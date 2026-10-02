@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ("sale", "Sale"), ("purchase", "Purchase"), ("return", "Return"),
-                    ("supplier_return", "Supplier return"), ("expense", "Expense"),
+                    ("supplier_return", "Supplier return"), ("inventory_writeoff", "Inventory write-off"), ("expense", "Expense"),
                     ("collection", "Debt payment"), ("supplier_payment", "Supplier payment"),
                     ("reversal", "Reversal"),
                 ],
@@ -67,6 +67,8 @@ class Migration(migrations.Migration):
                 ("reviewed_at", models.DateTimeField(blank=True, null=True)),
                 ("resolved_at", models.DateTimeField(blank=True, null=True)),
                 ("branch", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="core.branch")),
+                ("loss_document", models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT,
+                    related_name="+", to="core.document")),
                 ("product", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="core.product")),
                 ("requested_by", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT,
                     related_name="+", to=settings.AUTH_USER_MODEL)),
@@ -77,19 +79,25 @@ class Migration(migrations.Migration):
             ],
             options={"ordering": ["-created_at"]},
         ),
+        migrations.AddField(
+            model_name="transferreceipt",
+            name="loss_document",
+            field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT,
+                related_name="+", to="core.document"),
+        ),
         migrations.AddConstraint(
             model_name="supplierreturn",
-            constraint=models.CheckConstraint(condition=models.Q(("quantity__gt", 0)),
+            constraint=models.CheckConstraint(condition=models.Q(quantity__gt=0),
                 name="supplier_return_positive_quantity"),
         ),
         migrations.AddConstraint(
             model_name="quarantineitem",
-            constraint=models.CheckConstraint(condition=models.Q(("quantity__gt", 0)),
+            constraint=models.CheckConstraint(condition=models.Q(quantity__gt=0),
                 name="quarantine_positive_quantity"),
         ),
         migrations.AddConstraint(
             model_name="quarantineitem",
-            constraint=models.CheckConstraint(condition=models.Q(("unit_cost__gte", 0)),
+            constraint=models.CheckConstraint(condition=models.Q(unit_cost__gte=0),
                 name="quarantine_nonnegative_cost"),
         ),
     ]
