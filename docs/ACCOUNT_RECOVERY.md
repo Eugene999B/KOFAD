@@ -1,10 +1,12 @@
 # Account access and SMS recovery
 
+The requested initial login is username **admin**, password **admin** (lowercase password). The existing ADMIN username is matched case-insensitively.
+
 Normal login accepts the username (case-insensitive) and password, then opens the workspace. No password change or authenticator step is mandatory. Migration 0009 performs the explicitly requested one-time ADMIN password restoration, clears obsolete authenticator state and revokes the affected administrator's old sessions. Future releases do not reset passwords.
 
 ## Inside the workspace
 
-Open **My account** to change your password or save your recovery phone. Both changes require the current password. Administrators can manage each staff member's recovery number in **Administration → Accesss** (the Django access-record list), also linked from Company settings and My account. Numbers are normalized to international format. The company contact phone is separate.
+Open **My account** to change your password or save your recovery phone. Both changes require the current password. Administrators can manage each staff member's recovery number in **Administration → Access records** (the Django access-record list), also linked from Company settings and My account. Numbers are normalized to international format. The company contact phone is separate.
 
 ## Forgotten password
 

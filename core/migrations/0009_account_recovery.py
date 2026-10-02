@@ -14,7 +14,7 @@ def simplify_initial_access(apps, schema_editor):
     Access.objects.all().update(must_change_password=False, totp_secret="", totp_last_step=-1)
     # Explicit owner-requested one-time restoration. Future deployments never reset it.
     for user in User.objects.filter(username__iexact="ADMIN", is_superuser=True):
-        user.password = make_password("ADMIN")
+        user.password = make_password("admin")
         user.save(update_fields=["password"])
         Access.objects.filter(user_id=user.pk).update(session_version=models.F("session_version") + 1)
         Attempt.objects.filter(key=hashlib.sha256(user.username.casefold().encode()).hexdigest()).update(failures=0, blocked_until=None)
