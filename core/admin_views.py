@@ -8,7 +8,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
 from . import services as s
-from .models import Access, Branch
+from .models import Access, Branch, PasswordRecovery
 from .sms.service import normalize_phone
 
 ROLE_PERMISSION_CODES = [
@@ -191,13 +191,16 @@ def user_edit(request, branch, pk=None):
                     user.set_password(password)
                     user.save(update_fields=["password"])
                 access, _ = Access.objects.get_or_create(user=user)
+                phone_changed = access.recovery_phone != phone
                 access.recovery_phone = phone
                 access.save(update_fields=["recovery_phone"])
-                if len(active_branches) == 1:
-                    access.branches.set(active_branches)
-                else:
-                    access.branches.set(Branch.objects.filter(active=True, pk__in=values["branches"]))
+                if phone_changed:
+                    PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
                 if not user.is_superuser:
+                    if len(active_branches) == 1:
+                        access.branches.set(active_branches)
+                    else:
+                        access.branches.set(Branch.objects.filter(active=True, pk__in=values["branches"]))
                     user.groups.set([role])
                 after = {
                     "username": user.username,
