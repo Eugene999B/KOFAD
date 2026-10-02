@@ -138,7 +138,8 @@ class Party(models.Model):
 
 class Document(models.Model):
     KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("return", "Return"),
-             ("expense", "Expense"), ("collection", "Debt payment"), ("supplier_payment", "Supplier payment"), ("reversal", "Reversal")]
+             ("supplier_return", "Supplier return"), ("expense", "Expense"), ("collection", "Debt payment"),
+             ("supplier_payment", "Supplier payment"), ("reversal", "Reversal")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=40, unique=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
@@ -358,6 +359,63 @@ class Correction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
+
+
+
+
+
+class SupplierReturn(models.Model):
+    STATUS = [("requested", "Requested"), ("approved", "Approved"), ("rejected", "Rejected")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    source_line = models.ForeignKey(Line, related_name="supplier_returns", on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    refund_method = models.CharField(max_length=8, choices=Payment.METHODS, default="cash")
+    reason = models.TextField()
+    status = models.CharField(max_length=12, choices=STATUS, default="requested")
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    posted = models.OneToOneField(Document, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(condition=Q(quantity__gt=0), name="supplier_return_positive_quantity"),
+        ]
+
+
+class QuarantineItem(models.Model):
+    STATUS = [
+        ("requested", "Requested"), ("held", "Held in quarantine"), ("rejected", "Rejected"),
+        ("released", "Released to sellable stock"), ("written_off", "Written off"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(0)])
+    reason = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS, default="requested")
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    resolution_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(condition=Q(quantity__gt=0), name="quarantine_positive_quantity"),
+            models.CheckConstraint(condition=Q(unit_cost__gte=0), name="quarantine_nonnegative_cost"),
+        ]
+
+    @property
+    def value(self):
+        return self.quantity * self.unit_cost
 
 
 class StockCount(models.Model):
