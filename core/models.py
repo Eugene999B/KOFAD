@@ -343,3 +343,18 @@ class StockCountLine(models.Model):
     @property
     def variance(self):
         return None if self.counted is None else self.counted - self.expected
+
+
+class TransferReceipt(models.Model):
+    operation = models.OneToOneField(Operation, related_name="receipt", on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField()
+    note = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    resolution = models.CharField(max_length=12, blank=True)
+    resolution_note = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    @property
+    def missing(self):
+        return self.operation.quantity - self.quantity

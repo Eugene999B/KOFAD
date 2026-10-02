@@ -312,7 +312,10 @@ def request_operation(user, branch, payload):
 
 
 @transaction.atomic
-def advance_operation(user, operation_id, action):
+def advance_operation(user, operation_id, action, quantity=None, note=""):
+    if action == "receive":
+        from .transfers import receive_transfer
+        return receive_transfer(user, operation_id, quantity, note)
     op = Operation.objects.select_for_update(of=("self",)).select_related("branch", "destination", "product").get(pk=operation_id)
     branch = op.destination if action == "receive" else op.branch
     permit(user, branch, "approve_operations" if action in ("approve", "reject") else "operate_inventory")
@@ -323,14 +326,13 @@ def advance_operation(user, operation_id, action):
         op.approved_by = user
         op.status = "rejected" if action == "reject" else "approved"
         if action == "approve" and op.kind == "adjustment":
+            ensure_open(branch)
             stock_move(user, branch, op.product, op.quantity, str(op.pk), op.reason)
             op.status = "received"
     elif action == "dispatch" and op.status == "approved" and op.kind == "transfer":
+        ensure_open(branch)
         stock_move(user, branch, op.product, -op.quantity, str(op.pk), "Transfer dispatched: " + op.reason)
         op.status = "dispatched"
-    elif action == "receive" and op.status == "dispatched" and op.kind == "transfer":
-        stock_move(user, branch, op.product, op.quantity, str(op.pk), "Transfer received: " + op.reason)
-        op.status = "received"
     else:
         raise ValidationError("This operation has already advanced or the transition is invalid.")
     op.save(update_fields=["approved_by", "status"])

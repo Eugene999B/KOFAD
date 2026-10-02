@@ -410,7 +410,7 @@ def returns(request, branch):
         "key": request.POST.get("key") or str(uuid.uuid4()), "methods": Payment.METHODS})
 
 
-@protected("operate_inventory")
+@protected("operate_inventory|approve_operations")
 def operations(request, branch):
     if request.method == "POST":
         try:
@@ -418,14 +418,21 @@ def operations(request, branch):
                 s.request_operation(request.user, branch, request.POST.dict())
             else:
                 op = get_object_or_404(Operation.objects.filter(Q(branch=branch) | Q(destination=branch)), pk=request.POST.get("id"))
-                s.advance_operation(request.user, op.pk, request.POST.get("action"))
+                action = request.POST.get("action")
+                if action in ("resolve_arrived", "resolve_loss"):
+                    from .transfers import resolve_transfer
+                    resolve_transfer(request.user, op.pk, action.removeprefix("resolve_"), request.POST.get("note", ""))
+                else:
+                    if action == "receive" and not request.POST.get("received_quantity", "").strip():
+                        raise ValidationError("Enter the number of sellable units actually received, including zero.")
+                    s.advance_operation(request.user, op.pk, action, request.POST.get("received_quantity"), request.POST.get("note", ""))
             messages.success(request, "Stock operation recorded.")
             return redirect("operations")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
     return render(request, "operations.html", {"title": "Stock operations", "products": Product.objects.filter(active=True),
         "destinations": Branch.objects.filter(active=True).exclude(pk=branch.pk),
-        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related("product", "branch", "destination")[:100],
+        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related("product", "branch", "destination", "receipt", "receipt__recorded_by", "receipt__resolved_by")[:100],
         "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
 
 

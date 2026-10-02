@@ -14,7 +14,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Customers | Quick contacts, credit limit, due date, collections, current balances, running statements |
 | Returns/corrections | Original-line returns, quantity caps, debt reduction then refund; independent expense/payment reversal and remaining-item sale void |
 | Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation |
-| Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch and receipt |
+| Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch, partial receipt and independent discrepancy resolution |
 | Finance | Expenses, channel movement reconciliation, independent closing verification, closed-day posting lock |
 | Reporting | Transaction register, sales/profit by product/mode, inventory valuation and aging; CSV/PDF/XLSX/DOCX exports; printable receipts/statements |
 | Governance | Financial immutability triggers, audit events, scoped permissions, basic administration |
@@ -25,7 +25,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Configure and implement applicable taxes and legally required invoice fields. No tax compliance is implied.
 - Validate the implemented independent expense/payment reversal and remaining-item sale-void workflows with KOFAD. Sale void refunds use the explicitly selected channel.
 - Add approval thresholds for expenses, price overrides, discounts and credit overrides. These overrides are currently unavailable.
-- Extend damaged stock/transfer discrepancy handling and supplier returns. Structured blind stock-count sessions and independent variance posting are implemented.
+- Add supplier returns and damaged-goods quarantine. Blind stock counts and partial-transfer discrepancy review are implemented; multiple partial follow-up deliveries and accounting loss postings remain incomplete.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.
 - Arkesel adapter, durable outbox, retry controls, templates and token-authenticated callbacks are implemented. Validate the real provider sandbox and approved sender ID, then enable the worker. WhatsApp and receipt-file attachments remain incomplete.
 - Extend the implemented sales/gross-profit, receivables-aging and inventory-valuation reports with consolidated branch comparisons and operational analytics.

@@ -76,3 +76,7 @@ Catalog search fetches new results without navigating away from the cart. The br
 ## Physical count controls
 
 Count sessions snapshot both quantity and latest movement ID. Entry is blind, submission freezes evidence, and an independent reviewer posts variances under the shared branch lock. Any intervening movement invalidates approval, including net-zero movement pairs. PostgreSQL triggers protect snapshots and completed counts. Validation errors retain the counter's unsaved inputs.
+
+## Transfer receipt evidence
+
+Transfer receipts are immutable records of the quantity actually received. A shortage remains unresolved until a different authorized colleague confirms the remainder arrived or records a loss. Late arrivals add only the remainder; losses add no stock. Operation locks serialize receipt retries and discrepancy resolution, while branch locks coordinate postings with counts and closings.

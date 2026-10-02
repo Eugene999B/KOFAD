@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.db.models import F
 from .models import Access, Audit, Branch, Company, Document, Line, Movement, Party, Payment, Product, Closing, Operation
-from .models import StockCount, StockCountLine
+from .models import StockCount, StockCountLine, TransferReceipt
 from .services import audit
 
 admin.site.site_header = "KOFAD administration"
@@ -64,5 +64,5 @@ admin.site.register(User, UserAdmin)
 admin.site.register(Branch, BranchAdmin)
 admin.site.register(Access, AccessAdmin)
 # Business records are deliberately read-only in administration.
-for model in [Company, Product, Party, Document, Line, Payment, Movement, Audit, Closing, Operation, StockCount, StockCountLine]:
+for model in [Company, Product, Party, Document, Line, Payment, Movement, Audit, Closing, Operation, StockCount, StockCountLine, TransferReceipt]:
     admin.site.register(model, ReadOnlyAdmin)

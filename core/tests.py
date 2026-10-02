@@ -126,8 +126,8 @@ class BusinessTests(Fixtures, TestCase):
         self.assertFalse(Stock.objects.filter(branch=self.other,product=self.product).exists())
         s.advance_operation(self.user,op.pk,"receive")
         self.assertEqual(Stock.objects.get(branch=self.other,product=self.product).quantity,12)
-        with self.assertRaises(ValidationError):
-            s.advance_operation(self.user,op.pk,"receive")
+        s.advance_operation(self.user,op.pk,"receive")
+        self.assertEqual(Stock.objects.get(branch=self.other,product=self.product).quantity,12)
 
     def test_closing_and_independent_verification(self):
         self.sale()
