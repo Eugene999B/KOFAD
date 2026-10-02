@@ -26,6 +26,7 @@ urlpatterns = [
     path("products/<int:pk>/", v.product_edit, name="product_edit"),
     path("parties/", v.parties, name="parties"), path("parties/new/", v.party_edit, name="party_new"),
     path("parties/<int:pk>/", v.party_edit, name="party_edit"), path("parties/<int:pk>/statement/", v.statement, name="statement"),
+    path("parties/<int:pk>/statement/export/<str:format>/", export_views.statement_download, name="statement_export"),
     path("corrections/", v.corrections, name="corrections"),
     path("finance/", v.finance, name="finance"), path("returns/", v.returns, name="returns"),
     path("supplier-returns/", v.supplier_returns, name="supplier_returns"),
