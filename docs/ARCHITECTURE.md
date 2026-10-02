@@ -27,14 +27,14 @@ Serializing by branch is a deliberate initial safety tradeoff. Measure busy-coun
 - Quantities are whole base units. One product supports independently enabled retail/wholesale unit/pack prices.
 - Line snapshots preserve product description, price, pack conversion and standard cost at posting time.
 - Stock cannot fall below zero. Movements explain each balance change.
-- No client-provided sale price overrides or discounts are accepted.
+- Client-requested discounts and sale-price overrides are accepted only when enabled in company settings. The server recalculates from the current configured product price, enforces hard reduction limits and manager-authority thresholds, requires an override reason, and snapshots list price/final price/discount on the immutable line.
 - Configured standard cost is the current costing policy. Receiving does not silently change it.
 - Currency is GHS and business timezone is Africa/Accra. Both require an explicit migration/design review before operating in another currency.
 - Tax calculation is not enabled. This is a pre-launch policy/integration gap, not a claim of tax compliance.
 
 ## Debt and corrections
 
-An invoice starts with total minus initial payment. Subsequent allocations reduce outstanding debt. Collections cannot exceed the outstanding amount. Customer credit limits are checked under the same branch lock.
+An invoice starts with total minus initial payment. Subsequent allocations reduce outstanding debt. Collections cannot exceed the outstanding amount. Customer credit limits are checked under the same branch lock. Credit sales can be disabled, maximum credit days are configurable, and a user with approval authority may exceed a customer limit only within the configured maximum override and with a written reason.
 
 Returns refer to original sale lines and use the original selling units and price. Cumulative returned quantity cannot exceed quantity sold. Return value reduces outstanding debt first; any excess is a refund. Returns preserve the original document. Exchanges can be recorded as a return followed by a new sale; an explicit linked exchange workflow is not yet implemented.
 
@@ -54,6 +54,12 @@ Django password hashing and validators, same-origin CSRF-protected requests, sec
 Five failed password attempts lock the username for 15 minutes. Sign-in uses username and password without mandatory replacement or an authenticator. Security changes and permission membership changes revoke existing sessions. SMS password recovery uses a session-bound, hashed code, ten-minute expiry, five verification attempts and three sends per account per hour. Password and phone changes invalidate pending recovery. Codes are not stored in the customer messaging ledger or audit details.
 
 Django groups define custom permission sets; Access assigns locations. Default group templates are created only once so rerunning bootstrap preserves customization. Administration exposes financial records as read-only.
+
+## Business policy configuration
+
+Company settings now control which payment channels accept new postings, staff/manager discount limits, sale-price reduction limits, credit terms and override ceilings, customer-required and large-sale thresholds, large-expense manager authority, receipt fields and new-reference prefixes. Disabling a payment channel never rewrites historical ledger entries; historical reversals can reproduce the original payment channel so corrections remain faithful to the source record.
+
+These are server-side posting rules, not merely hidden interface controls. Thresholds use the existing `approve_operations` authority as the manager gate. They do not yet create a separate two-person pre-approval queue for discounts, prices, credit or expenses.
 
 ## Reports and communication
 
