@@ -56,13 +56,13 @@ If a release fails, revert to the last verified application commit only when its
 
 The web service's deployment command is python manage.py initialize_deployment. It serializes migrations with a PostgreSQL advisory lock, applies committed migrations, and performs one-time setup only when KOFAD_INITIAL_ADMIN_PASSWORD is explicitly configured. Existing ADMIN credentials are never reset by a release.
 
-For the first KOFAD deployment, set KOFAD_SETUP_KEY to at least 32 cryptographically random characters and KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested temporary value ADMIN. The deployment initializer invokes:
+For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested temporary value ADMIN. The deployment initializer invokes:
 
 python manage.py bootstrap_admin --confirm-initial-setup
 
 This creates username ADMIN with full administrative access. The application blocks all business pages and APIs until the password is changed; authenticator enrollment follows. The command refuses to reset or elevate an existing ADMIN account. Remove the temporary deployment variable immediately after setup.
 
-The public login requires the private KOFAD_SETUP_KEY while ADMIN must change its temporary password. Retrieve that key from kofad-web's Railway variables; never commit it. The gate also protects alternate authentication paths. Once the password is replaced, ordinary staff login does not require the setup key. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
+The initial administrator signs in with its username and temporary password, then must set a new password and enroll an authenticator before accessing business records. Usernames are case-insensitive. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
 
 For Arkesel web/worker configuration, see SMS.md.
 
@@ -79,8 +79,8 @@ Project: KOFAD (816fb38a-1d03-4508-ba65-07a8b9de12f1). Environment: production.
 - The Railway Wait for CI toggle could not be enabled through the connector; the release branch provides the verified-release gate instead.
 - The database Backups dashboard was checked on 2026-10-02. It reports backup creation and PITR require Pro; the workspace remains on Hobby at the owner's request. Although a next-backup timestamp appeared after an attempted schedule setting, no backup exists and backup protection is not verified. Do not rely on that timestamp. Independent encrypted off-platform backups and restore rehearsal remain outstanding.
 
-The web service stores DJANGO_SECRET_KEY and KOFAD_SETUP_KEY privately. DATABASE_URL references Postgres.DATABASE_URL. The worker references web-service SMS variables so credentials have one configured source. SMS_ENABLED=0 and SMS_SANDBOX=1 until Arkesel credentials and the sender are verified.
+The web service stores DJANGO_SECRET_KEY privately. DATABASE_URL references Postgres.DATABASE_URL. The worker references web-service SMS variables so credentials have one configured source. SMS_ENABLED=0 and SMS_SANDBOX=1 until Arkesel credentials and the sender are verified.
 
 KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
 
-Public login: https://kofad-web-production.up.railway.app/login/ . The initial ADMIN/ADMIN account requires the private KOFAD_SETUP_KEY, then a new password and authenticator enrollment. The setup key is only held in Railway's web-service variables.
+Public login: https://kofad-web-production.up.railway.app/login/ . The initial ADMIN/ADMIN account proceeds directly to mandatory password replacement, then authenticator enrollment.

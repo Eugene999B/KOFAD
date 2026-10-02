@@ -37,6 +37,17 @@ with sync_playwright() as p:
         except Exception:
             time.sleep(1)
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
+    assert page.get_by_text("Private setup key", exact=True).count() == 0
+    assert page.locator('link[rel="icon"]').get_attribute("href").endswith(".png")
+    page.get_by_role("button", name="Show password", exact=True).click()
+    assert page.locator("#password").get_attribute("type") == "text"
+    page.get_by_role("button", name="Hide password", exact=True).click()
+    assert page.locator("#password").get_attribute("type") == "password"
+    page.set_viewport_size({"width":390,"height":844})
+    page.screenshot(path=str(out / "login-mobile.png"), full_page=True)
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    assert page.get_by_role("button", name="Sign in", exact=False).bounding_box()["y"] < 700
+    page.set_viewport_size({"width":1440,"height":1000})
     page.get_by_label("Username", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
@@ -86,9 +97,22 @@ with sync_playwright() as p:
         page.goto("http://127.0.0.1:8000"+path)
         page.screenshot(path=str(out / (name+"-mobile.png")), full_page=True)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path + " overflows"
+    page.get_by_role("button",name="Toggle navigation",exact=True).click()
+    assert page.locator("#menu-toggle").get_attribute("aria-expanded") == "true"
+    page.keyboard.press("Escape")
+    assert page.locator("#menu-toggle").get_attribute("aria-expanded") == "false"
+    page.get_by_role("button",name="Toggle navigation",exact=True).click()
+    page.get_by_role("button",name="Close menu",exact=True).click()
+    assert page.locator("#menu-toggle").get_attribute("aria-expanded") == "false"
+    page.goto("http://127.0.0.1:8000/sales/new/")
+    page.locator(".product-card").first.get_by_role("button",name="Add",exact=False).click()
+    assert page.locator("#mobile-cart-count").inner_text() == "1"
+    page.locator("#cart-jump").click()
+    assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
+    page.locator("#cart").get_by_role("button",name="Remove",exact=False).click()
     admin_page = browser.new_page(viewport={"width":1280,"height":900})
     admin_page.goto("http://127.0.0.1:8000/login/")
-    admin_page.get_by_label("Username",exact=True).fill("ADMIN")
+    admin_page.get_by_label("Username",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("ADMIN")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
     admin_page.wait_for_url("**/account/password/")

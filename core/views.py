@@ -184,10 +184,16 @@ def dashboard(request):
     for d in week:
         d["height"] = round(float(d["amount"] / maximum) * 110) if d["amount"] else 2
         d["y"] = 130 - d["height"]
+    has_products = Product.objects.filter(active=True).exists()
+    has_stock = stock.filter(quantity__gt=0).exists()
+    has_sales = docs.filter(kind="sale").exists()
+    setup_complete = sum((has_products, has_stock, has_sales))
     return render(request, "dashboard.html", {"title": "Command centre", "revenue": revenue, "expenses": expenses,
         "debt": debt, "low": low[:6], "low_count": low.count(), "recent": docs[:7], "week": week,
         "pending": Operation.objects.filter(branch=branch, status="requested").count(), "today": today,
-        "channels": s.channel_totals(branch, today).items(), "sales_count": sales.count()})
+        "channels": s.channel_totals(branch, today).items(), "sales_count": sales.count(),
+        "needs_setup": setup_complete < 3, "setup_complete": setup_complete,
+        "has_products": has_products, "has_stock": has_stock, "has_sales": has_sales})
 
 
 @protected("operate_sales")

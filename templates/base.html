@@ -1,29 +1,29 @@
 {% load static %}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ title|default:"Business workspace" }} · KOFAD</title><link rel="icon" href="{% static 'brand/kofad-mark.svg' %}" type="image/svg+xml">
+<title>{{ title|default:"Business workspace" }} · KOFAD</title><link rel="icon" href="{% static 'brand/kofad-emblem.png' %}" type="image/png">
 <link rel="stylesheet" href="{% static 'app.css' %}"><script defer src="{% static 'app.js' %}"></script>{% block head %}{% endblock %}</head>
 <body><a class="skip" href="#main">Skip to content</a>
 <div class="workspace">
-<aside class="sidebar" aria-label="Main navigation">
-<a class="brand" href="/"><img src="{% static 'brand/kofad-mark.svg' %}" width="38" height="38" alt=""><span>KOFAD<small>IMPEX ENTERPRISE</small></span></a>
-<p class="nav-label">WORKSPACE</p><nav><a href="/search/"><span>⌕</span> Search <kbd>⌘ K</kbd></a>
+<button class="nav-backdrop" aria-label="Close navigation" tabindex="-1" hidden></button><aside class="sidebar" id="main-navigation" aria-label="Main navigation"><button type="button" class="nav-close" aria-label="Close menu">×</button>
+<a class="brand" href="/" aria-label="KOFAD IMPEX ENTERPRISE">{% include "brand.html" %}</a>
+<nav><p class="nav-label">WORKSPACE</p><a href="/search/"><span>⌕</span> Search <kbd>⌘ K</kbd></a>
 {% if perms.core.view_reports %}<a href="/" class="{% if request.path == '/' %}active{% endif %}"><span>◈</span> Overview</a>{% endif %}
-{% if perms.core.operate_sales %}<a href="/sales/new/" class="{% if request.path == '/sales/new/' %}active{% endif %}"><span>＋</span> New sale <kbd>N</kbd></a>
+{% if perms.core.operate_sales %}<p class="nav-label">TRADE & CUSTOMERS</p><a href="/sales/new/" class="{% if request.path == '/sales/new/' %}active{% endif %}"><span>＋</span> New sale <kbd>N</kbd></a>
 <a href="/documents/?kind=sale"><span>≡</span> Sales history</a><a href="/parties/"><span>◎</span> Customers</a>{% endif %}
-{% if perms.core.operate_inventory %}<a href="/inventory/"><span>▦</span> Inventory</a><a href="/purchasing/"><span>↙</span> Purchasing</a>
+{% if perms.core.operate_inventory %}<p class="nav-label">STOCK & SUPPLY</p><a href="/inventory/"><span>▦</span> Inventory</a><a href="/stock-counts/"><span>✓</span> Stock counts</a><a href="/purchasing/"><span>↙</span> Purchasing</a>
 <a href="/parties/?kind=supplier"><span>◇</span> Suppliers</a>{% endif %}
 {% if perms.core.operate_inventory or perms.core.approve_operations %}<a href="/operations/"><span>⇄</span> Stock operations</a>{% endif %}
-{% if perms.core.operate_finance %}<a href="/finance/"><span>▤</span> Finance</a><a href="/closings/"><span>✓</span> Daily closing</a><a href="/corrections/"><span>↺</span> Corrections</a>{% endif %}
+{% if perms.core.operate_finance %}<p class="nav-label">FINANCE & CONTROL</p><a href="/finance/"><span>▤</span> Finance</a><a href="/closings/"><span>✓</span> Daily closing</a><a href="/corrections/"><span>↺</span> Corrections</a>{% endif %}
 {% if perms.core.approve_operations %}<a href="/returns/"><span>↶</span> Returns</a>{% endif %}
 {% if perms.core.operate_sales %}<a href="/communications/"><span>✉</span> Communications</a>{% endif %}
-{% if perms.core.view_reports %}<a href="/reports/"><span>▥</span> Reports</a><a href="/audit/"><span>⌕</span> Audit trail</a>{% endif %}
+{% if perms.core.view_reports %}<p class="nav-label">BUSINESS INSIGHTS</p><a href="/reports/"><span>▥</span> Reports</a><a href="/audit/"><span>⌕</span> Audit trail</a>{% endif %}
 {% if perms.core.manage_company %}<a href="/settings/"><span>⚙</span> Settings</a>{% endif %}
 {% if request.user.is_staff %}<a href="/admin/"><span>⊞</span> Administration</a>{% endif %}
 </nav><div class="sidebar-bottom"><span class="status-dot"></span> KOFAD operating workspace<small>Trade with confidence.</small></div></aside>
-<div class="body"><header class="topbar"><button class="icon-button mobile-menu" aria-label="Toggle navigation" id="menu-toggle">☰</button>
+<div class="body"><header class="topbar"><button class="icon-button mobile-menu" aria-label="Toggle navigation" id="menu-toggle" aria-controls="main-navigation" aria-expanded="false">☰</button>
 <form method="post" action="/branch/" class="branch-form">{% csrf_token %}<label class="sr-only" for="branch-select">Location</label><select name="branch" id="branch-select">{% for branch in branches %}<option value="{{ branch.pk }}" {% if branch == current_branch %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select><button class="text-button" type="submit">Switch</button></form>
 <div class="top-right"><span class="user-avatar">{{ request.user.username|first|upper }}</span><span>{{ request.user.get_full_name|default:request.user.username }}</span><form method="post" action="/logout/">{% csrf_token %}<button class="text-button">Sign out</button></form></div></header>
 <main id="main"><div class="page-heading"><div><p class="eyebrow">KOFAD / {{ current_branch.name }}</p><h1>{{ title|default:"Workspace" }}</h1></div>{% block actions %}{% endblock %}</div>
 {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
 {% block content %}{% endblock %}<footer class="page-footer"><span>KOFAD IMPEX ENTERPRISE</span><span>Every movement accounted for.</span></footer>
-</main></div></div></body></html>
+</main></div></div><nav class="mobile-dock" aria-label="Quick navigation">{% if perms.core.view_reports %}<a href="/"><span aria-hidden="true">◈</span>Overview</a>{% endif %}{% if perms.core.operate_sales %}<a href="/sales/new/"><span aria-hidden="true">＋</span>New sale</a>{% endif %}{% if perms.core.operate_inventory %}<a href="/inventory/"><span aria-hidden="true">▦</span>Stock</a>{% endif %}<a href="/search/"><span aria-hidden="true">⌕</span>Search</a></nav></body></html>

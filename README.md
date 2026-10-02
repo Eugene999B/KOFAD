@@ -6,7 +6,7 @@ A unified retail and wholesale operating system for KOFAD. One catalog, pack-awa
 Python 3.12, Django 5.2 LTS, PostgreSQL 16, server-rendered HTML and focused vanilla JavaScript. A modular monolith keeps transactional boundaries explicit and avoids running separate frontend and API infrastructure. PostgreSQL row locks and database constraints protect concurrent stock and payment operations. Railway is the intended deployment target.
 
 ## Product direction
-A calm trading-house identity: forest green, warm paper, brass, compact ledgers, generous typography and a custom vector K mark. All dashboard figures must come from persisted records; there are no fabricated business metrics.
+A connected commerce identity: navy, gold and teal, a custom parcel-and-trade emblem, grouped task navigation, mobile checkout shortcuts and guided branch setup. All dashboard figures must come from persisted records; there are no fabricated business metrics.
 
 ## Source of requirements
 KOFAD IMPEX ENTERPRISE Master Software Plan, version 1.0, 2 October 2026, supplied by the owner. Treat its sample prices and metrics as illustrations, not production records. Business policy and provider credentials must be configured before launch.
@@ -45,7 +45,7 @@ GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration 
 - [Architecture and integrity rules](docs/ARCHITECTURE.md)
 - [Acceptance and remaining launch work](docs/ACCEPTANCE.md)
 - [Brand assets and usage](docs/BRAND.md)
-- [Logo](static/brand/kofad-logo.svg)
+- [Logo](static/brand/kofad-emblem.png)
 
 No default administrator is silently created at startup. Bootstrap creates role templates and a location; an operator creates the owner account and completes configuration. Dependencies used by the container are pinned in requirements.lock. Railway is configured but has not been deployed.
 

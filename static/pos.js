@@ -69,8 +69,14 @@
     });
     document.querySelector("#total").textContent = formatted(total());
     document.querySelector("#cart-count").textContent = cart.length + " lines";
+    document.querySelector("#mobile-cart-count").textContent = cart.length;
+    document.querySelector("#mobile-cart-total").textContent = formatted(total());
     persist();
   }
+  document.querySelector("#cart-jump").addEventListener("click", () => {
+    const panel = document.querySelector("#checkout-panel");
+    panel.scrollIntoView({block:"start"}); panel.focus({preventScroll:true});
+  });
   const productGrid = document.querySelector("#catalog");
   function renderCatalog() {
   productGrid.replaceChildren();

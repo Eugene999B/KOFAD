@@ -1,15 +1,15 @@
 # KOFAD identity
 
-The symbol is an original geometric K: a firm upright and two open diagonal arms, with a small brass junction. It is intended to suggest structure, exchange and a clear direction without using stock globe, handshake or shipping-clip-art imagery.
+The trade emblem combines a parcel with interwoven navy, gold and teal routes, representing goods moving through a connected business. The company name is typeset separately for legibility.
 
-- Primary forest: #183F35
-- Warm paper: #F5F4EF
-- Brass accent: #C5A46B
-- Ink: #20382E
-- Supporting text: #6D786F
+- Navy: #102B46
+- Gold: #E9AC32
+- Teal: #138C94
+- Workspace background: #F3F6FA
+- Text: #172F47
 
-The mark is in static/brand/kofad-mark.svg. The full wordmark is in static/brand/kofad-logo.svg. Both are editable vectors and remain crisp on receipts and high-density screens. The wordmark uses a system Georgia serif fallback; it does not require an external font service.
+The transparent emblem is `static/brand/kofad-emblem.png`. The shared `templates/brand.html` component pairs it with the KOFAD IMPEX ENTERPRISE wordmark. The same emblem is used for the favicon, sign-in, navigation, account setup and receipts. The previous K placeholder has been retired.
 
-Keep clear space at least the width of the upright around the mark. Use the mark at 24 px or larger and the full wordmark at 180 px or larger. Prefer forest on paper or the supplied paper-on-forest version. Avoid shadows, gradients and stretching.
+Keep the aspect ratio unchanged. Use a white tile behind the emblem on dark surfaces. The interface uses system sans-serif fonts without an external font dependency. Mobile login prioritizes the form; business navigation becomes an accessible drawer with a persistent task dock.
 
-This is the company's proposed identity for this implementation. Trademark clearance and final company adoption remain business decisions.
+The emblem was created with image generation for this implementation. No claim of trademark registration is made.

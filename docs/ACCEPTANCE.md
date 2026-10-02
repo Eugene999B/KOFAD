@@ -7,7 +7,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Area | Included |
 | --- | --- |
 | Identity | Password login, lockout, TOTP for staff/superusers, session revocation, custom Django groups, branch assignments |
-| Branding | Original SVG mark/wordmark, responsive forest/ivory interface, keyboard focus and counter shortcuts |
+| Branding | Trade emblem and shared wordmark, navy/gold/teal interface, responsive login, accessible mobile drawer, task dock, guided setup and mobile cart shortcut |
 | Catalog | Product/SKU/barcode, categories, units/packs, independent retail/wholesale price matrix, archival |
 | Inventory | Base-unit stock, immutable movements, nonnegative balances, reorder indicators |
 | Sales | Mixed-mode cart, held carts, server pricing, cash/MoMo/bank/card splits, credit, idempotency, receipts |
