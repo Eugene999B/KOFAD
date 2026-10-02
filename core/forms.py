@@ -65,13 +65,17 @@ class SalesPolicyForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        if data.get("staff_discount_limit", 0) > data.get("max_discount_percent", 0):
+        staff_discount = data.get("staff_discount_limit") or 0
+        max_discount = data.get("max_discount_percent") or 0
+        staff_reduction = data.get("staff_price_reduction_limit") or 0
+        max_reduction = data.get("max_price_reduction_percent") or 0
+        if staff_discount > max_discount:
             self.add_error("staff_discount_limit", "Staff limit cannot exceed the maximum discount.")
-        if data.get("staff_price_reduction_limit", 0) > data.get("max_price_reduction_percent", 0):
+        if staff_reduction > max_reduction:
             self.add_error("staff_price_reduction_limit", "Staff limit cannot exceed the maximum price reduction.")
-        if data.get("allow_discounts") and data.get("max_discount_percent", 0) <= 0:
+        if data.get("allow_discounts") and max_discount <= 0:
             self.add_error("max_discount_percent", "Set a maximum discount greater than zero or turn discounts off.")
-        if data.get("allow_price_overrides") and data.get("max_price_reduction_percent", 0) <= 0:
+        if data.get("allow_price_overrides") and max_reduction <= 0:
             self.add_error("max_price_reduction_percent", "Set a maximum reduction greater than zero or turn price overrides off.")
         return data
 
