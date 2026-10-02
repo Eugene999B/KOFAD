@@ -157,7 +157,8 @@ def _rows(request, dataset, branch, first, last):
         ops = Operation.objects.filter(
             Q(branch=branch) | Q(destination=branch),
             created_at__date__gte=first, created_at__date__lte=last,
-        ).select_related("product", "branch", "destination", "requested_by", "approved_by", "receipt", "receipt__resolved_by").order_by("-created_at")
+        ).select_related("product", "branch", "destination", "requested_by", "approved_by",
+                         "receipt", "receipt__resolved_by", "receipt__loss_document").order_by("-created_at")
         rows = []
         for row in ops:
             receipt = getattr(row, "receipt", None)
