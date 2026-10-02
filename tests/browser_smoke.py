@@ -44,8 +44,23 @@ with sync_playwright() as p:
     page.locator(".product-card").filter(has_text="Classic leather sandals").get_by_role("button",name="Add",exact=False).click()
     assert page.locator("#cart-count").inner_text() == "2 lines"
     page.get_by_role("button",name="Fill exact cash amount").click()
+    lost_response = []
+    def lose_confirmed_response(route):
+        response = route.fetch()
+        assert response.ok
+        lost_response.append(response.json())
+        route.abort()
+    page.route("**/api/trades/",lose_confirmed_response)
+    page.get_by_role("button",name="Complete sale",exact=False).click()
+    page.locator("#pos-error").wait_for(state="visible")
+    assert page.locator("#party").is_disabled()
+    page.unroute("**/api/trades/",lose_confirmed_response)
+    page.once("dialog",lambda dialog: dialog.accept())
+    page.reload()
+    assert page.locator("#cart-count").inner_text() == "2 lines"
     page.get_by_role("button",name="Complete sale",exact=False).click()
     page.wait_for_url("**/documents/**/")
+    assert page.url.endswith(lost_response[0]["url"])
     page.screenshot(path=str(out / "receipt-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
     page.screenshot(path=str(out / "pos-desktop.png"), full_page=True)
@@ -59,4 +74,4 @@ with sync_playwright() as p:
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path + " overflows"
     assert not errors, errors
     browser.close()
-print("Desktop/mobile navigation and checkout browser checks passed.")
+print("Owner MFA, cart-preserving search, lost-response checkout recovery, and desktop/mobile checks passed.")

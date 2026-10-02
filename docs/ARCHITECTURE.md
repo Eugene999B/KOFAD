@@ -68,3 +68,7 @@ Lists are capped; reports display 200 rows and export at most 10,000. Proper cur
 ## Financial correction requests
 
 Finance requests a reasoned correction; another authorized reviewer accepts or rejects it. Expenses and debt/supplier payments receive an opposite-channel reversal document. Reversing a collection removes its allocation from the live debt calculation while retaining original evidence. Sale voids return all remaining eligible quantities through linked return documents; refunds use the requested channel. Direct record edits remain forbidden.
+
+## Counter recovery
+
+Catalog search fetches new results without navigating away from the cart. The browser keeps product selections and unresolved idempotency keys in per-user, per-location tab session storage. It does not store credentials or card details. An uncertain checkout locks editing until an identical retry recovers the original server result; successful posting clears the stored draft. Signing out clears KOFAD tab drafts. Closing the tab may discard them; staff should use held sales for longer-lived drafts.

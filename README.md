@@ -25,19 +25,19 @@ The repository now contains a Django/PostgreSQL implementation of the core opera
 
 - Sales counter with mixed retail/wholesale and unit/pack carts, held sales, split payments and credit.
 - Products, stock movements, independent adjustment approvals and dispatch/receive transfers.
-- Customer/supplier records, purchase receiving, debt allocation, returns and expenses.
+- Customer/supplier records, purchase receiving, debt allocation, returns, expenses and independently approved corrections.
 - Daily channel reconciliation with independent verification and a posting lock after closing.
-- Receipts, statements, transaction reports and PDF/Excel/Word/CSV exports.
+- Receipts, statements, transaction/profit/stock/aging reports and PDF/Excel/Word/CSV exports.
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
 - Original SVG identity and responsive desktop/mobile screens.
 
-**Status:** pre-production implementation. The entire master plan is not complete. Tax handling, broader corrections/approvals, provider messaging, report families, advanced catalog/counts and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
+**Status:** pre-production implementation. The entire master plan is not complete. Tax handling, configurable approval thresholds, provider messaging, report families, advanced catalog/counts and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
 
 ## Verification
 
 [![Verify KOFAD](https://github.com/Eugene999B/KOFAD/actions/workflows/ci.yml/badge.svg)](https://github.com/Eugene999B/KOFAD/actions/workflows/ci.yml)
 
-GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration checks, dependency auditing, and Chromium desktop/mobile navigation and checkout checks. Browser screenshots are available in the run's browser-evidence artifact. Demo records are explicitly labeled and only permitted in DEBUG environments.
+GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration checks, dependency auditing, and Chromium desktop/mobile navigation, owner MFA, cart search and lost-response checkout recovery checks. The production Docker image is also built and health-tested. Browser screenshots are available in the run's browser-evidence artifact. Demo records are explicitly labeled and only permitted in DEBUG environments.
 
 ## Deployment and operations
 

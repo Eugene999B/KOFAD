@@ -15,7 +15,7 @@ This repository is prepared for Railway. It has not been deployed automatically.
 9. Sign in, enroll the owner's authenticator and configure company details, users, groups and location assignments.
 10. Add real products and contacts. Opening stock is an approved adjustment; prepare a second authorized user to review it.
 
-The Docker container binds Railway's PORT, runs as an unprivileged user and serves static assets using WhiteNoise. /health/ checks database connectivity. It does not certify migration compatibility or business acceptance.
+The CI suite builds the production image and checks database readiness and login rendering with production settings. The Docker container binds Railway's PORT, runs as an unprivileged user and serves static assets using WhiteNoise. /health/ checks database connectivity. It does not certify migration compatibility or business acceptance.
 
 ## Before accepting money
 
