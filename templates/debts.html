@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/exports/?dataset=debts">⇩ Download debt summary</a><a class="button secondary" href="/parties/">Customers</a></div>{% endblock %}
+{% block content %}
+<section class="hero-panel"><div><p class="eyebrow">CUSTOMER RECEIVABLES</p><h2>One customer account, every unpaid sale and every payment.</h2><p>Search a customer, see the true balance, record a partial payment or clear the whole account. Payments are allocated to the oldest due invoices first and every allocation remains auditable.</p></div><span class="pill">Oldest due first</span></section>
+
+<div class="metric-grid">
+<article class="metric-card"><small>Total receivables</small><strong>{{ company.currency }} {{ overview.total_receivables|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Overdue</small><strong>{{ company.currency }} {{ overview.overdue|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Due today</small><strong>{{ company.currency }} {{ overview.due_today|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Customers owing</small><strong>{{ overview.customers_owing }}</strong></article>
+</div>
+
+<form class="searchbar" method="get"><label class="sr-only" for="debt-q">Search debt customers</label><input id="debt-q" name="q" value="{{ q }}" placeholder="Search customer name or Ghana phone number"><button class="button secondary">Search</button></form>
+
+<section class="panel"><div class="section-heading"><div><h2>Customer debt accounts</h2><p class="muted">A customer may owe on several receipts. KOFAD keeps each receipt separate while presenting one account balance.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="number">Outstanding</th><th class="number">Overdue</th><th>Open receipts</th><th>Oldest / next due</th><th>Actions</th></tr></thead><tbody>
+{% for row in overview.rows %}
+<tr>
+<td><a href="{% url 'customer_profile' row.party.pk %}"><strong>{{ row.party.name }}</strong></a><small>{{ row.party.phone }}</small></td>
+<td class="number"><strong>{{ row.outstanding|floatformat:2 }}</strong></td>
+<td class="number">{% if row.overdue %}<span class="pill amber">{{ row.overdue|floatformat:2 }}</span>{% else %}0.00{% endif %}</td>
+<td>{{ row.invoice_count }}</td>
+<td>{% if row.invoices %}{% with first=row.invoices.0 %}{{ first.0.due_date|default:"No due date" }}<small>{{ first.0.reference }} · {{ first.1|floatformat:2 }}</small>{% endwith %}{% endif %}</td>
+<td><details><summary>Record payment</summary>
+{% if perms.core.operate_finance %}
+<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="party" value="{{ row.party.pk }}"><input type="hidden" name="pay_full" value="1">
+<label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Bank / provider reference<input name="reference" maxlength="100"></label>
+<button class="button">Pay full balance · {{ row.outstanding|floatformat:2 }}</button></form>
+<hr>
+<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="party" value="{{ row.party.pk }}">
+<label>Partial amount<input name="amount" type="number" min=".01" max="{{ row.outstanding }}" step=".01" required></label>
+<label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Bank / provider reference<input name="reference" maxlength="100"></label>
+<button class="button secondary">Record partial payment</button></form>
+{% else %}<p class="hint">Finance permission is required to receive debt payments.</p>{% endif %}
+</details></td>
+</tr>
+{% empty %}<tr><td colspan="6"><div class="empty"><h3>No matching debt accounts.</h3><p>Customers with a zero balance are intentionally excluded.</p></div></td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
