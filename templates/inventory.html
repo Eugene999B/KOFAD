@@ -9,7 +9,7 @@
 {% block content %}
 <section class="inventory-hero">
   <div><p class="eyebrow">STOCK CONTROL</p><h2>Inventory that explains itself.</h2><p>Search, filter, restock and review recent movement without leaving the stock workspace.</p></div>
-  {% if perms.core.operate_inventory %}<button type="button" class="button" data-restock-open data-product="" data-name="" data-pack-size="1" data-pack-name="pack" data-base-unit="unit" data-stock="0">＋ Quick restock</button>{% endif %}
+  {% if perms.core.operate_inventory %}<button type="button" class="button" data-inventory-search-focus>⌕ Find product to restock</button>{% endif %}
 </section>
 
 <div class="metric-grid inventory-metrics">
