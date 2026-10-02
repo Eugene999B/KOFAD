@@ -1,11 +1,77 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#102b46"><title>Sign in · KOFAD</title><link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}"><link rel="apple-touch-icon" href="{% static 'brand/kofad-emblem.png' %}"><script src="{% static 'theme.js' %}"></script><link rel="stylesheet" href="{% static 'app.css' %}"><script defer src="{% static 'app.js' %}"></script></head>
-<body class="login-page"><div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOFAD</span></div><header class="login-header"><a class="brand" href="/login/" aria-label="KOFAD IMPEX ENTERPRISE">{% include "brand.html" %}</a><span class="portal-label">STAFF PORTAL</span></header>
-<div class="login-layout"><section class="login-story" aria-label="KOFAD business workspace"><p class="eyebrow">CONNECTED COMMERCE. EVERY DAY.</p><h1>Moving goods.<br><span>Growing business.</span></h1><p class="story-copy">From the first delivery to the final sale.<br>One connected workspace for the people behind KOFAD.</p>
-<div class="trade-map" aria-label="Sales, inventory and finance connected in one workspace"><div class="trade-node node-sales"><span class="node-icon">↗</span><div><strong>Sales & customers</strong><small>Serve. Sell. Stay connected.</small></div></div><div class="trade-hub"><img src="{% static 'brand/kofad-emblem.png' %}" alt="KOFAD trade emblem" width="140" height="140"></div><div class="trade-node node-stock"><span class="node-icon">▦</span><div><strong>Stock & purchasing</strong><small>Know what moves.</small></div></div><div class="trade-node node-finance"><span class="node-icon">≋</span><div><strong>Finance & control</strong><small>Every transaction in view.</small></div></div></div>
-<div class="story-footer"><span>BUILT AROUND YOUR BUSINESS</span><span>Trade with confidence.</span></div></section>
-<main class="login-card" id="main"><div class="login-card-top"><span class="welcome-icon" aria-hidden="true">↗</span><span class="pill">Your business workspace</span></div><p class="eyebrow">WELCOME TO KOFAD</p><h2>Let’s get to work.</h2><p class="muted">Sign in to manage your day.</p>{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}{% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
-<form method="post">{% csrf_token %}<label for="username">Username</label><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Enter your username">
-<label for="password">Password</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
-<p class="forgot-link"><a href="/forgot-password/">Forgot password?</a></p><button class="button wide login-submit">Sign in <span aria-hidden="true">→</span></button></form>
-<div class="access-help"><strong>Need a hand signing in?</strong><p>Contact your KOFAD administrator for account access or a password reset.</p></div><p class="login-security">Staff access · Permission-based workspaces</p></main></div><footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Sales. Stock. People. Progress.</span></footer></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#082638">
+<title>Sign in · KOFAD</title>
+<link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}">
+<link rel="apple-touch-icon" href="{% static 'brand/kofad-emblem.png' %}">
+<script src="{% static 'theme.js' %}"></script>
+<link rel="stylesheet" href="{% static 'app.css' %}">
+<script defer src="{% static 'app.js' %}"></script>
+</head>
+<body class="login-page">
+<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOFAD</span></div>
+
+<header class="login-header premium-login-header">
+<a class="brand" href="/login/" aria-label="KOFAD IMPEX ENTERPRISE">{% include "brand.html" %}</a>
+<div class="login-header-meta"><span class="login-online-dot"></span><span>Secure operations gateway</span></div>
+</header>
+
+<div class="login-layout premium-login-layout">
+<section class="login-story premium-login-story" aria-label="KOFAD business workspace">
+<div class="login-story-grid" aria-hidden="true"></div>
+<div class="login-story-top">
+<p class="eyebrow">KOFAD OPERATIONS</p>
+<h1>One place to run<br><span>the whole trading day.</span></h1>
+<p class="story-copy">Search products. Serve customers. Control stock. Follow debt. Reconcile the day. Every action leaves a trace.</p>
+</div>
+
+<div class="login-command-map" aria-hidden="true">
+<div class="command-rail"><span></span><span></span><span></span><span></span></div>
+<article><b>01</b><div><strong>Sell faster</strong><small>Search-first retail & wholesale counter</small></div><span>→</span></article>
+<article><b>02</b><div><strong>Know stock</strong><small>Packs, loose units, receiving & controls</small></div><span>→</span></article>
+<article><b>03</b><div><strong>Know customers</strong><small>Accounts, debt, payments & statements</small></div><span>→</span></article>
+<article><b>04</b><div><strong>Close with confidence</strong><small>Cash, channels, variance & evidence</small></div><span>✓</span></article>
+</div>
+
+<div class="login-story-bottom">
+<div class="login-emblem-orbit"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div><strong>KOFAD IMPEX ENTERPRISE</strong><small>Sales · Stock · Customers · Finance</small></div>
+</div>
+</section>
+
+<main class="login-card premium-login-card" id="main">
+<div class="login-access-chip"><span>PRIVATE STAFF ACCESS</span><b>● LIVE</b></div>
+<div class="login-card-top">
+<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KOFAD.</h2></div>
+</div>
+<p class="muted login-intro-copy">Your permissions decide exactly what you can see and do after sign-in.</p>
+
+{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
+{% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+
+<form method="post" class="premium-login-form">{% csrf_token %}
+<label for="username">Username</label>
+<div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Enter your username"></div>
+
+<label for="password">Password</label>
+<div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
+
+<div class="login-form-row"><span>Authorized staff only</span><a href="/forgot-password/">Forgot password?</a></div>
+<button class="button wide login-submit premium-login-submit">Enter workspace <span aria-hidden="true">→</span></button>
+</form>
+
+<div class="login-assurance">
+<div><span>✓</span><p><strong>Permission scoped</strong><small>Only your assigned workspaces and locations.</small></p></div>
+<div><span>✓</span><p><strong>Audited activity</strong><small>Critical business actions retain evidence.</small></p></div>
+</div>
+<p class="login-security">Need account access? Contact your KOFAD administrator.</p>
+</main>
+</div>
+
+<footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Built for controlled, connected trading.</span></footer>
+</body>
+</html>
