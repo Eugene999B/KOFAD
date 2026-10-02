@@ -28,6 +28,8 @@ urlpatterns = [
     path("parties/<int:pk>/", v.party_edit, name="party_edit"), path("parties/<int:pk>/statement/", v.statement, name="statement"),
     path("corrections/", v.corrections, name="corrections"),
     path("finance/", v.finance, name="finance"), path("returns/", v.returns, name="returns"),
+    path("supplier-returns/", v.supplier_returns, name="supplier_returns"),
+    path("quarantine/", v.quarantine, name="quarantine"),
     path("operations/", v.operations, name="operations"), path("closings/", v.closings, name="closings"),
     path("reports/", v.reports, name="reports"), path("reports/export/<str:format>/", v.export_report, name="export"),
     path("audit/", v.audit_log, name="audit"),
