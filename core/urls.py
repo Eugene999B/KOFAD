@@ -1,7 +1,10 @@
 from django.urls import path
 from . import views as v
+from . import count_views
 from .sms.views import callback
 urlpatterns = [
+    path("stock-counts/", count_views.index, name="stock_counts"),
+    path("stock-counts/<uuid:pk>/", count_views.detail, name="stock_count"),
     path("sms/callback/<uuid:attempt_id>/", callback, name="sms_callback"),
     path("message-templates/", v.message_templates, name="message_templates"),
     path("account/password/", v.password_change, name="password_change"),

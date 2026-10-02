@@ -60,3 +60,5 @@ The requested ADMIN account is prepared through the explicit one-time bootstrap 
 ## Repository map
 
 `core/services.py` owns financial and stock transactions; `core/models.py` owns constraints and schema; `core/views.py` owns scoped screens and endpoints. Templates and static assets make up the interface. Database migrations, integrity tests and remote browser checks are committed alongside the application.
+
+Physical stock-count workflow: [operator guide](docs/STOCK_COUNTS.md).

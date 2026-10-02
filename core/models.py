@@ -309,3 +309,37 @@ class Correction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
+
+
+class StockCount(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    scope = models.CharField(max_length=80, blank=True)
+    status = models.CharField(max_length=12, default="draft")
+    note = models.TextField(blank=True)
+    review_note = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class StockCountLine(models.Model):
+    count = models.ForeignKey(StockCount, related_name="lines", on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    expected = models.PositiveIntegerField()
+    movement_id = models.PositiveBigIntegerField(default=0)
+    counted = models.PositiveIntegerField(null=True, blank=True)
+    reason = models.CharField(max_length=240, blank=True)
+    class Meta:
+        ordering = ["product__name", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["count", "product"], name="one_product_per_count"),
+            models.CheckConstraint(condition=Q(counted__isnull=True) | Q(counted__lte=2000000000), name="count_quantity_limit"),
+        ]
+    @property
+    def variance(self):
+        return None if self.counted is None else self.counted - self.expected
