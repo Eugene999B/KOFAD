@@ -337,7 +337,13 @@ def customer_search(request, branch):
     query = request.GET.get("q", "").strip()[:100]
     rows = Party.objects.filter(branch=branch, kind="customer")
     if query:
-        rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query))
+        phone_filter = Q(phone__icontains=query)
+        try:
+            from .identity import phone_variants
+            phone_filter |= Q(phone__in=phone_variants(query))
+        except ValidationError:
+            pass
+        rows = rows.filter(Q(name__icontains=query) | phone_filter)
     results = []
     for party in rows.order_by("name")[:20]:
         sales = Document.objects.filter(branch=branch, party=party, kind="sale")
