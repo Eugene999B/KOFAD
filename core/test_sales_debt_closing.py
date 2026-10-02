@@ -185,10 +185,21 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
 
     def test_debt_snapshot_has_aging_credit_usage_and_recent_payments(self):
         today = timezone.localdate()
-        old = s.post_trade(self.user, self.branch, self.payload(
-            payments=[], party=self.customer.pk,
-            due_date=(today - timedelta(days=45)).isoformat(),
-        ), uuid.uuid4())
+        old = Document(
+            id=uuid.uuid4(),
+            reference="AGING-OLD-001",
+            branch=self.branch,
+            kind="sale",
+            party=self.customer,
+            finalized=True,
+            total=Decimal("50.00"),
+            paid=Decimal("0.00"),
+            due_date=today - timedelta(days=45),
+            note="Historical aging fixture",
+            created_by=self.user,
+            created_at=timezone.now() - timedelta(days=50),
+        )
+        old.save_base(raw=True, force_insert=True, using="default")
         current = s.post_trade(self.user, self.branch, self.payload(
             payments=[], party=self.customer.pk,
             due_date=(today + timedelta(days=10)).isoformat(),
