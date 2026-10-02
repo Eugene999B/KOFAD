@@ -208,6 +208,8 @@ def trade_screen(request, branch, kind):
         "max_discount": company.max_discount_percent,
         "max_price_reduction": company.max_price_reduction_percent,
         "credit_override_available": kind == "sale" and company.max_credit_override > 0,
+        "allow_credit_sales": kind == "sale" and company.allow_credit_sales,
+        "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
         )})
