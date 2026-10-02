@@ -3,10 +3,8 @@ import hashlib
 import hmac
 import json
 from collections import Counter
-from datetime import datetime, timezone as dt_timezone
-from decimal import Decimal
+from datetime import timezone as dt_timezone
 from itertools import chain
-from uuid import UUID
 
 from django.apps import apps
 from django.conf import settings
@@ -18,7 +16,7 @@ from django.db import connection, transaction
 from django.db.migrations.recorder import MigrationRecorder
 from django.utils import timezone
 
-from .models import Access, Audit, Branch, Company, MessageTemplate
+from .models import Audit, Branch, Company
 
 
 BACKUP_FORMAT = "kofad-full-system-backup"
