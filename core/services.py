@@ -3,7 +3,7 @@ import hashlib
 import json
 import uuid
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -28,6 +28,39 @@ def money(value):
         return amount.quantize(Decimal(".01"))
     except (InvalidOperation, ValueError, TypeError):
         raise ValidationError("Enter a nonnegative amount with at most two decimal places.")
+
+
+def percent(value):
+    try:
+        amount = Decimal(str(value or 0))
+        if not amount.is_finite() or amount < 0 or amount > 100:
+            raise ValueError
+        if amount != amount.quantize(Decimal(".01")):
+            raise ValueError
+        return amount.quantize(Decimal(".01"))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValidationError("Enter a percentage from 0 to 100 with at most two decimal places.")
+
+
+def company_policy():
+    return Company.objects.first() or Company()
+
+
+PAYMENT_FLAGS = {
+    "cash": "payment_cash",
+    "momo": "payment_momo",
+    "bank": "payment_bank",
+    "card": "payment_card",
+}
+
+
+def active_payment_methods(company=None):
+    company = company or company_policy()
+    return [(code, label) for code, label in Payment.METHODS if getattr(company, PAYMENT_FLAGS[code], True)]
+
+
+def payment_method_enabled(method, company=None):
+    return method in dict(active_payment_methods(company))
 
 
 def units(value, signed=False):
@@ -92,7 +125,9 @@ def stock_move(user, branch, product, delta, reference, reason):
 
 
 def reference(kind, branch):
-    return f"{kind[:3].upper()}-{branch.code.upper()}-{uuid.uuid4().hex[:12].upper()}"
+    core = f"{kind[:3].upper()}-{branch.code.upper()}-{uuid.uuid4().hex[:12].upper()}"
+    prefix = company_policy().reference_prefix.strip().upper()
+    return f"{prefix}-{core}" if prefix else core
 
 
 def balance(invoice):
@@ -105,8 +140,9 @@ def party_debt(party):
     return sum((balance(d) for d in Document.objects.filter(party=party, kind=kind)), ZERO)
 
 
-def payments(document, rows, direction):
+def payments(document, rows, direction, enforce_enabled=True):
     total = ZERO
+    company = company_policy()
     if not isinstance(rows, list) or len(rows) > 8:
         raise ValidationError("Provide up to eight payment entries.")
     for row in rows:
@@ -118,6 +154,8 @@ def payments(document, rows, direction):
         method = row.get("method")
         if method not in dict(Payment.METHODS):
             raise ValidationError("Unknown payment method.")
+        if enforce_enabled and not payment_method_enabled(method, company):
+            raise ValidationError(f"{dict(Payment.METHODS)[method]} is disabled in Settings.")
         ref = str(row.get("reference", ""))[:100]
         Payment.objects.create(document=document, method=method, amount=amount, reference=ref, direction=direction)
         total += amount
@@ -134,6 +172,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
     if request.document_id:
         return request.document
     ensure_open(branch)
+    company = company_policy()
     rows = payload.get("items", [])
     if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
         raise ValidationError("Add between one and 100 items.")
@@ -145,9 +184,14 @@ def post_trade(user, branch, payload, key, kind="sale"):
             raise ValidationError("Choose a valid customer or supplier at this location.")
     if kind == "purchase" and not party:
         raise ValidationError("A supplier is required.")
+
+    override_reason = str(payload.get("override_reason", "")).strip()
+    elevated = []
+    overrides = []
     doc = Document.objects.create(branch=branch, kind=kind, party=party, total=0, paid=0, finalized=False,
         created_by=user, reference=reference(kind, branch), note=str(payload.get("note", ""))[:2000])
     total = ZERO
+
     for row in rows:
         if not isinstance(row, dict):
             raise ValidationError("Invalid line item.")
@@ -159,44 +203,138 @@ def post_trade(user, branch, payload, key, kind="sale"):
         if mode not in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack"):
             raise ValidationError("Invalid selling mode.")
         factor = product.pack_size if mode.endswith("pack") else 1
+        discount = ZERO
+        list_price = None
+
         if kind == "sale":
-            price = getattr(product, mode)
-            if price is None:
+            configured = getattr(product, mode)
+            if configured is None:
                 raise ValidationError(f"{mode.replace('_', ' ')} is disabled for {product.name}.")
+            list_price = money(configured)
+            price = list_price
+            requested = row.get("price")
+            if requested not in (None, ""):
+                requested_price = money(requested)
+                if requested_price != list_price:
+                    if not company.allow_price_overrides:
+                        raise ValidationError("Price overrides are disabled in Settings.")
+                    price = requested_price
+                    overrides.append({
+                        "type": "price", "product": product.sku,
+                        "from": str(list_price), "to": str(price),
+                    })
+                    if list_price > 0 and price < list_price:
+                        reduction = ((list_price - price) * Decimal("100") / list_price).quantize(
+                            Decimal(".01"), rounding=ROUND_HALF_UP)
+                        if reduction > company.max_price_reduction_percent:
+                            raise ValidationError(
+                                f"Price reduction for {product.name} exceeds the configured maximum of "
+                                f"{company.max_price_reduction_percent}%."
+                            )
+                        if reduction > company.staff_price_reduction_limit:
+                            if not user.has_perm("core.approve_operations"):
+                                raise ValidationError(
+                                    f"A manager with approval authority must complete price reductions above "
+                                    f"{company.staff_price_reduction_limit}%."
+                                )
+                            elevated.append(f"price reduction {product.sku} {reduction}%")
+
+            discount = percent(row.get("discount", 0))
+            if discount:
+                if not company.allow_discounts:
+                    raise ValidationError("Discounts are disabled in Settings.")
+                if price != list_price:
+                    raise ValidationError("Use either a price override or a discount on a line, not both.")
+                if discount > company.max_discount_percent:
+                    raise ValidationError(
+                        f"Discount for {product.name} exceeds the configured maximum of "
+                        f"{company.max_discount_percent}%."
+                    )
+                if discount > company.staff_discount_limit:
+                    if not user.has_perm("core.approve_operations"):
+                        raise ValidationError(
+                            f"A manager with approval authority must complete discounts above "
+                            f"{company.staff_discount_limit}%."
+                        )
+                    elevated.append(f"discount {product.sku} {discount}%")
+                overrides.append({"type": "discount", "product": product.sku, "percent": str(discount)})
+                price = (price * (Decimal("100") - discount) / Decimal("100")).quantize(
+                    Decimal(".01"), rounding=ROUND_HALF_UP)
         else:
             price = money(row.get("price"))
+            list_price = price
+
         price = money(price)
         if qty * factor > 1000000000:
             raise ValidationError("Base-unit quantity exceeds the supported posting limit.")
         line_total = money(price * qty)
         Line.objects.create(document=doc, product=product, description=product.name,
-            mode=mode, quantity=qty, factor=factor, unit_price=price, unit_cost=product.cost, total=line_total)
+            mode=mode, quantity=qty, factor=factor, list_price=list_price, unit_price=price,
+            discount_percent=discount, unit_cost=product.cost, total=line_total)
         stock_move(user, branch, product, qty * factor * (-1 if kind == "sale" else 1), doc.reference, kind)
         total += line_total
+
+    total = money(total)
+    if kind == "sale":
+        if company.customer_required_above and total >= company.customer_required_above and not party:
+            raise ValidationError(
+                f"A named customer is required for sales of {company.currency} "
+                f"{company.customer_required_above} or more."
+            )
+        if company.sale_manager_threshold and total > company.sale_manager_threshold:
+            if not user.has_perm("core.approve_operations"):
+                raise ValidationError(
+                    f"A manager with approval authority must complete sales above "
+                    f"{company.currency} {company.sale_manager_threshold}."
+                )
+            elevated.append(f"sale total {total}")
+
+    if overrides and len(override_reason) < 10:
+        raise ValidationError("Explain the discount or price override in at least ten characters.")
+
     paid = payments(doc, payload.get("payments", []), 1 if kind == "sale" else -1)
     if paid > total:
         raise ValidationError("Payments exceed the total. Enter the amount retained, excluding change.")
+
     due = None
+    credit_override = ZERO
     if paid < total:
         if not party:
             raise ValidationError("A customer is required for credit.")
+        if kind == "sale" and not company.allow_credit_sales:
+            raise ValidationError("Credit sales are disabled in Settings.")
         try:
             due = date.fromisoformat(str(payload.get("due_date", "")))
         except ValueError:
             raise ValidationError("A due date is required for an unpaid balance.")
         if due < timezone.localdate():
             raise ValidationError("The due date cannot be in the past.")
-        if kind == "sale" and party_debt(party) + total - paid > party.credit_limit:
-            raise ValidationError("This sale exceeds the customer's credit limit.")
-    # Finalize the new document once, before the immutable database trigger protects later updates.
-    doc.total, doc.paid, doc.due_date = money(total), paid, due
+        if kind == "sale" and due > timezone.localdate() + timezone.timedelta(days=company.max_credit_days):
+            raise ValidationError(f"Credit terms cannot exceed {company.max_credit_days} days.")
+        if kind == "sale":
+            projected = party_debt(party) + total - paid
+            if projected > party.credit_limit:
+                credit_override = projected - party.credit_limit
+                if (not user.has_perm("core.approve_operations") or company.max_credit_override <= 0
+                        or credit_override > company.max_credit_override):
+                    raise ValidationError(
+                        "This sale exceeds the customer's credit limit. A permitted manager override is required."
+                    )
+                if len(override_reason) < 10:
+                    raise ValidationError("Explain the credit-limit override in at least ten characters.")
+                elevated.append(f"credit override {credit_override}")
+
+    doc.total, doc.paid, doc.due_date = total, paid, due
     doc.finalized = True
     doc.save(update_fields=["total", "paid", "due_date", "finalized"])
     request.document = doc
     request.save(update_fields=["document"])
-    audit(user, branch, kind + ".posted", doc.reference, {"total": str(total), "paid": str(paid)})
+    audit(user, branch, kind + ".posted", doc.reference, {
+        "total": str(total), "paid": str(paid), "overrides": overrides,
+        "elevated_authority": elevated, "credit_override": str(credit_override),
+        "override_reason": override_reason if overrides or credit_override else "",
+    })
     return doc
-
 
 @transaction.atomic
 def post_payment(user, branch, payload, key, supplier=False):
@@ -276,12 +414,21 @@ def post_expense(user, branch, payload, key):
     note = str(payload.get("note", "")).strip()
     if amount <= 0 or len(note) < 5:
         raise ValidationError("Provide a positive amount and a meaningful expense description.")
+    company = company_policy()
+    elevated = bool(company.expense_manager_threshold and amount > company.expense_manager_threshold)
+    if elevated and not user.has_perm("core.approve_operations"):
+        raise ValidationError(
+            f"A manager with approval authority must post expenses above "
+            f"{company.currency} {company.expense_manager_threshold}."
+        )
     doc = Document.objects.create(branch=branch, kind="expense", reference=reference("expense", branch),
         total=amount, paid=amount, note=note, created_by=user)
     payments(doc, [{"method": payload.get("method"), "amount": amount}], -1)
     request.document = doc
     request.save(update_fields=["document"])
-    audit(user, branch, "expense.posted", doc.reference, {"amount": str(amount), "note": note})
+    audit(user, branch, "expense.posted", doc.reference, {
+        "amount": str(amount), "note": note, "manager_threshold": elevated,
+    })
     return doc
 
 
@@ -430,7 +577,8 @@ def review_correction(user, branch, correction_id, approve):
                 original=original, total=original.total, paid=original.paid, note=item.reason,
                 reference=reference("reversal",branch),created_by=user)
             for payment in original.payments.all():
-                payments(doc,[{"method":payment.method,"amount":payment.amount,"reference":payment.reference}],-payment.direction)
+                payments(doc,[{"method":payment.method,"amount":payment.amount,"reference":payment.reference}],
+                    -payment.direction, enforce_enabled=False)
             item.posted = doc
         item.status = "approved"
     else:
