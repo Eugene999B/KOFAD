@@ -8,6 +8,7 @@ from itertools import chain
 
 from django.apps import apps
 from django.conf import settings
+from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.core import serializers
@@ -48,7 +49,7 @@ def _managed(model):
 
 
 def backup_models():
-    ordered = [ContentType, Permission, Group, User]
+    ordered = [ContentType, Permission, Group, User, LogEntry]
     ordered.extend(
         model for model in apps.get_app_config("core").get_models()
         if _managed(model) and model._meta.label_lower not in EXCLUDED_BACKUP_MODELS
@@ -70,7 +71,7 @@ def current_migrations():
     return [
         [app, name]
         for app, name in MigrationRecorder.Migration.objects.order_by("app", "name").values_list("app", "name")
-        if app in {"contenttypes", "auth", "core"}
+        if app in {"contenttypes", "auth", "admin", "core"}
     ]
 
 
@@ -192,7 +193,7 @@ def _table_names_for_restore():
     existing = set(connection.introspection.table_names())
     names = {
         name for name in existing
-        if name == "django_content_type" or name.startswith("auth_") or name.startswith("core_")
+        if name in {"django_content_type", "django_admin_log"} or name.startswith("auth_") or name.startswith("core_")
     }
     return sorted(names)
 
