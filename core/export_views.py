@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
@@ -78,25 +78,30 @@ def _rows(request, dataset, branch, first, last):
         ]
 
     if dataset == "inventory":
-        balances = {stock.product_id: stock for stock in Stock.objects.filter(branch=branch).select_related("product")}
+        balances = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+        quarantine = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
+            "product_id").annotate(total=Sum("quantity")).values_list("product_id", "total"))
         rows = []
         for product in Product.objects.order_by("name"):
-            stock = balances.get(product.pk)
-            quantity = stock.quantity if stock else 0
+            quantity = balances.get(product.pk, 0)
+            held = quarantine.get(product.pk, 0)
             rows.append({
                 "sku": product.sku, "product": product.name, "category": product.category,
                 "base_unit": product.base_unit, "pack": f"{product.pack_name} × {product.pack_size}",
-                "quantity": quantity, "packs": quantity // product.pack_size,
-                "loose": quantity % product.pack_size, "cost": product.cost,
-                "value": product.cost * quantity, "retail_unit": product.retail_unit or "",
+                "quantity": quantity, "quarantine": held, "physical": quantity + held,
+                "packs": quantity // product.pack_size, "loose": quantity % product.pack_size,
+                "cost": product.cost, "value": product.cost * quantity,
+                "quarantine_value": product.cost * held, "retail_unit": product.retail_unit or "",
                 "retail_pack": product.retail_pack or "", "wholesale_unit": product.wholesale_unit or "",
                 "wholesale_pack": product.wholesale_pack or "", "reorder": product.reorder_level,
                 "status": "Active" if product.active else "Archived",
             })
         return rows, [
             ("sku", "SKU"), ("product", "Product"), ("category", "Category"), ("base_unit", "Base unit"),
-            ("pack", "Pack structure"), ("quantity", "Base units"), ("packs", "Full packs"), ("loose", "Loose units"),
-            ("cost", "Unit cost"), ("value", "Stock value"), ("retail_unit", "Retail unit"),
+            ("pack", "Pack structure"), ("quantity", "Sellable units"), ("quarantine", "Quarantined units"),
+            ("physical", "Total physical units"), ("packs", "Sellable full packs"), ("loose", "Sellable loose units"),
+            ("cost", "Unit cost"), ("value", "Sellable stock value"),
+            ("quarantine_value", "Quarantine value"), ("retail_unit", "Retail unit"),
             ("retail_pack", "Retail pack"), ("wholesale_unit", "Wholesale unit"),
             ("wholesale_pack", "Wholesale pack"), ("reorder", "Reorder level"), ("status", "Status"),
         ]
