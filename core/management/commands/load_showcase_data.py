@@ -601,6 +601,9 @@ class Command(BaseCommand):
             day = min(today - timedelta(days=1), source.document.created_at.date() + timedelta(days=6))
             qty = 1
             amount = money(source.unit_price * qty)
+            outstanding = purchase_outstanding.get(source.document_id, Decimal("0"))
+            credit = min(outstanding, amount)
+            refund = amount - credit
             supplier_return_counter += 1
             ret = raw_insert(
                 Document,
@@ -612,7 +615,7 @@ class Command(BaseCommand):
                 original=source.document,
                 finalized=True,
                 total=amount,
-                paid=0,
+                paid=refund,
                 due_date=None,
                 note="Synthetic showcase supplier return",
                 created_by=actor,
@@ -632,16 +635,18 @@ class Command(BaseCommand):
                 total=amount,
                 source_line=source,
             )
-            outstanding = purchase_outstanding.get(source.document_id, Decimal("0"))
-            credit = min(outstanding, amount)
             if credit:
                 Allocation.objects.create(payment_document=ret, invoice=source.document, amount=credit)
                 purchase_outstanding[source.document_id] -= credit
-            refund = amount - credit
             if refund > 0:
-                ret.paid = refund
-                # The document trigger allows update only while finalized is false, so create paid amount up-front is preferable.
-                raise CommandError("Showcase supplier return generation produced an unexpected cash refund.")
+                raw_insert(
+                    Payment,
+                    document=ret,
+                    method="bank",
+                    amount=refund,
+                    reference=f"SHOW-SRET-REFUND-{supplier_return_counter:03d}",
+                    direction=1,
+                )
             delta = -(qty * source.factor)
             balances[source.product_id] += delta
             raw_insert(
