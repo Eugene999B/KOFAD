@@ -22,6 +22,7 @@ class BusinessPolicyTests(Fixtures, TestCase):
         payload = {
             "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1}],
             "payments": [{"method": "cash", "amount": "50"}],
+            "party": self.customer.pk,
         }
         payload.update(changes)
         return payload
@@ -151,8 +152,8 @@ class BusinessPolicyTests(Fixtures, TestCase):
         self.company.save()
         cashier = self.policy_user("threshold-cashier", "operate_sales")
 
-        with self.assertRaisesRegex(ValidationError, "named customer is required"):
-            s.post_trade(cashier, self.branch, self.sale_payload(), uuid.uuid4())
+        with self.assertRaisesRegex(ValidationError, "new customer's name"):
+            s.post_trade(cashier, self.branch, self.sale_payload(party=None), uuid.uuid4())
 
         payload = self.sale_payload(party=self.customer.pk)
         with self.assertRaisesRegex(ValidationError, "manager with approval authority"):
