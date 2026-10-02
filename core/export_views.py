@@ -11,7 +11,7 @@ from django.utils import timezone
 from . import services as s
 from .context import shell
 from .exports import export
-from .models import Audit, Document, Movement, Party, Payment, Product, Stock
+from .models import Audit, Document, Movement, Party, Product, Stock
 
 
 DATASETS = {
@@ -190,22 +190,28 @@ def export_center(request):
 
 @login_required
 def download(request, format):
-    branch = _branch(request)
-    dataset = request.GET.get("dataset", "")
-    if dataset not in DATASETS:
-        raise ValidationError("Choose a valid export.")
-    label, codes = DATASETS[dataset]
-    if not _allowed(request.user, codes):
-        raise PermissionDenied("You do not have permission to export this information.")
-    first, last, start, end = _dates(request)
-    rows, columns = _rows(request, dataset, branch, first, last)
-    s.audit(request.user, branch, "export.downloaded", dataset, {
-        "format": format, "start": start, "end": end, "rows": len(rows),
-    })
-    date_suffix = "" if dataset in {"customers", "suppliers", "inventory", "staff"} else f" · {start} to {end}"
-    company = shell(request)["company"]
-    return export(
-        rows, format, f"{label}{date_suffix}", company, columns,
-        filename=f"kofad-{dataset}",
-        sheet_name=label[:31],
-    )
+    try:
+        branch = _branch(request)
+        dataset = request.GET.get("dataset", "")
+        if dataset not in DATASETS:
+            raise ValidationError("Choose a valid export.")
+        label, codes = DATASETS[dataset]
+        if not _allowed(request.user, codes):
+            raise PermissionDenied("You do not have permission to export this information.")
+        first, last, start, end = _dates(request)
+        rows, columns = _rows(request, dataset, branch, first, last)
+        s.audit(request.user, branch, "export.downloaded", dataset, {
+            "format": format, "start": start, "end": end, "rows": len(rows),
+        })
+        date_suffix = "" if dataset in {"customers", "suppliers", "inventory", "staff"} else f" · {start} to {end}"
+        company = shell(request)["company"]
+        return export(
+            rows, format, f"{label}{date_suffix}", company, columns,
+            filename=f"kofad-{dataset}",
+            sheet_name=label[:31],
+        )
+    except ValidationError as exc:
+        return render(request, "error.html", {
+            "title": "Check your export",
+            "error": "; ".join(exc.messages),
+        }, status=400)
