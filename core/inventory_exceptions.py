@@ -101,7 +101,7 @@ def review_supplier_return(user, branch, return_id, approve):
     s.permit(user, branch, "approve_operations")
     s.permit(user, branch, "operate_finance")
     branch = s.lock_branch(branch)
-    item = SupplierReturn.objects.select_for_update().select_related(
+    item = SupplierReturn.objects.select_for_update(of=("self",)).select_related(
         "source_line__document", "source_line__product", "source_line__document__party"
     ).get(pk=return_id, branch=branch)
     if item.status != "requested":
