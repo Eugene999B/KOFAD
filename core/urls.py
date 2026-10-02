@@ -4,6 +4,7 @@ from . import account as accounts
 from . import count_views
 from . import admin_views
 from . import export_views
+from . import maintenance_views
 from .sms.views import callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
@@ -49,6 +50,8 @@ urlpatterns = [
     path("settings/payments/", v.payment_policy_settings, name="payment_policy_settings"),
     path("settings/finance/", v.finance_policy_settings, name="finance_policy_settings"),
     path("settings/receipts/", v.receipt_policy_settings, name="receipt_policy_settings"),
+    path("settings/backup/", maintenance_views.backup_restore, name="backup_restore"),
+    path("settings/backup/download/", maintenance_views.download_backup, name="backup_download"),
     path("exports/", export_views.export_center, name="export_center"),
     path("exports/download/<str:format>/", export_views.download, name="export_download"),
     path("communications/", v.communications, name="communications"),
