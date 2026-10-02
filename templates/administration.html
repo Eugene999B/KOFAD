@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block actions %}<a class="button" href="/administration/users/new/">＋ Add staff member</a>{% endblock %}
-{% block content %}
+{% block content %}<h2 class="sr-only">Access and configuration</h2>
 <section class="hero-panel admin-hero"><div><p class="eyebrow">OWNER CONTROL CENTRE</p><h2>Run KOFAD without entering the technical backend.</h2><p>Manage staff, roles, access, exports and company controls from the same workspace used for daily business.</p></div><span class="pill">Business administration</span></section>
 <div class="admin-metrics"><article><span class="metric-icon">◎</span><div><small>Active staff</small><strong>{{ active_users }}</strong></div></article><article><span class="metric-icon">◈</span><div><small>Roles</small><strong>{{ role_count }}</strong></div></article><article><span class="metric-icon">⌂</span><div><small>Active locations</small><strong>{{ branch_count }}</strong></div></article><article><span class="metric-icon">○</span><div><small>Disabled accounts</small><strong>{{ disabled_users }}</strong></div></article></div>
 <div class="settings-grid">
