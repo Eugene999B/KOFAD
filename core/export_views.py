@@ -97,15 +97,21 @@ def _rows(request, dataset, branch, first, last):
         ]
 
     if dataset in {"sales", "purchases", "expenses", "payments", "transactions"}:
-        kinds = {
-            "sales": ["sale", "return"],
-            "purchases": ["purchase"],
-            "expenses": ["expense", "reversal"],
-            "payments": ["collection", "supplier_payment"],
-            "transactions": list(dict(Document.KINDS)),
-        }[dataset]
+        period = Q(created_at__date__gte=first, created_at__date__lte=last)
+        if dataset == "sales":
+            scope = Q(kind__in=["sale", "return"])
+        elif dataset == "purchases":
+            scope = Q(kind="purchase")
+        elif dataset == "expenses":
+            scope = Q(kind="expense") | Q(kind="reversal", original__kind="expense")
+        elif dataset == "payments":
+            scope = Q(kind__in=["collection", "supplier_payment"]) | Q(
+                kind="reversal", original__kind__in=["collection", "supplier_payment"]
+            )
+        else:
+            scope = Q(kind__in=list(dict(Document.KINDS)))
         docs = Document.objects.filter(
-            branch=branch, kind__in=kinds, created_at__date__gte=first, created_at__date__lte=last
+            Q(branch=branch) & period & scope
         ).select_related("party", "created_by").order_by("-created_at")
         rows = [{
             "reference": doc.reference,
