@@ -31,7 +31,7 @@ The repository now contains a Django/PostgreSQL implementation of the core opera
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
 - Original SVG identity and responsive desktop/mobile screens.
 
-**Status:** pre-production implementation. The entire master plan is not complete. Tax handling, configurable approval thresholds, provider messaging, report families, advanced catalog/counts and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
+**Status:** pre-production implementation. The entire master plan is not complete. Tax handling, configurable approval thresholds, WhatsApp delivery, report families, advanced catalog/counts and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
 
 ## Verification
 
@@ -47,7 +47,15 @@ GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration 
 - [Brand assets and usage](docs/BRAND.md)
 - [Logo](static/brand/kofad-logo.svg)
 
-No default production password exists. Bootstrap creates role templates and a location; an operator creates the owner account and completes configuration. Dependencies used by the container are pinned in requirements.lock. Railway is configured but has not been deployed.
+No default administrator is silently created at startup. Bootstrap creates role templates and a location; an operator creates the owner account and completes configuration. Dependencies used by the container are pinned in requirements.lock. Railway is configured but has not been deployed.
+
+## SMS and initial administrator
+
+Arkesel SMS now has a durable outbox, editable receipt/payment/reminder templates, sandbox mode, delivery callbacks and retry controls. Future providers use a registered adapter. See [SMS setup](docs/SMS.md).
+
+The requested ADMIN account is prepared through the explicit one-time bootstrap command, with mandatory password replacement and MFA before business access. It will be created in the deployment database when that command runs. See [initial administrator setup](docs/RAILWAY.md#requested-initial-administrator).
+
+[CHALIN03 comparison](docs/CHALIN03_REVIEW.md) records the reviewed features and KOFAD improvements without claiming complete parity.
 
 ## Repository map
 

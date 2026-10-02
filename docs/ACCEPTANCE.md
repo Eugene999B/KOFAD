@@ -27,7 +27,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Add approval thresholds for expenses, price overrides, discounts and credit overrides. These overrides are currently unavailable.
 - Extend structured stock-count sessions, damaged stock/transfer discrepancy handling and supplier returns.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.
-- Implement signed messaging webhooks, provider adapters, delivery queues and receipt attachments. Current messages remain drafts.
+- Arkesel adapter, durable outbox, retry controls, templates and token-authenticated callbacks are implemented. Validate the real provider sandbox and approved sender ID, then enable the worker. WhatsApp and receipt-file attachments remain incomplete.
 - Extend the implemented sales/gross-profit, receivables-aging and inventory-valuation reports with consolidated branch comparisons and operational analytics.
 - Add complete export coverage for statements, transfers, closings and other report families.
 - Extend implemented scoped global search with scalable pagination and export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.

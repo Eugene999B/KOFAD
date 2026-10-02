@@ -39,6 +39,9 @@ jobs:
       - run: python manage.py test --noinput
       - run: pip-audit -r requirements.lock
       - run: playwright install --with-deps chromium
+      - run: python manage.py bootstrap_admin --confirm-initial-setup
+        env:
+          KOFAD_INITIAL_ADMIN_PASSWORD: ADMIN
       - run: python manage.py bootstrap --demo
         env:
           DEMO_PASSWORD: isolated-demo-browser-password

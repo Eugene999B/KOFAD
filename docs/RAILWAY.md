@@ -51,3 +51,17 @@ This clears enrollment, revokes sessions and records an audit event. Keep at lea
 Monitor health checks, database capacity, application errors, request latency and failed logins. Never log passwords, TOTP keys, session cookies or payment credentials.
 
 If a release fails, revert to the last verified application commit only when its schema remains compatible. Do not blindly reverse financial migrations or overwrite live data. Stop new postings during incident recovery. Verify stock, payment totals and idempotency outcomes before reopening the counter.
+
+## Requested initial administrator
+
+KOFAD has no running deployment database yet. The account setup is prepared and tested in the repository; it is not a claim that a live account already exists.
+
+For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested temporary value ADMIN and run:
+
+python manage.py bootstrap_admin --confirm-initial-setup
+
+This creates username ADMIN with full administrative access. The application blocks all business pages and APIs until the password is changed; authenticator enrollment follows. The command refuses to reset or elevate an existing ADMIN account. Remove the temporary deployment variable immediately after setup.
+
+Use a private setup session before exposing the fresh service publicly. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
+
+For Arkesel web/worker configuration, see SMS.md.

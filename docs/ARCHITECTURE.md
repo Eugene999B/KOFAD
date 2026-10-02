@@ -59,7 +59,7 @@ Django groups define custom permission sets; Access assigns locations. Default g
 
 Screen and export transaction registers share the same query and location checks. CSV/Excel text is protected against formula injection. PDF and Word exports escape/encode user text through their document libraries. Export audit events record format and date filter.
 
-Messaging currently stores opted-in contact drafts. No provider calls, delivery claims, automatic reminders or bulk sends occur. Approved provider adapters, credential storage, webhook signatures and delivery retry/idempotency must be implemented before activating messages.
+SMS now uses a durable outbox and an Arkesel provider adapter with consent checks, per-attempt delivery callbacks, explicit outcome states and bounded retries. Live credentials are deployment variables. No live messages were sent during development. WhatsApp remains draft-only. See SMS.md.
 
 ## Operating constraints
 
