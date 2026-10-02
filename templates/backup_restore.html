@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block actions %}<a class="button secondary" href="/settings/">← Settings</a>{% endblock %}
+{% block content %}
+<section class="hero-panel">
+  <div>
+    <p class="eyebrow">SYSTEM RECOVERY</p>
+    <h2>Backup before you change what cannot be undone.</h2>
+    <p>Full-system backups preserve KOFAD business data, users, roles, settings, audit evidence and transactional records. Restore accepts only an untampered backup created by this KOFAD installation on the exact deployed schema.</p>
+  </div>
+  <span class="pill">System administrator only</span>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">1 · BACKUP</p>
+      <h2>Download a signed full-system backup</h2>
+      <p class="muted">The file is checksummed and cryptographically signed. Keep it private because it contains customer, staff and financial information.</p>
+    </div>
+    {% if recent_backup %}<span class="pill status-good">Safety backup downloaded</span>{% endif %}
+  </div>
+  <div class="notice">
+    <strong>Before restore or reset:</strong> KOFAD requires a fresh backup download from this browser session within the previous 30 minutes.
+  </div>
+  <a class="button" href="{% url 'backup_download' %}">⇩ Download full KOFAD backup</a>
+</section>
+
+<section class="panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">2 · VALIDATE</p>
+      <h2>Check a backup without changing data</h2>
+      <p class="muted">Validation verifies the KOFAD format, HMAC signature, SHA-256 checksum, model manifest and exact migration schema.</p>
+    </div>
+  </div>
+  <form method="post" enctype="multipart/form-data" class="stack-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="validate">
+    <label for="validate-file">KOFAD backup file</label>
+    <input id="validate-file" type="file" name="backup_file" accept=".json,.kofad.json,application/json" required>
+    <button class="button secondary">Validate backup</button>
+  </form>
+  {% if validation %}
+  <div class="notice success">
+    <strong>Valid backup</strong><br>
+    Created {{ validation.created_at }} by {{ validation.created_by }} · {{ validation.record_count }} records across {{ validation.model_count }} model areas.<br>
+    <small>SHA-256: {{ validation.checksum }}</small>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel danger-zone">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">3 · RESTORE</p>
+      <h2>Replace the current system from a backup</h2>
+      <p class="muted">Restore replaces KOFAD users, permissions, settings, products, customers, stock, transactions, debts, messages and audit history with the selected backup snapshot. You will be signed out after a successful restore.</p>
+    </div>
+    <span class="pill amber">Destructive</span>
+  </div>
+  <form method="post" enctype="multipart/form-data" class="stack-form maintenance-confirm-form" data-required-confirmation="{{ restore_phrase }}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="restore">
+    <label for="restore-file">Backup file to restore</label>
+    <input id="restore-file" type="file" name="backup_file" accept=".json,.kofad.json,application/json" required>
+    <label for="restore-password">Administrator password</label>
+    <input id="restore-password" type="password" name="password" autocomplete="current-password" required>
+    <label for="restore-confirm">Type exactly: <code>{{ restore_phrase }}</code></label>
+    <input id="restore-confirm" name="confirmation" autocomplete="off" required>
+    <label class="switch-row">
+      <input type="checkbox" name="understand" value="yes" required>
+      <span><strong>I understand the current database contents will be replaced.</strong><small>The uploaded backup must pass all integrity and schema checks first.</small></span>
+    </label>
+    <button class="button danger" {% if not recent_backup %}disabled title="Download a fresh backup first"{% endif %}>Restore full system</button>
+  </form>
+</section>
+
+<section class="panel danger-zone">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">4 · RESET</p>
+      <h2>Reset all business data</h2>
+      <p class="muted">This clears products, stock, customers, suppliers, sales, purchases, debts, payments, expenses, returns, stock operations, closings, messages and business audit records.</p>
+    </div>
+    <span class="pill amber">Fresh start</span>
+  </div>
+  <div class="notice">
+    <strong>KOFAD deliberately preserves access and configuration:</strong> administrator accounts, roles/permissions, company settings, business locations and message templates remain so the system does not lock you out after a reset.
+  </div>
+  <form method="post" class="stack-form maintenance-confirm-form" data-required-confirmation="{{ reset_phrase }}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="reset">
+    <label for="reset-password">Administrator password</label>
+    <input id="reset-password" type="password" name="password" autocomplete="current-password" required>
+    <label for="reset-confirm">Type exactly: <code>{{ reset_phrase }}</code></label>
+    <input id="reset-confirm" name="confirmation" autocomplete="off" required>
+    <label class="switch-row">
+      <input type="checkbox" name="understand" value="yes" required>
+      <span><strong>I understand business data will be permanently cleared.</strong><small>A fresh downloaded backup is required before KOFAD will execute the reset.</small></span>
+    </label>
+    <button class="button danger" {% if not recent_backup %}disabled title="Download a fresh backup first"{% endif %}>Reset business data</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-heading"><div><p class="eyebrow">RECOVERY RULES</p><h2>What KOFAD protects</h2></div><span class="pill status-good">Server enforced</span></div>
+  <p>Backup files are never trusted by filename. KOFAD checks their signature, checksum, record manifest and migration schema on the server. Restore and reset require the signed-in system administrator’s current password, an exact typed phrase, an explicit acknowledgement and a fresh safety backup.</p>
+</section>
+{% endblock %}
