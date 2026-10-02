@@ -24,8 +24,8 @@ Proprietary. Copyright KOFAD IMPEX ENTERPRISE. No license to use, distribute or 
 The repository now contains a Django/PostgreSQL implementation of the core operating workspace:
 
 - Sales counter with mixed retail/wholesale and unit/pack carts, held sales, configurable payment channels, controlled discounts/price overrides and credit.
-- Products, stock movements, independent adjustment approvals and dispatch/receive transfers.
-- Customer/supplier records, purchase receiving, debt allocation, returns, expenses and independently approved corrections.
+- Products, stock movements, independent adjustment approvals, dispatch/receive transfers, damaged-stock quarantine and inventory-loss evidence.
+- Customer/supplier records, purchase receiving, debt allocation, customer returns, independently reviewed supplier returns, expenses and independently approved corrections.
 - Daily channel reconciliation with independent verification and a posting lock after closing.
 - Receipts, statements, transaction/profit/stock/aging reports and PDF/Excel/Word/CSV exports.
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
