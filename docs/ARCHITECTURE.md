@@ -24,7 +24,7 @@ Serializing by branch is a deliberate initial safety tradeoff. Measure busy-coun
 
 - Decimal money with two fractional digits; invalid, nonfinite, negative and fractional-cent amounts are rejected.
 - Browser totals use integer cents. The server always recalculates sale prices.
-- Quantities are whole base units. One product supports independently enabled retail/wholesale unit/pack prices.
+- Quantities are whole base units. Full packs are a conversion and display layer over the same base-unit ledger, so a 12-unit box can be sold as 2 boxes + 6 loose units and stock remains exactly 330 base units / 27.50 boxes from a 360-unit opening balance. One product supports independently enabled retail/wholesale unit/pack prices.
 - Line snapshots preserve product description, price, pack conversion and standard cost at posting time.
 - Stock cannot fall below zero. Movements explain each balance change.
 - Client-requested discounts and sale-price overrides are accepted only when enabled in company settings. The server recalculates from the current configured product price, enforces hard reduction limits and manager-authority thresholds, requires an override reason, and snapshots list price/final price/discount on the immutable line.
@@ -34,7 +34,7 @@ Serializing by branch is a deliberate initial safety tradeoff. Measure busy-coun
 
 ## Debt and corrections
 
-An invoice starts with total minus initial payment. Subsequent allocations reduce outstanding debt. Collections cannot exceed the outstanding amount. Customer credit limits are checked under the same branch lock. Credit sales can be disabled, maximum credit days are configurable, and a user with approval authority may exceed a customer limit only within the configured maximum override and with a written reason.
+A sale always resolves to a named customer. Existing customers are searched within the active branch; new customers can be created atomically during checkout and Ghana phone numbers are canonicalized to +233 plus nine national digits. An invoice starts with total minus initial payment. Subsequent allocations reduce outstanding debt. The Debt Desk accepts a partial amount or the full customer balance and allocates one account payment across open invoices oldest-due-first under the branch lock. Collections cannot exceed the customer outstanding amount. Customer credit limits are checked under the same branch lock; zero means no individual customer cap while company credit policy still applies. Credit sales can be disabled, maximum credit days are configurable, and a user with approval authority may exceed a positive customer limit only within the configured maximum override and with a written reason.
 
 Returns refer to original sale lines and use the original selling units and price. Cumulative returned quantity cannot exceed quantity sold. Return value reduces outstanding debt first; any excess is a refund. Returns preserve the original document. Exchanges can be recorded as a return followed by a new sale; an explicit linked exchange workflow is not yet implemented.
 
@@ -66,6 +66,10 @@ These are server-side posting rules, not merely hidden interface controls. Thres
 Supplier returns must reference an original purchase line. Pending and approved return quantities cannot exceed the quantity purchased. A different authorized colleague with both approval and finance authority reviews the request. On approval, sellable stock is reduced, the return first reduces outstanding supplier debt through an allocation, and any excess is recorded as an inbound supplier refund on an enabled payment channel. The original purchase remains immutable.
 
 Transfer discrepancy receipts snapshot standard cost. When an independently reviewed discrepancy is confirmed as loss, KOFAD creates an inventory write-off document instead of inventing destination stock or restoring source stock. Quarantine write-offs use the same loss-document pattern.
+
+## Daily closing intelligence
+
+Closing is a reconciliation snapshot, not merely a net cash number. KOFAD separately records gross/net sales, credit created at checkout, customer debt collections, returns/refunds, purchases, supplier payments, expenses and inventory losses. Payment-channel movement is broken down by source. Cash reconciliation adds opening float and explicit other cash in/out to recorded net cash, compares expected against the independently counted amount, records channel variances, then locks financial posting for that business date. A different authorized colleague performs the first verification.
 
 ## Reports and communication
 
