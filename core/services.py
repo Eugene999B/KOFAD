@@ -544,7 +544,7 @@ def request_correction(user, branch, original_id, reason, refund_method="cash"):
         raise ValidationError("This document already has a correction request.")
     if refund_method not in dict(Payment.METHODS):
         raise ValidationError("Choose a valid refund channel.")
-    if not payment_method_enabled(refund_method):
+    if original.kind == "sale" and not payment_method_enabled(refund_method):
         raise ValidationError(f"{dict(Payment.METHODS)[refund_method]} is disabled in Settings.")
     item = Correction.objects.create(original=original, requested_by=user, reason=reason, refund_method=refund_method)
     audit(user, branch, "correction.requested", original.reference, {"reason":reason})
