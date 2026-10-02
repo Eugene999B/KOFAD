@@ -53,7 +53,7 @@ If a release fails, revert to the last verified application commit only when its
 
 The web service's deployment command is python manage.py initialize_deployment. It serializes migrations with a PostgreSQL advisory lock, applies committed migrations, and performs one-time setup only when KOFAD_INITIAL_ADMIN_PASSWORD is explicitly configured. Existing ADMIN credentials are never reset by a release.
 
-For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested temporary value ADMIN. The deployment initializer invokes:
+For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested initial value admin. The deployment initializer invokes:
 
 python manage.py bootstrap_admin --confirm-initial-setup
 
@@ -80,4 +80,4 @@ The web service stores DJANGO_SECRET_KEY privately. DATABASE_URL references Post
 
 KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
 
-Public login: https://kofad-web-production.up.railway.app/login/ . The initial ADMIN/ADMIN account opens the workspace directly. Change password and the recovery phone are available under My account.
+Public login: https://kofad-web-production.up.railway.app/login/ . The initial admin/admin account opens the workspace directly. Change password and the recovery phone are available under My account.

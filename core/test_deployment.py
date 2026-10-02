@@ -22,7 +22,7 @@ class InitialAccessTests(TestCase):
 
     def test_username_case_and_outer_spaces_do_not_prevent_login(self):
         response = self.client.post("/login/", {"username": " admin ", "password": "ADMIN"}, follow=True)
-        self.assertEqual(response.request["PATH_INFO"], "/account/password/")
+        self.assertEqual(response.request["PATH_INFO"], "/")
 
     def test_wrong_password_still_rejected(self):
         self.client.post("/login/", {"username": "admin", "password": "wrong"})
