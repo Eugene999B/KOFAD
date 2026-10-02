@@ -2,7 +2,7 @@
   "use strict";
   const root = document.querySelector("#pos");
   if (!root) return;
-  const catalog = JSON.parse(document.querySelector("#catalog-data").textContent);
+  let catalog = JSON.parse(document.querySelector("#catalog-data").textContent);
   const csrf = document.querySelector('[name="csrfmiddlewaretoken"]').value;
   const cart = [];
   let requestKey = root.dataset.key;
@@ -49,7 +49,7 @@
       if (purchase) {
         const price = el("input"); price.type = "number"; price.min = "0"; price.step = ".01"; price.value = line.price;
         price.setAttribute("aria-label", "Purchase price for " + line.name);
-        price.addEventListener("change", () => { try { cents(price.value); changed(); line.price = price.value; render(); } catch(e) { fail(e.message); } });
+        price.addEventListener("change", () => { try { cents(price.value); changed(); line.price = price.value; render(); } catch(e) { price.value = line.price; fail(e.message); } });
         controls.append(price);
       }
       controls.append(el("strong", formatted(cents(line.price) * line.quantity)));
@@ -59,6 +59,8 @@
     document.querySelector("#cart-count").textContent = cart.length + " lines";
   }
   const productGrid = document.querySelector("#catalog");
+  function renderCatalog() {
+  productGrid.replaceChildren();
   catalog.forEach(product => {
     const card = el("article", undefined, "product-card");
     const badge = el("div", (product.category || product.base_unit).slice(0, 2).toUpperCase(), "product-symbol");
@@ -81,6 +83,19 @@
     card.append(select, add); productGrid.append(card);
   });
   if (!catalog.length) productGrid.append(el("div", "No matching products. Add products in Inventory or refine your search.", "empty"));
+  }
+  renderCatalog();
+  document.querySelector("#catalog-search").addEventListener("submit",async event => {
+    event.preventDefault();
+    if (pendingBody) return fail("Resolve the pending checkout before searching.");
+    try {
+      const q = document.querySelector("#product-query").value;
+      const response = await fetch(location.pathname+"?format=json&q="+encodeURIComponent(q));
+      if (!response.ok || !(response.headers.get("Content-Type") || "").includes("application/json")) throw new Error("Search failed. Check your connection or sign in again.");
+      catalog = (await response.json()).catalog;
+      renderCatalog();
+    } catch(error) { fail(error.message); }
+  });
   document.querySelector("#exact-cash").addEventListener("click", () => {
     changed();
     ["momo", "bank", "card"].forEach(m => document.querySelector("#pay-" + m).value = "0");
@@ -123,7 +138,7 @@
   document.querySelector("#hold")?.addEventListener("click", async () => {
     if (!cart.length) return fail("Add a product before holding.");
     if (pendingBody) return fail("Resolve the pending checkout before holding this cart.");
-    try { await api("/api/held/", {label:"Counter sale", items:cart}); location.reload(); } catch(e) { fail(e.message); }
+    try { await api("/api/held/", {label:"Counter sale", items:cart}); if (heldId) await api("/api/held/"+heldId+"/", {}); completed = true; location.reload(); } catch(e) { fail(e.message); }
   });
   document.querySelectorAll(".held-item").forEach(button => button.addEventListener("click", async () => {
     if (cart.length || pendingBody) return fail("Complete or hold the current cart before resuming another.");

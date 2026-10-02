@@ -209,6 +209,8 @@ def trade_screen(request, branch, kind):
         if kind == "purchase":
             item["cost"] = str(p.cost)
         catalog.append(item)
+    if request.GET.get("format") == "json":
+        return JsonResponse({"catalog":catalog})
     return render(request, "pos.html", {"title": "New sale" if kind == "sale" else "Receive purchase",
         "catalog": catalog, "kind": kind, "key": str(uuid.uuid4()), "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),

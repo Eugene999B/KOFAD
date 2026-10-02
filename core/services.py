@@ -81,6 +81,8 @@ def stock_move(user, branch, product, delta, reference, reason):
         return
     stock, _ = Stock.objects.select_for_update().get_or_create(branch=branch, product=product)
     quantity = stock.quantity + delta
+    if quantity > 2000000000:
+        raise ValidationError("Stock balance exceeds the supported limit.")
     if quantity < 0:
         raise ValidationError(f"Insufficient stock for {product.name}. Available: {stock.quantity}.")
     stock.quantity = quantity
@@ -163,6 +165,9 @@ def post_trade(user, branch, payload, key, kind="sale"):
                 raise ValidationError(f"{mode.replace('_', ' ')} is disabled for {product.name}.")
         else:
             price = money(row.get("price"))
+        price = money(price)
+        if qty * factor > 1000000000:
+            raise ValidationError("Base-unit quantity exceeds the supported posting limit.")
         line_total = money(price * qty)
         Line.objects.create(document=doc, product=product, description=product.name,
             mode=mode, quantity=qty, factor=factor, unit_price=price, unit_cost=product.cost, total=line_total)

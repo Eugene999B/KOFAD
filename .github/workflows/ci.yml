@@ -44,6 +44,17 @@ jobs:
           DEMO_PASSWORD: isolated-demo-browser-password
       - run: python manage.py runserver 0.0.0.0:8000 --noreload > /tmp/kofad-server.log 2>&1 &
       - run: python tests/browser_smoke.py
+      - name: Verify production container
+        run: |
+          docker build -t kofad-verify .
+          docker run -d --name kofad-verify --network host -e PORT=8080 -e DJANGO_SECRET_KEY -e DATABASE_URL -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 -e DJANGO_DEBUG=0 kofad-verify
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/health/; then break; fi
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:8080/health/
+          curl --fail -H 'X-Forwarded-Proto: https' http://127.0.0.1:8080/login/ > /dev/null
+          docker stop kofad-verify
       - uses: actions/upload-artifact@v4
         if: always()
         with:

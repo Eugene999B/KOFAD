@@ -27,6 +27,10 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
     page.locator(".product-card").first.get_by_role("button",name="Add",exact=False).click()
+    page.locator("#product-query").fill("Classic leather")
+    page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
+    page.locator(".product-card").filter(has_text="Classic leather sandals").get_by_role("button",name="Add",exact=False).click()
+    assert page.locator("#cart-count").inner_text() == "2 lines"
     page.get_by_role("button",name="Fill exact cash amount").click()
     page.get_by_role("button",name="Complete sale",exact=False).click()
     page.wait_for_url("**/documents/**/")
