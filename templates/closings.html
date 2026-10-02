@@ -1,1 +1,63 @@
-{% extends "base.html" %}{% block content %}<div class="two-column"><section class="panel"><h2>Today's channel movements</h2><p class="hint">Net receipts less refunds, supplier payments and expenses. Opening float and bank balances are outside this register.</p>{% for method,amount in expected %}<div class="attention-row"><span>{{ method|title }}</span><strong>{{ amount }}</strong></div>{% endfor %}</section><section class="panel"><h2>Submit a daily closing</h2><form method="post">{% csrf_token %}<label for="closing-date">Date</label><input type="date" id="closing-date" name="date" value="{{ today }}" max="{{ today }}" required><div class="payment-grid">{% for value,label in methods %}<label>{{ label }} confirmed net movement<input name="{{ value }}" type="number" step=".01" required value="0"></label>{% endfor %}</div><label for="closing-note">Variance explanation</label><textarea id="closing-note" name="note"></textarea><p class="hint">Closing today blocks further financial postings today. Verification requires a different authorized user.</p><button class="button">Submit closing</button></form></section></div><section class="panel"><h2>Closing history</h2><div class="table-wrap"><table><thead><tr><th>Date</th><th>Expected</th><th>Confirmed</th><th>Submitted by</th><th>Verification</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.date }}</td><td>{% for channel,value in row.expected.items %}{{ channel }}: {{ value }}<br>{% endfor %}</td><td>{% for channel,value in row.counted.items %}{{ channel }}: {{ value }}<br>{% endfor %}<small>{{ row.note }}</small></td><td>{{ row.submitted_by }}</td><td>{% if row.verified_by %}{{ row.verified_by }}{% elif perms.core.approve_operations %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="verify"><input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button">Verify</button></form>{% else %}Awaiting review{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No daily closings.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'closing.js' %}"></script>{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/exports/?dataset=closings">⇩ Download closings</a></div>{% endblock %}
+{% block content %}
+<section class="hero-panel"><div><p class="eyebrow">DAILY CONTROL</p><h2>Understand the day before you close it.</h2><p>KOFAD separates sales, credit created, debt collections, refunds, purchases, expenses and payment channels so the closing explains <em>why</em> each expected balance exists.</p></div><span class="pill">{% if selected_closed %}Day closed{% else %}Open day{% endif %}</span></section>
+
+<form method="get" class="searchbar"><label for="closing-view-date">Business date</label><input type="date" id="closing-view-date" name="date" value="{{ selected_day }}" max="{{ today }}"><button class="button secondary">Load day</button></form>
+
+<div class="metric-grid">
+<article class="metric-card"><small>Gross sales</small><strong>{{ company.currency }} {{ summary.sales_total|floatformat:2 }}</strong><small>{{ summary.sale_count }} receipts</small></article>
+<article class="metric-card"><small>Net sales after returns</small><strong>{{ company.currency }} {{ summary.net_sales|floatformat:2 }}</strong><small>Returns {{ summary.returns_total|floatformat:2 }}</small></article>
+<article class="metric-card"><small>Credit created</small><strong>{{ company.currency }} {{ summary.credit_created|floatformat:2 }}</strong><small>{{ summary.credit_sale_count }} credit / part-paid sales</small></article>
+<article class="metric-card"><small>Debt collected</small><strong>{{ company.currency }} {{ summary.debt_collections|floatformat:2 }}</strong><small>{{ summary.collection_count }} account payments</small></article>
+<article class="metric-card"><small>Expenses</small><strong>{{ company.currency }} {{ summary.expenses_total|floatformat:2 }}</strong><small>{{ summary.expense_count }} postings</small></article>
+<article class="metric-card"><small>Purchases received</small><strong>{{ company.currency }} {{ summary.purchases_total|floatformat:2 }}</strong><small>Supplier debt payments {{ summary.supplier_debt_payments|floatformat:2 }}</small></article>
+<article class="metric-card"><small>Supplier returns</small><strong>{{ company.currency }} {{ summary.supplier_returns_total|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Inventory losses</small><strong>{{ company.currency }} {{ summary.inventory_losses|floatformat:2 }}</strong></article>
+</div>
+
+<section class="panel"><div class="section-heading"><div><h2>Where today's money moved</h2><p class="muted">Positive values are money into KOFAD; negative values are money out. Credit itself is not a payment channel.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Source</th>{% for value,label in methods %}<th class="number">{{ label }}</th>{% endfor %}</tr></thead><tbody>
+{% for source,channels in summary.channel_breakdown.items %}<tr><td>{{ source }}</td>{% for method,amount in channels.items %}<td class="number">{{ amount|floatformat:2 }}</td>{% endfor %}</tr>{% endfor %}
+<tr><td><strong>Net payment movement</strong></td>{% for method,amount in summary.channel_net.items %}<td class="number"><strong>{{ amount|floatformat:2 }}</strong></td>{% endfor %}</tr>
+</tbody></table></div></section>
+
+{% if not selected_closed %}
+<section class="panel" id="closing-workspace" data-net-cash="{{ summary.channel_net.cash }}">
+<div class="section-heading"><div><h2>Count and close {{ selected_day }}</h2><p class="muted">Count independently. Do not copy the expected values without checking the real cash, MoMo, bank and card evidence.</p></div></div>
+<form method="post">{% csrf_token %}<input type="hidden" name="date" value="{{ selected_day }}">
+<div class="three-column closing-cash-controls">
+<label>Opening cash float<input id="opening-cash" name="opening_cash" type="number" min="0" step=".01" value="0" required><small>Cash already in the drawer before today's trading.</small></label>
+<label>Other cash in<input id="closing-cash-in" name="cash_in" type="number" min="0" step=".01" value="0" required><small>Cash added outside recorded sales/collections.</small></label>
+<label>Other cash out<input id="closing-cash-out" name="cash_out" type="number" min="0" step=".01" value="0" required><small>Cash removed outside recorded expenses/payments.</small></label>
+</div>
+<div class="notice"><strong>Expected cash after adjustments: {{ company.currency }} <span id="expected-closing-cash">{{ summary.channel_net.cash|floatformat:2 }}</span></strong><br><small>Opening float + net recorded cash + other cash in − other cash out.</small></div>
+
+<div class="payment-grid">
+{% for value,label in methods %}<label>{{ label }} counted / confirmed
+<input name="{{ value }}" type="number" step=".01" required value="0">
+<small>{% if value == "cash" %}Physical cash actually counted.{% else %}Confirmed provider / bank total for this day.{% endif %}</small>
+</label>{% endfor %}
+</div>
+<label for="closing-note">Variance / control note</label><textarea id="closing-note" name="note" maxlength="2000" placeholder="Explain shortages, overages, cash movements or anything management should know."></textarea>
+<p class="hint">Submitting locks further financial posting for this date. A different authorized colleague must verify the closing.</p>
+<button class="button">Submit and lock day</button>
+</form></section>
+{% else %}
+<div class="notice success">This business date is already closed. The saved snapshot below is immutable except for independent verification.</div>
+{% endif %}
+
+<section class="panel"><div class="section-heading"><div><h2>Closing history</h2><p class="muted">Expected and counted channels are saved with the commercial snapshot that produced them.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Date</th><th>Expected</th><th>Counted</th><th>Variance</th><th>Cash controls</th><th>Submitted by</th><th>Verification</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+<td>{{ row.date }}</td>
+<td>{% for channel,value in row.expected.items %}<small>{{ channel|title }}: {{ value }}</small>{% endfor %}</td>
+<td>{% for channel,value in row.counted.items %}<small>{{ channel|title }}: {{ value }}</small>{% endfor %}</td>
+<td>{% for channel,value in row.variance_view.items %}<small>{{ channel|title }}: {{ value|floatformat:2 }}</small>{% endfor %}</td>
+<td><small>Opening: {{ row.opening_cash }}</small><small>Other in: {{ row.cash_in }}</small><small>Other out: {{ row.cash_out }}</small>{% if row.note %}<small>{{ row.note }}</small>{% endif %}</td>
+<td>{{ row.submitted_by }}</td>
+<td>{% if row.verified_by %}<span class="pill">Verified · {{ row.verified_by }}</span>{% elif perms.core.approve_operations %}<form method="post">{% csrf_token %}<input type="hidden" name="date" value="{{ row.date|date:'Y-m-d' }}"><input type="hidden" name="action" value="verify"><input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button">Verify independently</button></form>{% else %}Awaiting review{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="7" class="empty">No daily closings.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
