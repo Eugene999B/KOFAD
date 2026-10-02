@@ -300,7 +300,10 @@ def inventory(request, branch):
         quarantine_qty = quarantined.get(p.pk, 0)
         rows.append({"product": p, "quantity": quantity, "quarantine": quarantine_qty,
                      "physical": quantity + quarantine_qty, "packs": quantity // p.pack_size,
-                     "loose": quantity % p.pack_size, "low": quantity <= p.reorder_level})
+                     "loose": quantity % p.pack_size,
+                     "pack_equivalent": (Decimal(quantity) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity),
+                     "physical_pack_equivalent": (Decimal(quantity + quarantine_qty) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity + quarantine_qty),
+                     "low": quantity <= p.reorder_level})
     return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
 
 
