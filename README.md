@@ -23,13 +23,13 @@ Proprietary. Copyright KOFAD IMPEX ENTERPRISE. No license to use, distribute or 
 
 The repository now contains a Django/PostgreSQL implementation of the core operating workspace:
 
-- Fast sales counter with product search, retail/wholesale selection, full-pack plus loose-unit selling, exact base-unit stock, held sales, inline customer search/creation, configurable payment channels, controlled discounts/price overrides and full/part/credit settlement.
-- Products, stock movements, independent adjustment approvals, dispatch/receive transfers, damaged-stock quarantine and inventory-loss evidence.
-- Customer/supplier records, Ghana-normalized customer phones, customer account profiles, a customer-first debt desk with partial/full oldest-due-first allocation, purchase receiving, customer returns, independently reviewed supplier returns, expenses and independently approved corrections.
+- Search-first sales counter: no catalog wall on entry, live name/SKU/barcode/category search, focused product composer, retail/wholesale selection, full-pack plus loose-unit selling, exact base-unit stock, held sales, inline customer search/creation, configurable payment channels, controlled discounts/price overrides and full/part/credit settlement.
+- Products, additive quick restock with before/after audit evidence, supplier purchasing, stock movements, independent adjustment approvals, dispatch/receive transfers, damaged-stock quarantine and inventory-loss evidence.
+- Customer/supplier records, Ghana-normalized customer phones, customer account profiles, an account-centric Debt Desk with aging buckets, credit usage, recent payment history, allocation preview and partial/full oldest-due-first settlement, purchase receiving, customer returns, independently reviewed supplier returns, expenses and independently approved corrections.
 - Daily closing intelligence separating sales, credit created, debt collections, refunds, expenses, purchases and payment channels, with opening cash, other cash in/out, counted-vs-expected variance, independent verification and a posting lock after closing.
 - Receipts, statements, debt summaries, transaction/profit/stock/aging/closing reports and PDF/Excel/Word/CSV exports.
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
-- Original SVG identity and responsive desktop/mobile screens.
+- Original identity, a distinct login experience, personalized post-login welcome transition, consistent responsive desktop/mobile workspaces and light/dark themes.
 
 **Status:** pre-production implementation. The entire master plan is not complete. Manager authority thresholds for expenses, discounts, price reductions and credit overrides are now configurable and server-enforced. Tax handling, independent two-person override approval queues, WhatsApp delivery, advanced catalog features and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
 
