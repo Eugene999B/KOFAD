@@ -502,7 +502,10 @@ def operations(request, branch):
             messages.error(request, problem(exc))
     return render(request, "operations.html", {"title": "Stock operations", "products": Product.objects.filter(active=True),
         "destinations": Branch.objects.filter(active=True).exclude(pk=branch.pk),
-        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related("product", "branch", "destination", "receipt", "receipt__recorded_by", "receipt__resolved_by")[:100],
+        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related(
+            "product", "branch", "destination", "receipt", "receipt__recorded_by",
+            "receipt__resolved_by", "receipt__loss_document"
+        )[:100],
         "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
 
 
