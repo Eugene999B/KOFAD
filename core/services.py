@@ -177,11 +177,13 @@ def post_trade(user, branch, payload, key, kind="sale"):
     if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
         raise ValidationError("Add between one and 100 items.")
     party = None
-    if payload.get("party"):
-        party = Party.objects.filter(pk=payload["party"], branch=branch,
-                                     kind="customer" if kind == "sale" else "supplier").first()
+    if kind == "sale":
+        from .identity import resolve_sale_customer
+        party = resolve_sale_customer(user, branch, payload, audit)
+    elif payload.get("party"):
+        party = Party.objects.filter(pk=payload["party"], branch=branch, kind="supplier").first()
         if not party:
-            raise ValidationError("Choose a valid customer or supplier at this location.")
+            raise ValidationError("Choose a valid supplier at this location.")
     if kind == "purchase" and not party:
         raise ValidationError("A supplier is required.")
 
@@ -313,7 +315,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
             raise ValidationError(f"Credit terms cannot exceed {company.max_credit_days} days.")
         if kind == "sale":
             projected = party_debt(party) + total - paid
-            if projected > party.credit_limit:
+            if party.credit_limit > 0 and projected > party.credit_limit:
                 credit_override = projected - party.credit_limit
                 if (not user.has_perm("core.approve_operations") or company.max_credit_override <= 0
                         or credit_override > company.max_credit_override):
