@@ -1,9 +1,8 @@
 import os
 
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import connection
 
 
@@ -20,8 +19,6 @@ class Command(BaseCommand):
                 if User.objects.filter(username__iexact="ADMIN").exists():
                     self.stdout.write("ADMIN already exists; credentials and permissions were preserved.")
                 else:
-                    if len(settings.KOFAD_SETUP_KEY) < 32:
-                        raise CommandError("Set a private KOFAD_SETUP_KEY of at least 32 random characters before initial deployment.")
                     call_command("bootstrap_admin", confirm_initial_setup=True)
         finally:
             with connection.cursor() as cursor:

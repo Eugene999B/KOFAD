@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
@@ -70,7 +71,7 @@ def login_view(request):
         return redirect("dashboard")
     error = ""
     if request.method == "POST":
-        username = request.POST.get("username", "")[:150]
+        username = request.POST.get("username", "").strip()[:150]
         # Per-account lock avoids trusting spoofable forwarded IP headers.
         key = hashlib.sha256(username.casefold().encode()).hexdigest()
         with transaction.atomic():
@@ -82,17 +83,13 @@ def login_view(request):
                 if attempt.blocked_until:
                     attempt.failures = 0
                     attempt.blocked_until = None
-                user = authenticate(request, username=username, password=request.POST.get("password", ""))
+                matches = list(User.objects.filter(username__iexact=username).values_list("username", flat=True)[:2])
+                canonical = matches[0] if len(matches) == 1 else username
+                user = authenticate(request, username=canonical, password=request.POST.get("password", ""))
                 if user is not None:
                     access, _ = Access.objects.get_or_create(user=user)
-                    if access.must_change_password and settings.KOFAD_SETUP_KEY:
-                        supplied = request.POST.get("setup_key", "")
-                        if not secrets.compare_digest(supplied.encode(), settings.KOFAD_SETUP_KEY.encode()):
-                            user = None
                 if user is not None:
                     login(request, user)
-                    if access.must_change_password and settings.KOFAD_SETUP_KEY:
-                        request.session["setup_key_digest"] = hashlib.sha256(settings.KOFAD_SETUP_KEY.encode()).hexdigest()
                     request.session["access_version"] = access.session_version
                     request.session["mfa_ok"] = not bool(access.totp_secret) and not (user.is_staff or user.is_superuser or user.has_perm("core.manage_company"))
                     attempt.failures = 0
@@ -104,7 +101,7 @@ def login_view(request):
                     attempt.blocked_until = timezone.now() + timedelta(minutes=15)
                 attempt.save()
                 error = "The username or password is incorrect."
-    return render(request, "login.html", {"error": error, "setup_required": bool(settings.KOFAD_SETUP_KEY) and Access.objects.filter(must_change_password=True).exists()})
+    return render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
 
 
 @login_required

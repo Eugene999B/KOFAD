@@ -85,5 +85,3 @@ SMS_TIMEOUT_SECONDS = 15
 SMS_MAX_ATTEMPTS = 3
 SMS_ADAPTERS = {"arkesel":"core.sms.providers.Arkesel"}
 
-# Private first-run key protects the explicitly requested temporary ADMIN password.
-KOFAD_SETUP_KEY = os.environ.get("KOFAD_SETUP_KEY", "")
