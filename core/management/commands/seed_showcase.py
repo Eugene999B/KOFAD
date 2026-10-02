@@ -14,7 +14,7 @@ from core import debts as debt_service
 from core import inventory_exceptions as ix
 from core import services as s
 from core.models import (
-    Branch, Closing, Company, Document, HeldSale, Message, Party, Product, Stock,
+    Branch, Closing, Company, Document, HeldSale, Line, Message, Party, Product,
 )
 
 
@@ -491,8 +491,7 @@ class Command(BaseCommand):
             return
         sale = candidates[index % len(candidates)]
         line = sale.lines.first()
-        returned = line.returns.aggregate_count() if hasattr(line, "returns") else 0
-        if returned:
+        if Line.objects.filter(source_line=line).exists():
             return
         try:
             s.post_return(reviewer, branch, {
