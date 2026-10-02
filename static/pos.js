@@ -3,6 +3,10 @@
   const root = document.querySelector("#pos");
   if (!root) return;
   let catalog = JSON.parse(document.querySelector("#catalog-data").textContent);
+  const paymentMethods = JSON.parse(document.querySelector("#payment-methods-data").textContent);
+  const allowDiscounts = root.dataset.allowDiscounts === "true";
+  const allowPriceOverrides = root.dataset.allowPriceOverrides === "true";
+  const maxDiscount = Number(root.dataset.maxDiscount || 0);
   const csrf = document.querySelector('[name="csrfmiddlewaretoken"]').value;
   const cart = [];
   let requestKey = root.dataset.key;
@@ -33,9 +37,22 @@
     return amount;
   };
   const formatted = value => (value / 100).toFixed(2);
+  const percentBasisPoints = value => {
+    const v = String(value ?? "0");
+    if (!/^\d+(\.\d{1,2})?$/.test(v)) throw new Error("Enter a percentage from 0 to 100.");
+    const [whole, fraction = ""] = v.split(".");
+    const points = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+    if (!Number.isSafeInteger(points) || points < 0 || points > 10000) throw new Error("Enter a percentage from 0 to 100.");
+    return points;
+  };
+  const effectiveUnit = line => {
+    const price = cents(line.price);
+    const discount = percentBasisPoints(line.discount || "0");
+    return Math.round(price * (10000 - discount) / 10000);
+  };
   const fail = msg => { errorBox.textContent = msg; errorBox.classList.remove("hidden"); errorBox.scrollIntoView({block:"nearest"}); };
   const changed = () => { if (pendingBody) { pendingBody = null; requestKey = crypto.randomUUID(); } };
-  function total() { return cart.reduce((sum, line) => sum + cents(line.price) * line.quantity, 0); }
+  function total() { return cart.reduce((sum, line) => sum + effectiveUnit(line) * line.quantity, 0); }
   function render() {
     const container = document.querySelector("#cart");
     container.replaceChildren();
@@ -58,13 +75,38 @@
         changed(); line.quantity = n; render();
       });
       controls.append(quantity);
-      if (purchase) {
+      if (purchase || allowPriceOverrides) {
+        const priceWrap = el("label", undefined, "cart-control-field");
+        priceWrap.append(el("small", purchase ? "Purchase price" : "Selling price"));
         const price = el("input"); price.type = "number"; price.min = "0"; price.step = ".01"; price.value = line.price;
-        price.setAttribute("aria-label", "Purchase price for " + line.name);
-        price.addEventListener("change", () => { try { cents(price.value); changed(); line.price = price.value; render(); } catch(e) { price.value = line.price; fail(e.message); } });
-        controls.append(price);
+        price.setAttribute("aria-label", (purchase ? "Purchase price for " : "Selling price for ") + line.name);
+        price.addEventListener("change", () => {
+          try {
+            cents(price.value);
+            if (!purchase && line.discount && Number(line.discount) > 0 && price.value !== line.listPrice) {
+              throw new Error("Use either a custom selling price or a discount on a line, not both.");
+            }
+            changed(); line.price = price.value; render();
+          } catch(e) { price.value = line.price; fail(e.message); }
+        });
+        priceWrap.append(price); controls.append(priceWrap);
       }
-      controls.append(el("strong", formatted(cents(line.price) * line.quantity)));
+      if (!purchase && allowDiscounts) {
+        const discountWrap = el("label", undefined, "cart-control-field");
+        discountWrap.append(el("small", "Discount %"));
+        const discount = el("input"); discount.type = "number"; discount.min = "0"; discount.max = String(maxDiscount); discount.step = ".01"; discount.value = line.discount || "0";
+        discount.setAttribute("aria-label", "Discount percent for " + line.name);
+        discount.addEventListener("change", () => {
+          try {
+            const points = percentBasisPoints(discount.value);
+            if (points > Math.round(maxDiscount * 100)) throw new Error("Discount exceeds the maximum configured in Settings.");
+            if (points > 0 && line.price !== line.listPrice) throw new Error("Use either a custom selling price or a discount on a line, not both.");
+            changed(); line.discount = discount.value; render();
+          } catch(e) { discount.value = line.discount || "0"; fail(e.message); }
+        });
+        discountWrap.append(discount); controls.append(discountWrap);
+      }
+      controls.append(el("strong", formatted(effectiveUnit(line) * line.quantity)));
       row.append(controls); container.append(row);
     });
     document.querySelector("#total").textContent = formatted(total());
@@ -96,7 +138,7 @@
     add.addEventListener("click", () => {
       changed(); const mode = select.value; const found = cart.find(l => l.product === product.id && l.mode === mode);
       if (found) found.quantity += 1;
-      else cart.push({product:product.id, name:product.name, mode, quantity:1, factor: mode.endsWith("pack") ? product.pack_size : 1, price:prices[mode]});
+      else cart.push({product:product.id, name:product.name, mode, quantity:1, factor: mode.endsWith("pack") ? product.pack_size : 1, price:prices[mode], listPrice:prices[mode], discount:"0"});
       render();
     });
     card.append(select, add); productGrid.append(card);
@@ -115,10 +157,14 @@
       renderCatalog();
     } catch(error) { fail(error.message); }
   });
-  document.querySelector("#exact-cash").addEventListener("click", () => {
+  document.querySelector("#exact-cash")?.addEventListener("click", () => {
     changed();
-    ["momo", "bank", "card"].forEach(m => document.querySelector("#pay-" + m).value = "0");
-    document.querySelector("#pay-cash").value = formatted(total());
+    paymentMethods.filter(m => m !== "cash").forEach(m => {
+      const input = document.querySelector("#pay-" + m);
+      if (input) input.value = "0";
+    });
+    const cash = document.querySelector("#pay-cash");
+    if (cash) cash.value = formatted(total());
   });
   document.querySelector("#checkout").addEventListener("change", changed);
   async function api(path, body, key) {
@@ -133,12 +179,21 @@
     e.preventDefault();
     if (!cart.length) return fail("Add a product first.");
     const button = document.querySelector("#complete");
-    root.querySelectorAll("input,select,button").forEach(control => control.disabled = true);
+    root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
     errorBox.classList.add("hidden");
     try {
-      if (!pendingBody) pendingBody = {kind:root.dataset.kind, items:cart.map(({product,mode,quantity,price})=>({product,mode,quantity,...(purchase?{price}:{})})),
-        party:document.querySelector("#party").value || null, due_date:document.querySelector("#due-date").value,
-        payments:["cash","momo","bank","card"].map(method=>({method, amount:document.querySelector("#pay-"+method).value || "0"}))};
+      if (!pendingBody) pendingBody = {
+        kind:root.dataset.kind,
+        items:cart.map(({product,mode,quantity,price,discount})=>({
+          product, mode, quantity,
+          ...(purchase || allowPriceOverrides ? {price} : {}),
+          ...(!purchase && allowDiscounts ? {discount: discount || "0"} : {})
+        })),
+        party:document.querySelector("#party").value || null,
+        due_date:document.querySelector("#due-date").value,
+        override_reason:document.querySelector("#override-reason")?.value || "",
+        payments:paymentMethods.map(method=>({method, amount:document.querySelector("#pay-"+method)?.value || "0"}))
+      };
       persist();
       const result = await api("/api/trades/", pendingBody, requestKey);
       if (heldId) {
@@ -150,7 +205,7 @@
     } catch (error) {
       if (error.rejected) {
         pendingBody = null; requestKey = crypto.randomUUID(); persist();
-        root.querySelectorAll("input,select,button").forEach(control => control.disabled = false);
+        root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = false);
       }
       fail(error.message + (pendingBody ? " Retry this unchanged request to recover the same transaction. Editing is locked until its outcome is known." : ""));
     }
@@ -170,7 +225,15 @@
       const refreshed = saved.items.map(line => {
         const product = catalog.find(p => p.id === line.product);
         if (!product || !(line.mode in product.prices)) throw new Error("A held product is unavailable. Clear the catalog search or check its selling modes.");
-        return {...line, name:product.name, price:product.prices[line.mode], factor:line.mode.endsWith("pack") ? product.pack_size : 1};
+        const standard = product.prices[line.mode];
+        return {
+          ...line,
+          name:product.name,
+          price:allowPriceOverrides && line.price !== undefined ? line.price : standard,
+          listPrice:standard,
+          discount:allowDiscounts ? (line.discount || "0") : "0",
+          factor:line.mode.endsWith("pack") ? product.pack_size : 1
+        };
       });
       cart.push(...refreshed); heldId = button.dataset.id; render();
     } catch(e) { fail(e.message); }
@@ -180,8 +243,13 @@
   if (pendingBody) {
     document.querySelector("#party").value = pendingBody.party || "";
     document.querySelector("#due-date").value = pendingBody.due_date || "";
-    pendingBody.payments.forEach(payment => { document.querySelector("#pay-"+payment.method).value = payment.amount; });
-    root.querySelectorAll("input,select,button").forEach(control => control.disabled = true);
+    pendingBody.payments.forEach(payment => {
+      const input = document.querySelector("#pay-"+payment.method);
+      if (input) input.value = payment.amount;
+    });
+    const reason = document.querySelector("#override-reason");
+    if (reason) reason.value = pendingBody.override_reason || "";
+    root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
     document.querySelector("#complete").disabled = false;
     fail("A checkout was interrupted. Retry to recover its original result before making changes.");
   }
