@@ -19,7 +19,7 @@ def safe(value):
     return "'" + text if text.startswith(("=", "+", "-", "@", "\t", "\r")) else text
 
 
-def export(rows, format, title, company, columns=None):
+def export(rows, format, title, company, columns=None, filename="kofad-transactions", sheet_name="Transactions"):
     columns = columns or [(c,c.title()) for c in COLUMNS]
     headers = [title for key,title in columns]
     raw = [[r[key] for key,title in columns] for r in rows]
@@ -28,7 +28,7 @@ def export(rows, format, title, company, columns=None):
     if format == "xlsx":
         book = Workbook()
         sheet = book.active
-        sheet.title = "Transactions"
+        sheet.title = (sheet_name or "Export")[:31]
         sheet.append([company.name, title])
         sheet.append(headers)
         from decimal import Decimal
@@ -90,5 +90,6 @@ def export(rows, format, title, company, columns=None):
     else:
         raise ValidationError("Unsupported export format.")
     response = HttpResponse(output.getvalue(), content_type=content_type)
-    response["Content-Disposition"] = f'attachment; filename="kofad-transactions.{format}"'
+    safe_filename = "".join(ch for ch in filename.lower() if ch.isalnum() or ch in "-_") or "kofad-export"
+    response["Content-Disposition"] = f'attachment; filename="{safe_filename}.{format}"'
     return response
