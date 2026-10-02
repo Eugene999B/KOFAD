@@ -163,3 +163,24 @@ html[data-theme="dark"] .trade-hub{background:#edf3f6}html[data-theme="dark"] .p
 .cart-controls{flex-wrap:wrap}.cart-control-field{margin:0;min-width:105px;max-width:135px;font-weight:400}.cart-control-field small{display:block;margin:0 0 4px;color:var(--muted);font-size:9px}.cart-control-field input{min-height:38px;padding:7px 8px}.admin-form .field:has(input[type=checkbox]),.form-panel .field:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:10px;padding:14px;border:1px solid var(--line);border-radius:10px;margin-top:12px}.admin-form .field:has(input[type=checkbox]) label,.form-panel .field:has(input[type=checkbox]) label{order:2;margin:0;flex:1}.admin-form .field:has(input[type=checkbox]) input,.form-panel .field:has(input[type=checkbox]) input{order:1;margin:2px 0 0;min-height:18px;flex-shrink:0}.form-panel .field>small{display:block;color:var(--muted);font-size:10px;line-height:1.55;margin-top:5px}.form-panel .field:has(input[type=checkbox])>small{order:3;display:none}
 html[data-theme="dark"] .admin-form .field:has(input[type=checkbox]),html[data-theme="dark"] .form-panel .field:has(input[type=checkbox]){border-color:var(--line);background:#101d2a}
 @media(max-width:680px){.cart-control-field{min-width:95px;max-width:120px}.cart-controls>strong{margin-left:auto}}
+
+
+/* Fast counter / customer debt workspace */
+.pack-quantity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;margin:.7rem 0}
+.pack-quantity-grid input{width:100%}
+.checkout-customer{border:1px solid var(--line);border-radius:16px;padding:1rem;margin:.9rem 0;background:color-mix(in srgb,var(--panel) 94%,var(--accent) 6%)}
+.customer-results{display:grid;gap:.45rem;margin-top:.4rem;max-height:260px;overflow:auto}
+.customer-result{display:flex;flex-direction:column;align-items:flex-start;text-align:left;width:100%;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:.7rem .8rem;cursor:pointer}
+.customer-result:hover,.customer-result:focus-visible{border-color:var(--accent);outline:none}
+.selected-customer{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;padding:.8rem;margin:.6rem 0;background:var(--surface)}
+.new-customer-fields{display:grid;gap:.5rem;margin-top:.7rem}
+.phone-input{display:grid;grid-template-columns:auto 1fr;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.phone-input span{padding:0 .75rem;font-weight:700;border-right:1px solid var(--line)}
+.phone-input input{border:0!important;border-radius:0!important}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin:0 0 1rem}
+.metric-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1rem;display:flex;flex-direction:column;gap:.35rem}
+.metric-card strong{font-size:1.35rem}
+.stack-form{display:grid;gap:.55rem;min-width:250px}
+.stack-form hr{width:100%;border:0;border-top:1px solid var(--line)}
+@media(max-width:900px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.pack-quantity-grid,.metric-grid{grid-template-columns:1fr}.checkout-customer{padding:.8rem}.stack-form{min-width:0}}
