@@ -88,7 +88,7 @@
         price.addEventListener("change", () => {
           try {
             cents(price.value);
-            if (!purchase && line.discount && Number(line.discount) > 0 && price.value !== line.listPrice) {
+            if (!purchase && line.discount && Number(line.discount) > 0 && cents(price.value) !== cents(line.listPrice)) {
               throw new Error("Use either a custom selling price or a discount on a line, not both.");
             }
             changed(); line.price = price.value; render();
@@ -105,7 +105,7 @@
           try {
             const points = percentBasisPoints(discount.value);
             if (points > Math.round(maxDiscount * 100)) throw new Error("Discount exceeds the maximum configured in Settings.");
-            if (points > 0 && line.price !== line.listPrice) throw new Error("Use either a custom selling price or a discount on a line, not both.");
+            if (points > 0 && cents(line.price) !== cents(line.listPrice)) throw new Error("Use either a custom selling price or a discount on a line, not both.");
             changed(); line.discount = discount.value; render();
           } catch(e) { discount.value = line.discount || "0"; fail(e.message); }
         });
