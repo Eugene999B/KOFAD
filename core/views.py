@@ -500,22 +500,38 @@ def settings_view(request, branch):
         "description": "Currency is GHS and the operating timezone is Africa/Accra. Review tax requirements before launch."})
 
 
-@protected("operate_sales")
+@protected("operate_sales|send_messages")
 def communications(request, branch):
+    from .sms.service import create_draft,queue_message
+    from django.conf import settings
     if request.method == "POST":
-        party = get_object_or_404(Party, pk=request.POST.get("party"), branch=branch)
-        body = request.POST.get("body", "").strip()
-        channel = request.POST.get("channel")
-        if not party.consent or not body or channel not in ("sms", "whatsapp"):
-            messages.error(request, "An opted-in contact, message and valid channel are required.")
-        else:
-            Message.objects.create(branch=branch, party=party, body=body[:2000], channel=channel, created_by=request.user)
-            s.audit(request.user, branch, "message.drafted", party.pk, {"channel": channel})
-            messages.success(request, "Draft saved. Provider delivery is not configured.")
+        try:
+            action = request.POST.get("action","draft")
+            if action in ("queue","retry"):
+                item = get_object_or_404(Message,pk=request.POST.get("id"),branch=branch)
+                queue_message(request.user,branch,item.pk,action=="retry")
+                messages.success(request,"SMS queued. The worker will submit it to the selected provider.")
+            elif action == "document":
+                from .sms.templates import render_for_document
+                doc = get_object_or_404(Document,pk=request.POST.get("document"),branch=branch)
+                code = request.POST.get("template","receipt")
+                body = render_for_document(doc,code)
+                create_draft(request.user,branch,doc.party,body,source_key=f"{code}:{doc.pk}:{timezone.localdate()}")
+                messages.success(request,"Transaction message prepared. Review it before queueing.")
+            elif action == "draft":
+                party = get_object_or_404(Party,pk=request.POST.get("party"),branch=branch)
+                key = uuid.UUID(request.POST.get("key",""))
+                create_draft(request.user,branch,party,request.POST.get("body",""),request.POST.get("channel","sms"),f"manual:{key}")
+                messages.success(request,"Draft prepared. Review the recipient, content and estimated segments below.")
+            else:
+                raise ValidationError("Unknown message action.")
             return redirect("communications")
-    return render(request, "communications.html", {"title": "Communications",
-        "parties": Party.objects.filter(branch=branch, consent=True),
-        "rows": Message.objects.filter(branch=branch).select_related("party").order_by("-created_at")[:100]})
+        except (ValidationError,ValueError) as exc:
+            messages.error(request,problem(exc))
+    return render(request,"communications.html",{"title":"Communications","key":str(uuid.uuid4()),
+        "parties":Party.objects.filter(branch=branch,consent=True),
+        "rows":Message.objects.filter(branch=branch).select_related("party","created_by").order_by("-created_at")[:100],
+        "sms_enabled":settings.SMS_ENABLED,"sms_sandbox":settings.SMS_SANDBOX,"sms_provider":settings.SMS_PROVIDER})
 
 
 @protected("operate_finance")
@@ -564,3 +580,38 @@ def search(request):
             allowed = list(dict(Document.KINDS))
         docs = Document.objects.filter(branch=branch,kind__in=allowed,reference__icontains=q)[:20]
     return render(request,"search.html",{"title":"Search workspace","q":q,"products":products,"parties":parties,"documents":docs})
+
+
+@login_required
+def password_change(request):
+    from django.contrib.auth.forms import PasswordChangeForm
+    from django.contrib.auth import update_session_auth_hash
+    form = PasswordChangeForm(request.user,request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            user = form.save()
+            Access.objects.filter(user=user).update(must_change_password=False)
+            update_session_auth_hash(request,user)
+            user.access.refresh_from_db()
+            request.session["access_version"] = user.access.session_version
+            s.audit(user,None,"password.changed",user.pk)
+        return redirect("mfa" if not request.session.get("mfa_ok") else "dashboard")
+    return render(request,"password_change.html",{"form":form})
+
+
+@protected("manage_company")
+def message_templates(request,branch):
+    from .models import MessageTemplate
+    from .forms import MessageTemplateForm
+    code = request.GET.get("code","receipt")
+    item = get_object_or_404(MessageTemplate,code=code)
+    form = MessageTemplateForm(request.POST or None,instance=item)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            before = MessageTemplate.objects.get(pk=item.pk).body
+            obj = form.save()
+            s.audit(request.user,branch,"message_template.updated",obj.code,{"before":before,"after":obj.body})
+        messages.success(request,"Template updated.")
+        return redirect("/message-templates/?code="+code)
+    return render(request,"message_templates.html",{"title":"Message templates","form":form,
+        "templates":MessageTemplate.objects.all(),"code":code})

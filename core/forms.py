@@ -25,3 +25,15 @@ class CompanyForm(forms.ModelForm):
     class Meta:
         model = Company
         fields = ["name", "phone", "address", "receipt_footer", "closing_tolerance"]
+
+
+class MessageTemplateForm(forms.ModelForm):
+    class Meta:
+        from .models import MessageTemplate
+        model = MessageTemplate
+        fields = ["name","body","active"]
+    def clean_body(self):
+        from .sms.templates import validate_template
+        body = self.cleaned_data["body"]
+        validate_template(body)
+        return body

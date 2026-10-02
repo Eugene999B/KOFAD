@@ -13,8 +13,10 @@ class AccessMiddleware:
             if request.session.get("access_version") != access.session_version:
                 logout(request)
                 return redirect("login")
+            if access.must_change_password and request.path not in ("/account/password/", "/logout/", "/health/"):
+                return redirect("password_change")
             if (request.user.is_staff or request.user.is_superuser or request.user.has_perm("core.manage_company") or access.totp_secret) and not request.session.get("mfa_ok"):
-                if request.path not in ("/mfa/", "/logout/", "/health/"):
+                if request.path not in ("/mfa/", "/account/password/", "/logout/", "/health/"):
                     return redirect("mfa")
         response = self.get_response(request)
         response["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"

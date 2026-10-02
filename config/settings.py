@@ -73,3 +73,14 @@ LOGGING = {"version": 1, "disable_existing_loggers": False, "handlers": {"consol
            "root": {"handlers": ["console"], "level": "INFO"}}
 
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+
+# SMS credentials belong in deployment variables, never in database exports or the browser.
+SMS_ENABLED = os.environ.get("SMS_ENABLED","0") == "1"
+SMS_PROVIDER = os.environ.get("SMS_PROVIDER","arkesel")
+SMS_SENDER_ID = os.environ.get("SMS_SENDER_ID","KOFAD")
+SMS_SANDBOX = os.environ.get("SMS_SANDBOX","1") == "1"
+SMS_PUBLIC_ORIGIN = os.environ.get("SMS_PUBLIC_ORIGIN","").rstrip("/")
+ARKESEL_API_KEY = os.environ.get("ARKESEL_API_KEY","")
+SMS_TIMEOUT_SECONDS = 15
+SMS_MAX_ATTEMPTS = 3
+SMS_ADAPTERS = {"arkesel":"core.sms.providers.Arkesel"}

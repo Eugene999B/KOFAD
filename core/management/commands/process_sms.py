@@ -1,0 +1,28 @@
+import time
+from django.core.management.base import BaseCommand, CommandError
+from django.core.exceptions import ValidationError
+from django.db import close_old_connections
+from core.sms.service import process_one, recover_stale
+
+
+class Command(BaseCommand):
+    help = "Run the durable SMS outbox. Use --loop in a separate Railway worker."
+    def add_arguments(self,parser):
+        parser.add_argument("--loop",action="store_true")
+        parser.add_argument("--limit",type=int,default=100)
+    def handle(self,*args,**options):
+        processed = 0
+        while True:
+            close_old_connections()
+            try:
+                recover_stale()
+                found = process_one()
+            except ValidationError as exc:
+                raise CommandError("; ".join(exc.messages))
+            if found:
+                processed += 1
+            if not options["loop"] and (not found or processed >= options["limit"]):
+                break
+            if not found:
+                time.sleep(3)
+        self.stdout.write(f"Processed {processed} queued SMS records.")

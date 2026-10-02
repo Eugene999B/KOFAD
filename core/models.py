@@ -20,6 +20,7 @@ class Access(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     branches = models.ManyToManyField(Branch)
     session_version = models.PositiveIntegerField(default=1)
+    must_change_password = models.BooleanField(default=False)
     totp_secret = models.CharField(max_length=64, blank=True)
     totp_last_step = models.BigIntegerField(default=-1)
 
@@ -246,6 +247,55 @@ class Message(models.Model):
     status = models.CharField(max_length=16, default="draft")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    recipient = models.CharField(max_length=20, blank=True)
+    provider = models.CharField(max_length=40, blank=True)
+    sender = models.CharField(max_length=11, blank=True)
+    sandbox = models.BooleanField(default=True)
+    segments = models.PositiveIntegerField(default=1)
+    encoding = models.CharField(max_length=12, default="gsm7")
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    queued_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    source_key = models.CharField(max_length=150, null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    class Meta:
+        ordering = ["-created_at"]
+        permissions = [("send_messages", "Queue and retry customer SMS")]
+        constraints = [models.UniqueConstraint(fields=["branch", "source_key"], name="unique_message_source")]
+
+
+class SmsAttempt(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(Message, related_name="delivery_attempts", on_delete=models.PROTECT)
+    number = models.PositiveIntegerField()
+    provider = models.CharField(max_length=40)
+    provider_id = models.CharField(max_length=180, blank=True)
+    status = models.CharField(max_length=20, default="sending")
+    callback_digest = models.CharField(max_length=64)
+    started_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    http_status = models.PositiveIntegerField(null=True, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["message", "number"], name="unique_sms_attempt")]
+
+
+class SmsEvent(models.Model):
+    attempt = models.ForeignKey(SmsAttempt, on_delete=models.PROTECT)
+    fingerprint = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=20)
+    provider_id = models.CharField(max_length=180)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class MessageTemplate(models.Model):
+    code = models.SlugField(max_length=40, unique=True)
+    name = models.CharField(max_length=100)
+    body = models.TextField()
+    active = models.BooleanField(default=True)
+    def __str__(self):
+        return self.name
 
 
 class Correction(models.Model):

@@ -1,6 +1,10 @@
 from django.urls import path
 from . import views as v
+from .sms.views import callback
 urlpatterns = [
+    path("sms/callback/<uuid:attempt_id>/", callback, name="sms_callback"),
+    path("message-templates/", v.message_templates, name="message_templates"),
+    path("account/password/", v.password_change, name="password_change"),
     path("search/", v.search, name="search"),
     path("health/", v.health, name="health"), path("login/", v.login_view, name="login"),
     path("logout/", v.logout_view, name="logout"), path("mfa/", v.mfa, name="mfa"),

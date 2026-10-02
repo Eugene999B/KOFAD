@@ -7,9 +7,9 @@ from core.models import Access, Branch, Company, Party, Product
 from core.services import stock_move, audit
 
 ROLE_PERMISSIONS = {
-    "Owner": ["operate_sales", "operate_inventory", "operate_finance", "approve_operations", "view_reports", "manage_company",
+    "Owner": ["operate_sales", "operate_inventory", "operate_finance", "approve_operations", "view_reports", "manage_company", "send_messages",
               "add_product", "change_product", "add_party", "change_party"],
-    "Manager": ["operate_sales", "operate_inventory", "operate_finance", "approve_operations", "view_reports",
+    "Manager": ["send_messages", "operate_sales", "operate_inventory", "operate_finance", "approve_operations", "view_reports",
                 "add_product", "change_product", "add_party", "change_party"],
     "Cashier": ["operate_sales", "add_party"],
     "Storekeeper": ["operate_inventory"],
