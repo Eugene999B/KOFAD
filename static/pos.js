@@ -9,6 +9,18 @@
   let pendingBody = null;
   let heldId = null;
   let completed = false;
+  const storageKey = "kofad-cart:"+root.dataset.user+":"+root.dataset.branch+":"+root.dataset.kind;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+    if (saved && Array.isArray(saved.cart) && saved.cart.length <= 100) {
+      cart.push(...saved.cart); requestKey = saved.requestKey || requestKey;
+      pendingBody = saved.pendingBody || null; heldId = saved.heldId || null;
+    }
+  } catch (_) { /* Storage may be disabled; server idempotency still applies. */ }
+  function persist() {
+    try { sessionStorage.setItem(storageKey,JSON.stringify({cart,requestKey,pendingBody,heldId})); } catch (_) {}
+  }
+  function clearStored() { try { sessionStorage.removeItem(storageKey); } catch (_) {} }
   const purchase = root.dataset.kind === "purchase";
   const errorBox = document.querySelector("#pos-error");
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -57,6 +69,7 @@
     });
     document.querySelector("#total").textContent = formatted(total());
     document.querySelector("#cart-count").textContent = cart.length + " lines";
+    persist();
   }
   const productGrid = document.querySelector("#catalog");
   function renderCatalog() {
@@ -120,15 +133,17 @@
       if (!pendingBody) pendingBody = {kind:root.dataset.kind, items:cart.map(({product,mode,quantity,price})=>({product,mode,quantity,...(purchase?{price}:{})})),
         party:document.querySelector("#party").value || null, due_date:document.querySelector("#due-date").value,
         payments:["cash","momo","bank","card"].map(method=>({method, amount:document.querySelector("#pay-"+method).value || "0"}))};
+      persist();
       const result = await api("/api/trades/", pendingBody, requestKey);
       if (heldId) {
         try { await api("/api/held/" + heldId + "/", {}); } catch (_) { /* Posted sale remains valid if held-cart cleanup fails. */ }
       }
       completed = true;
+      clearStored();
       location.href = result.url;
     } catch (error) {
       if (error.rejected) {
-        pendingBody = null; requestKey = crypto.randomUUID();
+        pendingBody = null; requestKey = crypto.randomUUID(); persist();
         root.querySelectorAll("input,select,button").forEach(control => control.disabled = false);
       }
       fail(error.message + (pendingBody ? " Retry this unchanged request to recover the same transaction. Editing is locked until its outcome is known." : ""));
@@ -138,7 +153,7 @@
   document.querySelector("#hold")?.addEventListener("click", async () => {
     if (!cart.length) return fail("Add a product before holding.");
     if (pendingBody) return fail("Resolve the pending checkout before holding this cart.");
-    try { await api("/api/held/", {label:"Counter sale", items:cart}); if (heldId) await api("/api/held/"+heldId+"/", {}); completed = true; location.reload(); } catch(e) { fail(e.message); }
+    try { await api("/api/held/", {label:"Counter sale", items:cart}); if (heldId) await api("/api/held/"+heldId+"/", {}); completed = true; clearStored(); location.reload(); } catch(e) { fail(e.message); }
   });
   document.querySelectorAll(".held-item").forEach(button => button.addEventListener("click", async () => {
     if (cart.length || pendingBody) return fail("Complete or hold the current cart before resuming another.");
@@ -156,4 +171,12 @@
   }));
   window.addEventListener("beforeunload", e => { if (cart.length && !completed) { e.preventDefault(); e.returnValue = ""; } });
   render();
+  if (pendingBody) {
+    document.querySelector("#party").value = pendingBody.party || "";
+    document.querySelector("#due-date").value = pendingBody.due_date || "";
+    pendingBody.payments.forEach(payment => { document.querySelector("#pay-"+payment.method).value = payment.amount; });
+    root.querySelectorAll("input,select,button").forEach(control => control.disabled = true);
+    document.querySelector("#complete").disabled = false;
+    fail("A checkout was interrupted. Retry to recover its original result before making changes.");
+  }
 })();

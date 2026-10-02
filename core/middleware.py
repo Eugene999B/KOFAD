@@ -13,7 +13,7 @@ class AccessMiddleware:
             if request.session.get("access_version") != access.session_version:
                 logout(request)
                 return redirect("login")
-            if (request.user.is_staff or request.user.is_superuser or access.totp_secret) and not request.session.get("mfa_ok"):
+            if (request.user.is_staff or request.user.is_superuser or request.user.has_perm("core.manage_company") or access.totp_secret) and not request.session.get("mfa_ok"):
                 if request.path not in ("/mfa/", "/logout/", "/health/"):
                     return redirect("mfa")
         response = self.get_response(request)

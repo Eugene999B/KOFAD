@@ -316,3 +316,20 @@ class ReportingTests(Fixtures, TestCase):
         self.authenticate_client()
         response = self.client.get("/search/",{"q":doc.reference})
         self.assertContains(response,doc.reference)
+
+
+class OwnerSecurityTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+    def test_company_manager_requires_mfa_without_staff_flag(self):
+        owner = User.objects.create_user("business-owner",password="business-owner-password")
+        owner.user_permissions.add(Permission.objects.get(codename="manage_company"))
+        owner.access.branches.add(self.branch)
+        self.client.post("/login/",{"username":"business-owner","password":"business-owner-password"})
+        self.assertEqual(self.client.get("/").url,"/mfa/")
+    def test_cashier_cannot_search_supplier_contacts(self):
+        cashier = User.objects.create_user("limited-cashier",password="limited-cashier-password")
+        cashier.user_permissions.add(Permission.objects.get(codename="operate_sales"))
+        cashier.access.branches.add(self.branch)
+        self.authenticate_client(cashier)
+        self.assertNotContains(self.client.get("/search/",{"q":"Supplier"}),self.supplier.phone)

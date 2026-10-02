@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll('form[action="/logout/"]').forEach(form => form.addEventListener("submit",() => {
+    try { Object.keys(sessionStorage).filter(key => key.startsWith("kofad-cart:")).forEach(key => sessionStorage.removeItem(key)); } catch (_) {}
+  }));
   document.querySelector("#menu-toggle")?.addEventListener("click", () => document.body.classList.toggle("nav-open"));
   document.querySelectorAll("[data-print]").forEach(b => b.addEventListener("click", () => window.print()));
   document.querySelectorAll("[data-thermal]").forEach(b => b.addEventListener("click", () => {

@@ -85,7 +85,7 @@ def login_view(request):
                     access, _ = Access.objects.get_or_create(user=user)
                     login(request, user)
                     request.session["access_version"] = access.session_version
-                    request.session["mfa_ok"] = not bool(access.totp_secret) and not (user.is_staff or user.is_superuser)
+                    request.session["mfa_ok"] = not bool(access.totp_secret) and not (user.is_staff or user.is_superuser or user.has_perm("core.manage_company"))
                     attempt.failures = 0
                     attempt.save()
                     s.audit(user, None, "session.login", user.pk)
@@ -340,6 +340,9 @@ def party_edit(request, pk=None):
     kind = "supplier" if request.GET.get("kind") == "supplier" else "customer"
     s.permit(request.user, branch, "add_party" if not pk else "change_party")
     obj = get_object_or_404(Party, pk=pk, branch=branch) if pk else None
+    actual_kind = obj.kind if obj else kind
+    if not request.user.has_perm("core.operate_finance"):
+        s.permit(request.user,branch,"operate_inventory" if actual_kind == "supplier" else "operate_sales")
     form = PartyForm(request.POST or None, instance=obj)
     if not request.user.has_perm("core.operate_finance"):
         form.fields.pop("credit_limit")
@@ -544,7 +547,12 @@ def search(request):
     if q:
         if request.user.has_perm("core.operate_sales") or request.user.has_perm("core.operate_inventory") or request.user.has_perm("core.view_reports"):
             products = Product.objects.filter(Q(name__icontains=q)|Q(sku__icontains=q)|Q(barcode=q))[:20]
-            parties = Party.objects.filter(branch=branch).filter(Q(name__icontains=q)|Q(phone__icontains=q))[:20]
+            kinds = []
+            if request.user.has_perm("core.operate_sales") or request.user.has_perm("core.view_reports"):
+                kinds.append("customer")
+            if request.user.has_perm("core.operate_inventory") or request.user.has_perm("core.view_reports"):
+                kinds.append("supplier")
+            parties = Party.objects.filter(branch=branch,kind__in=kinds).filter(Q(name__icontains=q)|Q(phone__icontains=q))[:20]
         allowed = []
         if request.user.has_perm("core.operate_sales"):
             allowed += ["sale","return"]

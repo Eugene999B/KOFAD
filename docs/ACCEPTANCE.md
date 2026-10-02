@@ -30,7 +30,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Implement signed messaging webhooks, provider adapters, delivery queues and receipt attachments. Current messages remain drafts.
 - Extend the implemented sales/gross-profit, receivables-aging and inventory-valuation reports with consolidated branch comparisons and operational analytics.
 - Add complete export coverage for statements, transfers, closings and other report families.
-- Extend implemented scoped global search with scalable pagination/export jobs and network draft recovery.
+- Extend implemented scoped global search with scalable pagination and export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.
 - Configure, automate and rehearse encrypted independent backup/restore with manifests and retention.
 - Perform external security review, accessibility audit, production-scale performance tests and owner acceptance.
 - Provide self-service MFA recovery codes and sensitive-action reauthentication if required by the owner's security policy.

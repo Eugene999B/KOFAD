@@ -51,7 +51,7 @@ Adjustments require independent approval and a reason. A count discrepancy can b
 
 Django password hashing and validators, same-origin CSRF-protected requests, secure HTTP-only session cookies, no-store authenticated responses, a restrictive CSP, HTTPS redirects and HSTS are configured.
 
-Five failed password attempts lock the username for 15 minutes. Staff/superuser accounts must enroll a TOTP authenticator. Other enrolled users must also verify. TOTP steps cannot be reused. Security changes and permission membership changes revoke existing sessions. Operator MFA reset requires host access and records a reason.
+Five failed password attempts lock the username for 15 minutes. Staff/superuser and company-management accounts must enroll a TOTP authenticator. Other enrolled users must also verify. TOTP steps cannot be reused. Security changes and permission membership changes revoke existing sessions. Operator MFA reset requires host access and records a reason.
 
 Django groups define custom permission sets; Access assigns locations. Default group templates are created only once so rerunning bootstrap preserves customization. Administration exposes financial records as read-only.
 

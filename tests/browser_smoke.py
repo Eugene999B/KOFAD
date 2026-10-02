@@ -1,6 +1,10 @@
 """Remote browser evidence: real login, navigation, checkout and narrow-screen overflow."""
 import os
 import time
+import base64
+import hashlib
+import hmac
+import struct
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -22,6 +26,14 @@ with sync_playwright() as p:
     page.get_by_label("Username", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
+    page.wait_for_url("http://127.0.0.1:8000/mfa/")
+    secret = page.locator(".secret").inner_text().strip()
+    step = int(time.time() // 30)
+    digest = hmac.new(base64.b32decode(secret),struct.pack(">Q",step),hashlib.sha1).digest()
+    offset = digest[-1] & 15
+    code = (struct.unpack(">I",digest[offset:offset+4])[0] & 0x7fffffff) % 1000000
+    page.get_by_label("Six-digit authenticator code").fill(f"{code:06}")
+    page.get_by_role("button",name="Verify",exact=True).click()
     page.wait_for_url("http://127.0.0.1:8000/")
     page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
