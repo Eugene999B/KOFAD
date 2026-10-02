@@ -17,7 +17,12 @@
   try {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
     if (saved && Array.isArray(saved.cart) && saved.cart.length <= 100) {
-      cart.push(...saved.cart); requestKey = saved.requestKey || requestKey;
+      cart.push(...saved.cart);
+      cart.forEach(line => {
+        if (line.listPrice === undefined) line.listPrice = line.price;
+        if (line.discount === undefined) line.discount = "0";
+      });
+      requestKey = saved.requestKey || requestKey;
       pendingBody = saved.pendingBody || null; heldId = saved.heldId || null;
     }
   } catch (_) { /* Storage may be disabled; server idempotency still applies. */ }
