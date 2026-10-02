@@ -1,0 +1,502 @@
+import hashlib
+import json
+import secrets
+import uuid
+from datetime import date, timedelta
+from decimal import Decimal
+from functools import wraps
+
+from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import connection, transaction
+from django.db.models import F, Q, Sum
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+from . import services as s
+from .context import shell
+from .forms import CompanyForm, PartyForm, ProductForm
+from .models import (
+    Access, Audit, Branch, Closing, Company, Document, HeldSale, Line, LoginAttempt,
+    Message, Movement, Operation, Party, Payment, Product, Stock,
+)
+from .security import matching_step, new_secret
+
+
+def branch_for(request):
+    branch = shell(request)["current_branch"]
+    if not branch:
+        raise PermissionDenied("No active location is assigned to your account. Contact the owner.")
+    return branch
+
+
+def protected(permission):
+    def decorator(view):
+        @login_required
+        @wraps(view)
+        def inner(request, *args, **kwargs):
+            branch = branch_for(request)
+            s.permit(request.user, branch, permission)
+            try:
+                return view(request, branch, *args, **kwargs)
+            except ValidationError as exc:
+                return render(request, "error.html", {"title": "Check your request", "error": problem(exc)}, status=400)
+        return inner
+    return decorator
+
+
+def problem(exc):
+    return "; ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+
+
+def health(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return JsonResponse({"status": "ok"})
+    except Exception:
+        return JsonResponse({"status": "unavailable"}, status=503)
+
+
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    error = ""
+    if request.method == "POST":
+        username = request.POST.get("username", "")[:150]
+        # Per-account lock avoids trusting spoofable forwarded IP headers.
+        key = hashlib.sha256(username.casefold().encode()).hexdigest()
+        with transaction.atomic():
+            LoginAttempt.objects.get_or_create(key=key)
+            attempt = LoginAttempt.objects.select_for_update().get(key=key)
+            if attempt.blocked_until and attempt.blocked_until > timezone.now():
+                error = "Too many attempts. Please wait 15 minutes."
+            else:
+                if attempt.blocked_until:
+                    attempt.failures = 0
+                    attempt.blocked_until = None
+                user = authenticate(request, username=username, password=request.POST.get("password", ""))
+                if user is not None:
+                    access, _ = Access.objects.get_or_create(user=user)
+                    login(request, user)
+                    request.session["access_version"] = access.session_version
+                    request.session["mfa_ok"] = not bool(access.totp_secret) and not (user.is_staff or user.is_superuser)
+                    attempt.failures = 0
+                    attempt.save()
+                    s.audit(user, None, "session.login", user.pk)
+                    return redirect("mfa" if not request.session["mfa_ok"] else "dashboard")
+                attempt.failures += 1
+                if attempt.failures >= 5:
+                    attempt.blocked_until = timezone.now() + timedelta(minutes=15)
+                attempt.save()
+                error = "The username or password is incorrect."
+    return render(request, "login.html", {"error": error})
+
+
+@login_required
+def mfa(request):
+    access = request.user.access
+    enrolled = bool(access.totp_secret)
+    secret = access.totp_secret or request.session.get("enroll_secret") or new_secret()
+    if not enrolled:
+        request.session["enroll_secret"] = secret
+    error = ""
+    if request.method == "POST":
+        with transaction.atomic():
+            access = Access.objects.select_for_update().get(user=request.user)
+            step = matching_step(secret, request.POST.get("code", ""))
+            failures = request.session.get("mfa_failures", 0)
+            if failures >= 5:
+                logout(request)
+                return redirect("login")
+            if step is not None and step > access.totp_last_step:
+                access.totp_secret = secret
+                access.totp_last_step = step
+                access.save(update_fields=["totp_secret", "totp_last_step"])
+                request.session["mfa_ok"] = True
+                request.session.pop("enroll_secret", None)
+                request.session.pop("mfa_failures", None)
+                s.audit(request.user, None, "session.mfa", request.user.pk)
+                return redirect("dashboard")
+            request.session["mfa_failures"] = failures + 1
+            error = "The code is invalid or already used. Wait for the next code."
+    return render(request, "mfa.html", {"enrolled": enrolled, "secret": secret if not enrolled else "", "error": error})
+
+
+@require_POST
+def logout_view(request):
+    logout(request)
+    return redirect("login")
+
+
+@login_required
+@require_POST
+def switch_branch(request):
+    available = shell(request)["branches"]
+    branch = get_object_or_404(available, pk=request.POST.get("branch"))
+    request.session["branch"] = branch.pk
+    return redirect("dashboard")
+
+
+@login_required
+def dashboard(request):
+    branch = branch_for(request)
+    if not request.user.has_perm("core.view_reports"):
+        if request.user.has_perm("core.operate_sales"):
+            return redirect("pos")
+        return redirect("inventory")
+    s.permit(request.user, branch, "view_reports")
+    today = timezone.localdate()
+    docs = Document.objects.filter(branch=branch)
+    sales = docs.filter(kind="sale", created_at__date=today)
+    returned = docs.filter(kind="return", created_at__date=today)
+    revenue = (sales.aggregate(t=Sum("total"))["t"] or 0) - (returned.aggregate(t=Sum("total"))["t"] or 0)
+    expenses = docs.filter(kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or 0
+    debt = sum((s.party_debt(p) for p in Party.objects.filter(branch=branch, kind="customer")), Decimal(0))
+    stock = Stock.objects.filter(branch=branch).select_related("product")
+    low = stock.filter(quantity__lte=F("product__reorder_level"))
+    week = []
+    for offset in reversed(range(7)):
+        day = today - timedelta(days=offset)
+        value = docs.filter(kind="sale", created_at__date=day).aggregate(t=Sum("total"))["t"] or 0
+        week.append({"day": day.strftime("%a"), "amount": value})
+    maximum = max([d["amount"] for d in week] + [1])
+    for d in week:
+        d["height"] = round(float(d["amount"] / maximum) * 110) if d["amount"] else 2
+        d["y"] = 130 - d["height"]
+    return render(request, "dashboard.html", {"title": "Command centre", "revenue": revenue, "expenses": expenses,
+        "debt": debt, "low": low[:6], "low_count": low.count(), "recent": docs[:7], "week": week,
+        "pending": Operation.objects.filter(branch=branch, status="requested").count(), "today": today,
+        "channels": s.channel_totals(branch, today).items(), "sales_count": sales.count()})
+
+
+@protected("operate_sales")
+def pos(request, branch):
+    return trade_screen(request, branch, "sale")
+
+
+@protected("operate_inventory")
+def purchasing(request, branch):
+    return trade_screen(request, branch, "purchase")
+
+
+def trade_screen(request, branch, kind):
+    catalog = []
+    stock = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+    query = request.GET.get("q", "")[:100]
+    products = Product.objects.filter(active=True)
+    if query:
+        products = products.filter(Q(name__icontains=query) | Q(sku__icontains=query) | Q(barcode=query))
+    for p in products[:300]:
+        item = {"id": p.pk, "name": p.name, "sku": p.sku, "barcode": p.barcode, "category": p.category,
+                "pack_size": p.pack_size, "pack_name": p.pack_name, "base_unit": p.base_unit,
+                "stock": stock.get(p.pk, 0), "prices": {k: str(getattr(p, k)) for k in
+                    ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack") if getattr(p, k) is not None}}
+        if kind == "purchase":
+            item["cost"] = str(p.cost)
+        catalog.append(item)
+    return render(request, "pos.html", {"title": "New sale" if kind == "sale" else "Receive purchase",
+        "catalog": catalog, "kind": kind, "key": str(uuid.uuid4()), "q": query,
+        "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
+        "held": HeldSale.objects.filter(branch=branch, user=request.user),
+        "purchase": kind == "purchase"})
+
+
+@login_required
+@require_POST
+def complete_trade(request):
+    try:
+        data = json.loads(request.body)
+        if not isinstance(data, dict):
+            raise ValidationError("Expected a transaction object.")
+        doc = s.post_trade(request.user, branch_for(request), data, request.headers.get("Idempotency-Key"),
+                           kind=data.get("kind", "sale"))
+        return JsonResponse({"url": f"/documents/{doc.pk}/", "reference": doc.reference})
+    except (ValidationError, ValueError, TypeError, KeyError) as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+@protected("operate_sales")
+@require_POST
+def hold(request, branch):
+    try:
+        data = json.loads(request.body)
+        if len(request.body) > 60000 or not isinstance(data.get("items"), list):
+            raise ValidationError("Invalid held cart.")
+        held = HeldSale.objects.create(branch=branch, user=request.user, label=str(data.get("label", "Held sale"))[:100], cart=data)
+        return JsonResponse({"id": held.pk})
+    except (ValueError, ValidationError, TypeError) as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+@protected("operate_sales")
+def held(request, branch, pk):
+    item = get_object_or_404(HeldSale, pk=pk, branch=branch, user=request.user)
+    if request.method == "POST":
+        item.delete()
+        return JsonResponse({"ok": True})
+    return JsonResponse(item.cart)
+
+
+@login_required
+def documents(request):
+    branch = branch_for(request)
+    if not any(request.user.has_perm("core." + p) for p in ("operate_sales", "view_reports", "operate_finance", "operate_inventory")):
+        raise PermissionDenied
+    kind = request.GET.get("kind", "sale")
+    allowed = ["sale", "return"] if not request.user.has_perm("core.view_reports") else list(dict(Document.KINDS))
+    if request.user.has_perm("core.operate_inventory"):
+        allowed += ["purchase"]
+    if request.user.has_perm("core.operate_finance"):
+        allowed += ["expense", "collection", "supplier_payment"]
+    if kind not in allowed:
+        raise PermissionDenied
+    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
+    q = request.GET.get("q", "")[:100]
+    if q:
+        rows = rows.filter(Q(reference__icontains=q) | Q(party__name__icontains=q))
+    return render(request, "documents.html", {"title": dict(Document.KINDS).get(kind, "Transactions"),
+        "rows": rows[:200], "kind": kind, "q": q})
+
+
+@login_required
+def document(request, pk):
+    branch = branch_for(request)
+    doc = get_object_or_404(Document.objects.select_related("party", "created_by", "branch", "original"), pk=pk, branch=branch)
+    permission = "operate_sales" if doc.kind in ("sale", "return") else "operate_inventory" if doc.kind == "purchase" else "operate_finance"
+    if not request.user.has_perm("core.view_reports"):
+        s.permit(request.user, branch, permission)
+    return render(request, "document.html", {"title": doc.reference, "doc": doc,
+        "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None})
+
+
+@protected("operate_inventory")
+def inventory(request, branch):
+    q = request.GET.get("q", "")[:100]
+    products = Product.objects.all()
+    if q:
+        products = products.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode=q))
+    stocks = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+    rows = []
+    for p in products[:200]:
+        quantity = stocks.get(p.pk, 0)
+        rows.append({"product": p, "quantity": quantity, "packs": quantity // p.pack_size,
+                     "loose": quantity % p.pack_size, "low": quantity <= p.reorder_level})
+    return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
+
+
+@protected("change_product")
+def product_edit(request, branch, pk=None):
+    obj = get_object_or_404(Product, pk=pk) if pk else None
+    if not obj and not request.user.has_perm("core.add_product"):
+        raise PermissionDenied
+    form = ProductForm(request.POST or None, instance=obj)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            before = {k: str(v) for k, v in (Product.objects.filter(pk=pk).values().first() or {}).items()}
+            product = form.save()
+            s.audit(request.user, branch, "product.saved", product.sku,
+                    {"before": before, "after": {k: str(v) for k, v in form.cleaned_data.items()}})
+        messages.success(request, "Product saved. Use a stock operation to record opening stock.")
+        return redirect("inventory")
+    return render(request, "form.html", {"title": "Edit product" if pk else "New product", "form": form,
+        "description": "Leave a price blank to disable that selling mode. Quantities are always held in base units."})
+
+
+@login_required
+def parties(request):
+    branch = branch_for(request)
+    kind = "supplier" if request.GET.get("kind") == "supplier" else "customer"
+    permission = "operate_inventory" if kind == "supplier" else "operate_sales"
+    if not request.user.has_perm("core.view_reports"):
+        s.permit(request.user, branch, permission)
+    rows = Party.objects.filter(branch=branch, kind=kind)
+    q = request.GET.get("q", "")[:100]
+    if q:
+        rows = rows.filter(Q(name__icontains=q) | Q(phone__icontains=q))
+    return render(request, "parties.html", {"title": "Suppliers" if kind == "supplier" else "Customers",
+        "rows": [{"party": p, "debt": s.party_debt(p)} for p in rows[:200]], "kind": kind, "q": q})
+
+
+@login_required
+def party_edit(request, pk=None):
+    branch = branch_for(request)
+    kind = "supplier" if request.GET.get("kind") == "supplier" else "customer"
+    s.permit(request.user, branch, "add_party" if not pk else "change_party")
+    obj = get_object_or_404(Party, pk=pk, branch=branch) if pk else None
+    form = PartyForm(request.POST or None, instance=obj)
+    if not request.user.has_perm("core.operate_finance"):
+        form.fields.pop("credit_limit")
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            item = form.save(commit=False)
+            item.branch = branch
+            item.kind = obj.kind if obj else kind
+            item.save()
+            s.audit(request.user, branch, "party.saved", item.pk, {"name": item.name})
+        return redirect("/parties/?kind=" + item.kind)
+    return render(request, "form.html", {"title": "Edit contact" if pk else "New contact", "form": form,
+        "description": "Name and phone are enough to start. Credit limits are controlled by finance."})
+
+
+@login_required
+def statement(request, pk):
+    branch = branch_for(request)
+    s.permit(request.user, branch, "view_reports" if request.user.has_perm("core.view_reports") else "operate_finance")
+    party = get_object_or_404(Party, pk=pk, branch=branch)
+    docs = Document.objects.filter(party=party).order_by("created_at")
+    running = Decimal(0)
+    rows = []
+    for doc in docs:
+        change = doc.balance if doc.kind in ("sale", "purchase") else -sum((a.amount for a in doc.allocations.all()), Decimal(0))
+        running += change
+        rows.append({"doc": doc, "change": change, "running": running})
+    return render(request, "statement.html", {"title": party.name, "party": party, "rows": rows, "balance": running})
+
+
+@protected("operate_finance")
+def finance(request, branch):
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action")
+            if action == "expense":
+                doc = s.post_expense(request.user, branch, request.POST.dict(), request.POST.get("key"))
+            elif action in ("collection", "supplier_payment"):
+                doc = s.post_payment(request.user, branch, request.POST.dict(), request.POST.get("key"), action == "supplier_payment")
+            else:
+                raise ValidationError("Invalid action.")
+            return redirect("document", pk=doc.pk)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    invoices = Document.objects.filter(branch=branch, kind__in=["sale", "purchase"], party__isnull=False)
+    outstanding = [{"doc": d, "balance": s.balance(d)} for d in invoices]
+    return render(request, "finance.html", {"title": "Finance", "key": request.POST.get("key") or str(uuid.uuid4()),
+        "outstanding": [r for r in outstanding if r["balance"] > 0], "methods": Payment.METHODS,
+        "recent": Document.objects.filter(branch=branch, kind__in=["expense", "collection", "supplier_payment"])[:20]})
+
+
+@protected("approve_operations")
+def returns(request, branch):
+    if request.method == "POST":
+        try:
+            doc = s.post_return(request.user, branch, request.POST.dict(), request.POST.get("key"))
+            return redirect("document", pk=doc.pk)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    ref = request.GET.get("q", "")
+    lines = Line.objects.filter(document__branch=branch, document__kind="sale", document__reference=ref)
+    return render(request, "returns.html", {"title": "Returns", "lines": lines, "q": ref,
+        "key": request.POST.get("key") or str(uuid.uuid4()), "methods": Payment.METHODS})
+
+
+@protected("operate_inventory")
+def operations(request, branch):
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "request":
+                s.request_operation(request.user, branch, request.POST.dict())
+            else:
+                op = get_object_or_404(Operation.objects.filter(Q(branch=branch) | Q(destination=branch)), pk=request.POST.get("id"))
+                s.advance_operation(request.user, op.pk, request.POST.get("action"))
+            messages.success(request, "Stock operation recorded.")
+            return redirect("operations")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    return render(request, "operations.html", {"title": "Stock operations", "products": Product.objects.filter(active=True),
+        "destinations": Branch.objects.filter(active=True).exclude(pk=branch.pk),
+        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related("product", "branch", "destination")[:100],
+        "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
+
+
+@protected("operate_finance")
+def closings(request, branch):
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "verify":
+                s.verify_closing(request.user, get_object_or_404(Closing, pk=request.POST.get("id"), branch=branch))
+            else:
+                s.submit_closing(request.user, branch, date.fromisoformat(request.POST.get("date", "")),
+                    {m: request.POST.get(m, 0) for m, _ in Payment.METHODS}, request.POST.get("note", ""))
+            messages.success(request, "Closing recorded.")
+            return redirect("closings")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    return render(request, "closings.html", {"title": "Daily closing", "today": timezone.localdate().isoformat(),
+        "methods": Payment.METHODS, "expected": s.channel_totals(branch, timezone.localdate()).items(),
+        "rows": Closing.objects.filter(branch=branch).select_related("submitted_by", "verified_by")[:100]})
+
+
+@protected("view_reports")
+def reports(request, branch):
+    rows, filters = report_rows(request, branch)
+    return render(request, "reports.html", {"title": "Reports", "rows": rows[:200], "filters": filters,
+        "total": sum((r["total"] for r in rows), Decimal(0)), "query": request.GET.urlencode()})
+
+
+def report_rows(request, branch):
+    start = request.GET.get("start", timezone.localdate().replace(day=1).isoformat())
+    end = request.GET.get("end", timezone.localdate().isoformat())
+    try:
+        first, last = date.fromisoformat(start), date.fromisoformat(end)
+        if first > last:
+            raise ValueError
+    except ValueError:
+        raise ValidationError("Enter a valid date range.")
+    docs = Document.objects.filter(branch=branch, created_at__date__gte=first, created_at__date__lte=last)
+    rows = [{"reference": d.reference, "date": d.created_at.strftime("%Y-%m-%d %H:%M"),
+             "kind": d.get_kind_display(), "party": d.party.name if d.party else "Walk-in",
+             "total": -d.total if d.kind == "return" else d.total, "paid": d.paid,
+             "balance": s.balance(d) if d.kind in ("sale", "purchase") else Decimal(0)} for d in docs.select_related("party")[:10000]]
+    return rows, {"start": start, "end": end}
+
+
+@protected("view_reports")
+def export_report(request, branch, format):
+    from .exports import export
+    rows, filters = report_rows(request, branch)
+    s.audit(request.user, branch, "report.export", format, filters)
+    return export(rows, format, f"{branch.name} transaction register", Company.objects.first() or Company())
+
+
+@protected("view_reports")
+def audit_log(request, branch):
+    return render(request, "audit.html", {"title": "Audit trail",
+        "rows": Audit.objects.filter(Q(branch=branch) | Q(branch__isnull=True, actor=request.user)).select_related("actor")[:300]})
+
+
+@protected("manage_company")
+def settings_view(request, branch):
+    company = Company.objects.first()
+    form = CompanyForm(request.POST or None, instance=company)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            old = {k: str(v) for k, v in (Company.objects.filter(pk=company.pk).values().first() if company else {}).items()}
+            obj = form.save()
+            s.audit(request.user, branch, "company.updated", obj.pk,
+                    {"before": old, "after": {k: str(v) for k, v in form.cleaned_data.items()}})
+        messages.success(request, "Company settings saved.")
+        return redirect("settings")
+    return render(request, "form.html", {"title": "Company settings", "form": form,
+        "description": "Currency is GHS and the operating timezone is Africa/Accra. Review tax requirements before launch."})
+
+
+@protected("operate_sales")
+def communications(request, branch):
+    if request.method == "POST":
+        party = get_object_or_404(Party, pk=request.POST.get("party"), branch=branch)
+        body = request.POST.get("body", "").strip()
+        channel = request.POST.get("channel")
+        if not party.consent or not body or channel not in ("sms", "whatsapp"):
+            messages.error(request, "An opted-in contact, message and valid channel are required.")
+        else:
+            Message.objects.create(branch=branch, party=party, body=body[:2000], channel=channel, created_by=request.user)
+            s.audit(request.user, branch, "message.drafted", party.pk, {"channel": channel})
+            messages.success(request, "Draft saved. Provider delivery is not configured.")
+            return redirect("communications")
+    return render(request, "communications.html", {"title": "Communications",
+        "parties": Party.objects.filter(branch=branch, consent=True),
+        "rows": Message.objects.filter(branch=branch).select_related("party").order_by("-created_at")[:100]})

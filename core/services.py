@@ -1,0 +1,374 @@
+"""Transactional application services. Views never write financial ledgers directly."""
+import hashlib
+import json
+import uuid
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
+
+from .models import (
+    Allocation, Audit, Branch, Closing, Company, Document, Idempotency, Line,
+    Movement, Operation, Party, Payment, Product, Stock,
+)
+
+ZERO = Decimal("0.00")
+
+
+def money(value):
+    try:
+        amount = Decimal(str(value))
+        if not amount.is_finite() or amount < 0 or amount > Decimal("999999999999.99"):
+            raise ValueError
+        if amount != amount.quantize(Decimal(".01")):
+            raise ValueError
+        return amount.quantize(Decimal(".01"))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValidationError("Enter a nonnegative amount with at most two decimal places.")
+
+
+def units(value, signed=False):
+    if isinstance(value, bool) or not str(value).lstrip("-").isdigit():
+        raise ValidationError("Quantity must be a whole number.")
+    value = int(value)
+    if abs(value) > 1000000 or value == 0 or (value < 0 and not signed):
+        raise ValidationError("Quantity must be between 1 and 1,000,000.")
+    return value
+
+
+def permit(user, branch, permission):
+    if not user.is_active or not user.has_perm("core." + permission):
+        raise PermissionDenied("You do not have permission for this action.")
+    if not branch.active:
+        raise PermissionDenied("This location is inactive.")
+    if not user.is_superuser and not user.access.branches.filter(pk=branch.pk).exists():
+        raise PermissionDenied("This location is outside your access.")
+
+
+def audit(user, branch, action, reference, detail=None):
+    Audit.objects.create(actor=user, branch=branch, action=action, reference=str(reference), detail=detail or {})
+
+
+def lock_branch(branch):
+    # Every financial write takes the same branch lock, preventing overselling,
+    # double allocation and a concurrent posting from racing a daily closing.
+    return Branch.objects.select_for_update().get(pk=branch.pk)
+
+
+def ensure_open(branch):
+    if Closing.objects.filter(branch=branch, date=timezone.localdate()).exists():
+        raise ValidationError("Today is closed. No further financial postings are allowed.")
+
+
+def begin_request(user, branch, key, payload):
+    try:
+        key = uuid.UUID(str(key))
+    except (ValueError, TypeError, AttributeError):
+        raise ValidationError("A valid request key is required.")
+    raw = json.dumps({"user": user.pk, "payload": payload}, sort_keys=True, default=str)
+    fingerprint = hashlib.sha256(raw.encode()).hexdigest()
+    record, _ = Idempotency.objects.get_or_create(branch=branch, key=key, defaults={"fingerprint": fingerprint})
+    if record.fingerprint != fingerprint:
+        raise ValidationError("This request key was already used for different information.")
+    return record
+
+
+def stock_move(user, branch, product, delta, reference, reason):
+    if not delta:
+        return
+    stock, _ = Stock.objects.select_for_update().get_or_create(branch=branch, product=product)
+    quantity = stock.quantity + delta
+    if quantity < 0:
+        raise ValidationError(f"Insufficient stock for {product.name}. Available: {stock.quantity}.")
+    stock.quantity = quantity
+    stock.save(update_fields=["quantity"])
+    Movement.objects.create(branch=branch, product=product, delta=delta, balance=quantity,
+                            reference=reference, reason=reason, actor=user)
+
+
+def reference(kind, branch):
+    return f"{kind[:3].upper()}-{branch.code.upper()}-{uuid.uuid4().hex[:12].upper()}"
+
+
+def balance(invoice):
+    allocated = invoice.settlements.aggregate(total=Sum("amount"))["total"] or ZERO
+    return invoice.total - invoice.paid - allocated
+
+
+def party_debt(party):
+    kind = "sale" if party.kind == "customer" else "purchase"
+    return sum((balance(d) for d in Document.objects.filter(party=party, kind=kind)), ZERO)
+
+
+def payments(document, rows, direction):
+    total = ZERO
+    if not isinstance(rows, list) or len(rows) > 8:
+        raise ValidationError("Provide up to eight payment entries.")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValidationError("Invalid payment entry.")
+        amount = money(row.get("amount", 0))
+        if amount == 0:
+            continue
+        method = row.get("method")
+        if method not in dict(Payment.METHODS):
+            raise ValidationError("Unknown payment method.")
+        ref = str(row.get("reference", ""))[:100]
+        Payment.objects.create(document=document, method=method, amount=amount, reference=ref, direction=direction)
+        total += amount
+    return total
+
+
+@transaction.atomic
+def post_trade(user, branch, payload, key, kind="sale"):
+    if kind not in ("sale", "purchase"):
+        raise ValidationError("Invalid transaction kind.")
+    permit(user, branch, "operate_sales" if kind == "sale" else "operate_inventory")
+    branch = lock_branch(branch)
+    request = begin_request(user, branch, key, {"kind": kind, **payload})
+    if request.document_id:
+        return request.document
+    ensure_open(branch)
+    rows = payload.get("items", [])
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 100:
+        raise ValidationError("Add between one and 100 items.")
+    party = None
+    if payload.get("party"):
+        party = Party.objects.filter(pk=payload["party"], branch=branch,
+                                     kind="customer" if kind == "sale" else "supplier").first()
+        if not party:
+            raise ValidationError("Choose a valid customer or supplier at this location.")
+    if kind == "purchase" and not party:
+        raise ValidationError("A supplier is required.")
+    doc = Document.objects.create(branch=branch, kind=kind, party=party, total=0, paid=0, finalized=False,
+        created_by=user, reference=reference(kind, branch), note=str(payload.get("note", ""))[:2000])
+    total = ZERO
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValidationError("Invalid line item.")
+        product = Product.objects.filter(pk=row.get("product"), active=True).first()
+        if not product:
+            raise ValidationError("A product is missing or archived.")
+        qty = units(row.get("quantity"))
+        mode = row.get("mode", "retail_unit")
+        if mode not in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack"):
+            raise ValidationError("Invalid selling mode.")
+        factor = product.pack_size if mode.endswith("pack") else 1
+        if kind == "sale":
+            price = getattr(product, mode)
+            if price is None:
+                raise ValidationError(f"{mode.replace('_', ' ')} is disabled for {product.name}.")
+        else:
+            price = money(row.get("price"))
+        line_total = money(price * qty)
+        Line.objects.create(document=doc, product=product, description=product.name,
+            mode=mode, quantity=qty, factor=factor, unit_price=price, unit_cost=product.cost, total=line_total)
+        stock_move(user, branch, product, qty * factor * (-1 if kind == "sale" else 1), doc.reference, kind)
+        total += line_total
+    paid = payments(doc, payload.get("payments", []), 1 if kind == "sale" else -1)
+    if paid > total:
+        raise ValidationError("Payments exceed the total. Enter the amount retained, excluding change.")
+    due = None
+    if paid < total:
+        if not party:
+            raise ValidationError("A customer is required for credit.")
+        try:
+            due = date.fromisoformat(str(payload.get("due_date", "")))
+        except ValueError:
+            raise ValidationError("A due date is required for an unpaid balance.")
+        if due < timezone.localdate():
+            raise ValidationError("The due date cannot be in the past.")
+        if kind == "sale" and party_debt(party) + total - paid > party.credit_limit:
+            raise ValidationError("This sale exceeds the customer's credit limit.")
+    # Finalize the new document once, before the immutable database trigger protects later updates.
+    doc.total, doc.paid, doc.due_date = money(total), paid, due
+    doc.finalized = True
+    doc.save(update_fields=["total", "paid", "due_date", "finalized"])
+    request.document = doc
+    request.save(update_fields=["document"])
+    audit(user, branch, kind + ".posted", doc.reference, {"total": str(total), "paid": str(paid)})
+    return doc
+
+
+@transaction.atomic
+def post_payment(user, branch, payload, key, supplier=False):
+    permit(user, branch, "operate_finance")
+    branch = lock_branch(branch)
+    request = begin_request(user, branch, key, {"supplier": supplier, **payload})
+    if request.document_id:
+        return request.document
+    ensure_open(branch)
+    invoice = Document.objects.filter(pk=payload.get("invoice"), branch=branch,
+        kind="purchase" if supplier else "sale").first()
+    if not invoice:
+        raise ValidationError("Choose a valid outstanding invoice.")
+    amount = money(payload.get("amount"))
+    if amount <= 0 or amount > balance(invoice):
+        raise ValidationError("Payment must be positive and cannot exceed the outstanding balance.")
+    kind = "supplier_payment" if supplier else "collection"
+    doc = Document.objects.create(branch=branch, kind=kind, party=invoice.party, original=invoice,
+        reference=reference(kind, branch), total=amount, paid=amount, created_by=user)
+    payments(doc, [{"method": payload.get("method"), "amount": amount, "reference": payload.get("reference", "")}],
+             -1 if supplier else 1)
+    Allocation.objects.create(payment_document=doc, invoice=invoice, amount=amount)
+    request.document = doc
+    request.save(update_fields=["document"])
+    audit(user, branch, kind + ".posted", doc.reference, {"invoice": invoice.reference, "amount": str(amount)})
+    return doc
+
+
+@transaction.atomic
+def post_return(user, branch, payload, key):
+    permit(user, branch, "approve_operations")
+    branch = lock_branch(branch)
+    request = begin_request(user, branch, key, payload)
+    if request.document_id:
+        return request.document
+    ensure_open(branch)
+    source = Line.objects.select_related("document").filter(pk=payload.get("line"),
+        document__branch=branch, document__kind="sale").first()
+    if not source:
+        raise ValidationError("Choose a sale line from this location.")
+    qty = units(payload.get("quantity"))
+    returned = Line.objects.filter(source_line=source).aggregate(q=Sum("quantity"))["q"] or 0
+    if returned + qty > source.quantity:
+        raise ValidationError("Return quantity exceeds the eligible quantity.")
+    reason = str(payload.get("reason", "")).strip()
+    if len(reason) < 5:
+        raise ValidationError("Provide a meaningful reason for the return.")
+    amount = money(source.unit_price * qty)
+    credit = min(amount, balance(source.document))
+    refund = amount - credit
+    doc = Document.objects.create(branch=branch, kind="return", party=source.document.party,
+        original=source.document, reference=reference("return", branch), total=amount, paid=refund,
+        note=reason, created_by=user)
+    Line.objects.create(document=doc, product=source.product, description=source.description,
+        mode=source.mode, quantity=qty, factor=source.factor, unit_price=source.unit_price,
+        unit_cost=source.unit_cost, total=amount, source_line=source)
+    stock_move(user, branch, source.product, qty * source.factor, doc.reference, reason)
+    if credit:
+        Allocation.objects.create(payment_document=doc, invoice=source.document, amount=credit)
+    if refund:
+        payments(doc, [{"method": payload.get("method"), "amount": refund}], -1)
+    request.document = doc
+    request.save(update_fields=["document"])
+    audit(user, branch, "return.posted", doc.reference, {"original": source.document.reference, "reason": reason})
+    return doc
+
+
+@transaction.atomic
+def post_expense(user, branch, payload, key):
+    permit(user, branch, "operate_finance")
+    branch = lock_branch(branch)
+    request = begin_request(user, branch, key, payload)
+    if request.document_id:
+        return request.document
+    ensure_open(branch)
+    amount = money(payload.get("amount"))
+    note = str(payload.get("note", "")).strip()
+    if amount <= 0 or len(note) < 5:
+        raise ValidationError("Provide a positive amount and a meaningful expense description.")
+    doc = Document.objects.create(branch=branch, kind="expense", reference=reference("expense", branch),
+        total=amount, paid=amount, note=note, created_by=user)
+    payments(doc, [{"method": payload.get("method"), "amount": amount}], -1)
+    request.document = doc
+    request.save(update_fields=["document"])
+    audit(user, branch, "expense.posted", doc.reference, {"amount": str(amount), "note": note})
+    return doc
+
+
+@transaction.atomic
+def request_operation(user, branch, payload):
+    permit(user, branch, "operate_inventory")
+    qty = units(payload.get("quantity"), signed=True)
+    kind = payload.get("kind")
+    destination = None
+    if kind == "transfer":
+        if qty < 1:
+            raise ValidationError("Transfer quantity must be positive.")
+        destination = Branch.objects.filter(pk=payload.get("destination"), active=True).first()
+        if not destination or destination == branch:
+            raise ValidationError("Choose a different active destination.")
+    elif kind != "adjustment":
+        raise ValidationError("Invalid stock operation.")
+    reason = str(payload.get("reason", "")).strip()
+    if len(reason) < 5:
+        raise ValidationError("A meaningful reason is required.")
+    product = Product.objects.filter(pk=payload.get("product"), active=True).first()
+    if not product:
+        raise ValidationError("Choose an active product.")
+    op = Operation.objects.create(branch=branch, destination=destination, product=product, kind=kind,
+        quantity=qty, reason=reason, requested_by=user)
+    audit(user, branch, "stock.requested", op.pk, {"quantity": qty, "reason": reason})
+    return op
+
+
+@transaction.atomic
+def advance_operation(user, operation_id, action):
+    op = Operation.objects.select_for_update().select_related("branch", "destination", "product").get(pk=operation_id)
+    branch = op.destination if action == "receive" else op.branch
+    permit(user, branch, "approve_operations" if action in ("approve", "reject") else "operate_inventory")
+    lock_branch(branch)
+    if action in ("approve", "reject") and op.status == "requested":
+        if op.requested_by_id == user.pk:
+            raise ValidationError("A different authorized colleague must review this request.")
+        op.approved_by = user
+        op.status = "rejected" if action == "reject" else "approved"
+        if action == "approve" and op.kind == "adjustment":
+            stock_move(user, branch, op.product, op.quantity, str(op.pk), op.reason)
+            op.status = "received"
+    elif action == "dispatch" and op.status == "approved" and op.kind == "transfer":
+        stock_move(user, branch, op.product, -op.quantity, str(op.pk), "Transfer dispatched: " + op.reason)
+        op.status = "dispatched"
+    elif action == "receive" and op.status == "dispatched" and op.kind == "transfer":
+        stock_move(user, branch, op.product, op.quantity, str(op.pk), "Transfer received: " + op.reason)
+        op.status = "received"
+    else:
+        raise ValidationError("This operation has already advanced or the transition is invalid.")
+    op.save(update_fields=["approved_by", "status"])
+    audit(user, branch, "stock." + action, op.pk, {"status": op.status})
+    return op
+
+
+def channel_totals(branch, day):
+    rows = Payment.objects.filter(document__branch=branch, document__created_at__date=day)
+    totals = {method: ZERO for method, _ in Payment.METHODS}
+    for row in rows:
+        totals[row.method] += row.amount * row.direction
+    return totals
+
+
+@transaction.atomic
+def submit_closing(user, branch, day, counted, note):
+    permit(user, branch, "operate_finance")
+    lock_branch(branch)
+    if day > timezone.localdate():
+        raise ValidationError("Cannot close a future day.")
+    if Closing.objects.filter(branch=branch, date=day).exists():
+        raise ValidationError("This day is already closed.")
+    expected = channel_totals(branch, day)
+    actual = {}
+    for m, _ in Payment.METHODS:
+        raw = str(counted.get(m, 0))
+        actual[m] = -money(raw[1:]) if raw.startswith("-") else money(raw)
+    tolerance = (Company.objects.first() or Company()).closing_tolerance
+    if any(abs(actual[m] - expected[m]) > tolerance for m in actual) and len(note.strip()) < 5:
+        raise ValidationError("Explain the closing variance.")
+    closing = Closing.objects.create(branch=branch, date=day, expected={k: str(v) for k, v in expected.items()},
+        counted={k: str(v) for k, v in actual.items()}, note=note, submitted_by=user)
+    audit(user, branch, "closing.submitted", closing.pk, {"date": str(day), "expected": closing.expected})
+    return closing
+
+
+@transaction.atomic
+def verify_closing(user, closing):
+    permit(user, closing.branch, "approve_operations")
+    closing = Closing.objects.select_for_update().get(pk=closing.pk)
+    if closing.submitted_by_id == user.pk or closing.verified_by_id:
+        raise ValidationError("A different authorized colleague must verify an unverified closing.")
+    closing.verified_by = user
+    closing.save(update_fields=["verified_by"])
+    audit(user, closing.branch, "closing.verified", closing.pk)
