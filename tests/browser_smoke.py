@@ -1,5 +1,6 @@
 """Remote browser evidence: real login, navigation, checkout and narrow-screen overflow."""
 import os
+import sys
 import time
 import base64
 import hashlib
@@ -8,6 +9,19 @@ import struct
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+
+# Isolated CI fixtures only; never run this script against production.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+import django
+django.setup()
+from django.conf import settings
+from django.contrib.auth.models import User
+from core.models import Branch
+if not settings.DEBUG:
+    raise RuntimeError("Browser fixtures are forbidden outside DEBUG environments.")
+warehouse, _ = Branch.objects.get_or_create(code="browser-wh", defaults={"name": "Browser warehouse"})
+User.objects.get(username="demo").access.branches.add(warehouse)
 
 out = Path("test-results")
 out.mkdir(exist_ok=True)
@@ -117,6 +131,41 @@ with sync_playwright() as p:
     admin_page.get_by_role("button",name="Approve and post variances",exact=True).click()
     assert admin_page.locator(".pill").filter(has_text="approved").count() == 1
     admin_page.screenshot(path=str(out / "count-approved.png"),full_page=True)
+    page.set_viewport_size({"width":1440,"height":1000})
+    page.goto("http://127.0.0.1:8000/operations/")
+    page.locator("summary").click()
+    page.get_by_label("Operation",exact=True).select_option("transfer")
+    page.get_by_label("Base-unit quantity",exact=True).fill("12")
+    page.get_by_label("Transfer destination",exact=True).select_option(str(warehouse.pk))
+    page.get_by_label("Reason",exact=True).fill("Browser transfer discrepancy check")
+    page.get_by_role("button",name="Submit for approval",exact=True).click()
+    admin_page.goto("http://127.0.0.1:8000/operations/")
+    transfer_row = admin_page.locator("tbody tr").filter(has_text="Browser transfer discrepancy check").first
+    transfer_row.get_by_role("button",name="Approve",exact=True).click()
+    page.reload()
+    transfer_row = page.locator("tbody tr").filter(has_text="Browser transfer discrepancy check").first
+    transfer_row.get_by_role("button",name="Dispatch",exact=True).click()
+    page.get_by_label("Location",exact=True).select_option(str(warehouse.pk))
+    page.get_by_role("button",name="Switch",exact=True).click()
+    page.goto("http://127.0.0.1:8000/operations/")
+    transfer_row = page.locator("tbody tr").filter(has_text="Browser transfer discrepancy check").first
+    transfer_row.get_by_label("Sellable units received",exact=True).fill("9")
+    transfer_row.get_by_label("Receipt / discrepancy note",exact=True).fill("Three units missing at delivery")
+    transfer_row.get_by_role("button",name="Record receipt",exact=True).click()
+    transfer_row = page.locator("tbody tr").filter(has_text="Browser transfer discrepancy check").first
+    assert transfer_row.locator(".pill").inner_text() == "discrepancy"
+    admin_page.get_by_label("Location",exact=True).select_option(str(warehouse.pk))
+    admin_page.get_by_role("button",name="Switch",exact=True).click()
+    admin_page.goto("http://127.0.0.1:8000/operations/")
+    transfer_row = admin_page.locator("tbody tr").filter(has_text="Browser transfer discrepancy check").first
+    transfer_row.get_by_label("Resolution note",exact=True).fill("Missing three units subsequently arrived intact")
+    transfer_row.get_by_role("button",name="Confirm remainder arrived",exact=True).click()
+    transfer_row = admin_page.locator("tbody tr").filter(has_text="Browser transfer discrepancy check").first
+    assert transfer_row.locator(".pill").inner_text() == "received"
+    admin_page.screenshot(path=str(out / "transfer-resolved.png"),full_page=True)
+    admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.screenshot(path=str(out / "operations-mobile.png"),full_page=True)
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Operations overflows"
     assert not errors, errors
     browser.close()
-print("Owner MFA, cart-preserving search, lost-response checkout recovery, and desktop/mobile checks passed.")
+print("Owner MFA, cart-preserving search, lost-response checkout recovery, physical counts, transfer discrepancies, and desktop/mobile checks passed.")
