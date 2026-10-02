@@ -45,14 +45,14 @@ document.addEventListener("DOMContentLoaded", () => {
     else dialog.setAttribute("open", "");
   }
 
+  document.querySelector("[data-inventory-search-focus]")?.addEventListener("click", () => {
+    const search = document.querySelector(".inventory-search input[name='q']");
+    search?.focus();
+    search?.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center"});
+  });
+
   document.querySelectorAll("[data-restock-open]").forEach(button => {
-    button.addEventListener("click", () => {
-      if (!button.dataset.product) {
-        const first = document.querySelector("[data-restock-open][data-product]:not([data-product=''])");
-        if (first) return open(first);
-      }
-      open(button);
-    });
+    button.addEventListener("click", () => open(button));
   });
   document.querySelectorAll("[data-restock-close]").forEach(button => {
     button.addEventListener("click", () => dialog.close());
