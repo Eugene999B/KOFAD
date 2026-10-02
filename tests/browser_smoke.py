@@ -39,8 +39,8 @@ with sync_playwright() as p:
     page.set_viewport_size({"width":390,"height":844})
     for name,path in [("dashboard","/"),("pos","/sales/new/"),("inventory","/inventory/")]:
         page.goto("http://127.0.0.1:8000"+path)
-        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path + " overflows"
         page.screenshot(path=str(out / (name+"-mobile.png")), full_page=True)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path + " overflows"
     assert not errors, errors
     browser.close()
 print("Desktop/mobile navigation and checkout browser checks passed.")

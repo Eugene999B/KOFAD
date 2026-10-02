@@ -293,3 +293,26 @@ class CorrectionTests(Fixtures, TestCase):
         result = s.review_correction(self.reviewer,self.branch,request.pk,True)
         self.assertEqual(result.posted.original,expense)
         self.assertEqual(s.channel_totals(self.branch,timezone.localdate())["bank"],Decimal("0"))
+
+
+class ReportingTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+    def test_report_families_and_exports(self):
+        self.sale(payments=[],party=self.customer.pk,due_date=timezone.localdate().isoformat())
+        self.authenticate_client()
+        for family in ("register","sales","inventory","aging"):
+            self.assertEqual(self.client.get("/reports/?family="+family).status_code,200)
+            self.assertEqual(self.client.get("/reports/export/pdf/?family="+family).status_code,200)
+    def test_profit_uses_original_standard_cost(self):
+        from .reporting import build_report
+        self.sale(2)
+        self.product.cost = Decimal("30")
+        self.product.save()
+        rows,_ = build_report(self.branch,timezone.localdate(),timezone.localdate(),"sales")
+        self.assertEqual(rows[0]["profit"],Decimal("60"))
+    def test_global_search_scopes_transactions(self):
+        doc = self.sale()
+        self.authenticate_client()
+        response = self.client.get("/search/",{"q":doc.reference})
+        self.assertContains(response,doc.reference)

@@ -9,7 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!editing && e.key.toLowerCase() === "n" && !e.ctrlKey && !e.metaKey) location.href = "/sales/new/";
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       const search = document.querySelector('input[name="q"]');
-      if (search) { e.preventDefault(); search.focus(); }
+      e.preventDefault();
+      if (search && location.pathname === "/search/") search.focus(); else location.href = "/search/";
     }
   });
 });

@@ -40,7 +40,8 @@ def protected(permission):
         @wraps(view)
         def inner(request, *args, **kwargs):
             branch = branch_for(request)
-            s.permit(request.user, branch, permission)
+            selected = next((p for p in permission.split("|") if request.user.has_perm("core."+p)),permission.split("|")[0])
+            s.permit(request.user, branch, selected)
             try:
                 return view(request, branch, *args, **kwargs)
             except ValidationError as exc:
@@ -283,7 +284,7 @@ def document(request, pk):
         "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None})
 
 
-@protected("operate_inventory")
+@protected("operate_inventory|view_reports")
 def inventory(request, branch):
     q = request.GET.get("q", "")[:100]
     products = Product.objects.all()
@@ -441,36 +442,35 @@ def closings(request, branch):
         "rows": Closing.objects.filter(branch=branch).select_related("submitted_by", "verified_by")[:100]})
 
 
-@protected("view_reports")
-def reports(request, branch):
-    rows, filters = report_rows(request, branch)
-    return render(request, "reports.html", {"title": "Reports", "rows": rows[:200], "filters": filters,
-        "total": sum((r["total"] for r in rows), Decimal(0)), "query": request.GET.urlencode()})
-
-
-def report_rows(request, branch):
+def report_data(request, branch):
+    from .reporting import build_report, FAMILIES
     start = request.GET.get("start", timezone.localdate().replace(day=1).isoformat())
     end = request.GET.get("end", timezone.localdate().isoformat())
+    family = request.GET.get("family","register")
     try:
-        first, last = date.fromisoformat(start), date.fromisoformat(end)
-        if first > last:
+        first,last = date.fromisoformat(start),date.fromisoformat(end)
+        if first > last or family not in FAMILIES:
             raise ValueError
     except ValueError:
-        raise ValidationError("Enter a valid date range.")
-    docs = Document.objects.filter(branch=branch, created_at__date__gte=first, created_at__date__lte=last)
-    rows = [{"reference": d.reference, "date": d.created_at.strftime("%Y-%m-%d %H:%M"),
-             "kind": d.get_kind_display(), "party": d.party.name if d.party else "Walk-in",
-             "total": -d.total if d.kind in ("return", "reversal") else d.total, "paid": d.paid,
-             "balance": s.balance(d) if d.kind in ("sale", "purchase") else Decimal(0)} for d in docs.select_related("party")[:10000]]
-    return rows, {"start": start, "end": end}
+        raise ValidationError("Enter a valid date range and report family.")
+    rows,columns = build_report(branch,first,last,family)
+    return rows,columns,{"start":start,"end":end,"family":family},FAMILIES
+
+
+@protected("view_reports")
+def reports(request, branch):
+    rows,columns,filters,families = report_data(request,branch)
+    return render(request,"reports.html",{"title":"Reports","rows":[[row[key] for key,label in columns] for row in rows[:200]],
+        "headers":[label for key,label in columns],"filters":filters,"families":families.items(),
+        "report_title":families[filters["family"]],"query":request.GET.urlencode()})
 
 
 @protected("view_reports")
 def export_report(request, branch, format):
     from .exports import export
-    rows, filters = report_rows(request, branch)
-    s.audit(request.user, branch, "report.export", format, filters)
-    return export(rows, format, f"{branch.name} transaction register", Company.objects.first() or Company())
+    rows,columns,filters,families = report_data(request,branch)
+    s.audit(request.user,branch,"report.export",format,filters)
+    return export(rows,format,f"{branch.name} / {families[filters['family']]}",Company.objects.first() or Company(),columns)
 
 
 @protected("view_reports")
@@ -532,3 +532,25 @@ def corrections(request, branch):
     return render(request,"corrections.html",{"title":"Corrections", "methods":Payment.METHODS,
         "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment"],correction__isnull=True)[:200],
         "rows":Correction.objects.filter(original__branch=branch).select_related("original","requested_by","reviewed_by","posted")[:100]})
+
+
+@login_required
+def search(request):
+    branch = branch_for(request)
+    q = request.GET.get("q","").strip()[:100]
+    products,parties,docs = [],[],[]
+    if q:
+        if request.user.has_perm("core.operate_sales") or request.user.has_perm("core.operate_inventory") or request.user.has_perm("core.view_reports"):
+            products = Product.objects.filter(Q(name__icontains=q)|Q(sku__icontains=q)|Q(barcode=q))[:20]
+            parties = Party.objects.filter(branch=branch).filter(Q(name__icontains=q)|Q(phone__icontains=q))[:20]
+        allowed = []
+        if request.user.has_perm("core.operate_sales"):
+            allowed += ["sale","return"]
+        if request.user.has_perm("core.operate_inventory"):
+            allowed += ["purchase"]
+        if request.user.has_perm("core.operate_finance"):
+            allowed += ["expense","collection","supplier_payment","reversal"]
+        if request.user.has_perm("core.view_reports"):
+            allowed = list(dict(Document.KINDS))
+        docs = Document.objects.filter(branch=branch,kind__in=allowed,reference__icontains=q)[:20]
+    return render(request,"search.html",{"title":"Search workspace","q":q,"products":products,"parties":parties,"documents":docs})

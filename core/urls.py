@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views as v
 urlpatterns = [
+    path("search/", v.search, name="search"),
     path("health/", v.health, name="health"), path("login/", v.login_view, name="login"),
     path("logout/", v.logout_view, name="logout"), path("mfa/", v.mfa, name="mfa"),
     path("branch/", v.switch_branch, name="switch_branch"), path("", v.dashboard, name="dashboard"),

@@ -16,7 +16,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation |
 | Operations | Independent stock adjustment review; transfer request, approval, dispatch and receipt |
 | Finance | Expenses, channel movement reconciliation, independent closing verification, closed-day posting lock |
-| Reporting | Date-filtered transaction register; CSV/PDF/XLSX/DOCX exports; printable receipts/statements |
+| Reporting | Transaction register, sales/profit by product/mode, inventory valuation and aging; CSV/PDF/XLSX/DOCX exports; printable receipts/statements |
 | Governance | Financial immutability triggers, audit events, scoped permissions, basic administration |
 | Deployment | Container, Railway configuration, PostgreSQL migrations, dependency lock, remote tests |
 
@@ -28,9 +28,9 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Extend structured stock-count sessions, damaged stock/transfer discrepancy handling and supplier returns.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.
 - Implement signed messaging webhooks, provider adapters, delivery queues and receipt attachments. Current messages remain drafts.
-- Expand report families: gross profit/cost, aging buckets, valuation, retail/wholesale breakdown, branch comparisons and operational analytics.
+- Extend the implemented sales/gross-profit, receivables-aging and inventory-valuation reports with consolidated branch comparisons and operational analytics.
 - Add complete export coverage for statements, transfers, closings and other report families.
-- Add real global search, scalable pagination/export jobs and network draft recovery.
+- Extend implemented scoped global search with scalable pagination/export jobs and network draft recovery.
 - Configure, automate and rehearse encrypted independent backup/restore with manifests and retention.
 - Perform external security review, accessibility audit, production-scale performance tests and owner acceptance.
 - Provide self-service MFA recovery codes and sensitive-action reauthentication if required by the owner's security policy.

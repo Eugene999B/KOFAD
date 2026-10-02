@@ -19,9 +19,11 @@ def safe(value):
     return "'" + text if text.startswith(("=", "+", "-", "@", "\t", "\r")) else text
 
 
-def export(rows, format, title, company):
-    headers = [c.title() for c in COLUMNS]
-    data = [[str(r[c]) for c in COLUMNS] for r in rows]
+def export(rows, format, title, company, columns=None):
+    columns = columns or [(c,c.title()) for c in COLUMNS]
+    headers = [title for key,title in columns]
+    raw = [[r[key] for key,title in columns] for r in rows]
+    data = [[str(value) for value in row] for row in raw]
     output = io.BytesIO()
     if format == "xlsx":
         book = Workbook()
@@ -29,16 +31,25 @@ def export(rows, format, title, company):
         sheet.title = "Transactions"
         sheet.append([company.name, title])
         sheet.append(headers)
-        for row in data:
-            sheet.append([safe(v) for v in row])
+        from decimal import Decimal
+        for row in raw:
+            sheet.append([float(v) if isinstance(v,Decimal) else v if isinstance(v,(int,float)) else safe(v) for v in row])
         sheet.freeze_panes = "A3"
-        sheet.auto_filter.ref = f"A2:G{max(2, sheet.max_row)}"
-        for col in "ABCDEFG":
+        from openpyxl.utils import get_column_letter
+        sheet.auto_filter.ref = f"A2:{get_column_letter(len(headers))}{max(2, sheet.max_row)}"
+        for col in [get_column_letter(i) for i in range(1,len(headers)+1)]:
             sheet.column_dimensions[col].width = 25 if col in "ABD" else 18
         book.save(output)
         content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     elif format == "docx":
+        from docx.shared import Inches
+        from docx.enum.section import WD_ORIENT
         doc = WordDocument()
+        section = doc.sections[0]
+        section.orientation = WD_ORIENT.LANDSCAPE
+        section.page_width = Inches(11.7)
+        section.page_height = Inches(8.3)
+        section.left_margin = section.right_margin = Inches(.5)
         doc.add_heading(company.name, 0)
         doc.add_heading(title, 1)
         doc.add_paragraph(f"Currency: {company.currency}. Balances reflect allocations recorded at export time.")
@@ -57,7 +68,7 @@ def export(rows, format, title, company):
         style.fontSize = 7
         style.leading = 10
         cells = [[Paragraph(escape(v), style) for v in row] for row in [headers] + data]
-        table = Table(cells, repeatRows=1, colWidths=[150, 85, 80, 130, 80, 80, 80])
+        table = Table(cells, repeatRows=1, colWidths=[790 / len(headers)] * len(headers))
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e7ede8")),
             ("GRID", (0, 0), (-1, -1), .3, colors.HexColor("#d9ded8")),
