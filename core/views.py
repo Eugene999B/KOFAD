@@ -288,10 +288,14 @@ def inventory(request, branch):
     if q:
         products = products.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode=q))
     stocks = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+    quarantined = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
+        "product_id").annotate(total=Sum("quantity")).values_list("product_id", "total"))
     rows = []
     for p in products[:200]:
         quantity = stocks.get(p.pk, 0)
-        rows.append({"product": p, "quantity": quantity, "packs": quantity // p.pack_size,
+        quarantine_qty = quarantined.get(p.pk, 0)
+        rows.append({"product": p, "quantity": quantity, "quarantine": quarantine_qty,
+                     "physical": quantity + quarantine_qty, "packs": quantity // p.pack_size,
                      "loose": quantity % p.pack_size, "low": quantity <= p.reorder_level})
     return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
 
