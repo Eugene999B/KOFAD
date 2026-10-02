@@ -1,6 +1,7 @@
 from functools import wraps
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -52,6 +53,7 @@ def _admin_branch(request):
 
 
 def company_admin(view):
+    @login_required
     @wraps(view)
     def inner(request, *args, **kwargs):
         branch = _admin_branch(request)
