@@ -183,7 +183,7 @@ class InitialAdminTests(TestCase):
         self.assertTrue(user.check_password("ADMIN"))
         self.assertFalse(user.access.must_change_password)
         self.client.post("/login/",{"username":"ADMIN","password":"ADMIN"})
-        for path in ("/","/admin/","/sales/new/","/communications/"):
+        for path in ("/","/administration/","/sales/new/","/communications/"):
             self.assertEqual(self.client.get(path).status_code,200)
         result = self.client.post("/account/password/",{"old_password":"ADMIN",
             "new_password1":"A-unique-counter-password-1948!","new_password2":"A-unique-counter-password-1948!"})
