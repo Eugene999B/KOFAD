@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'statement' party.pk %}">Statement</a><a class="button secondary" href="{% url 'statement_export' party.pk 'pdf' %}">PDF statement</a>{% if perms.core.change_party %}<a class="button secondary" href="/parties/{{ party.pk }}/">Edit customer</a>{% endif %}</div>{% endblock %}
+{% block content %}
+<section class="hero-panel"><div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ party.name }}</h2><p>{{ party.phone }}{% if party.address %} · {{ party.address }}{% endif %}</p></div><span class="pill">{% if account.outstanding %}Owes {{ company.currency }} {{ account.outstanding|floatformat:2 }}{% else %}Account clear{% endif %}</span></section>
+
+<div class="metric-grid">
+<article class="metric-card"><small>Outstanding</small><strong>{{ company.currency }} {{ account.outstanding|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Overdue</small><strong>{{ company.currency }} {{ account.overdue|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Lifetime sales</small><strong>{{ company.currency }} {{ account.total_sales|floatformat:2 }}</strong></article>
+<article class="metric-card"><small>Debt payments received</small><strong>{{ company.currency }} {{ account.total_collections|floatformat:2 }}</strong></article>
+</div>
+
+{% if account.outstanding and perms.core.operate_finance %}
+<section class="panel"><div class="section-heading"><div><h2>Receive account payment</h2><p class="muted">One payment can settle several receipts. KOFAD applies it oldest due first and preserves the allocation on the receipt trail.</p></div></div>
+<div class="two-column">
+<form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="pay_full" value="1"><label>Channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label><label>Reference<input name="reference" maxlength="100"></label><button class="button wide">Pay full balance · {{ account.outstanding|floatformat:2 }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><label>Partial amount<input name="amount" type="number" min=".01" max="{{ account.outstanding }}" step=".01" required></label><label>Channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label><label>Reference<input name="reference" maxlength="100"></label><button class="button secondary wide">Record partial payment</button></form>
+</div></section>
+{% endif %}
+
+<section class="panel"><div class="section-heading"><div><h2>Open credit receipts</h2><p class="muted">Each sale remains its own accounting record even though the customer has one combined balance.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Receipt</th><th>Sale date</th><th>Due</th><th class="number">Original total</th><th class="number">Current balance</th></tr></thead><tbody>
+{% for invoice,amount in account.invoices %}<tr><td><a href="{% url 'document' invoice.pk %}">{{ invoice.reference }}</a></td><td>{{ invoice.created_at|date:"d M Y, H:i" }}</td><td>{{ invoice.due_date|default:"—" }}</td><td class="number">{{ invoice.total|floatformat:2 }}</td><td class="number"><strong>{{ amount|floatformat:2 }}</strong></td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No unpaid sales.</td></tr>{% endfor %}
+</tbody></table></div></section>
+
+<section class="panel"><div class="section-heading"><div><h2>Customer activity</h2><p class="muted">Sales, returns and debt payments in one chronological account history.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Date</th><th>Reference</th><th>Type</th><th class="number">Amount</th><th>Recorded by</th></tr></thead><tbody>
+{% for doc in activity %}<tr><td>{{ doc.created_at|date:"d M Y, H:i" }}</td><td><a href="{% url 'document' doc.pk %}">{{ doc.reference }}</a></td><td>{{ doc.get_kind_display }}</td><td class="number">{{ doc.total|floatformat:2 }}</td><td>{{ doc.created_by }}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No customer activity.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
