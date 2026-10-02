@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block content %}
+{% extends "base.html" %}{% block actions %}<a class="button secondary" href="/exports/?dataset=movements">⇩ Download movements</a>{% endblock %}{% block content %}
 <p><a class="button" href="{% url 'stock_counts' %}">Physical stock counts</a></p>
 {% if perms.core.operate_inventory %}
 <details class="panel"><summary>＋ Request an adjustment or transfer</summary>

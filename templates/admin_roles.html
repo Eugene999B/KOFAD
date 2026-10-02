@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block actions %}<a class="button" href="/administration/roles/new/">＋ Create custom role</a>{% endblock %}
+{% block content %}
+<section class="hero-panel compact-hero"><div><p class="eyebrow">PERMISSION CONTROL</p><h2>Roles should match real jobs.</h2><p>Cashiers should see the counter. Storekeepers should see stock. Accountants should see finance. Owners keep the broader control layer.</p></div></section>
+<div class="role-grid">{% for row in rows %}<article class="role-card"><div class="section-heading"><div><h3>{{ row.role.name }}</h3><p>{{ row.description }}</p></div><span class="pill">{{ row.members }} user{{ row.members|pluralize }}</span></div><div class="permission-tags">{% for permission in row.permissions %}<span>{{ permission }}</span>{% empty %}<span>No KOFAD permissions</span>{% endfor %}</div><a class="text-link" href="/administration/roles/{{ row.role.pk }}/">Edit role →</a></article>{% endfor %}</div>
+{% endblock %}

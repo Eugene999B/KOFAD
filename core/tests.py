@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from io import BytesIO
 
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections, connection, connections, transaction, DatabaseError
 from django.test import TestCase, TransactionTestCase
@@ -169,7 +169,8 @@ class BusinessTests(Fixtures, TestCase):
     def test_all_pages_render(self):
         self.authenticate_client()
         for path in ["/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
-                     "/finance/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/communications/",
+                     "/finance/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
+                     "/administration/","/administration/users/","/administration/roles/","/exports/","/communications/",
                      "/products/new/","/parties/new/"]:
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code,200)
@@ -333,3 +334,86 @@ class OwnerSecurityTests(Fixtures, TestCase):
         cashier.access.branches.add(self.branch)
         self.authenticate_client(cashier)
         self.assertNotContains(self.client.get("/search/",{"q":"Supplier"}),self.supplier.phone)
+
+
+
+class AdministrationAndExportTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+        self.authenticate_client()
+
+    def test_admin_route_is_business_centre_not_django_index(self):
+        response = self.client.get("/admin/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/administration/")
+        page = self.client.get("/administration/")
+        self.assertContains(page, "Run KOFAD without entering the technical backend")
+        self.assertNotContains(page, "Authentication and Authorization")
+
+    def test_owner_can_create_cashier_in_branded_admin(self):
+        role = Group.objects.create(name="Cashier test")
+        role.permissions.add(Permission.objects.get(codename="operate_sales"))
+        response = self.client.post("/administration/users/new/", {
+            "username": "counter-one",
+            "first_name": "Counter",
+            "last_name": "One",
+            "role": str(role.pk),
+            "password": "Strong-counter-password-2026!",
+            "active": "on",
+            "branches": [str(self.branch.pk)],
+            "recovery_phone": "0241234567",
+        })
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(username="counter-one")
+        self.assertTrue(user.groups.filter(pk=role.pk).exists())
+        self.assertTrue(user.access.branches.filter(pk=self.branch.pk).exists())
+        self.assertEqual(user.access.recovery_phone, "+233241234567")
+        self.assertFalse(user.is_staff)
+
+    def test_role_editor_changes_only_selected_role_members_sessions(self):
+        role = Group.objects.create(name="Counter control")
+        role.permissions.add(Permission.objects.get(codename="operate_sales"))
+        member = User.objects.create_user("role-member", password="role-member-strong-password")
+        member.groups.add(role)
+        member.access.branches.add(self.branch)
+        outsider = User.objects.create_user("role-outsider", password="role-outsider-strong-password")
+        outsider.access.branches.add(self.branch)
+        member.access.refresh_from_db()
+        outsider.access.refresh_from_db()
+        before_member = member.access.session_version
+        before_outsider = outsider.access.session_version
+        self.client.post(f"/administration/roles/{role.pk}/", {
+            "name": "Counter control",
+            "permissions": [
+                str(Permission.objects.get(codename="operate_sales").pk),
+                str(Permission.objects.get(codename="add_party").pk),
+            ],
+        })
+        member.access.refresh_from_db()
+        outsider.access.refresh_from_db()
+        self.assertGreater(member.access.session_version, before_member)
+        self.assertEqual(outsider.access.session_version, before_outsider)
+
+    def test_export_centre_produces_business_datasets_in_all_formats(self):
+        self.sale()
+        from openpyxl import load_workbook
+        from docx import Document as WordDocument
+        for dataset in ("customers", "inventory", "sales", "transactions", "movements", "audit", "staff"):
+            with self.subTest(dataset=dataset):
+                response = self.client.get(f"/exports/download/xlsx/?dataset={dataset}")
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(load_workbook(BytesIO(response.content)).active.max_row >= 2)
+        for format in ("pdf", "docx", "csv"):
+            response = self.client.get(f"/exports/download/{format}/?dataset=customers")
+            self.assertEqual(response.status_code, 200)
+            if format == "pdf":
+                self.assertTrue(response.content.startswith(b"%PDF"))
+            if format == "docx":
+                self.assertEqual(len(WordDocument(BytesIO(response.content)).tables), 1)
+
+    def test_single_store_hides_location_switcher(self):
+        self.other.delete()
+        response = self.client.get("/")
+        self.assertNotContains(response, 'id="branch-select"')
+        self.assertNotContains(response, ">Switch<")
+        self.assertContains(response, self.branch.name)

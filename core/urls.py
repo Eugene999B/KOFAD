@@ -2,6 +2,8 @@ from django.urls import path
 from . import views as v
 from . import account as accounts
 from . import count_views
+from . import admin_views
+from . import export_views
 from .sms.views import callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
@@ -28,6 +30,17 @@ urlpatterns = [
     path("finance/", v.finance, name="finance"), path("returns/", v.returns, name="returns"),
     path("operations/", v.operations, name="operations"), path("closings/", v.closings, name="closings"),
     path("reports/", v.reports, name="reports"), path("reports/export/<str:format>/", v.export_report, name="export"),
-    path("audit/", v.audit_log, name="audit"), path("settings/", v.settings_view, name="settings"),
+    path("audit/", v.audit_log, name="audit"),
+    path("administration/", admin_views.administration, name="administration"),
+    path("administration/users/", admin_views.users, name="admin_users"),
+    path("administration/users/new/", admin_views.user_edit, name="admin_user_new"),
+    path("administration/users/<int:pk>/", admin_views.user_edit, name="admin_user_edit"),
+    path("administration/roles/", admin_views.roles, name="admin_roles"),
+    path("administration/roles/new/", admin_views.role_edit, name="admin_role_new"),
+    path("administration/roles/<int:pk>/", admin_views.role_edit, name="admin_role_edit"),
+    path("settings/", admin_views.settings_center, name="settings"),
+    path("settings/company/", v.settings_view, name="company_settings"),
+    path("exports/", export_views.export_center, name="export_center"),
+    path("exports/download/<str:format>/", export_views.download, name="export_download"),
     path("communications/", v.communications, name="communications"),
 ]

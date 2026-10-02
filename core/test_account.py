@@ -132,7 +132,7 @@ class AccountRecoveryTests(TestCase):
         challenge = self.request_code()
         self.client.post("/login/", {"username":"ADMIN","password":"ADMIN"})
         access = Access.objects.get(user=self.user)
-        response = self.client.post(f"/admin/core/access/{access.pk}/change/", {
+        response = self.client.post(f"/technical-admin/core/access/{access.pk}/change/", {
             "user":self.user.pk, "branches":[Branch.objects.get(code="main").pk],
             "recovery_phone":"0241234568", "_save":"Save"})
         self.assertEqual(response.status_code, 302)
