@@ -609,20 +609,51 @@ def operations(request, branch):
 
 @protected("operate_finance")
 def closings(request, branch):
+    today = timezone.localdate()
+    raw_day = request.POST.get("date") if request.method == "POST" else request.GET.get("date")
+    try:
+        selected_day = date.fromisoformat(raw_day) if raw_day else today
+    except (TypeError, ValueError):
+        selected_day = today
+
     if request.method == "POST":
         try:
             if request.POST.get("action") == "verify":
                 s.verify_closing(request.user, get_object_or_404(Closing, pk=request.POST.get("id"), branch=branch))
+                messages.success(request, "Daily closing independently verified.")
             else:
-                s.submit_closing(request.user, branch, date.fromisoformat(request.POST.get("date", "")),
-                    {m: request.POST.get(m, 0) for m, _ in Payment.METHODS}, request.POST.get("note", ""))
-            messages.success(request, "Closing recorded.")
-            return redirect("closings")
+                s.submit_closing(
+                    request.user,
+                    branch,
+                    selected_day,
+                    {method: request.POST.get(method, 0) for method, _ in Payment.METHODS},
+                    request.POST.get("note", ""),
+                    request.POST.get("opening_cash", 0),
+                    request.POST.get("cash_in", 0),
+                    request.POST.get("cash_out", 0),
+                )
+                messages.success(request, "Daily closing submitted and the day is now locked.")
+            return redirect(f"/closings/?date={selected_day.isoformat()}")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
-    return render(request, "closings.html", {"title": "Daily closing", "today": timezone.localdate().isoformat(),
-        "methods": Payment.METHODS, "expected": s.channel_totals(branch, timezone.localdate()).items(),
-        "rows": Closing.objects.filter(branch=branch).select_related("submitted_by", "verified_by")[:100]})
+
+    summary = s.closing_summary(branch, selected_day)
+    history = list(Closing.objects.filter(branch=branch).select_related("submitted_by", "verified_by")[:100])
+    for row in history:
+        row.variance_view = {
+            method: Decimal(str(row.counted.get(method, "0"))) - Decimal(str(row.expected.get(method, "0")))
+            for method, _ in Payment.METHODS
+        }
+    return render(request, "closings.html", {
+        "title": "Daily closing",
+        "today": today.isoformat(),
+        "selected_day": selected_day.isoformat(),
+        "methods": Payment.METHODS,
+        "summary": summary,
+        "expected": summary["channel_net"].items(),
+        "rows": history,
+        "selected_closed": Closing.objects.filter(branch=branch, date=selected_day).exists(),
+    })
 
 
 def report_data(request, branch):
