@@ -138,7 +138,7 @@ class Party(models.Model):
 
 class Document(models.Model):
     KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("return", "Return"),
-             ("supplier_return", "Supplier return"), ("expense", "Expense"), ("collection", "Debt payment"),
+             ("supplier_return", "Supplier return"), ("inventory_writeoff", "Inventory write-off"), ("expense", "Expense"), ("collection", "Debt payment"),
              ("supplier_payment", "Supplier payment"), ("reversal", "Reversal")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=40, unique=True)
@@ -402,6 +402,7 @@ class QuarantineItem(models.Model):
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
     resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
     resolution_note = models.TextField(blank=True)
+    loss_document = models.OneToOneField(Document, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
@@ -462,6 +463,7 @@ class TransferReceipt(models.Model):
     resolution_note = models.TextField(blank=True)
     resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    loss_document = models.OneToOneField(Document, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
     @property
     def missing(self):
         return self.operation.quantity - self.quantity
