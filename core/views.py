@@ -707,9 +707,9 @@ def search(request):
         if request.user.has_perm("core.operate_sales"):
             allowed += ["sale","return"]
         if request.user.has_perm("core.operate_inventory"):
-            allowed += ["purchase"]
+            allowed += ["purchase","supplier_return","inventory_writeoff"]
         if request.user.has_perm("core.operate_finance"):
-            allowed += ["expense","collection","supplier_payment","reversal"]
+            allowed += ["expense","collection","supplier_payment","supplier_return","inventory_writeoff","reversal"]
         if request.user.has_perm("core.view_reports"):
             allowed = list(dict(Document.KINDS))
         docs = Document.objects.filter(branch=branch,kind__in=allowed,reference__icontains=q)[:20]
