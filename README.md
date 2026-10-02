@@ -64,3 +64,5 @@ The requested ADMIN account is prepared through the explicit one-time bootstrap 
 Physical stock-count workflow: [operator guide](docs/STOCK_COUNTS.md).
 
 Partial transfer receipts: [operator guide](docs/STOCK_TRANSFERS.md).
+
+Deployment uses Railway service settings and a CI-gated railway-release branch. See [live deployment and setup](docs/RAILWAY.md).

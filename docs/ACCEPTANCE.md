@@ -18,7 +18,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Finance | Expenses, channel movement reconciliation, independent closing verification, closed-day posting lock |
 | Reporting | Transaction register, sales/profit by product/mode, inventory valuation and aging; CSV/PDF/XLSX/DOCX exports; printable receipts/statements |
 | Governance | Financial immutability triggers, audit events, scoped permissions, basic administration |
-| Deployment | Container, Railway configuration, PostgreSQL migrations, dependency lock, remote tests |
+| Deployment | Live Railway web/worker/PostgreSQL, private setup gate, serialized migrations, verified release branch, dependency lock, remote tests |
 
 ## Incomplete launch requirements
 

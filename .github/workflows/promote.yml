@@ -1,0 +1,32 @@
+name: Promote verified Railway release
+on:
+  workflow_run:
+    workflows: ["Verify KOFAD"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: write
+concurrency:
+  group: railway-release-promotion
+  cancel-in-progress: false
+jobs:
+  promote:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote only the verified current main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
+          if [ "$current" != "$VERIFIED_SHA" ]; then
+            echo "Main advanced; waiting for its own successful verification."
+            exit 0
+          fi
+          gh api "repos/$GH_REPO/git/refs/heads/railway-release" \
+            --method PATCH --field sha="$VERIFIED_SHA" --field force=false \
+            --jq '{ref: .ref, sha: .object.sha}'

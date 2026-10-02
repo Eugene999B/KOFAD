@@ -65,3 +65,20 @@ This creates username ADMIN with full administrative access. The application blo
 The public login requires the private KOFAD_SETUP_KEY while ADMIN must change its temporary password. Retrieve that key from kofad-web's Railway variables; never commit it. The gate also protects alternate authentication paths. Once the password is replaced, ordinary staff login does not require the setup key. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
 
 For Arkesel web/worker configuration, see SMS.md.
+
+
+## Live KOFAD environment
+
+Project: KOFAD (816fb38a-1d03-4508-ba65-07a8b9de12f1). Environment: production.
+
+- Web: kofad-web, Dockerfile builder, port 8000, healthcheck /health/.
+- Worker: kofad-sms, same image source, start command python manage.py process_sms --loop, no public domain or HTTP healthcheck.
+- Database: Postgres, PostgreSQL 16, persistent 5 GB volume mounted at /var/lib/postgresql/data, private networking only.
+- Both application services run python manage.py initialize_deployment before release.
+- Both application services deploy from railway-release. GitHub's promotion workflow advances that branch only after Verify KOFAD succeeds for the current main commit. It does not execute artifacts or code from pull requests.
+- The Railway Wait for CI toggle could not be enabled through the connector; the release branch provides the verified-release gate instead.
+- The connector's daily-backup setting could not be verified through a backups-specific read. Confirm and enable the schedule in the database Backups dashboard before entering real business records. Independent encrypted off-platform backups and restore rehearsal remain outstanding.
+
+The web service stores DJANGO_SECRET_KEY and KOFAD_SETUP_KEY privately. DATABASE_URL references Postgres.DATABASE_URL. The worker references web-service SMS variables so credentials have one configured source. SMS_ENABLED=0 and SMS_SANDBOX=1 until Arkesel credentials and the sender are verified.
+
+KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
