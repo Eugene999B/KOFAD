@@ -2,7 +2,7 @@
 import hashlib
 import json
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -309,7 +309,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
             raise ValidationError("A due date is required for an unpaid balance.")
         if due < timezone.localdate():
             raise ValidationError("The due date cannot be in the past.")
-        if kind == "sale" and due > timezone.localdate() + timezone.timedelta(days=company.max_credit_days):
+        if kind == "sale" and due > timezone.localdate() + timedelta(days=company.max_credit_days):
             raise ValidationError(f"Credit terms cannot exceed {company.max_credit_days} days.")
         if kind == "sale":
             projected = party_debt(party) + total - paid
@@ -389,8 +389,10 @@ def post_return(user, branch, payload, key):
         original=source.document, reference=reference("return", branch), total=amount, paid=refund,
         note=reason, created_by=user)
     Line.objects.create(document=doc, product=source.product, description=source.description,
-        mode=source.mode, quantity=qty, factor=source.factor, unit_price=source.unit_price,
-        unit_cost=source.unit_cost, total=amount, source_line=source)
+        mode=source.mode, quantity=qty, factor=source.factor,
+        list_price=source.list_price or source.unit_price, unit_price=source.unit_price,
+        discount_percent=source.discount_percent, unit_cost=source.unit_cost,
+        total=amount, source_line=source)
     stock_move(user, branch, source.product, qty * source.factor, doc.reference, reason)
     if credit:
         Allocation.objects.create(payment_document=doc, invoice=source.document, amount=credit)
@@ -542,6 +544,8 @@ def request_correction(user, branch, original_id, reason, refund_method="cash"):
         raise ValidationError("This document already has a correction request.")
     if refund_method not in dict(Payment.METHODS):
         raise ValidationError("Choose a valid refund channel.")
+    if not payment_method_enabled(refund_method):
+        raise ValidationError(f"{dict(Payment.METHODS)[refund_method]} is disabled in Settings.")
     item = Correction.objects.create(original=original, requested_by=user, reason=reason, refund_method=refund_method)
     audit(user, branch, "correction.requested", original.reference, {"reason":reason})
     return item
