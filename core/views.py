@@ -180,27 +180,62 @@ def purchasing(request, branch):
 def trade_screen(request, branch, kind):
     catalog = []
     stock = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
-    query = request.GET.get("q", "")[:100]
+    query = request.GET.get("q", "").strip()[:100]
+    ids = [value for value in request.GET.get("ids", "").split(",") if value.isdigit()][:100]
     products = Product.objects.filter(active=True)
-    if query:
-        products = products.filter(Q(name__icontains=query) | Q(sku__icontains=query) | Q(barcode=query))
-    for p in products[:300]:
-        item = {"id": p.pk, "name": p.name, "sku": p.sku, "barcode": p.barcode, "category": p.category,
-                "pack_size": p.pack_size, "pack_name": p.pack_name, "base_unit": p.base_unit,
-                "stock": stock.get(p.pk, 0), "prices": {k: str(getattr(p, k)) for k in
-                    ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack") if getattr(p, k) is not None}}
+    if ids:
+        products = products.filter(pk__in=ids)
+    elif query:
+        products = products.filter(
+            Q(name__icontains=query) |
+            Q(sku__icontains=query) |
+            Q(barcode__icontains=query) |
+            Q(category__icontains=query)
+        )
+    else:
+        products = products.none()
+
+    for p in products.order_by("name")[:30]:
+        item = {
+            "id": p.pk,
+            "name": p.name,
+            "sku": p.sku,
+            "barcode": p.barcode,
+            "category": p.category,
+            "pack_size": p.pack_size,
+            "pack_name": p.pack_name,
+            "base_unit": p.base_unit,
+            "stock": stock.get(p.pk, 0),
+            "prices": {
+                key: str(getattr(p, key))
+                for key in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack")
+                if getattr(p, key) is not None
+            },
+        }
         if kind == "purchase":
             item["cost"] = str(p.cost)
         catalog.append(item)
+
     if request.GET.get("format") == "json":
-        return JsonResponse({"catalog":catalog})
+        return JsonResponse({
+            "catalog": catalog,
+            "query": query,
+            "count": len(catalog),
+            "search_required": not bool(query or ids),
+        })
+
     company = s.company_policy()
     payment_methods = s.active_payment_methods(company)
-    return render(request, "pos.html", {"title": "New sale" if kind == "sale" else "Receive purchase",
-        "catalog": catalog, "kind": kind, "key": str(uuid.uuid4()), "q": query,
+    return render(request, "pos.html", {
+        "title": "New sale" if kind == "sale" else "Receive purchase",
+        "catalog": catalog,
+        "kind": kind,
+        "key": str(uuid.uuid4()),
+        "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
         "held": HeldSale.objects.filter(branch=branch, user=request.user),
-        "purchase": kind == "purchase", "payment_methods": payment_methods,
+        "purchase": kind == "purchase",
+        "payment_methods": payment_methods,
         "payment_method_codes": [code for code, _ in payment_methods],
         "cash_enabled": any(code == "cash" for code, _ in payment_methods),
         "allow_discounts": kind == "sale" and company.allow_discounts,
@@ -212,8 +247,8 @@ def trade_screen(request, branch, kind):
         "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
-        )})
-
+        ),
+    })
 
 @login_required
 @require_POST
