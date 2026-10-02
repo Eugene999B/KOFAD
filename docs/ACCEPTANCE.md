@@ -13,10 +13,10 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Sales | Mixed-mode cart, held carts, server pricing, configurable payment channels, controlled discounts/price overrides, credit rules, idempotency, receipts |
 | Customers | Quick contacts, credit limit, due date, collections, current balances, running statements |
 | Returns/corrections | Original-line returns, quantity caps, debt reduction then refund; independent expense/payment reversal and remaining-item sale void |
-| Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation |
-| Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch, partial receipt and independent discrepancy resolution |
+| Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation, original-line supplier returns with independent finance review |
+| Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch, partial receipt and independent discrepancy resolution; damaged-stock quarantine and inventory-loss evidence |
 | Finance | Expenses with configurable manager threshold, channel movement reconciliation, independent closing verification, closed-day posting lock |
-| Reporting | Transaction register, sales/profit by product/mode, inventory valuation and aging; CSV/PDF/XLSX/DOCX exports; printable receipts/statements |
+| Reporting | Transaction register, sales/profit by product/mode, sellable/quarantine inventory valuation, aging and inventory losses; CSV/PDF/XLSX/DOCX exports including statements, transfers/operations, closings, supplier returns and quarantine |
 | Governance | Financial immutability triggers, audit events, scoped permissions, basic administration |
 | Deployment | Live Railway web/worker/PostgreSQL, private setup gate, serialized migrations, verified release branch, dependency lock, remote tests |
 
@@ -25,11 +25,11 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Configure and implement applicable taxes and legally required invoice fields. No tax compliance is implied.
 - Validate the implemented independent expense/payment reversal and remaining-item sale-void workflows with KOFAD. Sale void refunds use the explicitly selected channel.
 - Manager authority thresholds for expenses, price reductions, discounts and credit-limit overrides are implemented with audit evidence. Add a separate two-person pre-approval queue only if KOFAD requires independent approval rather than manager-authority completion at the point of posting.
-- Add supplier returns and damaged-goods quarantine. Blind stock counts and partial-transfer discrepancy review are implemented; multiple partial follow-up deliveries and accounting loss postings remain incomplete.
+- Supplier returns, damaged-goods quarantine and accounting loss documents for confirmed transfer/quarantine losses are implemented. Multiple partial follow-up deliveries on one transfer remain incomplete.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.
 - Arkesel adapter, durable outbox, retry controls, templates and token-authenticated callbacks are implemented. Validate the real provider sandbox and approved sender ID, then enable the worker. WhatsApp and receipt-file attachments remain incomplete.
 - Consolidated authorized-branch comparison is implemented, including period sales/cost/expenses and current stock/debt. Extend operational analytics and statutory accounting separately.
-- Add complete export coverage for statements, transfers, closings and other report families.
+- Statements, transfers/operations, closings, supplier returns, quarantine and inventory-loss exports are implemented. Add specialized stock-count and communications exports only if KOFAD's operating process requires them.
 - Reports now paginate and reject over-limit queries instead of returning incomplete totals. Extend scoped global-search pagination and asynchronous bulk export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.
 - Configure, automate and rehearse encrypted independent backup/restore with manifests and retention.
 - Perform external security review, accessibility audit, production-scale performance tests and owner acceptance.
