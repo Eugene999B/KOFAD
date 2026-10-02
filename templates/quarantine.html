@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block actions %}<a class="button secondary" href="/exports/?dataset=quarantine">⇩ Download quarantine</a>{% endblock %}
+{% block content %}
+<section class="hero-panel"><div><p class="eyebrow">DAMAGED STOCK CONTROL</p><h2>Keep damaged or doubtful goods out of sellable stock.</h2><p>Quarantine is a controlled stock movement: request, independent approval, then either release back to stock or write off with accounting evidence.</p></div><span class="pill">Non-sellable stock</span></section>
+
+{% if perms.core.operate_inventory %}
+<details class="panel" open><summary>＋ Request damaged stock quarantine</summary>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="request">
+<div class="form-grid">
+<div><label for="quarantine-product">Product</label><select id="quarantine-product" name="product" required>{% for p in products %}<option value="{{ p.pk }}">{{ p }}</option>{% endfor %}</select></div>
+<div><label for="quarantine-quantity">Base-unit quantity</label><input id="quarantine-quantity" name="quantity" type="number" min="1" step="1" required></div>
+<div><label for="quarantine-reason">Damage / quality reason</label><textarea id="quarantine-reason" name="reason" minlength="10" maxlength="2000" required></textarea></div>
+</div><p class="hint">Submitting does not move stock. A different authorized colleague must approve before the quantity leaves sellable stock.</p>
+<button class="button">Submit for approval</button></form></details>
+{% endif %}
+
+<section class="panel"><div class="section-heading"><div><h2>Quarantine register</h2><p class="muted">Held stock is excluded from sellable inventory. Write-offs create a separate inventory-loss document; releases restore the original quantity to sellable stock.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Product</th><th>Quantity</th><th>Value</th><th>Reason</th><th>Status</th><th>Control</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+<td>{{ row.product.name }}<small>{{ row.product.sku }}</small></td>
+<td>{{ row.quantity }}</td><td>{{ company.currency }} {{ row.value }}</td>
+<td>{{ row.reason }}{% if row.resolution_note %}<small>Resolution: {{ row.resolution_note }}</small>{% endif %}</td>
+<td><span class="pill">{{ row.get_status_display }}</span><small>Requested by {{ row.requested_by }}</small>{% if row.reviewed_by %}<small>Reviewed by {{ row.reviewed_by }}</small>{% endif %}{% if row.loss_document %}<small><a href="{% url 'document' row.loss_document.pk %}">{{ row.loss_document.reference }}</a></small>{% endif %}</td>
+<td>
+{% if row.status == "requested" and perms.core.approve_operations %}
+{% if row.requested_by_id != request.user.pk %}
+<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button" name="action" value="approve">Approve hold</button><button class="text-button danger" name="action" value="reject">Reject</button></form>
+{% else %}<small>Awaiting a different authorized colleague.</small>{% endif %}
+{% elif row.status == "held" and perms.core.approve_operations %}
+{% if row.requested_by_id != request.user.pk %}
+<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><label for="resolution-{{ row.pk }}">Resolution note</label><textarea id="resolution-{{ row.pk }}" name="note" minlength="10" maxlength="2000" required></textarea><div class="actions"><button class="text-button" name="action" value="release">Release to stock</button><button class="text-button danger" name="action" value="writeoff">Write off damaged stock</button></div></form>
+{% else %}<small>A different authorized colleague must resolve this item.</small>{% endif %}
+{% else %}<small>No action required.</small>{% endif %}
+</td></tr>
+{% empty %}<tr><td colspan="6" class="empty">No damaged stock has been quarantined.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
