@@ -77,8 +77,10 @@ Project: KOFAD (816fb38a-1d03-4508-ba65-07a8b9de12f1). Environment: production.
 - Both application services run python manage.py initialize_deployment before release.
 - Both application services deploy from railway-release. GitHub's promotion workflow advances that branch only after Verify KOFAD succeeds for the current main commit. It does not execute artifacts or code from pull requests.
 - The Railway Wait for CI toggle could not be enabled through the connector; the release branch provides the verified-release gate instead.
-- The connector's daily-backup setting could not be verified through a backups-specific read. Confirm and enable the schedule in the database Backups dashboard before entering real business records. Independent encrypted off-platform backups and restore rehearsal remain outstanding.
+- The database Backups dashboard was checked on 2026-10-02. It reports backup creation and PITR require Pro; the workspace remains on Hobby at the owner's request. Although a next-backup timestamp appeared after an attempted schedule setting, no backup exists and backup protection is not verified. Do not rely on that timestamp. Independent encrypted off-platform backups and restore rehearsal remain outstanding.
 
 The web service stores DJANGO_SECRET_KEY and KOFAD_SETUP_KEY privately. DATABASE_URL references Postgres.DATABASE_URL. The worker references web-service SMS variables so credentials have one configured source. SMS_ENABLED=0 and SMS_SANDBOX=1 until Arkesel credentials and the sender are verified.
 
 KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
+
+Public login: https://kofad-web-production.up.railway.app/login/ . The initial ADMIN/ADMIN account requires the private KOFAD_SETUP_KEY, then a new password and authenticator enrollment. The setup key is only held in Railway's web-service variables.
