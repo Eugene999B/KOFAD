@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import F, Sum
 from django.utils import timezone
 
 from .models import (
