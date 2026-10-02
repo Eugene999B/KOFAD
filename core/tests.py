@@ -28,7 +28,7 @@ class Fixtures:
 
     def sale(self, quantity=1, mode="retail_unit", payments=None, **kwargs):
         payload = {"items":[{"product":self.product.pk, "mode":mode, "quantity":quantity}],
-                   "payments":payments if payments is not None else [{"method":"cash", "amount":str(Decimal(50) * quantity)}], **kwargs}
+                   "payments":payments if payments is not None else [{"method":"cash", "amount":str(Decimal(50) * Decimal(str(quantity)))}], **kwargs}
         return s.post_trade(self.user, self.branch, payload, uuid.uuid4())
 
     def authenticate_client(self, user=None):

@@ -308,7 +308,7 @@ def request_operation(user, branch, payload):
 
 @transaction.atomic
 def advance_operation(user, operation_id, action):
-    op = Operation.objects.select_for_update().select_related("branch", "destination", "product").get(pk=operation_id)
+    op = Operation.objects.select_for_update(of=("self",)).select_related("branch", "destination", "product").get(pk=operation_id)
     branch = op.destination if action == "receive" else op.branch
     permit(user, branch, "approve_operations" if action in ("approve", "reject") else "operate_inventory")
     lock_branch(branch)

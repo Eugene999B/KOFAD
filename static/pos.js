@@ -8,6 +8,7 @@
   let requestKey = root.dataset.key;
   let pendingBody = null;
   let heldId = null;
+  let completed = false;
   const purchase = root.dataset.kind === "purchase";
   const errorBox = document.querySelector("#pos-error");
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -91,14 +92,14 @@
     const content = response.headers.get("Content-Type") || "";
     if (!content.includes("application/json")) throw new Error("Your session may have expired. Sign in again before retrying.");
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Request rejected. Check your permissions.");
+    if (!response.ok) { const error = new Error(result.error || "Request rejected. Check your permissions."); error.rejected = response.status >= 400 && response.status < 500; throw error; }
     return result;
   }
   document.querySelector("#checkout").addEventListener("submit", async e => {
     e.preventDefault();
     if (!cart.length) return fail("Add a product first.");
     const button = document.querySelector("#complete");
-    button.disabled = true;
+    root.querySelectorAll("input,select,button").forEach(control => control.disabled = true);
     errorBox.classList.add("hidden");
     try {
       if (!pendingBody) pendingBody = {kind:root.dataset.kind, items:cart.map(({product,mode,quantity,price})=>({product,mode,quantity,...(purchase?{price}:{})})),
@@ -108,9 +109,16 @@
       if (heldId) {
         try { await api("/api/held/" + heldId + "/", {}); } catch (_) { /* Posted sale remains valid if held-cart cleanup fails. */ }
       }
+      completed = true;
       location.href = result.url;
-    } catch (error) { fail(error.message + " If the connection failed, retry unchanged to safely recover the same transaction."); }
-    finally { button.disabled = false; }
+    } catch (error) {
+      if (error.rejected) {
+        pendingBody = null; requestKey = crypto.randomUUID();
+        root.querySelectorAll("input,select,button").forEach(control => control.disabled = false);
+      }
+      fail(error.message + (pendingBody ? " Retry this unchanged request to recover the same transaction. Editing is locked until its outcome is known." : ""));
+    }
+    finally { if (!completed) button.disabled = false; }
   });
   document.querySelector("#hold")?.addEventListener("click", async () => {
     if (!cart.length) return fail("Add a product before holding.");
@@ -131,6 +139,6 @@
       cart.push(...refreshed); heldId = button.dataset.id; render();
     } catch(e) { fail(e.message); }
   }));
-  window.addEventListener("beforeunload", e => { if (cart.length && !document.querySelector("#complete").disabled) { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", e => { if (cart.length && !completed) { e.preventDefault(); e.returnValue = ""; } });
   render();
 })();

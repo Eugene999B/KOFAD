@@ -108,21 +108,30 @@ def mfa(request):
     if request.method == "POST":
         with transaction.atomic():
             access = Access.objects.select_for_update().get(user=request.user)
+            attempt_key = hashlib.sha256(f"mfa:{request.user.pk}".encode()).hexdigest()
+            LoginAttempt.objects.get_or_create(key=attempt_key)
+            attempt = LoginAttempt.objects.select_for_update().get(key=attempt_key)
+            if attempt.blocked_until and attempt.blocked_until > timezone.now():
+                return render(request, "mfa.html", {"enrolled": enrolled, "error": "Too many verification attempts. Wait 15 minutes."})
+            if attempt.blocked_until:
+                attempt.failures = 0
+                attempt.blocked_until = None
             step = matching_step(secret, request.POST.get("code", ""))
-            failures = request.session.get("mfa_failures", 0)
-            if failures >= 5:
-                logout(request)
-                return redirect("login")
             if step is not None and step > access.totp_last_step:
                 access.totp_secret = secret
                 access.totp_last_step = step
                 access.save(update_fields=["totp_secret", "totp_last_step"])
+                attempt.failures = 0
+                attempt.save()
                 request.session["mfa_ok"] = True
                 request.session.pop("enroll_secret", None)
                 request.session.pop("mfa_failures", None)
                 s.audit(request.user, None, "session.mfa", request.user.pk)
                 return redirect("dashboard")
-            request.session["mfa_failures"] = failures + 1
+            attempt.failures += 1
+            if attempt.failures >= 5:
+                attempt.blocked_until = timezone.now() + timedelta(minutes=15)
+            attempt.save()
             error = "The code is invalid or already used. Wait for the next code."
     return render(request, "mfa.html", {"enrolled": enrolled, "secret": secret if not enrolled else "", "error": error})
 
