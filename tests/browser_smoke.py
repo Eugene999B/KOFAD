@@ -166,6 +166,13 @@ with sync_playwright() as p:
     admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.screenshot(path=str(out / "operations-mobile.png"),full_page=True)
     assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Operations overflows"
+    admin_page.goto("http://127.0.0.1:8000/reports/?family=branches")
+    admin_page.get_by_role("heading",name="Branch comparison",exact=True).wait_for()
+    assert admin_page.locator("tbody tr").count() == 2
+    admin_page.screenshot(path=str(out / "branch-comparison-mobile.png"),full_page=True)
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Branch report overflows"
+    admin_page.set_viewport_size({"width":1440,"height":1000})
+    admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
 print("Owner MFA, cart-preserving search, lost-response checkout recovery, physical counts, transfer discrepancies, and desktop/mobile checks passed.")
