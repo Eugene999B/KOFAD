@@ -499,25 +499,132 @@ def channel_totals(branch, day):
     return totals
 
 
+def closing_summary(branch, day):
+    """Explain the day's commercial activity separately from the channel reconciliation."""
+    docs = Document.objects.filter(branch=branch, created_at__date=day)
+    sales = docs.filter(kind="sale")
+    returns = docs.filter(kind="return")
+    purchases = docs.filter(kind="purchase")
+    supplier_returns = docs.filter(kind="supplier_return")
+    collections = docs.filter(kind="collection").exclude(correction__status="approved")
+    supplier_payments = docs.filter(kind="supplier_payment").exclude(correction__status="approved")
+    expenses = docs.filter(kind="expense").exclude(correction__status="approved")
+    losses = docs.filter(kind="inventory_writeoff")
+
+    def total(queryset):
+        return queryset.aggregate(value=Sum("total"))["value"] or ZERO
+
+    sale_total = total(sales)
+    sale_paid = sales.aggregate(value=Sum("paid"))["value"] or ZERO
+    return_total = total(returns)
+    source_codes = {
+        "sale": "Sales received",
+        "collection": "Debt collections",
+        "purchase": "Purchases paid",
+        "supplier_payment": "Supplier debt payments",
+        "expense": "Expenses",
+        "return": "Customer refunds",
+        "supplier_return": "Supplier refunds",
+        "reversal": "Corrections",
+    }
+    breakdown = {
+        label: {method: ZERO for method, _ in Payment.METHODS}
+        for label in source_codes.values()
+    }
+    payment_rows = Payment.objects.filter(
+        document__branch=branch, document__created_at__date=day
+    ).select_related("document")
+    for payment in payment_rows:
+        label = source_codes.get(payment.document.kind)
+        if label:
+            breakdown[label][payment.method] += payment.amount * payment.direction
+
+    return {
+        "sales_total": sale_total,
+        "sales_received_at_checkout": sale_paid,
+        "credit_created": sale_total - sale_paid,
+        "returns_total": return_total,
+        "net_sales": sale_total - return_total,
+        "debt_collections": total(collections),
+        "purchases_total": total(purchases),
+        "supplier_returns_total": total(supplier_returns),
+        "supplier_debt_payments": total(supplier_payments),
+        "expenses_total": total(expenses),
+        "inventory_losses": total(losses),
+        "sale_count": sales.count(),
+        "credit_sale_count": sales.filter(total__gt=F("paid")).count(),
+        "return_count": returns.count(),
+        "collection_count": collections.count(),
+        "expense_count": expenses.count(),
+        "channel_net": channel_totals(branch, day),
+        "channel_breakdown": breakdown,
+    }
+
+
+def _closing_json(value):
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _closing_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_closing_json(item) for item in value]
+    return value
+
+
 @transaction.atomic
-def submit_closing(user, branch, day, counted, note):
+def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, cash_out=0):
     permit(user, branch, "operate_finance")
-    lock_branch(branch)
+    branch = lock_branch(branch)
     if day > timezone.localdate():
         raise ValidationError("Cannot close a future day.")
     if Closing.objects.filter(branch=branch, date=day).exists():
         raise ValidationError("This day is already closed.")
-    expected = channel_totals(branch, day)
+
+    opening_cash = money(opening_cash or 0)
+    cash_in = money(cash_in or 0)
+    cash_out = money(cash_out or 0)
+    summary = closing_summary(branch, day)
+    expected = dict(summary["channel_net"])
+    expected["cash"] = expected["cash"] + opening_cash + cash_in - cash_out
+
     actual = {}
-    for m, _ in Payment.METHODS:
-        raw = str(counted.get(m, 0))
-        actual[m] = -money(raw[1:]) if raw.startswith("-") else money(raw)
-    tolerance = (Company.objects.first() or Company()).closing_tolerance
-    if any(abs(actual[m] - expected[m]) > tolerance for m in actual) and len(note.strip()) < 5:
-        raise ValidationError("Explain the closing variance.")
-    closing = Closing.objects.create(branch=branch, date=day, expected={k: str(v) for k, v in expected.items()},
-        counted={k: str(v) for k, v in actual.items()}, note=note, submitted_by=user)
-    audit(user, branch, "closing.submitted", closing.pk, {"date": str(day), "expected": closing.expected})
+    for method, _ in Payment.METHODS:
+        raw = str(counted.get(method, 0))
+        actual[method] = -money(raw[1:]) if raw.startswith("-") else money(raw)
+
+    tolerance = company_policy().closing_tolerance
+    variances = {method: actual[method] - expected[method] for method in actual}
+    if any(abs(value) > tolerance for value in variances.values()) and len(note.strip()) < 5:
+        raise ValidationError("Explain the closing variance in at least five characters.")
+
+    summary["cash_control"] = {
+        "opening_cash": opening_cash,
+        "other_cash_in": cash_in,
+        "other_cash_out": cash_out,
+        "expected_cash": expected["cash"],
+    }
+    summary["variance"] = variances
+    closing = Closing.objects.create(
+        branch=branch,
+        date=day,
+        expected={key: str(value) for key, value in expected.items()},
+        counted={key: str(value) for key, value in actual.items()},
+        opening_cash=opening_cash,
+        cash_in=cash_in,
+        cash_out=cash_out,
+        summary=_closing_json(summary),
+        note=str(note or "").strip()[:2000],
+        submitted_by=user,
+    )
+    audit(user, branch, "closing.submitted", closing.pk, {
+        "date": str(day),
+        "expected": closing.expected,
+        "counted": closing.counted,
+        "variance": {key: str(value) for key, value in variances.items()},
+        "opening_cash": str(opening_cash),
+        "cash_in": str(cash_in),
+        "cash_out": str(cash_out),
+    })
     return closing
 
 
