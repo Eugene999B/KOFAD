@@ -68,14 +68,11 @@ class ShowcaseSeedTests(TestCase):
         with self.assertRaises(CommandError):
             call_command("seed_showcase", days=3, product_limit=12, customer_limit=12)
 
-        call_command(
-            "seed_showcase",
-            confirm="LOAD KOFAD SAMPLE DATA",
-            days=3,
-            sales_per_day=2,
-            product_limit=12,
-            customer_limit=12,
-            stdout=StringIO(),
+        Product.objects.create(
+            name="SAMPLE · Existing marker",
+            sku="SAMPLE-EXISTS",
+            retail_unit="1.00",
+            cost="1.00",
         )
         with self.assertRaisesRegex(CommandError, "already exists"):
             call_command(
