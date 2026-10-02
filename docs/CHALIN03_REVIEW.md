@@ -14,14 +14,18 @@ CHALIN03 covers Spare Parts, Mining, Equipment Sales & Hire, Group Executive con
 | Accepted/delivered/unknown distinctions | Explicit statuses and attempt-scoped, token-authenticated callbacks |
 | Message credit estimates | GSM extension accounting and UTF-16 code-unit handling, including emoji |
 | SMS retry protection | Durable outbox, per-attempt records, bounded throttling retries, unknown-result hold |
-| Customer reuse and debt desk | Adopted the useful branch-scoped search/customer-account idea, but KOFAD adds checkout-time Ghana identity normalization, automatic reuse/creation, customer-level pay-full/partial settlement and immutable oldest-due-first multi-invoice allocations |
+| Customer reuse and debt desk | Retains the useful account-centric idea but KOFAD uses its own workspace: aging buckets, credit usage, recent collections, open-receipt detail, allocation preview, checkout-time Ghana identity normalization, automatic reuse/creation and immutable oldest-due-first multi-invoice allocations |
 | Receipt, debt and payment messages | Editable validated templates and review-before-queue workflow |
-| Signed recovery manifests and restore drills | Still a required operational workstream; do not claim equivalence yet |
+| Signed recovery manifests and restore drills | KOFAD now has signed/checksummed app-level full backup validation, exact-schema restore and guarded business-data reset; independent off-platform retention and recurring restore rehearsal remain required |
 | Detailed workforce and document lifecycle | Future scope; requires a KOFAD-specific business case |
 | Full accounting intelligence and consolidated executive reports | Basic profit/valuation/aging exists; broader analytics remain planned |
 
 ## Improvements implemented in this iteration
 
+- The sales counter is deliberately search-first instead of showing the full catalog; adding a product returns focus to search while preserving the cart.
+- Debt is presented as a customer account workspace rather than expanding large payment forms inside table rows.
+- Inventory Quick Restock adds to the current balance and records before/after evidence, while supplier-accounting purchases remain a separate workflow.
+- Successful login now transitions through a short KOFAD-branded personalized welcome before the user's permission-scoped workspace.
 - SMS submission runs outside the cashier's request in a durable worker.
 - Per-attempt callback tokens reduce the impact of a shared callback credential.
 - Unknown provider outcomes cannot silently switch gateways and duplicate billing.
