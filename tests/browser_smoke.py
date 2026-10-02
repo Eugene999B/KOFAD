@@ -96,6 +96,27 @@ with sync_playwright() as p:
     admin_page.get_by_role("heading",name="Access and configuration",exact=True).wait_for()
     admin_page.goto("http://127.0.0.1:8000/communications/")
     admin_page.screenshot(path=str(out / "communications-desktop.png"),full_page=True)
+    page.set_viewport_size({"width":1440,"height":1000})
+    page.goto("http://127.0.0.1:8000/stock-counts/")
+    page.get_by_role("button",name="Start blind count",exact=True).click()
+    count_url = page.url
+    assert page.get_by_role("columnheader",name="System at start").count() == 0
+    for field in page.locator('input[name^="quantity_"]').all():
+        field.fill("100")
+    for field in page.locator('input[name^="reason_"]').all():
+        field.fill("Physical shelf verified")
+    page.get_by_role("button",name="Save progress",exact=True).click()
+    page.screenshot(path=str(out / "count-desktop.png"),full_page=True)
+    page.set_viewport_size({"width":390,"height":844})
+    page.screenshot(path=str(out / "count-mobile.png"),full_page=True)
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Count sheet overflows"
+    page.get_by_role("button",name="Submit count",exact=True).click()
+    page.get_by_role("columnheader",name="System at start",exact=True).wait_for()
+    admin_page.goto(count_url)
+    admin_page.get_by_label("Review note",exact=True).fill("Independent physical recount verified")
+    admin_page.get_by_role("button",name="Approve and post variances",exact=True).click()
+    assert admin_page.locator(".pill").filter(has_text="approved").count() == 1
+    admin_page.screenshot(path=str(out / "count-approved.png"),full_page=True)
     assert not errors, errors
     browser.close()
 print("Owner MFA, cart-preserving search, lost-response checkout recovery, and desktop/mobile checks passed.")

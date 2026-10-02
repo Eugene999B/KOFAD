@@ -72,3 +72,7 @@ Finance requests a reasoned correction; another authorized reviewer accepts or r
 ## Counter recovery
 
 Catalog search fetches new results without navigating away from the cart. The browser keeps product selections and unresolved idempotency keys in per-user, per-location tab session storage. It does not store credentials or card details. An uncertain checkout locks editing until an identical retry recovers the original server result; successful posting clears the stored draft. Signing out clears KOFAD tab drafts. Closing the tab may discard them; staff should use held sales for longer-lived drafts.
+
+## Physical count controls
+
+Count sessions snapshot both quantity and latest movement ID. Entry is blind, submission freezes evidence, and an independent reviewer posts variances under the shared branch lock. Any intervening movement invalidates approval, including net-zero movement pairs. PostgreSQL triggers protect snapshots and completed counts. Validation errors retain the counter's unsaved inputs.
