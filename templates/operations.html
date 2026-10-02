@@ -1,5 +1,5 @@
-{% extends "base.html" %}{% block actions %}<a class="button secondary" href="/exports/?dataset=movements">⇩ Download movements</a>{% endblock %}{% block content %}
-<p><a class="button" href="{% url 'stock_counts' %}">Physical stock counts</a></p>
+{% extends "base.html" %}{% block actions %}<div class="actions"><a class="button secondary" href="/exports/?dataset=operations">⇩ Download operations</a><a class="button secondary" href="/exports/?dataset=movements">⇩ Download movements</a></div>{% endblock %}{% block content %}
+<div class="actions"><a class="button" href="{% url 'stock_counts' %}">Physical stock counts</a><a class="button secondary" href="{% url 'quarantine' %}">Damaged stock quarantine</a><a class="button secondary" href="{% url 'supplier_returns' %}">Supplier returns</a></div>
 {% if perms.core.operate_inventory %}
 <details class="panel"><summary>＋ Request an adjustment or transfer</summary>
 <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request">
@@ -15,7 +15,7 @@
 <section class="panel"><h2>Requests and transfers</h2><div class="table-wrap"><table><thead><tr><th>Product</th><th>Operation</th><th>Quantity</th><th>Route</th><th>Status</th><th>Action</th></tr></thead><tbody>
 {% for row in rows %}<tr>
 <td>{{ row.product.name }}<small>{{ row.reason }}</small></td><td>{{ row.get_kind_display }}</td>
-<td>{{ row.quantity }}{% if row.receipt %}<small>Initially received: {{ row.receipt.quantity }}{% if row.receipt.missing %} · Discrepancy: {{ row.receipt.missing }}{% endif %}</small><small>{{ row.receipt.note }}</small>{% if row.receipt.resolution %}<small>Resolution: {{ row.receipt.resolution }} · {{ row.receipt.resolved_by }}</small><small>{{ row.receipt.resolution_note }}</small>{% endif %}{% endif %}</td>
+<td>{{ row.quantity }}{% if row.receipt %}<small>Initially received: {{ row.receipt.quantity }}{% if row.receipt.missing %} · Discrepancy: {{ row.receipt.missing }}{% endif %}</small><small>{{ row.receipt.note }}</small>{% if row.receipt.resolution %}<small>Resolution: {{ row.receipt.resolution }} · {{ row.receipt.resolved_by }}</small><small>{{ row.receipt.resolution_note }}</small>{% if row.receipt.loss_document %}<small>Loss evidence: <a href="{% url 'document' row.receipt.loss_document.pk %}">{{ row.receipt.loss_document.reference }}</a></small>{% endif %}{% endif %}{% endif %}</td>
 <td>{{ row.branch }}{% if row.destination %} → {{ row.destination }}{% endif %}</td><td><span class="pill">{{ row.status }}</span></td>
 <td><form method="post" class="stock-action-form">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}">
 {% if row.status == 'requested' and perms.core.approve_operations %}
