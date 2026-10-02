@@ -16,6 +16,7 @@ from .models import Audit, Closing, Document, Movement, Operation, Party, Produc
 
 DATASETS = {
     "customers": ("Customers", ("operate_sales", "operate_finance", "view_reports")),
+    "debts": ("Customer debt summary", ("operate_sales", "operate_finance", "view_reports")),
     "suppliers": ("Suppliers", ("operate_inventory", "operate_finance", "view_reports")),
     "inventory": ("Inventory & stock", ("operate_inventory", "view_reports")),
     "sales": ("Sales transactions", ("operate_sales", "view_reports")),
@@ -75,6 +76,33 @@ def _rows(request, dataset, branch, first, last):
         return rows, [
             ("name", "Name"), ("phone", "Phone"), ("email", "Email"), ("address", "Address"),
             ("credit_limit", "Credit limit"), ("outstanding", "Outstanding"), ("messages", "Messaging consent"),
+        ]
+
+    if dataset == "debts":
+        from . import debts as debt_service
+        overview = debt_service.debt_overview(branch)
+        rows = []
+        for row in overview["rows"]:
+            first_invoice = row["invoices"][0] if row["invoices"] else None
+            rows.append({
+                "customer": row["party"].name,
+                "phone": row["party"].phone,
+                "outstanding": row["outstanding"],
+                "overdue": row["overdue"],
+                "due_today": row["due_today"],
+                "open_receipts": row["invoice_count"],
+                "next_due": first_invoice[0].due_date if first_invoice else "",
+                "next_reference": first_invoice[0].reference if first_invoice else "",
+                "next_balance": first_invoice[1] if first_invoice else "",
+                "lifetime_sales": row["total_sales"],
+                "debt_payments": row["total_collections"],
+            })
+        return rows, [
+            ("customer", "Customer"), ("phone", "Phone"), ("outstanding", "Outstanding"),
+            ("overdue", "Overdue"), ("due_today", "Due today"), ("open_receipts", "Open receipts"),
+            ("next_due", "Next / oldest due"), ("next_reference", "Receipt"),
+            ("next_balance", "Receipt balance"), ("lifetime_sales", "Lifetime sales"),
+            ("debt_payments", "Debt payments received"),
         ]
 
     if dataset == "inventory":
@@ -248,14 +276,35 @@ def _rows(request, dataset, branch, first, last):
                 values["expected_" + method] = expected
                 values["counted_" + method] = counted
                 values["variance_" + method] = counted - expected
+            summary = row.summary or {}
             rows.append({
                 "date": row.date,
+                "gross_sales": summary.get("sales_total", ""),
+                "net_sales": summary.get("net_sales", ""),
+                "credit_created": summary.get("credit_created", ""),
+                "debt_collections": summary.get("debt_collections", ""),
+                "returns": summary.get("returns_total", ""),
+                "expenses": summary.get("expenses_total", ""),
+                "purchases": summary.get("purchases_total", ""),
+                "supplier_payments": summary.get("supplier_debt_payments", ""),
+                "inventory_losses": summary.get("inventory_losses", ""),
+                "opening_cash": row.opening_cash,
+                "other_cash_in": row.cash_in,
+                "other_cash_out": row.cash_out,
                 "submitted_by": row.submitted_by.username,
                 "verified_by": row.verified_by.username if row.verified_by else "",
                 "note": row.note,
                 **values,
             })
-        columns = [("date", "Date"), ("submitted_by", "Submitted by"), ("verified_by", "Verified by")]
+        columns = [
+            ("date", "Date"), ("gross_sales", "Gross sales"), ("net_sales", "Net sales"),
+            ("credit_created", "Credit created"), ("debt_collections", "Debt collections"),
+            ("returns", "Returns"), ("expenses", "Expenses"), ("purchases", "Purchases"),
+            ("supplier_payments", "Supplier debt payments"), ("inventory_losses", "Inventory losses"),
+            ("opening_cash", "Opening cash"), ("other_cash_in", "Other cash in"),
+            ("other_cash_out", "Other cash out"), ("submitted_by", "Submitted by"),
+            ("verified_by", "Verified by"),
+        ]
         for method, label in (("cash", "Cash"), ("momo", "MoMo"), ("bank", "Bank"), ("card", "Card")):
             columns += [
                 ("expected_" + method, f"{label} expected"),

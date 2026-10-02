@@ -28,7 +28,8 @@ class Fixtures:
 
     def sale(self, quantity=1, mode="retail_unit", payments=None, **kwargs):
         payload = {"items":[{"product":self.product.pk, "mode":mode, "quantity":quantity}],
-                   "payments":payments if payments is not None else [{"method":"cash", "amount":str(Decimal(50) * Decimal(str(quantity)))}], **kwargs}
+                   "payments":payments if payments is not None else [{"method":"cash", "amount":str(Decimal(50) * Decimal(str(quantity))) }],
+                   "party": self.customer.pk, **kwargs}
         return s.post_trade(self.user, self.branch, payload, uuid.uuid4())
 
     def authenticate_client(self, user=None):
@@ -66,7 +67,7 @@ class BusinessTests(Fixtures, TestCase):
 
     def test_idempotency_and_mismatched_replay(self):
         key = uuid.uuid4()
-        payload = {"items":[{"product":self.product.pk,"mode":"retail_unit","quantity":1}], "payments":[{"method":"cash","amount":"50"}]}
+        payload = {"items":[{"product":self.product.pk,"mode":"retail_unit","quantity":1}], "payments":[{"method":"cash","amount":"50"}], "party": self.customer.pk}
         one = s.post_trade(self.user,self.branch,payload,key)
         two = s.post_trade(self.user,self.branch,payload,key)
         self.assertEqual(one.pk,two.pk)
@@ -77,7 +78,7 @@ class BusinessTests(Fixtures, TestCase):
 
     def test_credit_requires_customer_due_date_and_limit(self):
         with self.assertRaises(ValidationError):
-            self.sale(payments=[])
+            self.sale(payments=[], party=None)
         with self.assertRaises(ValidationError):
             self.sale(payments=[],party=self.customer.pk)
         self.customer.credit_limit = 20
@@ -227,7 +228,7 @@ class ConcurrencyTests(Fixtures, TransactionTestCase):
                 user = User.objects.get(pk=self.user.pk)
                 branch = Branch.objects.get(pk=self.branch.pk)
                 s.post_trade(user,branch,{"items":[{"product":self.product.pk,"mode":"retail_unit","quantity":1}],
-                    "payments":[{"method":"cash","amount":"50"}]},uuid.uuid4())
+                    "payments":[{"method":"cash","amount":"50"}], "party": self.customer.pk},uuid.uuid4())
                 return "posted"
             except ValidationError:
                 return "blocked"

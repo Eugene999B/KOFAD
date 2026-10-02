@@ -1,12 +1,103 @@
-{% extends "base.html" %}{% load static %}{% block head %}<script defer src="{% static 'pos.js' %}"></script>{% endblock %}
-{% block actions %}<a class="button secondary" href="/parties/new/?kind={% if purchase %}supplier{% else %}customer{% endif %}">＋ Quick contact</a>{% endblock %}
-{% block content %}<div id="pos" data-kind="{{ kind }}" data-key="{{ key }}" data-user="{{ request.user.pk }}" data-branch="{{ current_branch.pk }}" data-allow-discounts="{{ allow_discounts|yesno:"true,false" }}" data-allow-price-overrides="{{ allow_price_overrides|yesno:"true,false" }}" data-max-discount="{{ max_discount }}" data-max-price-reduction="{{ max_price_reduction }}"><div id="pos-error" class="notice error hidden" role="alert"></div><div class="pos-layout">
-<section><div class="workflow-strip"><span class="current"><b>1</b> Choose products</span><span><b>2</b> Review & pay</span><span><b>3</b> Receipt</span></div><form class="searchbar" method="get" id="catalog-search"><label class="sr-only" for="product-query">Search all products</label><input id="product-query" name="q" value="{{ q }}" placeholder="Search name, SKU or scan a barcode…" autofocus><button class="button secondary">Search</button></form><p class="hint">Showing up to 300 matching products. Search narrows the full catalog.</p><div class="product-grid" id="catalog"></div></section>
-<section class="panel cart-panel" id="checkout-panel" tabindex="-1"><div class="section-heading"><h2>{% if purchase %}Purchase{% else %}Current sale{% endif %}</h2><span class="pill" id="cart-count">0 lines</span></div><div id="cart" aria-live="polite"></div><div class="cart-total"><span>Total · {{ company.currency }}</span><strong id="total">0.00</strong></div>
-<form id="checkout">{% csrf_token %}<label for="party">{% if purchase %}Supplier{% else %}Customer{% endif %}</label><select id="party" name="party" {% if purchase %}required{% endif %}><option value="">{% if purchase %}Select a supplier{% else %}Walk-in customer{% endif %}</option>{% for party in parties %}<option value="{{ party.pk }}">{{ party.name }} · {{ party.phone }}</option>{% endfor %}</select>
-<fieldset><legend>Payment received{% if purchase %} by supplier{% endif %}</legend><p class="hint">Split payment across enabled channels. Enter amounts retained, excluding change.</p><div class="payment-grid">{% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}</div>{% if cash_enabled %}<button type="button" id="exact-cash" class="text-button">Fill exact cash amount</button>{% endif %}</fieldset>
-<label for="due-date">Due date <small>Required for any unpaid balance</small></label><input id="due-date" type="date">
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'pos.js' %}"></script>{% endblock %}
+{% block actions %}
+<div class="actions">
+{% if purchase %}<a class="button secondary" href="/parties/new/?kind=supplier">＋ New supplier</a>
+{% else %}<a class="button secondary" href="/parties/">Customers</a><a class="button secondary" href="/debts/">Customer debts</a>{% endif %}
+</div>
+{% endblock %}
+{% block content %}
+<div id="pos"
+ data-kind="{{ kind }}"
+ data-key="{{ key }}"
+ data-user="{{ request.user.pk }}"
+ data-branch="{{ current_branch.pk }}"
+ data-currency="{{ company.currency }}"
+ data-allow-credit="{{ allow_credit_sales|yesno:"true,false" }}"
+ data-max-credit-days="{{ max_credit_days }}"
+ data-allow-discounts="{{ allow_discounts|yesno:"true,false" }}"
+ data-allow-price-overrides="{{ allow_price_overrides|yesno:"true,false" }}"
+ data-max-discount="{{ max_discount }}"
+ data-max-price-reduction="{{ max_price_reduction }}">
+
+<div id="pos-error" class="notice error hidden" role="alert"></div>
+
+<div class="pos-layout">
+<section>
+<div class="workflow-strip"><span class="current"><b>1</b> Find product</span><span><b>2</b> Packs / loose units</span><span><b>3</b> Customer & payment</span><span><b>4</b> Receipt</span></div>
+
+<form class="searchbar" method="get" id="catalog-search">
+<label class="sr-only" for="product-query">Search all products</label>
+<input id="product-query" name="q" value="{{ q }}" placeholder="Type product name, SKU or scan barcode…" autofocus autocomplete="off">
+<button class="button secondary">Search</button>
+</form>
+<p class="hint">Choose Retail or Wholesale, then enter full packs and/or loose units. KOFAD always keeps the exact remaining base-unit balance.</p>
+<div class="product-grid" id="catalog"></div>
+</section>
+
+<section class="panel cart-panel" id="checkout-panel" tabindex="-1">
+<div class="section-heading"><div><h2>{% if purchase %}Purchase{% else %}Current sale{% endif %}</h2><p class="muted" id="stock-explanation">{% if purchase %}Receive full packs or loose units.{% else %}Pack and loose quantities can be mixed on one product.{% endif %}</p></div><span class="pill" id="cart-count">0 lines</span></div>
+<div id="cart" aria-live="polite"></div>
+<div class="cart-total"><span>Total · {{ company.currency }}</span><strong id="total">0.00</strong></div>
+
+<form id="checkout">{% csrf_token %}
+{% if purchase %}
+<label for="party">Supplier</label>
+<select id="party" name="party" required><option value="">Select supplier</option>{% for party in parties %}<option value="{{ party.pk }}">{{ party.name }} · {{ party.phone }}</option>{% endfor %}</select>
+{% else %}
+<section class="checkout-customer">
+<div class="section-heading"><div><h3>Customer</h3><p class="muted">Search a returning customer or enter a new customer here. You do not need to leave the sale screen.</p></div></div>
+<input type="hidden" id="party" name="party">
+<label for="customer-search">Returning customer search</label>
+<input id="customer-search" type="search" autocomplete="off" placeholder="Type customer name or phone">
+<div id="customer-results" class="customer-results" role="listbox" aria-label="Customer search results"></div>
+<div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
+<div class="actions"><button type="button" class="text-button" id="new-customer-toggle">＋ Enter new customer</button><button type="button" class="text-button hidden" id="clear-customer">Change customer</button></div>
+<div id="new-customer-fields" class="new-customer-fields hidden">
+<label for="customer-name">Customer name <small>Required</small></label>
+<input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer full name">
+<label for="customer-phone">Ghana phone number <small>Required</small></label>
+<div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567 or 0241234567"></div>
+<p class="hint">If the customer types 0241234567, KOFAD removes the leading 0 and stores +233241234567.</p>
+</div>
+</section>
+{% endif %}
+
+{% if not purchase %}
+<label for="payment-plan">Payment arrangement</label>
+<select id="payment-plan">
+<option value="full">Paid in full now</option>
+{% if allow_credit_sales %}<option value="part">Part payment · customer owes the balance</option><option value="credit">Credit · pay later</option>{% endif %}
+</select>
+{% endif %}
+
+<fieldset><legend>{% if purchase %}Payment made to supplier{% else %}Amount paid now · channel split{% endif %}</legend>
+<p class="hint">{% if purchase %}Split the amount paid across enabled channels.{% else %}Cash, MoMo, bank and card can be mixed. Enter only money actually received now.{% endif %}</p>
+<div class="payment-grid">{% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}</div>
+{% if cash_enabled %}<button type="button" id="exact-cash" class="text-button">{% if purchase %}Fill exact amount{% else %}Paid in full by cash{% endif %}</button>{% endif %}
+</fieldset>
+
+<div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
+<label for="due-date">Due date <small>Required when a balance remains</small></label>
+<input id="due-date" type="date" max="9999-12-31">
+{% if not purchase %}<p class="hint">Credit can run for up to {{ max_credit_days }} days under the current company policy.</p>{% endif %}
+</div>
+
 {% if policy_controls %}<label for="override-reason">Override / approval reason <small>Required when using a discount, custom selling price or manager credit override.</small></label><textarea id="override-reason" maxlength="500" placeholder="Explain why this exception is authorized"></textarea>{% endif %}
-<button class="button wide" id="complete">{% if purchase %}Post purchase{% else %}Complete sale{% endif %} →</button></form>
-{% if not purchase %}<button class="button secondary wide" id="hold">Hold sale</button><details><summary>Held sales ({{ held|length }})</summary>{% for sale in held %}<button class="held-item text-button" data-id="{{ sale.pk }}">{{ sale.label }} · {{ sale.created_at|date:"H:i" }}</button>{% empty %}<p class="hint">No held sales.</p>{% endfor %}</details>{% endif %}
-<p class="hint">Stock and totals are verified again when you complete. A sale is complete only after server confirmation.</p></section></div><button class="mobile-cart button" id="cart-jump" type="button"><span>Review cart · <span id="mobile-cart-count">0</span> lines</span><strong>{{ company.currency }} <span id="mobile-cart-total">0.00</span> →</strong></button></div>{{ catalog|json_script:"catalog-data" }}{{ payment_method_codes|json_script:"payment-methods-data" }}{% endblock %}
+
+<button class="button wide" id="complete">{% if purchase %}Post purchase{% else %}Complete sale{% endif %} →</button>
+</form>
+
+{% if not purchase %}
+<button class="button secondary wide" id="hold">Hold sale</button>
+<details><summary>Held sales ({{ held|length }})</summary>{% for sale in held %}<button class="held-item text-button" data-id="{{ sale.pk }}">{{ sale.label }} · {{ sale.created_at|date:"H:i" }}</button>{% empty %}<p class="hint">No held sales.</p>{% endfor %}</details>
+{% endif %}
+<p class="hint">Stock, customer, prices, debt policy and totals are checked again on the server before anything posts.</p>
+</section>
+</div>
+
+<button class="mobile-cart button" id="cart-jump" type="button"><span>Review cart · <span id="mobile-cart-count">0</span> lines</span><strong>{{ company.currency }} <span id="mobile-cart-total">0.00</span> →</strong></button>
+</div>
+{{ catalog|json_script:"catalog-data" }}
+{{ payment_method_codes|json_script:"payment-methods-data" }}
+{% endblock %}

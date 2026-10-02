@@ -22,6 +22,7 @@ class BusinessPolicyTests(Fixtures, TestCase):
         payload = {
             "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1}],
             "payments": [{"method": "cash", "amount": "50"}],
+            "party": self.customer.pk,
         }
         payload.update(changes)
         return payload
@@ -55,6 +56,7 @@ class BusinessPolicyTests(Fixtures, TestCase):
         doc = s.post_trade(self.user, self.branch, {
             "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "discount": "10"}],
             "payments": [{"method": "cash", "amount": "45"}],
+            "party": self.customer.pk,
             "override_reason": "Approved customer loyalty discount",
         }, uuid.uuid4())
 
@@ -76,6 +78,7 @@ class BusinessPolicyTests(Fixtures, TestCase):
             s.post_trade(cashier, self.branch, {
                 "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "discount": "10"}],
                 "payments": [{"method": "cash", "amount": "45"}],
+                "party": self.customer.pk,
                 "override_reason": "Requested loyalty discount at counter",
             }, uuid.uuid4())
 
@@ -89,11 +92,13 @@ class BusinessPolicyTests(Fixtures, TestCase):
             s.post_trade(self.user, self.branch, {
                 "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "price": "45"}],
                 "payments": [{"method": "cash", "amount": "45"}],
+                "party": self.customer.pk,
             }, uuid.uuid4())
 
         doc = s.post_trade(self.user, self.branch, {
             "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "price": "45"}],
             "payments": [{"method": "cash", "amount": "45"}],
+            "party": self.customer.pk,
             "override_reason": "Manager approved negotiated selling price",
         }, uuid.uuid4())
         line = doc.lines.get()
@@ -104,6 +109,7 @@ class BusinessPolicyTests(Fixtures, TestCase):
             s.post_trade(self.user, self.branch, {
                 "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "price": "35"}],
                 "payments": [{"method": "cash", "amount": "35"}],
+                "party": self.customer.pk,
                 "override_reason": "Manager requested excessive reduction test",
             }, uuid.uuid4())
 
@@ -151,8 +157,8 @@ class BusinessPolicyTests(Fixtures, TestCase):
         self.company.save()
         cashier = self.policy_user("threshold-cashier", "operate_sales")
 
-        with self.assertRaisesRegex(ValidationError, "named customer is required"):
-            s.post_trade(cashier, self.branch, self.sale_payload(), uuid.uuid4())
+        with self.assertRaisesRegex(ValidationError, "new customer's name"):
+            s.post_trade(cashier, self.branch, self.sale_payload(party=None), uuid.uuid4())
 
         payload = self.sale_payload(party=self.customer.pk)
         with self.assertRaisesRegex(ValidationError, "manager with approval authority"):

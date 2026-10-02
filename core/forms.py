@@ -2,19 +2,77 @@ import re
 
 from django import forms
 
+from .identity import normalize_ghana_phone
 from .models import Company, Party, Product
 
 
 class ProductForm(forms.ModelForm):
+    pack_enabled = forms.ChoiceField(
+        choices=[("yes", "Packed / boxed product"), ("no", "Loose / single-unit product")],
+        initial="yes",
+        label="Stock structure",
+        help_text="Choose packed when one carton, box, bundle or pack contains several sellable units.",
+    )
+    opening_packs = forms.IntegerField(
+        required=False, min_value=0, initial=0,
+        label="Opening full packs / boxes",
+        help_text="Only shown when creating a product. KOFAD records this as opening stock evidence.",
+    )
+    opening_units = forms.IntegerField(
+        required=False, min_value=0, initial=0,
+        label="Opening loose units",
+        help_text="Loose pieces already outside a full pack.",
+    )
+
     class Meta:
         model = Product
         fields = ["name", "sku", "barcode", "category", "base_unit", "pack_name", "pack_size",
                   "cost", "retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack", "reorder_level", "active"]
+        labels = {
+            "base_unit": "Smallest sellable unit",
+            "pack_name": "Pack / box name",
+            "pack_size": "Units inside one pack / box",
+            "retail_unit": "Retail price · one loose unit",
+            "retail_pack": "Retail price · one full pack",
+            "wholesale_unit": "Wholesale price · one loose unit",
+            "wholesale_pack": "Wholesale price · one full pack",
+            "reorder_level": "Low-stock warning · base units",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["pack_enabled"].initial = "yes" if (not self.instance.pk or self.instance.pack_size > 1) else "no"
+        if self.instance.pk:
+            self.fields.pop("opening_packs", None)
+            self.fields.pop("opening_units", None)
+        desired = ["name", "sku", "barcode", "category", "base_unit", "pack_enabled", "pack_name", "pack_size",
+                   "opening_packs", "opening_units", "cost", "retail_unit", "retail_pack",
+                   "wholesale_unit", "wholesale_pack", "reorder_level", "active"]
+        self.order_fields([field for field in desired if field in self.fields])
+        self.opening_total = 0
 
     def clean(self):
         data = super().clean()
+        packed = data.get("pack_enabled") == "yes"
+        if packed:
+            if (data.get("pack_size") or 0) < 2:
+                self.add_error("pack_size", "A packed product must contain at least two base units per pack.")
+            pack_size = data.get("pack_size") or 1
+            loose = data.get("opening_units") or 0
+            if not self.instance.pk and loose >= pack_size:
+                self.add_error("opening_units", f"Loose opening units must be less than one full pack ({pack_size}).")
+        else:
+            data["pack_size"] = 1
+            data["pack_name"] = data.get("base_unit") or "unit"
+            data["retail_pack"] = None
+            data["wholesale_pack"] = None
+            data["opening_packs"] = 0
+
         if all(data.get(k) is None for k in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack")):
-            raise forms.ValidationError("Enable at least one selling price. A blank price disables that mode.")
+            raise forms.ValidationError("Enable at least one selling price. A blank price disables that selling mode.")
+
+        if not self.instance.pk:
+            self.opening_total = (data.get("opening_packs") or 0) * (data.get("pack_size") or 1) + (data.get("opening_units") or 0)
         return data
 
 
@@ -22,6 +80,14 @@ class PartyForm(forms.ModelForm):
     class Meta:
         model = Party
         fields = ["name", "phone", "email", "address", "credit_limit", "consent"]
+        labels = {"phone": "Ghana phone number", "credit_limit": "Individual credit limit"}
+        help_texts = {
+            "phone": "Enter 0241234567, 241234567 or +233241234567. KOFAD stores +233241234567.",
+            "credit_limit": "Zero means no individual customer cap; company credit policy still applies.",
+        }
+
+    def clean_phone(self):
+        return normalize_ghana_phone(self.cleaned_data["phone"])
 
 
 class CompanyForm(forms.ModelForm):

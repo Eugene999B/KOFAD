@@ -9,11 +9,12 @@ CHALIN03 covers Spare Parts, Mining, Equipment Sales & Hire, Group Executive con
 | Scoped stores/sites and permission checks | Branch assignments and service-level permissions already enforced |
 | Financial corrections with original evidence | Independent expense/payment reversal and sale void workflows already implemented |
 | Transfer approval, dispatch and receive | Separate state transitions and movement timing already implemented |
-| Independent closing verification | Already implemented with immutable closing evidence |
+| Independent closing verification | Implemented and expanded with opening cash, other cash in/out, source-by-channel reconciliation, credit-created vs cash-received separation and immutable verification evidence |
 | Arkesel, optional future provider | Arkesel adapter plus extensible registry; no ambiguous automatic failover |
 | Accepted/delivered/unknown distinctions | Explicit statuses and attempt-scoped, token-authenticated callbacks |
 | Message credit estimates | GSM extension accounting and UTF-16 code-unit handling, including emoji |
 | SMS retry protection | Durable outbox, per-attempt records, bounded throttling retries, unknown-result hold |
+| Customer reuse and debt desk | Adopted the useful branch-scoped search/customer-account idea, but KOFAD adds checkout-time Ghana identity normalization, automatic reuse/creation, customer-level pay-full/partial settlement and immutable oldest-due-first multi-invoice allocations |
 | Receipt, debt and payment messages | Editable validated templates and review-before-queue workflow |
 | Signed recovery manifests and restore drills | Still a required operational workstream; do not claim equivalence yet |
 | Detailed workforce and document lifecycle | Future scope; requires a KOFAD-specific business case |

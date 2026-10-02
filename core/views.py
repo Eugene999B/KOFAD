@@ -208,6 +208,8 @@ def trade_screen(request, branch, kind):
         "max_discount": company.max_discount_percent,
         "max_price_reduction": company.max_price_reduction_percent,
         "credit_override_available": kind == "sale" and company.max_credit_override > 0,
+        "allow_credit_sales": kind == "sale" and company.allow_credit_sales,
+        "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
         )})
@@ -298,7 +300,10 @@ def inventory(request, branch):
         quarantine_qty = quarantined.get(p.pk, 0)
         rows.append({"product": p, "quantity": quantity, "quarantine": quarantine_qty,
                      "physical": quantity + quarantine_qty, "packs": quantity // p.pack_size,
-                     "loose": quantity % p.pack_size, "low": quantity <= p.reorder_level})
+                     "loose": quantity % p.pack_size,
+                     "pack_equivalent": (Decimal(quantity) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity),
+                     "physical_pack_equivalent": (Decimal(quantity + quarantine_qty) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity + quarantine_qty),
+                     "low": quantity <= p.reorder_level})
     return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
 
 
@@ -309,15 +314,109 @@ def product_edit(request, branch, pk=None):
         raise PermissionDenied
     form = ProductForm(request.POST or None, instance=obj)
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            before = {k: str(v) for k, v in (Product.objects.filter(pk=pk).values().first() or {}).items()}
-            product = form.save()
-            s.audit(request.user, branch, "product.saved", product.sku,
-                    {"before": before, "after": {k: str(v) for k, v in form.cleaned_data.items()}})
-        messages.success(request, "Product saved. Use a stock operation to record opening stock.")
-        return redirect("inventory")
+        opening_total = getattr(form, "opening_total", 0)
+        if opening_total and not request.user.has_perm("core.operate_inventory"):
+            form.add_error(None, "Inventory permission is required to record opening stock.")
+        else:
+            with transaction.atomic():
+                before = {k: str(v) for k, v in (Product.objects.filter(pk=pk).values().first() or {}).items()}
+                product = form.save()
+                if opening_total:
+                    s.stock_move(
+                        request.user, branch, product, opening_total,
+                        f"OPEN-{product.sku}", "Opening stock recorded during product setup"
+                    )
+                s.audit(request.user, branch, "product.saved", product.sku,
+                        {"before": before, "after": {k: str(v) for k, v in form.cleaned_data.items()},
+                         "opening_stock_base_units": opening_total})
+            messages.success(request, "Product saved" + (f" with {opening_total} opening base units." if opening_total else "."))
+            return redirect("inventory")
     return render(request, "form.html", {"title": "Edit product" if pk else "New product", "form": form,
         "description": "Leave a price blank to disable that selling mode. Quantities are always held in base units."})
+
+
+@protected("operate_sales|operate_finance|view_reports")
+def customer_search(request, branch):
+    query = request.GET.get("q", "").strip()[:100]
+    rows = Party.objects.filter(branch=branch, kind="customer")
+    if query:
+        phone_filter = Q(phone__icontains=query)
+        try:
+            from .identity import phone_variants
+            phone_filter |= Q(phone__in=phone_variants(query))
+        except ValidationError:
+            pass
+        rows = rows.filter(Q(name__icontains=query) | phone_filter)
+    results = []
+    for party in rows.order_by("name")[:20]:
+        sales = Document.objects.filter(branch=branch, party=party, kind="sale")
+        last_sale = sales.order_by("-created_at").first()
+        results.append({
+            "id": party.pk,
+            "name": party.name,
+            "phone": party.phone,
+            "outstanding": str(s.party_debt(party)),
+            "purchase_count": sales.count(),
+            "last_purchase_at": last_sale.created_at.isoformat() if last_sale else "",
+        })
+    return JsonResponse({"customers": results})
+
+
+@protected("operate_sales|operate_finance|view_reports")
+def customer_profile(request, branch, pk):
+    from . import debts as debt_service
+    party = get_object_or_404(Party, pk=pk, branch=branch, kind="customer")
+    if request.method == "POST":
+        try:
+            s.permit(request.user, branch, "operate_finance")
+            doc = debt_service.post_customer_payment(
+                request.user, branch, {
+                    "party": party.pk,
+                    "amount": request.POST.get("amount"),
+                    "pay_full": request.POST.get("pay_full", ""),
+                    "method": request.POST.get("method"),
+                    "reference": request.POST.get("reference", ""),
+                },
+                request.POST.get("key"),
+            )
+            return redirect("document", pk=doc.pk)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    snapshot = debt_service.customer_account_snapshot(party)
+    activity = Document.objects.filter(branch=branch, party=party).select_related(
+        "created_by", "original"
+    ).order_by("-created_at")[:100]
+    return render(request, "customer_profile.html", {
+        "title": party.name,
+        "party": party,
+        "account": snapshot,
+        "activity": activity,
+        "methods": s.active_payment_methods(),
+        "key": request.POST.get("key") or str(uuid.uuid4()),
+    })
+
+
+@protected("operate_sales|operate_finance|view_reports")
+def debts(request, branch):
+    from . import debts as debt_service
+    if request.method == "POST":
+        try:
+            s.permit(request.user, branch, "operate_finance")
+            doc = debt_service.post_customer_payment(
+                request.user, branch, request.POST.dict(), request.POST.get("key")
+            )
+            return redirect("document", pk=doc.pk)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    query = request.GET.get("q", "").strip()[:100]
+    overview = debt_service.debt_overview(branch, query)
+    return render(request, "debts.html", {
+        "title": "Customer debts",
+        "q": query,
+        "overview": overview,
+        "methods": s.active_payment_methods(),
+        "key": request.POST.get("key") or str(uuid.uuid4()),
+    })
 
 
 @login_required
@@ -513,20 +612,51 @@ def operations(request, branch):
 
 @protected("operate_finance")
 def closings(request, branch):
+    today = timezone.localdate()
+    raw_day = request.POST.get("date") if request.method == "POST" else request.GET.get("date")
+    try:
+        selected_day = date.fromisoformat(raw_day) if raw_day else today
+    except (TypeError, ValueError):
+        selected_day = today
+
     if request.method == "POST":
         try:
             if request.POST.get("action") == "verify":
                 s.verify_closing(request.user, get_object_or_404(Closing, pk=request.POST.get("id"), branch=branch))
+                messages.success(request, "Daily closing independently verified.")
             else:
-                s.submit_closing(request.user, branch, date.fromisoformat(request.POST.get("date", "")),
-                    {m: request.POST.get(m, 0) for m, _ in Payment.METHODS}, request.POST.get("note", ""))
-            messages.success(request, "Closing recorded.")
-            return redirect("closings")
+                s.submit_closing(
+                    request.user,
+                    branch,
+                    selected_day,
+                    {method: request.POST.get(method, 0) for method, _ in Payment.METHODS},
+                    request.POST.get("note", ""),
+                    request.POST.get("opening_cash", 0),
+                    request.POST.get("cash_in", 0),
+                    request.POST.get("cash_out", 0),
+                )
+                messages.success(request, "Daily closing submitted and the day is now locked.")
+            return redirect(f"/closings/?date={selected_day.isoformat()}")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
-    return render(request, "closings.html", {"title": "Daily closing", "today": timezone.localdate().isoformat(),
-        "methods": Payment.METHODS, "expected": s.channel_totals(branch, timezone.localdate()).items(),
-        "rows": Closing.objects.filter(branch=branch).select_related("submitted_by", "verified_by")[:100]})
+
+    summary = s.closing_summary(branch, selected_day)
+    history = list(Closing.objects.filter(branch=branch).select_related("submitted_by", "verified_by")[:100])
+    for row in history:
+        row.variance_view = {
+            method: Decimal(str(row.counted.get(method, "0"))) - Decimal(str(row.expected.get(method, "0")))
+            for method, _ in Payment.METHODS
+        }
+    return render(request, "closings.html", {
+        "title": "Daily closing",
+        "today": today.isoformat(),
+        "selected_day": selected_day.isoformat(),
+        "methods": Payment.METHODS,
+        "summary": summary,
+        "expected": summary["channel_net"].items(),
+        "rows": history,
+        "selected_closed": Closing.objects.filter(branch=branch, date=selected_day).exists(),
+    })
 
 
 def report_data(request, branch):
