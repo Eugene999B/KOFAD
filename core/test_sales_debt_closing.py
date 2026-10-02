@@ -151,7 +151,8 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
             before + 2 * self.product.pack_size + 3,
         )
         page = self.client.get("/inventory/")
-        self.assertContains(page, "Quick restock")
+        self.assertContains(page, "Find product to restock")
+        self.assertContains(page, "QUICK RESTOCK")
         self.assertContains(page, "Recent stock movement")
         self.assertContains(page, "RESTOCK-WEB-001")
 
