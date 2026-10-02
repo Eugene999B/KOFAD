@@ -1,6 +1,6 @@
 # Railway deployment and recovery
 
-This repository is prepared for Railway. It has not been deployed automatically. Use a staging environment first.
+KOFAD uses a dedicated Railway project with PostgreSQL, a web service and an SMS worker. Live deployment settings are managed through Railway service configuration. New Railway services no longer accept the deprecated railway.json configuration format.
 
 ## Configure staging
 
@@ -11,7 +11,7 @@ This repository is prepared for Railway. It has not been deployed automatically.
 5. Set DJANGO_ALLOWED_HOSTS to the application's hostname, without a URL scheme.
 6. Set CSRF_TRUSTED_ORIGINS to the full HTTPS origin. Set DJANGO_DEBUG=0 and SECURE_SSL_REDIRECT=1.
 7. Deploy a verified commit. Run python manage.py bootstrap once in the application service.
-8. Run python manage.py createsuperuser interactively in Railway's service shell. There is no default owner password.
+8. For the requested initial ADMIN account, follow the protected initial-administrator setup below.
 9. Sign in, enroll the owner's authenticator and configure company details, users, groups and location assignments.
 10. Add real products and contacts. Opening stock is an approved adjustment; prepare a second authorized user to review it.
 
@@ -54,14 +54,14 @@ If a release fails, revert to the last verified application commit only when its
 
 ## Requested initial administrator
 
-KOFAD has no running deployment database yet. The account setup is prepared and tested in the repository; it is not a claim that a live account already exists.
+The web service's deployment command is python manage.py initialize_deployment. It serializes migrations with a PostgreSQL advisory lock, applies committed migrations, and performs one-time setup only when KOFAD_INITIAL_ADMIN_PASSWORD is explicitly configured. Existing ADMIN credentials are never reset by a release.
 
-For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested temporary value ADMIN and run:
+For the first KOFAD deployment, set KOFAD_SETUP_KEY to at least 32 cryptographically random characters and KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested temporary value ADMIN. The deployment initializer invokes:
 
 python manage.py bootstrap_admin --confirm-initial-setup
 
 This creates username ADMIN with full administrative access. The application blocks all business pages and APIs until the password is changed; authenticator enrollment follows. The command refuses to reset or elevate an existing ADMIN account. Remove the temporary deployment variable immediately after setup.
 
-Use a private setup session before exposing the fresh service publicly. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
+The public login requires the private KOFAD_SETUP_KEY while ADMIN must change its temporary password. Retrieve that key from kofad-web's Railway variables; never commit it. The gate also protects alternate authentication paths. Once the password is replaced, ordinary staff login does not require the setup key. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
 
 For Arkesel web/worker configuration, see SMS.md.

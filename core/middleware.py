@@ -1,3 +1,6 @@
+import hashlib
+import secrets
+from django.conf import settings
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 from .models import Access
@@ -13,6 +16,11 @@ class AccessMiddleware:
             if request.session.get("access_version") != access.session_version:
                 logout(request)
                 return redirect("login")
+            if access.must_change_password and settings.KOFAD_SETUP_KEY:
+                expected = hashlib.sha256(settings.KOFAD_SETUP_KEY.encode()).hexdigest()
+                if not secrets.compare_digest(request.session.get("setup_key_digest", ""), expected):
+                    logout(request)
+                    return redirect("login")
             if access.must_change_password and request.path not in ("/account/password/", "/logout/", "/health/"):
                 return redirect("password_change")
             if (request.user.is_staff or request.user.is_superuser or request.user.has_perm("core.manage_company") or access.totp_secret) and not request.session.get("mfa_ok"):

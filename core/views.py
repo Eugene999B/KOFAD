@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from functools import wraps
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -83,7 +84,14 @@ def login_view(request):
                 user = authenticate(request, username=username, password=request.POST.get("password", ""))
                 if user is not None:
                     access, _ = Access.objects.get_or_create(user=user)
+                    if access.must_change_password and settings.KOFAD_SETUP_KEY:
+                        supplied = request.POST.get("setup_key", "")
+                        if not secrets.compare_digest(supplied, settings.KOFAD_SETUP_KEY):
+                            user = None
+                if user is not None:
                     login(request, user)
+                    if access.must_change_password and settings.KOFAD_SETUP_KEY:
+                        request.session["setup_key_digest"] = hashlib.sha256(settings.KOFAD_SETUP_KEY.encode()).hexdigest()
                     request.session["access_version"] = access.session_version
                     request.session["mfa_ok"] = not bool(access.totp_secret) and not (user.is_staff or user.is_superuser or user.has_perm("core.manage_company"))
                     attempt.failures = 0
@@ -95,7 +103,7 @@ def login_view(request):
                     attempt.blocked_until = timezone.now() + timedelta(minutes=15)
                 attempt.save()
                 error = "The username or password is incorrect."
-    return render(request, "login.html", {"error": error})
+    return render(request, "login.html", {"error": error, "setup_required": bool(settings.KOFAD_SETUP_KEY) and Access.objects.filter(must_change_password=True).exists()})
 
 
 @login_required

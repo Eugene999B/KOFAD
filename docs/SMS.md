@@ -14,7 +14,7 @@ Set these on both the web service and a separate SMS worker:
 - ARKESEL_API_KEY set privately in Railway
 - The same DATABASE_URL and DJANGO_SECRET_KEY as the web service
 
-Worker command: python manage.py process_sms --loop. A separate Railway worker can select railway.sms.json as its configuration path; it must share the web service database and secrets.
+Worker command: python manage.py process_sms --loop. A separate Railway worker can select Railway worker service settings as its configuration path; it must share the web service database and secrets.
 
 For a bounded scheduled run: python manage.py process_sms --limit 100
 
