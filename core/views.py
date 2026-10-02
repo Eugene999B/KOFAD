@@ -322,25 +322,101 @@ def document(request, pk):
 
 @protected("operate_inventory|view_reports")
 def inventory(request, branch):
-    q = request.GET.get("q", "")[:100]
-    products = Product.objects.all()
+    if request.method == "POST":
+        try:
+            s.permit(request.user, branch, "operate_inventory")
+            result = s.restock_inventory(
+                request.user,
+                branch,
+                request.POST.get("product"),
+                request.POST.get("packs", 0),
+                request.POST.get("loose", 0),
+                request.POST.get("note", ""),
+                request.POST.get("reference", ""),
+                request.POST.get("unit_cost", ""),
+            )
+            messages.success(
+                request,
+                f"Restocked {result['product'].name}: +{result['added']} {result['product'].base_unit}. "
+                f"New sellable balance: {result['after']}."
+            )
+            return redirect("inventory")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+
+    q = request.GET.get("q", "").strip()[:100]
+    status = request.GET.get("status", "all")
+    if status not in {"all", "low", "out", "healthy", "quarantine"}:
+        status = "all"
+
+    products = Product.objects.all().order_by("name")
     if q:
-        products = products.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode=q))
+        products = products.filter(
+            Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q) | Q(category__icontains=q)
+        )
     stocks = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
-    quarantined = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
-        "product_id").annotate(total=Sum("quantity")).values_list("product_id", "total"))
+    quarantined = dict(
+        QuarantineItem.objects.filter(branch=branch, status="held")
+        .values("product_id").annotate(total=Sum("quantity")).values_list("product_id", "total")
+    )
     rows = []
-    for p in products[:200]:
+    for p in products[:500]:
         quantity = stocks.get(p.pk, 0)
         quarantine_qty = quarantined.get(p.pk, 0)
-        rows.append({"product": p, "quantity": quantity, "quarantine": quarantine_qty,
-                     "physical": quantity + quarantine_qty, "packs": quantity // p.pack_size,
-                     "loose": quantity % p.pack_size,
-                     "pack_equivalent": (Decimal(quantity) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity),
-                     "physical_pack_equivalent": (Decimal(quantity + quarantine_qty) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity + quarantine_qty),
-                     "low": quantity <= p.reorder_level})
-    return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
+        row = {
+            "product": p,
+            "quantity": quantity,
+            "quarantine": quarantine_qty,
+            "physical": quantity + quarantine_qty,
+            "packs": quantity // p.pack_size,
+            "loose": quantity % p.pack_size,
+            "pack_equivalent": (Decimal(quantity) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity),
+            "physical_pack_equivalent": (
+                Decimal(quantity + quarantine_qty) / Decimal(p.pack_size)
+                if p.pack_size > 1 else Decimal(quantity + quarantine_qty)
+            ),
+            "low": quantity <= p.reorder_level,
+            "out": quantity == 0,
+            "sellable_value": Decimal(quantity) * p.cost,
+        }
+        if status == "low" and not (row["low"] and quantity > 0):
+            continue
+        if status == "out" and not row["out"]:
+            continue
+        if status == "healthy" and (row["low"] or row["out"]):
+            continue
+        if status == "quarantine" and not quarantine_qty:
+            continue
+        rows.append(row)
 
+    all_products = Product.objects.all()
+    all_stock = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+    catalog_count = all_products.count()
+    out_count = sum(1 for p in all_products if all_stock.get(p.pk, 0) == 0)
+    low_count = sum(
+        1 for p in all_products
+        if 0 < all_stock.get(p.pk, 0) <= p.reorder_level
+    )
+    sellable_value = sum(
+        (Decimal(all_stock.get(p.pk, 0)) * p.cost for p in all_products),
+        Decimal("0"),
+    )
+    quarantine_units = sum(quarantined.values(), 0)
+    movements = Movement.objects.filter(branch=branch).select_related("product", "actor").order_by("-created_at")[:20]
+
+    return render(request, "inventory.html", {
+        "title": "Inventory",
+        "rows": rows,
+        "q": q,
+        "status": status,
+        "catalog_count": catalog_count,
+        "out_count": out_count,
+        "low_count": low_count,
+        "sellable_value": sellable_value,
+        "quarantine_units": quarantine_units,
+        "movements": movements,
+        "restock_key": str(uuid.uuid4()),
+    })
 
 @protected("change_product")
 def product_edit(request, branch, pk=None):
