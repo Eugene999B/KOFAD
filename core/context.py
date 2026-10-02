@@ -8,4 +8,10 @@ def shell(request):
     if not request.user.is_authenticated:
         branches = Branch.objects.none()
     current = branches.filter(pk=request.session.get("branch")).first() or branches.first()
-    return {"company": Company.objects.first() or Company(), "branches": branches, "current_branch": current}
+    welcome = request.session.pop("kofad_welcome", None) if request.user.is_authenticated else None
+    return {
+        "company": Company.objects.first() or Company(),
+        "branches": branches,
+        "current_branch": current,
+        "login_welcome": welcome,
+    }
