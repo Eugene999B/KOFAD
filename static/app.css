@@ -119,3 +119,5 @@ td{padding:16px 12px}tbody tr:hover{background:#f8fbfd}
 .nav-icon{width:19px;height:19px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}.mobile-dock .nav-icon{width:21px;height:21px;margin-bottom:3px}
 
 @media(max-width:680px){input,select,textarea,.login-card input{font-size:16px}.product-card select{font-size:12px}.branch-form select{font-size:12px}}
+
+.auth-exit{border-top:1px solid var(--line);margin-top:24px;padding-top:4px}.auth-exit .text-button{font-size:12px}
