@@ -456,6 +456,7 @@ class StockCountLine(models.Model):
 class TransferReceipt(models.Model):
     operation = models.OneToOneField(Operation, related_name="receipt", on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
     note = models.TextField(blank=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
     recorded_at = models.DateTimeField(auto_now_add=True)
