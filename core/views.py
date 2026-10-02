@@ -516,19 +516,56 @@ def debts(request, branch):
             doc = debt_service.post_customer_payment(
                 request.user, branch, request.POST.dict(), request.POST.get("key")
             )
-            return redirect("document", pk=doc.pk)
+            messages.success(request, f"Payment recorded. Receipt {doc.reference} is ready.")
+            return redirect(f"/debts/?customer={doc.party_id}&payment={doc.pk}")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
+
     query = request.GET.get("q", "").strip()[:100]
+    status = request.GET.get("status", "all")
+    if status not in {"all", "overdue", "due_today", "current"}:
+        status = "all"
+
     overview = debt_service.debt_overview(branch, query)
+    rows = overview["rows"]
+    if status == "overdue":
+        rows = [row for row in rows if row["overdue"] > 0]
+    elif status == "due_today":
+        rows = [row for row in rows if row["due_today"] > 0]
+    elif status == "current":
+        rows = [row for row in rows if row["overdue"] == 0]
+
+    selected = None
+    selected_id = request.GET.get("customer", "")
+    if selected_id.isdigit():
+        selected = next((row for row in rows if row["party"].pk == int(selected_id)), None)
+        if selected is None:
+            party = Party.objects.filter(pk=selected_id, branch=branch, kind="customer").first()
+            if party:
+                snapshot = debt_service.customer_account_snapshot(party)
+                if snapshot["outstanding"] > 0:
+                    selected = {"party": party, **snapshot}
+    if selected is None and rows:
+        selected = rows[0]
+
+    payment_doc = None
+    payment_id = request.GET.get("payment", "")
+    if payment_id:
+        payment_doc = Document.objects.filter(
+            pk=payment_id, branch=branch, kind="collection"
+        ).select_related("party").first()
+
     return render(request, "debts.html", {
         "title": "Customer debts",
         "q": query,
+        "status": status,
         "overview": overview,
+        "rows": rows,
+        "selected": selected,
         "methods": s.active_payment_methods(),
         "key": request.POST.get("key") or str(uuid.uuid4()),
+        "payment_doc": payment_doc,
     })
-
 
 @login_required
 def parties(request):
