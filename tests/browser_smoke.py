@@ -2,10 +2,6 @@
 import os
 import sys
 import time
-import base64
-import hashlib
-import hmac
-import struct
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -51,17 +47,13 @@ with sync_playwright() as p:
         page.set_viewport_size({"width":width,"height":900})
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "login overflow"
     page.set_viewport_size({"width":1440,"height":1000})
+    page.get_by_role("link",name="Forgot password?",exact=True).click()
+    page.get_by_role("heading",name="Forgot your password?",exact=True).wait_for()
+    assert page.get_by_text("SMS recovery is not available yet.",exact=False).is_visible()
+    page.goto("http://127.0.0.1:8000/login/")
     page.get_by_label("Username", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
-    page.wait_for_url("http://127.0.0.1:8000/mfa/")
-    secret = page.locator(".secret").inner_text().strip()
-    step = int(time.time() // 30)
-    digest = hmac.new(base64.b32decode(secret),struct.pack(">Q",step),hashlib.sha1).digest()
-    offset = digest[-1] & 15
-    code = (struct.unpack(">I",digest[offset:offset+4])[0] & 0x7fffffff) % 1000000
-    page.get_by_label("Six-digit authenticator code").fill(f"{code:06}")
-    page.get_by_role("button",name="Verify",exact=True).click()
     page.wait_for_url("http://127.0.0.1:8000/")
     page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
@@ -124,21 +116,21 @@ with sync_playwright() as p:
     admin_page.get_by_label("Username",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("ADMIN")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
-    admin_page.wait_for_url("**/account/password/")
-    admin_page.screenshot(path=str(out / "admin-first-login.png"),full_page=True)
+    admin_page.wait_for_url("http://127.0.0.1:8000/")
+    admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
+    admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/account/")
+    admin_page.get_by_label("Recovery phone number",exact=True).fill("0241234567")
+    admin_page.get_by_label("Current password",exact=True).fill("ADMIN")
+    admin_page.get_by_role("button",name="Save recovery phone",exact=True).click()
+    assert admin_page.get_by_label("Recovery phone number",exact=True).input_value() == "+233241234567"
+    admin_page.screenshot(path=str(out / "account-settings.png"),full_page=True)
+    admin_page.get_by_role("link",name="Change password",exact=True).click()
     admin_page.locator("#id_old_password").fill("ADMIN")
     admin_page.locator("#id_new_password1").fill("New-private-admin-passphrase-986!")
     admin_page.locator("#id_new_password2").fill("New-private-admin-passphrase-986!")
-    admin_page.get_by_role("button",name="Set password",exact=True).click()
-    admin_page.wait_for_url("**/mfa/")
-    secret = admin_page.locator(".secret").inner_text().strip()
-    step = int(time.time() // 30)
-    digest = hmac.new(base64.b32decode(secret),struct.pack(">Q",step),hashlib.sha1).digest()
-    offset = digest[-1] & 15
-    code = (struct.unpack(">I",digest[offset:offset+4])[0] & 0x7fffffff) % 1000000
-    admin_page.get_by_label("Six-digit authenticator code").fill(f"{code:06}")
-    admin_page.get_by_role("button",name="Verify",exact=True).click()
-    admin_page.wait_for_url("http://127.0.0.1:8000/")
+    admin_page.get_by_role("button",name="Change password",exact=True).click()
+    admin_page.wait_for_url("http://127.0.0.1:8000/account/")
     admin_page.goto("http://127.0.0.1:8000/admin/")
     admin_page.get_by_role("heading",name="Access and configuration",exact=True).wait_for()
     admin_page.goto("http://127.0.0.1:8000/communications/")
@@ -208,4 +200,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Owner MFA, cart-preserving search, lost-response checkout recovery, physical counts, transfer discrepancies, and desktop/mobile checks passed.")
+print("Direct admin login, optional password change, recovery phone, cart-preserving search, lost-response checkout recovery, physical counts, transfer discrepancies, and desktop/mobile checks passed.")

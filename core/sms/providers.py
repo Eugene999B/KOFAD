@@ -53,7 +53,9 @@ class Arkesel:
     def submit(self, recipient, body, sender, callback_url, sandbox):
         self.validate()
         payload = {"sender":sender,"message":body,"recipients":[recipient.lstrip("+")],
-                   "callback_url":callback_url,"sandbox":sandbox}
+                   "sandbox":sandbox}
+        if callback_url:
+            payload["callback_url"] = callback_url
         request = Request(self.endpoint,data=json.dumps(payload).encode(),method="POST",
             headers={"api-key":settings.ARKESEL_API_KEY,"Content-Type":"application/json","Accept":"application/json"})
         try:

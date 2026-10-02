@@ -37,7 +37,7 @@ The repository now contains a Django/PostgreSQL implementation of the core opera
 
 [![Verify KOFAD](https://github.com/Eugene999B/KOFAD/actions/workflows/ci.yml/badge.svg)](https://github.com/Eugene999B/KOFAD/actions/workflows/ci.yml)
 
-GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration checks, dependency auditing, and Chromium desktop/mobile navigation, owner MFA, cart search and lost-response checkout recovery checks. The production Docker image is also built and health-tested. Browser screenshots are available in the run's browser-evidence artifact. Demo records are explicitly labeled and only permitted in DEBUG environments.
+GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration checks, dependency auditing, and Chromium desktop/mobile navigation, direct administrator login, account settings, cart search and lost-response checkout recovery checks. The production Docker image is also built and health-tested. Browser screenshots are available in the run's browser-evidence artifact. Demo records are explicitly labeled and only permitted in DEBUG environments.
 
 ## Deployment and operations
 
@@ -53,7 +53,7 @@ No default administrator is silently created at startup. Bootstrap creates role 
 
 Arkesel SMS now has a durable outbox, editable receipt/payment/reminder templates, sandbox mode, delivery callbacks and retry controls. Future providers use a registered adapter. See [SMS setup](docs/SMS.md).
 
-The requested ADMIN account is prepared through the explicit one-time bootstrap command, with mandatory password replacement and MFA before business access. It will be created in the deployment database when that command runs. See [initial administrator setup](docs/RAILWAY.md#requested-initial-administrator).
+The requested ADMIN account signs in directly. Password changes are optional under My account; SMS password recovery uses an individual account recovery phone. See [account recovery](docs/ACCOUNT_RECOVERY.md) and [initial administrator setup](docs/RAILWAY.md#requested-initial-administrator).
 
 [CHALIN03 comparison](docs/CHALIN03_REVIEW.md) records the reviewed features and KOFAD improvements without claiming complete parity.
 

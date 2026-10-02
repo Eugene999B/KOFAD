@@ -33,7 +33,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Reports now paginate and reject over-limit queries instead of returning incomplete totals. Extend scoped global-search pagination and asynchronous bulk export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.
 - Configure, automate and rehearse encrypted independent backup/restore with manifests and retention.
 - Perform external security review, accessibility audit, production-scale performance tests and owner acceptance.
-- Provide self-service MFA recovery codes and sensitive-action reauthentication if required by the owner's security policy.
+- Verify live Arkesel delivery after configuring credentials, an approved sender and account recovery numbers.
 
 ## Remote verification
 

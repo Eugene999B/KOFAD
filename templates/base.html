@@ -18,7 +18,7 @@
 {% if perms.core.operate_sales %}<a href="/communications/">{% include "icon.html" with name="mail" %} Communications</a>{% endif %}
 {% if perms.core.view_reports %}<p class="nav-label">BUSINESS INSIGHTS</p><a href="/reports/">{% include "icon.html" with name="chart" %} Reports</a><a href="/audit/">{% include "icon.html" with name="search" %} Audit trail</a>{% endif %}
 {% if perms.core.manage_company %}<a href="/settings/">{% include "icon.html" with name="settings" %} Settings</a>{% endif %}
-{% if request.user.is_staff %}<a href="/admin/">{% include "icon.html" with name="shield" %} Administration</a>{% endif %}
+<a href="/account/">{% include "icon.html" with name="users" %} My account</a>{% if request.user.is_staff %}<a href="/admin/">{% include "icon.html" with name="shield" %} Administration</a>{% endif %}
 </nav><div class="sidebar-bottom"><span class="status-dot"></span> KOFAD operating workspace<small>Trade with confidence.</small></div></aside>
 <div class="body"><header class="topbar"><button class="icon-button mobile-menu" aria-label="Toggle navigation" id="menu-toggle" aria-controls="main-navigation" aria-expanded="false">☰</button>
 <form method="post" action="/branch/" class="branch-form">{% csrf_token %}<label class="sr-only" for="branch-select">Location</label><select name="branch" id="branch-select">{% for branch in branches %}<option value="{{ branch.pk }}" {% if branch == current_branch %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select><button class="text-button" type="submit">Switch</button></form>

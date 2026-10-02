@@ -19,6 +19,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.debug import sensitive_post_parameters
 
 from . import services as s
 from .context import shell
@@ -27,7 +28,6 @@ from .models import (
     Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
     Message, Movement, Operation, Party, Payment, Product, Stock,
 )
-from .security import matching_step, new_secret
 
 
 def branch_for(request):
@@ -66,6 +66,7 @@ def health(request):
         return JsonResponse({"status": "unavailable"}, status=503)
 
 
+@sensitive_post_parameters("password")
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
@@ -91,11 +92,11 @@ def login_view(request):
                 if user is not None:
                     login(request, user)
                     request.session["access_version"] = access.session_version
-                    request.session["mfa_ok"] = not bool(access.totp_secret) and not (user.is_staff or user.is_superuser or user.has_perm("core.manage_company"))
+                    request.session.pop("enroll_secret", None)
                     attempt.failures = 0
                     attempt.save()
                     s.audit(user, None, "session.login", user.pk)
-                    return redirect("mfa" if not request.session["mfa_ok"] else "dashboard")
+                    return redirect("dashboard")
                 attempt.failures += 1
                 if attempt.failures >= 5:
                     attempt.blocked_until = timezone.now() + timedelta(minutes=15)
@@ -106,41 +107,8 @@ def login_view(request):
 
 @login_required
 def mfa(request):
-    access = request.user.access
-    enrolled = bool(access.totp_secret)
-    secret = access.totp_secret or request.session.get("enroll_secret") or new_secret()
-    if not enrolled:
-        request.session["enroll_secret"] = secret
-    error = ""
-    if request.method == "POST":
-        with transaction.atomic():
-            access = Access.objects.select_for_update().get(user=request.user)
-            attempt_key = hashlib.sha256(f"mfa:{request.user.pk}".encode()).hexdigest()
-            LoginAttempt.objects.get_or_create(key=attempt_key)
-            attempt = LoginAttempt.objects.select_for_update().get(key=attempt_key)
-            if attempt.blocked_until and attempt.blocked_until > timezone.now():
-                return render(request, "mfa.html", {"enrolled": enrolled, "error": "Too many verification attempts. Wait 15 minutes."})
-            if attempt.blocked_until:
-                attempt.failures = 0
-                attempt.blocked_until = None
-            step = matching_step(secret, request.POST.get("code", ""))
-            if step is not None and step > access.totp_last_step:
-                access.totp_secret = secret
-                access.totp_last_step = step
-                access.save(update_fields=["totp_secret", "totp_last_step"])
-                attempt.failures = 0
-                attempt.save()
-                request.session["mfa_ok"] = True
-                request.session.pop("enroll_secret", None)
-                request.session.pop("mfa_failures", None)
-                s.audit(request.user, None, "session.mfa", request.user.pk)
-                return redirect("dashboard")
-            attempt.failures += 1
-            if attempt.failures >= 5:
-                attempt.blocked_until = timezone.now() + timedelta(minutes=15)
-            attempt.save()
-            error = "The code is invalid or already used. Wait for the next code."
-    return render(request, "mfa.html", {"enrolled": enrolled, "secret": secret if not enrolled else "", "error": error})
+    request.session.pop("enroll_secret", None)
+    return redirect("dashboard")
 
 
 @require_POST
@@ -607,20 +575,25 @@ def search(request):
 
 
 @login_required
+@sensitive_post_parameters("old_password", "new_password1", "new_password2")
 def password_change(request):
     from django.contrib.auth.forms import PasswordChangeForm
     from django.contrib.auth import update_session_auth_hash
-    form = PasswordChangeForm(request.user,request.POST or None)
-    if request.method == "POST" and form.is_valid():
+    form = PasswordChangeForm(request.user)
+    if request.method == "POST":
         with transaction.atomic():
-            user = form.save()
-            Access.objects.filter(user=user).update(must_change_password=False)
-            update_session_auth_hash(request,user)
-            user.access.refresh_from_db()
-            request.session["access_version"] = user.access.session_version
-            s.audit(user,None,"password.changed",user.pk)
-        return redirect("mfa" if not request.session.get("mfa_ok") else "dashboard")
-    return render(request,"password_change.html",{"form":form})
+            current = User.objects.select_for_update().get(pk=request.user.pk)
+            form = PasswordChangeForm(current, request.POST)
+            if form.is_valid():
+                user = form.save()
+                Access.objects.filter(user=user).update(must_change_password=False)
+                update_session_auth_hash(request, user)
+                user.access.refresh_from_db()
+                request.session["access_version"] = user.access.session_version
+                s.audit(user, None, "password.changed", user.pk)
+                messages.success(request, "Your password has been changed.")
+                return redirect("account")
+    return render(request, "password_change.html", {"form":form, "title":"Change password"})
 
 
 @protected("manage_company")

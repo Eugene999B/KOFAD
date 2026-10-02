@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
@@ -32,8 +33,21 @@ def revoke_sessions(modeladmin, request, queryset):
         audit(request.user, None, "access.revoked", access.user_id)
 
 
+class AccessForm(forms.ModelForm):
+    class Meta:
+        model = Access
+        fields = ["user", "branches", "recovery_phone"]
+    def clean_recovery_phone(self):
+        from .sms.service import normalize_phone
+        raw = self.cleaned_data["recovery_phone"].strip()
+        return normalize_phone(raw) if raw else ""
+
+
 class AccessAdmin(AuditedAdmin):
-    fields = ["user", "branches", "session_version"]
+    form = AccessForm
+    list_display = ["user", "recovery_phone"]
+    search_fields = ["user__username", "recovery_phone"]
+    fields = ["user", "branches", "recovery_phone", "session_version"]
     readonly_fields = ["session_version"]
     filter_horizontal = ["branches"]
     actions = [revoke_sessions]

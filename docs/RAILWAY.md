@@ -12,7 +12,7 @@ KOFAD uses a dedicated Railway project with PostgreSQL, a web service and an SMS
 6. Set CSRF_TRUSTED_ORIGINS to the full HTTPS origin. Set DJANGO_DEBUG=0 and SECURE_SSL_REDIRECT=1.
 7. Deploy a verified commit. Run python manage.py bootstrap once in the application service.
 8. For the requested initial ADMIN account, follow the protected initial-administrator setup below.
-9. Sign in, enroll the owner's authenticator and configure company details, users, groups and location assignments.
+9. Sign in and configure company details, users, groups and location assignments.
 10. Add real products and contacts. Opening stock is an approved adjustment; prepare a second authorized user to review it.
 
 The CI suite builds the production image and checks database readiness and login rendering with production settings. The Docker container binds Railway's PORT, runs as an unprivileged user and serves static assets using WhiteNoise. /health/ checks database connectivity. It does not certify migration compatibility or business acceptance.
@@ -39,12 +39,9 @@ Revoke sessions after recovery by incrementing all Access.session_version values
 
 The application does not automate backup scheduling, off-platform storage, manifest signing or production restore. Those are launch blockers until an operator configures and rehearses them.
 
-## MFA recovery
+## Account recovery
 
-From the authorized service shell:
-python manage.py reset_mfa USERNAME --reason "Verified owner identity under recovery procedure"
-
-This clears enrollment, revokes sessions and records an audit event. Keep at least two secured operator access paths. Self-service recovery codes are not implemented.
+See [account recovery](ACCOUNT_RECOVERY.md). Authenticator enrollment is no longer required.
 
 ## Monitoring and rollback
 
@@ -60,9 +57,9 @@ For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to th
 
 python manage.py bootstrap_admin --confirm-initial-setup
 
-This creates username ADMIN with full administrative access. The application blocks all business pages and APIs until the password is changed; authenticator enrollment follows. The command refuses to reset or elevate an existing ADMIN account. Remove the temporary deployment variable immediately after setup.
+This creates username ADMIN with full administrative access. The account opens the workspace directly. Users can change passwords under My account. The command refuses to reset or elevate an existing ADMIN account. Remove the temporary deployment variable immediately after setup.
 
-The initial administrator signs in with its username and temporary password, then must set a new password and enroll an authenticator before accessing business records. Usernames are case-insensitive. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
+The initial administrator signs in directly with the configured username and password. Password changes are available under My account. Usernames are case-insensitive. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
 
 For Arkesel web/worker configuration, see SMS.md.
 
@@ -83,4 +80,4 @@ The web service stores DJANGO_SECRET_KEY privately. DATABASE_URL references Post
 
 KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
 
-Public login: https://kofad-web-production.up.railway.app/login/ . The initial ADMIN/ADMIN account proceeds directly to mandatory password replacement, then authenticator enrollment.
+Public login: https://kofad-web-production.up.railway.app/login/ . The initial ADMIN/ADMIN account opens the workspace directly. Change password and the recovery phone are available under My account.

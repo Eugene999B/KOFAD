@@ -26,6 +26,6 @@ CHALIN03 covers Spare Parts, Mining, Equipment Sales & Hire, Group Executive con
 - Unknown provider outcomes cannot silently switch gateways and duplicate billing.
 - Sandbox evidence cannot be mistaken for real delivery.
 - UTF-16 estimates count non-BMP characters correctly.
-- The requested temporary administrator password cannot reach business records before replacement and MFA enrollment.
+- The owner requested direct administrator sign-in. Password change is optional in My account; SMS recovery is available after live delivery and per-account numbers are configured.
 
 These are concrete design improvements, not a claim that the whole KOFAD platform already exceeds CHALIN03 in feature breadth. The remaining acceptance work stays visible in ACCEPTANCE.md.

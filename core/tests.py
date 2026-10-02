@@ -206,8 +206,8 @@ class BusinessTests(Fixtures, TestCase):
     def test_login_session_survives_last_login_update(self):
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
         self.assertEqual(response.status_code,302)
-        self.assertEqual(self.client.get("/mfa/").status_code,200)
-        self.assertEqual(self.client.get("/").url,"/mfa/")
+        self.assertEqual(self.client.get("/mfa/").url,"/")
+        self.assertEqual(self.client.get("/").status_code,200)
 
     def test_malformed_report_range_returns_400(self):
         self.authenticate_client()
@@ -321,12 +321,12 @@ class ReportingTests(Fixtures, TestCase):
 class OwnerSecurityTests(Fixtures, TestCase):
     def setUp(self):
         self.setup_data()
-    def test_company_manager_requires_mfa_without_staff_flag(self):
+    def test_company_manager_has_no_authenticator_gate(self):
         owner = User.objects.create_user("business-owner",password="business-owner-password")
         owner.user_permissions.add(Permission.objects.get(codename="manage_company"))
         owner.access.branches.add(self.branch)
         self.client.post("/login/",{"username":"business-owner","password":"business-owner-password"})
-        self.assertEqual(self.client.get("/").url,"/mfa/")
+        self.assertEqual(self.client.get("/").url,"/inventory/")
     def test_cashier_cannot_search_supplier_contacts(self):
         cashier = User.objects.create_user("limited-cashier",password="limited-cashier-password")
         cashier.user_permissions.add(Permission.objects.get(codename="operate_sales"))

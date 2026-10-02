@@ -51,7 +51,7 @@ Adjustments require independent approval and a reason. A count discrepancy can b
 
 Django password hashing and validators, same-origin CSRF-protected requests, secure HTTP-only session cookies, no-store authenticated responses, a restrictive CSP, HTTPS redirects and HSTS are configured.
 
-Five failed password attempts lock the username for 15 minutes. Staff/superuser and company-management accounts must enroll a TOTP authenticator. Other enrolled users must also verify. TOTP steps cannot be reused. Security changes and permission membership changes revoke existing sessions. Operator MFA reset requires host access and records a reason.
+Five failed password attempts lock the username for 15 minutes. Sign-in uses username and password without mandatory replacement or an authenticator. Security changes and permission membership changes revoke existing sessions. SMS password recovery uses a session-bound, hashed code, ten-minute expiry, five verification attempts and three sends per account per hour. Password and phone changes invalidate pending recovery. Codes are not stored in the customer messaging ledger or audit details.
 
 Django groups define custom permission sets; Access assigns locations. Default group templates are created only once so rerunning bootstrap preserves customization. Administration exposes financial records as read-only.
 

@@ -1,8 +1,12 @@
 from django.urls import path
 from . import views as v
+from . import account as accounts
 from . import count_views
 from .sms.views import callback
 urlpatterns = [
+    path("account/", accounts.account, name="account"),
+    path("forgot-password/", accounts.forgot_password, name="forgot_password"),
+    path("forgot-password/code/", accounts.reset_password, name="reset_password"),
     path("stock-counts/", count_views.index, name="stock_counts"),
     path("stock-counts/<uuid:pk>/", count_views.detail, name="stock_count"),
     path("sms/callback/<uuid:attempt_id>/", callback, name="sms_callback"),
