@@ -81,6 +81,12 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="transferreceipt",
+            name="unit_cost",
+            field=models.DecimalField(blank=True, decimal_places=2, max_digits=14, null=True,
+                validators=[MinValueValidator(0)]),
+        ),
+        migrations.AddField(
+            model_name="transferreceipt",
             name="loss_document",
             field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT,
                 related_name="+", to="core.document"),
