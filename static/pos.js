@@ -19,6 +19,7 @@
   let selectedCustomer = null;
   let newCustomerMode = false;
   let restoredState = null;
+  let hydrating = true;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
   try {
@@ -86,6 +87,7 @@
   };
   const clearError = () => errorBox.classList.add("hidden");
   const changed = () => {
+    if (hydrating) return;
     if (pendingBody) {
       pendingBody = null;
       requestKey = crypto.randomUUID();
@@ -713,6 +715,7 @@
   }
   applyPaymentPlan();
   render();
+  hydrating = false;
 
   if (pendingBody) {
     if (partyInput) partyInput.value = pendingBody.party || "";
