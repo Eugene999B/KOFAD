@@ -180,7 +180,7 @@ def _rows(request, dataset, branch, first, last):
 
 @login_required
 def export_center(request):
-    branch = _branch(request)
+    _branch(request)
     available = [
         {"key": key, "label": label}
         for key, (label, codes) in DATASETS.items()
