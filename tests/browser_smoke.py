@@ -63,7 +63,9 @@ with sync_playwright() as p:
     page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
     page.locator(".product-card").filter(has_text="Classic leather sandals").get_by_role("button",name="Add",exact=False).click()
     assert page.locator("#cart-count").inner_text() == "2 lines"
-    page.get_by_role("button",name="Fill exact cash amount").click()
+    page.locator("#customer-search").fill("Sample Trading")
+    page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
+    page.get_by_role("button",name="Paid in full by cash",exact=True).click()
     lost_response = []
     def lose_confirmed_response(route):
         response = route.fetch()
