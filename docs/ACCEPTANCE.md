@@ -8,15 +8,15 @@ This is a working first implementation, not a claim that all eleven phases of th
 | --- | --- |
 | Identity | Password login, lockout, TOTP for staff/superusers, session revocation, custom Django groups, branch assignments |
 | Branding | Trade emblem and shared wordmark, navy/gold/teal interface, responsive login, accessible mobile drawer, task dock, guided setup and mobile cart shortcut |
-| Catalog | Product/SKU/barcode, categories, units/packs, independent retail/wholesale price matrix, archival |
+| Catalog | Product/SKU/barcode, categories, explicit packed/loose structure, units-per-pack, opening packs + loose units, independent retail/wholesale unit/pack price matrix, archival |
 | Inventory | Base-unit stock, immutable movements, nonnegative balances, reorder indicators |
-| Sales | Mixed-mode cart, held carts, server pricing, configurable payment channels, controlled discounts/price overrides, credit rules, idempotency, receipts |
-| Customers | Quick contacts, credit limit, due date, collections, current balances, running statements |
+| Sales | Search-first counter, retail/wholesale choice, mixed full-pack + loose-unit quantities, exact base-unit stock, inline existing/new customer selection, Ghana +233 normalization, full/part/credit settlement, held carts, server pricing, configurable payment channels, controlled discounts/price overrides, credit rules, idempotency, receipts |
+| Customers | Inline checkout creation/reuse, customer account profile, purchase/activity history, credit limit, due dates, current/overdue balances, running statements and customer-first debt desk |
 | Returns/corrections | Original-line returns, quantity caps, debt reduction then refund; independent expense/payment reversal and remaining-item sale void |
 | Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation, original-line supplier returns with independent finance review |
 | Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch, partial receipt and independent discrepancy resolution; damaged-stock quarantine and inventory-loss evidence |
-| Finance | Expenses with configurable manager threshold, channel movement reconciliation, independent closing verification, closed-day posting lock |
-| Reporting | Transaction register, sales/profit by product/mode, sellable/quarantine inventory valuation, aging and inventory losses; CSV/PDF/XLSX/DOCX exports including statements, transfers/operations, closings, supplier returns and quarantine |
+| Finance | Expenses with configurable manager threshold; customer-level partial/full debt payments allocated oldest-due-first; daily closing split by sales, credit, collections, refunds, purchases and expenses; opening cash and other cash in/out; counted-vs-expected channel variance; independent verification and closed-day posting lock |
+| Reporting | Transaction register, sales/profit by product/mode, exact pack-equivalent inventory, sellable/quarantine valuation, aging, debt summaries, intelligent closing snapshots and inventory losses; CSV/PDF/XLSX/DOCX exports including statements, debts, transfers/operations, closings, supplier returns and quarantine |
 | Governance | Financial immutability triggers, audit events, scoped permissions, basic administration |
 | Deployment | Live Railway web/worker/PostgreSQL, private setup gate, serialized migrations, verified release branch, dependency lock, remote tests |
 
@@ -39,7 +39,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 
 The CI suite uses PostgreSQL, not SQLite. It checks migration drift, application checks, business tests, true concurrent oversell protection, immutable ledgers, exports, dependency advisories and Chromium desktop/mobile workflows.
 
-Test scenarios include the plan's 240 → 235 → 199 base-unit example, disabled selling modes, duplicate keys, credit enforcement, over-allocation, return bounds, transfer timing, independent approval, closing locks, CSRF and session revocation.
+Test scenarios include the plan's 240 → 235 → 199 base-unit example, a 30-pack → 27.5-pack mixed pack/loose sale, inline Ghana customer reuse, customer-level partial/full debt settlement, oldest-due-first allocation, deep closing reconciliation, disabled selling modes, duplicate keys, credit enforcement, over-allocation, return bounds, transfer timing, independent approval, closing locks, CSRF and session revocation.
 
 Browser screenshots are test artifacts with explicitly seeded demo records. They are not KOFAD business data or evidence of a live deployment.
 
