@@ -58,7 +58,9 @@ with sync_playwright() as p:
     page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
-    first_product = page.locator(".product-card").first
+    page.locator("#product-query").fill("Classic leather")
+    page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
+    first_product = page.locator(".product-card").filter(has_text="Classic leather sandals")
     first_product.locator('input[type="number"]').first.fill("1")
     first_product.get_by_role("button",name="Add",exact=False).click()
     assert page.locator("#cart-count").inner_text() == "1 lines"
@@ -107,7 +109,11 @@ with sync_playwright() as p:
     page.get_by_role("button",name="Close menu",exact=True).click()
     assert page.locator("#menu-toggle").get_attribute("aria-expanded") == "false"
     page.goto("http://127.0.0.1:8000/sales/new/")
-    page.locator(".product-card").first.get_by_role("button",name="Add",exact=False).click()
+    page.locator("#product-query").fill("Classic leather")
+    page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
+    mobile_product = page.locator(".product-card").filter(has_text="Classic leather sandals")
+    mobile_product.locator('input[type="number"]').first.fill("1")
+    mobile_product.get_by_role("button",name="Add",exact=False).click()
     assert page.locator("#mobile-cart-count").inner_text() == "1"
     page.locator("#cart-jump").click()
     assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
