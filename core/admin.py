@@ -54,6 +54,8 @@ class AccessAdmin(AuditedAdmin):
     def save_model(self, request, obj, form, change):
         if change:
             obj.session_version += 1
+            from .models import PasswordRecovery
+            PasswordRecovery.objects.filter(user_id=obj.user_id, used=False).update(used=True)
         super().save_model(request, obj, form, change)
 
 

@@ -127,3 +127,16 @@ class AccountRecoveryTests(TestCase):
             "new_password1":"Changed-private-password-987!", "new_password2":"Changed-private-password-987!"})
         self.assertRedirects(response, "/account/")
         self.assertEqual(self.client.get("/").status_code, 200)
+
+    def test_admin_phone_update_invalidates_existing_codes(self):
+        challenge = self.request_code()
+        self.client.post("/login/", {"username":"ADMIN","password":"ADMIN"})
+        access = Access.objects.get(user=self.user)
+        response = self.client.post(f"/admin/core/access/{access.pk}/change/", {
+            "user":self.user.pk, "branches":[Branch.objects.get(code="main").pk],
+            "recovery_phone":"0241234568", "_save":"Save"})
+        self.assertEqual(response.status_code, 302)
+        access.refresh_from_db()
+        challenge.refresh_from_db()
+        self.assertEqual(access.recovery_phone, "+233241234568")
+        self.assertTrue(challenge.used)
