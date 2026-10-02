@@ -21,6 +21,11 @@ class SetupGateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("_auth_user_id", self.client.session)
 
+    def test_non_ascii_setup_key_is_rejected_without_server_error(self):
+        response = self.client.post("/login/", {"username": "ADMIN", "password": "ADMIN", "setup_key": "🔐"})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
     def test_correct_setup_key_unlocks_password_change_only(self):
         response = self.client.post("/login/", {"username": "ADMIN", "password": "ADMIN",
             "setup_key": "private-test-setup-key-at-least-32-characters"})

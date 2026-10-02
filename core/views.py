@@ -86,7 +86,7 @@ def login_view(request):
                     access, _ = Access.objects.get_or_create(user=user)
                     if access.must_change_password and settings.KOFAD_SETUP_KEY:
                         supplied = request.POST.get("setup_key", "")
-                        if not secrets.compare_digest(supplied, settings.KOFAD_SETUP_KEY):
+                        if not secrets.compare_digest(supplied.encode(), settings.KOFAD_SETUP_KEY.encode()):
                             user = None
                 if user is not None:
                     login(request, user)
