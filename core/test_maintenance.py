@@ -1,9 +1,11 @@
 import copy
 import json
+from datetime import timedelta
 
 from django.contrib.auth.models import Permission, User
 from django.contrib.sessions.models import Session
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from . import maintenance
 from .models import Audit, Branch, Company, Party, Product, Stock
@@ -77,7 +79,7 @@ class MaintenanceServiceTests(TransactionTestCase):
         Session.objects.create(
             session_key="stale-session-before-restore",
             session_data="e30:1test:invalid",
-            expire_date=timezone.now() + timezone.timedelta(days=1),
+            expire_date=timezone.now() + timedelta(days=1),
         )
 
         Product.objects.create(
