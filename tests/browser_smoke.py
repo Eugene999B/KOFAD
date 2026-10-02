@@ -120,10 +120,10 @@ with sync_playwright() as p:
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
     admin_page.goto("http://127.0.0.1:8000/account/")
-    admin_page.get_by_label("Recovery phone number",exact=True).fill("0241234567")
-    admin_page.get_by_label("Current password",exact=True).fill("admin")
+    admin_page.get_by_label("Recovery phone number",exact=False).fill("0241234567")
+    admin_page.get_by_label("Current password",exact=False).fill("admin")
     admin_page.get_by_role("button",name="Save recovery phone",exact=True).click()
-    assert admin_page.get_by_label("Recovery phone number",exact=True).input_value() == "+233241234567"
+    assert admin_page.get_by_label("Recovery phone number",exact=False).input_value() == "+233241234567"
     admin_page.screenshot(path=str(out / "account-settings.png"),full_page=True)
     admin_page.get_by_role("link",name="Change password",exact=True).click()
     admin_page.locator("#id_old_password").fill("admin")
