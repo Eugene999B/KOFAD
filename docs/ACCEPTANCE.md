@@ -10,12 +10,12 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Branding | Trade emblem and shared wordmark, navy/gold/teal interface, responsive login, accessible mobile drawer, task dock, guided setup and mobile cart shortcut |
 | Catalog | Product/SKU/barcode, categories, units/packs, independent retail/wholesale price matrix, archival |
 | Inventory | Base-unit stock, immutable movements, nonnegative balances, reorder indicators |
-| Sales | Mixed-mode cart, held carts, server pricing, cash/MoMo/bank/card splits, credit, idempotency, receipts |
+| Sales | Mixed-mode cart, held carts, server pricing, configurable payment channels, controlled discounts/price overrides, credit rules, idempotency, receipts |
 | Customers | Quick contacts, credit limit, due date, collections, current balances, running statements |
 | Returns/corrections | Original-line returns, quantity caps, debt reduction then refund; independent expense/payment reversal and remaining-item sale void |
 | Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation |
 | Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch, partial receipt and independent discrepancy resolution |
-| Finance | Expenses, channel movement reconciliation, independent closing verification, closed-day posting lock |
+| Finance | Expenses with configurable manager threshold, channel movement reconciliation, independent closing verification, closed-day posting lock |
 | Reporting | Transaction register, sales/profit by product/mode, inventory valuation and aging; CSV/PDF/XLSX/DOCX exports; printable receipts/statements |
 | Governance | Financial immutability triggers, audit events, scoped permissions, basic administration |
 | Deployment | Live Railway web/worker/PostgreSQL, private setup gate, serialized migrations, verified release branch, dependency lock, remote tests |
@@ -24,7 +24,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 
 - Configure and implement applicable taxes and legally required invoice fields. No tax compliance is implied.
 - Validate the implemented independent expense/payment reversal and remaining-item sale-void workflows with KOFAD. Sale void refunds use the explicitly selected channel.
-- Add approval thresholds for expenses, price overrides, discounts and credit overrides. These overrides are currently unavailable.
+- Manager authority thresholds for expenses, price reductions, discounts and credit-limit overrides are implemented with audit evidence. Add a separate two-person pre-approval queue only if KOFAD requires independent approval rather than manager-authority completion at the point of posting.
 - Add supplier returns and damaged-goods quarantine. Blind stock counts and partial-transfer discrepancy review are implemented; multiple partial follow-up deliveries and accounting loss postings remain incomplete.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.
 - Arkesel adapter, durable outbox, retry controls, templates and token-authenticated callbacks are implemented. Validate the real provider sandbox and approved sender ID, then enable the worker. WhatsApp and receipt-file attachments remain incomplete.
@@ -45,6 +45,6 @@ Browser screenshots are test artifacts with explicitly seeded demo records. They
 
 ## Configuration still needed from KOFAD
 
-Real branch names, staff assignments, company address/phone, real catalog/prices/opening stock, supplier/customer data, credit limits, receipt policy, tax decisions, payment accounts and messaging provider credentials.
+Real branch names, staff assignments, company address/phone, real catalog/prices/opening stock, supplier/customer data, chosen discount/override thresholds, credit limits, receipt policy, tax decisions, payment accounts and messaging provider credentials.
 
 No secrets or live business records belong in this public repository.

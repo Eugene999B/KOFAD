@@ -23,7 +23,7 @@ Proprietary. Copyright KOFAD IMPEX ENTERPRISE. No license to use, distribute or 
 
 The repository now contains a Django/PostgreSQL implementation of the core operating workspace:
 
-- Sales counter with mixed retail/wholesale and unit/pack carts, held sales, split payments and credit.
+- Sales counter with mixed retail/wholesale and unit/pack carts, held sales, configurable payment channels, controlled discounts/price overrides and credit.
 - Products, stock movements, independent adjustment approvals and dispatch/receive transfers.
 - Customer/supplier records, purchase receiving, debt allocation, returns, expenses and independently approved corrections.
 - Daily channel reconciliation with independent verification and a posting lock after closing.
@@ -31,7 +31,7 @@ The repository now contains a Django/PostgreSQL implementation of the core opera
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
 - Original SVG identity and responsive desktop/mobile screens.
 
-**Status:** pre-production implementation. The entire master plan is not complete. Tax handling, configurable approval thresholds, WhatsApp delivery, report families, advanced catalog/counts and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
+**Status:** pre-production implementation. The entire master plan is not complete. Manager authority thresholds for expenses, discounts, price reductions and credit overrides are now configurable and server-enforced. Tax handling, independent two-person override approval queues, WhatsApp delivery, advanced catalog features and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
 
 ## Verification
 

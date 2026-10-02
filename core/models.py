@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -37,8 +37,51 @@ class Company(models.Model):
     phone = models.CharField(max_length=40, blank=True)
     address = models.TextField(blank=True)
     currency = models.CharField(max_length=3, default="GHS")
+
+    # Payment channels can be switched off for new postings without rewriting historical ledgers.
+    payment_cash = models.BooleanField(default=True)
+    payment_momo = models.BooleanField(default=True)
+    payment_bank = models.BooleanField(default=True)
+    payment_card = models.BooleanField(default=True)
+
+    # Sales and credit controls. Zero thresholds mean "no extra threshold".
+    allow_discounts = models.BooleanField(default=False)
+    staff_discount_limit = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)])
+    max_discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)])
+    allow_price_overrides = models.BooleanField(default=False)
+    staff_price_reduction_limit = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)])
+    max_price_reduction_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)])
+    allow_credit_sales = models.BooleanField(default=True)
+    max_credit_days = models.PositiveIntegerField(default=90, validators=[MinValueValidator(1)])
+    max_credit_override = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+        validators=[MinValueValidator(0)])
+    customer_required_above = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+        validators=[MinValueValidator(0)])
+    sale_manager_threshold = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+        validators=[MinValueValidator(0)])
+    expense_manager_threshold = models.DecimalField(max_digits=14, decimal_places=2, default=0,
+        validators=[MinValueValidator(0)])
+
+    # Receipt/reference presentation. The transaction UUID suffix remains the uniqueness boundary.
+    reference_prefix = models.CharField(max_length=8, blank=True)
     receipt_footer = models.CharField(max_length=240, default="Thank you for trading with KOFAD.")
+    receipt_show_staff = models.BooleanField(default=True)
+    receipt_show_contact_phone = models.BooleanField(default=True)
+    receipt_show_payment_reference = models.BooleanField(default=True)
     closing_tolerance = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(staff_discount_limit__lte=models.F("max_discount_percent")),
+                name="company_discount_limits_ordered"),
+            models.CheckConstraint(condition=Q(staff_price_reduction_limit__lte=models.F("max_price_reduction_percent")),
+                name="company_price_limits_ordered"),
+        ]
+
     def __str__(self):
         return self.name
 
@@ -135,7 +178,10 @@ class Line(models.Model):
     mode = models.CharField(max_length=20)
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     factor = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    list_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)])
     unit_cost = models.DecimalField(max_digits=14, decimal_places=2)
     total = models.DecimalField(max_digits=14, decimal_places=2)
     source_line = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT)
@@ -143,6 +189,8 @@ class Line(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(quantity__gt=0) & Q(factor__gt=0), name="positive_line_units"),
             models.CheckConstraint(condition=Q(total__gte=0) & Q(unit_price__gte=0) & Q(unit_cost__gte=0), name="positive_line_amounts"),
+            models.CheckConstraint(condition=Q(discount_percent__gte=0) & Q(discount_percent__lte=100),
+                name="valid_line_discount"),
         ]
 
 

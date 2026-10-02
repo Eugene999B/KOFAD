@@ -23,7 +23,10 @@ from django.views.decorators.debug import sensitive_post_parameters
 
 from . import services as s
 from .context import shell
-from .forms import CompanyForm, PartyForm, ProductForm
+from .forms import (
+    CompanyForm, FinancePolicyForm, PartyForm, PaymentPolicyForm, ProductForm,
+    ReceiptPolicyForm, SalesPolicyForm,
+)
 from .models import (
     Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
     Message, Movement, Operation, Party, Payment, Product, Stock,
@@ -191,11 +194,23 @@ def trade_screen(request, branch, kind):
         catalog.append(item)
     if request.GET.get("format") == "json":
         return JsonResponse({"catalog":catalog})
+    company = s.company_policy()
+    payment_methods = s.active_payment_methods(company)
     return render(request, "pos.html", {"title": "New sale" if kind == "sale" else "Receive purchase",
         "catalog": catalog, "kind": kind, "key": str(uuid.uuid4()), "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
         "held": HeldSale.objects.filter(branch=branch, user=request.user),
-        "purchase": kind == "purchase"})
+        "purchase": kind == "purchase", "payment_methods": payment_methods,
+        "payment_method_codes": [code for code, _ in payment_methods],
+        "cash_enabled": any(code == "cash" for code, _ in payment_methods),
+        "allow_discounts": kind == "sale" and company.allow_discounts,
+        "allow_price_overrides": kind == "sale" and company.allow_price_overrides,
+        "max_discount": company.max_discount_percent,
+        "max_price_reduction": company.max_price_reduction_percent,
+        "credit_override_available": kind == "sale" and company.max_credit_override > 0,
+        "policy_controls": kind == "sale" and (
+            company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
+        )})
 
 
 @login_required
@@ -372,7 +387,7 @@ def finance(request, branch):
     invoices = Document.objects.filter(branch=branch, kind__in=["sale", "purchase"], party__isnull=False)
     outstanding = [{"doc": d, "balance": s.balance(d)} for d in invoices]
     return render(request, "finance.html", {"title": "Finance", "key": request.POST.get("key") or str(uuid.uuid4()),
-        "outstanding": [r for r in outstanding if r["balance"] > 0], "methods": Payment.METHODS,
+        "outstanding": [r for r in outstanding if r["balance"] > 0], "methods": s.active_payment_methods(),
         "recent": Document.objects.filter(branch=branch, kind__in=["expense", "collection", "supplier_payment"])[:20]})
 
 
@@ -387,7 +402,7 @@ def returns(request, branch):
     ref = request.GET.get("q", "")
     lines = Line.objects.filter(document__branch=branch, document__kind="sale", document__reference=ref)
     return render(request, "returns.html", {"title": "Returns", "lines": lines, "q": ref,
-        "key": request.POST.get("key") or str(uuid.uuid4()), "methods": Payment.METHODS})
+        "key": request.POST.get("key") or str(uuid.uuid4()), "methods": s.active_payment_methods()})
 
 
 @protected("operate_inventory|approve_operations")
@@ -476,20 +491,67 @@ def audit_log(request, branch):
         "rows": Audit.objects.filter(Q(branch=branch) | Q(branch__isnull=True, actor=request.user)).select_related("actor")[:300]})
 
 
-@protected("manage_company")
-def settings_view(request, branch):
-    company = Company.objects.first()
-    form = CompanyForm(request.POST or None, instance=company)
+def _settings_form(request, branch, form_class, title, description, action):
+    company = Company.objects.first() or Company.objects.create()
+    form = form_class(request.POST or None, instance=company)
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
-            old = {k: str(v) for k, v in (Company.objects.filter(pk=company.pk).values().first() if company else {}).items()}
+            before = {field: str(getattr(company, field)) for field in form.fields}
             obj = form.save()
-            s.audit(request.user, branch, "company.updated", obj.pk,
-                    {"before": old, "after": {k: str(v) for k, v in form.cleaned_data.items()}})
-        messages.success(request, "Company settings saved.")
-        return redirect("settings")
-    return render(request, "form.html", {"title": "Company settings", "form": form,
-        "description": "Currency is GHS and the operating timezone is Africa/Accra. Review tax requirements before launch."})
+            s.audit(request.user, branch, action, obj.pk, {
+                "before": before,
+                "after": {field: str(form.cleaned_data.get(field)) for field in form.fields},
+            })
+        messages.success(request, f"{title} saved.")
+        return redirect(request.resolver_match.url_name)
+    return render(request, "form.html", {
+        "title": title, "form": form, "description": description, "settings_section": True,
+    })
+
+
+@protected("manage_company")
+def settings_view(request, branch):
+    return _settings_form(
+        request, branch, CompanyForm, "Company profile",
+        "Business identity used across the KOFAD workspace and printed documents. Currency remains GHS and the operating timezone is Africa/Accra.",
+        "settings.company.updated",
+    )
+
+
+@protected("manage_company")
+def sales_policy_settings(request, branch):
+    return _settings_form(
+        request, branch, SalesPolicyForm, "Sales & credit policies",
+        "Set staff limits, manager authority thresholds and credit rules. These controls are enforced again on the server when a transaction posts.",
+        "settings.sales_policy.updated",
+    )
+
+
+@protected("manage_company")
+def payment_policy_settings(request, branch):
+    return _settings_form(
+        request, branch, PaymentPolicyForm, "Payment methods",
+        "Choose which channels may be used for new transactions. Historical payments and audit records are never rewritten when a channel is disabled.",
+        "settings.payment_policy.updated",
+    )
+
+
+@protected("manage_company")
+def finance_policy_settings(request, branch):
+    return _settings_form(
+        request, branch, FinancePolicyForm, "Finance controls",
+        "Set the expense authority threshold and daily-closing variance tolerance. Zero disables the expense threshold.",
+        "settings.finance_policy.updated",
+    )
+
+
+@protected("manage_company")
+def receipt_policy_settings(request, branch):
+    return _settings_form(
+        request, branch, ReceiptPolicyForm, "Receipts & numbering",
+        "Configure new transaction references and what appears on printed receipts. Existing references and posted transaction evidence never change.",
+        "settings.receipt_policy.updated",
+    )
 
 
 @protected("operate_sales|send_messages")
@@ -542,7 +604,7 @@ def corrections(request, branch):
             return redirect("corrections")
         except (ValidationError,ValueError) as exc:
             messages.error(request,problem(exc))
-    return render(request,"corrections.html",{"title":"Corrections", "methods":Payment.METHODS,
+    return render(request,"corrections.html",{"title":"Corrections", "methods":s.active_payment_methods(),
         "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment"],correction__isnull=True)[:200],
         "rows":Correction.objects.filter(original__branch=branch).select_related("original","requested_by","reviewed_by","posted")[:100]})
 
