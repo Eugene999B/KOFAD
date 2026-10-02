@@ -7,11 +7,11 @@ from .models import Company, Party, Product
 
 
 class ProductForm(forms.ModelForm):
-    pack_enabled = forms.BooleanField(
-        required=False,
-        initial=True,
-        label="This product is stocked in packs / boxes",
-        help_text="Turn this on when one carton, box, bundle or pack contains several sellable units.",
+    pack_enabled = forms.ChoiceField(
+        choices=[("yes", "Packed / boxed product"), ("no", "Loose / single-unit product")],
+        initial="yes",
+        label="Stock structure",
+        help_text="Choose packed when one carton, box, bundle or pack contains several sellable units.",
     )
     opening_packs = forms.IntegerField(
         required=False, min_value=0, initial=0,
@@ -41,7 +41,7 @@ class ProductForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["pack_enabled"].initial = bool(not self.instance.pk or self.instance.pack_size > 1)
+        self.fields["pack_enabled"].initial = "yes" if (not self.instance.pk or self.instance.pack_size > 1) else "no"
         if self.instance.pk:
             self.fields.pop("opening_packs", None)
             self.fields.pop("opening_units", None)
@@ -53,7 +53,7 @@ class ProductForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        packed = bool(data.get("pack_enabled"))
+        packed = data.get("pack_enabled") == "yes"
         if packed:
             if (data.get("pack_size") or 0) < 2:
                 self.add_error("pack_size", "A packed product must contain at least two base units per pack.")
