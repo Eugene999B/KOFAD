@@ -47,6 +47,9 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "login-mobile.png"), full_page=True)
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert page.get_by_role("button", name="Sign in", exact=False).bounding_box()["y"] < 700
+    for width in (320, 768):
+        page.set_viewport_size({"width":width,"height":900})
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "login overflow"
     page.set_viewport_size({"width":1440,"height":1000})
     page.get_by_label("Username", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
@@ -110,6 +113,12 @@ with sync_playwright() as p:
     page.locator("#cart-jump").click()
     assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
     page.locator("#cart").get_by_role("button",name="Remove",exact=False).click()
+    for width in (320, 768):
+        page.set_viewport_size({"width":width,"height":900})
+        for path in ("/", "/sales/new/", "/inventory/", "/finance/"):
+            page.goto("http://127.0.0.1:8000"+path)
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width)+path
+    page.set_viewport_size({"width":390,"height":844})
     admin_page = browser.new_page(viewport={"width":1280,"height":900})
     admin_page.goto("http://127.0.0.1:8000/login/")
     admin_page.get_by_label("Username",exact=True).fill("admin")

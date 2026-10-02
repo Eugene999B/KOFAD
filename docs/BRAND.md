@@ -13,3 +13,7 @@ The transparent emblem is `static/brand/kofad-emblem.png`. The shared `templates
 Keep the aspect ratio unchanged. Use a white tile behind the emblem on dark surfaces. The interface uses system sans-serif fonts without an external font dependency. Mobile login prioritizes the form; business navigation becomes an accessible drawer with a persistent task dock.
 
 The emblem was created with image generation for this implementation. No claim of trademark registration is made.
+
+## Generation record
+
+Built-in image generation was used for the emblem. Design brief: a navy, gold and teal circular trade emblem, interwoven routes around a parcel cube, transparent background, no lettering or K monogram. The wordmark and interface icons are maintained separately in HTML and SVG templates.
