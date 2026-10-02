@@ -309,15 +309,103 @@ def product_edit(request, branch, pk=None):
         raise PermissionDenied
     form = ProductForm(request.POST or None, instance=obj)
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            before = {k: str(v) for k, v in (Product.objects.filter(pk=pk).values().first() or {}).items()}
-            product = form.save()
-            s.audit(request.user, branch, "product.saved", product.sku,
-                    {"before": before, "after": {k: str(v) for k, v in form.cleaned_data.items()}})
-        messages.success(request, "Product saved. Use a stock operation to record opening stock.")
-        return redirect("inventory")
+        opening_total = getattr(form, "opening_total", 0)
+        if opening_total and not request.user.has_perm("core.operate_inventory"):
+            form.add_error(None, "Inventory permission is required to record opening stock.")
+        else:
+            with transaction.atomic():
+                before = {k: str(v) for k, v in (Product.objects.filter(pk=pk).values().first() or {}).items()}
+                product = form.save()
+                if opening_total:
+                    s.stock_move(
+                        request.user, branch, product, opening_total,
+                        f"OPEN-{product.sku}", "Opening stock recorded during product setup"
+                    )
+                s.audit(request.user, branch, "product.saved", product.sku,
+                        {"before": before, "after": {k: str(v) for k, v in form.cleaned_data.items()},
+                         "opening_stock_base_units": opening_total})
+            messages.success(request, "Product saved" + (f" with {opening_total} opening base units." if opening_total else "."))
+            return redirect("inventory")
     return render(request, "form.html", {"title": "Edit product" if pk else "New product", "form": form,
         "description": "Leave a price blank to disable that selling mode. Quantities are always held in base units."})
+
+
+@protected("operate_sales|operate_finance|view_reports")
+def customer_search(request, branch):
+    query = request.GET.get("q", "").strip()[:100]
+    rows = Party.objects.filter(branch=branch, kind="customer")
+    if query:
+        rows = rows.filter(Q(name__icontains=query) | Q(phone__icontains=query))
+    results = []
+    for party in rows.order_by("name")[:20]:
+        sales = Document.objects.filter(branch=branch, party=party, kind="sale")
+        last_sale = sales.order_by("-created_at").first()
+        results.append({
+            "id": party.pk,
+            "name": party.name,
+            "phone": party.phone,
+            "outstanding": str(s.party_debt(party)),
+            "purchase_count": sales.count(),
+            "last_purchase_at": last_sale.created_at.isoformat() if last_sale else "",
+        })
+    return JsonResponse({"customers": results})
+
+
+@protected("operate_sales|operate_finance|view_reports")
+def customer_profile(request, branch, pk):
+    from . import debts as debt_service
+    party = get_object_or_404(Party, pk=pk, branch=branch, kind="customer")
+    if request.method == "POST":
+        try:
+            s.permit(request.user, branch, "operate_finance")
+            doc = debt_service.post_customer_payment(
+                request.user, branch, {
+                    "party": party.pk,
+                    "amount": request.POST.get("amount"),
+                    "pay_full": request.POST.get("pay_full", ""),
+                    "method": request.POST.get("method"),
+                    "reference": request.POST.get("reference", ""),
+                },
+                request.POST.get("key"),
+            )
+            return redirect("document", pk=doc.pk)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    snapshot = debt_service.customer_account_snapshot(party)
+    activity = Document.objects.filter(branch=branch, party=party).select_related(
+        "created_by", "original"
+    ).order_by("-created_at")[:100]
+    return render(request, "customer_profile.html", {
+        "title": party.name,
+        "party": party,
+        "account": snapshot,
+        "activity": activity,
+        "methods": s.active_payment_methods(),
+        "key": request.POST.get("key") or str(uuid.uuid4()),
+    })
+
+
+@protected("operate_sales|operate_finance|view_reports")
+def debts(request, branch):
+    from . import debts as debt_service
+    if request.method == "POST":
+        try:
+            s.permit(request.user, branch, "operate_finance")
+            doc = debt_service.post_customer_payment(
+                request.user, branch, request.POST.dict(), request.POST.get("key")
+            )
+            return redirect("document", pk=doc.pk)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    query = request.GET.get("q", "").strip()[:100]
+    overview = debt_service.debt_overview(branch, query)
+    return render(request, "debts.html", {
+        "title": "Customer debts",
+        "q": query,
+        "overview": overview,
+        "methods": s.active_payment_methods(),
+        "key": request.POST.get("key") or str(uuid.uuid4()),
+    })
 
 
 @login_required
