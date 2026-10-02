@@ -4,7 +4,16 @@ import re
 import socket
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, build_opener
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        return None
+
+
+# Do not forward API credentials to a redirected host.
+urlopen = build_opener(NoRedirect).open
 
 from django.conf import settings
 from django.core.exceptions import ValidationError

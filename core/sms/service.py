@@ -12,7 +12,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from core.models import Message, SmsAttempt, SmsEvent
-from core.services import audit, permit
+from core.services import audit, permit, lock_branch
 from .providers import get_provider
 
 GSM_BASIC = set("@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà")
@@ -72,6 +72,7 @@ def validate_config(provider):
 @transaction.atomic
 def create_draft(user,branch,party,body,channel="sms",source_key=None):
     permit(user,branch,"operate_sales" if not user.has_perm("core.send_messages") else "send_messages")
+    lock_branch(branch)
     if party.branch_id != branch.pk or not party.consent:
         raise ValidationError("Choose an opted-in contact at this location.")
     if channel not in ("sms","whatsapp"):

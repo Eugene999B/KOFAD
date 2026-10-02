@@ -230,3 +230,43 @@ class SmsConcurrencyTests(Fixtures,TransactionTestCase):
         self.assertCountEqual(outcomes,[True,False])
         self.assertEqual(submit.call_count,1)
         self.assertEqual(SmsAttempt.objects.filter(message=message).count(),1)
+
+
+@override_settings(**SETTINGS)
+class SmsEvidenceTests(Fixtures,TestCase):
+    def setUp(self):
+        self.setup_data()
+        self.customer.phone,self.customer.consent = "+233241234567",True
+        self.customer.save()
+
+    def test_callback_before_submission_response_keeps_delivered(self):
+        from urllib.parse import urlsplit,parse_qs
+        message = create_draft(self.user,self.branch,self.customer,"Callback race test")
+        queue_message(self.user,self.branch,message.pk)
+        def callback_first(recipient,body,sender,callback,sandbox):
+            url = urlsplit(callback)
+            attempt_id = uuid.UUID(url.path.strip("/").split("/")[-1])
+            self.assertTrue(receive_callback(attempt_id,parse_qs(url.query)["token"][0],"fast-1","DELIVERED"))
+            return Submission("accepted","fast-1",200)
+        with patch("core.sms.providers.Arkesel.submit",side_effect=callback_first):
+            process_one()
+        message.refresh_from_db()
+        self.assertEqual(message.status,"delivered")
+
+    def test_queued_content_cannot_be_rewritten(self):
+        from django.db import DatabaseError,transaction
+        message = create_draft(self.user,self.branch,self.customer,"Original SMS")
+        queue_message(self.user,self.branch,message.pk)
+        with self.assertRaises(DatabaseError),transaction.atomic():
+            Message.objects.filter(pk=message.pk).update(body="Changed after approval")
+
+    def test_consent_revoked_after_queue_blocks_network(self):
+        message = create_draft(self.user,self.branch,self.customer,"Consent test")
+        queue_message(self.user,self.branch,message.pk)
+        self.customer.consent = False
+        self.customer.save()
+        with patch("core.sms.providers.Arkesel.submit") as submit:
+            process_one()
+            submit.assert_not_called()
+        message.refresh_from_db()
+        self.assertEqual(message.status,"failed")
