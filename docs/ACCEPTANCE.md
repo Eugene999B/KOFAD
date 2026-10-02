@@ -28,9 +28,9 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Add supplier returns and damaged-goods quarantine. Blind stock counts and partial-transfer discrepancy review are implemented; multiple partial follow-up deliveries and accounting loss postings remain incomplete.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.
 - Arkesel adapter, durable outbox, retry controls, templates and token-authenticated callbacks are implemented. Validate the real provider sandbox and approved sender ID, then enable the worker. WhatsApp and receipt-file attachments remain incomplete.
-- Extend the implemented sales/gross-profit, receivables-aging and inventory-valuation reports with consolidated branch comparisons and operational analytics.
+- Consolidated authorized-branch comparison is implemented, including period sales/cost/expenses and current stock/debt. Extend operational analytics and statutory accounting separately.
 - Add complete export coverage for statements, transfers, closings and other report families.
-- Extend implemented scoped global search with scalable pagination and export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.
+- Reports now paginate and reject over-limit queries instead of returning incomplete totals. Extend scoped global-search pagination and asynchronous bulk export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.
 - Configure, automate and rehearse encrypted independent backup/restore with manifests and retention.
 - Perform external security review, accessibility audit, production-scale performance tests and owner acceptance.
 - Provide self-service MFA recovery codes and sensitive-action reauthentication if required by the owner's security policy.

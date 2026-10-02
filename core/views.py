@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import F, Q, Sum
 from django.http import HttpResponse, JsonResponse
@@ -463,7 +464,7 @@ def closings(request, branch):
 
 
 def report_data(request, branch):
-    from .reporting import build_report, FAMILIES
+    from .reporting import build_report, branch_comparison, FAMILIES
     start = request.GET.get("start", timezone.localdate().replace(day=1).isoformat())
     end = request.GET.get("end", timezone.localdate().isoformat())
     family = request.GET.get("family","register")
@@ -473,14 +474,18 @@ def report_data(request, branch):
             raise ValueError
     except ValueError:
         raise ValidationError("Enter a valid date range and report family.")
-    rows,columns = build_report(branch,first,last,family)
+    rows,columns = branch_comparison(request.user,first,last) if family == 'branches' else build_report(branch,first,last,family)
     return rows,columns,{"start":start,"end":end,"family":family},FAMILIES
 
 
 @protected("view_reports")
 def reports(request, branch):
     rows,columns,filters,families = report_data(request,branch)
-    return render(request,"reports.html",{"title":"Reports","rows":[[row[key] for key,label in columns] for row in rows[:200]],
+    page = Paginator(rows, 100).get_page(request.GET.get("page"))
+    page_query = request.GET.copy()
+    page_query.pop("page", None)
+    return render(request,"reports.html",{"title":"Reports","rows":[[row[key] for key,label in columns] for row in page],
+        "page":page, "page_query":page_query.urlencode(),
         "headers":[label for key,label in columns],"filters":filters,"families":families.items(),
         "report_title":families[filters["family"]],"query":request.GET.urlencode()})
 
@@ -490,7 +495,8 @@ def export_report(request, branch, format):
     from .exports import export
     rows,columns,filters,families = report_data(request,branch)
     s.audit(request.user,branch,"report.export",format,filters)
-    return export(rows,format,f"{branch.name} / {families[filters['family']]}",Company.objects.first() or Company(),columns)
+    scope = "Authorized branches" if filters["family"] == "branches" else branch.name
+    return export(rows,format,f"{scope} / {families[filters['family']]}",Company.objects.first() or Company(),columns)
 
 
 @protected("view_reports")
