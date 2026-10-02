@@ -237,3 +237,26 @@ class ConcurrencyTests(Fixtures, TransactionTestCase):
         self.assertCountEqual(results,["posted","blocked"])
         self.assertEqual(Document.objects.count(),1)
         self.assertEqual(Stock.objects.get(branch=self.branch,product=self.product).quantity,0)
+
+
+class LedgerIntegrityTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+
+    def test_posted_document_cannot_be_rewritten(self):
+        doc = self.sale()
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            Document.objects.filter(pk=doc.pk).update(total=0)
+
+    def test_ledger_entries_cannot_be_deleted(self):
+        self.sale()
+        for model in (Line, Payment, Movement, Audit):
+            with self.subTest(model=model.__name__):
+                with self.assertRaises(DatabaseError), transaction.atomic():
+                    model.objects.all().delete()
+
+    def test_signed_closing_cannot_be_recounted(self):
+        self.sale()
+        closing = s.submit_closing(self.user,self.branch,timezone.localdate(),{"cash":"50"},"")
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            type(closing).objects.filter(pk=closing.pk).update(counted={"cash":"0"})
