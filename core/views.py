@@ -257,9 +257,9 @@ def documents(request):
     kind = request.GET.get("kind", "sale")
     allowed = ["sale", "return"] if not request.user.has_perm("core.view_reports") else list(dict(Document.KINDS))
     if request.user.has_perm("core.operate_inventory"):
-        allowed += ["purchase"]
+        allowed += ["purchase", "supplier_return", "inventory_writeoff"]
     if request.user.has_perm("core.operate_finance"):
-        allowed += ["expense", "collection", "supplier_payment"]
+        allowed += ["expense", "collection", "supplier_payment", "supplier_return", "inventory_writeoff"]
     if kind not in allowed:
         raise PermissionDenied
     rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
@@ -274,7 +274,9 @@ def documents(request):
 def document(request, pk):
     branch = branch_for(request)
     doc = get_object_or_404(Document.objects.select_related("party", "created_by", "branch", "original"), pk=pk, branch=branch)
-    permission = "operate_sales" if doc.kind in ("sale", "return") else "operate_inventory" if doc.kind == "purchase" else "operate_finance"
+    permission = "operate_sales" if doc.kind in ("sale", "return") else (
+        "operate_inventory" if doc.kind in ("purchase", "supplier_return", "inventory_writeoff") else "operate_finance"
+    )
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
     return render(request, "document.html", {"title": doc.reference, "doc": doc,
