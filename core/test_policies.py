@@ -182,6 +182,8 @@ class BusinessPolicyTests(Fixtures, TestCase):
         self.assertTrue(second.reference.startswith("KOFAD-SAL-"))
 
     def test_receipt_visibility_settings_are_respected(self):
+        self.customer.phone = "0240009876"
+        self.customer.save(update_fields=["phone"])
         self.company.receipt_show_staff = False
         self.company.receipt_show_contact_phone = False
         self.company.receipt_show_payment_reference = False
