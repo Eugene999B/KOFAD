@@ -516,7 +516,7 @@ def communications(request, branch):
                 doc = get_object_or_404(Document,pk=request.POST.get("document"),branch=branch)
                 code = request.POST.get("template","receipt")
                 body = render_for_document(doc,code)
-                create_draft(request.user,branch,doc.party,body,source_key=f"{code}:{doc.pk}:{timezone.localdate()}")
+                create_draft(request.user,branch,doc.party,body,source_key=f"{code}:{doc.pk}:{s.balance(doc) if code == 'debt' else 'once'}:{timezone.localdate()}")
                 messages.success(request,"Transaction message prepared. Review it before queueing.")
             elif action == "draft":
                 party = get_object_or_404(Party,pk=request.POST.get("party"),branch=branch)

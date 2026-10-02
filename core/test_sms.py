@@ -270,3 +270,28 @@ class SmsEvidenceTests(Fixtures,TestCase):
             submit.assert_not_called()
         message.refresh_from_db()
         self.assertEqual(message.status,"failed")
+
+
+@override_settings(**SETTINGS)
+class ReminderTests(Fixtures,TestCase):
+    def setUp(self):
+        self.setup_data()
+        self.customer.phone,self.customer.consent = "+233241234567",True
+        self.customer.save()
+        from core.sms.templates import DEFAULTS
+        for code,(name,body) in DEFAULTS.items():
+            MessageTemplate.objects.get_or_create(code=code,defaults={"name":name,"body":body})
+
+    def test_paid_invoice_stops_queued_reminder(self):
+        from core.sms.templates import render_for_document
+        from core import services
+        invoice = self.sale(payments=[],party=self.customer.pk,due_date=timezone.localdate().isoformat())
+        message = create_draft(self.user,self.branch,self.customer,render_for_document(invoice,"debt"),
+            source_key=f"debt:{invoice.pk}:50:{timezone.localdate()}")
+        queue_message(self.user,self.branch,message.pk)
+        services.post_payment(self.user,self.branch,{"invoice":str(invoice.pk),"amount":"50","method":"cash"},uuid.uuid4())
+        with patch("core.sms.providers.Arkesel.submit") as submit:
+            process_one()
+            submit.assert_not_called()
+        message.refresh_from_db()
+        self.assertEqual(message.status,"failed")

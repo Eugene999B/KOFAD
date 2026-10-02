@@ -60,6 +60,16 @@ def estimate(body):
     return ("gsm7" if gsm else "utf16"),count
 
 
+def validate_current_context(message):
+    if message.source_key and message.source_key.startswith("debt:"):
+        from core.models import Document
+        from .templates import render_for_document
+        reference = message.source_key.split(":")[1]
+        document = Document.objects.get(pk=reference,branch=message.branch,party=message.party)
+        if render_for_document(document,"debt") != message.body:
+            raise ValidationError("The outstanding balance or template changed. Prepare the reminder again.")
+
+
 def validate_config(provider):
     if not settings.SMS_ENABLED:
         raise ValidationError("SMS is disabled. Configure the service before queueing.")
@@ -83,6 +93,11 @@ def create_draft(user,branch,party,body,channel="sms",source_key=None):
     if source_key:
         existing = Message.objects.filter(branch=branch,source_key=source_key).first()
         if existing:
+            if existing.status == "draft" and source_key.startswith(("receipt:","debt:","payment:")):
+                existing.body,existing.encoding,existing.segments = body,encoding,segments
+                existing.save(update_fields=["body","encoding","segments"])
+            elif existing.body != body or existing.party_id != party.pk or existing.channel != channel:
+                raise ValidationError("This draft key already belongs to another message.")
             return existing
     message = Message.objects.create(branch=branch,party=party,created_by=user,body=body,channel=channel,
         recipient=recipient,encoding=encoding,segments=segments,source_key=source_key)
@@ -101,6 +116,7 @@ def queue_message(user,branch,pk,retry=False):
         raise ValidationError("WhatsApp delivery is not configured.")
     if not message.party.consent or normalize_phone(message.party.phone) != message.recipient:
         raise ValidationError("Consent or recipient details changed. Prepare a new draft.")
+    validate_current_context(message)
     provider = message.provider or settings.SMS_PROVIDER
     validate_config(provider)
     if message.attempts >= settings.SMS_MAX_ATTEMPTS:
@@ -136,6 +152,7 @@ def process_one():
         validate_config(message.provider)
         try:
             permit(message.queued_by,message.branch,"send_messages")
+            validate_current_context(message)
             if not message.party.consent or normalize_phone(message.party.phone) != message.recipient:
                 raise ValidationError("Consent or recipient changed.")
         except Exception:

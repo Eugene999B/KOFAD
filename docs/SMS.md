@@ -14,7 +14,7 @@ Set these on both the web service and a separate SMS worker:
 - ARKESEL_API_KEY set privately in Railway
 - The same DATABASE_URL and DJANGO_SECRET_KEY as the web service
 
-Worker command: python manage.py process_sms --loop
+Worker command: python manage.py process_sms --loop. A separate Railway worker can select railway.sms.json as its configuration path; it must share the web service database and secrets.
 
 For a bounded scheduled run: python manage.py process_sms --limit 100
 
@@ -24,7 +24,7 @@ Keep live sending disabled until the account, sender ID, consent records and san
 
 Prepare a custom SMS in Communications or create a receipt/payment/reminder draft from a transaction. Review the recipient snapshot, message and estimated segments. A user with send_messages may queue it. The worker checks that the sender still has permission and the contact still consents before submission.
 
-Receipt and payment drafts use recorded financial values. Debt reminders use the current outstanding balance. Owner-editable templates allow only explicit safe placeholders; existing drafts retain their original content.
+Receipt and payment drafts use recorded financial values. Debt reminders use the current outstanding balance. Owner-editable templates allow only explicit safe placeholders. Prepared debt reminders are revalidated before queueing and immediately before submission; a changed balance stops stale reminders. Queued message content is immutable; new values require a fresh draft.
 
 Each attempt records provider, timestamp, status and provider ID. The main states are draft, queued, sending, accepted, delivered, undelivered, expired, failed, retry_wait, unknown and simulated. Provider acceptance is never displayed as handset delivery.
 
