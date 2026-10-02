@@ -29,7 +29,7 @@ from .forms import (
 )
 from .models import (
     Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
-    Message, Movement, Operation, Party, Payment, Product, Stock,
+    Message, Movement, Operation, Party, Payment, Product, QuarantineItem, Stock, SupplierReturn,
 )
 
 
@@ -403,6 +403,77 @@ def returns(request, branch):
     lines = Line.objects.filter(document__branch=branch, document__kind="sale", document__reference=ref)
     return render(request, "returns.html", {"title": "Returns", "lines": lines, "q": ref,
         "key": request.POST.get("key") or str(uuid.uuid4()), "methods": s.active_payment_methods()})
+
+
+@protected("operate_inventory|approve_operations|operate_finance")
+def supplier_returns(request, branch):
+    from . import inventory_exceptions as ix
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "request")
+            if action == "request":
+                ix.request_supplier_return(
+                    request.user, branch, request.POST.get("line"), request.POST.get("quantity"),
+                    request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
+                )
+                messages.success(request, "Supplier return submitted for independent review.")
+            elif action in ("approve", "reject"):
+                ix.review_supplier_return(request.user, branch, request.POST.get("id"), action == "approve")
+                messages.success(request, "Supplier return review recorded.")
+            else:
+                raise ValidationError("Choose a valid supplier-return action.")
+            return redirect("supplier_returns")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    ref = request.GET.get("q", "").strip()[:100]
+    lines = Line.objects.filter(document__branch=branch, document__kind="purchase")
+    if ref:
+        lines = lines.filter(document__reference=ref)
+    else:
+        lines = lines.none()
+    return render(request, "supplier_returns.html", {
+        "title": "Supplier returns",
+        "q": ref,
+        "lines": lines.select_related("document", "document__party", "product"),
+        "methods": s.active_payment_methods(),
+        "rows": SupplierReturn.objects.filter(branch=branch).select_related(
+            "source_line__product", "source_line__document", "requested_by", "reviewed_by", "posted"
+        )[:100],
+    })
+
+
+@protected("operate_inventory|approve_operations")
+def quarantine(request, branch):
+    from . import inventory_exceptions as ix
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "request")
+            if action == "request":
+                ix.request_quarantine(
+                    request.user, branch, request.POST.get("product"), request.POST.get("quantity"),
+                    request.POST.get("reason", ""),
+                )
+                messages.success(request, "Quarantine request submitted for independent review.")
+            elif action in ("approve", "reject"):
+                ix.review_quarantine(request.user, branch, request.POST.get("id"), action == "approve")
+                messages.success(request, "Quarantine review recorded.")
+            elif action in ("release", "writeoff"):
+                ix.resolve_quarantine(
+                    request.user, branch, request.POST.get("id"), action, request.POST.get("note", "")
+                )
+                messages.success(request, "Quarantine resolution recorded.")
+            else:
+                raise ValidationError("Choose a valid quarantine action.")
+            return redirect("quarantine")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    return render(request, "quarantine.html", {
+        "title": "Damaged stock quarantine",
+        "products": Product.objects.filter(active=True),
+        "rows": QuarantineItem.objects.filter(branch=branch).select_related(
+            "product", "requested_by", "reviewed_by", "resolved_by", "loss_document"
+        )[:100],
+    })
 
 
 @protected("operate_inventory|approve_operations")
