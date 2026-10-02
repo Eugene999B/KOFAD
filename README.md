@@ -47,7 +47,7 @@ GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration 
 - [Brand assets and usage](docs/BRAND.md)
 - [Logo](static/brand/kofad-emblem.png)
 
-No default administrator is silently created at startup. Bootstrap creates role templates and a location; an operator creates the owner account and completes configuration. Dependencies used by the container are pinned in requirements.lock. Railway is configured but has not been deployed.
+No default administrator is silently created at startup. Bootstrap creates role templates and a location; the requested initial administrator is created only through the explicit deployment initializer. Dependencies used by the container are pinned in requirements.lock. KOFAD is live on Railway with separate web, PostgreSQL and SMS-worker services; launch blockers and operational limitations remain documented below.
 
 ## SMS and initial administrator
 
