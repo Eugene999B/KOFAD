@@ -4,14 +4,14 @@ from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q
-from django.shortcuts import render
+from django.db.models import Q, Sum
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
 from . import services as s
 from .context import shell
 from .exports import export
-from .models import Audit, Document, Movement, Party, Product, Stock
+from .models import Audit, Closing, Document, Movement, Operation, Party, Product, QuarantineItem, Stock, SupplierReturn
 
 
 DATASETS = {
@@ -24,6 +24,11 @@ DATASETS = {
     "payments": ("Payments & collections", ("operate_finance", "view_reports")),
     "transactions": ("All transactions", ("view_reports",)),
     "movements": ("Stock movement ledger", ("operate_inventory", "view_reports")),
+    "operations": ("Stock operations & transfers", ("operate_inventory", "approve_operations", "view_reports")),
+    "supplier_returns": ("Supplier returns", ("operate_inventory", "operate_finance", "view_reports")),
+    "quarantine": ("Damaged-stock quarantine", ("operate_inventory", "approve_operations", "view_reports")),
+    "closings": ("Daily closings", ("operate_finance", "view_reports")),
+    "losses": ("Inventory write-offs", ("operate_inventory", "operate_finance", "view_reports")),
     "audit": ("Audit trail", ("view_reports",)),
     "staff": ("Staff directory", ("manage_company",)),
 }
@@ -73,25 +78,30 @@ def _rows(request, dataset, branch, first, last):
         ]
 
     if dataset == "inventory":
-        balances = {stock.product_id: stock for stock in Stock.objects.filter(branch=branch).select_related("product")}
+        balances = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+        quarantine = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
+            "product_id").annotate(total=Sum("quantity")).values_list("product_id", "total"))
         rows = []
         for product in Product.objects.order_by("name"):
-            stock = balances.get(product.pk)
-            quantity = stock.quantity if stock else 0
+            quantity = balances.get(product.pk, 0)
+            held = quarantine.get(product.pk, 0)
             rows.append({
                 "sku": product.sku, "product": product.name, "category": product.category,
                 "base_unit": product.base_unit, "pack": f"{product.pack_name} × {product.pack_size}",
-                "quantity": quantity, "packs": quantity // product.pack_size,
-                "loose": quantity % product.pack_size, "cost": product.cost,
-                "value": product.cost * quantity, "retail_unit": product.retail_unit or "",
+                "quantity": quantity, "quarantine": held, "physical": quantity + held,
+                "packs": quantity // product.pack_size, "loose": quantity % product.pack_size,
+                "cost": product.cost, "value": product.cost * quantity,
+                "quarantine_value": product.cost * held, "retail_unit": product.retail_unit or "",
                 "retail_pack": product.retail_pack or "", "wholesale_unit": product.wholesale_unit or "",
                 "wholesale_pack": product.wholesale_pack or "", "reorder": product.reorder_level,
                 "status": "Active" if product.active else "Archived",
             })
         return rows, [
             ("sku", "SKU"), ("product", "Product"), ("category", "Category"), ("base_unit", "Base unit"),
-            ("pack", "Pack structure"), ("quantity", "Base units"), ("packs", "Full packs"), ("loose", "Loose units"),
-            ("cost", "Unit cost"), ("value", "Stock value"), ("retail_unit", "Retail unit"),
+            ("pack", "Pack structure"), ("quantity", "Sellable units"), ("quarantine", "Quarantined units"),
+            ("physical", "Total physical units"), ("packs", "Sellable full packs"), ("loose", "Sellable loose units"),
+            ("cost", "Unit cost"), ("value", "Sellable stock value"),
+            ("quarantine_value", "Quarantine value"), ("retail_unit", "Retail unit"),
             ("retail_pack", "Retail pack"), ("wholesale_unit", "Wholesale unit"),
             ("wholesale_pack", "Wholesale pack"), ("reorder", "Reorder level"), ("status", "Status"),
         ]
@@ -101,7 +111,7 @@ def _rows(request, dataset, branch, first, last):
         if dataset == "sales":
             scope = Q(kind__in=["sale", "return"])
         elif dataset == "purchases":
-            scope = Q(kind="purchase")
+            scope = Q(kind__in=["purchase", "supplier_return"])
         elif dataset == "expenses":
             scope = Q(kind="expense") | Q(kind="reversal", original__kind="expense")
         elif dataset == "payments":
@@ -141,6 +151,142 @@ def _rows(request, dataset, branch, first, last):
         return rows, [
             ("date", "Date"), ("sku", "SKU"), ("product", "Product"), ("change", "Change"),
             ("balance", "Balance"), ("reference", "Source"), ("reason", "Reason"), ("staff", "Staff"),
+        ]
+
+    if dataset == "operations":
+        ops = Operation.objects.filter(
+            Q(branch=branch) | Q(destination=branch),
+            created_at__date__gte=first, created_at__date__lte=last,
+        ).select_related("product", "branch", "destination", "requested_by", "approved_by",
+                         "receipt", "receipt__resolved_by", "receipt__loss_document").order_by("-created_at")
+        rows = []
+        for row in ops:
+            receipt = getattr(row, "receipt", None)
+            rows.append({
+                "date": timezone.localtime(row.created_at).strftime("%Y-%m-%d %H:%M"),
+                "product": row.product.name,
+                "type": row.get_kind_display(),
+                "quantity": row.quantity,
+                "route": f"{row.branch.name} → {row.destination.name}" if row.destination else row.branch.name,
+                "status": row.status,
+                "requested_by": row.requested_by.username,
+                "approved_by": row.approved_by.username if row.approved_by else "",
+                "received": receipt.quantity if receipt else "",
+                "missing": receipt.missing if receipt else "",
+                "resolution": receipt.resolution if receipt else "",
+                "loss_document": receipt.loss_document.reference if receipt and receipt.loss_document_id else "",
+                "reason": row.reason,
+            })
+        return rows, [
+            ("date", "Date"), ("product", "Product"), ("type", "Operation"), ("quantity", "Quantity"),
+            ("route", "Route"), ("status", "Status"), ("requested_by", "Requested by"),
+            ("approved_by", "Approved by"), ("received", "Received"), ("missing", "Missing"),
+            ("resolution", "Resolution"), ("loss_document", "Loss document"), ("reason", "Reason"),
+        ]
+
+    if dataset == "supplier_returns":
+        rows = []
+        for row in SupplierReturn.objects.filter(
+            branch=branch, created_at__date__gte=first, created_at__date__lte=last
+        ).select_related("source_line__document", "source_line__document__party", "source_line__product",
+                         "requested_by", "reviewed_by", "posted").order_by("-created_at"):
+            rows.append({
+                "date": timezone.localtime(row.created_at).strftime("%Y-%m-%d %H:%M"),
+                "purchase": row.source_line.document.reference,
+                "supplier": row.source_line.document.party.name if row.source_line.document.party else "",
+                "product": row.source_line.product.name,
+                "quantity": row.quantity,
+                "amount": row.source_line.unit_price * row.quantity,
+                "refund_method": row.get_refund_method_display(),
+                "status": row.get_status_display(),
+                "requested_by": row.requested_by.username,
+                "reviewed_by": row.reviewed_by.username if row.reviewed_by else "",
+                "posted": row.posted.reference if row.posted else "",
+                "reason": row.reason,
+            })
+        return rows, [
+            ("date", "Date"), ("purchase", "Original purchase"), ("supplier", "Supplier"),
+            ("product", "Product"), ("quantity", "Quantity"), ("amount", "Return value"),
+            ("refund_method", "Refund channel"), ("status", "Status"), ("requested_by", "Requested by"),
+            ("reviewed_by", "Reviewed by"), ("posted", "Posted document"), ("reason", "Reason"),
+        ]
+
+    if dataset == "quarantine":
+        rows = [{
+            "date": timezone.localtime(row.created_at).strftime("%Y-%m-%d %H:%M"),
+            "sku": row.product.sku,
+            "product": row.product.name,
+            "quantity": row.quantity,
+            "unit_cost": row.unit_cost,
+            "value": row.value,
+            "status": row.get_status_display(),
+            "requested_by": row.requested_by.username,
+            "reviewed_by": row.reviewed_by.username if row.reviewed_by else "",
+            "resolved_by": row.resolved_by.username if row.resolved_by else "",
+            "loss_document": row.loss_document.reference if row.loss_document else "",
+            "reason": row.reason,
+            "resolution_note": row.resolution_note,
+        } for row in QuarantineItem.objects.filter(
+            branch=branch, created_at__date__gte=first, created_at__date__lte=last
+        ).select_related("product", "requested_by", "reviewed_by", "resolved_by", "loss_document").order_by("-created_at")]
+        return rows, [
+            ("date", "Date"), ("sku", "SKU"), ("product", "Product"), ("quantity", "Quantity"),
+            ("unit_cost", "Unit cost"), ("value", "Value"), ("status", "Status"),
+            ("requested_by", "Requested by"), ("reviewed_by", "Reviewed by"), ("resolved_by", "Resolved by"),
+            ("loss_document", "Loss document"), ("reason", "Reason"), ("resolution_note", "Resolution note"),
+        ]
+
+    if dataset == "closings":
+        rows = []
+        for row in Closing.objects.filter(branch=branch, date__gte=first, date__lte=last).select_related(
+            "submitted_by", "verified_by"
+        ).order_by("-date"):
+            values = {}
+            for method in ("cash", "momo", "bank", "card"):
+                expected = Decimal(str(row.expected.get(method, "0")))
+                counted = Decimal(str(row.counted.get(method, "0")))
+                values["expected_" + method] = expected
+                values["counted_" + method] = counted
+                values["variance_" + method] = counted - expected
+            rows.append({
+                "date": row.date,
+                "submitted_by": row.submitted_by.username,
+                "verified_by": row.verified_by.username if row.verified_by else "",
+                "note": row.note,
+                **values,
+            })
+        columns = [("date", "Date"), ("submitted_by", "Submitted by"), ("verified_by", "Verified by")]
+        for method, label in (("cash", "Cash"), ("momo", "MoMo"), ("bank", "Bank"), ("card", "Card")):
+            columns += [
+                ("expected_" + method, f"{label} expected"),
+                ("counted_" + method, f"{label} counted"),
+                ("variance_" + method, f"{label} variance"),
+            ]
+        columns.append(("note", "Note"))
+        return rows, columns
+
+    if dataset == "losses":
+        docs = Document.objects.filter(
+            branch=branch, kind="inventory_writeoff",
+            created_at__date__gte=first, created_at__date__lte=last,
+        ).select_related("created_by").prefetch_related("lines").order_by("-created_at")
+        rows = []
+        for doc in docs:
+            line = doc.lines.first()
+            rows.append({
+                "date": timezone.localtime(doc.created_at).strftime("%Y-%m-%d %H:%M"),
+                "reference": doc.reference,
+                "product": line.product.name if line else "",
+                "quantity": line.quantity if line else "",
+                "unit_cost": line.unit_cost if line else "",
+                "value": doc.total,
+                "staff": doc.created_by.username,
+                "reason": doc.note,
+            })
+        return rows, [
+            ("date", "Date"), ("reference", "Reference"), ("product", "Product"),
+            ("quantity", "Quantity"), ("unit_cost", "Unit cost"), ("value", "Loss value"),
+            ("staff", "Recorded by"), ("reason", "Reason"),
         ]
 
     if dataset == "audit":
@@ -221,3 +367,39 @@ def download(request, format):
             "title": "Check your export",
             "error": "; ".join(exc.messages),
         }, status=400)
+
+
+
+@login_required
+def statement_download(request, pk, format):
+    branch = _branch(request)
+    if not _allowed(request.user, ("operate_finance", "view_reports")):
+        raise PermissionDenied("You do not have permission to export account statements.")
+    party = get_object_or_404(Party, pk=pk, branch=branch)
+    running = Decimal("0")
+    rows = []
+    for doc in Document.objects.filter(party=party).order_by("created_at"):
+        change = doc.balance if doc.kind in ("sale", "purchase") else -sum(
+            (allocation.amount for allocation in doc.allocations.all()), Decimal("0")
+        )
+        if doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
+            change = sum((allocation.amount for allocation in doc.original.allocations.all()), Decimal("0"))
+        running += change
+        rows.append({
+            "date": timezone.localtime(doc.created_at).strftime("%Y-%m-%d %H:%M"),
+            "reference": doc.reference,
+            "type": doc.get_kind_display(),
+            "change": change,
+            "running": running,
+            "note": doc.note,
+        })
+    s.audit(request.user, branch, "statement.exported", party.pk, {
+        "format": format, "rows": len(rows), "balance": str(running),
+    })
+    return export(
+        rows, format, f"Account statement · {party.name}", shell(request)["company"],
+        [("date", "Date"), ("reference", "Reference"), ("type", "Type"),
+         ("change", "Balance change"), ("running", "Running balance"), ("note", "Note")],
+        filename=f"kofad-statement-{party.pk}",
+        sheet_name="Statement",
+    )

@@ -29,7 +29,9 @@ def receive_transfer(user, operation_id, quantity=None, note=""):
     if op.status != "dispatched":
         raise ValidationError("Only a dispatched transfer can be received.")
     s.ensure_open(op.destination)
-    TransferReceipt.objects.create(operation=op, quantity=quantity, note=note, recorded_by=user)
+    TransferReceipt.objects.create(
+        operation=op, quantity=quantity, unit_cost=op.product.cost, note=note, recorded_by=user
+    )
     s.stock_move(user, op.destination, op.product, quantity, str(op.pk), "Transfer receipt: " + (note or op.reason))
     op.status = "received" if quantity == op.quantity else "discrepancy"
     op.save(update_fields=["status"])
@@ -57,14 +59,22 @@ def resolve_transfer(user, operation_id, resolution, note):
     if resolution == "arrived":
         s.stock_move(user, op.destination, op.product, receipt.missing, str(op.pk),
             "Transfer remainder received: " + note)
+    else:
+        from .inventory_exceptions import post_transfer_loss
+        receipt.loss_document = post_transfer_loss(
+            user, op.destination, op.product, receipt.missing,
+            receipt.unit_cost if receipt.unit_cost is not None else op.product.cost,
+            "Confirmed transfer loss: " + note,
+        )
     # A confirmed loss never restores source stock or invents destination stock.
     receipt.resolution = resolution
     receipt.resolution_note = note
     receipt.resolved_by = user
     receipt.resolved_at = timezone.now()
-    receipt.save(update_fields=["resolution", "resolution_note", "resolved_by", "resolved_at"])
+    receipt.save(update_fields=["resolution", "resolution_note", "resolved_by", "resolved_at", "loss_document"])
     op.status = "received"
     op.save(update_fields=["status"])
     s.audit(user, op.destination, "transfer.discrepancy_resolved", op.pk,
-        {"resolution": resolution, "quantity": receipt.missing, "note": note})
+        {"resolution": resolution, "quantity": receipt.missing, "note": note,
+         "loss_document": str(receipt.loss_document_id or "")})
     return op

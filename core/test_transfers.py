@@ -79,9 +79,15 @@ class TransferReceiptTests(TransferFixtures, TestCase):
         receive_transfer(self.user, op.pk, 9, "Three units missing")
         with self.assertRaises(DatabaseError), transaction.atomic():
             TransferReceipt.objects.filter(operation=op).update(quantity=12)
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            TransferReceipt.objects.filter(operation=op).update(unit_cost=0)
         resolve_transfer(self.reviewer, op.pk, "loss", "Loss independently verified")
+        receipt = TransferReceipt.objects.get(operation=op)
+        self.assertIsNotNone(receipt.loss_document_id)
         with self.assertRaises(DatabaseError), transaction.atomic():
             TransferReceipt.objects.filter(operation=op).update(resolution="arrived")
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            TransferReceipt.objects.filter(operation=op).update(loss_document=None)
 
     def test_destination_branch_permission_required(self):
         op = self.dispatched()

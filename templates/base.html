@@ -11,7 +11,10 @@
 {% if perms.core.operate_sales %}<p class="nav-label">TRADE & CUSTOMERS</p><a href="/sales/new/" class="{% if request.path == '/sales/new/' %}active{% endif %}">{% include "icon.html" with name="plus" %} New sale <kbd>N</kbd></a>
 <a href="/documents/?kind=sale">{% include "icon.html" with name="records" %} Sales history</a><a href="/parties/">{% include "icon.html" with name="users" %} Customers</a>{% endif %}
 {% if perms.core.operate_inventory %}<p class="nav-label">STOCK & SUPPLY</p><a href="/inventory/">{% include "icon.html" with name="box" %} Inventory</a><a href="/stock-counts/">{% include "icon.html" with name="check" %} Stock counts</a><a href="/purchasing/">{% include "icon.html" with name="arrow" %} Purchasing</a>
+<a href="/supplier-returns/">{% include "icon.html" with name="undo" %} Supplier returns</a>
+<a href="/quarantine/">{% include "icon.html" with name="shield" %} Damaged stock</a>
 <a href="/parties/?kind=supplier">{% include "icon.html" with name="users" %} Suppliers</a>{% endif %}
+{% if perms.core.approve_operations and not perms.core.operate_inventory %}<p class="nav-label">STOCK & SUPPLY</p><a href="/quarantine/">{% include "icon.html" with name="shield" %} Damaged stock</a><a href="/supplier-returns/">{% include "icon.html" with name="undo" %} Supplier returns</a>{% endif %}
 {% if perms.core.operate_inventory or perms.core.approve_operations %}<a href="/operations/">{% include "icon.html" with name="transfer" %} Stock operations</a>{% endif %}
 {% if perms.core.operate_finance %}<p class="nav-label">FINANCE & CONTROL</p><a href="/finance/">{% include "icon.html" with name="wallet" %} Finance</a><a href="/closings/">{% include "icon.html" with name="check" %} Daily closing</a><a href="/corrections/">{% include "icon.html" with name="undo" %} Corrections</a>{% endif %}
 {% if perms.core.approve_operations %}<a href="/returns/">{% include "icon.html" with name="undo" %} Returns</a>{% endif %}

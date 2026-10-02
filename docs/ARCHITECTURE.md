@@ -45,7 +45,7 @@ Database triggers block updates/deletes on posted documents, lines, payments, al
 Request → independent approval → dispatch → receipt.
 Approval does not move transfer stock. Dispatch deducts source stock; receipt adds destination stock. Each transition checks the actor's permission at the affected location. Repeated transitions are rejected.
 
-Adjustments require independent approval and a reason. A count discrepancy can be posted as an adjustment, but structured count sessions, blind counts and frozen count snapshots remain future work. Unsent held carts do not reserve stock.
+Adjustments require independent approval and a reason. Blind physical counts use frozen stock/movement snapshots and reject stale approvals. Damaged stock uses a separate quarantine workflow: request → independent hold approval → release or write-off. Approved quarantine removes units from sellable stock without pretending they disappeared physically; write-off creates an immutable inventory-loss document at the quarantined cost snapshot. Unsent held carts do not reserve stock.
 
 ## Authentication and authorization
 
@@ -60,6 +60,12 @@ Django groups define custom permission sets; Access assigns locations. Default g
 Company settings now control which payment channels accept new postings, staff/manager discount limits, sale-price reduction limits, credit terms and override ceilings, customer-required and large-sale thresholds, large-expense manager authority, receipt fields and new-reference prefixes. Disabling a payment channel never rewrites historical ledger entries; historical reversals can reproduce the original payment channel so corrections remain faithful to the source record.
 
 These are server-side posting rules, not merely hidden interface controls. Thresholds use the existing `approve_operations` authority as the manager gate. They do not yet create a separate two-person pre-approval queue for discounts, prices, credit or expenses.
+
+## Supplier returns and inventory exceptions
+
+Supplier returns must reference an original purchase line. Pending and approved return quantities cannot exceed the quantity purchased. A different authorized colleague with both approval and finance authority reviews the request. On approval, sellable stock is reduced, the return first reduces outstanding supplier debt through an allocation, and any excess is recorded as an inbound supplier refund on an enabled payment channel. The original purchase remains immutable.
+
+Transfer discrepancy receipts snapshot standard cost. When an independently reviewed discrepancy is confirmed as loss, KOFAD creates an inventory write-off document instead of inventing destination stock or restoring source stock. Quarantine write-offs use the same loss-document pattern.
 
 ## Reports and communication
 

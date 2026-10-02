@@ -29,7 +29,7 @@ from .forms import (
 )
 from .models import (
     Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
-    Message, Movement, Operation, Party, Payment, Product, Stock,
+    Message, Movement, Operation, Party, Payment, Product, QuarantineItem, Stock, SupplierReturn,
 )
 
 
@@ -257,9 +257,9 @@ def documents(request):
     kind = request.GET.get("kind", "sale")
     allowed = ["sale", "return"] if not request.user.has_perm("core.view_reports") else list(dict(Document.KINDS))
     if request.user.has_perm("core.operate_inventory"):
-        allowed += ["purchase"]
+        allowed += ["purchase", "supplier_return", "inventory_writeoff"]
     if request.user.has_perm("core.operate_finance"):
-        allowed += ["expense", "collection", "supplier_payment"]
+        allowed += ["expense", "collection", "supplier_payment", "supplier_return", "inventory_writeoff"]
     if kind not in allowed:
         raise PermissionDenied
     rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
@@ -274,7 +274,9 @@ def documents(request):
 def document(request, pk):
     branch = branch_for(request)
     doc = get_object_or_404(Document.objects.select_related("party", "created_by", "branch", "original"), pk=pk, branch=branch)
-    permission = "operate_sales" if doc.kind in ("sale", "return") else "operate_inventory" if doc.kind == "purchase" else "operate_finance"
+    permission = "operate_sales" if doc.kind in ("sale", "return") else (
+        "operate_inventory" if doc.kind in ("purchase", "supplier_return", "inventory_writeoff") else "operate_finance"
+    )
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
     return render(request, "document.html", {"title": doc.reference, "doc": doc,
@@ -288,10 +290,14 @@ def inventory(request, branch):
     if q:
         products = products.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode=q))
     stocks = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+    quarantined = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
+        "product_id").annotate(total=Sum("quantity")).values_list("product_id", "total"))
     rows = []
     for p in products[:200]:
         quantity = stocks.get(p.pk, 0)
-        rows.append({"product": p, "quantity": quantity, "packs": quantity // p.pack_size,
+        quarantine_qty = quarantined.get(p.pk, 0)
+        rows.append({"product": p, "quantity": quantity, "quarantine": quarantine_qty,
+                     "physical": quantity + quarantine_qty, "packs": quantity // p.pack_size,
                      "loose": quantity % p.pack_size, "low": quantity <= p.reorder_level})
     return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
 
@@ -405,6 +411,77 @@ def returns(request, branch):
         "key": request.POST.get("key") or str(uuid.uuid4()), "methods": s.active_payment_methods()})
 
 
+@protected("operate_inventory|approve_operations|operate_finance")
+def supplier_returns(request, branch):
+    from . import inventory_exceptions as ix
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "request")
+            if action == "request":
+                ix.request_supplier_return(
+                    request.user, branch, request.POST.get("line"), request.POST.get("quantity"),
+                    request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
+                )
+                messages.success(request, "Supplier return submitted for independent review.")
+            elif action in ("approve", "reject"):
+                ix.review_supplier_return(request.user, branch, request.POST.get("id"), action == "approve")
+                messages.success(request, "Supplier return review recorded.")
+            else:
+                raise ValidationError("Choose a valid supplier-return action.")
+            return redirect("supplier_returns")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    ref = request.GET.get("q", "").strip()[:100]
+    lines = Line.objects.filter(document__branch=branch, document__kind="purchase")
+    if ref:
+        lines = lines.filter(document__reference=ref)
+    else:
+        lines = lines.none()
+    return render(request, "supplier_returns.html", {
+        "title": "Supplier returns",
+        "q": ref,
+        "lines": lines.select_related("document", "document__party", "product"),
+        "methods": s.active_payment_methods(),
+        "rows": SupplierReturn.objects.filter(branch=branch).select_related(
+            "source_line__product", "source_line__document", "requested_by", "reviewed_by", "posted"
+        )[:100],
+    })
+
+
+@protected("operate_inventory|approve_operations")
+def quarantine(request, branch):
+    from . import inventory_exceptions as ix
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "request")
+            if action == "request":
+                ix.request_quarantine(
+                    request.user, branch, request.POST.get("product"), request.POST.get("quantity"),
+                    request.POST.get("reason", ""),
+                )
+                messages.success(request, "Quarantine request submitted for independent review.")
+            elif action in ("approve", "reject"):
+                ix.review_quarantine(request.user, branch, request.POST.get("id"), action == "approve")
+                messages.success(request, "Quarantine review recorded.")
+            elif action in ("release", "writeoff"):
+                ix.resolve_quarantine(
+                    request.user, branch, request.POST.get("id"), action, request.POST.get("note", "")
+                )
+                messages.success(request, "Quarantine resolution recorded.")
+            else:
+                raise ValidationError("Choose a valid quarantine action.")
+            return redirect("quarantine")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    return render(request, "quarantine.html", {
+        "title": "Damaged stock quarantine",
+        "products": Product.objects.filter(active=True),
+        "rows": QuarantineItem.objects.filter(branch=branch).select_related(
+            "product", "requested_by", "reviewed_by", "resolved_by", "loss_document"
+        )[:100],
+    })
+
+
 @protected("operate_inventory|approve_operations")
 def operations(request, branch):
     if request.method == "POST":
@@ -427,7 +504,10 @@ def operations(request, branch):
             messages.error(request, problem(exc))
     return render(request, "operations.html", {"title": "Stock operations", "products": Product.objects.filter(active=True),
         "destinations": Branch.objects.filter(active=True).exclude(pk=branch.pk),
-        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related("product", "branch", "destination", "receipt", "receipt__recorded_by", "receipt__resolved_by")[:100],
+        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related(
+            "product", "branch", "destination", "receipt", "receipt__recorded_by",
+            "receipt__resolved_by", "receipt__loss_document"
+        )[:100],
         "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
 
 
@@ -627,9 +707,9 @@ def search(request):
         if request.user.has_perm("core.operate_sales"):
             allowed += ["sale","return"]
         if request.user.has_perm("core.operate_inventory"):
-            allowed += ["purchase"]
+            allowed += ["purchase","supplier_return","inventory_writeoff"]
         if request.user.has_perm("core.operate_finance"):
-            allowed += ["expense","collection","supplier_payment","reversal"]
+            allowed += ["expense","collection","supplier_payment","supplier_return","inventory_writeoff","reversal"]
         if request.user.has_perm("core.view_reports"):
             allowed = list(dict(Document.KINDS))
         docs = Document.objects.filter(branch=branch,kind__in=allowed,reference__icontains=q)[:20]
