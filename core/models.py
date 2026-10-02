@@ -93,7 +93,7 @@ class Party(models.Model):
 
 class Document(models.Model):
     KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("return", "Return"),
-             ("expense", "Expense"), ("collection", "Debt payment"), ("supplier_payment", "Supplier payment")]
+             ("expense", "Expense"), ("collection", "Debt payment"), ("supplier_payment", "Supplier payment"), ("reversal", "Reversal")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=40, unique=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
@@ -246,3 +246,16 @@ class Message(models.Model):
     status = models.CharField(max_length=16, default="draft")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Correction(models.Model):
+    refund_method = models.CharField(max_length=8, choices=Payment.METHODS, default="cash")
+    original = models.OneToOneField(Document, related_name="correction", on_delete=models.PROTECT)
+    posted = models.ForeignKey(Document, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    reason = models.TextField()
+    status = models.CharField(max_length=12, default="requested")
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["-created_at"]

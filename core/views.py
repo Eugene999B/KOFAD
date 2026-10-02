@@ -21,7 +21,7 @@ from . import services as s
 from .context import shell
 from .forms import CompanyForm, PartyForm, ProductForm
 from .models import (
-    Access, Audit, Branch, Closing, Company, Document, HeldSale, Line, LoginAttempt,
+    Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
     Message, Movement, Operation, Party, Payment, Product, Stock,
 )
 from .security import matching_step, new_secret
@@ -164,7 +164,7 @@ def dashboard(request):
     sales = docs.filter(kind="sale", created_at__date=today)
     returned = docs.filter(kind="return", created_at__date=today)
     revenue = (sales.aggregate(t=Sum("total"))["t"] or 0) - (returned.aggregate(t=Sum("total"))["t"] or 0)
-    expenses = docs.filter(kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or 0
+    expenses = (docs.filter(kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or 0) - (docs.filter(kind="reversal", original__kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or 0)
     debt = sum((s.party_debt(p) for p in Party.objects.filter(branch=branch, kind="customer")), Decimal(0))
     stock = Stock.objects.filter(branch=branch).select_related("product")
     low = stock.filter(quantity__lte=F("product__reorder_level"))
@@ -362,6 +362,8 @@ def statement(request, pk):
     rows = []
     for doc in docs:
         change = doc.balance if doc.kind in ("sale", "purchase") else -sum((a.amount for a in doc.allocations.all()), Decimal(0))
+        if doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
+            change = sum((a.amount for a in doc.original.allocations.all()), Decimal(0))
         running += change
         rows.append({"doc": doc, "change": change, "running": running})
     return render(request, "statement.html", {"title": party.name, "party": party, "rows": rows, "balance": running})
@@ -458,7 +460,7 @@ def report_rows(request, branch):
     docs = Document.objects.filter(branch=branch, created_at__date__gte=first, created_at__date__lte=last)
     rows = [{"reference": d.reference, "date": d.created_at.strftime("%Y-%m-%d %H:%M"),
              "kind": d.get_kind_display(), "party": d.party.name if d.party else "Walk-in",
-             "total": -d.total if d.kind == "return" else d.total, "paid": d.paid,
+             "total": -d.total if d.kind in ("return", "reversal") else d.total, "paid": d.paid,
              "balance": s.balance(d) if d.kind in ("sale", "purchase") else Decimal(0)} for d in docs.select_related("party")[:10000]]
     return rows, {"start": start, "end": end}
 
@@ -509,3 +511,24 @@ def communications(request, branch):
     return render(request, "communications.html", {"title": "Communications",
         "parties": Party.objects.filter(branch=branch, consent=True),
         "rows": Message.objects.filter(branch=branch).select_related("party").order_by("-created_at")[:100]})
+
+
+@protected("operate_finance")
+def corrections(request, branch):
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "request":
+                s.request_correction(request.user,branch,request.POST.get("original"),request.POST.get("reason",""),request.POST.get("refund_method","cash"))
+            else:
+                item = get_object_or_404(Correction,pk=request.POST.get("id"),original__branch=branch)
+                action = request.POST.get("action")
+                if action not in ("approve","reject"):
+                    raise ValidationError("Invalid review action.")
+                s.review_correction(request.user,branch,item.pk,action=="approve")
+            messages.success(request,"Correction request recorded.")
+            return redirect("corrections")
+        except (ValidationError,ValueError) as exc:
+            messages.error(request,problem(exc))
+    return render(request,"corrections.html",{"title":"Corrections", "methods":Payment.METHODS,
+        "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment"],correction__isnull=True)[:200],
+        "rows":Correction.objects.filter(original__branch=branch).select_related("original","requested_by","reviewed_by","posted")[:100]})

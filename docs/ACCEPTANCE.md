@@ -12,7 +12,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Inventory | Base-unit stock, immutable movements, nonnegative balances, reorder indicators |
 | Sales | Mixed-mode cart, held carts, server pricing, cash/MoMo/bank/card splits, credit, idempotency, receipts |
 | Customers | Quick contacts, credit limit, due date, collections, current balances, running statements |
-| Returns | Original-line validation, cumulative quantity cap, original price, debt reduction then refund |
+| Returns/corrections | Original-line returns, quantity caps, debt reduction then refund; independent expense/payment reversal and remaining-item sale void |
 | Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation |
 | Operations | Independent stock adjustment review; transfer request, approval, dispatch and receipt |
 | Finance | Expenses, channel movement reconciliation, independent closing verification, closed-day posting lock |
@@ -23,7 +23,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 ## Incomplete launch requirements
 
 - Configure and implement applicable taxes and legally required invoice fields. No tax compliance is implied.
-- Implement controlled expense reversal, payment reversal and whole-sale void workflows. Do not manually edit ledger rows to correct mistakes.
+- Validate the implemented independent expense/payment reversal and remaining-item sale-void workflows with KOFAD. Sale void refunds use the explicitly selected channel.
 - Add approval thresholds for expenses, price overrides, discounts and credit overrides. These overrides are currently unavailable.
 - Extend structured stock-count sessions, damaged stock/transfer discrepancy handling and supplier returns.
 - Add product variants, images, multi-level conversions, batch/serial tracking only as needed; current catalog has one-level packs.

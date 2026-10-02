@@ -12,7 +12,7 @@
 <a href="/documents/?kind=sale"><span>≡</span> Sales history</a><a href="/parties/"><span>◎</span> Customers</a>{% endif %}
 {% if perms.core.operate_inventory %}<a href="/inventory/"><span>▦</span> Inventory</a><a href="/purchasing/"><span>↙</span> Purchasing</a>
 <a href="/parties/?kind=supplier"><span>◇</span> Suppliers</a><a href="/operations/"><span>⇄</span> Stock operations</a>{% endif %}
-{% if perms.core.operate_finance %}<a href="/finance/"><span>▤</span> Finance</a><a href="/closings/"><span>✓</span> Daily closing</a>{% endif %}
+{% if perms.core.operate_finance %}<a href="/finance/"><span>▤</span> Finance</a><a href="/closings/"><span>✓</span> Daily closing</a><a href="/corrections/"><span>↺</span> Corrections</a>{% endif %}
 {% if perms.core.approve_operations %}<a href="/returns/"><span>↶</span> Returns</a>{% endif %}
 {% if perms.core.operate_sales %}<a href="/communications/"><span>✉</span> Communications</a>{% endif %}
 {% if perms.core.view_reports %}<a href="/reports/"><span>▥</span> Reports</a><a href="/audit/"><span>⌕</span> Audit trail</a>{% endif %}

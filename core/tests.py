@@ -5,7 +5,7 @@ from io import BytesIO
 
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import close_old_connections, connection, transaction, DatabaseError
+from django.db import close_old_connections, connection, connections, transaction, DatabaseError
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
@@ -231,7 +231,7 @@ class ConcurrencyTests(Fixtures, TransactionTestCase):
             except ValidationError:
                 return "blocked"
             finally:
-                close_old_connections()
+                connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(attempt,range(2)))
         self.assertCountEqual(results,["posted","blocked"])
@@ -260,3 +260,36 @@ class LedgerIntegrityTests(Fixtures, TestCase):
         closing = s.submit_closing(self.user,self.branch,timezone.localdate(),{"cash":"50"},"")
         with self.assertRaises(DatabaseError), transaction.atomic():
             type(closing).objects.filter(pk=closing.pk).update(counted={"cash":"0"})
+
+
+class CorrectionTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+
+    def test_payment_reversal_restores_debt_and_channel(self):
+        sale = self.sale(payments=[],party=self.customer.pk,due_date=timezone.localdate().isoformat())
+        payment = s.post_payment(self.user,self.branch,{"invoice":str(sale.pk),"amount":"50","method":"momo"},uuid.uuid4())
+        request = s.request_correction(self.user,self.branch,payment.pk,"Wrong payment reference recorded")
+        with self.assertRaises(ValidationError):
+            s.review_correction(self.user,self.branch,request.pk,True)
+        s.review_correction(self.reviewer,self.branch,request.pk,True)
+        self.assertEqual(s.balance(sale),Decimal("50"))
+        self.assertEqual(s.channel_totals(self.branch,timezone.localdate())["momo"],Decimal("0"))
+        with self.assertRaises(ValidationError):
+            s.review_correction(self.reviewer,self.branch,request.pk,True)
+
+    def test_void_sale_preserves_original_and_restores_stock(self):
+        sale = self.sale(2)
+        request = s.request_correction(self.user,self.branch,sale.pk,"Duplicate counter sale entered")
+        s.review_correction(self.reviewer,self.branch,request.pk,True)
+        sale.refresh_from_db()
+        self.assertEqual(sale.total,Decimal("100"))
+        self.assertEqual(Stock.objects.get(branch=self.branch,product=self.product).quantity,240)
+        self.assertEqual(s.channel_totals(self.branch,timezone.localdate())["cash"],Decimal("0"))
+
+    def test_expense_reversal_preserves_evidence(self):
+        expense = s.post_expense(self.user,self.branch,{"amount":"20","method":"bank","note":"Office supply expense"},uuid.uuid4())
+        request = s.request_correction(self.user,self.branch,expense.pk,"Incorrect supplier expense posted")
+        result = s.review_correction(self.reviewer,self.branch,request.pk,True)
+        self.assertEqual(result.posted.original,expense)
+        self.assertEqual(s.channel_totals(self.branch,timezone.localdate())["bank"],Decimal("0"))

@@ -64,3 +64,7 @@ Messaging currently stores opted-in contact drafts. No provider calls, delivery 
 ## Operating constraints
 
 Lists are capped; reports display 200 rows and export at most 10,000. Proper cursor pagination, indexed global search and larger export jobs are required for high-volume deployment. The application requires online server confirmation; offline financial posting is intentionally unavailable.
+
+## Financial correction requests
+
+Finance requests a reasoned correction; another authorized reviewer accepts or rejects it. Expenses and debt/supplier payments receive an opposite-channel reversal document. Reversing a collection removes its allocation from the live debt calculation while retaining original evidence. Sale voids return all remaining eligible quantities through linked return documents; refunds use the requested channel. Direct record edits remain forbidden.

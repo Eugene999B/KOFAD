@@ -11,7 +11,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from .models import (
-    Allocation, Audit, Branch, Closing, Company, Document, Idempotency, Line,
+    Allocation, Audit, Branch, Closing, Company, Correction, Document, Idempotency, Line,
     Movement, Operation, Party, Payment, Product, Stock,
 )
 
@@ -94,7 +94,7 @@ def reference(kind, branch):
 
 
 def balance(invoice):
-    allocated = invoice.settlements.aggregate(total=Sum("amount"))["total"] or ZERO
+    allocated = invoice.settlements.exclude(payment_document__correction__status="approved").aggregate(total=Sum("amount"))["total"] or ZERO
     return invoice.total - invoice.paid - allocated
 
 
@@ -372,3 +372,63 @@ def verify_closing(user, closing):
     closing.verified_by = user
     closing.save(update_fields=["verified_by"])
     audit(user, closing.branch, "closing.verified", closing.pk)
+
+
+@transaction.atomic
+def request_correction(user, branch, original_id, reason, refund_method="cash"):
+    permit(user, branch, "operate_finance")
+    lock_branch(branch)
+    original = Document.objects.filter(pk=original_id, branch=branch, kind__in=[
+        "sale", "expense", "collection", "supplier_payment"]).first()
+    if not original:
+        raise ValidationError("This record cannot be reversed through this workflow.")
+    if len(reason.strip()) < 10:
+        raise ValidationError("Explain the correction in at least ten characters.")
+    if Correction.objects.filter(original=original).exists():
+        raise ValidationError("This document already has a correction request.")
+    if refund_method not in dict(Payment.METHODS):
+        raise ValidationError("Choose a valid refund channel.")
+    item = Correction.objects.create(original=original, requested_by=user, reason=reason, refund_method=refund_method)
+    audit(user, branch, "correction.requested", original.reference, {"reason":reason})
+    return item
+
+
+@transaction.atomic
+def review_correction(user, branch, correction_id, approve):
+    permit(user, branch, "approve_operations")
+    branch = lock_branch(branch)
+    item = Correction.objects.select_for_update(of=("self",)).select_related("original").get(pk=correction_id, original__branch=branch)
+    if item.status != "requested":
+        raise ValidationError("This request has already been reviewed.")
+    if item.requested_by_id == user.pk:
+        raise ValidationError("A different authorized colleague must review the correction.")
+    original = item.original
+    if approve:
+        ensure_open(branch)
+        if original.kind == "sale":
+            posted = []
+            for line in original.lines.all():
+                previous = Line.objects.filter(source_line=line).aggregate(q=Sum("quantity"))["q"] or 0
+                remaining = line.quantity - previous
+                if remaining:
+                    doc = post_return(user,branch,{"line":line.pk,"quantity":remaining,
+                        "reason":"Approved sale void: " + item.reason,"method":item.refund_method},
+                        uuid.uuid5(original.pk, f"void:{item.pk}:{line.pk}"))
+                    posted.append(doc)
+            if not posted:
+                raise ValidationError("All sale quantities have already been returned.")
+            item.posted = posted[0]
+        else:
+            doc = Document.objects.create(branch=branch, kind="reversal", party=original.party,
+                original=original, total=original.total, paid=original.paid, note=item.reason,
+                reference=reference("reversal",branch),created_by=user)
+            for payment in original.payments.all():
+                payments(doc,[{"method":payment.method,"amount":payment.amount,"reference":payment.reference}],-payment.direction)
+            item.posted = doc
+        item.status = "approved"
+    else:
+        item.status = "rejected"
+    item.reviewed_by = user
+    item.save(update_fields=["status","reviewed_by","posted"])
+    audit(user,branch,"correction."+item.status,original.reference,{"reason":item.reason,"posted":str(item.posted_id or "")})
+    return item
