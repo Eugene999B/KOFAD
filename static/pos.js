@@ -345,8 +345,8 @@
         }
 
         if (product.pack_size === 1 && looseInput) looseInput.value = "1";
-        else if (packInput && !looseInput) packInput.value = "1";
-        else if (looseInput && !packInput) looseInput.value = "1";
+        else if (packInput) packInput.value = "1";
+        else if (looseInput) looseInput.value = "1";
 
         addButton.onclick = () => {
           try {
