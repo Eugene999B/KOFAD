@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block actions %}<a class="button secondary" href="/exports/?dataset=supplier_returns">⇩ Download supplier returns</a>{% endblock %}
+{% block content %}
+<section class="hero-panel"><div><p class="eyebrow">PURCHASE CONTROL</p><h2>Return stock to suppliers without rewriting purchases.</h2><p>Every request is tied to an original purchase line, reserves only the eligible quantity, and needs independent finance-authorized approval before stock or supplier debt changes.</p></div><span class="pill">Independent review</span></section>
+
+<section class="panel">
+<div class="section-heading"><div><h2>Find the original purchase</h2><p class="muted">Enter the exact purchase reference printed on the purchase record.</p></div></div>
+<form method="get" class="inline-form"><label for="purchase-ref">Purchase reference</label><input id="purchase-ref" name="q" value="{{ q }}" placeholder="PUR-..." required><button class="button">Find purchase</button></form>
+{% if q %}
+<div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Product</th><th>Purchased</th><th>Purchase price</th><th>Request return</th></tr></thead><tbody>
+{% for line in lines %}
+<tr><td>{{ line.document.party|default:"Supplier" }}<small>{{ line.document.reference }}</small></td><td>{{ line.product.name }}<small>{{ line.mode|title }} · {{ line.factor }} base units each</small></td><td>{{ line.quantity }}</td><td>{{ line.unit_price }}</td><td>
+{% if perms.core.operate_inventory %}
+<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="request"><input type="hidden" name="line" value="{{ line.pk }}">
+<label for="qty-{{ line.pk }}">Quantity</label><input id="qty-{{ line.pk }}" type="number" name="quantity" min="1" max="{{ line.quantity }}" step="1" required>
+<label for="method-{{ line.pk }}">Supplier refund channel</label><select id="method-{{ line.pk }}" name="refund_method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+<label for="reason-{{ line.pk }}">Reason</label><textarea id="reason-{{ line.pk }}" name="reason" minlength="10" maxlength="2000" required placeholder="Why are these goods being returned?"></textarea>
+<button class="button">Submit for approval</button></form>
+{% else %}<span class="muted">Inventory permission required.</span>{% endif %}
+</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">No purchase lines match this reference at the current store.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+</section>
+
+<section class="panel"><div class="section-heading"><div><h2>Supplier return queue</h2><p class="muted">Approval reduces sellable stock, reduces unpaid supplier debt first, then records any supplier refund through the selected payment channel.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>When</th><th>Purchase</th><th>Product</th><th>Qty</th><th>Requested by</th><th>Status</th><th>Review</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+<td>{{ row.created_at|date:"d M Y, H:i" }}</td>
+<td>{{ row.source_line.document.reference }}<small>{{ row.source_line.document.party }}</small></td>
+<td>{{ row.source_line.product.name }}<small>{{ row.reason }}</small></td>
+<td>{{ row.quantity }}</td><td>{{ row.requested_by }}</td>
+<td><span class="pill">{{ row.get_status_display }}</span>{% if row.posted %}<small><a href="{% url 'document' row.posted.pk %}">{{ row.posted.reference }}</a></small>{% endif %}{% if row.reviewed_by %}<small>Reviewed by {{ row.reviewed_by }}</small>{% endif %}</td>
+<td>
+{% if row.status == "requested" and perms.core.approve_operations and perms.core.operate_finance %}
+{% if row.requested_by_id != request.user.pk %}
+<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button" name="action" value="approve">Approve & post</button><button class="text-button danger" name="action" value="reject">Reject</button></form>
+{% else %}<small>Awaiting a different authorized colleague.</small>{% endif %}
+{% else %}<small>No action required.</small>{% endif %}
+</td></tr>
+{% empty %}<tr><td colspan="7" class="empty">No supplier return requests yet.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}
