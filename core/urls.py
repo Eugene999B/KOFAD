@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/trades/", v.complete_trade), path("api/customers/", v.customer_search, name="customer_search"), path("api/held/", v.hold),
     path("api/held/<int:pk>/", v.held),
     path("documents/", v.documents, name="documents"), path("documents/<uuid:pk>/", v.document, name="document"),
+    path("documents/<uuid:pk>/pdf/<str:format>/", v.document_pdf, name="document_pdf"),
     path("inventory/", v.inventory, name="inventory"), path("products/new/", v.product_edit, name="product_new"),
     path("products/<int:pk>/", v.product_edit, name="product_edit"),
     path("parties/", v.parties, name="parties"), path("parties/new/", v.party_edit, name="party_new"),
