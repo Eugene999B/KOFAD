@@ -9,7 +9,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from .models import Company
 from .services import balance
@@ -73,17 +73,9 @@ def _styles(thermal=False, narrow=False):
         "ReceiptSmall", parent=body, fontSize=max(5.4, body_size - 1.2),
         leading=max(6.5, body_size * 1.15), textColor=MUTED,
     )
-    heading = ParagraphStyle(
-        "ReceiptHeading", parent=body, fontName="Helvetica-Bold",
-        fontSize=10 if thermal else 14, leading=12 if thermal else 17, textColor=INK,
-    )
-    title = ParagraphStyle(
-        "ReceiptTitle", parent=body, fontName="Helvetica-Bold",
-        fontSize=8.5 if thermal else 11, leading=10.5 if thermal else 13, textColor=TEAL,
-    )
     right = ParagraphStyle("ReceiptRight", parent=body, alignment=TA_RIGHT)
     center = ParagraphStyle("ReceiptCenter", parent=small, alignment=TA_CENTER)
-    return body, small, heading, title, right, center
+    return body, small, right, center
 
 
 def _money(company, value):
@@ -129,7 +121,7 @@ def render_receipt_pdf(document, format_name="a4"):
         topMargin=top, bottomMargin=bottom, title=document.reference,
         author=company.name,
     )
-    body, small, heading, title, right_style, center = _styles(thermal, narrow)
+    body, small, right_style, center = _styles(thermal, narrow)
     story = []
 
     logo = _logo(15 * mm if not thermal else 10 * mm, 15 * mm if not thermal else 10 * mm)
