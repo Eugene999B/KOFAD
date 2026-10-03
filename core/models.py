@@ -240,6 +240,11 @@ class Document(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(total__gte=0), name="document_total_positive"),
             models.CheckConstraint(condition=Q(paid__gte=0) & Q(paid__lte=models.F("total")), name="document_paid_valid"),
+            models.UniqueConstraint(
+                fields=["branch", "party", "external_reference"],
+                condition=Q(kind__in=["purchase", "creditor_charge"]) & ~Q(external_reference=""),
+                name="unique_supplier_payable_reference",
+            ),
         ]
         permissions = [
             ("operate_sales", "Complete sales"), ("operate_inventory", "Receive and request stock changes"),
