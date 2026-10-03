@@ -286,3 +286,30 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         response = self.client.get("/debts/", {"customer": self.customer.pk})
         self.assertContains(response, 'class="debt-payment-dialog"')
         self.assertContains(response, "Save payment")
+
+
+    def test_sale_checkout_uses_payment_dialog_and_can_capture_sms_consent(self):
+        self.authenticate_client()
+        page = self.client.get("/sales/new/")
+        self.assertContains(page, 'id="sale-payment-dialog"')
+        self.assertContains(page, "Payment &amp; finish")
+        self.assertContains(page, 'id="customer-consent"')
+
+        self.customer.phone = "+233241234567"
+        self.customer.save(update_fields=["phone"])
+        self.assertFalse(self.customer.consent)
+        self.sale(customer_consent=True)
+        self.customer.refresh_from_db()
+        self.assertTrue(self.customer.consent)
+
+    @override_settings(SMS_ENABLED=True)
+    def test_completed_sale_shows_ready_receipt_message_instead_of_prepare_hop(self):
+        self.customer.phone = "+233241234567"
+        self.customer.consent = True
+        self.customer.save(update_fields=["phone", "consent"])
+        sale = self.sale()
+        self.authenticate_client()
+        response = self.client.get(f"/documents/{sale.pk}/")
+        self.assertContains(response, "Receipt message ready")
+        self.assertContains(response, "Send SMS now")
+        self.assertNotContains(response, "Prepare receipt SMS")
