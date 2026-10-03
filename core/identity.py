@@ -49,6 +49,10 @@ def resolve_sale_customer(user, branch, payload, audit):
 
     name = str(payload.get("customer_name", "")).strip()
     phone = str(payload.get("customer_phone", "")).strip()
+    if not name and not phone:
+        if consent_requested:
+            raise ValidationError("Choose or create a customer before enabling transaction messages.")
+        return None
     if len(name) < 2 or len(name) > 120:
         raise ValidationError("Enter the new customer's name.")
     canonical = normalize_ghana_phone(phone)
