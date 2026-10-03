@@ -1053,10 +1053,22 @@ def communications(request, branch):
             return redirect("communications")
         except (ValidationError,ValueError) as exc:
             messages.error(request,problem(exc))
-    return render(request,"communications.html",{"title":"Communications","key":str(uuid.uuid4()),
+    communication_policy = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
+    debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
+    rows = Message.objects.filter(branch=branch).select_related(
+        "party", "management_contact", "created_by", "queued_by"
+    ).order_by("-created_at")[:100]
+    return render(request,"communications.html",{
+        "title":"Communications","key":str(uuid.uuid4()),
         "parties":Party.objects.filter(branch=branch,consent=True),
-        "rows":Message.objects.filter(branch=branch).select_related("party","created_by").order_by("-created_at")[:100],
-        "sms_enabled":settings.SMS_ENABLED,"sms_sandbox":settings.SMS_SANDBOX,"sms_provider":settings.SMS_PROVIDER})
+        "rows":rows,
+        "communication_policy":communication_policy,
+        "debt_policy":debt_policy,
+        "management_count":ManagementContact.objects.filter(active=True).filter(
+            Q(branch__isnull=True) | Q(branch=branch)
+        ).count(),
+        "sms_enabled":settings.SMS_ENABLED,"sms_sandbox":settings.SMS_SANDBOX,"sms_provider":settings.SMS_PROVIDER
+    })
 
 
 @protected("operate_finance")
