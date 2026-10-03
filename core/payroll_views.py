@@ -33,6 +33,13 @@ def _decimal(value, label):
     return number
 
 
+def _rate(value, label):
+    number = _decimal(value, label)
+    if number > 100:
+        raise ValidationError(f"{label} cannot exceed 100%.")
+    return number
+
+
 def _period_summary(period):
     totals = engine.period_totals(period)
     issue_count = sum(len(entry.validation_flags or []) for entry in period.entries.all())
@@ -163,6 +170,11 @@ def payroll_action(request, branch, pk):
             period = engine.lock_period(request.user, period)
             audit(request.user, branch, "payroll.locked", period.pk, {"locked_by": request.user.username})
             messages.success(request, "Payroll locked for salary payments.")
+        elif action == "return_to_draft":
+            permit(request.user, branch, "approve_operations")
+            period = engine.return_to_draft(period)
+            audit(request.user, branch, "payroll.returned_to_draft", period.pk, {"by": request.user.username})
+            messages.success(request, "Payroll returned to draft for correction.")
         elif action == "reconcile":
             period, outstanding = engine.reconcile_period(period)
             audit(request.user, branch, "payroll.reconciled", period.pk, {"outstanding": outstanding})
@@ -279,6 +291,8 @@ def payroll_rules(request, branch):
     if request.method == "POST":
         try:
             effective = date.fromisoformat(request.POST.get("effective_from", ""))
+            if effective <= current.effective_from:
+                raise ValidationError("A new payroll rule must start after the current rule effective date.")
             amounts = request.POST.getlist("band_amount")
             rates = request.POST.getlist("band_rate")
             if not rates or len(amounts) != len(rates):
@@ -302,21 +316,23 @@ def payroll_rules(request, branch):
                 rule = PayrollRule.objects.create(
                     code="GH-PAYROLL", name=request.POST.get("name", "").strip()[:160] or f"Ghana payroll rules · {effective}",
                     effective_from=effective, resident_bands=bands,
-                    employee_ssnit_rate=_decimal(request.POST.get("employee_ssnit_rate"), "Employee SSNIT rate"),
-                    employer_pension_rate=_decimal(request.POST.get("employer_pension_rate"), "Employer pension rate"),
-                    first_tier_rate=_decimal(request.POST.get("first_tier_rate"), "First-tier rate"),
-                    tier2_rate=_decimal(request.POST.get("tier2_rate"), "Tier 2 rate"),
+                    employee_ssnit_rate=_rate(request.POST.get("employee_ssnit_rate"), "Employee SSNIT rate"),
+                    employer_pension_rate=_rate(request.POST.get("employer_pension_rate"), "Employer pension rate"),
+                    first_tier_rate=_rate(request.POST.get("first_tier_rate"), "First-tier rate"),
+                    tier2_rate=_rate(request.POST.get("tier2_rate"), "Tier 2 rate"),
                     min_insurable_earnings=_decimal(request.POST.get("min_insurable_earnings"), "Minimum insurable earnings"),
                     max_insurable_earnings=_decimal(request.POST.get("max_insurable_earnings"), "Maximum insurable earnings"),
-                    nonresident_rate=_decimal(request.POST.get("nonresident_rate"), "Non-resident rate"),
-                    casual_rate=_decimal(request.POST.get("casual_rate"), "Casual rate"),
-                    bonus_rate=_decimal(request.POST.get("bonus_rate"), "Bonus rate"),
-                    bonus_limit_percent=_decimal(request.POST.get("bonus_limit_percent"), "Bonus limit"),
-                    junior_overtime_rate=_decimal(request.POST.get("junior_overtime_rate"), "Overtime rate"),
-                    junior_overtime_excess_rate=_decimal(request.POST.get("junior_overtime_excess_rate"), "Overtime excess rate"),
+                    nonresident_rate=_rate(request.POST.get("nonresident_rate"), "Non-resident rate"),
+                    casual_rate=_rate(request.POST.get("casual_rate"), "Casual rate"),
+                    bonus_rate=_rate(request.POST.get("bonus_rate"), "Bonus rate"),
+                    bonus_limit_percent=_rate(request.POST.get("bonus_limit_percent"), "Bonus limit"),
+                    junior_overtime_rate=_rate(request.POST.get("junior_overtime_rate"), "Overtime rate"),
+                    junior_overtime_excess_rate=_rate(request.POST.get("junior_overtime_excess_rate"), "Overtime excess rate"),
                     junior_overtime_basic_limit=_decimal(request.POST.get("junior_overtime_basic_limit"), "Junior staff limit"),
                     notes=request.POST.get("notes", "").strip(), created_by=request.user,
                 )
+                if rule.min_insurable_earnings > rule.max_insurable_earnings:
+                    raise ValidationError("Minimum insurable earnings cannot exceed the maximum.")
             audit(request.user, branch, "payroll.rule.created", rule.pk, {"effective_from": str(effective), "name": rule.name})
             messages.success(request, "New effective-dated payroll rule saved. Existing payroll snapshots were not changed.")
             return redirect("payroll_rules")
