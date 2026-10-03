@@ -270,7 +270,10 @@ def export(
                 ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F6F2EA")),
                 ("LINEBELOW", (0, 0), (-1, -1), .25, colors.HexColor("#DDD8D0")),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ]))
             story.extend([meta_table, Spacer(1, 7)])
         if summary:
@@ -279,7 +282,10 @@ def export(
             summary_table.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F2EA")),
                 ("BOX", (0, 0), (-1, -1), .4, colors.HexColor("#DDD8D0")),
-                ("PADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
             ]))
             story.extend([summary_table, Spacer(1, 7)])
 
