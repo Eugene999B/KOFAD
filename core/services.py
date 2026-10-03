@@ -819,7 +819,8 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
 
 @transaction.atomic
 def verify_closing(user, closing):
-    permit(user, closing.branch, "approve_operations")
+    if not (user.is_superuser or user.has_perm("core.manage_company")):
+        permit(user, closing.branch, "approve_operations")
     closing = Closing.objects.select_for_update().get(pk=closing.pk)
     if closing.verified_by_id:
         raise ValidationError("This closing has already been verified.")
@@ -857,7 +858,8 @@ def request_correction(user, branch, original_id, reason, refund_method="cash"):
 
 @transaction.atomic
 def review_correction(user, branch, correction_id, approve):
-    permit(user, branch, "approve_operations")
+    if not (user.is_superuser or user.has_perm("core.manage_company")):
+        permit(user, branch, "approve_operations")
     branch = lock_branch(branch)
     item = Correction.objects.select_for_update(of=("self",)).select_related("original").get(pk=correction_id, original__branch=branch)
     if item.status != "requested":
