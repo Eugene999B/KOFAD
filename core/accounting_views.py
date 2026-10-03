@@ -3,14 +3,13 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.models import F, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models import Sum
 from django.shortcuts import render
 from django.utils import timezone
 
 from .context import shell
 from .exports import export
-from .models import Document, Line, Party, Payment, PayrollEntry, PayrollPeriod, Stock
+from .models import Document, Line, Payment, PayrollEntry, Stock
 from .services import audit, balance
 from .views import protected
 
