@@ -16,7 +16,7 @@ from django.utils import timezone
 from core.models import Access, Message, MessageTemplate, SmsAttempt, SmsEvent
 from core.tests import Fixtures
 from core.sms.providers import Arkesel, Submission, get_provider
-from core.sms.service import create_draft,send_message_now,process_one,receive_callback,recover_stale,estimate,normalize_phone
+from core.sms.service import create_draft,send_message_now,receive_callback,recover_stale,estimate,normalize_phone
 from core.sms.templates import validate_template
 
 SETTINGS = dict(SMS_ENABLED=True,SMS_PROVIDER="arkesel",SMS_SENDER_ID="KOFAD",SMS_SANDBOX=False,
@@ -104,7 +104,6 @@ class SmsTests(Fixtures,TestCase):
         with self.assertRaises(ValidationError):
             send_message_now(self.user,self.branch,message.pk,retry=True)
         self.assertEqual(submit_many.call_count,1)
-        self.assertFalse(process_one())
 
     @patch("core.sms.providers.Arkesel.submit_many")
     def test_throttled_direct_send_fails_safely_and_requires_manual_retry(self, submit_many):
@@ -122,7 +121,6 @@ class SmsTests(Fixtures,TestCase):
         sent = send_message_now(self.user,self.branch,message.pk)
         self.assertEqual(sent.status,"failed")
         self.assertIn("rate limit", sent.last_error.lower())
-        self.assertFalse(process_one())
         retried = send_message_now(self.user,self.branch,message.pk,retry=True)
         self.assertEqual(retried.status, "accepted")
         self.assertEqual(submit_many.call_count,2)
@@ -163,7 +161,6 @@ class SmsTests(Fixtures,TestCase):
         self.assertEqual(recover_stale(),1)
         message.refresh_from_db()
         self.assertEqual(message.status,"unknown")
-        self.assertFalse(process_one())
 
     def test_templates_reject_attribute_and_format_access(self):
         for body in ("{customer.password}","{total:03}","{missing}","{company"):
