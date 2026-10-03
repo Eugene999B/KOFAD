@@ -24,12 +24,14 @@ from django.views.decorators.debug import sensitive_post_parameters
 from . import services as s
 from .context import shell
 from .forms import (
-    CompanyForm, FinancePolicyForm, PartyForm, PaymentPolicyForm, ProductForm,
+    CommunicationSettingsForm, CompanyForm, DebtSettingsForm, FinancePolicyForm,
+    LocationSettingsForm, ManagementContactForm, PartyForm, PaymentPolicyForm, ProductForm,
     ReceiptPolicyForm, SalesPolicyForm,
 )
 from .models import (
-    Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
-    Message, Movement, Operation, Party, Payment, Product, QuarantineItem, Stock, SupplierReturn,
+    Access, Audit, Branch, Closing, CommunicationSettings, Company, Correction, DebtSettings,
+    Document, HeldSale, Line, LoginAttempt, ManagementContact, Message, MessageTemplate,
+    Movement, Operation, Party, Payment, Product, QuarantineItem, Stock, SupplierReturn,
 )
 
 
