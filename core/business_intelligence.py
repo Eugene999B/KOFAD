@@ -96,7 +96,7 @@ def _change(current, prior):
 
 def _aging_receivables(branch):
     today = timezone.localdate()
-    buckets = {"current": ZERO, "1_30": ZERO, "31_60": ZERO, "61_90": ZERO, "90_plus": ZERO}
+    buckets = {"current": ZERO, "days_1_30": ZERO, "days_31_60": ZERO, "days_61_90": ZERO, "days_90_plus": ZERO}
     total = ZERO
     overdue = ZERO
     rows = []
@@ -109,7 +109,7 @@ def _aging_receivables(branch):
         days = max((today - due).days, 0)
         if days:
             overdue += outstanding
-        key = "current" if days == 0 else "1_30" if days <= 30 else "31_60" if days <= 60 else "61_90" if days <= 90 else "90_plus"
+        key = "current" if days == 0 else "days_1_30" if days <= 30 else "days_31_60" if days <= 60 else "days_61_90" if days <= 90 else "days_90_plus"
         buckets[key] += outstanding
         rows.append({
             "customer": doc.party.name, "reference": doc.reference,
