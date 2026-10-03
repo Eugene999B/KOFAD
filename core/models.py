@@ -455,6 +455,47 @@ class SmsEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+
+class WhatsAppAttempt(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(Message, related_name="whatsapp_attempts", on_delete=models.PROTECT)
+    number = models.PositiveIntegerField()
+    provider_id = models.CharField(max_length=180, blank=True, db_index=True)
+    status = models.CharField(max_length=20, default="sending")
+    template_name = models.CharField(max_length=120, blank=True)
+    media_id = models.CharField(max_length=180, blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    http_status = models.PositiveIntegerField(null=True, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    error_detail = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["message", "number"], name="unique_whatsapp_attempt"),
+        ]
+
+
+class WhatsAppWebhookEvent(models.Model):
+    fingerprint = models.CharField(max_length=64, unique=True)
+    waba_id = models.CharField(max_length=80, blank=True)
+    phone_number_id = models.CharField(max_length=80, blank=True)
+    event_type = models.CharField(max_length=24)
+    provider_message_id = models.CharField(max_length=180, blank=True, db_index=True)
+    wa_id = models.CharField(max_length=40, blank=True, db_index=True)
+    status = models.CharField(max_length=20, blank=True)
+    payload = models.JSONField(default=dict)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_at"]
+        indexes = [
+            models.Index(fields=["event_type", "received_at"], name="wa_event_type_time_idx"),
+            models.Index(fields=["status", "received_at"], name="wa_status_time_idx"),
+        ]
+
+
 class MessageTemplate(models.Model):
     code = models.SlugField(max_length=40, unique=True)
     name = models.CharField(max_length=100)
