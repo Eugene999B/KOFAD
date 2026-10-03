@@ -822,6 +822,8 @@ def statement(request, pk):
             change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
         elif doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
             change = sum((a.amount for a in doc.original.allocations.all()), Decimal(0))
+        elif doc.kind == "reversal" and doc.original_id and doc.original.kind == "creditor_charge":
+            change = -doc.original.total
         else:
             change = Decimal(0)
         running += change
