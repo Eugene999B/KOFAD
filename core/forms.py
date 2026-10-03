@@ -32,9 +32,9 @@ class ProductForm(forms.ModelForm):
             "base_unit": "Smallest sellable unit",
             "pack_name": "Pack / box name",
             "pack_size": "Units inside one pack / box",
-            "retail_unit": "Retail price · one loose unit",
+            "retail_unit": "Retail price",
             "retail_pack": "Retail price · one full pack",
-            "wholesale_unit": "Wholesale price · one loose unit",
+            "wholesale_unit": "Wholesale price",
             "wholesale_pack": "Wholesale price · one full pack",
             "reorder_level": "Low-stock warning · base units",
         }
