@@ -884,6 +884,7 @@
     if (reason) reason.value = pendingBody.override_reason || "";
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
     document.querySelector("#complete").disabled = false;
+    openPayment();
     fail("A checkout was interrupted. Retry to recover its original result before making changes.");
   }
 })();
