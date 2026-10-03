@@ -22,8 +22,8 @@
 
 <div id="pos-error" class="notice error hidden" role="alert"></div>
 
-<div class="counter-layout">
-<section class="counter-products" aria-label="Product search">
+<div class="counter-layout chalin-sale-layout">
+<section class="counter-products chalin-sale-builder" aria-label="Product search and sale items">
   <div class="sale-search-shell counter-search-shell">
     <form method="get" id="catalog-search" class="sale-product-search">
       <span aria-hidden="true">⌕</span>
@@ -37,132 +37,131 @@
   <div id="catalog-status" class="catalog-status counter-empty-state">
     <span class="catalog-empty-icon">⌕</span>
     <h3>Find a product</h3>
-    <p>Search, choose the item, and it goes straight into the current sale.</p>
+    <p>Search, choose the item, and add it to this sale.</p>
   </div>
   <div class="product-grid search-results-grid counter-results" id="catalog"></div>
+
+  <section class="panel chalin-cart-panel" aria-label="Sale items">
+    <header class="counter-sale-head">
+      <div>
+        <p class="eyebrow">{% if purchase %}DELIVERY ITEMS{% else %}SALE ITEMS{% endif %}</p>
+        <h2>{% if purchase %}Items being received{% else %}Review the cart{% endif %}</h2>
+        <p class="muted">{% if purchase %}Confirm quantities before posting stock.{% else %}Quantities and prices remain visible while you finish customer and payment details.{% endif %}</p>
+      </div>
+      <span class="pill" id="cart-count">0 lines</span>
+    </header>
+    <div id="cart" class="counter-cart chalin-cart-list" aria-live="polite"></div>
+    <div class="cart-total counter-total chalin-cart-total">
+      <span>{% if purchase %}Delivery total{% else %}Sale total{% endif %} · {{ company.currency }}</span>
+      <strong id="total">0.00</strong>
+    </div>
+  </section>
 </section>
 
-<section class="panel cart-panel premium-cart counter-sale-panel" id="checkout-panel" tabindex="-1">
-  <header class="counter-sale-head">
+<section class="panel counter-sale-panel chalin-checkout-panel" id="checkout-panel" tabindex="-1">
+  <header class="chalin-checkout-head">
     <div>
-      <p class="eyebrow">{% if purchase %}DELIVERY{% else %}CURRENT SALE{% endif %}</p>
-      <h2>{% if purchase %}Receive stock{% else %}Sale summary{% endif %}</h2>
+      <p class="eyebrow">{% if purchase %}STEP 2{% else %}STEP 2{% endif %}</p>
+      <h2>{% if purchase %}Supplier & payment{% else %}Customer & payment{% endif %}</h2>
+      <p class="muted">{% if purchase %}Choose the supplier, record payment and post the delivery.{% else %}Choose a customer only when needed, select how they paid, then complete the sale once.{% endif %}</p>
     </div>
-    <div class="counter-sale-head-actions">
-      <span class="pill" id="cart-count">0 lines</span>
-      {% if not purchase and held %}
-      <button type="button" class="text-button held-sales-launch" id="open-held-sales">Held · {{ held|length }}</button>
-      {% endif %}
-    </div>
+    {% if not purchase and held %}
+    <button type="button" class="button secondary held-sales-launch" id="open-held-sales">Held sales · {{ held|length }}</button>
+    {% endif %}
   </header>
-
-  <div id="cart" class="counter-cart" aria-live="polite"></div>
-
-  <div class="cart-total counter-total">
-    <span>Total · {{ company.currency }}</span>
-    <strong id="total">0.00</strong>
-  </div>
 
   <form id="checkout">{% csrf_token %}
     {% if purchase %}
-    <section class="counter-customer">
+    <section class="counter-customer chalin-customer-card">
       <label for="party">Supplier</label>
       <select id="party" name="party" required><option value="">Select supplier</option>{% for party in parties %}<option value="{{ party.pk }}">{{ party.name }} · {{ party.phone }}</option>{% endfor %}</select>
     </section>
     {% else %}
-    <section class="counter-customer">
+    <section class="counter-customer chalin-customer-card">
       <input type="hidden" id="party" name="party">
       <div class="counter-customer-title">
         <label for="customer-search">Customer <small>Optional for a fully paid walk-in sale</small></label>
-        <button type="button" class="text-button" id="new-customer-toggle">＋ New</button>
+        <button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button>
         <button type="button" class="text-button hidden" id="clear-customer">Change</button>
       </div>
-      <input id="customer-search" type="search" autocomplete="off" placeholder="Search name or Ghana phone">
+      <input id="customer-search" type="search" autocomplete="off" placeholder="Search saved customer by name or Ghana phone">
       <div id="customer-results" class="customer-results counter-customer-results" role="listbox" aria-label="Customer search results"></div>
       <div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
       <div id="new-customer-fields" class="new-customer-fields hidden counter-new-customer">
         <input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer name">
         <div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
       </div>
+      <label class="checkout-consent compact-consent" id="customer-consent-wrap">
+        <input id="customer-consent" type="checkbox">
+        <span><strong>Send receipt by SMS</strong><small>Tick only after this customer agrees to receive the receipt message.</small></span>
+      </label>
     </section>
     {% endif %}
 
-    <div class="sale-checkout-bar counter-finish-bar" aria-label="Checkout actions">
-      <div class="sale-checkout-total">
-        <small>{% if purchase %}DELIVERY TOTAL{% else %}SALE TOTAL{% endif %}</small>
+    <section class="chalin-payment-card">
+      <div class="chalin-section-title">
+        <div><p class="eyebrow">PAYMENT</p><h3>{% if purchase %}How was this paid?{% else %}How did the customer pay?{% endif %}</h3></div>
         <strong>{{ company.currency }} <span id="payment-total">0.00</span></strong>
       </div>
-      <button class="button sale-payment-open" type="button" id="open-payment">{% if purchase %}Payment & post{% else %}Payment & finish{% endif %} →</button>
-    </div>
 
-    <dialog id="sale-payment-dialog" class="kofad-dialog sale-payment-dialog">
-      <div class="dialog-heading payment-dialog-heading">
-        <div><p class="eyebrow">PAYMENT</p><h2>{% if purchase %}Record payment{% else %}Finish this sale{% endif %}</h2><p class="muted">Normal sales should take only a few clicks.</p></div>
-        <button class="icon-button" type="button" id="close-payment" aria-label="Close payment">×</button>
-      </div>
-      <div id="payment-error" class="notice error hidden" role="alert"></div>
+      {% if not purchase %}
+      <label for="payment-plan">Settlement</label>
+      <select id="payment-plan">
+        <option value="full">Paid in full now</option>
+        {% if allow_credit_sales %}<option value="part">Part payment · balance becomes debt</option><option value="credit">Credit · pay later</option>{% endif %}
+      </select>
+      {% endif %}
 
-      <div class="payment-dialog-total">
-        <span>Amount due</span>
-        <strong>{{ company.currency }} <span id="payment-dialog-total">0.00</span></strong>
-      </div>
-
-      <div class="payment-dialog-body">
-        {% if not purchase %}
-        <div class="compact-field">
-          <label for="payment-plan">Settlement</label>
-          <select id="payment-plan">
-            <option value="full">Paid in full now</option>
-            {% if allow_credit_sales %}<option value="part">Part payment · balance becomes debt</option><option value="credit">Credit · pay later</option>{% endif %}
-          </select>
-        </div>
-        {% endif %}
-
-        <fieldset class="counter-payment-fieldset">
-          <legend>Payment method</legend>
-          <div class="payment-method-picker" id="payment-method-picker">
-            {% for value,label in payment_methods %}
-            <button type="button" class="payment-method-option" data-payment-method="{{ value }}">{{ label }}</button>
-            {% endfor %}
-            {% if payment_methods|length > 1 %}<button type="button" class="payment-method-option" data-payment-method="split">Split</button>{% endif %}
-          </div>
-
-          <div id="single-payment-wrap" class="single-payment-wrap">
-            <label for="single-payment-value">Amount received</label>
-            <input id="single-payment-value" inputmode="decimal" type="number" min="0" step=".01" value="0">
-          </div>
-
-          <div id="split-payment-grid" class="payment-grid compact-payment-grid hidden">
-            {% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}
-          </div>
-        </fieldset>
-
-        <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
-          <label for="due-date">Due date <small>Required while a balance remains</small></label>
-          <input id="due-date" type="date" max="9999-12-31">
-          {% if not purchase %}<p class="hint">Credit policy allows up to {{ max_credit_days }} days.</p>{% endif %}
+      <fieldset class="counter-payment-fieldset">
+        <legend>Payment method</legend>
+        <div class="payment-method-picker" id="payment-method-picker">
+          {% for value,label in payment_methods %}
+          <button type="button" class="payment-method-option" data-payment-method="{{ value }}">{{ label }}</button>
+          {% endfor %}
+          {% if payment_methods|length > 1 %}<button type="button" class="payment-method-option" data-payment-method="split">Mixed</button>{% endif %}
         </div>
 
-        {% if not purchase %}
-        <label class="checkout-consent compact-consent" id="customer-consent-wrap">
-          <input id="customer-consent" type="checkbox">
-          <span><strong>Customer agrees to SMS receipt</strong><small>Use only when a customer and phone number are attached to this sale.</small></span>
-        </label>
-        {% endif %}
+        <div id="single-payment-wrap" class="single-payment-wrap chalin-single-payment">
+          <label for="single-payment-value">Amount received</label>
+          <input id="single-payment-value" inputmode="decimal" type="number" min="0" step=".01" value="0">
+          <div class="quick-money-row">
+            <button class="button secondary" type="button" id="exact-payment">Exact</button>
+            <button class="text-button" type="button" id="clear-payment">Clear</button>
+          </div>
+        </div>
 
-        {% if policy_controls %}
-        <details class="counter-override">
-          <summary>Discount / price override reason</summary>
-          <textarea id="override-reason" maxlength="500" placeholder="Required only when an override is used."></textarea>
-        </details>
-        {% endif %}
+        <div id="split-payment-grid" class="payment-grid compact-payment-grid hidden">
+          {% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}
+        </div>
+      </fieldset>
+
+      <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
+        <label for="due-date">Due date <small>Required while a balance remains</small></label>
+        <input id="due-date" type="date" max="9999-12-31">
+        {% if not purchase %}<p class="hint">Credit policy allows up to {{ max_credit_days }} days.</p>{% endif %}
       </div>
 
-      <footer class="payment-dialog-actions">
+      {% if policy_controls %}
+      <details class="counter-override">
+        <summary>Discount / price override reason</summary>
+        <textarea id="override-reason" maxlength="500" placeholder="Required only when an override is used."></textarea>
+      </details>
+      {% endif %}
+    </section>
+
+    <section class="chalin-total-panel">
+      <p class="eyebrow">{% if purchase %}DELIVERY TOTAL{% else %}SALE TOTAL{% endif %}</p>
+      <div class="chalin-total-row"><span>Total due</span><strong>{{ company.currency }} <span id="checkout-total-due">0.00</span></strong></div>
+      <div class="chalin-total-row"><span>Paid now</span><strong>{{ company.currency }} <span id="checkout-paid-now">0.00</span></strong></div>
+      <div class="chalin-total-row chalin-balance-row"><span>Balance after sale</span><strong>{{ company.currency }} <span id="checkout-balance">0.00</span></strong></div>
+      <div class="checkout-progress"><span id="checkout-progress-fill"></span></div>
+
+      <div class="chalin-complete-actions">
         {% if not purchase %}<button class="button secondary" type="button" id="hold">Hold sale</button>{% endif %}
-        <button class="button complete-sale-button" id="complete">{% if purchase %}Post purchase{% else %}Complete sale{% endif %}</button>
-      </footer>
-    </dialog>
+        <button class="button complete-sale-button" id="complete">{% if purchase %}Post purchase & receive stock{% else %}Complete Sale & Generate Receipt{% endif %}</button>
+      </div>
+      <p class="hint chalin-submit-hint">One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.</p>
+    </section>
   </form>
 </section>
 </div>
@@ -178,27 +177,37 @@
   </div>
 </dialog>
 
-<dialog id="sale-success-dialog" class="kofad-dialog sale-success-dialog">
+<dialog id="sale-success-dialog" class="kofad-dialog sale-success-dialog chalin-receipt-dialog">
   <div class="sale-success-mark" aria-hidden="true">✓</div>
   <p class="eyebrow">SALE COMPLETE</p>
   <h2>Receipt ready</h2>
   <strong class="sale-success-reference" id="success-reference">—</strong>
-  <div class="sale-success-summary">
-    <span>Total</span><strong>{{ company.currency }} <span id="success-total">0.00</span></strong>
+
+  <div class="success-mini-receipt">
+    <div class="success-receipt-meta">
+      <span id="success-customer">Walk-in customer</span>
+      <span id="success-payment">Payment recorded</span>
+    </div>
+    <div id="success-items" class="success-receipt-items"></div>
+    <div class="success-receipt-totals">
+      <p><span>Total</span><strong>{{ company.currency }} <span id="success-total">0.00</span></strong></p>
+      <p><span>Paid</span><strong>{{ company.currency }} <span id="success-paid">0.00</span></strong></p>
+      <p><span>Balance</span><strong>{{ company.currency }} <span id="success-balance">0.00</span></strong></p>
+    </div>
   </div>
-  <p class="sale-success-customer" id="success-customer">Walk-in customer</p>
+
   <div id="success-message-status" class="notice subtle hidden" role="status"></div>
   <div class="sale-success-actions">
     <a class="button" id="receipt-print" target="_blank" rel="noopener">Print receipt</a>
-    <button class="button secondary" type="button" id="receipt-sms">Send SMS</button>
+    <button class="button secondary" type="button" id="receipt-sms">Send SMS receipt</button>
     <a class="button secondary" id="receipt-a4" target="_blank" rel="noopener">A4 PDF</a>
-    <a class="text-button" id="receipt-view">View receipt</a>
+    <a class="button secondary" id="receipt-view">Open full receipt</a>
   </div>
   <button class="button wide new-sale-button" type="button" id="new-sale-after-success">Start next sale</button>
 </dialog>
 {% endif %}
 
-<button class="mobile-cart button" id="cart-jump" type="button"><span>Review · <span id="mobile-cart-count">0</span> lines</span><strong>{{ company.currency }} <span id="mobile-cart-total">0.00</span> →</strong></button>
+<button class="mobile-cart button" id="cart-jump" type="button"><span>Checkout · <span id="mobile-cart-count">0</span> lines</span><strong>{{ company.currency }} <span id="mobile-cart-total">0.00</span> →</strong></button>
 </div>
 {{ catalog|json_script:"catalog-data" }}
 {{ payment_method_codes|json_script:"payment-methods-data" }}
