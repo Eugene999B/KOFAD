@@ -15,7 +15,7 @@ from .models import (
     Message, Party, Product, Stock,
 )
 from .sms.providers import Submission
-from .sms.service import _delivery_callback_token, create_internal_draft, queue_automatic
+from .sms.service import _delivery_callback_token, create_internal_draft, send_automatic
 from .tests import Fixtures
 
 
@@ -295,10 +295,10 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         message = create_internal_draft(
             self.user, self.branch, contact, "Internal closing draft", "auto:test:provider-off"
         )
-        queue_automatic(message, self.user)
+        send_automatic(message, self.user)
         message.refresh_from_db()
         self.assertEqual(message.status, "draft")
-        self.assertIsNone(message.queued_by)
+        self.assertIsNone(message.submitted_by)
 
     def test_source_key_cannot_be_rebound_to_another_management_recipient(self):
         first = ManagementContact.objects.create(name="First", phone="+233246666666")
@@ -413,7 +413,7 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertTrue(message.manual_override)
         self.assertEqual(message.status, "accepted")
         self.assertEqual(message.provider, "arkesel")
-        self.assertIsNotNone(message.queued_by)
+        self.assertIsNotNone(message.submitted_by)
         attempt = message.delivery_attempts.get()
         self.assertEqual(attempt.provider_id, "msg-1")
         self.assertEqual(attempt.status, "accepted")
