@@ -1,1 +1,53 @@
-{% extends "base.html" %}{% block content %}<section class="panel form-panel"><p class="muted">Return against an original sale. Outstanding debt is reduced first; any remaining amount is refunded. The original receipt remains unchanged.</p><form method="get" class="searchbar"><input name="q" value="{{ q }}" aria-label="Original sale reference" placeholder="Full original sale reference" required><button class="button secondary">Find sale</button></form>{% if lines %}<form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><label for="line">Original item</label><select name="line" id="line">{% for line in lines %}<option value="{{ line.pk }}">{{ line.description }} · {{ line.quantity }} sold · {{ line.mode }}</option>{% endfor %}</select><label for="quantity">Quantity to return in original selling units</label><input id="quantity" name="quantity" type="number" min="1" step="1" required><label for="reason">Reason</label><textarea id="reason" name="reason" minlength="5" required></textarea><label for="method">Refund channel</label><select name="method" id="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><button class="button">Post return</button></form>{% elif q %}<div class="empty">No sale matches this reference at this location.</div>{% endif %}</section>{% endblock %}
+{% extends "base.html" %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'approval_center' %}">Approval Center</a>{% if perms.core.manage_company %}<a class="button secondary" href="{% url 'return_privileges' %}">Return privileges</a>{% endif %}</div>{% endblock %}
+{% block content %}
+<section class="hero-panel returns-hero">
+  <div><p class="eyebrow">CUSTOMER RETURNS</p><h2>Handle the whole return correctly—not just one item.</h2><p>Find the original sale, select every item being returned, choose whether each item is sellable or damaged, and let KOFAD calculate the debt credit and refund. {% if direct_authority %}<strong>Your account has direct-return authority.</strong>{% else %}Your request posts only after approval.{% endif %}</p></div>
+  <span class="pill">{% if direct_authority %}Direct authority{% else %}Approval controlled{% endif %}</span>
+</section>
+
+<section class="panel return-search-panel">
+  <div class="section-heading"><div><h2>1. Find the original sale</h2><p class="muted">Search by KOFAD receipt/reference, customer name or phone number.</p></div></div>
+  <form method="get" class="searchbar"><input name="q" value="{{ q }}" placeholder="Receipt, customer or phone" required><button class="button">Search sales</button></form>
+  {% if sales %}
+  <div class="return-sale-results">
+  {% for sale in sales %}<a href="?q={{ q|urlencode }}&sale={{ sale.pk }}" class="return-sale-card {% if selected.pk == sale.pk %}active{% endif %}">
+    <span><strong>{{ sale.reference }}</strong><small>{{ sale.party.name|default:"Walk-in customer" }} · {{ sale.created_at|date:"d M Y, H:i" }}</small></span>
+    <span><strong>{{ company.currency }} {{ sale.total|floatformat:2 }}</strong><small>{% if sale.due_date %}Due {{ sale.due_date }}{% else %}Paid / counter sale{% endif %}</small></span>
+  </a>{% endfor %}
+  </div>
+  {% elif q and not selected %}<div class="empty">No sale matches that search.</div>{% endif %}
+</section>
+
+{% if selected %}
+<form method="post" class="return-workspace">{% csrf_token %}<input type="hidden" name="sale" value="{{ selected.pk }}">
+<section class="panel">
+  <div class="section-heading"><div><p class="eyebrow">ORIGINAL SALE</p><h2>{{ selected.reference }}</h2><p class="muted">{{ selected.party.name|default:"Walk-in customer" }}{% if selected.party.phone %} · {{ selected.party.phone }}{% endif %}</p></div><strong>{{ company.currency }} {{ selected.total|floatformat:2 }}</strong></div>
+  <div class="return-lines">
+  {% for row in line_rows %}
+    <article class="return-line {% if row.eligible == 0 %}disabled{% endif %}">
+      <label class="return-line-select"><input type="checkbox" name="selected_{{ row.line.pk }}" {% if row.eligible == 0 %}disabled{% endif %}><span><strong>{{ row.line.product.name }}</strong><small>{{ row.line.product.sku }} · Sold {{ row.line.quantity }} · Already returned {{ row.posted }} · Pending {{ row.pending }}</small></span></label>
+      <div class="return-line-controls">
+        <label>Eligible<input value="{{ row.eligible }}" disabled></label>
+        <label>Return qty<input type="number" name="quantity_{{ row.line.pk }}" min="1" max="{{ row.eligible }}" step="1" value="{% if row.eligible %}1{% endif %}" {% if row.eligible == 0 %}disabled{% endif %}></label>
+        <label>Stock outcome<select name="disposition_{{ row.line.pk }}" {% if row.eligible == 0 %}disabled{% endif %}><option value="sellable">Sellable — return to stock</option><option value="quarantine">Damaged / doubtful — quarantine</option></select></label>
+        <div><small>Eligible value</small><strong>{{ company.currency }} {{ row.line_value|floatformat:2 }}</strong></div>
+      </div>
+    </article>
+  {% empty %}<div class="empty">This sale has no returnable lines.</div>{% endfor %}
+  </div>
+</section>
+<section class="panel return-decision">
+  <div class="section-heading"><div><h2>2. Explain and settle the return</h2><p class="muted">KOFAD first reduces any outstanding customer debt. Only the remaining value is refunded through the channel below.</p></div></div>
+  <div class="form-grid"><label>Return reason<textarea name="reason" minlength="5" maxlength="2000" required placeholder="Wrong part, damaged item, customer changed mind, delivery issue…"></textarea></label><label>Refund channel<select name="refund_method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><small>Used only if money must actually be refunded after debt reduction.</small></label></div>
+  {% if direct_authority %}<div class="notice success"><strong>Direct-return authority:</strong> submitting posts the return immediately, updates stock/quarantine, customer debt and any refund.</div>{% else %}<div class="notice"><strong>Approval controlled:</strong> submitting reserves the selected quantities only. No stock, debt or cash changes until an authorized reviewer approves it in the Approval Center.</div>{% endif %}
+  <button class="button">{% if direct_authority %}Post customer return{% else %}Send return for approval{% endif %}</button>
+</section>
+</form>
+{% endif %}
+
+<section class="panel"><div class="section-heading"><div><h2>Return history</h2><p class="muted">Pending requests and posted returns remain linked to the original receipt.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>When</th><th>Sale</th><th>Customer</th><th>Items</th><th>Requested by</th><th>Status</th><th>Result</th></tr></thead><tbody>
+{% for row in history %}<tr><td>{{ row.created_at|date:"d M Y, H:i" }}</td><td>{{ row.sale.reference }}</td><td>{{ row.sale.party.name|default:"Walk-in" }}</td><td>{{ row.lines.count }}</td><td>{{ row.requested_by }}</td><td><span class="pill">{{ row.get_status_display }}</span>{% if row.direct %}<small>Direct authority</small>{% endif %}</td><td>{% if row.posted %}<a href="{% url 'document' row.posted.pk %}">{{ row.posted.reference }}</a>{% elif row.status == "requested" %}<a href="{% url 'approval_center' %}">Waiting approval</a>{% else %}{{ row.reviewed_by|default:"—" }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="empty">No customer return activity yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
