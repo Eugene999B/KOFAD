@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420" role="img" aria-labelledby="title desc">
+  <title id="title">KOFAD IMPEX monogram</title>
+  <desc id="desc">Bespoke KI monogram for KOFAD IMPEX.</desc>
+  <rect x="6" y="6" width="408" height="408" rx="70" fill="none" stroke="#171717" stroke-width="12"/>
+  <path d="M105 86V334" fill="none" stroke="#171717" stroke-width="42" stroke-linecap="square"/>
+  <path d="M130 210L270 86" fill="none" stroke="#B66B45" stroke-width="38" stroke-linecap="square"/>
+  <path d="M130 210L286 334" fill="none" stroke="#171717" stroke-width="38" stroke-linecap="square"/>
+  <path d="M314 92V328" fill="none" stroke="#B66B45" stroke-width="30" stroke-linecap="square"/>
+  <path d="M246 104L284 104" stroke="#171717" stroke-width="10"/>
+  <path d="M268 316L308 316" stroke="#B66B45" stroke-width="10"/>
+</svg>
