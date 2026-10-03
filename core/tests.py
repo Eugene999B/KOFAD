@@ -600,6 +600,41 @@ class CreditorsTests(Fixtures, TestCase):
         with self.assertRaises(ValidationError):
             s.request_correction(self.user, self.branch, paid_bill.pk, "Need to reverse this paid creditor bill")
 
+    def test_due_date_filter_scopes_creditor_totals_to_matching_bills(self):
+        from . import creditors as creditor_service
+        today = timezone.localdate()
+        creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "40",
+                "document_date": today.isoformat(),
+                "due_date": (today + timedelta(days=3)).isoformat(),
+                "external_reference": "DUE-3", "category": "utilities",
+                "note": "Utility bill due soon",
+            },
+            uuid.uuid4(),
+        )
+        creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "90",
+                "document_date": today.isoformat(),
+                "due_date": (today + timedelta(days=20)).isoformat(),
+                "external_reference": "DUE-20", "category": "maintenance",
+                "note": "Maintenance bill due later",
+            },
+            uuid.uuid4(),
+        )
+        self.authenticate_client()
+        response = self.client.get("/creditors/", {
+            "due_from": (today + timedelta(days=1)).isoformat(),
+            "due_to": (today + timedelta(days=7)).isoformat(),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["overview"]["total_payables"], Decimal("40"))
+        self.assertEqual(response.context["rows"][0]["bill_count"], 1)
+        self.assertEqual(response.context["rows"][0]["outstanding"], Decimal("40"))
+
     def test_creditor_search_finds_supplier_invoice_reference(self):
         from . import creditors as creditor_service
         self.credit_purchase(amount="75", external_reference="LOOKUP-AP-75")
