@@ -54,7 +54,7 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertContains(response, "A4 PDF / print")
         self.assertContains(response, "Thermal 80mm PDF")
         self.assertContains(response, "Thermal 58mm PDF")
-        self.assertContains(response, "Headers and footers")
+        self.assertNotContains(response, "Best print quality:")
 
         for format_name in ("a4", "thermal80", "thermal58"):
             with self.subTest(format=format_name):
