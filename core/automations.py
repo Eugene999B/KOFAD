@@ -8,7 +8,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.db.models import Sum
+from django.db.models import Q
 from django.utils import timezone
 
 from . import debts as debt_service
@@ -97,13 +97,10 @@ def prepare_payment_confirmation(document, actor=None):
 
 
 def management_contacts(branch, field):
-    filters = {
-        "active": True,
-        field: True,
-    }
+    filters = {"active": True, field: True}
     return ManagementContact.objects.filter(**filters).filter(
-        branch__isnull=True
-    ) | ManagementContact.objects.filter(**filters, branch=branch)
+        Q(branch__isnull=True) | Q(branch=branch)
+    )
 
 
 def prepare_closing_notifications(closing, actor=None):
@@ -194,7 +191,7 @@ def render_debt_account_message(party, today=None):
     })
 
 
-def _debt_frequency_allows(branch, party, policy, now):
+def _debt_frequency_allows(branch, party, policy, now, snapshot):
     history = Message.objects.filter(
         branch=branch,
         party=party,
@@ -204,6 +201,8 @@ def _debt_frequency_allows(branch, party, policy, now):
     if last:
         minimum = timedelta(hours=policy.minimum_hours_between_sms)
         if now - last.created_at < minimum:
+            return False
+        if snapshot["overdue"] > 0 and now - last.created_at < timedelta(days=policy.overdue_repeat_days):
             return False
     if history.filter(created_at__gte=now - timedelta(days=7)).count() >= policy.max_sms_7_days:
         return False
@@ -223,7 +222,6 @@ def run_debt_reminders(now=None):
     if now.time().replace(tzinfo=None) < policy.reminder_time:
         return 0
 
-    company = _company()
     actor = _actor()
     if not actor:
         return 0
@@ -233,7 +231,7 @@ def run_debt_reminders(now=None):
             snapshot = debt_service.customer_account_snapshot(party)
             if not _debt_eligible(snapshot, policy, today):
                 continue
-            if not _debt_frequency_allows(branch, party, policy, now):
+            if not _debt_frequency_allows(branch, party, policy, now, snapshot):
                 continue
             body = render_debt_account_message(party, today)
             if not body:
