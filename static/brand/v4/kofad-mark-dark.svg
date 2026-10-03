@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420" role="img" aria-labelledby="title desc">
+<title id="title">KOFAD IMPEX dark-background monogram</title><desc id="desc">Dark-background version of the refined KOFAD IMPEX monogram.</desc>
+<rect width="420" height="420" rx="52" fill="#171717"/>
+
+  <path d="M92 28H326C363 28 392 57 392 94V144" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M392 276V326C392 363 363 392 326 392H276" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M144 392H94C57 392 28 363 28 326V276" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M28 144V94C28 57 57 28 94 28H144" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M392 168V252" stroke="#B66B45" stroke-width="12"/>
+  <path d="M168 392H252" stroke="#B66B45" stroke-width="12"/>
+  <path d="M94 92H140V330H94Z" fill="#171717"/>
+  <path d="M136 201L247 92H299L167 229L136 220Z" fill="#B66B45"/>
+  <path d="M136 205L169 192L304 330H247L136 225Z" fill="#171717"/>
+  <path d="M316 96H348V326H316Z" fill="#B66B45"/>
+  <path d="M299 96H365V113H299Z" fill="#171717"/>
+  <path d="M299 309H365V326H299Z" fill="#171717"/>
+  <path d="M268 92L299 92L278 113L247 113Z" fill="#171717"/>
+  <path d="M276 309L307 309L287 330L256 330Z" fill="#171717"/>
+</svg>
