@@ -1,2 +1,64 @@
-{% extends "base.html" %}{% load static %}{% block actions %}<div class="actions">{% if doc.party and perms.core.operate_sales %}<form method="post" action="/communications/">{% csrf_token %}<input type="hidden" name="action" value="document"><input type="hidden" name="document" value="{{ doc.pk }}">{% if doc.kind == "sale" %}<button class="button secondary" name="template" value="receipt">Prepare receipt SMS</button>{% if outstanding %}<button class="text-button" name="template" value="debt">Prepare reminder</button>{% endif %}{% elif doc.kind == "collection" %}<button class="button secondary" name="template" value="payment">Prepare payment SMS</button>{% endif %}</form>{% endif %}<button class="button secondary" data-print>Print / save PDF</button><button class="text-button" data-thermal>Thermal layout</button></div>{% endblock %}{% block content %}<article class="panel receipt"><header class="receipt-header"><div class="brand receipt-brand">{% include "brand.html" %}</div><div><h2>{{ doc.get_kind_display }}</h2><span class="reference">{{ doc.reference }}</span><p>{{ doc.created_at|date:"d F Y, H:i" }}</p></div></header><p>{{ company.address }}<br>{{ company.phone }}</p><div class="receipt-meta"><p><small>LOCATION</small>{{ doc.branch.name }}</p><p><small>CONTACT</small>{% if doc.party %}{{ doc.party }}{% elif doc.kind == "inventory_writeoff" %}Internal inventory record{% else %}Walk-in customer{% endif %}{% if company.receipt_show_contact_phone and doc.party %}<br><span class="muted">{{ doc.party.phone }}</span>{% endif %}</p>{% if company.receipt_show_staff %}<p><small>RECORDED BY</small>{{ doc.created_by }}</p>{% endif %}</div>{% if doc.original %}<p>Linked record: <a href="/documents/{{ doc.original.pk }}/">{{ doc.original.reference }}</a></p>{% endif %}
-<div class="table-wrap"><table><thead><tr><th>Item</th><th>Mode</th><th>Quantity × units</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>{% for line in doc.lines.all %}<tr><td>{{ line.description }}</td><td>{{ line.mode }}</td><td>{{ line.quantity }} × {{ line.factor }}</td><td class="number">{% if line.discount_percent %}{% if line.list_price %}<small>List {{ line.list_price }}</small>{% endif %}{{ line.unit_price }}<small>{{ line.discount_percent }}% discount</small>{% elif line.list_price and line.list_price != line.unit_price %}<small>List {{ line.list_price }}</small>{{ line.unit_price }}<small>Price override</small>{% else %}{{ line.unit_price }}{% endif %}</td><td class="number">{{ line.total }}</td></tr>{% empty %}<tr><td colspan="5">{{ doc.note|default:doc.get_kind_display }}</td></tr>{% endfor %}</tbody></table></div><div class="receipt-totals">{% if doc.kind == "inventory_writeoff" %}<p>Inventory loss value <strong>{{ company.currency }} {{ doc.total }}</strong></p>{% else %}<p>Total <strong>{{ company.currency }} {{ doc.total }}</strong></p><p>Paid / refunded at posting <strong>{{ doc.paid }}</strong></p>{% endif %}{% if outstanding != None %}<p>Current outstanding <strong>{{ outstanding }}</strong></p>{% endif %}{% if doc.due_date %}<p>Due date <strong>{{ doc.due_date }}</strong></p>{% endif %}{% for payment in doc.payments.all %}<p>{{ payment.get_method_display }} <span>{{ payment.amount }} {% if company.receipt_show_payment_reference and payment.reference %}· {{ payment.reference }}{% endif %}</span></p>{% endfor %}</div>{% if doc.note %}<p class="notice">{{ doc.note }}</p>{% endif %}<footer class="receipt-footer">{{ company.receipt_footer }}<small>Reprints preserve the original transaction reference.</small></footer></article>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block actions %}
+<div class="actions receipt-actions">
+{% if doc.party and perms.core.operate_sales %}
+<form method="post" action="/communications/">{% csrf_token %}<input type="hidden" name="action" value="document"><input type="hidden" name="document" value="{{ doc.pk }}">
+{% if doc.kind == "sale" %}<button class="button secondary" name="template" value="receipt">Prepare receipt SMS</button>{% if outstanding %}<button class="text-button" name="template" value="debt">Prepare reminder</button>{% endif %}
+{% elif doc.kind == "collection" %}<button class="button secondary" name="template" value="payment">Prepare payment SMS</button>{% endif %}
+</form>
+{% endif %}
+<button class="button secondary" type="button" data-print-mode="a4">Print / save A4 PDF</button>
+<button class="text-button" type="button" data-print-mode="thermal80">Thermal 80mm</button>
+<button class="text-button" type="button" data-print-mode="thermal58">Thermal 58mm</button>
+</div>
+{% endblock %}
+{% block content %}
+<article class="panel receipt document-receipt">
+<header class="receipt-header">
+<div class="brand receipt-brand">{% include "brand.html" %}</div>
+<div class="receipt-title-block"><p class="receipt-kind">{{ doc.get_kind_display }}</p><h2>{{ doc.reference }}</h2><span>{{ doc.created_at|date:"d F Y, H:i" }}</span></div>
+</header>
+
+<div class="receipt-business-bar">
+<div><small>BUSINESS CONTACT</small><strong>{% if company.phone %}{{ company.phone }}{% else %}Not configured{% endif %}{% if company.secondary_phone %} · {{ company.secondary_phone }}{% endif %}</strong></div>
+<div><small>LOCATION</small><strong>{{ doc.branch.name }}</strong><span>{% if doc.branch.address %}{{ doc.branch.address }}{% elif company.address %}{{ company.address }}{% else %}Location address not configured{% endif %}</span></div>
+</div>
+
+<div class="receipt-meta">
+{% if doc.party %}
+<p><small>{% if doc.kind == "purchase" or doc.kind == "supplier_return" or doc.kind == "supplier_payment" %}SUPPLIER{% else %}CUSTOMER{% endif %}</small><strong>{{ doc.party }}</strong>{% if company.receipt_show_contact_phone %}<br><span class="muted">{{ doc.party.phone }}</span>{% endif %}</p>
+{% elif doc.kind == "inventory_writeoff" %}<p><small>ACCOUNT</small><strong>Internal inventory record</strong></p>
+{% else %}<p><small>ACCOUNT</small><strong>Internal / walk-in record</strong></p>{% endif %}
+{% if company.receipt_show_staff %}<p><small>RECORDED BY</small><strong>{{ doc.created_by.get_full_name|default:doc.created_by.username }}</strong></p>{% endif %}
+{% if doc.due_date %}<p><small>DUE DATE</small><strong>{{ doc.due_date|date:"d M Y" }}</strong></p>{% endif %}
+</div>
+
+{% if doc.original %}<p class="receipt-linked">Linked record: <a href="/documents/{{ doc.original.pk }}/">{{ doc.original.reference }}</a></p>{% endif %}
+
+<div class="table-wrap receipt-table-wrap"><table class="receipt-table"><thead><tr><th>Item</th><th>Mode</th><th>Qty</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>
+{% for line in doc.lines.all %}
+<tr>
+<td><strong>{{ line.description }}</strong></td>
+<td>{% if line.mode == "retail_pack" %}Retail pack{% elif line.mode == "retail_unit" %}Retail{% elif line.mode == "wholesale_pack" %}Wholesale pack{% elif line.mode == "wholesale_unit" %}Wholesale{% elif line.mode == "writeoff" %}Write-off{% else %}{{ line.mode|title }}{% endif %}</td>
+<td>{{ line.quantity }}{% if line.factor > 1 %} × {{ line.factor }}{% endif %}</td>
+<td class="number">{% if line.discount_percent %}{% if line.list_price %}<small>List {{ line.list_price }}</small>{% endif %}{{ line.unit_price }}<small>{{ line.discount_percent }}% off</small>{% elif line.list_price and line.list_price != line.unit_price %}<small>List {{ line.list_price }}</small>{{ line.unit_price }}<small>Override</small>{% else %}{{ line.unit_price }}{% endif %}</td>
+<td class="number">{{ line.total }}</td>
+</tr>
+{% empty %}<tr><td colspan="5">{{ doc.note|default:doc.get_kind_display }}</td></tr>{% endfor %}
+</tbody></table></div>
+
+<div class="receipt-summary">
+<div class="receipt-payment-list">
+{% for payment in doc.payments.all %}<p><span>{{ payment.get_method_display }}{% if company.receipt_show_payment_reference and payment.reference %}<small>{{ payment.reference }}</small>{% endif %}</span><strong>{{ company.currency }} {{ payment.amount }}</strong></p>{% empty %}<p><span>No payment recorded at posting</span><strong>—</strong></p>{% endfor %}
+</div>
+<div class="receipt-totals">
+{% if doc.kind == "inventory_writeoff" %}<p><span>Inventory loss value</span><strong>{{ company.currency }} {{ doc.total }}</strong></p>
+{% else %}<p class="grand-total"><span>Total</span><strong>{{ company.currency }} {{ doc.total }}</strong></p><p><span>Paid / refunded at posting</span><strong>{{ company.currency }} {{ doc.paid }}</strong></p>{% endif %}
+{% if outstanding != None %}<p><span>Current outstanding</span><strong>{{ company.currency }} {{ outstanding }}</strong></p>{% endif %}
+</div>
+</div>
+
+{% if doc.note %}<p class="receipt-note"><strong>Note</strong><span>{{ doc.note }}</span></p>{% endif %}
+<footer class="receipt-footer"><strong>{{ company.receipt_footer }}</strong><small>{{ company.name }}{% if company.phone %} · {{ company.phone }}{% endif %}{% if company.secondary_phone %} · {{ company.secondary_phone }}{% endif %}</small><small>Reprints preserve the original transaction reference.</small></footer>
+</article>
+{% endblock %}
