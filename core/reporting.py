@@ -281,14 +281,14 @@ def build_report(branch, first, last, family="register", query="", category="", 
             quarantine = held.get(product.pk, 0)
             rows.append({
                 "sku": product.sku, "product": product.name, "category": product.category,
-                "sellable": sellable, "quarantine": quarantine, "physical": sellable + quarantine,
+                "units": sellable, "sellable": sellable, "quarantine": quarantine, "physical": sellable + quarantine,
                 "reorder": product.reorder_level, "status": "Reorder" if sellable <= product.reorder_level else "Healthy",
                 "cost": product.cost, "value": product.cost * sellable,
             })
         rows = _match(rows, query)
         return rows, [
             ("sku", "SKU"), ("product", "Product"), ("category", "Category"),
-            ("sellable", "Sellable units"), ("quarantine", "Quarantined"),
+            ("sellable", "Sellable units"), ("quarantine", "Quarantined units"),
             ("physical", "Physical total"), ("reorder", "Reorder level"),
             ("status", "Stock status"), ("cost", "Unit cost"), ("value", "Stock value"),
         ]
