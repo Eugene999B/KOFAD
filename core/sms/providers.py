@@ -102,8 +102,9 @@ class Arkesel:
             "sender": sender,
             "message": body,
             "recipients": [value.lstrip("+") for value in recipients],
-            "sandbox": sandbox,
         }
+        if sandbox:
+            payload["sandbox"] = True
         if callback_url:
             payload["callback_url"] = callback_url
         request = Request(
