@@ -212,6 +212,11 @@ def _supplier_from_payload(user, branch, payload):
         raise ValidationError("Choose an existing creditor or enter the new creditor name.")
     if not phone:
         raise ValidationError("Enter a phone number for the new creditor.")
+    existing = Party.objects.filter(
+        branch=branch, kind="supplier", name__iexact=name, phone=phone
+    ).first()
+    if existing:
+        return existing
     supplier = Party.objects.create(
         branch=branch,
         kind="supplier",
@@ -239,6 +244,8 @@ def post_creditor_bill(user, branch, payload, key):
     if amount <= 0:
         raise ValidationError("Creditor amount must be greater than zero.")
     document_date = _business_date(payload.get("document_date"), "Bill date", timezone.localdate())
+    if document_date > timezone.localdate():
+        raise ValidationError("Bill date cannot be in the future.")
     due_date = _business_date(payload.get("due_date"), "Due date")
     if not due_date:
         raise ValidationError("A due date is required.")
