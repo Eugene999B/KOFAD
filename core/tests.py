@@ -216,8 +216,8 @@ class BusinessTests(Fixtures, TestCase):
 
     def test_login_accepts_ghana_phone_and_forces_temporary_password_change(self):
         self.user.access.recovery_phone = "+233241234567"
-        self.user.access.must_change_password = True
-        self.user.access.save(update_fields=["recovery_phone", "must_change_password"])
+        self.user.access.force_password_change = True
+        self.user.access.save(update_fields=["recovery_phone", "force_password_change"])
         response = self.client.post("/login/", {
             "username": "0241234567",
             "password": "test-password-long-enough",
@@ -239,7 +239,7 @@ class BusinessTests(Fixtures, TestCase):
         self.assertTrue(owner.is_staff)
         self.assertTrue(owner.check_password("0249998877"))
         self.assertEqual(owner.access.recovery_phone, "+233249998877")
-        self.assertTrue(owner.access.must_change_password)
+        self.assertTrue(owner.access.force_password_change)
         self.assertEqual(
             set(owner.access.branches.values_list("pk", flat=True)),
             set(Branch.objects.filter(active=True).values_list("pk", flat=True)),
