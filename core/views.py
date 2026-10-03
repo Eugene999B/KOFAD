@@ -341,7 +341,7 @@ def send_transaction_message_api(request, pk):
     if not settings.SMS_ENABLED:
         return JsonResponse({"error": "SMS delivery is not enabled for this deployment."}, status=400)
 
-    from .sms.service import create_draft, queue_message
+    from .sms.service import create_draft, send_message_now
     from .sms.templates import render_for_document
 
     try:
@@ -355,27 +355,45 @@ def send_transaction_message_api(request, pk):
         ).order_by("-created_at").first()
 
         retryable = {"failed", "undelivered", "expired"}
-        in_flight = {"queued", "sending", "retry_wait", "accepted", "delivered", "simulated"}
+        in_flight = {"sending", "accepted", "delivered", "simulated"}
         if item and item.status in in_flight:
+            label = {
+                "sending": "sending",
+                "accepted": "sent",
+                "delivered": "delivered",
+                "simulated": "test sent",
+            }.get(item.status, item.status)
             return JsonResponse({
                 "ok": True,
                 "status": item.status,
-                "message": f"Receipt SMS is already {item.status}.",
+                "message": f"Receipt SMS is already {label}.",
             })
         if item and item.status == "unknown":
             return JsonResponse({
-                "error": "The previous SMS result is unknown. Verify it before sending again."
+                "error": "The previous SMS delivery result is unknown. Check the provider result before sending again."
             }, status=409)
         if item and item.status in retryable:
-            queue_message(request.user, branch, item.pk, retry=True)
-            return JsonResponse({"ok": True, "status": "queued", "message": "Receipt SMS retry queued."})
+            sent = send_message_now(request.user, branch, item.pk, retry=True)
+            return JsonResponse({
+                "ok": sent.status in {"accepted", "delivered", "simulated"},
+                "status": sent.status,
+                "message": "Receipt SMS sent to Arkesel." if sent.status == "accepted"
+                    else "Receipt SMS delivered." if sent.status == "delivered"
+                    else sent.last_error or f"Receipt SMS {sent.status}.",
+            }, status=200 if sent.status in {"accepted", "delivered", "simulated"} else 502)
         if not item:
             item = create_draft(
                 request.user, branch, doc.party, body,
                 source_key=f"document:receipt:{doc.pk}",
             )
-        queue_message(request.user, branch, item.pk)
-        return JsonResponse({"ok": True, "status": "queued", "message": "Receipt SMS queued."})
+        sent = send_message_now(request.user, branch, item.pk)
+        return JsonResponse({
+            "ok": sent.status in {"accepted", "delivered", "simulated"},
+            "status": sent.status,
+            "message": "Receipt SMS sent to Arkesel." if sent.status == "accepted"
+                else "Receipt SMS delivered." if sent.status == "delivered"
+                else sent.last_error or f"Receipt SMS {sent.status}.",
+        }, status=200 if sent.status in {"accepted", "delivered", "simulated"} else 502)
     except (ValidationError, ValueError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 
