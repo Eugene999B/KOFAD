@@ -2,9 +2,9 @@ import hashlib
 import json
 import os
 import uuid
+import requests
 from datetime import timedelta
 from unittest.mock import patch
-from urllib.error import HTTPError, URLError
 
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -172,24 +172,38 @@ class SmsTests(Fixtures,TestCase):
         with self.assertRaises(ValidationError):
             get_provider("uninstalled")
 
-    @patch("core.sms.providers.urlopen")
-    def test_arkesel_contract_and_no_false_success(self,urlopen):
-        response = urlopen.return_value.__enter__.return_value
-        response.status = 200
-        response.read.return_value = json.dumps({"status":"success","data":[{"id":"sms-001"}]}).encode()
+    @patch("core.sms.providers.requests.post")
+    def test_arkesel_contract_and_no_false_success(self,post):
+        response = post.return_value
+        response.status_code = 200
+        response.json.return_value = {"status":"success","data":[{"id":"sms-001"}]}
+        response.text = '{"status":"success"}'
         result = Arkesel().submit("+233241234567","Hello","KOFAD","https://kofad.example/callback",False)
         self.assertEqual(result.status,"accepted")
-        request = urlopen.call_args.args[0]
-        self.assertEqual(request.full_url,"https://sms.arkesel.com/api/v2/sms/send")
-        payload = json.loads(request.data)
-        self.assertEqual(payload["recipients"],["233241234567"])
-        self.assertNotIn("sandbox", payload)
-        response.read.return_value = b"not json"
+        self.assertEqual(post.call_args.args[0],"https://sms.arkesel.com/api/v2/sms/send")
+        kwargs = post.call_args.kwargs
+        self.assertEqual(kwargs["json"]["recipients"],["233241234567"])
+        self.assertNotIn("sandbox", kwargs["json"])
+        self.assertEqual(kwargs["headers"]["api-key"],"test-only-key")
+        self.assertEqual(kwargs["headers"]["User-Agent"],"KOFAD-IMPEX/1.0")
+        self.assertFalse(kwargs["allow_redirects"])
+        response.json.side_effect = ValueError("not json")
+        response.text = "not json"
         self.assertEqual(Arkesel().submit("+233241234567","Hello","KOFAD","https://kofad.example/callback",False).status,"unknown")
 
-    @patch("core.sms.providers.urlopen",side_effect=URLError("timed out"))
+    @patch("core.sms.providers.requests.post",side_effect=requests.RequestException("timed out"))
     def test_transport_error_is_unknown(self,_):
         self.assertEqual(Arkesel().submit("+233241234567","Hello","KOFAD","https://kofad.example/callback",False).status,"unknown")
+
+    @patch("core.sms.providers.requests.post")
+    def test_arkesel_security_edge_block_is_reported_as_provider_failure(self,post):
+        response = post.return_value
+        response.status_code = 403
+        response.json.side_effect = ValueError("html")
+        response.text = "The site owner has blocked access based on your browser's signature."
+        result = Arkesel().submit("+233241234567","Hello","KOFAD","https://kofad.example/callback",False)
+        self.assertEqual(result.status,"failed")
+        self.assertIn("security edge", result.error_detail)
 
 
 class InitialAdminTests(TestCase):
