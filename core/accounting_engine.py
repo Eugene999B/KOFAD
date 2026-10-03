@@ -11,7 +11,7 @@ from django.utils import timezone
 from . import services as s
 from .models import (
     Allocation, CustomerReturnRequest, Document, ManualJournal, ManualJournalLine,
-    Payment, PayrollEntry, PayrollPayment,
+    Payment, PayrollEntry, PayrollPayment, QuarantineItem, Stock,
 )
 
 ZERO = Decimal("0.00")
@@ -154,7 +154,8 @@ def _document_entries(branch, first, last):
 
         elif doc.kind == "inventory_writeoff":
             _row(rows, day, ref, "Inventory write-off", note, "6200", debit=doc.total)
-            _row(rows, day, ref, "Inventory write-off", note, "1200", credit=doc.total)
+            inventory_account = "1210" if QuarantineItem.objects.filter(loss_document=doc).exists() else "1200"
+            _row(rows, day, ref, "Inventory write-off", note, inventory_account, credit=doc.total)
 
         elif doc.kind == "reversal" and doc.original:
             original = doc.original
@@ -173,6 +174,35 @@ def _document_entries(branch, first, last):
             elif original.kind == "creditor_charge":
                 _row(rows, day, ref, "Creditor bill reversal", note, "2000", debit=doc.total)
                 _row(rows, day, ref, "Creditor bill reversal", note, EXPENSE_ACCOUNT.get(original.payable_category or "other", "6990"), credit=doc.total)
+    return rows
+
+
+def _quarantine_entries(branch, first, last):
+    """Move inventory cost between sellable and quarantine control accounts.
+
+    Customer-return quarantine is already debited directly to account 1210 in
+    the return journal, so only its later release/write-off needs additional
+    quarantine accounting.
+    """
+    rows = []
+    items = QuarantineItem.objects.filter(branch=branch).select_related("product", "loss_document")
+    for item in items:
+        value = _money(item.unit_cost) * item.quantity
+        customer_return_origin = str(item.reason or "").startswith("Customer return ")
+
+        if item.reviewed_at and not customer_return_origin:
+            held_day = timezone.localtime(item.reviewed_at).date()
+            if first <= held_day <= last and item.status != "rejected":
+                ref = f"QUAR-{item.pk}"
+                _row(rows, held_day, ref, "Inventory quarantine", item.reason, "1210", debit=value)
+                _row(rows, held_day, ref, "Inventory quarantine", item.reason, "1200", credit=value)
+
+        if item.status == "released" and item.resolved_at:
+            day = timezone.localtime(item.resolved_at).date()
+            if first <= day <= last:
+                ref = f"QUAR-{item.pk}"
+                _row(rows, day, ref, "Quarantine release", item.resolution_note, "1200", debit=value)
+                _row(rows, day, ref, "Quarantine release", item.resolution_note, "1210", credit=value)
     return rows
 
 
@@ -218,7 +248,12 @@ def _manual_entries(branch, first, last):
 
 
 def ledger(branch, first, last):
-    rows = _document_entries(branch, first, last) + _payroll_entries(branch, first, last) + _manual_entries(branch, first, last)
+    rows = (
+        _document_entries(branch, first, last)
+        + _quarantine_entries(branch, first, last)
+        + _payroll_entries(branch, first, last)
+        + _manual_entries(branch, first, last)
+    )
     rows.sort(key=lambda row: (row["date"], row["reference"], row["account_code"]))
     return rows
 
@@ -312,6 +347,29 @@ def statements(branch, first, last):
         cash_flow[bucket] += movement
     cash_flow["net_change"] = sum(cash_flow.values(), ZERO)
 
+    inventory_control = None
+    if last == timezone.localdate():
+        operational_sellable = sum(
+            (row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")),
+            ZERO,
+        )
+        operational_quarantine = sum(
+            (row.quantity * row.unit_cost for row in QuarantineItem.objects.filter(branch=branch, status="held")),
+            ZERO,
+        )
+        ledger_inventory = ZERO
+        for row in cumulative_tb:
+            if row["code"] in {"1200", "1210"}:
+                ledger_inventory += row["debit"] - row["credit"]
+        operational_inventory = operational_sellable + operational_quarantine
+        inventory_control = {
+            "operational": operational_inventory,
+            "ledger": ledger_inventory,
+            "difference": operational_inventory - ledger_inventory,
+            "sellable": operational_sellable,
+            "quarantine": operational_quarantine,
+        }
+
     return {
         "trial_balance": period_tb,
         "cumulative_trial_balance": cumulative_tb,
@@ -321,6 +379,7 @@ def statements(branch, first, last):
         "assets": assets, "liabilities": liabilities, "ledger_equity": ledger_equity,
         "equity": equity, "balance_check": assets - liabilities - equity,
         "cash_flow": cash_flow,
+        "inventory_control": inventory_control,
     }
 
 
