@@ -109,7 +109,9 @@ def create_customer_return(user, branch, sale, lines, reason, refund_method):
     if not can_request_customer_return(user):
         raise PermissionDenied("You do not have permission to request customer returns.")
     branch = s.lock_branch(branch)
-    sale = Document.objects.select_for_update().select_related("party").get(pk=sale.pk, branch=branch, kind="sale")
+    sale = Document.objects.select_for_update(of=("self",)).select_related("party").get(
+        pk=sale.pk, branch=branch, kind="sale"
+    )
     reason, refund_method, validated = _validate_request_payload(
         branch, sale, lines, reason, refund_method
     )
@@ -147,7 +149,7 @@ def create_customer_return(user, branch, sale, lines, reason, refund_method):
 @transaction.atomic
 def execute_customer_return(user, branch, request_id, direct=False):
     branch = s.lock_branch(branch)
-    item = CustomerReturnRequest.objects.select_for_update().select_related(
+    item = CustomerReturnRequest.objects.select_for_update(of=("self",)).select_related(
         "sale", "sale__party", "requested_by"
     ).get(pk=request_id, branch=branch)
     if item.status != "requested":
