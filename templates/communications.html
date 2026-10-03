@@ -3,13 +3,6 @@
 {% block content %}
 <section class="hero-panel compact-hero"><div><p class="eyebrow">MESSAGE CENTRE</p><h2>Communications</h2><p>Manual messages, automatic-message rules and provider delivery evidence are separated so staff can tell exactly what KOFAD is doing.</p></div><span class="pill">{% if not sms_enabled %}SMS disabled{% elif sms_sandbox %}SMS sandbox{% else %}SMS live · {{ sms_provider }}{% endif %}</span></section>
 
-<div class="communication-status-grid">
-<article><span>MANUAL</span><strong>Staff drafts</strong><small>Choose an opted-in customer, write the message, then review before queueing.</small></article>
-<article><span>AUTO</span><strong>Customer events</strong><small>Sale: {{ communication_policy.get_sale_receipt_mode_display }} · Payment: {{ communication_policy.get_payment_confirmation_mode_display }} · Debt: {{ debt_policy.get_delivery_mode_display }}</small></article>
-<article><span>MGMT</span><strong>Management alerts</strong><small>{{ management_count }} active recipient{{ management_count|pluralize }} · Closing: {{ communication_policy.get_daily_closing_mode_display }} · Stock: {{ communication_policy.get_low_stock_mode_display }}</small></article>
-<article><span>PROVIDER</span><strong>{% if not sms_enabled %}Not connected{% elif sms_sandbox %}Sandbox only{% else %}Live provider{% endif %}</strong><small>{% if not sms_enabled %}Drafts remain safe in KOFAD until credentials are enabled.{% elif sms_sandbox %}Provider responses do not prove real customer delivery.{% else %}Queued messages may create billable provider submissions.{% endif %}</small></article>
-</div>
-
 <section class="communication-workspace">
 <div class="panel communication-composer">
 <div class="section-heading"><div><p class="eyebrow">MANUAL MESSAGE</p><h2>Prepare a customer message</h2><p class="muted">Only customers who have messaging consent appear here.</p></div></div>

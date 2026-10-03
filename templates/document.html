@@ -11,32 +11,6 @@
 </div>
 {% endblock %}
 {% block content %}
-{% if transaction_message_preview %}
-<section class="transaction-message-card" aria-label="Customer transaction message">
-<div class="transaction-message-head">
-<div><p class="eyebrow">CUSTOMER MESSAGE</p><h2>{% if doc.kind == "collection" %}Payment confirmation ready{% else %}Receipt message ready{% endif %}</h2><p>To {{ doc.party.name }}{% if company.receipt_show_contact_phone %} · {{ doc.party.phone }}{% endif %}</p></div>
-{% if transaction_message %}<span class="pill">{{ transaction_message.status|title }}</span>{% else %}<span class="pill">Ready</span>{% endif %}
-</div>
-<div class="transaction-message-preview">{{ transaction_message_preview }}</div>
-<div class="transaction-message-actions">
-{% if transaction_message_action == "send" or transaction_message_action == "retry" %}
-<form method="post">{% csrf_token %}<input type="hidden" name="action" value="send_transaction_message"><button class="button" type="submit">{% if transaction_message_action == "retry" %}Retry SMS{% else %}Send SMS now{% endif %}</button></form>
-<small>One click queues this exact message for immediate provider submission.</small>
-{% elif transaction_message_action == "sent" %}
-<strong class="success-copy">Message already {{ transaction_message.status }}.</strong><small>No duplicate will be created.</small>
-{% elif transaction_message_action == "consent" %}
-<strong>SMS not enabled for this customer.</strong><small>Confirm the customer's agreement and tick “SMS receipt” during checkout before sending transaction messages.</small>
-{% elif transaction_message_action == "permission" %}
-<strong>Sender permission required.</strong><small>An authorized message sender can send this directly from the receipt.</small>
-{% elif transaction_message_action == "disabled" %}
-<strong>SMS sending is currently disabled.</strong><small>The message is ready, but the live provider must be enabled before it can be sent.</small>
-{% elif transaction_message_action == "unknown" %}
-<strong class="danger">Previous SMS outcome is unknown.</strong><small>Verify with the provider before trying again to avoid a duplicate.</small>
-{% endif %}
-</div>
-</section>
-{% endif %}
-<div class="notice subtle print-screen-tip"><strong>Best print quality:</strong> use the A4 / 80mm / 58mm PDF buttons above. They generate sharp vector text at the exact paper width. “Quick browser print” is only a convenience. If Chrome adds the web address/date, open <em>More settings</em> and turn off <em>Headers and footers</em>.</div>
 <article class="panel receipt document-receipt">
 <header class="receipt-header">
 <div class="brand receipt-brand">{% include "brand.html" %}</div>
