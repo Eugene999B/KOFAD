@@ -14,7 +14,6 @@ def forwards(apps, schema_editor):
     Message.objects.filter(status__in=["queued", "retry_wait"]).update(
         status="failed",
         last_error="Previous pending SMS was cancelled during the direct-send upgrade. Retry to send it directly.",
-        next_attempt_at=None,
     )
 
 
@@ -46,6 +45,10 @@ class Migration(migrations.Migration):
             model_name="message",
             old_name="queued_by",
             new_name="submitted_by",
+        ),
+        migrations.RemoveField(
+            model_name="message",
+            name="next_attempt_at",
         ),
         migrations.RunPython(forwards, backwards),
         migrations.AlterField(
