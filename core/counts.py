@@ -89,8 +89,11 @@ def save_count(user, branch, count_id, values, note="", submit=False):
 
 
 @transaction.atomic
-def review_count(user, branch, count_id, action, note=""):
-    if not (user.is_superuser or user.has_perm("core.manage_company")):
+def review_count(user, branch, count_id, action, note="", owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
         s.permit(user, branch, "operate_inventory" if action == "cancel" else "approve_operations")
     s.lock_branch(branch)
     count = StockCount.objects.select_for_update().get(pk=count_id, branch=branch)
@@ -103,7 +106,7 @@ def review_count(user, branch, count_id, action, note=""):
     else:
         if action not in ("approve", "reject") or count.status != "submitted":
             raise ValidationError("Choose a valid action for a submitted count.")
-        if count.created_by_id == user.pk and not (user.is_superuser or user.has_perm("core.manage_company")):
+        if count.created_by_id == user.pk and not owner_direct:
             raise ValidationError("A different authorized colleague must review this count.")
         note = str(note).strip()
         if len(note) < 5 or len(note) > 2000:
