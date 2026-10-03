@@ -129,12 +129,12 @@ class CommunicationSettings(models.Model):
     low_stock_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     low_stock_time = models.TimeField(default=time(17, 0))
     closing_template = models.TextField(default=(
-        "{company} closing {date} · Sales {currency} {sales_total}; cash expected {currency} {expected_cash}; "
+        "{company} closing {date} - Sales {currency} {sales_total}; cash expected {currency} {expected_cash}; "
         "cash counted {currency} {counted_cash}; variance {currency} {cash_variance}; "
         "debt collected {currency} {debt_collections}; expenses {currency} {expenses}. Submitted by {staff}."
     ))
     low_stock_template = models.TextField(default=(
-        "{company} stock alert · {low_count} product(s) are low and {out_count} out of stock at {location}. "
+        "{company} stock alert - {low_count} product(s) are low and {out_count} out of stock at {location}. "
         "Open Inventory for details."
     ))
 
