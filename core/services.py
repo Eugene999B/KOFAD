@@ -214,6 +214,8 @@ def reference(kind, branch):
 
 
 def balance(invoice):
+    if invoice.kind == "creditor_charge" and hasattr(invoice, "correction") and invoice.correction.status == "approved":
+        return ZERO
     allocated = invoice.settlements.exclude(payment_document__correction__status="approved").aggregate(total=Sum("amount"))["total"] or ZERO
     return invoice.total - invoice.paid - allocated
 
@@ -780,13 +782,17 @@ def request_correction(user, branch, original_id, reason, refund_method="cash"):
     permit(user, branch, "operate_finance")
     lock_branch(branch)
     original = Document.objects.filter(pk=original_id, branch=branch, kind__in=[
-        "sale", "expense", "collection", "supplier_payment"]).first()
+        "sale", "expense", "collection", "supplier_payment", "creditor_charge"]).first()
     if not original:
         raise ValidationError("This record cannot be reversed through this workflow.")
     if len(reason.strip()) < 10:
         raise ValidationError("Explain the correction in at least ten characters.")
     if Correction.objects.filter(original=original).exists():
         raise ValidationError("This document already has a correction request.")
+    if original.kind == "creditor_charge":
+        allocated = original.settlements.exclude(payment_document__correction__status="approved").aggregate(total=Sum("amount"))["total"] or ZERO
+        if allocated > 0:
+            raise ValidationError("Reverse the creditor payments allocated to this bill before reversing the bill itself.")
     if refund_method not in dict(Payment.METHODS):
         raise ValidationError("Choose a valid refund channel.")
     if original.kind == "sale" and not payment_method_enabled(refund_method):
