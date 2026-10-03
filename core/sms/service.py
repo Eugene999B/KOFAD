@@ -118,8 +118,6 @@ def _create_draft_record(user, branch, body, channel="sms", source_key=None, par
                 existing.body, existing.encoding, existing.segments = body, encoding, segments
                 existing.recipient = recipient
                 existing.save(update_fields=["body", "encoding", "segments", "recipient"])
-            elif existing.body != body:
-                raise ValidationError("This prepared message is already in delivery history with different content.")
             return existing
 
     message = Message.objects.create(
