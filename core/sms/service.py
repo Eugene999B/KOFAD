@@ -153,7 +153,66 @@ def create_internal_draft(user, branch, management_contact, body, source_key=Non
     )
 
 
+@transaction.atomic
+def create_direct_draft(user, branch, body, *, channel="sms", source_key=None, party=None, phone="", label=""):
+    """Create an explicitly staff-directed message without the automation consent gate."""
+    if channel not in ("sms", "whatsapp"):
+        raise ValidationError("Unknown channel.")
+    if channel == "sms":
+        permit(user, branch, "send_messages")
+    else:
+        permit(user, branch, "operate_sales" if not user.has_perm("core.send_messages") else "send_messages")
+    lock_branch(branch)
+
+    body = str(body or "").strip()
+    encoding, segments = estimate(body)
+    if party:
+        if party.branch_id != branch.pk or party.kind != "customer":
+            raise ValidationError("Choose a customer from the current location.")
+        recipient = normalize_phone(party.phone)
+        recipient_name = party.name
+    else:
+        recipient = normalize_phone(phone)
+        recipient_name = str(label or "Manual number").strip()[:120]
+
+    existing = Message.objects.filter(branch=branch, source_key=source_key).first() if source_key else None
+    if existing:
+        return existing
+
+    message = Message.objects.create(
+        branch=branch,
+        party=party,
+        created_by=user,
+        body=body,
+        channel=channel,
+        recipient=recipient,
+        recipient_name=recipient_name,
+        manual_override=True,
+        encoding=encoding,
+        segments=segments,
+        source_key=source_key,
+        status="draft",
+    )
+    audit(user, branch, "message.manual_prepared", message.pk, {
+        "channel": channel,
+        "segments": segments,
+        "recipient": recipient,
+        "recipient_type": "customer" if party else "manual",
+    })
+    return message
+
+
 def _recipient_is_current(message):
+    if message.manual_override:
+        if message.party_id:
+            return (
+                message.party.branch_id == message.branch_id
+                and normalize_phone(message.party.phone) == message.recipient
+            )
+        try:
+            return normalize_phone(message.recipient) == message.recipient
+        except ValidationError:
+            return False
     if message.party_id:
         return (
             message.party.branch_id == message.branch_id
@@ -220,7 +279,7 @@ def queue_message(user,branch,pk,retry=False):
     if message.channel != "sms":
         raise ValidationError("WhatsApp delivery is not configured.")
     if not _recipient_is_current(message):
-        raise ValidationError("Consent, recipient details or management-recipient status changed. Prepare a new draft.")
+        raise ValidationError("Recipient details or sending eligibility changed. Prepare a new message.")
     validate_current_context(message)
     provider = message.provider or settings.SMS_PROVIDER
     validate_config(provider)

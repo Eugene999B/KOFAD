@@ -378,6 +378,8 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     recipient = models.CharField(max_length=20, blank=True)
+    recipient_name = models.CharField(max_length=120, blank=True)
+    manual_override = models.BooleanField(default=False)
     provider = models.CharField(max_length=40, blank=True)
     sender = models.CharField(max_length=11, blank=True)
     sandbox = models.BooleanField(default=True)
@@ -396,9 +398,13 @@ class Message(models.Model):
             models.CheckConstraint(
                 condition=(
                     Q(party__isnull=False, management_contact__isnull=True) |
-                    Q(party__isnull=True, management_contact__isnull=False)
+                    Q(party__isnull=True, management_contact__isnull=False) |
+                    (
+                        Q(party__isnull=True, management_contact__isnull=True, manual_override=True)
+                        & ~Q(recipient="")
+                    )
                 ),
-                name="message_exactly_one_recipient",
+                name="message_has_recipient",
             ),
         ]
 

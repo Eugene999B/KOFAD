@@ -33,5 +33,5 @@ class Command(BaseCommand):
             if not options["loop"] and (not found or processed >= options["limit"]):
                 break
             if not found:
-                time.sleep(3)
+                time.sleep(1)
         self.stdout.write(f"Processed {processed} queued SMS records.")

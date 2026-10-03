@@ -1169,47 +1169,182 @@ def receipt_policy_settings(request, branch):
 
 @protected("operate_sales|send_messages")
 def communications(request, branch):
-    from .sms.service import create_draft,queue_message
+    from urllib.parse import quote
     from django.conf import settings
+    from .sms.service import create_draft, create_direct_draft, normalize_phone, queue_message
+
+    redirect_suffix = ""
     if request.method == "POST":
         try:
-            action = request.POST.get("action","draft")
-            if action in ("queue","retry"):
-                item = get_object_or_404(Message,pk=request.POST.get("id"),branch=branch)
-                queue_message(request.user,branch,item.pk,action=="retry")
-                messages.success(request,"SMS queued. The worker will submit it to the selected provider.")
+            action = request.POST.get("action", "send_compose")
+            if action in ("queue", "retry"):
+                item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch)
+                queue_message(request.user, branch, item.pk, action == "retry")
+                messages.success(request, "SMS queued for sending.")
             elif action == "document":
                 from .sms.templates import render_for_document
-                doc = get_object_or_404(Document,pk=request.POST.get("document"),branch=branch)
-                code = request.POST.get("template","receipt")
-                body = render_for_document(doc,code)
-                create_draft(request.user,branch,doc.party,body,source_key=f"{code}:{doc.pk}:{s.balance(doc) if code == 'debt' else 'once'}:{timezone.localdate()}")
-                messages.success(request,"Transaction message prepared. Review it before queueing.")
-            elif action == "draft":
-                party = get_object_or_404(Party,pk=request.POST.get("party"),branch=branch)
-                key = uuid.UUID(request.POST.get("key",""))
-                create_draft(request.user,branch,party,request.POST.get("body",""),request.POST.get("channel","sms"),f"manual:{key}")
-                messages.success(request,"Draft prepared. Review the recipient, content and estimated segments below.")
+                doc = get_object_or_404(Document, pk=request.POST.get("document"), branch=branch)
+                code = request.POST.get("template", "receipt")
+                body = render_for_document(doc, code)
+                create_draft(
+                    request.user, branch, doc.party, body,
+                    source_key=f"{code}:{doc.pk}:{s.balance(doc) if code == 'debt' else 'once'}:{timezone.localdate()}"
+                )
+                messages.success(request, "Transaction message prepared.")
+            elif action == "send_compose":
+                channel = request.POST.get("channel", "sms").strip().lower()
+                target = request.POST.get("target", "one").strip().lower()
+                body = request.POST.get("body", "").strip()
+                key = uuid.UUID(request.POST.get("key", ""))
+                if channel not in ("sms", "whatsapp"):
+                    raise ValidationError("Choose SMS or WhatsApp.")
+                if target not in ("one", "selected", "all", "manual"):
+                    raise ValidationError("Choose who should receive the message.")
+                if not body:
+                    raise ValidationError("Type a message first.")
+                if channel == "sms" and len(body) > 480:
+                    raise ValidationError("Keep SMS messages at 480 characters or fewer.")
+                if channel == "whatsapp" and len(body) > 1000:
+                    raise ValidationError("Keep WhatsApp messages at 1,000 characters or fewer.")
+
+                customers = Party.objects.filter(
+                    branch=branch, kind="customer"
+                ).exclude(phone="").order_by("name", "pk")
+
+                selected = []
+                manual_phone = ""
+                if target == "one":
+                    party_id = request.POST.get("party", "").strip()
+                    if not party_id:
+                        raise ValidationError("Choose a customer.")
+                    selected = [get_object_or_404(customers, pk=party_id)]
+                elif target == "selected":
+                    ids = []
+                    for value in request.POST.getlist("customer_ids"):
+                        try:
+                            ids.append(int(value))
+                        except (TypeError, ValueError):
+                            raise ValidationError("One selected customer is invalid.")
+                    if not ids:
+                        raise ValidationError("Select at least one customer.")
+                    selected = list(customers.filter(pk__in=ids)[:201])
+                elif target == "all":
+                    if request.POST.get("confirm_all") != "yes":
+                        raise ValidationError("Confirm the all-customers send first.")
+                    selected = list(customers[:201])
+                    if customers.count() > 200:
+                        raise ValidationError("This location has more than 200 customer numbers. Use selected customers in smaller groups.")
+                else:
+                    manual_phone = request.POST.get("phone", "").strip()
+                    if not manual_phone:
+                        raise ValidationError("Enter a phone number.")
+
+                recipients = []
+                seen = set()
+                if target == "manual":
+                    normalized = normalize_phone(manual_phone)
+                    recipients.append((None, normalized, "Manual number"))
+                else:
+                    for party in selected:
+                        try:
+                            normalized = normalize_phone(party.phone)
+                        except ValidationError:
+                            continue
+                        if normalized in seen:
+                            continue
+                        seen.add(normalized)
+                        recipients.append((party, normalized, party.name))
+
+                if not recipients:
+                    raise ValidationError("No valid Ghana phone numbers were found.")
+
+                prepared = []
+                for index, (party, phone, label) in enumerate(recipients):
+                    item = create_direct_draft(
+                        request.user,
+                        branch,
+                        body,
+                        channel=channel,
+                        source_key=f"manual:{key}:{index}",
+                        party=party,
+                        phone=phone,
+                        label=label,
+                    )
+                    if channel == "sms":
+                        queue_message(request.user, branch, item.pk)
+                    else:
+                        item.provider = "whatsapp-link"
+                        item.status = "ready"
+                        item.save(update_fields=["provider", "status"])
+                    prepared.append(item)
+
+                if channel == "sms":
+                    messages.success(
+                        request,
+                        f"{len(prepared)} SMS message{'' if len(prepared) == 1 else 's'} queued for immediate sending."
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f"{len(prepared)} WhatsApp chat{'' if len(prepared) == 1 else 's'} prepared."
+                    )
+                    if len(prepared) == 1:
+                        redirect_suffix = f"?wa={prepared[0].pk}"
+                    else:
+                        redirect_suffix = f"?wa_batch={key}"
             else:
                 raise ValidationError("Unknown message action.")
-            return redirect("communications")
-        except (ValidationError,ValueError) as exc:
-            messages.error(request,problem(exc))
+            return redirect("/communications/" + redirect_suffix)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+
     communication_policy = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
     debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
-    rows = Message.objects.filter(branch=branch).select_related(
-        "party", "management_contact", "created_by", "queued_by"
-    ).order_by("-created_at")[:100]
-    return render(request,"communications.html",{
-        "title":"Communications","key":str(uuid.uuid4()),
-        "parties":Party.objects.filter(branch=branch,consent=True),
-        "rows":rows,
-        "communication_policy":communication_policy,
-        "debt_policy":debt_policy,
-        "management_count":ManagementContact.objects.filter(active=True).filter(
-            Q(branch__isnull=True) | Q(branch=branch)
-        ).count(),
-        "sms_enabled":settings.SMS_ENABLED,"sms_sandbox":settings.SMS_SANDBOX,"sms_provider":settings.SMS_PROVIDER
+    rows = list(
+        Message.objects.filter(branch=branch).select_related(
+            "party", "management_contact", "created_by", "queued_by"
+        ).order_by("-created_at")[:120]
+    )
+    for row in rows:
+        row.whatsapp_url = ""
+        if row.channel == "whatsapp" and row.recipient:
+            digits = "".join(ch for ch in row.recipient if ch.isdigit())
+            row.whatsapp_url = f"https://wa.me/{digits}?text={quote(row.body)}"
+
+    whatsapp_launch = None
+    whatsapp_batch = []
+    wa_id = request.GET.get("wa", "")
+    if wa_id.isdigit():
+        whatsapp_launch = next(
+            (row for row in rows if row.pk == int(wa_id) and row.channel == "whatsapp"),
+            None,
+        )
+    wa_batch = request.GET.get("wa_batch", "").strip()
+    if wa_batch:
+        prefix = f"manual:{wa_batch}:"
+        whatsapp_batch = [
+            row for row in rows
+            if row.channel == "whatsapp" and (row.source_key or "").startswith(prefix)
+        ]
+
+    parties = list(
+        Party.objects.filter(branch=branch, kind="customer")
+        .exclude(phone="")
+        .order_by("name", "pk")
+    )
+    return render(request, "communications.html", {
+        "title": "Communications",
+        "key": str(uuid.uuid4()),
+        "parties": parties,
+        "customer_count": len(parties),
+        "rows": rows,
+        "whatsapp_launch": whatsapp_launch,
+        "whatsapp_batch": whatsapp_batch,
+        "communication_policy": communication_policy,
+        "debt_policy": debt_policy,
+        "sms_enabled": settings.SMS_ENABLED,
+        "sms_sandbox": settings.SMS_SANDBOX,
+        "sms_provider": settings.SMS_PROVIDER,
     })
 
 
