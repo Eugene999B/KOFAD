@@ -207,7 +207,7 @@ def _trend(branch, last, months=6):
     return rows
 
 
-def _actions(current, prior, receivables, payables, inventory, pending_approvals):
+def _actions(current, prior, receivables, payables, inventory, accounting, pending_approvals):
     actions = []
     def add(severity, title, evidence, action):
         actions.append({"severity": severity, "title": title, "evidence": evidence, "action": action})
@@ -255,6 +255,15 @@ def _actions(current, prior, receivables, payables, inventory, pending_approvals
         add("medium", "Approval backlog is growing",
             f"{pending_approvals} controlled requests are waiting.",
             "Clear high-value and time-sensitive approvals to avoid operational delay.")
+    if accounting["balance_check"] != 0:
+        add("critical", "Accounting equation is out of balance",
+            f"Assets less liabilities and equity differ by {accounting['balance_check']:.2f}.",
+            "Stop relying on the statement view until the ledger imbalance is identified and corrected.")
+    inventory_control = accounting.get("inventory_control")
+    if inventory_control and inventory_control["difference"] != 0:
+        add("high", "Inventory subledger does not reconcile to operational stock",
+            f"Operational inventory and ledger inventory differ by {inventory_control['difference']:.2f}.",
+            "Review opening inventory and historical adjustments; post a controlled opening-balance/manual journal where supported by evidence.")
     if current["operating_result"] < 0:
         add("critical", "The selected period produced an operating loss",
             f"Operating result is {current['operating_result']:.2f}.",
@@ -292,7 +301,7 @@ def intelligence(branch, first, last, pending_approvals=0):
     dpo = (payables["total_payables"] / current["purchase_value"] * days).quantize(Decimal("0.1")) if current["purchase_value"] > 0 else ZERO
     working_capital = receivables["total"] + inventory["stock_value"] - payables["total_payables"]
 
-    actions = _actions(current, prior, receivables, payables, inventory, pending_approvals)
+    actions = _actions(current, prior, receivables, payables, inventory, accounting, pending_approvals)
     risk_weight = sum({"critical": 28, "high": 14, "medium": 6, "low": 0}[a["severity"]] for a in actions)
     health_score = max(0, 100 - risk_weight)
     health_label = "Strong" if health_score >= 85 else "Watch closely" if health_score >= 65 else "Immediate attention"
