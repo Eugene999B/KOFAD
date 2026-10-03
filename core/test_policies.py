@@ -157,7 +157,7 @@ class BusinessPolicyTests(Fixtures, TestCase):
         self.company.save()
         cashier = self.policy_user("threshold-cashier", "operate_sales")
 
-        with self.assertRaisesRegex(ValidationError, "new customer's name"):
+        with self.assertRaisesRegex(ValidationError, "named customer is required"):
             s.post_trade(cashier, self.branch, self.sale_payload(party=None), uuid.uuid4())
 
         payload = self.sale_payload(party=self.customer.pk)
