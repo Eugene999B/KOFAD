@@ -1,5 +1,6 @@
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_http_methods
 
 from .service import receive_callback, receive_delivery_callback
 
@@ -17,7 +18,8 @@ def callback(request, attempt_id):
     return JsonResponse({"ok": accepted}, status=200 if accepted else 403)
 
 
-@require_GET
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
 def delivery_callback(request):
     if len(request.META.get("QUERY_STRING", "")) > 2000:
         return JsonResponse({"ok": False}, status=400)
