@@ -1,10 +1,11 @@
 """Controlled supplier returns, damaged-stock quarantine and inventory loss evidence."""
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from . import services as s
+from .returns import can_direct_return, is_owner
 from .models import (
     Allocation, Document, Line, Payment, Product, QuarantineItem, Stock, SupplierReturn,
 )
@@ -86,28 +87,36 @@ def request_supplier_return(user, branch, source_line_id, quantity, reason, refu
         reason=reason,
         requested_by=user,
     )
+    direct = can_direct_return(user, branch, "supplier")
     s.audit(user, branch, "supplier_return.requested", item.pk, {
         "purchase": source.document.reference,
         "product": source.product.sku,
         "quantity": quantity,
         "refund_method": refund_method,
         "reason": reason,
-    })
+        "direct_authority": direct,
+    }, category="returns", severity="notice", entity_type="supplier_return_request")
+    if direct:
+        return review_supplier_return(user, branch, item.pk, True, direct=True)
     return item
 
 
 @transaction.atomic
-def review_supplier_return(user, branch, return_id, approve):
-    s.permit(user, branch, "approve_operations")
-    s.permit(user, branch, "operate_finance")
+def review_supplier_return(user, branch, return_id, approve, direct=False):
     branch = s.lock_branch(branch)
     item = SupplierReturn.objects.select_for_update(of=("self",)).select_related(
         "source_line__document", "source_line__product", "source_line__document__party"
     ).get(pk=return_id, branch=branch)
     if item.status != "requested":
         raise ValidationError("This supplier return has already been reviewed.")
-    if item.requested_by_id == user.pk:
-        raise ValidationError("A different authorized colleague must review this supplier return.")
+    if direct:
+        if item.requested_by_id != user.pk or not can_direct_return(user, branch, "supplier"):
+            raise PermissionDenied("Direct supplier-return authority is required.")
+    else:
+        s.permit(user, branch, "approve_operations")
+        s.permit(user, branch, "operate_finance")
+        if item.requested_by_id == user.pk and not is_owner(user):
+            raise ValidationError("A different authorized colleague must review this supplier return.")
     if not approve:
         item.status = "rejected"
         item.reviewed_by = user
@@ -186,7 +195,8 @@ def review_supplier_return(user, branch, return_id, approve):
         "credit": str(credit),
         "refund": str(refund),
         "refund_method": item.refund_method,
-    })
+        "direct_authority": bool(direct),
+    }, category="returns", severity="high" if refund else "notice", entity_type="supplier_return", entity_id=str(doc.pk))
     return item
 
 
