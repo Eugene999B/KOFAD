@@ -305,13 +305,31 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertTrue(self.customer.consent)
 
     @override_settings(SMS_ENABLED=True)
-    def test_completed_sale_shows_ready_receipt_message_instead_of_prepare_hop(self):
+    def test_sales_history_receipt_detail_stays_focused_on_transaction(self):
         self.customer.phone = "+233241234567"
         self.customer.consent = True
         self.customer.save(update_fields=["phone", "consent"])
         sale = self.sale()
         self.authenticate_client()
         response = self.client.get(f"/documents/{sale.pk}/")
-        self.assertContains(response, "Receipt message ready")
-        self.assertContains(response, "Send SMS now")
-        self.assertNotContains(response, "Prepare receipt SMS")
+        self.assertContains(response, sale.reference)
+        self.assertNotContains(response, "CUSTOMER MESSAGE")
+        self.assertNotContains(response, "Receipt message ready")
+        self.assertNotContains(response, "Send SMS now")
+        self.assertNotContains(response, "Best print quality:")
+
+    def test_new_sale_sms_checkbox_has_no_repeated_instruction_copy(self):
+        self.authenticate_client()
+        response = self.client.get("/sales/new/")
+        self.assertContains(response, "Send receipt by SMS")
+        self.assertNotContains(response, "Tick only after this customer agrees to receive the receipt message.")
+
+    def test_communications_page_omits_redundant_status_cards(self):
+        self.authenticate_client()
+        response = self.client.get("/communications/")
+        self.assertNotContains(response, "Staff drafts")
+        self.assertNotContains(response, "Customer events")
+        self.assertNotContains(response, "Management alerts")
+        self.assertNotContains(response, "Drafts remain safe in KOFAD until credentials are enabled.")
+        self.assertContains(response, "Prepare a customer message")
+        self.assertContains(response, "Message history")
