@@ -92,46 +92,61 @@ def _audit_category(action):
     }.get(prefix, "system")
 
 
-def audit(user, branch, action, reference, detail=None, *, category=None, severity="info", entity_type="", entity_id=""):
-    """Append a structured, tamper-evident business event.
+def _audit_digest(event_id, branch_id, actor_id, action, reference, category, severity, entity_type, entity_id, detail, previous_hash):
+    canonical = json.dumps({
+        "event_id": str(event_id),
+        "branch": branch_id,
+        "actor": actor_id,
+        "action": str(action),
+        "reference": str(reference),
+        "category": str(category),
+        "severity": str(severity),
+        "entity_type": str(entity_type or ""),
+        "entity_id": str(entity_id or reference or ""),
+        "detail": detail or {},
+        "previous_hash": str(previous_hash or ""),
+    }, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
-    Existing callers can continue using the original five arguments. New control
-    workflows can add category/severity/entity context without changing the ledger.
-    """
+
+def audit_hash_for(row):
+    return _audit_digest(
+        row.event_id, row.branch_id, row.actor_id, row.action, row.reference,
+        row.category, row.severity, row.entity_type, row.entity_id, row.detail, row.previous_hash,
+    )
+
+
+def audit(user, branch, action, reference, detail=None, *, category=None, severity="info", entity_type="", entity_id=""):
+    """Append a serialized, hash-linked and database-immutable business event."""
     detail = detail or {}
     category = str(category or _audit_category(action))[:32]
     severity = str(severity or "info")[:12]
-    event_id = uuid.uuid4()
-    previous = Audit.objects.filter(branch=branch).exclude(event_hash="").order_by("-created_at", "-pk").first()
-    previous_hash = previous.event_hash if previous else ""
-    canonical = json.dumps({
-        "event_id": str(event_id),
-        "branch": getattr(branch, "pk", None),
-        "actor": getattr(user, "pk", None),
-        "action": str(action),
-        "reference": str(reference),
-        "category": category,
-        "severity": severity,
-        "entity_type": str(entity_type or ""),
-        "entity_id": str(entity_id or reference or ""),
-        "detail": detail,
-        "previous_hash": previous_hash,
-    }, sort_keys=True, separators=(",", ":"), default=str)
-    event_hash = hashlib.sha256(canonical.encode()).hexdigest()
-    return Audit.objects.create(
-        event_id=event_id,
-        actor=user,
-        branch=branch,
-        action=str(action)[:80],
-        reference=str(reference)[:100],
-        category=category,
-        severity=severity,
-        entity_type=str(entity_type or "")[:60],
-        entity_id=str(entity_id or reference or "")[:100],
-        detail=detail,
-        previous_hash=previous_hash,
-        event_hash=event_hash,
-    )
+    entity_type = str(entity_type or "")[:60]
+    entity_id = str(entity_id or reference or "")[:100]
+    with transaction.atomic():
+        if branch is not None:
+            Branch.objects.select_for_update().get(pk=branch.pk)
+        previous = Audit.objects.filter(branch=branch).exclude(event_hash="").order_by("-created_at", "-pk").first()
+        previous_hash = previous.event_hash if previous else ""
+        event_id = uuid.uuid4()
+        event_hash = _audit_digest(
+            event_id, getattr(branch, "pk", None), getattr(user, "pk", None),
+            action, reference, category, severity, entity_type, entity_id, detail, previous_hash,
+        )
+        return Audit.objects.create(
+            event_id=event_id,
+            actor=user,
+            branch=branch,
+            action=str(action)[:80],
+            reference=str(reference)[:100],
+            category=category,
+            severity=severity,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            detail=detail,
+            previous_hash=previous_hash,
+            event_hash=event_hash,
+        )
 
 
 def lock_branch(branch):
