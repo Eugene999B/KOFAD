@@ -62,7 +62,7 @@ class Migration(migrations.Migration):
             name="CustomerReturnRequest",
             fields=[
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ("refund_method", models.CharField(choices=[("cash", "Cash"), ("momo", "Mobile Money"), ("bank", "Bank"), ("card", "Card")], default="cash", max_length=8)),
+                ("refund_method", models.CharField(choices=[("cash", "Cash"), ("momo", "MoMo"), ("bank", "Bank"), ("card", "Card")], default="cash", max_length=8)),
                 ("reason", models.TextField()),
                 ("status", models.CharField(choices=[("requested", "Waiting approval"), ("approved", "Approved"), ("rejected", "Rejected")], default="requested", max_length=12)),
                 ("direct", models.BooleanField(default=False)),
