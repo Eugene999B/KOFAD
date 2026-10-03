@@ -20,6 +20,8 @@ class Command(BaseCommand):
                     self.stdout.write("ADMIN already exists; credentials and permissions were preserved.")
                 else:
                     call_command("bootstrap_admin", confirm_initial_setup=True)
+            if os.environ.get("KOFAD_OWNER_ADMIN_PHONE", "").strip():
+                call_command("provision_owner_admin", confirm_owner_admin=True)
             if os.environ.get("KOFAD_LOAD_SHOWCASE_DATA", "").strip() == "1":
                 call_command("load_showcase_data", confirm_live_showcase=True)
         finally:
