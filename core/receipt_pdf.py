@@ -291,6 +291,10 @@ def render_receipt_pdf(document, format_name="a4"):
     totals = []
     if document.kind == "inventory_writeoff":
         totals.append(["Inventory loss value", _money(company, document.total)])
+    elif document.kind == "creditor_charge":
+        totals.append(["BILL TOTAL", _money(company, document.total)])
+    elif document.kind == "supplier_payment":
+        totals.append(["PAYMENT TOTAL", _money(company, document.total)])
     else:
         totals.append(["TOTAL", _money(company, document.total)])
         totals.append(["Paid / refunded at posting", _money(company, document.paid)])
