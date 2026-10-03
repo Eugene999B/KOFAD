@@ -385,7 +385,7 @@ def branch_comparison(user, first, last):
         metrics = _period_metrics(branch, first, last)
         stock = sum((row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")), ZERO)
         receivables = sum((max(ZERO, balance(doc)) for doc in Document.objects.filter(branch=branch, kind="sale", party__isnull=False)), ZERO)
-        payables = sum((max(ZERO, balance(doc)) for doc in Document.objects.filter(branch=branch, kind="purchase", party__isnull=False)), ZERO)
+        payables = sum((max(ZERO, balance(doc)) for doc in Document.objects.filter(branch=branch, kind__in=["purchase", "creditor_charge"], party__isnull=False)), ZERO)
         rows.append({
             "branch": branch.name, "sales": metrics["net_sales"], "cost": metrics["cogs"],
             "profit": metrics["gross_profit"], "expenses": metrics["expenses"],
