@@ -386,7 +386,6 @@ class Message(models.Model):
     segments = models.PositiveIntegerField(default=1)
     encoding = models.CharField(max_length=12, default="gsm7")
     attempts = models.PositiveIntegerField(default=0)
-    next_attempt_at = models.DateTimeField(null=True, blank=True)
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
     source_key = models.CharField(max_length=150, null=True, blank=True)
     last_error = models.CharField(max_length=240, blank=True)
