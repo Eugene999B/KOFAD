@@ -444,8 +444,12 @@ def product_edit(request, branch, pk=None):
                          "opening_stock_base_units": opening_total})
             messages.success(request, "Product saved" + (f" with {opening_total} opening base units." if opening_total else "."))
             return redirect("inventory")
-    return render(request, "form.html", {"title": "Edit product" if pk else "New product", "form": form,
-        "description": "Leave a price blank to disable that selling mode. Quantities are always held in base units."})
+    return render(request, "product_form.html", {
+        "title": "Edit product" if pk else "New product",
+        "form": form,
+        "editing": bool(pk),
+        "description": "Choose whether this product is sold as a single unit or from packs/boxes. KOFAD keeps stock in the smallest sellable unit so pack remainders stay exact.",
+    })
 
 
 @protected("operate_sales|operate_finance|view_reports")
