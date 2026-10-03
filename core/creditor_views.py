@@ -36,11 +36,7 @@ def supplier_search(request, branch):
             "phone": party.phone,
             "email": party.email,
             "address": party.address,
-            "outstanding": str(s.party_debt(party) + sum(
-                (s.balance(doc) for doc in Document.objects.filter(
-                    branch=branch, party=party, kind="creditor_charge"
-                )), Decimal("0")
-            )),
+            "outstanding": str(s.party_debt(party)),
             "purchase_count": purchases.count(),
             "last_purchase_at": last_purchase.created_at.isoformat() if last_purchase else "",
         })
