@@ -224,6 +224,7 @@ class Document(models.Model):
     total = models.DecimalField(max_digits=14, decimal_places=2)
     paid = models.DecimalField(max_digits=14, decimal_places=2)
     due_date = models.DateField(null=True, blank=True)
+    document_date = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
     external_reference = models.CharField(max_length=120, blank=True, default="")
     payable_category = models.CharField(max_length=40, blank=True, default="")
