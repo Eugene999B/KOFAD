@@ -416,8 +416,10 @@ def post_trade(user, branch, payload, key, kind="sale"):
             due = date.fromisoformat(str(payload.get("due_date", "")))
         except ValueError:
             raise ValidationError("A due date is required for an unpaid balance.")
-        if due < timezone.localdate():
+        if kind == "sale" and due < timezone.localdate():
             raise ValidationError("The due date cannot be in the past.")
+        if kind == "purchase" and due < document_date:
+            raise ValidationError("Supplier due date cannot be before the supplier invoice date.")
         if kind == "sale" and due > timezone.localdate() + timedelta(days=company.max_credit_days):
             raise ValidationError(f"Credit terms cannot exceed {company.max_credit_days} days.")
         if kind == "sale":
