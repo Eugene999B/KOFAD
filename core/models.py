@@ -211,7 +211,7 @@ class Party(models.Model):
 
 
 class Document(models.Model):
-    KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("return", "Return"),
+    KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("creditor_charge", "Creditor bill"), ("return", "Return"),
              ("supplier_return", "Supplier return"), ("inventory_writeoff", "Inventory write-off"), ("expense", "Expense"), ("collection", "Debt payment"),
              ("supplier_payment", "Supplier payment"), ("reversal", "Reversal")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -225,6 +225,8 @@ class Document(models.Model):
     paid = models.DecimalField(max_digits=14, decimal_places=2)
     due_date = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
+    external_reference = models.CharField(max_length=120, blank=True, default="")
+    payable_category = models.CharField(max_length=40, blank=True, default="")
     expense_category = models.CharField(max_length=40, blank=True, default="")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
