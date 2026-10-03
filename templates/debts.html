@@ -104,7 +104,7 @@
     </section>
 
     {% if perms.core.operate_finance %}
-    <dialog class="debt-payment-dialog" id="debt-payment-box" data-outstanding="{{ selected.outstanding }}">
+    <dialog class="debt-payment-dialog" id="debt-payment-box" data-outstanding="{{ selected.outstanding }}" data-open-on-load="{{ open_payment_dialog|yesno:'true,false' }}">
       <div class="mobile-sheet-handle" aria-hidden="true"></div>
       <div class="debt-payment-dialog-inner">
         <div class="section-heading debt-dialog-heading"><div><p class="eyebrow">RECEIVE PAYMENT</p><h3 id="debt-payment-title">Record customer payment</h3><p class="muted">{{ selected.party.name }} · outstanding {{ company.currency }} {{ selected.outstanding|floatformat:2 }}</p></div><button type="button" class="icon-button" data-debt-payment-close aria-label="Close payment form">×</button></div>
