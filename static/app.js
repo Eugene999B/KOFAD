@@ -124,9 +124,22 @@ document.addEventListener("DOMContentLoaded", () => {
     button.setAttribute("aria-label", show ? "Hide password" : "Show password");
     button.setAttribute("aria-pressed", String(show));
   }));
-  document.querySelectorAll("[data-print]").forEach(b => b.addEventListener("click", () => window.print()));
-  document.querySelectorAll("[data-thermal]").forEach(b => b.addEventListener("click", () => {
-    document.body.classList.toggle("thermal"); window.print();
+  const printClasses = ["print-a4", "print-thermal80", "print-thermal58"];
+  function resetPrintMode() {
+    printClasses.forEach(name => document.body.classList.remove(name));
+  }
+  document.querySelectorAll("[data-print-mode]").forEach(button => button.addEventListener("click", () => {
+    resetPrintMode();
+    const mode = button.dataset.printMode || "a4";
+    document.body.classList.add(mode === "thermal80" ? "print-thermal80" : mode === "thermal58" ? "print-thermal58" : "print-a4");
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  }));
+  window.addEventListener("afterprint", resetPrintMode);
+  document.querySelectorAll("[data-print]").forEach(button => button.addEventListener("click", () => {
+    resetPrintMode(); document.body.classList.add("print-a4"); window.print();
+  }));
+  document.querySelectorAll("[data-thermal]").forEach(button => button.addEventListener("click", () => {
+    resetPrintMode(); document.body.classList.add("print-thermal80"); window.print();
   }));
   document.addEventListener("keydown", e => {
     const editing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
