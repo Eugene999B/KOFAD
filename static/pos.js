@@ -291,6 +291,17 @@
     const dialogTotal = document.querySelector("#payment-dialog-total");
     if (paymentTotalNode) paymentTotalNode.textContent = formatted(total());
     if (dialogTotal) dialogTotal.textContent = formatted(total());
+    if (
+      singlePaymentValue &&
+      selectedPaymentMethod !== "split" &&
+      selectedPaymentMethod &&
+      (!paymentPlan || paymentPlan.value === "full")
+    ) {
+      singlePaymentValue.value = formatted(total());
+      zeroPaymentInputs();
+      const selectedInput = document.querySelector("#pay-" + selectedPaymentMethod);
+      if (selectedInput) selectedInput.value = singlePaymentValue.value;
+    }
     renderCheckoutSummary();
     persist();
   }
