@@ -32,6 +32,7 @@ def _due_filters(request):
 
 def _apply_creditor_filters(rows, status, due_from=None, due_to=None):
     if due_from or due_to:
+        today = timezone.localdate()
         filtered = []
         for row in rows:
             matching = [
@@ -40,8 +41,37 @@ def _apply_creditor_filters(rows, status, due_from=None, due_to=None):
                 and (not due_from or item["bill"].due_date >= due_from)
                 and (not due_to or item["bill"].due_date <= due_to)
             ]
-            if matching:
-                filtered.append(row)
+            if not matching:
+                continue
+            scoped = dict(row)
+            scoped["bill_rows"] = matching
+            scoped["bill_count"] = len(matching)
+            scoped["outstanding"] = sum((item["outstanding"] for item in matching), Decimal("0"))
+            scoped["overdue"] = sum(
+                (item["outstanding"] for item in matching if item["days_overdue"] > 0),
+                Decimal("0"),
+            )
+            scoped["due_today"] = sum(
+                (item["outstanding"] for item in matching if item["bill"].due_date == today),
+                Decimal("0"),
+            )
+            scoped["due_7_days"] = sum(
+                (
+                    item["outstanding"] for item in matching
+                    if item["bill"].due_date and today <= item["bill"].due_date <= today + timedelta(days=7)
+                ),
+                Decimal("0"),
+            )
+            scoped["maximum_days_overdue"] = max((item["days_overdue"] for item in matching), default=0)
+            scoped["next_due"] = min((item["bill"].due_date for item in matching if item["bill"].due_date), default=None)
+            scoped["aging"] = {
+                "current": sum((item["outstanding"] for item in matching if item["days_overdue"] == 0), Decimal("0")),
+                "days_1_30": sum((item["outstanding"] for item in matching if 1 <= item["days_overdue"] <= 30), Decimal("0")),
+                "days_31_60": sum((item["outstanding"] for item in matching if 31 <= item["days_overdue"] <= 60), Decimal("0")),
+                "days_61_90": sum((item["outstanding"] for item in matching if 61 <= item["days_overdue"] <= 90), Decimal("0")),
+                "days_90_plus": sum((item["outstanding"] for item in matching if item["days_overdue"] > 90), Decimal("0")),
+            }
+            filtered.append(scoped)
         rows = filtered
     if status == "open":
         rows = [row for row in rows if row["outstanding"] > 0]
