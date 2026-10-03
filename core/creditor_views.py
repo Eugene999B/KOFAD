@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -15,6 +15,45 @@ from .context import shell
 from .exports import export
 from .models import Document, Party
 from .views import protected, problem
+
+
+def _due_filters(request):
+    raw_from = request.GET.get("due_from", "").strip()
+    raw_to = request.GET.get("due_to", "").strip()
+    try:
+        due_from = date.fromisoformat(raw_from) if raw_from else None
+        due_to = date.fromisoformat(raw_to) if raw_to else None
+    except ValueError:
+        raise ValidationError("Choose valid creditor due-date filters.")
+    if due_from and due_to and due_from > due_to:
+        raise ValidationError("Due-from date cannot be after due-to date.")
+    return due_from, due_to, raw_from, raw_to
+
+
+def _apply_creditor_filters(rows, status, due_from=None, due_to=None):
+    if due_from or due_to:
+        filtered = []
+        for row in rows:
+            matching = [
+                item for item in row["bill_rows"]
+                if item["bill"].due_date
+                and (not due_from or item["bill"].due_date >= due_from)
+                and (not due_to or item["bill"].due_date <= due_to)
+            ]
+            if matching:
+                filtered.append(row)
+        rows = filtered
+    if status == "open":
+        rows = [row for row in rows if row["outstanding"] > 0]
+    elif status == "overdue":
+        rows = [row for row in rows if row["overdue"] > 0]
+    elif status == "due_7":
+        rows = [row for row in rows if row["due_7_days"] > 0]
+    elif status == "current":
+        rows = [row for row in rows if row["outstanding"] > 0 and row["overdue"] == 0]
+    elif status == "settled":
+        rows = [row for row in rows if row["outstanding"] <= 0]
+    return rows
 
 
 @protected("operate_inventory|operate_finance|view_reports")
@@ -70,18 +109,9 @@ def creditors(request, branch):
     if status not in {"open", "overdue", "due_7", "current", "settled", "all"}:
         status = "open"
     include_settled = status in {"settled", "all"}
+    due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
     overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
-    rows = overview["rows"]
-    if status == "open":
-        rows = [row for row in rows if row["outstanding"] > 0]
-    elif status == "overdue":
-        rows = [row for row in rows if row["overdue"] > 0]
-    elif status == "due_7":
-        rows = [row for row in rows if row["due_7_days"] > 0]
-    elif status == "current":
-        rows = [row for row in rows if row["outstanding"] > 0 and row["overdue"] == 0]
-    elif status == "settled":
-        rows = [row for row in rows if row["outstanding"] <= 0]
+    rows = _apply_creditor_filters(overview["rows"], status, due_from, due_to)
 
     selected = None
     selected_id = request.GET.get("creditor", "") or request.POST.get("party", "")
@@ -105,6 +135,7 @@ def creditors(request, branch):
         "title": "Creditors",
         "q": query,
         "status": status,
+        "due_from": due_from_raw, "due_to": due_to_raw,
         "overview": overview,
         "rows": rows,
         "selected": selected,
@@ -123,18 +154,9 @@ def creditors_export(request, branch, format):
     query = request.GET.get("q", "").strip()[:100]
     status = request.GET.get("status", "open")
     include_settled = status in {"settled", "all"}
+    due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
     overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
-    rows = overview["rows"]
-    if status == "overdue":
-        rows = [row for row in rows if row["overdue"] > 0]
-    elif status == "due_7":
-        rows = [row for row in rows if row["due_7_days"] > 0]
-    elif status == "current":
-        rows = [row for row in rows if row["outstanding"] > 0 and row["overdue"] == 0]
-    elif status == "settled":
-        rows = [row for row in rows if row["outstanding"] <= 0]
-    elif status == "open":
-        rows = [row for row in rows if row["outstanding"] > 0]
+    rows = _apply_creditor_filters(overview["rows"], status, due_from, due_to)
 
     data = [{
         "creditor": row["party"].name,
@@ -167,6 +189,7 @@ def creditors_export(request, branch, format):
             "Location": branch.name,
             "Status": status.replace("_", " ").title(),
             "Search": query or "All",
+            "Due-date range": f"{due_from_raw or 'Any'} to {due_to_raw or 'Any'}",
             "Generated": timezone.localtime().strftime("%d %b %Y %H:%M"),
         },
         summary={
