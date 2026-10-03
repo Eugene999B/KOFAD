@@ -266,7 +266,7 @@ def approve_period(user, period):
     locked = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
     if locked.status != "prepared":
         raise ValidationError("Payroll must be prepared before approval.")
-    if locked.prepared_by_id == user.pk:
+    if locked.prepared_by_id == user.pk and not (user.is_superuser or user.has_perm("core.manage_company")):
         raise ValidationError("A different authorised user must approve payroll.")
     locked.status = "approved"
     locked.approved_by = user
