@@ -84,7 +84,7 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
         page = self.client.get("/sales/new/")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Find a product")
-        self.assertContains(page, "Search, choose the item, and it goes straight into the current sale.")
+        self.assertContains(page, "Search, choose the item, and add it to this sale.")
         self.assertNotContains(page, self.product.name)
 
         result = self.client.get("/sales/new/", {"format": "json", "q": self.product.sku})

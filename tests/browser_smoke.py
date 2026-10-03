@@ -82,10 +82,10 @@ with sync_playwright() as p:
     assert page.locator(".search-result-card").count() == 0
     assert page.get_by_text("Find a product", exact=True).is_visible()
     counter_panel = page.locator("#checkout-panel")
-    counter_box = counter_panel.bounding_box()
-    assert counter_box["y"] >= 0 and counter_box["y"] + counter_box["height"] <= page.viewport_size["height"] + 2
-    assert counter_panel.evaluate("el => el.scrollHeight <= el.clientHeight + 2"), "checkout panel must not have its own page-style scrollbar"
-    assert page.evaluate("document.scrollingElement.scrollHeight <= window.innerHeight + 2"), "desktop counter should fit one viewport"
+    assert page.locator("#sale-payment-dialog").count() == 0
+    assert page.locator("#open-payment").count() == 0
+    assert page.evaluate("getComputedStyle(document.body).overflow !== 'hidden'")
+    assert counter_panel.evaluate("el => !['auto','scroll','hidden'].includes(getComputedStyle(el).overflow)")
     page.locator("#product-query").fill("Classic leather")
     page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
     first_product = page.locator(".search-result-card").filter(has_text="Classic leather sandals")
@@ -104,14 +104,11 @@ with sync_playwright() as p:
     assert page.locator("#cart-count").inner_text() == "2 lines"
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
-    assert counter_panel.evaluate("el => el.scrollHeight <= el.clientHeight + 2"), "customer selection must not reintroduce nested checkout scrolling"
-    page.locator("#open-payment").click()
-    payment_dialog = page.locator("#sale-payment-dialog")
-    payment_dialog.wait_for(state="visible")
-    payment_box = payment_dialog.bounding_box()
-    assert payment_box["y"] >= 0 and payment_box["y"] + payment_box["height"] <= page.viewport_size["height"] + 2
+    page.locator("#checkout-panel").scroll_into_view_if_needed()
+    assert page.locator("#single-payment-value").is_visible()
     assert page.locator("#single-payment-value").input_value() == page.locator("#total").inner_text()
     assert page.locator("#pay-cash").input_value() == page.locator("#total").inner_text()
+    assert page.get_by_role("button", name="Complete Sale & Generate Receipt", exact=True).is_visible()
     page.screenshot(path=str(out / "pos-payment-desktop.png"), full_page=True)
 
     lost_response = []
@@ -121,16 +118,14 @@ with sync_playwright() as p:
         lost_response.append(response.json())
         route.abort()
     page.route("**/api/trades/",lose_confirmed_response)
-    payment_dialog.get_by_role("button",name="Complete sale",exact=True).click()
+    page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).click()
     page.locator("#pos-error").wait_for(state="visible")
     assert page.locator("#party").is_disabled()
     page.unroute("**/api/trades/",lose_confirmed_response)
     page.once("dialog",lambda dialog: dialog.accept())
     page.reload()
     assert page.locator("#cart-count").inner_text() == "2 lines"
-    payment_dialog = page.locator("#sale-payment-dialog")
-    payment_dialog.wait_for(state="visible")
-    payment_dialog.get_by_role("button",name="Complete sale",exact=True).click()
+    page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).click()
 
     success_dialog = page.locator("#sale-success-dialog")
     success_dialog.wait_for(state="visible")
@@ -201,14 +196,10 @@ with sync_playwright() as p:
     assert page.locator("#mobile-cart-count").inner_text() == "1"
     page.locator("#cart-jump").click()
     assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
-    page.locator("#open-payment").click()
-    mobile_payment = page.locator("#sale-payment-dialog")
-    mobile_payment.wait_for(state="visible")
-    mobile_payment_box = mobile_payment.bounding_box()
-    assert mobile_payment_box["height"] <= 844 * .9 + 2
-    assert abs((mobile_payment_box["y"] + mobile_payment_box["height"]) - 844) < 8
+    assert page.locator("#sale-payment-dialog").count() == 0
+    assert page.locator("#single-payment-value").is_visible()
+    assert page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).is_visible()
     page.screenshot(path=str(out / "pos-payment-mobile.png"), full_page=True)
-    mobile_payment.get_by_role("button",name="Close payment",exact=True).click()
     page.locator("#cart").get_by_role("button",name="Remove",exact=False).click()
     for width in (320, 768):
         page.set_viewport_size({"width":width,"height":900})
@@ -305,4 +296,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Direct admin login, compact one-screen sales counter, modal payment, inline receipt actions, lost-response recovery, debt payment, stock counts, transfers, and desktop/mobile checks passed.")
+print("Direct admin login, natural-scroll CHALIN03-style sales checkout, immediate receipt actions, lost-response recovery, debt payment, stock counts, transfers, and desktop/mobile checks passed.")
