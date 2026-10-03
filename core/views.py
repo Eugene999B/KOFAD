@@ -1326,8 +1326,23 @@ def communications(request, branch):
             "party", "management_contact", "created_by", "queued_by"
         ).order_by("-created_at")[:120]
     )
+    status_labels = {
+        "draft": "Ready to send",
+        "sending": "Sending…",
+        "queued": "Sending…",
+        "retry_wait": "Failed · retry",
+        "accepted": "Sent",
+        "delivered": "Delivered",
+        "undelivered": "Not delivered",
+        "expired": "Expired",
+        "failed": "Failed",
+        "unknown": "Delivery unknown",
+        "simulated": "Test sent",
+        "ready": "Ready to open",
+    }
     for row in rows:
         row.whatsapp_url = ""
+        row.status_label = status_labels.get(row.status, row.status.replace("_", " ").title())
         if row.channel == "whatsapp" and row.recipient:
             digits = "".join(ch for ch in row.recipient if ch.isdigit())
             row.whatsapp_url = f"https://wa.me/{digits}?text={quote(row.body)}"
