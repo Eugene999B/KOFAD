@@ -223,3 +223,16 @@ html[data-theme="dark"] .premium-login-card{background:#101d2a;border-color:#2a4
 @media(max-width:1050px){.premium-login-layout{grid-template-columns:minmax(440px,1fr) minmax(350px,.8fr);gap:28px}.premium-login-story{padding:38px 32px}.login-command-map article:nth-child(n){margin-left:0}.premium-login-card{padding:27px 26px}}
 @media(max-width:760px){.premium-login-layout{display:block;padding-top:4px}.premium-login-story{display:none}.premium-login-card{max-width:455px;margin:6vh auto 0;padding:26px 24px}.login-header-meta{font-size:9px}.login-assurance{grid-template-columns:1fr}.premium-login-card .login-card-top h2{font-size:27px}}
 @media(max-width:420px){.premium-login-card{padding:22px 18px;border-radius:18px}.premium-welcome-icon{width:50px;height:50px}.premium-welcome-icon img{width:43px;height:43px}.premium-login-card .login-card-top h2{font-size:24px}.login-header-meta span:last-child{display:none}}
+
+/* Narrow login containment: protect 320px staff devices from horizontal overflow. */
+.login-page,.login-page *{min-width:0}.login-page{overflow-x:clip}.premium-login-layout,.premium-login-card,.premium-login-form,.login-input-shell{max-width:100%}
+@media(max-width:360px){
+  .login-header{padding-left:14px;padding-right:14px}
+  .premium-login-layout{padding-left:14px;padding-right:14px}
+  .premium-login-card{padding-left:14px;padding-right:14px}
+  .login-footer{padding-left:14px;padding-right:14px;flex-direction:column;gap:4px}
+  .login-form-row{flex-wrap:wrap}
+  .login-header .brand{margin-left:0;margin-right:0}
+  .login-header .brand-emblem{width:46px;height:46px}
+  .login-header .brand-wordmark{font-size:19px}
+}
