@@ -51,10 +51,18 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertContains(response, "+233302111111")
         self.assertContains(response, "+233242222222")
         self.assertContains(response, "Adum, Kumasi")
-        self.assertContains(response, "Print / save A4 PDF")
-        self.assertContains(response, "Thermal 80mm")
-        self.assertContains(response, "Thermal 58mm")
+        self.assertContains(response, "A4 PDF / print")
+        self.assertContains(response, "Thermal 80mm PDF")
+        self.assertContains(response, "Thermal 58mm PDF")
         self.assertContains(response, "Headers and footers")
+
+        for format_name in ("a4", "thermal80", "thermal58"):
+            with self.subTest(format=format_name):
+                pdf = self.client.get(f"/documents/{sale.pk}/pdf/{format_name}/")
+                self.assertEqual(pdf.status_code, 200)
+                self.assertEqual(pdf["Content-Type"], "application/pdf")
+                self.assertTrue(pdf.content.startswith(b"%PDF"))
+                self.assertGreater(len(pdf.content), 1000)
 
     def test_company_and_location_settings_normalize_public_identity(self):
         self.authenticate_client()
