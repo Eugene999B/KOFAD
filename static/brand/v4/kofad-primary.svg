@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 760" role="img" aria-labelledby="title desc">
+  <title id="title">KOFAD IMPEX Enterprise</title>
+  <desc id="desc">A premium KOFAD IMPEX identity built around a bespoke KI monogram, forward trade motion, charcoal and copper.</desc>
+
+  <!-- Master mark is intentionally flat: no gradients, no globe, no generic box. -->
+  <g transform="translate(250 72)">
+    <!-- Fine outer frame gives the mark authority without turning it into a badge. -->
+    <rect x="0" y="0" width="420" height="420" rx="72" fill="none" stroke="#171717" stroke-width="12"/>
+
+    <!-- Bespoke K: left stem + two directional arms. -->
+    <path d="M105 86V334" fill="none" stroke="#171717" stroke-width="42" stroke-linecap="square"/>
+    <path d="M130 210L270 86" fill="none" stroke="#B66B45" stroke-width="38" stroke-linecap="square"/>
+    <path d="M130 210L286 334" fill="none" stroke="#171717" stroke-width="38" stroke-linecap="square"/>
+
+    <!-- The I is deliberately independent: KOFAD + IMPEX, joined but not fused. -->
+    <path d="M314 92V328" fill="none" stroke="#B66B45" stroke-width="30" stroke-linecap="square"/>
+
+    <!-- Small cuts suggest movement / exchange without using obvious arrows. -->
+    <path d="M246 104L284 104" stroke="#171717" stroke-width="10" stroke-linecap="square"/>
+    <path d="M268 316L308 316" stroke="#B66B45" stroke-width="10" stroke-linecap="square"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="460" y="590" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="118" font-weight="700" letter-spacing="8"
+        fill="#171717">KOFAD</text>
+
+  <g transform="translate(214 630)">
+    <line x1="0" y1="16" x2="96" y2="16" stroke="#B66B45" stroke-width="5"/>
+    <text x="246" y="30" text-anchor="middle"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="28" font-weight="700" letter-spacing="12"
+          fill="#4F4A45">IMPEX</text>
+    <line x1="396" y1="16" x2="492" y2="16" stroke="#171717" stroke-width="5"/>
+  </g>
+
+  <text x="460" y="704" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="18" font-weight="700" letter-spacing="9"
+        fill="#7A736C">ENTERPRISE</text>
+</svg>
