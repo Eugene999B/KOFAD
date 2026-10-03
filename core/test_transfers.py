@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, close_old_connections, connections, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, override_settings, TransactionTestCase
 from django.utils import timezone
 
 from . import services as s
@@ -110,6 +110,7 @@ class TransferReceiptTests(TransferFixtures, TestCase):
         with self.assertRaises(ValidationError):
             resolve_transfer(self.reviewer, op.pk, "arrived", "Remaining three arrived intact")
 
+    @override_settings(DEBUG=True)
     def test_operations_screen_shows_receipt_evidence(self):
         op = self.dispatched()
         receive_transfer(self.user, op.pk, 9, "Three units missing")
