@@ -72,4 +72,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   amount?.addEventListener("input", renderPreview);
   renderPreview();
+  if (box.dataset.openOnLoad === "true") open("partial");
 });
