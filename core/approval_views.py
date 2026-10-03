@@ -215,6 +215,7 @@ def approval_action(request):
         messages.error(request, "Choose approve or reject.")
         return redirect("approval_center")
     approve = action == "approve"
+    owner_direct = _owner(request.user)
     try:
         if kind == "customer_return":
             if approve:
@@ -222,17 +223,17 @@ def approval_action(request):
             else:
                 return_controls.reject_customer_return(request.user, branch, item_id, note)
         elif kind == "supplier_return":
-            inventory_controls.review_supplier_return(request.user, branch, item_id, approve)
+            inventory_controls.review_supplier_return(request.user, branch, item_id, approve, direct=owner_direct)
         elif kind == "correction":
-            s.review_correction(request.user, branch, item_id, approve)
+            s.review_correction(request.user, branch, item_id, approve, owner_direct=owner_direct)
         elif kind == "stock_count":
-            counts.review_count(request.user, branch, item_id, "approve" if approve else "reject", note)
+            counts.review_count(request.user, branch, item_id, "approve" if approve else "reject", note, owner_direct=owner_direct)
         elif kind == "quarantine":
-            inventory_controls.review_quarantine(request.user, branch, item_id, approve)
+            inventory_controls.review_quarantine(request.user, branch, item_id, approve, direct=owner_direct)
         elif kind == "payroll":
             period = PayrollPeriod.objects.get(pk=item_id, branch=branch)
             if approve:
-                payroll_engine.approve_period(request.user, period)
+                payroll_engine.approve_period(request.user, period, owner_direct=owner_direct)
             else:
                 payroll_engine.return_to_draft(period)
         elif kind == "manual_journal":
@@ -241,7 +242,7 @@ def approval_action(request):
             if not approve:
                 raise ValidationError("Daily closings are verified, not rejected. Correct the underlying records before verification.")
             closing = Closing.objects.get(pk=item_id, branch=branch)
-            s.verify_closing(request.user, closing)
+            s.verify_closing(request.user, closing, owner_direct=owner_direct)
         else:
             raise ValidationError("Unknown approval request type.")
         messages.success(request, "Approval decision recorded.")
