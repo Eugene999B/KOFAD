@@ -5,7 +5,7 @@ from . import count_views
 from . import admin_views
 from . import export_views
 from . import maintenance_views
-from . import accounting_views, payroll_views, workforce_views
+from . import accounting_views, creditor_views, payroll_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
@@ -24,7 +24,8 @@ urlpatterns = [
     path("sales/new/", v.pos, name="pos"), path("purchasing/", v.purchasing, name="purchasing"),
     path("api/trades/", v.complete_trade),
     path("api/documents/<uuid:pk>/send-sms/", v.send_transaction_message_api, name="send_transaction_message_api"),
-    path("api/customers/", v.customer_search, name="customer_search"), path("api/held/", v.hold),
+    path("api/customers/", v.customer_search, name="customer_search"),
+    path("api/suppliers/", creditor_views.supplier_search, name="supplier_search"), path("api/held/", v.hold),
     path("api/held/<int:pk>/", v.held),
     path("documents/", v.documents, name="documents"), path("documents/<uuid:pk>/", v.document, name="document"),
     path("documents/<uuid:pk>/pdf/<str:format>/", v.document_pdf, name="document_pdf"),
@@ -38,6 +39,9 @@ urlpatterns = [
     path("debts/", v.debts, name="debts"),
     path("finance/", v.finance, name="finance"),
     path("accounting/", accounting_views.accounting, name="accounting"),
+    path("creditors/", creditor_views.creditors, name="creditors"),
+    path("creditors/export/<str:format>/", creditor_views.creditors_export, name="creditors_export"),
+    path("creditors/<int:pk>/statement/<str:format>/", creditor_views.creditor_statement_export, name="creditor_statement_export"),
     path("accounting/export/<str:format>/", accounting_views.accounting_export, name="accounting_export"),
     path("workers/", workforce_views.workers, name="workers"),
     path("workers/new/", workforce_views.worker_edit, name="worker_new"),
