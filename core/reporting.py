@@ -260,6 +260,26 @@ def build_report(branch, first, last, family="register", query="", category="", 
                 "method": payment.get_method_display() if payment else "",
                 "staff": doc.created_by.username,
             })
+        payable_expense_categories = {
+            "transport", "fuel", "utilities", "rent", "maintenance",
+            "professional", "tax", "staff", "other",
+        }
+        creditor_expenses = Document.objects.filter(
+            branch=branch, kind="creditor_charge", document_date__range=(first, last),
+            payable_category__in=payable_expense_categories,
+        ).exclude(correction__status="approved").select_related("created_by", "party")
+        if category:
+            creditor_category = "staff" if category == "salary" else category
+            creditor_expenses = creditor_expenses.filter(payable_category=creditor_category)
+        if not method:
+            for doc in limited(creditor_expenses, 20000):
+                rows.append({
+                    "date": str(doc.document_date), "reference": doc.reference,
+                    "category": (doc.payable_category or "other").replace("_", " ").title(),
+                    "description": doc.note, "amount": doc.total,
+                    "method": "Accounts payable", "staff": doc.created_by.username,
+                })
+        rows.sort(key=lambda row: row["date"], reverse=True)
         rows = _match(rows, query)
         return rows, [
             ("date", "Date"), ("reference", "Reference"), ("category", "Category"),
