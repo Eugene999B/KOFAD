@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" role="img" aria-labelledby="t d">
+<title id="t">KOFAD IMPEX — Trade Portal</title><desc id="d">A clean hexagonal trade portal with a K, route arrow and package corner.</desc>
+<rect width="720" height="720" rx="56" fill="#F8FAFC"/>
+<path d="M360 82L530 180V376L360 474L190 376V180Z" fill="#0B2F4B"/>
+<path d="M360 122L493 199V357L360 434L227 357V199Z" fill="#FFFFFF"/>
+<path d="M284 183V373" stroke="#0B2F4B" stroke-width="40" stroke-linecap="round"/>
+<path d="M302 278L414 190" stroke="#D99A24" stroke-width="35" stroke-linecap="round"/>
+<path d="M302 278L426 370" stroke="#0E8993" stroke-width="35" stroke-linecap="round"/>
+<path d="M402 188H458V244" fill="none" stroke="#D99A24" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M397 370H453V314" fill="none" stroke="#0E8993" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M339 250L360 239L381 250L360 261Z" fill="#D99A24"/>
+<path d="M339 250L360 261V284L339 273Z" fill="#0B2F4B"/>
+<path d="M381 250L360 261V284L381 273Z" fill="#0E8993"/>
+<rect x="248" y="402" width="224" height="52" rx="26" fill="#0B2F4B"/>
+<text x="360" y="437" text-anchor="middle" fill="#FFFFFF" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="28" font-weight="800" letter-spacing="8">IMPEX</text>
+<text x="360" y="565" text-anchor="middle" fill="#0B2F4B" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="90" font-weight="800" letter-spacing="7">KOFAD</text>
+<text x="360" y="614" text-anchor="middle" fill="#73808A" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="19" font-weight="700" letter-spacing="8">ENTERPRISE</text>
+</svg>
