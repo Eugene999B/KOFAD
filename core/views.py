@@ -932,13 +932,15 @@ def supplier_returns(request, branch):
             if not selected_ids:
                 raise ValidationError("Select at least one purchase item to return.")
             completed = []
-            for line_id in selected_ids:
-                item = ix.request_supplier_return(
-                    request.user, branch, line_id, request.POST.get(f"quantity_{line_id}") or request.POST.get("quantity"),
-                    request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
-                )
-                completed.append(item)
             direct = can_direct_return(request.user, branch, "supplier")
+            with transaction.atomic():
+                for line_id in selected_ids:
+                    item = ix.request_supplier_return(
+                        request.user, branch, line_id, request.POST.get(f"quantity_{line_id}") or request.POST.get("quantity"),
+                        request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
+                        direct=direct,
+                    )
+                    completed.append(item)
             messages.success(
                 request,
                 f"{len(completed)} supplier return item(s) {'posted immediately under direct authority' if direct else 'sent to the Approval Center'}."
@@ -981,17 +983,22 @@ def quarantine(request, branch):
         try:
             action = request.POST.get("action", "request")
             if action == "request":
+                direct = request.user.is_superuser or request.user.has_perm("core.manage_company")
                 ix.request_quarantine(
                     request.user, branch, request.POST.get("product"), request.POST.get("quantity"),
-                    request.POST.get("reason", ""),
+                    request.POST.get("reason", ""), direct=direct,
                 )
-                messages.success(request, "Quarantine request submitted for independent review.")
+                messages.success(request, "Damaged stock moved to quarantine under owner authority." if direct else "Quarantine request submitted for approval.")
             elif action in ("approve", "reject"):
-                ix.review_quarantine(request.user, branch, request.POST.get("id"), action == "approve")
+                ix.review_quarantine(
+                    request.user, branch, request.POST.get("id"), action == "approve",
+                    direct=request.user.is_superuser or request.user.has_perm("core.manage_company"),
+                )
                 messages.success(request, "Quarantine review recorded.")
             elif action in ("release", "writeoff"):
                 ix.resolve_quarantine(
-                    request.user, branch, request.POST.get("id"), action, request.POST.get("note", "")
+                    request.user, branch, request.POST.get("id"), action, request.POST.get("note", ""),
+                    owner_direct=request.user.is_superuser or request.user.has_perm("core.manage_company"),
                 )
                 messages.success(request, "Quarantine resolution recorded.")
             else:
@@ -1044,7 +1051,7 @@ def operations(request, branch):
         "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
 
 
-@protected("operate_finance")
+@protected("operate_finance|manage_company")
 def closings(request, branch):
     today = timezone.localdate()
     raw_day = request.POST.get("date") if request.method == "POST" else request.GET.get("date")
@@ -1059,6 +1066,7 @@ def closings(request, branch):
                 s.verify_closing(request.user, get_object_or_404(Closing, pk=request.POST.get("id"), branch=branch))
                 messages.success(request, "Daily closing independently verified.")
             else:
+                owner_direct = request.user.is_superuser or request.user.has_perm("core.manage_company")
                 closing = s.submit_closing(
                     request.user,
                     branch,
@@ -1068,12 +1076,14 @@ def closings(request, branch):
                     request.POST.get("opening_cash", 0),
                     request.POST.get("cash_in", 0),
                     request.POST.get("cash_out", 0),
+                    owner_direct=owner_direct,
                 )
-                if request.user.is_superuser or request.user.has_perm("core.manage_company"):
-                    s.verify_closing(request.user, closing)
-                    messages.success(request, "Daily closing submitted, locked and owner-verified.")
-                else:
-                    messages.success(request, "Daily closing submitted and sent to the Approval Center for verification.")
+                messages.success(
+                    request,
+                    "Daily closing submitted and finalized under owner authority."
+                    if owner_direct else
+                    "Daily closing submitted and sent to the Approval Center for verification."
+                )
             return redirect(f"/closings/?date={selected_day.isoformat()}")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
@@ -1635,13 +1645,16 @@ def corrections(request, branch):
             if request.POST.get("action") == "request":
                 item = s.request_correction(request.user,branch,request.POST.get("original"),request.POST.get("reason",""),request.POST.get("refund_method","cash"))
                 if request.user.is_superuser or request.user.has_perm("core.manage_company"):
-                    s.review_correction(request.user, branch, item.pk, True)
+                    s.review_correction(request.user, branch, item.pk, True, owner_direct=True)
             else:
                 item = get_object_or_404(Correction,pk=request.POST.get("id"),original__branch=branch)
                 action = request.POST.get("action")
                 if action not in ("approve","reject"):
                     raise ValidationError("Invalid review action.")
-                s.review_correction(request.user,branch,item.pk,action=="approve")
+                s.review_correction(
+                    request.user, branch, item.pk, action=="approve",
+                    owner_direct=request.user.is_superuser or request.user.has_perm("core.manage_company"),
+                )
             messages.success(request,"Correction request recorded.")
             return redirect("corrections")
         except (ValidationError,ValueError) as exc:
