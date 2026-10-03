@@ -533,8 +533,8 @@
     if (customerSearch) customerSearch.value = "";
     if (customerConsent) customerConsent.checked = Boolean(customer.consent);
     changed();
+    updateConsentAvailability();
     persist();
-    if (cart.length) requestAnimationFrame(openPayment);
   }
 
   function clearCustomer() {
@@ -549,6 +549,7 @@
     clearCustomerButton?.classList.add("hidden");
     if (customerConsent) customerConsent.checked = false;
     changed();
+    updateConsentAvailability();
     persist();
   }
 
@@ -559,6 +560,7 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerConsent) customerConsent.checked = false;
+    updateConsentAvailability();
     customerName?.focus();
     persist();
   }
