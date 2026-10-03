@@ -1,7 +1,7 @@
 import hashlib
 import io
 import os
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -145,13 +145,13 @@ def workers(request, branch):
     expiring = WorkerDocument.objects.filter(
         worker__branch=branch, is_current=True,
         expiry_date__isnull=False,
-        expiry_date__lte=timezone.localdate() + timezone.timedelta(days=30),
+        expiry_date__lte=timezone.localdate() + timedelta(days=30),
     ).count()
     return render(request, "workers.html", {
         "title": "Workers", "page": page, "q": q, "status": status,
         "department": department, "departments": departments,
         "active_count": active_count, "total_count": Worker.objects.filter(branch=branch).count(),
-        "expiring_documents": expiring,
+        "expiring_documents": expiring, "statuses": Worker.STATUSES,
     })
 
 
@@ -194,9 +194,9 @@ def worker_profile(request, branch, pk):
     docs = worker.documents.exclude(category="photo")
     today = timezone.localdate()
     alerts = []
-    if worker.contract_end and worker.contract_end <= today + timezone.timedelta(days=30):
+    if worker.contract_end and worker.contract_end <= today + timedelta(days=30):
         alerts.append(f"Contract ends on {worker.contract_end:%d %b %Y}.")
-    for doc in docs.filter(is_current=True, expiry_date__isnull=False, expiry_date__lte=today + timezone.timedelta(days=30)):
+    for doc in docs.filter(is_current=True, expiry_date__isnull=False, expiry_date__lte=today + timedelta(days=30)):
         alerts.append(f"{doc.title} expires on {doc.expiry_date:%d %b %Y}.")
     photo = worker.documents.filter(category="photo", is_current=True).first()
     return render(request, "worker_profile.html", {
