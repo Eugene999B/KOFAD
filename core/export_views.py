@@ -31,7 +31,9 @@ DATASETS = {
     "closings": ("Daily closings", ("operate_finance", "view_reports")),
     "losses": ("Inventory write-offs", ("operate_inventory", "operate_finance", "view_reports")),
     "audit": ("Audit trail", ("view_reports",)),
-    "staff": ("Staff directory", ("manage_company",)),
+    "staff": ("System user accounts", ("manage_company",)),
+    "workers": ("Workforce register", ("manage_company",)),
+    "payroll": ("Payroll register", ("operate_finance", "view_reports")),
 }
 
 
@@ -352,6 +354,57 @@ def _rows(request, dataset, branch, first, last):
             ("reference", "Reference"), ("evidence", "Evidence"),
         ]
 
+    if dataset == "workers":
+        from .models import Worker
+        rows = [{
+            "employee_code": worker.employee_code,
+            "name": worker.full_name,
+            "department": worker.department,
+            "job_title": worker.job_title,
+            "employment_type": worker.get_employment_type_display(),
+            "status": worker.get_status_display(),
+            "phone": worker.phone,
+            "email": worker.email,
+            "hire_date": worker.hire_date,
+            "base_salary": worker.base_salary,
+            "allowance": worker.recurring_allowance,
+            "ssnit_number": worker.ssnit_number,
+            "ghana_card": worker.ghana_card_number,
+        } for worker in Worker.objects.filter(branch=branch).order_by("last_name", "first_name")]
+        return rows, [
+            ("employee_code", "Employee ID"), ("name", "Worker"), ("department", "Department"),
+            ("job_title", "Job title"), ("employment_type", "Employment type"), ("status", "Status"),
+            ("phone", "Phone"), ("email", "Email"), ("hire_date", "Hire date"),
+            ("base_salary", "Base salary"), ("allowance", "Recurring allowance"),
+            ("ssnit_number", "SSNIT number"), ("ghana_card", "Ghana Card"),
+        ]
+
+    if dataset == "payroll":
+        from .models import PayrollEntry
+        entries = PayrollEntry.objects.filter(
+            period__branch=branch, period__end_date__range=(first, last)
+        ).select_related("period", "worker")
+        rows = [{
+            "period": entry.period.label,
+            "employee_code": entry.worker.employee_code,
+            "worker": entry.worker.full_name,
+            "department": entry.worker.department,
+            "gross": entry.gross_pay,
+            "employee_ssnit": entry.ssnit_employee,
+            "tax": entry.paye_tax + entry.bonus_tax + entry.overtime_tax,
+            "net": entry.net_pay,
+            "paid": entry.paid_amount,
+            "outstanding": entry.balance,
+            "status": entry.period.get_status_display(),
+            "flags": "; ".join(entry.validation_flags or []),
+        } for entry in entries]
+        return rows, [
+            ("period", "Payroll period"), ("employee_code", "Employee ID"), ("worker", "Worker"),
+            ("department", "Department"), ("gross", "Gross pay"), ("employee_ssnit", "Employee SSNIT"),
+            ("tax", "Tax"), ("net", "Net pay"), ("paid", "Paid"),
+            ("outstanding", "Outstanding"), ("status", "Period status"), ("flags", "Validation flags"),
+        ]
+
     if dataset == "staff":
         from django.contrib.auth.models import User
         rows = []
@@ -404,12 +457,19 @@ def download(request, format):
         s.audit(request.user, branch, "export.downloaded", dataset, {
             "format": format, "start": start, "end": end, "rows": len(rows),
         })
-        date_suffix = "" if dataset in {"customers", "suppliers", "inventory", "staff"} else f" · {start} to {end}"
+        date_suffix = "" if dataset in {"customers", "suppliers", "inventory", "staff", "workers"} else f" · {start} to {end}"
         company = shell(request)["company"]
         return export(
             rows, format, f"{label}{date_suffix}", company, columns,
             filename=f"kofad-{dataset}",
             sheet_name=label[:31],
+            metadata={
+                "Location": branch.name,
+                "Date range": "Current snapshot" if not date_suffix else f"{start} to {end}",
+                "Generated": timezone.localtime().strftime("%d %b %Y %H:%M"),
+            },
+            summary={"Rows exported": len(rows)},
+            notes=["Generated directly from KOFAD with the current user's permission and location scope."],
         )
     except ValidationError as exc:
         return render(request, "error.html", {
