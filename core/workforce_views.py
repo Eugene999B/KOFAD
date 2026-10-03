@@ -127,6 +127,9 @@ def workers(request, branch):
     q = request.GET.get("q", "").strip()[:100]
     status = request.GET.get("status", "").strip()
     department = request.GET.get("department", "").strip()[:100]
+    employment = request.GET.get("employment", "").strip()[:20]
+    joined_from = request.GET.get("joined_from", "").strip()
+    joined_to = request.GET.get("joined_to", "").strip()
     if q:
         rows = rows.filter(
             Q(employee_code__icontains=q) | Q(first_name__icontains=q) |
@@ -137,6 +140,12 @@ def workers(request, branch):
         rows = rows.filter(status=status)
     if department:
         rows = rows.filter(department=department)
+    if employment:
+        rows = rows.filter(employment_type=employment)
+    if joined_from:
+        rows = rows.filter(hire_date__gte=_date(joined_from, "Joined from"))
+    if joined_to:
+        rows = rows.filter(hire_date__lte=_date(joined_to, "Joined to"))
     departments = Worker.objects.filter(branch=branch).exclude(
         department=""
     ).values_list("department", flat=True).distinct().order_by("department")
@@ -149,7 +158,9 @@ def workers(request, branch):
     ).count()
     return render(request, "workers.html", {
         "title": "Workers", "page": page, "q": q, "status": status,
-        "department": department, "departments": departments,
+        "department": department, "departments": departments, "employment": employment,
+        "joined_from": joined_from, "joined_to": joined_to,
+        "employment_types": Worker.EMPLOYMENT_TYPES,
         "active_count": active_count, "total_count": Worker.objects.filter(branch=branch).count(),
         "expiring_documents": expiring, "statuses": Worker.STATUSES,
     })
@@ -352,9 +363,28 @@ def worker_id_card(request, branch, pk):
 def workers_export(request, branch, format):
     rows = []
     qs = Worker.objects.filter(branch=branch).order_by("last_name", "first_name")
-    status = request.GET.get("status", "")
+    q = request.GET.get("q", "").strip()[:100]
+    status = request.GET.get("status", "").strip()
+    department = request.GET.get("department", "").strip()[:100]
+    employment = request.GET.get("employment", "").strip()[:20]
+    joined_from = request.GET.get("joined_from", "").strip()
+    joined_to = request.GET.get("joined_to", "").strip()
+    if q:
+        qs = qs.filter(
+            Q(employee_code__icontains=q) | Q(first_name__icontains=q) |
+            Q(last_name__icontains=q) | Q(other_names__icontains=q) |
+            Q(phone__icontains=q) | Q(job_title__icontains=q)
+        )
     if status:
         qs = qs.filter(status=status)
+    if department:
+        qs = qs.filter(department=department)
+    if employment:
+        qs = qs.filter(employment_type=employment)
+    if joined_from:
+        qs = qs.filter(hire_date__gte=_date(joined_from, "Joined from"))
+    if joined_to:
+        qs = qs.filter(hire_date__lte=_date(joined_to, "Joined to"))
     for worker in qs:
         rows.append({
             "employee_code": worker.employee_code, "name": worker.full_name,
@@ -376,6 +406,6 @@ def workers_export(request, branch, format):
     return export(
         rows, format, f"Workforce register · {branch.name}", shell(request)["company"], columns,
         filename="kofad-workforce-register", sheet_name="Workforce",
-        metadata={"Scope": branch.name, "Status": status or "All", "Generated": timezone.localtime().strftime("%d %b %Y %H:%M")},
+        metadata={"Scope": branch.name, "Status": status or "All", "Department": department or "All", "Employment": employment or "All", "Joined": f"{joined_from or 'Any'} to {joined_to or 'Any'}", "Search": q or "All", "Generated": timezone.localtime().strftime("%d %b %Y %H:%M")},
         summary={"Workers": len(rows), "Active": sum(1 for row in rows if row["status"] == "Active")},
     )
