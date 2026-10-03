@@ -7,13 +7,14 @@
 {% elif doc.kind == "collection" %}<button class="button secondary" name="template" value="payment">Prepare payment SMS</button>{% endif %}
 </form>
 {% endif %}
-<button class="button secondary" type="button" data-print-mode="a4">Print / save A4 PDF</button>
-<button class="text-button" type="button" data-print-mode="thermal80">Thermal 80mm</button>
-<button class="text-button" type="button" data-print-mode="thermal58">Thermal 58mm</button>
+<a class="button secondary" href="{% url 'document_pdf' doc.pk 'a4' %}" target="_blank" rel="noopener">A4 PDF / print</a>
+<a class="button secondary" href="{% url 'document_pdf' doc.pk 'thermal80' %}" target="_blank" rel="noopener">Thermal 80mm PDF</a>
+<a class="button secondary" href="{% url 'document_pdf' doc.pk 'thermal58' %}" target="_blank" rel="noopener">Thermal 58mm PDF</a>
+<button class="text-button" type="button" data-print-mode="a4">Quick browser print</button>
 </div>
 {% endblock %}
 {% block content %}
-<div class="notice subtle print-screen-tip"><strong>Print tip:</strong> A4, 80mm and 58mm now use separate print sizes. If Chrome adds the web address/date around the receipt, open <em>More settings</em> and turn off <em>Headers and footers</em>.</div>
+<div class="notice subtle print-screen-tip"><strong>Best print quality:</strong> use the A4 / 80mm / 58mm PDF buttons above. They generate sharp vector text at the exact paper width. “Quick browser print” is only a convenience. If Chrome adds the web address/date, open <em>More settings</em> and turn off <em>Headers and footers</em>.</div>
 <article class="panel receipt document-receipt">
 <header class="receipt-header">
 <div class="brand receipt-brand">{% include "brand.html" %}</div>
