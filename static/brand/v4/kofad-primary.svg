@@ -1,42 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 760" role="img" aria-labelledby="title desc">
-  <title id="title">KOFAD IMPEX Enterprise</title>
-  <desc id="desc">A premium KOFAD IMPEX identity built around a bespoke KI monogram, forward trade motion, charcoal and copper.</desc>
-
-  <!-- Master mark is intentionally flat: no gradients, no globe, no generic box. -->
-  <g transform="translate(250 72)">
-    <!-- Fine outer frame gives the mark authority without turning it into a badge. -->
-    <rect x="0" y="0" width="420" height="420" rx="72" fill="none" stroke="#171717" stroke-width="12"/>
-
-    <!-- Bespoke K: left stem + two directional arms. -->
-    <path d="M105 86V334" fill="none" stroke="#171717" stroke-width="42" stroke-linecap="square"/>
-    <path d="M130 210L270 86" fill="none" stroke="#B66B45" stroke-width="38" stroke-linecap="square"/>
-    <path d="M130 210L286 334" fill="none" stroke="#171717" stroke-width="38" stroke-linecap="square"/>
-
-    <!-- The I is deliberately independent: KOFAD + IMPEX, joined but not fused. -->
-    <path d="M314 92V328" fill="none" stroke="#B66B45" stroke-width="30" stroke-linecap="square"/>
-
-    <!-- Small cuts suggest movement / exchange without using obvious arrows. -->
-    <path d="M246 104L284 104" stroke="#171717" stroke-width="10" stroke-linecap="square"/>
-    <path d="M268 316L308 316" stroke="#B66B45" stroke-width="10" stroke-linecap="square"/>
-  </g>
-
-  <!-- Wordmark -->
-  <text x="460" y="590" text-anchor="middle"
-        font-family="Georgia, 'Times New Roman', serif"
-        font-size="118" font-weight="700" letter-spacing="8"
-        fill="#171717">KOFAD</text>
-
-  <g transform="translate(214 630)">
-    <line x1="0" y1="16" x2="96" y2="16" stroke="#B66B45" stroke-width="5"/>
-    <text x="246" y="30" text-anchor="middle"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="28" font-weight="700" letter-spacing="12"
-          fill="#4F4A45">IMPEX</text>
-    <line x1="396" y1="16" x2="492" y2="16" stroke="#171717" stroke-width="5"/>
-  </g>
-
-  <text x="460" y="704" text-anchor="middle"
-        font-family="Arial, Helvetica, sans-serif"
-        font-size="18" font-weight="700" letter-spacing="9"
-        fill="#7A736C">ENTERPRISE</text>
+<title id="title">KOFAD IMPEX Enterprise</title>
+<desc id="desc">Refined KOFAD IMPEX identity with a bespoke KI monogram, broken architectural frame and copper trade accents.</desc>
+<g transform="translate(250 64)">
+  <path d="M92 28H326C363 28 392 57 392 94V144" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M392 276V326C392 363 363 392 326 392H276" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M144 392H94C57 392 28 363 28 326V276" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M28 144V94C28 57 57 28 94 28H144" fill="none" stroke="#171717" stroke-width="12" stroke-linecap="square"/>
+  <path d="M392 168V252" stroke="#B66B45" stroke-width="12"/>
+  <path d="M168 392H252" stroke="#B66B45" stroke-width="12"/>
+  <path d="M94 92H140V330H94Z" fill="#171717"/>
+  <path d="M136 201L247 92H299L167 229L136 220Z" fill="#B66B45"/>
+  <path d="M136 205L169 192L304 330H247L136 225Z" fill="#171717"/>
+  <path d="M316 96H348V326H316Z" fill="#B66B45"/>
+  <path d="M299 96H365V113H299Z" fill="#171717"/>
+  <path d="M299 309H365V326H299Z" fill="#171717"/>
+  <path d="M268 92L299 92L278 113L247 113Z" fill="#F7F3ED"/>
+  <path d="M276 309L307 309L287 330L256 330Z" fill="#F7F3ED"/></g>
+<g transform="translate(224 586) scale(.118 -.118)" fill="#171717">
+<path transform="translate(0 0)" d="M747 31C702 31 676 32 669 35C646 44 637 67 626 87L415 453L515 565C550 605 577 631 595 643C610 653 639 658 683 658V689H433V658C470 659 491 655 498 645C503 638 505 631 505 624C505 612 499 599 486 586L217 288V658H310V689H31V658H124V31H31V0H308V31H215V230L344 377L513 89C520 77 523 66 523 57C523 40 499 31 451 31V0H747Z"/>
+<path transform="translate(865 0)" d="M663 341C663 452 636 541 581 607C527 674 453 707 360 707C273 707 201 675 144 610C85 542 55 454 54 347C53 247 82 162 142 91C203 21 275 -14 360 -14C447 -14 519 20 576 89C634 158 663 242 663 341ZM552 343C552 247 537 171 506 114C473 52 425 21 363 21C231 21 165 130 165 347C165 451 178 530 205 583C237 645 289 676 360 676C427 676 477 643 510 578C538 522 552 444 552 343Z"/>
+<path transform="translate(1673 0)" d="M609 689H44V658H138V31H44V0H320V31H227V334H349C398 334 435 290 435 209H467V486H435C435 445 427 414 412 393C399 376 378 368 349 368H227V658L398 656C526 653 571 599 580 486H611Z"/>
+<path transform="translate(2409 0)" d="M725 31H651L415 708H375L158 138C139 85 120 53 103 42C90 34 66 30 31 31V0H249V31C211 31 190 34 186 40C182 46 180 54 180 63C180 82 186 107 198 138L236 228H477L545 31H465V0H725ZM250 266 364 559 463 266Z"/>
+<path transform="translate(3247 0)" d="M691 336C691 443 664 527 609 590C555 653 481 684 388 685C310 686 247 686 199 685C147 684 95 686 44 689V658H138V31H44V0C87 1 134 2 184 2C245 1 312 0 385 -2C466 -5 537 28 598 95C660 162 691 243 691 336ZM585 339C586 250 571 180 538 127C505 70 454 37 386 27C375 26 361 25 343 25C311 25 272 27 227 31V654C276 660 330 661 388 658C462 652 515 617 546 554C571 505 584 434 585 339Z"/></g>
+<g transform="translate(208 630)">
+  <line x1="0" y1="16" x2="112" y2="16" stroke="#B66B45" stroke-width="4"/>
+  <text x="252" y="30" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" letter-spacing="12" fill="#4F4A45">IMPEX</text>
+  <line x1="392" y1="16" x2="504" y2="16" stroke="#171717" stroke-width="4"/>
+</g>
+<text x="460" y="704" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" letter-spacing="9" fill="#7A736C">ENTERPRISE</text>
 </svg>
