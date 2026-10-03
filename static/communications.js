@@ -14,6 +14,8 @@
   const customerChecks = customerRows.map(row => row.querySelector('input[type="checkbox"]'));
   const selectedCount = document.querySelector("#comms-selected-count");
   const oneCustomer = document.querySelector("#comms-one-customer");
+  const oneSearch = document.querySelector("#comms-one-search");
+  const oneRows = [...document.querySelectorAll("[data-one-customer]")];
   const manualPhone = document.querySelector("#comms-manual-phone");
 
   function selectedVisibleChecks() {
@@ -94,6 +96,23 @@
       updateCharCount();
     });
   });
+
+  oneSearch?.addEventListener("input", () => {
+    const q = oneSearch.value.trim().toLowerCase();
+    if (oneCustomer && oneCustomer.value && !q) oneCustomer.value = "";
+    oneRows.forEach(row => {
+      row.classList.toggle("hidden", Boolean(q) && !row.dataset.search.includes(q));
+      row.classList.toggle("active", row.dataset.oneCustomer === oneCustomer?.value);
+    });
+    updateRecipientSummary();
+  });
+
+  oneRows.forEach(row => row.addEventListener("click", () => {
+    if (oneCustomer) oneCustomer.value = row.dataset.oneCustomer || "";
+    if (oneSearch) oneSearch.value = [row.dataset.name, row.dataset.phone].filter(Boolean).join(" · ");
+    oneRows.forEach(item => item.classList.toggle("active", item === row));
+    updateRecipientSummary();
+  }));
 
   customerSearch?.addEventListener("input", () => {
     const q = customerSearch.value.trim().toLowerCase();
