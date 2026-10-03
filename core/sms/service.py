@@ -1,7 +1,6 @@
 import hashlib
 import hmac
 import re
-import secrets
 from datetime import timedelta
 from urllib.parse import urlencode, urlsplit
 
@@ -229,22 +228,21 @@ def _recipient_is_current(message):
     return False
 
 
-def _automation_queue_actor(actor):
+def _automation_sender(actor):
     if actor and actor.is_active and actor.has_perm("core.send_messages"):
         return actor
     from django.contrib.auth.models import User
     return User.objects.filter(is_active=True, is_superuser=True).order_by("pk").first()
 
 
-def queue_automatic(message, actor=None):
-    """Compatibility name: automatic live mode now submits immediately, never queues."""
+def send_automatic(message, actor=None):
+    """Submit an eligible automatic SMS immediately when live SMS is enabled."""
     if message.status != "draft" or message.channel != "sms" or not settings.SMS_ENABLED:
         return message
-    sender = _automation_queue_actor(actor)
+    sender = _automation_sender(actor)
     if not sender:
         raise ValidationError("No active administrator is available to authorize automatic SMS.")
     return send_message_now(sender, message.branch, message.pk, automatic=True)
-
 
 
 def _delivery_callback_token():
@@ -280,12 +278,11 @@ def _prepare_direct_attempt(user, message, retry=False):
         message.sandbox = settings.SMS_SANDBOX
     message.attempts += 1
     message.status = "sending"
-    message.queued_by = user  # legacy field now records the authorising sender.
-    message.next_attempt_at = None
+    message.submitted_by = user
     message.last_error = ""
     message.save(update_fields=[
         "provider", "sender", "sandbox", "attempts", "status",
-        "queued_by", "next_attempt_at", "last_error",
+        "submitted_by", "last_error",
     ])
     attempt = SmsAttempt.objects.create(
         message=message,
@@ -393,71 +390,12 @@ def send_message_now(user, branch, pk, retry=False, automatic=False):
     return send_messages_now(user, branch, [pk], retry=retry, automatic=automatic)[0]
 
 
-def queue_message(user, branch, pk, retry=False):
-    """Legacy API kept for old callers; it now sends immediately."""
-    return send_message_now(user, branch, pk, retry=retry)
-
-
-
-
 def transition(current,incoming):
     if current == "delivered" or incoming == "delivered":
         return "delivered"
     if current in FINAL:
         return current
     return incoming
-
-
-def process_one():
-    # Validate before claiming. A misconfigured worker leaves the queue intact.
-    with transaction.atomic():
-        message = Message.objects.select_for_update(of=("self",), skip_locked=True).select_related("party", "management_contact").filter(
-            status__in=["queued","retry_wait"], next_attempt_at__lte=timezone.now()
-        ).order_by("created_at").first()
-        if not message:
-            return False
-        validate_config(message.provider)
-        try:
-            permit(message.queued_by,message.branch,"send_messages")
-            validate_current_context(message)
-            if not _recipient_is_current(message):
-                raise ValidationError("Consent or recipient changed.")
-        except Exception:
-            message.status,message.last_error = "failed","Recipient consent or sender access no longer valid."
-            message.save(update_fields=["status","last_error"])
-            audit(None,message.branch,"sms.blocked",message.pk)
-            return True
-        token = secrets.token_urlsafe(32)
-        message.attempts += 1
-        attempt = SmsAttempt.objects.create(message=message,number=message.attempts,provider=message.provider,
-            callback_digest=hashlib.sha256(token.encode()).hexdigest())
-        message.status = "sending"
-        message.save(update_fields=["status","attempts"])
-    callback = settings.SMS_PUBLIC_ORIGIN + f"/sms/callback/{attempt.pk}/?" + urlencode({"token":token})
-    try:
-        result = get_provider(message.provider).submit(message.recipient,message.body,message.sender,callback,message.sandbox)
-    except Exception:
-        # Adapter bugs or interrupted transport cannot establish whether a charge occurred.
-        from .providers import Submission
-        result = Submission("unknown",error_code="adapter_outcome_unknown")
-    with transaction.atomic():
-        locked = Message.objects.select_for_update().get(pk=message.pk)
-        current = SmsAttempt.objects.select_for_update().get(pk=attempt.pk)
-        incoming = result.status
-        if incoming == "retry_wait" and locked.attempts >= settings.SMS_MAX_ATTEMPTS:
-            incoming = "failed"
-        current.status = transition(current.status,incoming)
-        if not current.provider_id:
-            current.provider_id = result.provider_id
-        current.http_status,current.error_code = result.http_status,result.error_code
-        current.save()
-        locked.status = "simulated" if locked.sandbox and current.status in ("accepted","delivered") else current.status
-        locked.last_error = result.error_code
-        if locked.status == "retry_wait":
-            locked.next_attempt_at = timezone.now()+timedelta(seconds=60*2**(locked.attempts-1))
-        locked.save(update_fields=["status","last_error","next_attempt_at"])
-        audit(locked.queued_by,locked.branch,"sms."+locked.status,locked.pk,{"attempt":str(current.pk),"provider":locked.provider})
-    return True
 
 
 @transaction.atomic
