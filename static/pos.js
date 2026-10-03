@@ -813,21 +813,28 @@
 
     if (!purchase) {
       if (!party) {
-        newName = customerName?.value.trim() || "";
-        if (!newCustomerMode && !newName) throw new Error("Choose a returning customer or enter a new customer.");
-        if (newName.length < 2) throw new Error("Enter the new customer's name.");
-        newPhone = normalizeGhanaPhone(customerPhone?.value || "");
+        const rawName = customerName?.value.trim() || "";
+        const rawPhone = customerPhone?.value.trim() || "";
+        const wantsNamedCustomer = newCustomerMode || rawName || rawPhone;
+        if (wantsNamedCustomer) {
+          if (rawName.length < 2) throw new Error("Enter the new customer's name.");
+          newName = rawName;
+          newPhone = normalizeGhanaPhone(rawPhone);
+        }
       }
       const plan = paymentPlan?.value || "full";
       if (!allowCredit && plan !== "full") throw new Error("Credit sales are disabled by company policy.");
+      if ((plan === "part" || plan === "credit") && !party && !newName) {
+        throw new Error("Choose or enter a customer for a sale that leaves a balance.");
+      }
       if (plan === "full" && paidNow !== grandTotal) {
-        throw new Error("For “Paid in full”, the channel split must exactly equal the sale total.");
+        throw new Error("The payment amount must exactly equal the sale total.");
       }
       if (plan === "part" && !(paidNow > 0 && paidNow < grandTotal)) {
         throw new Error("Part payment must be greater than zero and less than the sale total.");
       }
       if (plan === "credit" && paidNow !== 0) {
-        throw new Error("Credit / pay later starts with zero payment. Choose Part payment if money is received now.");
+        throw new Error("Credit / pay later starts with zero payment.");
       }
       if ((plan === "part" || plan === "credit") && !dueDate?.value) {
         throw new Error("Choose a due date for the unpaid balance.");
@@ -844,8 +851,8 @@
         ...(!purchase && allowDiscounts ? {discount: discount || "0"} : {})
       })),
       party,
-      ...(!purchase && !party ? {customer_name: newName, customer_phone: newPhone} : {}),
-      ...(!purchase ? {customer_consent: Boolean(customerConsent?.checked)} : {}),
+      ...(!purchase && !party && newName ? {customer_name: newName, customer_phone: newPhone} : {}),
+      ...(!purchase ? {customer_consent: Boolean((party || newName) && customerConsent?.checked)} : {}),
       due_date: dueDate?.value || "",
       override_reason: document.querySelector("#override-reason")?.value || "",
       payments: paymentMethods.map(method => ({
@@ -854,6 +861,94 @@
       }))
     };
   }
+
+  function setSuccessStatus(message, tone = "subtle") {
+    if (!successMessageStatus) return;
+    successMessageStatus.textContent = message || "";
+    successMessageStatus.classList.toggle("hidden", !message);
+    successMessageStatus.classList.toggle("error", tone === "error");
+    successMessageStatus.classList.toggle("subtle", tone !== "error");
+  }
+
+  function showSaleSuccess(result) {
+    lastCompletedSale = result;
+    closePayment();
+    root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = false);
+    document.querySelector("#success-reference").textContent = result.reference || "Receipt";
+    document.querySelector("#success-total").textContent = Number(result.total || 0).toFixed(2);
+    document.querySelector("#success-customer").textContent = result.customer
+      ? result.customer.name + (result.customer.phone ? " · " + result.customer.phone : "")
+      : "Walk-in customer";
+
+    const printLink = document.querySelector("#receipt-print");
+    const a4Link = document.querySelector("#receipt-a4");
+    const viewLink = document.querySelector("#receipt-view");
+    if (result.document_id) {
+      printLink.href = "/documents/" + result.document_id + "/pdf/thermal80/";
+      a4Link.href = "/documents/" + result.document_id + "/pdf/a4/";
+      viewLink.href = result.url;
+    }
+
+    if (receiptSmsButton) {
+      receiptSmsButton.disabled = !result.can_send_sms;
+      receiptSmsButton.textContent = result.can_send_sms ? "Send SMS" : "SMS unavailable";
+    }
+    setSuccessStatus(result.can_send_sms ? "" : (result.sms_reason || ""));
+    if (typeof successDialog?.showModal === "function") successDialog.showModal();
+    else successDialog?.setAttribute("open", "");
+  }
+
+  function resetForNextSale() {
+    successDialog?.close?.();
+    completed = false;
+    lastCompletedSale = null;
+    pendingBody = null;
+    heldId = null;
+    requestKey = crypto.randomUUID();
+    cart.splice(0, cart.length);
+    selectedCustomer = null;
+    newCustomerMode = false;
+    if (partyInput) partyInput.value = "";
+    selectedCustomerBox?.classList.add("hidden");
+    selectedCustomerBox?.replaceChildren();
+    customerResults?.replaceChildren();
+    newCustomerFields?.classList.add("hidden");
+    newCustomerToggle?.classList.remove("hidden");
+    clearCustomerButton?.classList.add("hidden");
+    if (customerSearch) customerSearch.value = "";
+    if (customerName) customerName.value = "";
+    if (customerPhone) customerPhone.value = "";
+    if (customerConsent) customerConsent.checked = false;
+    if (paymentPlan) paymentPlan.value = "full";
+    if (dueDate) dueDate.value = "";
+    selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+    zeroPaymentInputs();
+    if (singlePaymentValue) singlePaymentValue.value = "0";
+    const reason = document.querySelector("#override-reason");
+    if (reason) reason.value = "";
+    clearStored();
+    applyPaymentPlan();
+    render();
+    clearError();
+    productQuery?.focus();
+  }
+
+  receiptSmsButton?.addEventListener("click", async () => {
+    if (!lastCompletedSale?.document_id) return;
+    setSuccessStatus("");
+    receiptSmsButton.disabled = true;
+    receiptSmsButton.textContent = "Sending…";
+    try {
+      const result = await api("/api/documents/" + lastCompletedSale.document_id + "/send-sms/", {});
+      receiptSmsButton.textContent = "Message queued ✓";
+      setSuccessStatus(result.message || "Receipt SMS queued.");
+    } catch (error) {
+      receiptSmsButton.disabled = false;
+      receiptSmsButton.textContent = "Send SMS";
+      setSuccessStatus(error.message, "error");
+    }
+  });
+  document.querySelector("#new-sale-after-success")?.addEventListener("click", resetForNextSale);
 
   document.querySelector("#checkout").addEventListener("submit", async event => {
     event.preventDefault();
@@ -871,7 +966,11 @@
       }
       completed = true;
       clearStored();
-      location.href = result.url;
+      if (purchase) {
+        location.href = result.url;
+        return;
+      }
+      showSaleSuccess(result);
     } catch (error) {
       if (error.rejected || !pendingBody) {
         pendingBody = null;
