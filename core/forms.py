@@ -3,7 +3,7 @@ import re
 from django import forms
 
 from .identity import normalize_ghana_phone
-from .models import Company, Party, Product
+from .models import Branch, CommunicationSettings, Company, DebtSettings, ManagementContact, Party, Product
 
 
 class ProductForm(forms.ModelForm):
@@ -93,7 +93,150 @@ class PartyForm(forms.ModelForm):
 class CompanyForm(forms.ModelForm):
     class Meta:
         model = Company
-        fields = ["name", "phone", "address"]
+        fields = ["name", "phone", "secondary_phone", "address"]
+        labels = {
+            "name": "Business name",
+            "phone": "Business phone 1",
+            "secondary_phone": "Business phone 2",
+            "address": "Business address / public location",
+        }
+        help_texts = {
+            "phone": "Printed as a KOFAD business contact number, not as the customer's number.",
+            "secondary_phone": "Optional second public business number.",
+            "address": "Public business address. Each store/location can also have its own address.",
+        }
+
+
+class LocationSettingsForm(forms.ModelForm):
+    class Meta:
+        model = Branch
+        fields = ["name", "address"]
+        labels = {"name": "Location name", "address": "Location address"}
+        help_texts = {
+            "name": "Shown on receipts, reports and stock records.",
+            "address": "Printed on receipts for transactions posted at this location.",
+        }
+
+
+class DebtSettingsForm(forms.ModelForm):
+    class Meta:
+        model = DebtSettings
+        fields = [
+            "delivery_mode", "reminder_time", "due_soon_enabled", "due_soon_days",
+            "due_today_enabled", "overdue_enabled", "overdue_grace_value", "overdue_grace_unit",
+            "overdue_repeat_days", "max_sms_7_days", "max_sms_30_days",
+            "minimum_hours_between_sms", "minimum_balance", "skip_weekends", "message_template",
+        ]
+        labels = {
+            "delivery_mode": "Automatic reminder action",
+            "reminder_time": "Reminder run time",
+            "due_soon_days": "Due-soon reminder days",
+            "overdue_grace_value": "Grace period before overdue",
+            "overdue_grace_unit": "Grace period unit",
+            "overdue_repeat_days": "Repeat overdue reminder every",
+            "max_sms_7_days": "Maximum debt SMS in any 7 days",
+            "max_sms_30_days": "Maximum debt SMS in any 30 days",
+            "minimum_hours_between_sms": "Minimum hours between debt SMS",
+            "minimum_balance": "Minimum balance for reminders",
+            "message_template": "Default debt reminder message",
+        }
+        help_texts = {
+            "delivery_mode": "Off does nothing. Draft prepares messages for review. Queue submits automatically only when live SMS is configured.",
+            "reminder_time": "Africa/Accra local time.",
+            "due_soon_days": "Comma-separated days before due date, for example 7,3,1.",
+            "overdue_grace_value": "Zero means a debt becomes overdue immediately after its due date.",
+            "overdue_grace_unit": "Months are treated as 30 days for reminder scheduling.",
+            "overdue_repeat_days": "How often an eligible overdue account may be reminded.",
+            "minimum_balance": "Balances below this amount are ignored by automatic debt reminders.",
+            "message_template": "Available placeholders: {company}, {customer}, {currency}, {balance}, {debt_count}, {due_sentence}, {business_phone}, {location}.",
+        }
+
+    def clean_due_soon_days(self):
+        raw = self.cleaned_data["due_soon_days"]
+        values = []
+        for part in str(raw).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if not part.isdigit():
+                raise forms.ValidationError("Use comma-separated whole days, such as 7,3,1.")
+            value = int(part)
+            if value < 0 or value > 3650:
+                raise forms.ValidationError("Due-soon days must be between 0 and 3650.")
+            values.append(value)
+        if not values:
+            raise forms.ValidationError("Enter at least one due-soon day.")
+        return ",".join(str(value) for value in sorted(set(values), reverse=True))
+
+    def clean_message_template(self):
+        body = self.cleaned_data["message_template"].strip()
+        allowed = {"company","customer","currency","balance","debt_count","due_sentence","business_phone","location"}
+        keys = set(re.findall(r"\{([^{}]+)\}", body))
+        if not keys.issubset(allowed):
+            raise forms.ValidationError("The debt message contains an unsupported placeholder.")
+        if len(body) > 1500:
+            raise forms.ValidationError("Keep the debt message within 1,500 characters.")
+        return body
+
+
+class CommunicationSettingsForm(forms.ModelForm):
+    class Meta:
+        model = CommunicationSettings
+        fields = [
+            "sale_receipt_mode", "payment_confirmation_mode",
+            "daily_closing_mode", "low_stock_mode", "low_stock_time",
+            "closing_template", "low_stock_template",
+        ]
+        labels = {
+            "sale_receipt_mode": "After a completed sale",
+            "payment_confirmation_mode": "After a customer debt payment",
+            "daily_closing_mode": "After daily closing",
+            "low_stock_mode": "Daily low-stock summary",
+            "low_stock_time": "Low-stock summary time",
+            "closing_template": "Daily closing message",
+            "low_stock_template": "Low-stock management message",
+        }
+        help_texts = {
+            "sale_receipt_mode": "Customer must have messaging consent. Draft or queue the existing receipt template.",
+            "payment_confirmation_mode": "Customer must have messaging consent. Draft or queue the existing payment template.",
+            "daily_closing_mode": "Sent to active management contacts marked for closing notifications.",
+            "low_stock_mode": "Sent at most once per day to management contacts marked for stock notifications.",
+            "low_stock_time": "Africa/Accra local time.",
+            "closing_template": "Placeholders: {company}, {date}, {currency}, {sales_total}, {expected_cash}, {counted_cash}, {cash_variance}, {debt_collections}, {expenses}, {staff}, {location}.",
+            "low_stock_template": "Placeholders: {company}, {low_count}, {out_count}, {location}.",
+        }
+
+    def clean(self):
+        data = super().clean()
+        allowed = {
+            "closing_template": {"company","date","currency","sales_total","expected_cash","counted_cash","cash_variance","debt_collections","expenses","staff","location"},
+            "low_stock_template": {"company","low_count","out_count","location"},
+        }
+        for field, tokens in allowed.items():
+            body = (data.get(field) or "").strip()
+            keys = set(re.findall(r"\{([^{}]+)\}", body))
+            if not keys.issubset(tokens):
+                self.add_error(field, "This template contains an unsupported placeholder.")
+            if len(body) > 1500:
+                self.add_error(field, "Keep this message within 1,500 characters.")
+        return data
+
+
+class ManagementContactForm(forms.ModelForm):
+    class Meta:
+        model = ManagementContact
+        fields = ["name", "phone", "branch", "receive_closing", "receive_low_stock", "receive_system_alerts", "active"]
+        labels = {
+            "phone": "Ghana phone number",
+            "branch": "Location scope",
+            "receive_closing": "Receive daily closing messages",
+            "receive_low_stock": "Receive low-stock summaries",
+            "receive_system_alerts": "Receive system alerts",
+        }
+        help_texts = {"branch": "Leave blank to receive notifications for all locations."}
+
+    def clean_phone(self):
+        return normalize_ghana_phone(self.cleaned_data["phone"])
 
 
 class SalesPolicyForm(forms.ModelForm):
