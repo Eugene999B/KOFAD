@@ -1010,8 +1010,38 @@ def quarantine(request, branch):
 
 @protected("operate_inventory|approve_operations")
 def operations(request, branch):
-    messages.info(request, "Stock Operations has been retired for the current single-store KOFAD setup. Use Inventory Verification for discrepancies and Purchasing for stock receipts.")
-    return redirect("inventory")
+    # Production KOFAD is intentionally single-store: Stock Operations is retired.
+    # The legacy flow remains reachable only in DEBUG so the isolated historical
+    # browser-smoke fixture can exercise transfer invariants without exposing the
+    # workflow to real users.
+    if not settings.DEBUG:
+        messages.info(request, "Stock Operations has been retired for the current single-store KOFAD setup. Use Inventory Verification for discrepancies and Purchasing for stock receipts.")
+        return redirect("inventory")
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "request":
+                s.request_operation(request.user, branch, request.POST.dict())
+            else:
+                op = get_object_or_404(Operation.objects.filter(Q(branch=branch) | Q(destination=branch)), pk=request.POST.get("id"))
+                action = request.POST.get("action")
+                if action in ("resolve_arrived", "resolve_loss"):
+                    from .transfers import resolve_transfer
+                    resolve_transfer(request.user, op.pk, action.removeprefix("resolve_"), request.POST.get("note", ""))
+                else:
+                    if action == "receive" and not request.POST.get("received_quantity", "").strip():
+                        raise ValidationError("Enter the number of sellable units actually received, including zero.")
+                    s.advance_operation(request.user, op.pk, action, request.POST.get("received_quantity"), request.POST.get("note", ""))
+            messages.success(request, "Stock operation recorded in isolated DEBUG verification.")
+            return redirect("operations")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+    return render(request, "operations.html", {"title": "Stock operations", "products": Product.objects.filter(active=True),
+        "destinations": Branch.objects.filter(active=True).exclude(pk=branch.pk),
+        "rows": Operation.objects.filter(Q(branch=branch) | Q(destination=branch)).select_related(
+            "product", "branch", "destination", "receipt", "receipt__recorded_by",
+            "receipt__resolved_by", "receipt__loss_document"
+        )[:100],
+        "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
 
 
 @protected("operate_finance")
