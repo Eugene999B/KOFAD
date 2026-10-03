@@ -1499,3 +1499,11 @@ html[data-theme="dark"] .comms-wa-ready span{color:#abc6b2}
 html[data-theme="dark"] .comms-status-error{color:#ff9b91!important}
 html[data-theme="dark"] [data-sms-status][data-delivery-state="delivered"]{color:#78d99a!important}
 html[data-theme="dark"] [data-sms-status][data-delivery-state="accepted"]{color:#e5c7ad!important}
+
+.comms-one-results{margin-top:8px;max-height:220px}
+.comms-one-customer-row{width:100%;border:0;background:transparent;text-align:left;font:inherit;color:var(--ink)}
+.comms-one-customer-row em{margin-left:auto;font-style:normal;font-size:10px;font-weight:650;color:#895036}
+.comms-one-customer-row.active{background:var(--kofad-accent-soft)}
+.comms-one-customer-row.active em::after{content:" ✓"}
+html[data-theme="dark"] .comms-one-customer-row{color:#fff}
+html[data-theme="dark"] .comms-one-customer-row em{color:#d79a79}
