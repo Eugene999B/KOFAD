@@ -4,6 +4,7 @@
 <div class="actions">
   <a class="button secondary" href="/exports/?dataset=debts">⇩ Export debt book</a>
   <a class="button secondary" href="/parties/">Customer directory</a>
+  {% if perms.core.manage_company %}<a class="button secondary" href="/settings/debt/">Debt settings</a>{% endif %}
 </div>
 {% endblock %}
 {% block content %}
@@ -131,7 +132,7 @@
         {% for row in selected.invoice_rows %}
         <article class="debt-invoice-row {{ row.status }}" data-reference="{{ row.invoice.reference }}" data-outstanding="{{ row.outstanding }}">
           <div><a href="{% url 'document' row.invoice.pk %}"><strong>{{ row.invoice.reference }}</strong></a><small>Sale {{ row.invoice.created_at|date:"d M Y, H:i" }} · total {{ row.invoice.total|floatformat:2 }}</small></div>
-          <div><small>Due</small><strong>{{ row.invoice.due_date|default:"No due date" }}</strong>{% if row.days_overdue %}<em>{{ row.days_overdue }} days overdue</em>{% endif %}</div>
+          <div><small>Due</small><strong>{{ row.invoice.due_date|default:"No due date" }}</strong>{% if row.days_overdue %}<em>{{ row.days_overdue }} days overdue</em>{% elif row.invoice.due_date and selected.overdue_grace_days %}<em>Overdue after {{ row.overdue_on|date:"d M Y" }}</em>{% endif %}</div>
           <div class="number"><small>Left to pay</small><strong>{{ row.outstanding|floatformat:2 }}</strong><em>{{ row.paid_so_far|floatformat:2 }} settled</em></div>
         </article>
         {% endfor %}
