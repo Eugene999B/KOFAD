@@ -261,8 +261,95 @@ def complete_trade(request):
             raise ValidationError("Expected a transaction object.")
         doc = s.post_trade(request.user, branch_for(request), data, request.headers.get("Idempotency-Key"),
                            kind=data.get("kind", "sale"))
-        return JsonResponse({"url": f"/documents/{doc.pk}/", "reference": doc.reference})
+        party = doc.party
+        can_send_sms = bool(
+            doc.kind == "sale"
+            and party
+            and party.consent
+            and request.user.has_perm("core.send_messages")
+            and settings.SMS_ENABLED
+        )
+        return JsonResponse({
+            "url": f"/documents/{doc.pk}/",
+            "document_id": str(doc.pk),
+            "reference": doc.reference,
+            "total": str(doc.total),
+            "paid": str(doc.paid),
+            "customer": (
+                {"name": party.name, "phone": party.phone, "consent": party.consent}
+                if party else None
+            ),
+            "can_send_sms": can_send_sms,
+            "sms_reason": (
+                ""
+                if can_send_sms
+                else "No customer is attached to this sale."
+                if not party
+                else "Customer SMS consent is not enabled."
+                if not party.consent
+                else "Your account does not have message-sending permission."
+                if not request.user.has_perm("core.send_messages")
+                else "SMS delivery is not enabled for this deployment."
+            ),
+        })
     except (ValidationError, ValueError, TypeError, KeyError) as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+@login_required
+@require_POST
+def send_transaction_message_api(request, pk):
+    branch = branch_for(request)
+    doc = get_object_or_404(
+        Document.objects.select_related("party"), pk=pk, branch=branch, kind="sale"
+    )
+    if not request.user.has_perm("core.operate_sales"):
+        raise PermissionDenied
+    if not request.user.has_perm("core.send_messages"):
+        return JsonResponse({"error": "Message-sending permission is required."}, status=403)
+    if not doc.party_id:
+        return JsonResponse({"error": "This is a walk-in sale with no customer phone number."}, status=400)
+    if not doc.party.consent:
+        return JsonResponse({"error": "Customer SMS consent is not enabled for this sale."}, status=400)
+    if not settings.SMS_ENABLED:
+        return JsonResponse({"error": "SMS delivery is not enabled for this deployment."}, status=400)
+
+    from .sms.service import create_draft, queue_message
+    from .sms.templates import render_for_document
+
+    try:
+        body = render_for_document(doc, "receipt")
+        item = Message.objects.filter(
+            branch=branch, party=doc.party
+        ).filter(
+            Q(source_key=f"auto:receipt:{doc.pk}")
+            | Q(source_key=f"document:receipt:{doc.pk}")
+            | Q(source_key__startswith=f"receipt:{doc.pk}:")
+        ).order_by("-created_at").first()
+
+        retryable = {"failed", "undelivered", "expired"}
+        in_flight = {"queued", "sending", "retry_wait", "accepted", "delivered", "simulated"}
+        if item and item.status in in_flight:
+            return JsonResponse({
+                "ok": True,
+                "status": item.status,
+                "message": f"Receipt SMS is already {item.status}.",
+            })
+        if item and item.status == "unknown":
+            return JsonResponse({
+                "error": "The previous SMS result is unknown. Verify it before sending again."
+            }, status=409)
+        if item and item.status in retryable:
+            queue_message(request.user, branch, item.pk, retry=True)
+            return JsonResponse({"ok": True, "status": "queued", "message": "Receipt SMS retry queued."})
+        if not item:
+            item = create_draft(
+                request.user, branch, doc.party, body,
+                source_key=f"document:receipt:{doc.pk}",
+            )
+        queue_message(request.user, branch, item.pk)
+        return JsonResponse({"ok": True, "status": "queued", "message": "Receipt SMS queued."})
+    except (ValidationError, ValueError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 
 
