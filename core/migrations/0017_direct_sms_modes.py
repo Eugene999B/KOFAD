@@ -58,44 +58,6 @@ class Migration(migrations.Migration):
             name="next_attempt_at",
         ),
         migrations.RunPython(forwards, backwards),
-        migrations.RunSQL(
-            """
-            CREATE OR REPLACE FUNCTION kofad_protect_message_content()
-            RETURNS trigger LANGUAGE plpgsql AS $
-            BEGIN
-                IF TG_OP = 'DELETE' THEN
-                    RAISE EXCEPTION 'Message history cannot be deleted';
-                END IF;
-                IF OLD.status <> 'draft' AND (
-                   NEW.body IS DISTINCT FROM OLD.body OR NEW.recipient IS DISTINCT FROM OLD.recipient
-                   OR NEW.party_id IS DISTINCT FROM OLD.party_id OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
-                   OR NEW.channel IS DISTINCT FROM OLD.channel OR NEW.provider IS DISTINCT FROM OLD.provider
-                   OR NEW.sender IS DISTINCT FROM OLD.sender OR NEW.sandbox IS DISTINCT FROM OLD.sandbox) THEN
-                    RAISE EXCEPTION 'Sent message content and routing are immutable';
-                END IF;
-                RETURN NEW;
-            END;
-            $;
-            """,
-            """
-            CREATE OR REPLACE FUNCTION kofad_protect_message_content()
-            RETURNS trigger LANGUAGE plpgsql AS $
-            BEGIN
-                IF TG_OP = 'DELETE' THEN
-                    RAISE EXCEPTION 'Message history cannot be deleted';
-                END IF;
-                IF OLD.status <> 'draft' AND (
-                   NEW.body IS DISTINCT FROM OLD.body OR NEW.recipient IS DISTINCT FROM OLD.recipient
-                   OR NEW.party_id IS DISTINCT FROM OLD.party_id OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
-                   OR NEW.channel IS DISTINCT FROM OLD.channel OR NEW.provider IS DISTINCT FROM OLD.provider
-                   OR NEW.sender IS DISTINCT FROM OLD.sender OR NEW.sandbox IS DISTINCT FROM OLD.sandbox) THEN
-                    RAISE EXCEPTION 'Queued message content and routing are immutable';
-                END IF;
-                RETURN NEW;
-            END;
-            $;
-            """,
-        ),
         migrations.AlterField(
             model_name="communicationsettings",
             name="daily_closing_mode",
