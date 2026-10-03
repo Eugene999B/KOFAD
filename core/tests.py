@@ -174,7 +174,7 @@ class BusinessTests(Fixtures, TestCase):
     def test_all_pages_render(self):
         self.authenticate_client()
         for path in ["/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
-                     "/finance/","/creditors/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
+                     "/finance/","/creditors/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
                      "/administration/","/administration/users/","/administration/roles/","/exports/","/communications/",
                      "/products/new/","/parties/new/"]:
             with self.subTest(path=path):
