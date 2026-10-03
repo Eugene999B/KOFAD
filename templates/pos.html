@@ -45,6 +45,12 @@
     </form>
     <div class="sale-search-help"><span>Start typing to find products</span><span>Barcode scanners can type directly here</span><kbd>/</kbd></div>
   </div>
+  {% if not purchase and held %}
+  <details class="held-sales held-sales-strip">
+    <summary>Held sales · {{ held|length }}</summary>
+    <div class="held-sales-menu">{% for sale in held %}<button class="held-item text-button" data-id="{{ sale.pk }}">{{ sale.label }} · {{ sale.created_at|date:"H:i" }}</button>{% endfor %}</div>
+  </details>
+  {% endif %}
   <div id="catalog-status" class="catalog-status">
     <span class="catalog-empty-icon">⌕</span>
     <h3>Find the first product</h3>
@@ -66,26 +72,7 @@
 <select id="party" name="party" required><option value="">Select supplier</option>{% for party in parties %}<option value="{{ party.pk }}">{{ party.name }} · {{ party.phone }}</option>{% endfor %}</select>
 </section>
 {% else %}
-<section class="checkout-customer checkout-stage">
-<div class="stage-heading"><span>2</span><div><strong>Customer</strong><small>Use an existing profile or create one without leaving checkout.</small></div></div>
 <input type="hidden" id="party" name="party">
-<label for="customer-search">Find returning customer</label>
-<input id="customer-search" type="search" autocomplete="off" placeholder="Name or Ghana phone number">
-<div id="customer-results" class="customer-results" role="listbox" aria-label="Customer search results"></div>
-<div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
-<div class="actions customer-actions"><button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button><button type="button" class="text-button hidden" id="clear-customer">Change customer</button></div>
-<div id="new-customer-fields" class="new-customer-fields hidden">
-<label for="customer-name">Customer name <small>Required</small></label>
-<input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer full name">
-<label for="customer-phone">Ghana phone <small>Required</small></label>
-<div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
-<p class="hint">You may also enter 0241234567; KOFAD stores one clean +233 format and reuses a matching customer.</p>
-</div>
-<label class="checkout-consent" id="customer-consent-wrap">
-<input id="customer-consent" type="checkbox">
-<span><strong>SMS receipt</strong><small>Tick only after the customer agrees to receive transaction messages on this number.</small></span>
-</label>
-</section>
 {% endif %}
 
 <div class="sale-checkout-bar" aria-label="Checkout actions">
@@ -95,11 +82,32 @@
 
 <dialog id="sale-payment-dialog" class="kofad-dialog sale-payment-dialog">
 <div class="dialog-heading payment-dialog-heading">
-<div><p class="eyebrow">STEP 3 OF 4</p><h2>{% if purchase %}Payment & receive stock{% else %}Take payment{% endif %}</h2><p class="muted">{% if purchase %}Record what was paid now, then post the delivery.{% else %}Choose the settlement and payment channel without leaving the counter.{% endif %}</p></div>
+<div><p class="eyebrow">{% if purchase %}PAYMENT{% else %}CHECKOUT{% endif %}</p><h2>{% if purchase %}Payment & receive stock{% else %}Finish sale{% endif %}</h2><p class="muted">{% if purchase %}Record what was paid now, then post the delivery.{% else %}Customer, payment and receipt — all from this one sheet.{% endif %}</p></div>
 <button class="icon-button" type="button" id="close-payment" aria-label="Close payment">×</button>
 </div>
 <div id="payment-error" class="notice error hidden" role="alert"></div>
 <div class="payment-dialog-total"><span>Amount due</span><strong>{{ company.currency }} <span id="payment-dialog-total">0.00</span></strong></div>
+
+{% if not purchase %}
+<section class="checkout-customer checkout-stage payment-dialog-customer">
+<div class="stage-heading"><span>2</span><div><strong>Customer</strong><small>Optional for a paid-in-full walk-in sale. Required for credit or SMS.</small></div></div>
+<div class="quick-customer-actions"><button type="button" class="button secondary" id="walk-in-customer">Walk-in sale</button><button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button><button type="button" class="text-button hidden" id="clear-customer">Change customer</button></div>
+<label class="sr-only" for="customer-search">Find returning customer</label>
+<input id="customer-search" type="search" autocomplete="off" placeholder="Search customer name or Ghana phone">
+<div id="customer-results" class="customer-results" role="listbox" aria-label="Customer search results"></div>
+<div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
+<div id="new-customer-fields" class="new-customer-fields hidden">
+<div class="new-customer-grid">
+<label>Customer name<input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer full name"></label>
+<label>Ghana phone<div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div></label>
+</div>
+<label class="checkout-consent" id="customer-consent-wrap">
+<input id="customer-consent" type="checkbox">
+<span><strong>Send SMS receipt</strong><small>Only enable after the customer agrees.</small></span>
+</label>
+</div>
+</section>
+{% endif %}
 
 <section class="checkout-stage payment-dialog-stage">
 <div class="stage-heading"><span>3</span><div><strong>Payment</strong><small>{% if purchase %}Record what was paid to the supplier now.{% else %}Choose how much the customer pays now.{% endif %}</small></div></div>
@@ -111,9 +119,11 @@
 </select>
 {% endif %}
 
-<fieldset><legend>Payment channels</legend>
+<fieldset class="payment-method-fieldset"><legend>Payment channel</legend>
+<div class="quick-payment-methods">{% for value,label in payment_methods %}<button type="button" class="button secondary quick-pay" data-payment-method="{{ value }}">{{ label }}</button>{% endfor %}<button type="button" class="button secondary" id="split-payment-toggle">Split payment</button></div>
+<div id="payment-split-fields" class="payment-split-fields hidden">
 <div class="payment-grid compact-payment-grid">{% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}</div>
-{% if cash_enabled %}<button type="button" id="exact-cash" class="button secondary exact-payment-button">{% if purchase %}Fill exact amount{% else %}Pay full amount by cash{% endif %}</button>{% endif %}
+</div>
 </fieldset>
 
 <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
@@ -133,9 +143,7 @@
 </dialog>
 </form>
 
-{% if not purchase %}
-<details class="held-sales"><summary>Held sales · {{ held|length }}</summary>{% for sale in held %}<button class="held-item text-button" data-id="{{ sale.pk }}">{{ sale.label }} · {{ sale.created_at|date:"H:i" }}</button>{% empty %}<p class="hint">No held sales.</p>{% endfor %}</details>
-{% endif %}
+
 </section>
 </div>
 
