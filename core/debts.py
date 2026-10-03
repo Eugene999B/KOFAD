@@ -232,6 +232,11 @@ def post_customer_payment(user, branch, payload, key):
         "remaining_customer_debt": str(total_outstanding - amount),
         "note": note,
     })
+    from . import automations
+    transaction.on_commit(
+        lambda document_id=doc.pk, actor_id=user.pk:
+            automations.safe_prepare_payment_confirmation(document_id, actor_id)
+    )
     return doc
 
 
