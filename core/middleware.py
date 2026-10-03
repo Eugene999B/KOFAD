@@ -13,7 +13,7 @@ class AccessMiddleware:
             if request.session.get("access_version") != access.session_version:
                 logout(request)
                 return redirect("login")
-            if access.must_change_password and request.path not in ("/account/password/", "/logout/"):
+            if access.force_password_change and request.path not in ("/account/password/", "/logout/"):
                 return redirect("password_change")
         response = self.get_response(request)
         response["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
