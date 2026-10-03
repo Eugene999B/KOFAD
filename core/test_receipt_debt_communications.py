@@ -331,5 +331,88 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertNotContains(response, "Customer events")
         self.assertNotContains(response, "Management alerts")
         self.assertNotContains(response, "Drafts remain safe in KOFAD until credentials are enabled.")
-        self.assertContains(response, "Prepare a customer message")
-        self.assertContains(response, "Message history")
+        self.assertContains(response, "Send a message")
+        self.assertContains(response, "Recent messages")
+
+
+    def test_communications_hub_exposes_all_recipient_modes_and_whatsapp(self):
+        self.customer.phone = "0241234567"
+        self.customer.save(update_fields=["phone"])
+        self.authenticate_client()
+        response = self.client.get("/communications/")
+        for phrase in ("One customer", "Select customers", "All customers", "Any number", "WhatsApp"):
+            self.assertContains(response, phrase)
+
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    def test_manual_sms_is_normalized_and_queued_immediately(self):
+        self.authenticate_client()
+        response = self.client.post("/communications/", {
+            "action": "send_compose",
+            "key": str(uuid.uuid4()),
+            "channel": "sms",
+            "target": "manual",
+            "phone": "0241234567",
+            "body": "KOFAD test message",
+        })
+        self.assertEqual(response.status_code, 302)
+        message = Message.objects.get(channel="sms", body="KOFAD test message")
+        self.assertEqual(message.recipient, "+233241234567")
+        self.assertTrue(message.manual_override)
+        self.assertEqual(message.status, "queued")
+        self.assertEqual(message.provider, "arkesel")
+        self.assertIsNotNone(message.queued_by)
+
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    def test_selected_customers_can_be_queued_together(self):
+        self.customer.phone = "0241234567"
+        self.customer.save(update_fields=["phone"])
+        other = Party.objects.create(
+            branch=self.branch, kind="customer", name="Second Customer", phone="0207654321"
+        )
+        self.authenticate_client()
+        response = self.client.post("/communications/", {
+            "action": "send_compose",
+            "key": str(uuid.uuid4()),
+            "channel": "sms",
+            "target": "selected",
+            "customer_ids": [str(self.customer.pk), str(other.pk)],
+            "body": "Stock has arrived",
+        })
+        self.assertEqual(response.status_code, 302)
+        queued = Message.objects.filter(channel="sms", body="Stock has arrived", status="queued")
+        self.assertEqual(queued.count(), 2)
+        self.assertEqual(set(queued.values_list("recipient", flat=True)), {
+            "+233241234567", "+233207654321"
+        })
+
+    def test_manual_whatsapp_prepares_direct_chat_link_without_claiming_delivery(self):
+        self.authenticate_client()
+        response = self.client.post("/communications/", {
+            "action": "send_compose",
+            "key": str(uuid.uuid4()),
+            "channel": "whatsapp",
+            "target": "manual",
+            "phone": "0241234567",
+            "body": "Hello from KOFAD",
+        })
+        self.assertEqual(response.status_code, 302)
+        item = Message.objects.get(channel="whatsapp", body="Hello from KOFAD")
+        self.assertEqual(item.status, "ready")
+        self.assertEqual(item.provider, "whatsapp-link")
+        page = self.client.get(f"/communications/?wa={item.pk}")
+        self.assertContains(page, "Open WhatsApp")
+        self.assertContains(page, "https://wa.me/233241234567")
