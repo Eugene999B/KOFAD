@@ -3,6 +3,13 @@
 <title>{{ title|default:"Business workspace" }} · KOFAD</title><link rel="icon" href="{% static 'brand/kofad-emblem.png' %}" type="image/png">
 <script src="{% static 'theme.js' %}"></script><link rel="stylesheet" href="{% static 'app.css' %}"><script defer src="{% static 'app.js' %}"></script>{% block head %}{% endblock %}</head>
 <body><a class="skip" href="#main">Skip to content</a>
+<div class="login-welcome-overlay" id="login-welcome-overlay" aria-hidden="true" data-user-name="{{ request.user.get_full_name|default:request.user.username }}" data-branch-name="{{ current_branch.name|default:'KOFAD' }}">
+  <div class="welcome-orbit" aria-hidden="true"></div>
+  <div class="welcome-logo"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+  <p>WELCOME BACK</p>
+  <h2><span id="welcome-person">{{ request.user.get_full_name|default:request.user.username }}</span></h2>
+  <small>{{ current_branch.name|default:"KOFAD" }} · Ready for business</small>
+</div>
 <div class="workspace">
 <button class="nav-backdrop" aria-label="Close navigation" tabindex="-1" hidden></button><aside class="sidebar" id="main-navigation" aria-label="Main navigation"><button type="button" class="nav-close" aria-label="Close menu">×</button>
 <a class="brand" href="/" aria-label="KOFAD IMPEX ENTERPRISE">{% include "brand.html" %}</a>
@@ -25,7 +32,7 @@
 </nav><div class="sidebar-bottom"><span class="status-dot"></span> KOFAD operating workspace<small>Trade with confidence.</small></div></aside>
 <div class="body"><header class="topbar"><button class="icon-button mobile-menu" aria-label="Toggle navigation" id="menu-toggle" aria-controls="main-navigation" aria-expanded="false">☰</button>
 {% if branches.count > 1 %}<form method="post" action="/branch/" class="branch-form">{% csrf_token %}<label class="sr-only" for="branch-select">Location</label><select name="branch" id="branch-select">{% for branch in branches %}<option value="{{ branch.pk }}" {% if branch == current_branch %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select><button class="text-button" type="submit">Switch</button></form>{% else %}<div class="single-location"><span class="status-dot"></span><strong>{{ current_branch.name }}</strong></div>{% endif %}
-<div class="top-right"><button type="button" class="theme-toggle icon-button" data-theme-toggle aria-label="Switch colour theme" title="Light / dark mode">◐</button><span class="user-avatar">{{ request.user.username|first|upper }}</span><span>{{ request.user.get_full_name|default:request.user.username }}</span><form method="post" action="/logout/">{% csrf_token %}<button class="text-button">Sign out</button></form></div></header>
+<div class="top-right"><button type="button" class="theme-toggle icon-button" data-theme-toggle aria-label="Switch colour theme" title="Light / dark mode">◐</button><a class="top-user-card" href="/account/"><span class="user-avatar">{{ request.user.username|first|upper }}</span><span><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>My account</small></span></a><form method="post" action="/logout/">{% csrf_token %}<button class="text-button">Sign out</button></form></div></header>
 <main id="main"><div class="page-heading"><div><p class="eyebrow">KOFAD{% if current_branch %} / {{ current_branch.name }}{% endif %}</p><h1>{{ title|default:"Workspace" }}</h1></div>{% block actions %}{% endblock %}</div>
 {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
 {% block content %}{% endblock %}<footer class="page-footer"><span>KOFAD IMPEX ENTERPRISE</span><span>Every movement accounted for.</span></footer>

@@ -9,7 +9,7 @@ from django.utils import timezone
 from . import debts as debt_service
 from . import services as s
 from .identity import normalize_ghana_phone
-from .models import Closing, Document, Movement, Party, Product, Stock
+from .models import Audit, Closing, Document, Movement, Party, Product, Stock
 from .tests import Fixtures
 
 
@@ -78,6 +78,84 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
         self.assertContains(response, "27.50")
         self.assertContains(response, "27 Test carton".replace("Test carton", self.product.pack_name))
 
+    def test_pos_is_search_first_and_product_search_is_bounded(self):
+        self.authenticate_client()
+        page = self.client.get("/sales/new/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Nothing is listed until you search")
+        self.assertNotContains(page, self.product.name)
+
+        result = self.client.get("/sales/new/", {"format": "json", "q": self.product.sku})
+        self.assertEqual(result.status_code, 200)
+        body = result.json()
+        self.assertFalse(body["search_required"])
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["catalog"][0]["id"], self.product.pk)
+
+        blank = self.client.get("/sales/new/", {"format": "json"})
+        self.assertTrue(blank.json()["search_required"])
+        self.assertEqual(blank.json()["catalog"], [])
+
+    def test_quick_restock_adds_packs_and_loose_units_without_replacing_balance(self):
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        result = s.restock_inventory(
+            self.user,
+            self.branch,
+            self.product.pk,
+            packs="3",
+            loose="5",
+            note="Received supplier top-up delivery",
+            external_reference="DN-TEST-001",
+            unit_cost="22.00",
+        )
+        expected_added = 3 * self.product.pack_size + 5
+        self.assertEqual(result["before"], before)
+        self.assertEqual(result["added"], expected_added)
+        self.assertEqual(result["after"], before + expected_added)
+        stock = Stock.objects.get(branch=self.branch, product=self.product)
+        self.assertEqual(stock.quantity, before + expected_added)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.cost, Decimal("22.00"))
+        movement = Movement.objects.get(reference="DN-TEST-001")
+        self.assertEqual(movement.delta, expected_added)
+        self.assertEqual(movement.balance, before + expected_added)
+        evidence = Audit.objects.filter(action="inventory.restocked", reference=self.product.sku).latest("created_at")
+        self.assertEqual(evidence.detail["stock_before"], before)
+        self.assertEqual(evidence.detail["stock_after"], before + expected_added)
+
+        with self.assertRaisesRegex(ValidationError, "less than one full"):
+            s.restock_inventory(
+                self.user,
+                self.branch,
+                self.product.pk,
+                packs="0",
+                loose=str(self.product.pack_size),
+                note="Invalid loose quantity test",
+            )
+
+    def test_inventory_post_restock_and_workspace_render(self):
+        self.authenticate_client()
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        response = self.client.post("/inventory/", {
+            "product": str(self.product.pk),
+            "packs": "2",
+            "loose": "3",
+            "note": "Received counter stock delivery",
+            "reference": "RESTOCK-WEB-001",
+            "unit_cost": "21.00",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/inventory/")
+        self.assertEqual(
+            Stock.objects.get(branch=self.branch, product=self.product).quantity,
+            before + 2 * self.product.pack_size + 3,
+        )
+        page = self.client.get("/inventory/")
+        self.assertContains(page, "Find product to restock")
+        self.assertContains(page, "QUICK RESTOCK")
+        self.assertContains(page, "Recent stock movement")
+        self.assertContains(page, "RESTOCK-WEB-001")
+
     def test_product_setup_can_record_opening_packs_and_loose_units(self):
         self.authenticate_client()
         response = self.client.post("/products/new/", {
@@ -105,6 +183,55 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
         movement = Movement.objects.get(branch=self.branch, product=product)
         self.assertEqual(movement.delta, 366)
         self.assertIn("Opening stock", movement.reason)
+
+    def test_debt_snapshot_has_aging_credit_usage_and_recent_payments(self):
+        today = timezone.localdate()
+        old = Document(
+            id=uuid.uuid4(),
+            reference="AGING-OLD-001",
+            branch=self.branch,
+            kind="sale",
+            party=self.customer,
+            finalized=True,
+            total=Decimal("50.00"),
+            paid=Decimal("0.00"),
+            due_date=today - timedelta(days=45),
+            note="Historical aging fixture",
+            created_by=self.user,
+            created_at=timezone.now() - timedelta(days=50),
+        )
+        old.save_base(raw=True, force_insert=True, using="default")
+        current = s.post_trade(self.user, self.branch, self.payload(
+            payments=[], party=self.customer.pk,
+            due_date=(today + timedelta(days=10)).isoformat(),
+        ), uuid.uuid4())
+        self.customer.credit_limit = Decimal("500")
+        self.customer.save(update_fields=["credit_limit"])
+
+        payment = debt_service.post_customer_payment(self.user, self.branch, {
+            "party": self.customer.pk,
+            "amount": "20",
+            "method": "cash",
+            "note": "Part payment collected at counter",
+        }, uuid.uuid4())
+
+        snapshot = debt_service.customer_account_snapshot(self.customer)
+        self.assertEqual(snapshot["outstanding"], Decimal("80"))
+        self.assertEqual(snapshot["aging"]["days_31_60"], Decimal("30"))
+        self.assertEqual(snapshot["aging"]["current"], Decimal("50"))
+        self.assertEqual(snapshot["maximum_days_overdue"], 45)
+        self.assertEqual(snapshot["available_credit"], Decimal("420"))
+        self.assertEqual(snapshot["credit_usage_percent"], Decimal("16.00"))
+        self.assertEqual(snapshot["recent_payments"][0].pk, payment.pk)
+        self.assertEqual(snapshot["invoice_rows"][0]["invoice"].pk, old.pk)
+        self.assertEqual(snapshot["invoice_rows"][1]["invoice"].pk, current.pk)
+
+        self.authenticate_client()
+        page = self.client.get("/debts/", {"customer": self.customer.pk, "status": "all"})
+        self.assertContains(page, "Aging position")
+        self.assertContains(page, "Record partial payment")
+        self.assertContains(page, "Allocation preview")
+        self.assertContains(page, old.reference)
 
     def test_customer_level_partial_payment_allocates_oldest_due_first(self):
         today = timezone.localdate()

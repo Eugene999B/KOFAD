@@ -124,6 +124,89 @@ def stock_move(user, branch, product, delta, reference, reason):
                             reference=reference, reason=reason, actor=user)
 
 
+@transaction.atomic
+def restock_inventory(user, branch, product_id, packs=0, loose=0, note="", external_reference="", unit_cost=None):
+    """Receive sellable stock without creating a supplier payable.
+
+    Financial supplier purchases belong in Purchasing. This quick restock exists for
+    stock-only receipts, opening top-ups and deliveries whose accounting is handled
+    outside KOFAD.
+    """
+    permit(user, branch, "operate_inventory")
+    branch = lock_branch(branch)
+    ensure_open(branch)
+    product = Product.objects.select_for_update().filter(pk=product_id, active=True).first()
+    if not product:
+        raise ValidationError("Choose an active product.")
+
+    def nonnegative(value, label):
+        raw = str(value or "0").strip()
+        if not raw.isdigit():
+            raise ValidationError(f"{label} must be a whole number.")
+        number = int(raw)
+        if number > 100000000:
+            raise ValidationError(f"{label} is too large.")
+        return number
+
+    pack_count = nonnegative(packs, "Pack quantity")
+    loose_count = nonnegative(loose, "Loose quantity")
+    if product.pack_size > 1 and loose_count >= product.pack_size:
+        raise ValidationError(
+            f"Loose quantity must be less than one full {product.pack_name} ({product.pack_size} {product.base_unit})."
+        )
+    if product.pack_size <= 1 and pack_count:
+        loose_count += pack_count
+        pack_count = 0
+
+    quantity = pack_count * product.pack_size + loose_count
+    if quantity <= 0:
+        raise ValidationError("Enter at least one pack or loose unit to restock.")
+
+    cleaned_note = str(note or "").strip()
+    if len(cleaned_note) < 5:
+        raise ValidationError("Add a short restock note of at least five characters.")
+
+    current = Stock.objects.select_for_update().filter(branch=branch, product=product).first()
+    before_quantity = current.quantity if current else 0
+    before_cost = product.cost
+
+    if unit_cost not in (None, ""):
+        new_cost = money(unit_cost)
+        if new_cost <= 0:
+            raise ValidationError("Unit cost must be greater than zero when supplied.")
+        if new_cost != product.cost:
+            product.cost = new_cost
+            product.save(update_fields=["cost"])
+
+    supplied_reference = str(external_reference or "").strip()[:100]
+    ref = supplied_reference or reference("restock", branch)
+    stock_move(user, branch, product, quantity, ref, f"restock · {cleaned_note}")
+
+    after_quantity = before_quantity + quantity
+    audit(user, branch, "inventory.restocked", product.sku, {
+        "product": product.pk,
+        "reference": ref,
+        "packs": pack_count,
+        "loose_units": loose_count,
+        "base_units_added": quantity,
+        "stock_before": before_quantity,
+        "stock_after": after_quantity,
+        "unit_cost_before": str(before_cost),
+        "unit_cost_after": str(product.cost),
+        "note": cleaned_note,
+        "accounting_effect": "inventory_only",
+    })
+    return {
+        "product": product,
+        "reference": ref,
+        "packs": pack_count,
+        "loose": loose_count,
+        "added": quantity,
+        "before": before_quantity,
+        "after": after_quantity,
+    }
+
+
 def reference(kind, branch):
     core = f"{kind[:3].upper()}-{branch.code.upper()}-{uuid.uuid4().hex[:12].upper()}"
     prefix = company_policy().reference_prefix.strip().upper()

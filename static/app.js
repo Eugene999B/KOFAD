@@ -67,6 +67,19 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       if (sessionStorage.getItem("kofad-welcome-after-login") === "1") {
         sessionStorage.removeItem("kofad-welcome-after-login");
+        const overlay = document.querySelector("#login-welcome-overlay");
+        if (overlay) {
+          overlay.classList.add("show");
+          overlay.setAttribute("aria-hidden", "false");
+          const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+          window.setTimeout(() => {
+            overlay.classList.add("leaving");
+            window.setTimeout(() => {
+              overlay.classList.remove("show", "leaving");
+              overlay.setAttribute("aria-hidden", "true");
+            }, reduced ? 0 : 420);
+          }, reduced ? 650 : 1850);
+        }
         setTimeout(welcomeChime, 180);
       }
     } catch (_) {}

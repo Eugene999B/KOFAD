@@ -7,11 +7,11 @@ This is a working first implementation, not a claim that all eleven phases of th
 | Area | Included |
 | --- | --- |
 | Identity | Password login, lockout, TOTP for staff/superusers, session revocation, custom Django groups, branch assignments |
-| Branding | Trade emblem and shared wordmark, navy/gold/teal interface, responsive login, accessible mobile drawer, task dock, guided setup and mobile cart shortcut |
+| Branding | Trade emblem and shared wordmark, distinct responsive login, personalized post-login logo/name welcome, navy/gold/teal operating interface, accessible mobile drawer, task dock and mobile cart shortcut |
 | Catalog | Product/SKU/barcode, categories, explicit packed/loose structure, units-per-pack, opening packs + loose units, independent retail/wholesale unit/pack price matrix, archival |
-| Inventory | Base-unit stock, immutable movements, nonnegative balances, reorder indicators |
-| Sales | Search-first counter, retail/wholesale choice, mixed full-pack + loose-unit quantities, exact base-unit stock, inline existing/new customer selection, Ghana +233 normalization, full/part/credit settlement, held carts, server pricing, configurable payment channels, controlled discounts/price overrides, credit rules, idempotency, receipts |
-| Customers | Inline checkout creation/reuse, customer account profile, purchase/activity history, credit limit, due dates, current/overdue balances, running statements and customer-first debt desk |
+| Inventory | Base-unit stock, immutable movements, nonnegative balances, search/filter workspace, reorder indicators, additive pack/loose quick restock with before/after audit evidence; supplier-accounting receipts remain in Purchasing |
+| Sales | Empty-by-default search-first counter, live product/SKU/barcode/category lookup, focused one-product composer, retail/wholesale choice, mixed full-pack + loose-unit quantities, exact base-unit stock, inline existing/new customer selection, Ghana +233 normalization, full/part/credit settlement, held carts, server pricing, configurable payment channels, controlled discounts/price overrides, credit rules, idempotency, receipts |
+| Customers | Inline checkout creation/reuse, customer account profile, purchase/activity history, credit limit and available-credit view, due dates, aging buckets, current/overdue balances, recent collection history, payment-allocation preview, running statements and account-centric Debt Desk |
 | Returns/corrections | Original-line returns, quantity caps, debt reduction then refund; independent expense/payment reversal and remaining-item sale void |
 | Purchasing | Supplier contacts, pack-aware receipt, payment splits, supplier debt/payment allocation, original-line supplier returns with independent finance review |
 | Operations | Independent stock adjustment review; blind physical count sheets with stale-snapshot protection; transfer request, approval, dispatch, partial receipt and independent discrepancy resolution; damaged-stock quarantine and inventory-loss evidence |
@@ -31,7 +31,7 @@ This is a working first implementation, not a claim that all eleven phases of th
 - Consolidated authorized-branch comparison is implemented, including period sales/cost/expenses and current stock/debt. Extend operational analytics and statutory accounting separately.
 - Statements, transfers/operations, closings, supplier returns, quarantine and inventory-loss exports are implemented. Add specialized stock-count and communications exports only if KOFAD's operating process requires them.
 - Reports now paginate and reject over-limit queries instead of returning incomplete totals. Extend scoped global-search pagination and asynchronous bulk export jobs. Counter carts and unresolved request keys now survive reloads in the same browser tab.
-- Configure, automate and rehearse encrypted independent backup/restore with manifests and retention.
+- App-level signed/checksummed full-system backup, validation, exact-schema restore and guarded business-data reset are implemented. An independent encrypted off-platform backup destination, retention schedule and recurring restore rehearsal are still required for disaster recovery.
 - Perform external security review, accessibility audit, production-scale performance tests and owner acceptance.
 - Verify live Arkesel delivery after configuring credentials, an approved sender and account recovery numbers.
 

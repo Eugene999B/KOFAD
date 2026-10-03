@@ -1,41 +1,152 @@
-{% extends "base.html" %}
-{% block actions %}<div class="actions"><a class="button secondary" href="/exports/?dataset=debts">⇩ Download debt summary</a><a class="button secondary" href="/parties/">Customers</a></div>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'debt.js' %}"></script>{% endblock %}
+{% block actions %}
+<div class="actions">
+  <a class="button secondary" href="/exports/?dataset=debts">⇩ Export debt book</a>
+  <a class="button secondary" href="/parties/">Customer directory</a>
+</div>
+{% endblock %}
 {% block content %}
-<section class="hero-panel"><div><p class="eyebrow">CUSTOMER RECEIVABLES</p><h2>One customer account, every unpaid sale and every payment.</h2><p>Search a customer, see the true balance, record a partial payment or clear the whole account. Payments are allocated to the oldest due invoices first and every allocation remains auditable.</p></div><span class="pill">Oldest due first</span></section>
+<section class="debt-hero">
+  <div>
+    <p class="eyebrow">CUSTOMER RECEIVABLES</p>
+    <h2>Debt Desk</h2>
+    <p>Find the customer first. Then review every open receipt, aging position and payment before recording anything.</p>
+    <div class="debt-trust"><span>✓ Oldest due first</span><span>✓ Partial payments preserved</span><span>✓ Every allocation auditable</span></div>
+  </div>
+  <div class="debt-hero-actions"><span class="debt-hero-label">Outstanding now</span><strong>{{ company.currency }} {{ overview.total_receivables|floatformat:2 }}</strong><small>{{ overview.customers_owing }} customer{{ overview.customers_owing|pluralize }} owing</small></div>
+</section>
 
-<div class="metric-grid">
-<article class="metric-card"><small>Total receivables</small><strong>{{ company.currency }} {{ overview.total_receivables|floatformat:2 }}</strong></article>
-<article class="metric-card"><small>Overdue</small><strong>{{ company.currency }} {{ overview.overdue|floatformat:2 }}</strong></article>
-<article class="metric-card"><small>Due today</small><strong>{{ company.currency }} {{ overview.due_today|floatformat:2 }}</strong></article>
-<article class="metric-card"><small>Customers owing</small><strong>{{ overview.customers_owing }}</strong></article>
+<div class="metric-grid debt-metrics">
+  <article class="metric-card danger-tone"><small>Overdue value</small><strong>{{ company.currency }} {{ overview.overdue|floatformat:2 }}</strong><span>{{ overview.overdue_customers }} overdue account{{ overview.overdue_customers|pluralize }}</span></article>
+  <article class="metric-card warning-tone"><small>Due today</small><strong>{{ company.currency }} {{ overview.due_today|floatformat:2 }}</strong><span>Needs attention today</span></article>
+  <article class="metric-card success-tone"><small>Collected · last 30 days</small><strong>{{ company.currency }} {{ overview.collected_30_days|floatformat:2 }}</strong><span>Posted customer debt payments</span></article>
+  <article class="metric-card primary-tone"><small>Open customer accounts</small><strong>{{ overview.customers_owing }}</strong><span>One account can contain many receipts</span></article>
 </div>
 
-<form class="searchbar" method="get"><label class="sr-only" for="debt-q">Search debt customers</label><input id="debt-q" name="q" value="{{ q }}" placeholder="Search customer name or Ghana phone number"><button class="button secondary">Search</button></form>
+{% if payment_doc %}
+<div class="notice success debt-payment-success">
+  <div><strong>Payment saved.</strong><span>{{ payment_doc.reference }} · {{ company.currency }} {{ payment_doc.total|floatformat:2 }} received from {{ payment_doc.party.name }}.</span></div>
+  <a class="button secondary" href="{% url 'document' payment_doc.pk %}">Open receipt</a>
+</div>
+{% endif %}
 
-<section class="panel"><div class="section-heading"><div><h2>Customer debt accounts</h2><p class="muted">A customer may owe on several receipts. KOFAD keeps each receipt separate while presenting one account balance.</p></div></div>
-<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="number">Outstanding</th><th class="number">Overdue</th><th>Open receipts</th><th>Oldest / next due</th><th>Actions</th></tr></thead><tbody>
-{% for row in overview.rows %}
-<tr>
-<td><a href="{% url 'customer_profile' row.party.pk %}"><strong>{{ row.party.name }}</strong></a><small>{{ row.party.phone }}</small></td>
-<td class="number"><strong>{{ row.outstanding|floatformat:2 }}</strong></td>
-<td class="number">{% if row.overdue %}<span class="pill amber">{{ row.overdue|floatformat:2 }}</span>{% else %}0.00{% endif %}</td>
-<td>{{ row.invoice_count }}</td>
-<td>{% if row.invoices %}{% with first=row.invoices.0 %}{{ first.0.due_date|default:"No due date" }}<small>{{ first.0.reference }} · {{ first.1|floatformat:2 }}</small>{% endwith %}{% endif %}</td>
-<td><details><summary>Record payment</summary>
-{% if perms.core.operate_finance %}
-<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="party" value="{{ row.party.pk }}"><input type="hidden" name="pay_full" value="1">
-<label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
-<label>Bank / provider reference<input name="reference" maxlength="100"></label>
-<button class="button">Pay full balance · {{ row.outstanding|floatformat:2 }}</button></form>
-<hr>
-<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="party" value="{{ row.party.pk }}">
-<label>Partial amount<input name="amount" type="number" min=".01" max="{{ row.outstanding }}" step=".01" required></label>
-<label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
-<label>Bank / provider reference<input name="reference" maxlength="100"></label>
-<button class="button secondary">Record partial payment</button></form>
-{% else %}<p class="hint">Finance permission is required to receive debt payments.</p>{% endif %}
-</details></td>
-</tr>
-{% empty %}<tr><td colspan="6"><div class="empty"><h3>No matching debt accounts.</h3><p>Customers with a zero balance are intentionally excluded.</p></div></td></tr>{% endfor %}
-</tbody></table></div></section>
+<section class="debt-workspace">
+  <div class="debt-account-pane">
+    <div class="debt-toolbar">
+      <form method="get" class="debt-search-form">
+        <input type="hidden" name="status" value="{{ status }}">
+        <span aria-hidden="true">⌕</span>
+        <input id="debt-q" name="q" value="{{ q }}" placeholder="Search customer name or Ghana phone" autocomplete="off">
+        {% if q %}<a href="/debts/?status={{ status }}" aria-label="Clear debt search">×</a>{% endif %}
+        <button class="button secondary">Search</button>
+      </form>
+      <div class="debt-filter-row">
+        <a href="/debts/?q={{ q|urlencode }}&status=all" class="{% if status == 'all' %}active{% endif %}">All</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=overdue" class="{% if status == 'overdue' %}active{% endif %}">Overdue</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=due_today" class="{% if status == 'due_today' %}active{% endif %}">Due today</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=current" class="{% if status == 'current' %}active{% endif %}">Not overdue</a>
+      </div>
+    </div>
+    <div class="debt-list-heading"><strong>{{ rows|length }} account{{ rows|length|pluralize }}</strong><small>Select a customer to open the account</small></div>
+    <div class="debt-account-list">
+      {% for row in rows %}
+      <a class="debt-account-card {% if selected.party.pk == row.party.pk %}selected{% endif %} {% if row.overdue %}overdue{% endif %}" href="/debts/?q={{ q|urlencode }}&status={{ status }}&customer={{ row.party.pk }}">
+        <span class="debt-avatar">{{ row.party.name|first|upper }}</span>
+        <span class="debt-account-copy">
+          <strong>{{ row.party.name }}</strong>
+          <small>{{ row.party.phone }} · {{ row.invoice_count }} open receipt{{ row.invoice_count|pluralize }}</small>
+          <span class="debt-account-meta">
+            {% if row.overdue %}<b>{{ row.maximum_days_overdue }}d overdue</b>{% elif row.due_today %}<b>Due today</b>{% else %}<b>Current</b>{% endif %}
+            {% if row.next_due %}<em>Next due {{ row.next_due|date:"d M Y" }}</em>{% endif %}
+          </span>
+        </span>
+        <span class="debt-account-balance"><small>Balance</small><strong>{{ row.outstanding|floatformat:2 }}</strong>{% if row.overdue %}<em>{{ row.overdue|floatformat:2 }} overdue</em>{% endif %}</span>
+      </a>
+      {% empty %}
+      <div class="empty"><h3>No debt accounts match this view.</h3><p>Change the filter or search. Fully settled customers stay in the Customer directory and statements.</p></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <aside class="debt-detail-pane">
+    {% if selected %}
+    <header class="debt-customer-header">
+      <div class="debt-avatar large">{{ selected.party.name|first|upper }}</div>
+      <div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ selected.party.name }}</h2><p>{{ selected.party.phone }}{% if selected.party.address %} · {{ selected.party.address }}{% endif %}</p></div>
+      <a class="button secondary" href="{% url 'customer_profile' selected.party.pk %}">Full profile</a>
+    </header>
+
+    <section class="debt-balance-card">
+      <div><small>Outstanding balance</small><strong>{{ company.currency }} {{ selected.outstanding|floatformat:2 }}</strong><p>{{ selected.invoice_count }} open receipt{{ selected.invoice_count|pluralize }}{% if selected.maximum_days_overdue %} · oldest {{ selected.maximum_days_overdue }} days overdue{% endif %}</p></div>
+      <div class="debt-quick-actions">
+        {% if perms.core.operate_finance %}<button class="button" type="button" data-debt-payment-mode="full">Pay full balance</button><button class="button secondary" type="button" data-debt-payment-mode="partial">Record partial payment</button>{% endif %}
+        <a class="button secondary" href="{% url 'statement' selected.party.pk %}">Statement</a>
+      </div>
+    </section>
+
+    {% if selected.credit_limit %}
+    <section class="debt-credit-strip">
+      <div><span>Credit limit</span><strong>{{ company.currency }} {{ selected.credit_limit|floatformat:2 }}</strong></div>
+      <div><span>Available credit</span><strong>{{ company.currency }} {{ selected.available_credit|floatformat:2 }}</strong></div>
+      <div><span>Usage</span><strong>{{ selected.credit_usage_percent|floatformat:0 }}%</strong></div>
+    </section>
+    {% endif %}
+
+    <section class="debt-aging">
+      <h3>Aging position</h3>
+      <div class="debt-aging-grid">
+        <div><span>Current</span><strong>{{ selected.aging.current|floatformat:2 }}</strong></div>
+        <div><span>1–30 overdue</span><strong>{{ selected.aging.days_1_30|floatformat:2 }}</strong></div>
+        <div><span>31–60 overdue</span><strong>{{ selected.aging.days_31_60|floatformat:2 }}</strong></div>
+        <div><span>61+ overdue</span><strong>{{ selected.aging.days_61_plus|floatformat:2 }}</strong></div>
+      </div>
+    </section>
+
+    {% if perms.core.operate_finance %}
+    <section class="debt-payment-box hidden" id="debt-payment-box" data-outstanding="{{ selected.outstanding }}">
+      <div class="section-heading"><div><p class="eyebrow">RECEIVE PAYMENT</p><h3 id="debt-payment-title">Record customer payment</h3><p class="muted">Preview shows how this payment will settle the oldest due receipts first.</p></div><button type="button" class="icon-button" data-debt-payment-close aria-label="Close payment form">×</button></div>
+      <form method="post" id="debt-payment-form">{% csrf_token %}
+        <input type="hidden" name="key" value="{{ key }}">
+        <input type="hidden" name="party" value="{{ selected.party.pk }}">
+        <input type="hidden" name="pay_full" id="debt-pay-full" value="">
+        <label for="debt-amount">Amount received</label>
+        <input id="debt-amount" name="amount" type="number" min=".01" max="{{ selected.outstanding }}" step=".01" required>
+        <div class="two-column compact">
+          <label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+          <label>Provider / bank reference<input name="reference" maxlength="100" placeholder="Optional for cash"></label>
+        </div>
+        <label>Collection note<input name="note" maxlength="500" placeholder="Optional note for this payment"></label>
+        <div class="debt-allocation-preview"><strong>Allocation preview</strong><div id="debt-allocation-lines"></div></div>
+        <button class="button wide" id="debt-payment-submit">Save payment & issue receipt</button>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="debt-section">
+      <div class="section-heading"><div><h3>Open receipts</h3><p class="muted">Each receipt remains separate even when one payment settles several of them.</p></div><a href="{% url 'statement_export' selected.party.pk 'pdf' %}">PDF statement ↗</a></div>
+      <div class="debt-invoice-list">
+        {% for row in selected.invoice_rows %}
+        <article class="debt-invoice-row {{ row.status }}" data-reference="{{ row.invoice.reference }}" data-outstanding="{{ row.outstanding }}">
+          <div><a href="{% url 'document' row.invoice.pk %}"><strong>{{ row.invoice.reference }}</strong></a><small>Sale {{ row.invoice.created_at|date:"d M Y, H:i" }} · total {{ row.invoice.total|floatformat:2 }}</small></div>
+          <div><small>Due</small><strong>{{ row.invoice.due_date|default:"No due date" }}</strong>{% if row.days_overdue %}<em>{{ row.days_overdue }} days overdue</em>{% endif %}</div>
+          <div class="number"><small>Left to pay</small><strong>{{ row.outstanding|floatformat:2 }}</strong><em>{{ row.paid_so_far|floatformat:2 }} settled</em></div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="debt-section">
+      <div class="section-heading"><div><h3>Recent debt payments</h3><p class="muted">Collection receipts stay separate from sale receipts.</p></div></div>
+      <div class="debt-payment-history">
+        {% for payment in selected.recent_payments %}
+        <a href="{% url 'document' payment.pk %}"><span><strong>{{ payment.reference }}</strong><small>{{ payment.created_at|date:"d M Y, H:i" }} · {{ payment.created_by }}</small></span><b>{{ company.currency }} {{ payment.total|floatformat:2 }}</b></a>
+        {% empty %}<p class="muted">No account payments have been recorded yet.</p>{% endfor %}
+      </div>
+    </section>
+    {% else %}
+    <div class="debt-detail-empty"><span>◎</span><h2>Select a customer account</h2><p>Open receipts, aging, payment history and collection actions will appear here.</p></div>
+    {% endif %}
+  </aside>
+</section>
 {% endblock %}

@@ -180,27 +180,62 @@ def purchasing(request, branch):
 def trade_screen(request, branch, kind):
     catalog = []
     stock = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
-    query = request.GET.get("q", "")[:100]
+    query = request.GET.get("q", "").strip()[:100]
+    ids = [value for value in request.GET.get("ids", "").split(",") if value.isdigit()][:100]
     products = Product.objects.filter(active=True)
-    if query:
-        products = products.filter(Q(name__icontains=query) | Q(sku__icontains=query) | Q(barcode=query))
-    for p in products[:300]:
-        item = {"id": p.pk, "name": p.name, "sku": p.sku, "barcode": p.barcode, "category": p.category,
-                "pack_size": p.pack_size, "pack_name": p.pack_name, "base_unit": p.base_unit,
-                "stock": stock.get(p.pk, 0), "prices": {k: str(getattr(p, k)) for k in
-                    ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack") if getattr(p, k) is not None}}
+    if ids:
+        products = products.filter(pk__in=ids)
+    elif query:
+        products = products.filter(
+            Q(name__icontains=query) |
+            Q(sku__icontains=query) |
+            Q(barcode__icontains=query) |
+            Q(category__icontains=query)
+        )
+    else:
+        products = products.none()
+
+    for p in products.order_by("name")[:30]:
+        item = {
+            "id": p.pk,
+            "name": p.name,
+            "sku": p.sku,
+            "barcode": p.barcode,
+            "category": p.category,
+            "pack_size": p.pack_size,
+            "pack_name": p.pack_name,
+            "base_unit": p.base_unit,
+            "stock": stock.get(p.pk, 0),
+            "prices": {
+                key: str(getattr(p, key))
+                for key in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack")
+                if getattr(p, key) is not None
+            },
+        }
         if kind == "purchase":
             item["cost"] = str(p.cost)
         catalog.append(item)
+
     if request.GET.get("format") == "json":
-        return JsonResponse({"catalog":catalog})
+        return JsonResponse({
+            "catalog": catalog,
+            "query": query,
+            "count": len(catalog),
+            "search_required": not bool(query or ids),
+        })
+
     company = s.company_policy()
     payment_methods = s.active_payment_methods(company)
-    return render(request, "pos.html", {"title": "New sale" if kind == "sale" else "Receive purchase",
-        "catalog": catalog, "kind": kind, "key": str(uuid.uuid4()), "q": query,
+    return render(request, "pos.html", {
+        "title": "New sale" if kind == "sale" else "Receive purchase",
+        "catalog": catalog,
+        "kind": kind,
+        "key": str(uuid.uuid4()),
+        "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
         "held": HeldSale.objects.filter(branch=branch, user=request.user),
-        "purchase": kind == "purchase", "payment_methods": payment_methods,
+        "purchase": kind == "purchase",
+        "payment_methods": payment_methods,
         "payment_method_codes": [code for code, _ in payment_methods],
         "cash_enabled": any(code == "cash" for code, _ in payment_methods),
         "allow_discounts": kind == "sale" and company.allow_discounts,
@@ -212,8 +247,8 @@ def trade_screen(request, branch, kind):
         "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
-        )})
-
+        ),
+    })
 
 @login_required
 @require_POST
@@ -287,25 +322,101 @@ def document(request, pk):
 
 @protected("operate_inventory|view_reports")
 def inventory(request, branch):
-    q = request.GET.get("q", "")[:100]
-    products = Product.objects.all()
+    if request.method == "POST":
+        try:
+            s.permit(request.user, branch, "operate_inventory")
+            result = s.restock_inventory(
+                request.user,
+                branch,
+                request.POST.get("product"),
+                request.POST.get("packs", 0),
+                request.POST.get("loose", 0),
+                request.POST.get("note", ""),
+                request.POST.get("reference", ""),
+                request.POST.get("unit_cost", ""),
+            )
+            messages.success(
+                request,
+                f"Restocked {result['product'].name}: +{result['added']} {result['product'].base_unit}. "
+                f"New sellable balance: {result['after']}."
+            )
+            return redirect("inventory")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+
+    q = request.GET.get("q", "").strip()[:100]
+    status = request.GET.get("status", "all")
+    if status not in {"all", "low", "out", "healthy", "quarantine"}:
+        status = "all"
+
+    products = Product.objects.all().order_by("name")
     if q:
-        products = products.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode=q))
+        products = products.filter(
+            Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q) | Q(category__icontains=q)
+        )
     stocks = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
-    quarantined = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
-        "product_id").annotate(total=Sum("quantity")).values_list("product_id", "total"))
+    quarantined = dict(
+        QuarantineItem.objects.filter(branch=branch, status="held")
+        .values("product_id").annotate(total=Sum("quantity")).values_list("product_id", "total")
+    )
     rows = []
-    for p in products[:200]:
+    for p in products[:500]:
         quantity = stocks.get(p.pk, 0)
         quarantine_qty = quarantined.get(p.pk, 0)
-        rows.append({"product": p, "quantity": quantity, "quarantine": quarantine_qty,
-                     "physical": quantity + quarantine_qty, "packs": quantity // p.pack_size,
-                     "loose": quantity % p.pack_size,
-                     "pack_equivalent": (Decimal(quantity) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity),
-                     "physical_pack_equivalent": (Decimal(quantity + quarantine_qty) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity + quarantine_qty),
-                     "low": quantity <= p.reorder_level})
-    return render(request, "inventory.html", {"title": "Inventory", "rows": rows, "q": q})
+        row = {
+            "product": p,
+            "quantity": quantity,
+            "quarantine": quarantine_qty,
+            "physical": quantity + quarantine_qty,
+            "packs": quantity // p.pack_size,
+            "loose": quantity % p.pack_size,
+            "pack_equivalent": (Decimal(quantity) / Decimal(p.pack_size)) if p.pack_size > 1 else Decimal(quantity),
+            "physical_pack_equivalent": (
+                Decimal(quantity + quarantine_qty) / Decimal(p.pack_size)
+                if p.pack_size > 1 else Decimal(quantity + quarantine_qty)
+            ),
+            "low": quantity <= p.reorder_level,
+            "out": quantity == 0,
+            "sellable_value": Decimal(quantity) * p.cost,
+        }
+        if status == "low" and not (row["low"] and quantity > 0):
+            continue
+        if status == "out" and not row["out"]:
+            continue
+        if status == "healthy" and (row["low"] or row["out"]):
+            continue
+        if status == "quarantine" and not quarantine_qty:
+            continue
+        rows.append(row)
 
+    all_products = Product.objects.all()
+    all_stock = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+    catalog_count = all_products.count()
+    out_count = sum(1 for p in all_products if all_stock.get(p.pk, 0) == 0)
+    low_count = sum(
+        1 for p in all_products
+        if 0 < all_stock.get(p.pk, 0) <= p.reorder_level
+    )
+    sellable_value = sum(
+        (Decimal(all_stock.get(p.pk, 0)) * p.cost for p in all_products),
+        Decimal("0"),
+    )
+    quarantine_units = sum(quarantined.values(), 0)
+    movements = Movement.objects.filter(branch=branch).select_related("product", "actor").order_by("-created_at")[:20]
+
+    return render(request, "inventory.html", {
+        "title": "Inventory",
+        "rows": rows,
+        "q": q,
+        "status": status,
+        "catalog_count": catalog_count,
+        "out_count": out_count,
+        "low_count": low_count,
+        "sellable_value": sellable_value,
+        "quarantine_units": quarantine_units,
+        "movements": movements,
+        "restock_key": str(uuid.uuid4()),
+    })
 
 @protected("change_product")
 def product_edit(request, branch, pk=None):
@@ -405,19 +516,56 @@ def debts(request, branch):
             doc = debt_service.post_customer_payment(
                 request.user, branch, request.POST.dict(), request.POST.get("key")
             )
-            return redirect("document", pk=doc.pk)
+            messages.success(request, f"Payment recorded. Receipt {doc.reference} is ready.")
+            return redirect(f"/debts/?customer={doc.party_id}&payment={doc.pk}")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
+
     query = request.GET.get("q", "").strip()[:100]
+    status = request.GET.get("status", "all")
+    if status not in {"all", "overdue", "due_today", "current"}:
+        status = "all"
+
     overview = debt_service.debt_overview(branch, query)
+    rows = overview["rows"]
+    if status == "overdue":
+        rows = [row for row in rows if row["overdue"] > 0]
+    elif status == "due_today":
+        rows = [row for row in rows if row["due_today"] > 0]
+    elif status == "current":
+        rows = [row for row in rows if row["overdue"] == 0]
+
+    selected = None
+    selected_id = request.GET.get("customer", "")
+    if selected_id.isdigit():
+        selected = next((row for row in rows if row["party"].pk == int(selected_id)), None)
+        if selected is None:
+            party = Party.objects.filter(pk=selected_id, branch=branch, kind="customer").first()
+            if party:
+                snapshot = debt_service.customer_account_snapshot(party)
+                if snapshot["outstanding"] > 0:
+                    selected = {"party": party, **snapshot}
+    if selected is None and rows:
+        selected = rows[0]
+
+    payment_doc = None
+    payment_id = request.GET.get("payment", "")
+    if payment_id:
+        payment_doc = Document.objects.filter(
+            pk=payment_id, branch=branch, kind="collection"
+        ).select_related("party").first()
+
     return render(request, "debts.html", {
         "title": "Customer debts",
         "q": query,
+        "status": status,
         "overview": overview,
+        "rows": rows,
+        "selected": selected,
         "methods": s.active_payment_methods(),
         "key": request.POST.get("key") or str(uuid.uuid4()),
+        "payment_doc": payment_doc,
     })
-
 
 @login_required
 def parties(request):

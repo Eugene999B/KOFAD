@@ -265,133 +265,223 @@
   }
 
   const productGrid = document.querySelector("#catalog");
-  function renderCatalog() {
-    productGrid.replaceChildren();
-    catalog.forEach(product => {
-      const card = el("article", undefined, "product-card");
-      card.append(
-        el("div", (product.category || product.base_unit).slice(0, 2).toUpperCase(), "product-symbol"),
-        el("small", product.sku, "muted"),
-        el("h3", product.name),
-        el("p", stockLabel(product) + " available", product.stock ? "muted" : "danger")
-      );
+  const catalogStatus = document.querySelector("#catalog-status");
+  const productQuery = document.querySelector("#product-query");
+  let openComposerId = null;
+  let searchTimer = null;
+  let searchSerial = 0;
 
-      const prices = purchase
-        ? {
-            retail_unit: product.cost,
-            retail_pack: formatted(cents(product.cost) * product.pack_size)
-          }
-        : product.prices;
+  function priceSummary(product) {
+    if (purchase) return root.dataset.currency + " " + formatted(cents(product.cost));
+    const entries = [];
+    if (product.prices.retail_unit !== undefined) entries.push("Retail " + product.prices.retail_unit);
+    if (product.prices.wholesale_unit !== undefined) entries.push("Wholesale " + product.prices.wholesale_unit);
+    return entries.join(" · ") || "No unit selling price";
+  }
 
-      const tiers = purchase
-        ? [{value: "purchase", label: "Purchase"}]
-        : [
-            ...((prices.retail_unit !== undefined || prices.retail_pack !== undefined) ? [{value: "retail", label: "Retail"}] : []),
-            ...((prices.wholesale_unit !== undefined || prices.wholesale_pack !== undefined) ? [{value: "wholesale", label: "Wholesale"}] : [])
-          ];
-
-      if (!tiers.length) {
-        card.append(el("p", "No selling price configured.", "danger"));
-        productGrid.append(card);
-        return;
-      }
-
-      const tierSelect = el("select");
-      tierSelect.setAttribute("aria-label", "Retail or wholesale for " + product.name);
-      tiers.forEach(tier => {
-        const option = el("option", tier.label);
-        option.value = tier.value;
-        tierSelect.append(option);
-      });
-
-      const quantityArea = el("div", undefined, "pack-quantity-grid");
-      const addButton = el("button", "＋ Add to sale", "button secondary");
-      addButton.type = "button";
-
-      function drawQuantityControls() {
-        quantityArea.replaceChildren();
-        const tier = tierSelect.value;
-        const unitMode = purchase ? "retail_unit" : tier + "_unit";
-        const packMode = purchase ? "retail_pack" : tier + "_pack";
-        const unitPrice = prices[unitMode];
-        const packPrice = prices[packMode];
-
-        let packInput = null;
-        let looseInput = null;
-
-        if (product.pack_size > 1 && packPrice !== undefined) {
-          const wrap = el("label", undefined, "cart-control-field");
-          wrap.append(el("small", "Full " + product.pack_name + "s · " + packPrice));
-          packInput = el("input");
-          packInput.type = "number";
-          packInput.min = "0";
-          packInput.step = "1";
-          packInput.value = "0";
-          packInput.setAttribute("aria-label", "Full " + product.pack_name + " quantity for " + product.name);
-          wrap.append(packInput);
-          quantityArea.append(wrap);
-        }
-
-        if (unitPrice !== undefined) {
-          const wrap = el("label", undefined, "cart-control-field");
-          wrap.append(el("small", (product.pack_size > 1 ? "Loose " : "") + product.base_unit + "s · " + unitPrice));
-          looseInput = el("input");
-          looseInput.type = "number";
-          looseInput.min = "0";
-          looseInput.step = "1";
-          looseInput.value = "0";
-          if (product.pack_size > 1) looseInput.max = String(product.pack_size - 1);
-          looseInput.setAttribute("aria-label", "Loose unit quantity for " + product.name);
-          wrap.append(looseInput);
-          quantityArea.append(wrap);
-        }
-
-        if (product.pack_size === 1 && looseInput) looseInput.value = "1";
-        else if (packInput) packInput.value = "1";
-        else if (looseInput) looseInput.value = "1";
-
-        addButton.onclick = () => {
-          try {
-            clearError();
-            const packs = packInput ? Number(packInput.value || 0) : 0;
-            const loose = looseInput ? Number(looseInput.value || 0) : 0;
-            if (!Number.isInteger(packs) || packs < 0 || !Number.isInteger(loose) || loose < 0) {
-              throw new Error("Pack and loose quantities must be whole numbers.");
-            }
-            if (product.pack_size > 1 && loose >= product.pack_size) {
-              throw new Error("Loose units must be less than one full " + product.pack_name + ". Put the extra quantity into full packs.");
-            }
-            if (packs === 0 && loose === 0) throw new Error("Enter at least one pack or loose unit.");
-
-            const requested = packs * product.pack_size + loose;
-            const alreadyInCart = cart.filter(line => line.product === product.id)
-              .reduce((sum, line) => sum + line.quantity * line.factor, 0);
-            if (!purchase && requested + alreadyInCart > product.stock) {
-              throw new Error("Not enough sellable stock. Available: " + stockLabel(product) + ".");
-            }
-
-            changed();
-            if (packs) addCartLine(product, packMode, packs, packPrice);
-            if (loose) addCartLine(product, unitMode, loose, unitPrice);
-            render();
-            if (packInput) packInput.value = "0";
-            if (looseInput) looseInput.value = product.pack_size === 1 ? "1" : "0";
-          } catch (error) {
-            fail(error.message);
-          }
-        };
-      }
-
-      tierSelect.addEventListener("change", drawQuantityControls);
-      drawQuantityControls();
-      card.append(tierSelect, quantityArea, addButton);
-      productGrid.append(card);
-    });
-
-    if (!catalog.length) {
-      productGrid.append(el("div", "No matching products. Add products in Inventory or refine your search.", "empty"));
+  function setCatalogStatus(mode, text) {
+    if (!catalogStatus) return;
+    catalogStatus.classList.toggle("hidden", mode === "results");
+    catalogStatus.classList.toggle("loading", mode === "loading");
+    const heading = catalogStatus.querySelector("h3");
+    const copy = catalogStatus.querySelector("p");
+    if (mode === "loading") {
+      if (heading) heading.textContent = "Searching…";
+      if (copy) copy.textContent = "Finding the closest product matches.";
+    } else if (mode === "empty") {
+      if (heading) heading.textContent = "No matching product";
+      if (copy) copy.textContent = text || "Try another product name, SKU, barcode or category.";
+    } else if (mode === "idle") {
+      if (heading) heading.textContent = "Find the first product";
+      if (copy) copy.textContent = "Nothing is listed until you search, keeping the counter fast and uncluttered.";
     }
   }
+
+  function clearCatalogAfterAdd() {
+    catalog = [];
+    openComposerId = null;
+    if (productQuery) {
+      productQuery.value = "";
+      productQuery.focus();
+    }
+    renderCatalog();
+  }
+
+  function renderCatalog() {
+    productGrid.replaceChildren();
+    const hasQuery = Boolean(productQuery?.value.trim());
+    if (!catalog.length) {
+      setCatalogStatus(hasQuery ? "empty" : "idle");
+      return;
+    }
+    setCatalogStatus("results");
+
+    catalog.forEach(product => {
+      const card = el("article", undefined, "search-result-card");
+      const summary = el("div", undefined, "search-result-summary");
+      const symbol = el("span", (product.category || product.base_unit).slice(0, 2).toUpperCase(), "search-result-symbol");
+      const identity = el("div", undefined, "search-result-identity");
+      identity.append(
+        el("strong", product.name),
+        el("small", product.sku + (product.category ? " · " + product.category : ""), "muted"),
+        el("span", stockLabel(product) + " available", product.stock ? "stock-copy" : "stock-copy danger")
+      );
+      const commercial = el("div", undefined, "search-result-commercial");
+      commercial.append(el("small", purchase ? "Current cost" : "From", "muted"), el("strong", priceSummary(product)));
+      const choose = el("button", openComposerId === product.id ? "Close" : "Choose", "button secondary choose-product");
+      choose.type = "button";
+      choose.addEventListener("click", () => {
+        openComposerId = openComposerId === product.id ? null : product.id;
+        renderCatalog();
+        if (openComposerId) {
+          requestAnimationFrame(() => productGrid.querySelector("[data-composer='" + product.id + "'] select")?.focus());
+        }
+      });
+      summary.append(symbol, identity, commercial, choose);
+      card.append(summary);
+
+      if (openComposerId === product.id) {
+        const composer = el("div", undefined, "product-composer");
+        composer.dataset.composer = String(product.id);
+        const prices = purchase
+          ? {retail_unit: product.cost, retail_pack: formatted(cents(product.cost) * product.pack_size)}
+          : product.prices;
+        const tiers = purchase
+          ? [{value: "purchase", label: "Purchase"}]
+          : [
+              ...((prices.retail_unit !== undefined || prices.retail_pack !== undefined) ? [{value: "retail", label: "Retail"}] : []),
+              ...((prices.wholesale_unit !== undefined || prices.wholesale_pack !== undefined) ? [{value: "wholesale", label: "Wholesale"}] : [])
+            ];
+
+        if (!tiers.length) {
+          composer.append(el("p", "No selling price is configured for this product.", "danger"));
+        } else {
+          const tierWrap = el("label", undefined, "composer-tier");
+          tierWrap.append(el("small", purchase ? "Receiving mode" : "Selling tier"));
+          const tierSelect = el("select");
+          tiers.forEach(tier => {
+            const option = el("option", tier.label);
+            option.value = tier.value;
+            tierSelect.append(option);
+          });
+          tierWrap.append(tierSelect);
+
+          const quantityArea = el("div", undefined, "composer-quantities");
+          const addButton = el("button", purchase ? "＋ Add to delivery" : "＋ Add to sale", "button");
+          addButton.type = "button";
+
+          function drawQuantityControls() {
+            quantityArea.replaceChildren();
+            const tier = tierSelect.value;
+            const unitMode = purchase ? "retail_unit" : tier + "_unit";
+            const packMode = purchase ? "retail_pack" : tier + "_pack";
+            const unitPrice = prices[unitMode];
+            const packPrice = prices[packMode];
+            let packInput = null;
+            let looseInput = null;
+
+            if (product.pack_size > 1 && packPrice !== undefined) {
+              const wrap = el("label", undefined, "composer-quantity");
+              wrap.append(el("small", "Full " + product.pack_name + "s"), el("strong", root.dataset.currency + " " + packPrice));
+              packInput = el("input");
+              packInput.type = "number";
+              packInput.min = "0";
+              packInput.step = "1";
+              packInput.value = "1";
+              wrap.append(packInput);
+              quantityArea.append(wrap);
+            }
+            if (unitPrice !== undefined) {
+              const wrap = el("label", undefined, "composer-quantity");
+              wrap.append(el("small", (product.pack_size > 1 ? "Loose " : "") + product.base_unit + "s"), el("strong", root.dataset.currency + " " + unitPrice));
+              looseInput = el("input");
+              looseInput.type = "number";
+              looseInput.min = "0";
+              looseInput.step = "1";
+              looseInput.value = packInput ? "0" : "1";
+              if (product.pack_size > 1) looseInput.max = String(product.pack_size - 1);
+              wrap.append(looseInput);
+              quantityArea.append(wrap);
+            }
+
+            addButton.onclick = () => {
+              try {
+                clearError();
+                const packs = packInput ? Number(packInput.value || 0) : 0;
+                const loose = looseInput ? Number(looseInput.value || 0) : 0;
+                if (!Number.isInteger(packs) || packs < 0 || !Number.isInteger(loose) || loose < 0) {
+                  throw new Error("Pack and loose quantities must be whole numbers.");
+                }
+                if (product.pack_size > 1 && loose >= product.pack_size) {
+                  throw new Error("Loose units must be less than one full " + product.pack_name + ".");
+                }
+                if (packs === 0 && loose === 0) throw new Error("Enter at least one pack or loose unit.");
+                const requested = packs * product.pack_size + loose;
+                const already = cart.filter(line => line.product === product.id)
+                  .reduce((sum, line) => sum + line.quantity * line.factor, 0);
+                if (!purchase && requested + already > product.stock) {
+                  throw new Error("Not enough sellable stock. Available: " + stockLabel(product) + ".");
+                }
+                changed();
+                if (packs) addCartLine(product, packMode, packs, packPrice);
+                if (loose) addCartLine(product, unitMode, loose, unitPrice);
+                render();
+                clearCatalogAfterAdd();
+              } catch (error) {
+                fail(error.message);
+              }
+            };
+          }
+
+          tierSelect.addEventListener("change", drawQuantityControls);
+          drawQuantityControls();
+          composer.append(tierWrap, quantityArea, addButton);
+        }
+        card.append(composer);
+      }
+      productGrid.append(card);
+    });
+  }
+
+  async function searchCatalog(query, {silent = false} = {}) {
+    const q = String(query || "").trim();
+    if (pendingBody) return;
+    if (!q) {
+      catalog = [];
+      openComposerId = null;
+      renderCatalog();
+      return;
+    }
+    const serial = ++searchSerial;
+    if (!silent) setCatalogStatus("loading");
+    try {
+      const response = await fetch(location.pathname + "?format=json&q=" + encodeURIComponent(q));
+      if (!response.ok || !(response.headers.get("Content-Type") || "").includes("application/json")) {
+        throw new Error("Product search failed. Check your connection or sign in again.");
+      }
+      const data = await response.json();
+      if (serial !== searchSerial) return;
+      catalog = data.catalog || [];
+      openComposerId = catalog.length === 1 ? catalog[0].id : null;
+      renderCatalog();
+    } catch (error) {
+      if (serial === searchSerial) {
+        catalog = [];
+        renderCatalog();
+        fail(error.message);
+      }
+    }
+  }
+
+  async function ensureProducts(ids) {
+    const missing = ids.filter(id => !catalog.some(item => item.id === id));
+    if (!missing.length) return;
+    const response = await fetch(location.pathname + "?format=json&ids=" + encodeURIComponent(missing.join(",")));
+    if (!response.ok) throw new Error("Could not refresh products for the held sale.");
+    const data = await response.json();
+    catalog = [...catalog, ...(data.catalog || []).filter(item => !catalog.some(existing => existing.id === item.id))];
+  }
+
 
   function showSelectedCustomer(customer) {
     selectedCustomer = customer;
@@ -502,19 +592,26 @@
 
   renderCatalog();
 
-  document.querySelector("#catalog-search").addEventListener("submit", async event => {
+  document.querySelector("#catalog-search").addEventListener("submit", event => {
     event.preventDefault();
-    if (pendingBody) return fail("Resolve the pending checkout before searching.");
-    try {
-      const q = document.querySelector("#product-query").value;
-      const response = await fetch(location.pathname + "?format=json&q=" + encodeURIComponent(q));
-      if (!response.ok || !(response.headers.get("Content-Type") || "").includes("application/json")) {
-        throw new Error("Search failed. Check your connection or sign in again.");
-      }
-      catalog = (await response.json()).catalog;
+    searchCatalog(productQuery.value);
+  });
+  productQuery?.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    const q = productQuery.value.trim();
+    if (!q) {
+      catalog = [];
+      openComposerId = null;
       renderCatalog();
-    } catch (error) {
-      fail(error.message);
+      return;
+    }
+    searchTimer = setTimeout(() => searchCatalog(q, {silent: true}), q.length === 1 ? 280 : 150);
+  });
+  document.addEventListener("keydown", event => {
+    const editing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "");
+    if (!editing && event.key === "/") {
+      event.preventDefault();
+      productQuery?.focus();
     }
   });
 
@@ -666,6 +763,7 @@
       const response = await fetch("/api/held/" + button.dataset.id + "/");
       if (!response.ok) throw new Error("Cannot load held sale.");
       const saved = await response.json();
+      await ensureProducts(saved.items.map(line => line.product));
       const refreshed = saved.items.map(line => {
         const product = catalog.find(item => item.id === line.product);
         if (!product || !(line.mode in product.prices)) throw new Error("A held product is unavailable. Clear the catalog search or check its selling modes.");

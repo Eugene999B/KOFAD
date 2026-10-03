@@ -1,2 +1,97 @@
-{% extends "base.html" %}{% block actions %}<div class="actions"><a class="button secondary" href="/exports/?dataset=inventory">⇩ Download inventory</a>{% if perms.core.add_product %}<a class="button" href="/products/new/">＋ New product</a>{% endif %}</div>{% endblock %}{% block content %}
-<form class="searchbar"><input aria-label="Find a product" name="q" value="{{ q }}" placeholder="Find by name, SKU or barcode"><button class="button secondary">Search</button></form><section class="panel"><div class="section-heading"><h2>Product ledger</h2><div class="actions"><a href="/quarantine/">Damaged stock →</a><a href="/operations/">Record stock movement →</a></div></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>Category</th><th>Sellable</th><th>Quarantine</th><th>Total physical</th><th>Pack view</th><th>Pack equivalent</th><th>Retail / unit</th><th>Status</th><th></th></tr></thead><tbody>{% for row in rows %}<tr><td><strong>{{ row.product.name }}</strong><small>{{ row.product.sku }}</small></td><td>{{ row.product.category|default:"—" }}</td><td>{{ row.quantity }} {{ row.product.base_unit }}</td><td>{% if row.quarantine %}<a href="/quarantine/">{{ row.quarantine }} {{ row.product.base_unit }}</a>{% else %}0{% endif %}</td><td>{{ row.physical }} {{ row.product.base_unit }}</td><td>{{ row.packs }} {{ row.product.pack_name }}{% if row.loose %} + {{ row.loose }} {{ row.product.base_unit }}{% endif %}</td><td>{% if row.product.pack_size > 1 %}{{ row.pack_equivalent|floatformat:2 }} {{ row.product.pack_name }}{% else %}—{% endif %}</td><td>{{ row.product.retail_unit|default_if_none:"Disabled" }}</td><td>{% if not row.product.active %}<span class="pill">Archived</span>{% elif row.low %}<span class="pill amber">Reorder</span>{% else %}<span class="pill">In stock</span>{% endif %}</td><td>{% if perms.core.change_product %}<a href="/products/{{ row.product.pk }}/">Edit ↗</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="10"><div class="empty"><h3>No products yet.</h3><p>Add a product and its selling prices, then record opening stock through Stock operations.</p></div></td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'inventory.js' %}"></script>{% endblock %}
+{% block actions %}
+<div class="actions">
+  <a class="button secondary" href="/exports/?dataset=inventory">⇩ Export inventory</a>
+  {% if perms.core.add_product %}<a class="button" href="/products/new/">＋ New product</a>{% endif %}
+</div>
+{% endblock %}
+{% block content %}
+<section class="inventory-hero">
+  <div><p class="eyebrow">STOCK CONTROL</p><h2>Inventory that explains itself.</h2><p>Search, filter, restock and review recent movement without leaving the stock workspace.</p></div>
+  {% if perms.core.operate_inventory %}<button type="button" class="button" data-inventory-search-focus>⌕ Find product to restock</button>{% endif %}
+</section>
+
+<div class="metric-grid inventory-metrics">
+  <article class="metric-card primary-tone"><small>Products</small><strong>{{ catalog_count }}</strong><span>Active and archived catalog records</span></article>
+  <article class="metric-card success-tone"><small>Sellable stock value</small><strong>{{ company.currency }} {{ sellable_value|floatformat:2 }}</strong><span>Current standard cost × sellable units</span></article>
+  <article class="metric-card warning-tone"><small>Needs restock</small><strong>{{ low_count }}</strong><span>{{ out_count }} currently out of stock</span></article>
+  <article class="metric-card danger-tone"><small>Quarantined units</small><strong>{{ quarantine_units }}</strong><span>Held outside sellable stock</span></article>
+</div>
+
+<section class="panel inventory-toolbar-panel">
+  <form class="inventory-search" method="get">
+    <input type="hidden" name="status" value="{{ status }}">
+    <span aria-hidden="true">⌕</span>
+    <input name="q" value="{{ q }}" placeholder="Search product name, SKU, barcode or category" autocomplete="off">
+    {% if q %}<a href="/inventory/?status={{ status }}" aria-label="Clear inventory search">×</a>{% endif %}
+    <button class="button secondary">Search</button>
+  </form>
+  <div class="inventory-filters">
+    <a href="/inventory/?q={{ q|urlencode }}&status=all" class="{% if status == 'all' %}active{% endif %}">All stock</a>
+    <a href="/inventory/?q={{ q|urlencode }}&status=low" class="{% if status == 'low' %}active{% endif %}">Low stock</a>
+    <a href="/inventory/?q={{ q|urlencode }}&status=out" class="{% if status == 'out' %}active{% endif %}">Out of stock</a>
+    <a href="/inventory/?q={{ q|urlencode }}&status=healthy" class="{% if status == 'healthy' %}active{% endif %}">Healthy</a>
+    <a href="/inventory/?q={{ q|urlencode }}&status=quarantine" class="{% if status == 'quarantine' %}active{% endif %}">Quarantine</a>
+  </div>
+</section>
+
+<section class="panel inventory-ledger">
+  <div class="section-heading"><div><h2>Stock overview</h2><p class="muted">Restock always adds to the current balance. Recounts, damage, transfers and write-offs remain separate controlled workflows.</p></div><div class="actions"><a href="/stock-counts/">Stock counts →</a><a href="/operations/">Stock operations →</a></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Product</th><th>Sellable</th><th>Pack position</th><th>Quarantine</th><th class="number">Cost</th><th class="number">Retail</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><a href="/products/{{ row.product.pk }}/"><strong>{{ row.product.name }}</strong></a><small>{{ row.product.sku }}{% if row.product.category %} · {{ row.product.category }}{% endif %}</small></td>
+        <td><strong>{{ row.quantity }} {{ row.product.base_unit }}</strong><small>Total physical {{ row.physical }}</small></td>
+        <td>{% if row.product.pack_size > 1 %}<strong>{{ row.packs }} {{ row.product.pack_name }}{% if row.loose %} + {{ row.loose }} {{ row.product.base_unit }}{% endif %}</strong><small>{{ row.pack_equivalent|floatformat:2 }} {{ row.product.pack_name }} equivalent</small>{% else %}<strong>{{ row.quantity }} {{ row.product.base_unit }}</strong><small>Single-unit product</small>{% endif %}</td>
+        <td>{% if row.quarantine %}<a href="/quarantine/"><strong>{{ row.quarantine }}</strong> held</a>{% else %}<span class="muted">0</span>{% endif %}</td>
+        <td class="number">{{ company.currency }} {{ row.product.cost|floatformat:2 }}<small>per {{ row.product.base_unit }}</small></td>
+        <td class="number">{% if row.product.retail_unit != None %}{{ company.currency }} {{ row.product.retail_unit|floatformat:2 }}{% else %}<span class="muted">Disabled</span>{% endif %}</td>
+        <td>{% if not row.product.active %}<span class="stock-state neutral">Archived</span>{% elif row.out %}<span class="stock-state danger">Out of stock</span>{% elif row.low %}<span class="stock-state warning">Low stock</span>{% else %}<span class="stock-state success">Healthy</span>{% endif %}</td>
+        <td>
+          <div class="row-actions">
+            {% if perms.core.operate_inventory %}<button type="button" class="text-button" data-restock-open data-product="{{ row.product.pk }}" data-name="{{ row.product.name }}" data-pack-size="{{ row.product.pack_size }}" data-pack-name="{{ row.product.pack_name }}" data-base-unit="{{ row.product.base_unit }}" data-stock="{{ row.quantity }}" data-cost="{{ row.product.cost }}">Restock</button>{% endif %}
+            {% if perms.core.change_product %}<a href="/products/{{ row.product.pk }}/">Edit</a>{% endif %}
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8"><div class="empty"><h3>No products match this view.</h3><p>Try another filter or create a new product.</p></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel inventory-history">
+  <div class="section-heading"><div><h2>Recent stock movement</h2><p class="muted">A quick audit trail of what changed sellable stock.</p></div><a href="/exports/?dataset=movements">Export movements →</a></div>
+  <div class="movement-list">
+    {% for movement in movements %}
+    <article><span class="movement-sign {% if movement.delta > 0 %}in{% else %}out{% endif %}">{% if movement.delta > 0 %}+{% endif %}{{ movement.delta }}</span><div><strong>{{ movement.product.name }}</strong><small>{{ movement.reason }} · {{ movement.reference }}</small></div><div class="number"><strong>{{ movement.balance }}</strong><small>{{ movement.created_at|date:"d M, H:i" }} · {{ movement.actor|default:"System" }}</small></div></article>
+    {% empty %}<p class="muted">No stock movement recorded yet.</p>{% endfor %}
+  </div>
+</section>
+
+{% if perms.core.operate_inventory %}
+<dialog id="restock-dialog" class="kofad-dialog">
+  <form method="post" id="restock-form">{% csrf_token %}
+    <div class="dialog-heading"><div><p class="eyebrow">QUICK RESTOCK</p><h2 id="restock-name">Choose a product</h2><p class="muted">Adds stock to the current sellable balance. It does not replace the balance.</p></div><button type="button" class="icon-button" data-restock-close aria-label="Close restock">×</button></div>
+    <input type="hidden" name="product" id="restock-product">
+    <div class="restock-current"><span>Current sellable stock</span><strong id="restock-current">0</strong></div>
+    <div class="restock-grid">
+      <label id="restock-pack-label">Full packs / boxes<input name="packs" id="restock-packs" type="number" min="0" step="1" value="0"></label>
+      <label>Loose <span id="restock-unit-label">units</span><input name="loose" id="restock-loose" type="number" min="0" step="1" value="0"></label>
+    </div>
+    <div class="restock-preview"><span>Stock to add</span><strong id="restock-added">0</strong><span>New sellable balance</span><strong id="restock-new-balance">0</strong></div>
+    <label>New unit cost <small>Optional. Historical sales keep their original cost snapshots.</small><input name="unit_cost" id="restock-cost" type="number" min=".01" step=".01"></label>
+    <label>Delivery / supplier reference <small>Optional external reference, delivery note or invoice number.</small><input name="reference" maxlength="100" placeholder="e.g. DN-2048"></label>
+    <label>Restock note <small>Required. Explain what stock was received.</small><textarea name="note" maxlength="500" required placeholder="Received stock from supplier delivery"></textarea></label>
+    <div class="notice"><strong>Accounting note:</strong> Quick Restock changes inventory only. If KOFAD should also record a supplier invoice or supplier debt, use <a href="/purchasing/">Purchasing</a> instead.</div>
+    <div class="dialog-actions"><button type="button" class="button secondary" data-restock-close>Cancel</button><button class="button">Add stock</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
