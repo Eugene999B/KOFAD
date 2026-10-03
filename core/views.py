@@ -542,7 +542,7 @@ def debts(request, branch):
         rows = [row for row in rows if row["overdue"] == 0]
 
     selected = None
-    selected_id = request.GET.get("customer", "")
+    selected_id = request.GET.get("customer", "") or (request.POST.get("party", "") if request.method == "POST" else "")
     if selected_id.isdigit():
         selected = next((row for row in rows if row["party"].pk == int(selected_id)), None)
         if selected is None:
@@ -571,6 +571,7 @@ def debts(request, branch):
         "methods": s.active_payment_methods(),
         "key": request.POST.get("key") or str(uuid.uuid4()),
         "payment_doc": payment_doc,
+        "open_payment_dialog": request.method == "POST",
     })
 
 @login_required
