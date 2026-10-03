@@ -5,13 +5,12 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 
 from . import services as s
 from .models import (
-    Allocation, CustomerReturnRequest, Document, ManualJournal, ManualJournalLine,
-    Payment, PayrollEntry, PayrollPayment, QuarantineItem, Stock,
+    CustomerReturnRequest, Document, ManualJournal, ManualJournalLine,
+    PayrollEntry, PayrollPayment, QuarantineItem, Stock,
 )
 
 ZERO = Decimal("0.00")
