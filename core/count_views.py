@@ -33,6 +33,11 @@ def detail(request, branch, pk):
                 values = {str(line.pk): (request.POST.get("quantity_" + str(line.pk), ""),
                     request.POST.get("reason_" + str(line.pk), "")) for line in lines}
                 counts.save_count(request.user, branch, pk, values, request.POST.get("note", ""), action == "submit")
+                if action == "submit" and (request.user.is_superuser or request.user.has_perm("core.manage_company")):
+                    counts.review_count(
+                        request.user, branch, pk, "approve",
+                        "Owner direct authority — inventory verification posted after complete blind count.",
+                    )
             else:
                 counts.review_count(request.user, branch, pk, action, request.POST.get("review_note", ""))
             messages.success(request, "Stock count recorded.")
@@ -46,7 +51,22 @@ def detail(request, branch, pk):
                     line.counted = request.POST.get("quantity_" + str(line.pk), "")
                     line.reason = request.POST.get("reason_" + str(line.pk), "")
                 count.note = request.POST.get("note", "")
-    return render(request, "count.html", {"title": "Count sheet", "count": count, "lines": lines,
+    count.refresh_from_db()
+    lines = list(count.lines.select_related("product"))
+    variance_units = sum(abs(line.variance or 0) for line in lines if line.counted is not None)
+    variance_value = sum(
+        (abs(line.variance or 0) * line.product.cost for line in lines if line.counted is not None),
+        0,
+    )
+    exception_lines = [line for line in lines if line.variance not in (None, 0)]
+    for line in lines:
+        line.variance_value = abs(line.variance or 0) * line.product.cost
+        line.risk = "high" if line.variance_value >= 1000 else ("medium" if line.variance_value >= 250 else "low")
+    owner = request.user.is_superuser or request.user.has_perm("core.manage_company")
+    return render(request, "count.html", {"title": "Inventory verification", "count": count, "lines": lines,
         "editable": count.status == "draft" and count.created_by_id == request.user.pk,
-        "can_review": count.status == "submitted" and count.created_by_id != request.user.pk and request.user.has_perm("core.approve_operations"),
+        "can_review": count.status == "submitted" and request.user.has_perm("core.approve_operations")
+            and (count.created_by_id != request.user.pk or owner),
+        "variance_units": variance_units, "variance_value": variance_value,
+        "exception_count": len(exception_lines), "owner_direct": owner,
     }, status=status)
