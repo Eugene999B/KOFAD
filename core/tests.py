@@ -1,6 +1,7 @@
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
@@ -173,7 +174,7 @@ class BusinessTests(Fixtures, TestCase):
     def test_all_pages_render(self):
         self.authenticate_client()
         for path in ["/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
-                     "/finance/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
+                     "/finance/","/creditors/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
                      "/administration/","/administration/users/","/administration/roles/","/exports/","/communications/",
                      "/products/new/","/parties/new/"]:
             with self.subTest(path=path):
@@ -388,6 +389,284 @@ class WorkforcePayrollAccountingTests(Fixtures, TestCase):
         self.assertTrue(exported.content.startswith(b"%PDF"))
 
 
+class CreditorsTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+
+    def credit_purchase(self, amount="60", due_date=None, external_reference="SUP-INV-001"):
+        due_date = due_date or (timezone.localdate() + timedelta(days=14)).isoformat()
+        return s.post_trade(
+            self.user,
+            self.branch,
+            {
+                "party": self.supplier.pk,
+                "items": [{
+                    "product": self.product.pk, "mode": "retail_unit",
+                    "quantity": 1, "price": amount,
+                }],
+                "payments": [],
+                "due_date": due_date,
+                "external_reference": external_reference,
+                "document_date": timezone.localdate().isoformat(),
+                "note": "Supplier stock invoice",
+            },
+            uuid.uuid4(),
+            "purchase",
+        )
+
+    def test_credit_purchase_automatically_becomes_supplier_payable(self):
+        from . import creditors as creditor_service
+        purchase = self.credit_purchase(amount="60")
+        snapshot = creditor_service.supplier_account_snapshot(self.supplier)
+        self.assertEqual(snapshot["outstanding"], Decimal("60"))
+        self.assertEqual(snapshot["bill_count"], 1)
+        self.assertEqual(snapshot["bill_rows"][0]["bill"], purchase)
+        self.assertEqual(snapshot["bill_rows"][0]["source"], "Purchase")
+        self.assertEqual(s.party_debt(self.supplier), Decimal("60"))
+
+    def test_backdated_supplier_invoice_can_enter_as_already_overdue(self):
+        from . import creditors as creditor_service
+        invoice_date = timezone.localdate() - timedelta(days=45)
+        due_date = timezone.localdate() - timedelta(days=15)
+        purchase = s.post_trade(
+            self.user, self.branch,
+            {
+                "party": self.supplier.pk,
+                "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "price": "55"}],
+                "payments": [],
+                "document_date": invoice_date.isoformat(),
+                "due_date": due_date.isoformat(),
+                "external_reference": "HIST-55",
+                "note": "Historical unpaid stock invoice",
+            },
+            uuid.uuid4(), "purchase",
+        )
+        snapshot = creditor_service.supplier_account_snapshot(self.supplier)
+        self.assertEqual(purchase.document_date, invoice_date)
+        self.assertEqual(purchase.due_date, due_date)
+        self.assertEqual(snapshot["overdue"], Decimal("55"))
+        self.assertEqual(snapshot["maximum_days_overdue"], 15)
+
+    def test_direct_creditor_bill_creates_liability_without_stock_movement(self):
+        from . import creditors as creditor_service
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        bill = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "850.00",
+                "document_date": timezone.localdate().isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=7)).isoformat(),
+                "external_reference": "RENT-OCT-2026", "category": "rent",
+                "note": "October warehouse rent payable",
+            },
+            uuid.uuid4(),
+        )
+        self.assertEqual(bill.kind, "creditor_charge")
+        self.assertEqual(s.balance(bill), Decimal("850"))
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before)
+        self.assertEqual(s.party_debt(self.supplier), Decimal("850"))
+
+    def test_direct_bill_can_create_new_creditor_inline(self):
+        from . import creditors as creditor_service
+        bill = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "supplier_name": "New Service Vendor", "supplier_phone": "0249876543",
+                "supplier_email": "vendor@example.test", "amount": "300",
+                "document_date": timezone.localdate().isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=10)).isoformat(),
+                "external_reference": "NSV-001", "category": "professional",
+                "note": "Professional service payable",
+            },
+            uuid.uuid4(),
+        )
+        self.assertEqual(bill.party.kind, "supplier")
+        self.assertEqual(bill.party.name, "New Service Vendor")
+        self.assertEqual(s.party_debt(bill.party), Decimal("300"))
+
+    def test_duplicate_supplier_reference_is_blocked_across_purchase_and_direct_bill(self):
+        from . import creditors as creditor_service
+        self.credit_purchase(external_reference="VENDOR-77")
+        with self.assertRaises(ValidationError):
+            creditor_service.post_creditor_bill(
+                self.user, self.branch,
+                {
+                    "party": str(self.supplier.pk), "amount": "120",
+                    "document_date": timezone.localdate().isoformat(),
+                    "due_date": (timezone.localdate() + timedelta(days=5)).isoformat(),
+                    "external_reference": "vendor-77", "category": "professional",
+                    "note": "Duplicate supplier bill reference",
+                },
+                uuid.uuid4(),
+            )
+
+    def test_account_payment_allocates_oldest_due_first_and_blocks_overpayment(self):
+        from . import creditors as creditor_service
+        old_bill = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "40",
+                "document_date": (timezone.localdate() - timedelta(days=30)).isoformat(),
+                "due_date": (timezone.localdate() - timedelta(days=10)).isoformat(),
+                "external_reference": "OLD-40", "category": "utilities",
+                "note": "Old utility creditor bill",
+            },
+            uuid.uuid4(),
+        )
+        purchase = self.credit_purchase(
+            amount="60",
+            due_date=(timezone.localdate() + timedelta(days=10)).isoformat(),
+            external_reference="NEW-60",
+        )
+        payment = creditor_service.post_supplier_account_payment(
+            self.user, self.branch,
+            {"party": str(self.supplier.pk), "amount": "50", "method": "bank", "reference": "BANK-001"},
+            uuid.uuid4(),
+        )
+        allocations = list(payment.allocations.order_by("pk"))
+        self.assertEqual(allocations[0].invoice, old_bill)
+        self.assertEqual(allocations[0].amount, Decimal("40"))
+        self.assertEqual(allocations[1].invoice, purchase)
+        self.assertEqual(allocations[1].amount, Decimal("10"))
+        self.assertEqual(s.balance(old_bill), Decimal("0"))
+        self.assertEqual(s.balance(purchase), Decimal("50"))
+        self.assertEqual(s.channel_totals(self.branch, timezone.localdate())["bank"], Decimal("-50"))
+        with self.assertRaises(ValidationError):
+            creditor_service.post_supplier_account_payment(
+                self.user, self.branch,
+                {"party": str(self.supplier.pk), "amount": "51", "method": "bank"},
+                uuid.uuid4(),
+            )
+
+    def test_selected_bill_payment_only_allocates_selected_bill(self):
+        from . import creditors as creditor_service
+        first = self.credit_purchase(amount="25", external_reference="ONE-25")
+        second = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "35",
+                "document_date": timezone.localdate().isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=5)).isoformat(),
+                "external_reference": "TWO-35", "category": "maintenance",
+                "note": "Workshop repair payable",
+            },
+            uuid.uuid4(),
+        )
+        payment = creditor_service.post_supplier_account_payment(
+            self.user, self.branch,
+            {"party": str(self.supplier.pk), "invoice": str(second.pk), "amount": "20", "method": "cash"},
+            uuid.uuid4(),
+        )
+        self.assertEqual(payment.allocations.count(), 1)
+        self.assertEqual(payment.allocations.get().invoice, second)
+        self.assertEqual(s.balance(first), Decimal("25"))
+        self.assertEqual(s.balance(second), Decimal("15"))
+
+    def test_direct_bill_correction_requires_payment_reversal_first(self):
+        from . import creditors as creditor_service
+        bill = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "90",
+                "document_date": timezone.localdate().isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=2)).isoformat(),
+                "external_reference": "ERR-90", "category": "other",
+                "note": "Creditor bill entered incorrectly",
+            },
+            uuid.uuid4(),
+        )
+        request = s.request_correction(self.user, self.branch, bill.pk, "Wrong creditor bill amount entered")
+        s.review_correction(self.reviewer, self.branch, request.pk, True)
+        bill.refresh_from_db()
+        self.assertEqual(s.balance(bill), Decimal("0"))
+        self.assertEqual(s.party_debt(self.supplier), Decimal("0"))
+
+        paid_bill = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "50",
+                "document_date": timezone.localdate().isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=2)).isoformat(),
+                "external_reference": "PAID-50", "category": "other",
+                "note": "Partially settled creditor bill",
+            },
+            uuid.uuid4(),
+        )
+        creditor_service.post_supplier_account_payment(
+            self.user, self.branch,
+            {"party": str(self.supplier.pk), "invoice": str(paid_bill.pk), "amount": "10", "method": "cash"},
+            uuid.uuid4(),
+        )
+        with self.assertRaises(ValidationError):
+            s.request_correction(self.user, self.branch, paid_bill.pk, "Need to reverse this paid creditor bill")
+
+    def test_due_date_filter_scopes_creditor_totals_to_matching_bills(self):
+        from . import creditors as creditor_service
+        today = timezone.localdate()
+        creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "40",
+                "document_date": today.isoformat(),
+                "due_date": (today + timedelta(days=3)).isoformat(),
+                "external_reference": "DUE-3", "category": "utilities",
+                "note": "Utility bill due soon",
+            },
+            uuid.uuid4(),
+        )
+        creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "party": str(self.supplier.pk), "amount": "90",
+                "document_date": today.isoformat(),
+                "due_date": (today + timedelta(days=20)).isoformat(),
+                "external_reference": "DUE-20", "category": "maintenance",
+                "note": "Maintenance bill due later",
+            },
+            uuid.uuid4(),
+        )
+        self.authenticate_client()
+        response = self.client.get("/creditors/", {
+            "due_from": (today + timedelta(days=1)).isoformat(),
+            "due_to": (today + timedelta(days=7)).isoformat(),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["overview"]["total_payables"], Decimal("40"))
+        self.assertEqual(response.context["rows"][0]["bill_count"], 1)
+        self.assertEqual(response.context["rows"][0]["outstanding"], Decimal("40"))
+
+    def test_creditor_search_finds_supplier_invoice_reference(self):
+        from . import creditors as creditor_service
+        self.credit_purchase(amount="75", external_reference="LOOKUP-AP-75")
+        rows = creditor_service.creditor_accounts(self.branch, "lookup-ap-75")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["party"], self.supplier)
+
+    def test_creditor_page_supplier_search_print_and_exports(self):
+        self.credit_purchase(amount="75", external_reference="SEARCH-75")
+        self.authenticate_client()
+        page = self.client.get("/creditors/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, self.supplier.name)
+        purchase_page = self.client.get("/purchasing/")
+        self.assertContains(purchase_page, 'id="supplier-search"')
+        self.assertContains(purchase_page, 'id="purchase-reference"')
+        search = self.client.get("/api/suppliers/", {"q": "Supplier"})
+        self.assertEqual(search.status_code, 200)
+        self.assertEqual(search.json()["suppliers"][0]["outstanding"], "75.00")
+        ref_search = self.client.get("/creditors/", {"q": "SEARCH-75"})
+        self.assertContains(ref_search, self.supplier.name)
+        for format in ("pdf", "xlsx", "docx", "csv"):
+            response = self.client.get(f"/creditors/export/{format}/")
+            self.assertEqual(response.status_code, 200)
+        printable = self.client.get(
+            f"/documents/{Document.objects.get(external_reference='SEARCH-75').pk}/pdf/a4/"
+        )
+        self.assertEqual(printable.status_code, 200)
+        self.assertTrue(printable.content.startswith(b"%PDF"))
+
+
+
 class CorrectionTests(Fixtures, TestCase):
     def setUp(self):
         self.setup_data()
@@ -427,7 +706,7 @@ class ReportingTests(Fixtures, TestCase):
     def test_report_families_and_exports(self):
         self.sale(payments=[],party=self.customer.pk,due_date=timezone.localdate().isoformat())
         self.authenticate_client()
-        for family in ("register","sales","inventory","aging"):
+        for family in ("register","sales","inventory","aging","creditors"):
             self.assertEqual(self.client.get("/reports/?family="+family).status_code,200)
             self.assertEqual(self.client.get("/reports/export/pdf/?family="+family).status_code,200)
     def test_profit_uses_original_standard_cost(self):
@@ -523,7 +802,7 @@ class AdministrationAndExportTests(Fixtures, TestCase):
         self.sale()
         from openpyxl import load_workbook
         from docx import Document as WordDocument
-        for dataset in ("customers", "inventory", "sales", "transactions", "movements", "audit", "staff"):
+        for dataset in ("customers", "creditors", "inventory", "sales", "transactions", "movements", "audit", "staff"):
             with self.subTest(dataset=dataset):
                 response = self.client.get(f"/exports/download/xlsx/?dataset={dataset}")
                 self.assertEqual(response.status_code, 200)

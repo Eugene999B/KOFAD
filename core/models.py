@@ -211,7 +211,7 @@ class Party(models.Model):
 
 
 class Document(models.Model):
-    KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("return", "Return"),
+    KINDS = [("sale", "Sale"), ("purchase", "Purchase"), ("creditor_charge", "Creditor bill"), ("return", "Return"),
              ("supplier_return", "Supplier return"), ("inventory_writeoff", "Inventory write-off"), ("expense", "Expense"), ("collection", "Debt payment"),
              ("supplier_payment", "Supplier payment"), ("reversal", "Reversal")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -224,16 +224,27 @@ class Document(models.Model):
     total = models.DecimalField(max_digits=14, decimal_places=2)
     paid = models.DecimalField(max_digits=14, decimal_places=2)
     due_date = models.DateField(null=True, blank=True)
+    document_date = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
+    external_reference = models.CharField(max_length=120, blank=True, default="")
+    payable_category = models.CharField(max_length=40, blank=True, default="")
     expense_category = models.CharField(max_length=40, blank=True, default="")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["branch", "kind", "created_at"])]
+        indexes = [
+            models.Index(fields=["branch", "kind", "created_at"]),
+            models.Index(fields=["branch", "party", "external_reference"], name="supplier_invoice_ref_idx"),
+        ]
         constraints = [
             models.CheckConstraint(condition=Q(total__gte=0), name="document_total_positive"),
             models.CheckConstraint(condition=Q(paid__gte=0) & Q(paid__lte=models.F("total")), name="document_paid_valid"),
+            models.UniqueConstraint(
+                fields=["branch", "party", "external_reference"],
+                condition=Q(kind__in=["purchase", "creditor_charge"]) & ~Q(external_reference=""),
+                name="unique_supplier_payable_reference",
+            ),
         ]
         permissions = [
             ("operate_sales", "Complete sales"), ("operate_inventory", "Receive and request stock changes"),

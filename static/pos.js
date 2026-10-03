@@ -17,6 +17,7 @@
   let heldId = null;
   let completed = false;
   let selectedCustomer = null;
+  let selectedSupplier = null;
   let newCustomerMode = false;
   let restoredState = null;
   let hydrating = true;
@@ -36,6 +37,7 @@
       pendingBody = restoredState.pendingBody || null;
       heldId = restoredState.heldId || null;
       selectedCustomer = restoredState.selectedCustomer || null;
+      selectedSupplier = restoredState.selectedSupplier || null;
       newCustomerMode = Boolean(restoredState.newCustomerMode);
       if (
         restoredState.selectedPaymentMethod === "split" ||
@@ -56,6 +58,13 @@
   const clearCustomerButton = document.querySelector("#clear-customer");
   const customerName = document.querySelector("#customer-name");
   const customerPhone = document.querySelector("#customer-phone");
+  const supplierSearch = document.querySelector("#supplier-search");
+  const supplierResults = document.querySelector("#supplier-results");
+  const selectedSupplierBox = document.querySelector("#selected-supplier");
+  const clearSupplierButton = document.querySelector("#clear-supplier");
+  const purchaseReference = document.querySelector("#purchase-reference");
+  const purchaseDocumentDate = document.querySelector("#purchase-document-date");
+  const purchaseNote = document.querySelector("#purchase-note");
   const paymentPlan = document.querySelector("#payment-plan");
   const creditFields = document.querySelector("#credit-fields");
   const dueDate = document.querySelector("#due-date");
@@ -171,12 +180,15 @@
   function persist() {
     try {
       sessionStorage.setItem(storageKey, JSON.stringify({
-        cart, requestKey, pendingBody, heldId, selectedCustomer, newCustomerMode,
+        cart, requestKey, pendingBody, heldId, selectedCustomer, selectedSupplier, newCustomerMode,
         customerName: customerName?.value || "",
         customerPhone: customerPhone?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
         customerConsent: Boolean(customerConsent?.checked),
+        purchaseReference: purchaseReference?.value || "",
+        purchaseDocumentDate: purchaseDocumentDate?.value || "",
+        purchaseNote: purchaseNote?.value || "",
         selectedPaymentMethod
       }));
     } catch (_) {}
@@ -633,6 +645,64 @@
   });
   newCustomerToggle?.addEventListener("click", beginNewCustomer);
   clearCustomerButton?.addEventListener("click", clearCustomer);
+  function showSelectedSupplier(supplier) {
+    selectedSupplier = supplier;
+    if (partyInput) partyInput.value = supplier.id;
+    selectedSupplierBox?.classList.remove("hidden");
+    if (selectedSupplierBox) {
+      selectedSupplierBox.replaceChildren();
+      selectedSupplierBox.append(
+        el("strong", supplier.name),
+        el("small", supplier.phone + " · Outstanding " + root.dataset.currency + " " + supplier.outstanding + " · " + supplier.purchase_count + " purchases", "muted")
+      );
+    }
+    supplierResults?.replaceChildren();
+    clearSupplierButton?.classList.remove("hidden");
+    if (supplierSearch) supplierSearch.value = "";
+    changed();
+    persist();
+  }
+
+  function clearSupplier() {
+    selectedSupplier = null;
+    if (partyInput) partyInput.value = "";
+    selectedSupplierBox?.classList.add("hidden");
+    selectedSupplierBox?.replaceChildren();
+    supplierResults?.replaceChildren();
+    clearSupplierButton?.classList.add("hidden");
+    changed();
+    persist();
+  }
+
+  let supplierTimer = null;
+  supplierSearch?.addEventListener("input", () => {
+    clearTimeout(supplierTimer);
+    const q = supplierSearch.value.trim();
+    supplierResults?.replaceChildren();
+    if (q.length < 2) return;
+    supplierTimer = setTimeout(async () => {
+      try {
+        const response = await fetch("/api/suppliers/?q=" + encodeURIComponent(q));
+        if (!response.ok) throw new Error("Supplier search failed.");
+        const data = await response.json();
+        supplierResults?.replaceChildren();
+        data.suppliers.forEach(supplier => {
+          const button = el("button", undefined, "customer-result");
+          button.type = "button";
+          button.setAttribute("role", "option");
+          button.append(
+            el("strong", supplier.name),
+            el("small", supplier.phone + " · owes " + root.dataset.currency + " " + supplier.outstanding + " · " + supplier.purchase_count + " purchases", "muted")
+          );
+          button.addEventListener("click", () => showSelectedSupplier(supplier));
+          supplierResults?.append(button);
+        });
+        if (!data.suppliers.length) supplierResults?.append(el("div", "No saved supplier found. Add a new supplier first.", "empty"));
+      } catch (error) { fail(error.message); }
+    }, 180);
+  });
+  clearSupplierButton?.addEventListener("click", clearSupplier);
+
   function hasAttachedCustomer() {
     return Boolean(
       partyInput?.value ||
@@ -905,8 +975,12 @@
       if ((plan === "part" || plan === "credit") && !dueDate?.value) {
         throw new Error("Choose a due date for the unpaid balance.");
       }
-    } else if (paidNow < grandTotal && !dueDate?.value) {
-      throw new Error("Choose a due date for the unpaid supplier balance.");
+    } else {
+      if (!party) throw new Error("Search and choose a supplier before posting this purchase.");
+      if (!purchaseDocumentDate?.value) throw new Error("Choose the supplier invoice date.");
+      if (paidNow < grandTotal && !dueDate?.value) {
+        throw new Error("Choose a due date for the unpaid supplier balance.");
+      }
     }
 
     return {
@@ -920,6 +994,7 @@
       ...(!purchase && !party && newName ? {customer_name: newName, customer_phone: newPhone} : {}),
       ...(!purchase ? {customer_consent: Boolean((party || newName) && customerConsent?.checked)} : {}),
       due_date: dueDate?.value || "",
+      ...(purchase ? {external_reference: purchaseReference?.value.trim() || "", document_date: purchaseDocumentDate?.value || "", note: purchaseNote?.value.trim() || ""} : {}),
       override_reason: document.querySelector("#override-reason")?.value || "",
       payments: paymentMethods.map(method => ({
         method,
@@ -1170,12 +1245,16 @@
 
   if (selectedCustomer?.id) showSelectedCustomer(selectedCustomer);
   else if (newCustomerMode) beginNewCustomer();
+  if (selectedSupplier?.id) showSelectedSupplier(selectedSupplier);
   if (restoredState) {
     if (customerName && restoredState.customerName) customerName.value = restoredState.customerName;
     if (customerPhone && restoredState.customerPhone) customerPhone.value = restoredState.customerPhone;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
     if (customerConsent) customerConsent.checked = Boolean(restoredState.customerConsent || selectedCustomer?.consent);
+    if (purchaseReference) purchaseReference.value = restoredState.purchaseReference || "";
+    if (purchaseDocumentDate && restoredState.purchaseDocumentDate) purchaseDocumentDate.value = restoredState.purchaseDocumentDate;
+    if (purchaseNote) purchaseNote.value = restoredState.purchaseNote || "";
     if (
       restoredState.selectedPaymentMethod === "split" ||
       paymentMethods.includes(restoredState.selectedPaymentMethod)
@@ -1195,6 +1274,9 @@
       customerPhone.value = pendingBody.customer_phone || "";
     }
     if (dueDate) dueDate.value = pendingBody.due_date || "";
+    if (purchaseReference) purchaseReference.value = pendingBody.external_reference || "";
+    if (purchaseDocumentDate) purchaseDocumentDate.value = pendingBody.document_date || purchaseDocumentDate.value;
+    if (purchaseNote) purchaseNote.value = pendingBody.note || "";
     pendingBody.payments.forEach(payment => {
       const input = document.querySelector("#pay-" + payment.method);
       if (input) input.value = payment.amount;

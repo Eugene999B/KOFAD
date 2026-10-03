@@ -264,6 +264,7 @@ def trade_screen(request, branch, kind):
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
         "held": HeldSale.objects.filter(branch=branch, user=request.user),
         "purchase": kind == "purchase",
+        "today": timezone.localdate(),
         "payment_methods": payment_methods,
         "payment_method_codes": [code for code, _ in payment_methods],
         "cash_enabled": any(code == "cash" for code, _ in payment_methods),
@@ -462,7 +463,7 @@ def documents(request):
     if request.user.has_perm("core.operate_inventory"):
         allowed += ["purchase", "supplier_return", "inventory_writeoff"]
     if request.user.has_perm("core.operate_finance"):
-        allowed += ["expense", "collection", "supplier_payment", "supplier_return", "inventory_writeoff"]
+        allowed += ["expense", "collection", "supplier_payment", "creditor_charge", "supplier_return", "inventory_writeoff"]
     if kind not in allowed:
         raise PermissionDenied
     rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
@@ -488,7 +489,7 @@ def document(request, pk):
     return render(request, "document.html", {
         "title": doc.reference,
         "doc": doc,
-        "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None,
+        "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase", "creditor_charge") else None,
     })
 
 
@@ -809,13 +810,22 @@ def statement(request, pk):
     branch = branch_for(request)
     s.permit(request.user, branch, "view_reports" if request.user.has_perm("core.view_reports") else "operate_finance")
     party = get_object_or_404(Party, pk=pk, branch=branch)
-    docs = Document.objects.filter(party=party).order_by("created_at")
+    docs = Document.objects.filter(party=party).select_related("original").order_by("created_at")
     running = Decimal(0)
     rows = []
     for doc in docs:
-        change = doc.balance if doc.kind in ("sale", "purchase") else -sum((a.amount for a in doc.allocations.all()), Decimal(0))
-        if doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
+        if doc.kind in ("sale", "purchase", "creditor_charge"):
+            change = doc.total
+        elif doc.kind in ("collection", "supplier_payment"):
+            change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
+        elif doc.kind in ("return", "supplier_return"):
+            change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
+        elif doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
             change = sum((a.amount for a in doc.original.allocations.all()), Decimal(0))
+        elif doc.kind == "reversal" and doc.original_id and doc.original.kind == "creditor_charge":
+            change = -doc.original.total
+        else:
+            change = Decimal(0)
         running += change
         rows.append({"doc": doc, "change": change, "running": running})
     return render(request, "statement.html", {"title": party.name, "party": party, "rows": rows, "balance": running})
@@ -835,7 +845,7 @@ def finance(request, branch):
             return redirect("document", pk=doc.pk)
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
-    invoices = Document.objects.filter(branch=branch, kind__in=["sale", "purchase"], party__isnull=False)
+    invoices = Document.objects.filter(branch=branch, kind__in=["sale", "purchase", "creditor_charge"], party__isnull=False)
     outstanding = [{"doc": d, "balance": s.balance(d)} for d in invoices]
     from .accounting_views import EXPENSE_CATEGORIES
     return render(request, "finance.html", {"title": "Expenses", "key": request.POST.get("key") or str(uuid.uuid4()),
@@ -1513,7 +1523,7 @@ def corrections(request, branch):
         except (ValidationError,ValueError) as exc:
             messages.error(request,problem(exc))
     return render(request,"corrections.html",{"title":"Corrections", "methods":s.active_payment_methods(),
-        "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment"],correction__isnull=True)[:200],
+        "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment","creditor_charge"],correction__isnull=True)[:200],
         "rows":Correction.objects.filter(original__branch=branch).select_related("original","requested_by","reviewed_by","posted")[:100]})
 
 
@@ -1537,10 +1547,10 @@ def search(request):
         if request.user.has_perm("core.operate_inventory"):
             allowed += ["purchase","supplier_return","inventory_writeoff"]
         if request.user.has_perm("core.operate_finance"):
-            allowed += ["expense","collection","supplier_payment","supplier_return","inventory_writeoff","reversal"]
+            allowed += ["expense","collection","supplier_payment","creditor_charge","supplier_return","inventory_writeoff","reversal"]
         if request.user.has_perm("core.view_reports"):
             allowed = list(dict(Document.KINDS))
-        docs = Document.objects.filter(branch=branch,kind__in=allowed,reference__icontains=q)[:20]
+        docs = Document.objects.filter(branch=branch,kind__in=allowed).filter(Q(reference__icontains=q)|Q(external_reference__icontains=q)|Q(party__name__icontains=q))[:20]
     return render(request,"search.html",{"title":"Search workspace","q":q,"products":products,"parties":parties,"documents":docs})
 
 

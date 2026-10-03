@@ -2,7 +2,7 @@
 {% block head %}<script defer src="{% static 'pos.js' %}"></script>{% endblock %}
 {% block actions %}
 <div class="actions">
-{% if purchase %}<a class="button secondary" href="/parties/?kind=supplier">Suppliers</a><a class="button secondary" href="/inventory/">Inventory</a>
+{% if purchase %}<a class="button secondary" href="/parties/?kind=supplier">Suppliers</a><a class="button secondary" href="/creditors/">Creditors</a><a class="button secondary" href="/inventory/">Inventory</a>
 {% else %}<a class="button secondary" href="/parties/">Customers</a><a class="button secondary" href="/debts/">Debt Desk</a>{% endif %}
 </div>
 {% endblock %}
@@ -72,9 +72,17 @@
 
   <form id="checkout">{% csrf_token %}
     {% if purchase %}
-    <section class="counter-customer chalin-customer-card">
-      <label for="party">Supplier</label>
-      <select id="party" name="party" required><option value="">Select supplier</option>{% for party in parties %}<option value="{{ party.pk }}">{{ party.name }} · {{ party.phone }}</option>{% endfor %}</select>
+    <section class="counter-customer chalin-customer-card supplier-search-card">
+      <input type="hidden" id="party" name="party">
+      <div class="counter-customer-title"><label for="supplier-search">Supplier <small>Required</small></label><a class="text-link" href="/parties/new/?kind=supplier">＋ New supplier</a><button type="button" class="text-button hidden" id="clear-supplier">Change</button></div>
+      <input id="supplier-search" type="search" autocomplete="off" placeholder="Search supplier by name, phone, email or address">
+      <div id="supplier-results" class="customer-results counter-customer-results" role="listbox" aria-label="Supplier search results"></div>
+      <div id="selected-supplier" class="selected-customer hidden" aria-live="polite"></div>
+      <div class="purchase-invoice-fields">
+        <label>Supplier invoice / reference<input id="purchase-reference" maxlength="120" placeholder="Duplicate references are blocked"></label>
+        <label>Supplier invoice date<input id="purchase-document-date" type="date" value="{{ today|date:'Y-m-d' }}"></label>
+        <label>Purchase note<textarea id="purchase-note" maxlength="2000" placeholder="Delivery note, terms or any useful purchasing detail"></textarea></label>
+      </div>
     </section>
     {% else %}
     <section class="counter-customer chalin-customer-card">

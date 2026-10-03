@@ -1550,3 +1550,29 @@ html[data-theme="dark"] .comms-one-customer-row em{color:#d79a79}
 .format-card,.profile-hero,.payroll-status{box-shadow:0 12px 34px rgba(27,27,24,.05)}
 @media(max-width:1050px){.advanced-filter{grid-template-columns:repeat(2,minmax(0,1fr))}.profile-grid,.accounting-layout{grid-template-columns:1fr}.document-upload-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.payroll-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-row{grid-template-columns:80px 1fr}.analytics-row>div:last-child{grid-column:2}}
 @media(max-width:720px){.form-grid.three,.advanced-filter,.document-upload-grid,.payroll-edit-grid{grid-template-columns:1fr}.span-2,.span-3{grid-column:auto}.profile-hero{grid-template-columns:auto 1fr}.profile-pay{grid-column:1/-1;text-align:left}.worker-avatar{width:74px;height:90px}.detail-grid{grid-template-columns:1fr}.payroll-status,.workflow-actions{align-items:flex-start;flex-direction:column}.status-rail{justify-content:flex-start}.analytics-row{grid-template-columns:1fr}.analytics-row>div:last-child{grid-column:auto}.pagination{align-items:flex-start;flex-wrap:wrap}}
+
+
+/* Creditors & accounts payable */
+.creditor-hero{border-left:4px solid #b87333}
+.aging-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.aging-grid article{padding:14px;border:1px solid rgba(128,128,112,.16);border-radius:12px;background:rgba(128,128,112,.035)}
+.aging-grid small{display:block;color:#777e77;text-transform:uppercase;letter-spacing:.05em;font-size:.68rem}
+.aging-grid strong{display:block;margin-top:5px;font-size:1rem}
+.creditor-layout{display:grid;grid-template-columns:minmax(290px,.72fr) minmax(0,1.5fr);gap:18px;align-items:start}
+.creditor-account-list{display:grid;gap:9px;max-height:820px;overflow:auto;padding-right:3px}
+.creditor-account-card{display:grid;gap:9px;padding:14px;border:1px solid rgba(128,128,112,.16);border-radius:14px;text-decoration:none;color:inherit;background:rgba(128,128,112,.025);transition:.15s ease}
+.creditor-account-card:hover,.creditor-account-card.active{border-color:rgba(184,115,51,.55);background:rgba(184,115,51,.07);transform:translateY(-1px)}
+.creditor-account-head,.creditor-account-money,.creditor-account-meta{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.creditor-account-head span:first-child{display:grid;gap:2px}.creditor-account-head small,.creditor-account-meta{color:#747a74;font-size:.76rem}
+.creditor-account-money strong{font-size:1.05rem}.creditor-account-money span{color:#747a74;font-size:.78rem}
+.creditor-payment-box{margin:20px 0;padding:16px;border:1px solid rgba(184,115,51,.23);border-radius:14px;background:rgba(184,115,51,.045)}
+.creditor-payment-success{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:16px 0}
+.creditor-payment-success .actions{flex-shrink:0}
+@media(max-width:1050px){.creditor-layout{grid-template-columns:1fr}.creditor-account-list{max-height:none}.aging-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.aging-grid{grid-template-columns:1fr 1fr}.creditor-payment-success{align-items:flex-start;flex-direction:column}}
+
+.purchase-invoice-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(128,128,112,.14)}
+.purchase-invoice-fields label:last-child{grid-column:1/-1}
+.purchase-invoice-fields textarea{min-height:74px}
+.supplier-search-card .selected-customer{margin-top:10px}
+@media(max-width:720px){.purchase-invoice-fields{grid-template-columns:1fr}.purchase-invoice-fields label:last-child{grid-column:auto}}

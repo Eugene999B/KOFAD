@@ -160,7 +160,7 @@ def render_receipt_pdf(document, format_name="a4"):
     party_name = "Internal record"
     party_phone = ""
     if document.party:
-        party_label = "SUPPLIER" if document.kind in ("purchase", "supplier_return", "supplier_payment") else "CUSTOMER"
+        party_label = "SUPPLIER / CREDITOR" if document.kind in ("purchase", "creditor_charge", "supplier_return", "supplier_payment") else "CUSTOMER"
         party_name = document.party.name
         if company.receipt_show_contact_phone:
             party_phone = document.party.phone
@@ -192,6 +192,12 @@ def render_receipt_pdf(document, format_name="a4"):
         staff = document.created_by.get_full_name() or document.created_by.username
         story.append(Spacer(1, 1.5 * mm))
         story.append(Paragraph(f"<font color='#657585'>Recorded by</font> <b>{_text(staff)}</b>", small))
+    if document.document_date:
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(f"<font color='#657585'>Business / invoice date</font> <b>{_text(document.document_date.strftime('%d %b %Y'))}</b>", body))
+    if document.external_reference:
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(f"<font color='#657585'>Supplier reference</font> <b>{_text(document.external_reference)}</b>", body))
     if document.due_date:
         story.append(Spacer(1, 1.5 * mm))
         story.append(Paragraph(f"<font color='#657585'>Due date</font> <b>{_text(document.due_date.strftime('%d %b %Y'))}</b>", body))
@@ -249,10 +255,46 @@ def render_receipt_pdf(document, format_name="a4"):
     story.append(line_table)
     story.append(Spacer(1, 4 * mm))
 
-    outstanding = balance(document) if document.kind in ("sale", "purchase") else None
+    if document.kind == "supplier_payment" and document.allocations.exists():
+        story.append(Paragraph("<b>APPLIED TO</b>", small))
+        story.append(Spacer(1, 1.5 * mm))
+        allocation_rows = [[
+            Paragraph("<b>BILL</b>", small),
+            Paragraph("<b>SUPPLIER REF.</b>", small),
+            Paragraph("<b>AMOUNT</b>", right_style),
+        ]]
+        for allocation in document.allocations.select_related("invoice").all():
+            invoice = allocation.invoice
+            allocation_rows.append([
+                Paragraph(_text(invoice.reference), small),
+                Paragraph(_text(invoice.external_reference or "—"), small),
+                Paragraph(_money(company, allocation.amount), right_style),
+            ])
+        allocation_table = Table(
+            allocation_rows,
+            colWidths=[page_width * .38, page_width * .34, page_width * .28],
+            repeatRows=1,
+        )
+        allocation_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), SOFT),
+            ("LINEBELOW", (0, 0), (-1, -1), .25, LINE),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2 if thermal else 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2 if thermal else 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(allocation_table)
+        story.append(Spacer(1, 4 * mm))
+
+    outstanding = balance(document) if document.kind in ("sale", "purchase", "creditor_charge") else None
     totals = []
     if document.kind == "inventory_writeoff":
         totals.append(["Inventory loss value", _money(company, document.total)])
+    elif document.kind == "creditor_charge":
+        totals.append(["BILL TOTAL", _money(company, document.total)])
+    elif document.kind == "supplier_payment":
+        totals.append(["PAYMENT TOTAL", _money(company, document.total)])
     else:
         totals.append(["TOTAL", _money(company, document.total)])
         totals.append(["Paid / refunded at posting", _money(company, document.paid)])

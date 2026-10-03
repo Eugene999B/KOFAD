@@ -19,6 +19,7 @@ FAMILIES = {
     "trend": "Sales, cost & operating trend",
     "sales": "Sales and gross profit",
     "customers": "Customer performance",
+    "creditors": "Creditors & payable aging",
     "expenses": "Expense analysis",
     "payments": "Payments & cash channels",
     "inventory": "Inventory valuation",
@@ -57,6 +58,14 @@ def _period_metrics(branch, first, last):
         cogs += -amount if line.document.kind == "return" else amount
     gross_profit = net_sales - cogs
     expenses = _sum(docs.filter(kind="expense")) - _sum(docs.filter(kind="reversal", original__kind="expense"))
+    payable_expense_categories = {
+        "transport", "fuel", "utilities", "rent", "maintenance",
+        "professional", "tax", "staff", "other",
+    }
+    expenses += _sum(Document.objects.filter(
+        branch=branch, kind="creditor_charge", document_date__range=(first, last),
+        payable_category__in=payable_expense_categories,
+    ).exclude(correction__status="approved"))
     losses = _sum(docs.filter(kind="inventory_writeoff"))
     payroll = PayrollEntry.objects.filter(
         period__branch=branch, period__end_date__range=(first, last),
@@ -210,6 +219,31 @@ def build_report(branch, first, last, family="register", query="", category="", 
             ("average", "Average sale"), ("outstanding", "Current outstanding"),
         ]
 
+    if family == "creditors":
+        from . import creditors as creditor_service
+        overview = creditor_service.creditors_overview(branch, query, include_settled=True)
+        rows = [{
+            "creditor": row["party"].name,
+            "phone": row["party"].phone,
+            "outstanding": row["outstanding"],
+            "overdue": row["overdue"],
+            "due_7": row["due_7_days"],
+            "open_bills": row["bill_count"],
+            "next_due": row["next_due"] or "",
+            "max_days": row["maximum_days_overdue"],
+            "purchases": row["total_purchases"],
+            "direct": row["total_direct"],
+            "payments": row["total_paid"],
+        } for row in overview["rows"] if row["total_billed"] > 0]
+        return rows, [
+            ("creditor", "Creditor / supplier"), ("phone", "Phone"),
+            ("outstanding", "Outstanding"), ("overdue", "Overdue"),
+            ("due_7", "Due next 7 days"), ("open_bills", "Open bills"),
+            ("next_due", "Next due date"), ("max_days", "Max days overdue"),
+            ("purchases", "Purchase value"), ("direct", "Direct bills"),
+            ("payments", "Supplier payments"),
+        ]
+
     if family == "expenses":
         expense_docs = docs.filter(kind="expense").select_related("created_by").prefetch_related("payments")
         if category:
@@ -226,6 +260,26 @@ def build_report(branch, first, last, family="register", query="", category="", 
                 "method": payment.get_method_display() if payment else "",
                 "staff": doc.created_by.username,
             })
+        payable_expense_categories = {
+            "transport", "fuel", "utilities", "rent", "maintenance",
+            "professional", "tax", "staff", "other",
+        }
+        creditor_expenses = Document.objects.filter(
+            branch=branch, kind="creditor_charge", document_date__range=(first, last),
+            payable_category__in=payable_expense_categories,
+        ).exclude(correction__status="approved").select_related("created_by", "party")
+        if category:
+            creditor_category = "staff" if category == "salary" else category
+            creditor_expenses = creditor_expenses.filter(payable_category=creditor_category)
+        if not method:
+            for doc in limited(creditor_expenses, 20000):
+                rows.append({
+                    "date": str(doc.document_date), "reference": doc.reference,
+                    "category": (doc.payable_category or "other").replace("_", " ").title(),
+                    "description": doc.note, "amount": doc.total,
+                    "method": "Accounts payable", "staff": doc.created_by.username,
+                })
+        rows.sort(key=lambda row: row["date"], reverse=True)
         rows = _match(rows, query)
         return rows, [
             ("date", "Date"), ("reference", "Reference"), ("category", "Category"),
@@ -385,7 +439,7 @@ def branch_comparison(user, first, last):
         metrics = _period_metrics(branch, first, last)
         stock = sum((row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")), ZERO)
         receivables = sum((max(ZERO, balance(doc)) for doc in Document.objects.filter(branch=branch, kind="sale", party__isnull=False)), ZERO)
-        payables = sum((max(ZERO, balance(doc)) for doc in Document.objects.filter(branch=branch, kind="purchase", party__isnull=False)), ZERO)
+        payables = sum((max(ZERO, balance(doc)) for doc in Document.objects.filter(branch=branch, kind__in=["purchase", "creditor_charge"], party__isnull=False)), ZERO)
         rows.append({
             "branch": branch.name, "sales": metrics["net_sales"], "cost": metrics["cogs"],
             "profit": metrics["gross_profit"], "expenses": metrics["expenses"],

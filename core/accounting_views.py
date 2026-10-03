@@ -73,6 +73,19 @@ def accounting_snapshot(branch, first, last, category="", method=""):
     if category:
         reversals = reversals.filter(original__expense_category=category)
     expenses -= _sum(reversals)
+    payable_expense_categories = {
+        "transport", "fuel", "utilities", "rent", "maintenance",
+        "professional", "tax", "staff", "other",
+    }
+    creditor_expenses = Document.objects.filter(
+        branch=branch, kind="creditor_charge",
+        document_date__range=(first, last),
+        payable_category__in=payable_expense_categories,
+    ).exclude(correction__status="approved")
+    if category:
+        creditor_category = "staff" if category == "salary" else category
+        creditor_expenses = creditor_expenses.filter(payable_category=creditor_category)
+    expenses += _sum(creditor_expenses)
     inventory_losses = _sum(docs.filter(kind="inventory_writeoff"))
 
     payroll_entries = PayrollEntry.objects.filter(
@@ -93,7 +106,7 @@ def accounting_snapshot(branch, first, last, category="", method=""):
     for doc in Document.objects.filter(branch=branch, kind="sale", party__isnull=False):
         current_receivables += max(ZERO, balance(doc))
     current_payables = ZERO
-    for doc in Document.objects.filter(branch=branch, kind="purchase", party__isnull=False):
+    for doc in Document.objects.filter(branch=branch, kind__in=["purchase", "creditor_charge"], party__isnull=False):
         current_payables += max(ZERO, balance(doc))
     stock_value = sum((row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")), ZERO)
 
@@ -126,6 +139,12 @@ def accounting_snapshot(branch, first, last, category="", method=""):
         expense_breakdown[row.expense_category or "other"] += row.total
     for row in docs.filter(kind="reversal", original__kind="expense").select_related("original"):
         expense_breakdown[row.original.expense_category or "other"] -= row.total
+    for row in Document.objects.filter(
+        branch=branch, kind="creditor_charge",
+        document_date__range=(first, last),
+        payable_category__in=payable_expense_categories,
+    ).exclude(correction__status="approved"):
+        expense_breakdown[row.payable_category or "other"] += row.total
     expense_rows = [
         {"code": code, "category": CATEGORY_LABELS.get(code, code.replace("_", " ").title()), "amount": amount}
         for code, amount in sorted(expense_breakdown.items(), key=lambda item: item[1], reverse=True)
@@ -140,6 +159,11 @@ def accounting_snapshot(branch, first, last, category="", method=""):
         month_docs = Document.objects.filter(branch=branch, created_at__date__range=(month_first, month_last))
         month_sales = _sum(month_docs.filter(kind="sale")) - _sum(month_docs.filter(kind="return"))
         month_expense = _sum(month_docs.filter(kind="expense")) - _sum(month_docs.filter(kind="reversal", original__kind="expense"))
+        month_expense += _sum(Document.objects.filter(
+            branch=branch, kind="creditor_charge",
+            document_date__range=(month_first, month_last),
+            payable_category__in=payable_expense_categories,
+        ).exclude(correction__status="approved"))
         month_payroll = PayrollEntry.objects.filter(
             period__branch=branch, period__end_date__range=(month_first, month_last),
             period__status__in=["locked", "reconciled"],
