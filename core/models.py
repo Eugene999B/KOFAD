@@ -642,8 +642,8 @@ class Worker(models.Model):
     class Meta:
         ordering = ["last_name", "first_name", "employee_code"]
         indexes = [
-            models.Index(fields=["branch", "status", "department"]),
-            models.Index(fields=["employee_code"]),
+            models.Index(fields=["branch", "status", "department"], name="worker_branch_status_idx"),
+            models.Index(fields=["employee_code"], name="worker_employee_code_idx"),
         ]
         constraints = [
             models.CheckConstraint(condition=Q(base_salary__gte=0) & Q(recurring_allowance__gte=0), name="worker_compensation_nonnegative"),
@@ -682,7 +682,7 @@ class WorkerDocument(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["worker", "category", "is_current"])]
+        indexes = [models.Index(fields=["worker", "category", "is_current"], name="worker_doc_current_idx")]
 
 
 class PayrollRule(models.Model):
@@ -740,7 +740,7 @@ class PayrollPeriod(models.Model):
     class Meta:
         ordering = ["-year", "-month", "-pk"]
         constraints = [models.UniqueConstraint(fields=["branch", "year", "month"], name="one_payroll_period_per_branch_month")]
-        indexes = [models.Index(fields=["branch", "year", "month", "status"])]
+        indexes = [models.Index(fields=["branch", "year", "month", "status"], name="payroll_period_lookup_idx")]
 
     @property
     def label(self):
