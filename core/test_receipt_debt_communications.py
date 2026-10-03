@@ -95,8 +95,6 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
             "category": "Drinks",
             "base_unit": "bottle",
             "pack_enabled": "no",
-            "pack_name": "carton",
-            "pack_size": "24",
             "opening_packs": "6",
             "opening_units": "7",
             "cost": "10.00",
