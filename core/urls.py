@@ -5,7 +5,7 @@ from . import count_views
 from . import admin_views
 from . import export_views
 from . import maintenance_views
-from . import accounting_views, approval_views, creditor_views, payroll_views, workforce_views
+from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
@@ -19,6 +19,7 @@ urlpatterns = [
     path("stock-counts/<uuid:pk>/", count_views.detail, name="stock_count"),
     path("sms/callback/<uuid:attempt_id>/", callback, name="sms_callback"),
     path("sms/delivery/", v_sms_delivery_callback, name="sms_delivery_callback"),
+    path("whatsapp/webhook/", whatsapp_views.webhook, name="whatsapp_webhook"),
     path("message-templates/", v.message_templates, name="message_templates"),
     path("account/password/", v.password_change, name="password_change"),
     path("search/", v.search, name="search"),
