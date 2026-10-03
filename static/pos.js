@@ -18,6 +18,7 @@
   let completed = false;
   let selectedCustomer = null;
   let newCustomerMode = false;
+  let splitPaymentMode = false;
   let restoredState = null;
   let hydrating = true;
 
@@ -56,6 +57,10 @@
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
   const paymentErrorBox = document.querySelector("#payment-error");
+  const walkInCustomerButton = document.querySelector("#walk-in-customer");
+  const splitPaymentToggle = document.querySelector("#split-payment-toggle");
+  const splitPaymentFields = document.querySelector("#payment-split-fields");
+  const quickPaymentMethods = document.querySelector(".quick-payment-methods");
 
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
@@ -522,7 +527,7 @@
     if (customerConsent) customerConsent.checked = Boolean(customer.consent);
     changed();
     persist();
-    if (cart.length) requestAnimationFrame(openPayment);
+    if (cart.length && !paymentDialog?.open) requestAnimationFrame(openPayment);
   }
 
   function clearCustomer() {
@@ -536,6 +541,9 @@
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
     if (customerConsent) customerConsent.checked = false;
+    if (customerSearch) customerSearch.value = "";
+    if (customerName) customerName.value = "";
+    if (customerPhone) customerPhone.value = "";
     changed();
     persist();
   }
@@ -588,21 +596,63 @@
     changed();
     persist();
   });
+  walkInCustomerButton?.addEventListener("click", () => {
+    clearCustomer();
+    walkInCustomerButton.classList.add("active");
+    customerSearch?.focus();
+  });
+
+  function setFullPayment(method) {
+    changed();
+    splitPaymentMode = false;
+    if (paymentPlan) paymentPlan.value = "full";
+    paymentMethods.forEach(code => {
+      const input = document.querySelector("#pay-" + code);
+      if (input) {
+        input.disabled = false;
+        input.value = code === method ? formatted(total()) : "0";
+      }
+    });
+    document.querySelectorAll(".quick-pay").forEach(button => {
+      button.classList.toggle("active", button.dataset.paymentMethod === method);
+    });
+    applyPaymentPlan();
+    persist();
+  }
+
+  document.querySelectorAll(".quick-pay").forEach(button => {
+    button.addEventListener("click", () => setFullPayment(button.dataset.paymentMethod));
+  });
+  splitPaymentToggle?.addEventListener("click", () => {
+    changed();
+    splitPaymentMode = !splitPaymentMode;
+    applyPaymentPlan();
+  });
 
   function applyPaymentPlan() {
-    if (purchase || !paymentPlan) return;
-    const plan = paymentPlan.value;
     const inputs = paymentMethods.map(method => document.querySelector("#pay-" + method)).filter(Boolean);
+    const plan = purchase ? "full" : (paymentPlan?.value || "full");
     if (plan === "credit") {
       inputs.forEach(input => {
         input.value = "0";
         input.disabled = true;
       });
       creditFields?.classList.remove("hidden");
+      quickPaymentMethods?.classList.add("hidden");
+      splitPaymentFields?.classList.add("hidden");
+    } else if (plan === "part") {
+      inputs.forEach(input => input.disabled = false);
+      creditFields?.classList.remove("hidden");
+      quickPaymentMethods?.classList.add("hidden");
+      splitPaymentFields?.classList.remove("hidden");
+      splitPaymentMode = true;
     } else {
       inputs.forEach(input => input.disabled = false);
-      creditFields?.classList.toggle("hidden", plan === "full");
-      if (plan === "full" && dueDate) dueDate.value = "";
+      creditFields?.classList.add("hidden");
+      if (dueDate) dueDate.value = "";
+      quickPaymentMethods?.classList.remove("hidden");
+      splitPaymentFields?.classList.toggle("hidden", !splitPaymentMode);
+      if (splitPaymentToggle) splitPaymentToggle.textContent = splitPaymentMode ? "Use one payment" : "Split payment";
     }
     persist();
   }
@@ -615,9 +665,14 @@
     clearError();
     if (!cart.length) return fail("Add a product first.");
     if (!paymentDialog) return;
-    if (typeof paymentDialog.showModal === "function") paymentDialog.showModal();
-    else paymentDialog.setAttribute("open", "");
-    requestAnimationFrame(() => paymentPlan?.focus());
+    if (!paymentDialog.open) {
+      if (typeof paymentDialog.showModal === "function") paymentDialog.showModal();
+      else paymentDialog.setAttribute("open", "");
+    }
+    requestAnimationFrame(() => {
+      if (!purchase && !selectedCustomer && !newCustomerMode) customerSearch?.focus();
+      else document.querySelector(".quick-pay")?.focus();
+    });
   }
   function closePayment() {
     if (!paymentDialog?.open) return;
@@ -665,21 +720,6 @@
     }
   });
 
-  document.querySelector("#exact-cash")?.addEventListener("click", () => {
-    changed();
-    if (paymentPlan) paymentPlan.value = "full";
-    paymentMethods.filter(method => method !== "cash").forEach(method => {
-      const input = document.querySelector("#pay-" + method);
-      if (input) input.value = "0";
-    });
-    const cash = document.querySelector("#pay-cash");
-    if (cash) {
-      cash.disabled = false;
-      cash.value = formatted(total());
-    }
-    applyPaymentPlan();
-  });
-
   document.querySelector("#checkout").addEventListener("change", () => {
     changed();
     persist();
@@ -712,14 +752,23 @@
     if (!purchase) {
       if (!party) {
         newName = customerName?.value.trim() || "";
-        if (!newCustomerMode && !newName) throw new Error("Choose a returning customer or enter a new customer.");
-        if (newName.length < 2) throw new Error("Enter the new customer's name.");
-        newPhone = normalizeGhanaPhone(customerPhone?.value || "");
+        const rawPhone = customerPhone?.value.trim() || "";
+        const wantsCustomer = newCustomerMode || Boolean(newName || rawPhone);
+        if (wantsCustomer) {
+          if (newName.length < 2) throw new Error("Enter the new customer's name.");
+          newPhone = normalizeGhanaPhone(rawPhone);
+        }
       }
       const plan = paymentPlan?.value || "full";
       if (!allowCredit && plan !== "full") throw new Error("Credit sales are disabled by company policy.");
+      if ((plan === "part" || plan === "credit") && !party && !newName) {
+        throw new Error("Choose or create a customer for a sale with an unpaid balance.");
+      }
+      if (customerConsent?.checked && !party && !newName) {
+        throw new Error("Choose or create a customer before enabling an SMS receipt.");
+      }
       if (plan === "full" && paidNow !== grandTotal) {
-        throw new Error("For “Paid in full”, the channel split must exactly equal the sale total.");
+        throw new Error("Choose a payment channel or enter a split that exactly equals the sale total.");
       }
       if (plan === "part" && !(paidNow > 0 && paidNow < grandTotal)) {
         throw new Error("Part payment must be greater than zero and less than the sale total.");
