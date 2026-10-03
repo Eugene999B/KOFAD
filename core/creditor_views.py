@@ -56,6 +56,20 @@ def _apply_creditor_filters(rows, status, due_from=None, due_to=None):
     return rows
 
 
+def _summary_for_rows(overview, rows):
+    display = dict(overview)
+    display["total_payables"] = sum((row["outstanding"] for row in rows), Decimal("0"))
+    display["overdue"] = sum((row["overdue"] for row in rows), Decimal("0"))
+    display["due_7_days"] = sum((row["due_7_days"] for row in rows), Decimal("0"))
+    display["creditors_owing"] = sum(1 for row in rows if row["outstanding"] > 0)
+    display["overdue_creditors"] = sum(1 for row in rows if row["overdue"] > 0)
+    display["aging"] = {
+        key: sum((row["aging"][key] for row in rows), Decimal("0"))
+        for key in ("current", "days_1_30", "days_31_60", "days_61_90", "days_90_plus")
+    }
+    return display
+
+
 @protected("operate_inventory|operate_finance|view_reports")
 def supplier_search(request, branch):
     query = request.GET.get("q", "").strip()[:100]
@@ -112,6 +126,7 @@ def creditors(request, branch):
     due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
     overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
     rows = _apply_creditor_filters(overview["rows"], status, due_from, due_to)
+    overview = _summary_for_rows(overview, rows)
 
     selected = None
     selected_id = request.GET.get("creditor", "") or request.POST.get("party", "")
@@ -157,6 +172,7 @@ def creditors_export(request, branch, format):
     due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
     overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
     rows = _apply_creditor_filters(overview["rows"], status, due_from, due_to)
+    overview = _summary_for_rows(overview, rows)
 
     data = [{
         "creditor": row["party"].name,
