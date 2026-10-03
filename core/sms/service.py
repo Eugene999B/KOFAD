@@ -185,7 +185,11 @@ def queue_automatic(message, actor=None):
     if not queued_by:
         raise ValidationError("No active system administrator is available to authorize automatic SMS.")
     provider = message.provider or settings.SMS_PROVIDER
-    validate_config(provider)
+    try:
+        validate_config(provider)
+    except ValidationError:
+        audit(actor, message.branch, "sms.automatic_waiting_for_provider", message.pk, {"provider": provider})
+        return message
     message.provider = provider
     message.sender = message.sender or settings.SMS_SENDER_ID
     message.sandbox = settings.SMS_SANDBOX
