@@ -58,6 +58,14 @@ def _period_metrics(branch, first, last):
         cogs += -amount if line.document.kind == "return" else amount
     gross_profit = net_sales - cogs
     expenses = _sum(docs.filter(kind="expense")) - _sum(docs.filter(kind="reversal", original__kind="expense"))
+    payable_expense_categories = {
+        "transport", "fuel", "utilities", "rent", "maintenance",
+        "professional", "tax", "staff", "other",
+    }
+    expenses += _sum(Document.objects.filter(
+        branch=branch, kind="creditor_charge", document_date__range=(first, last),
+        payable_category__in=payable_expense_categories,
+    ).exclude(correction__status="approved"))
     losses = _sum(docs.filter(kind="inventory_writeoff"))
     payroll = PayrollEntry.objects.filter(
         period__branch=branch, period__end_date__range=(first, last),
