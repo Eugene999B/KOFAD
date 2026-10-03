@@ -17,6 +17,7 @@ from .models import Audit, Closing, Document, Movement, Operation, Party, Produc
 DATASETS = {
     "customers": ("Customers", ("operate_sales", "operate_finance", "view_reports")),
     "debts": ("Customer debt summary", ("operate_sales", "operate_finance", "view_reports")),
+    "creditors": ("Creditors & accounts payable", ("operate_finance", "view_reports")),
     "suppliers": ("Suppliers", ("operate_inventory", "operate_finance", "view_reports")),
     "inventory": ("Inventory & stock", ("operate_inventory", "view_reports")),
     "sales": ("Sales transactions", ("operate_sales", "view_reports")),
@@ -107,6 +108,32 @@ def _rows(request, dataset, branch, first, last):
             ("debt_payments", "Debt payments received"),
         ]
 
+    if dataset == "creditors":
+        from . import creditors as creditor_service
+        overview = creditor_service.creditors_overview(branch, include_settled=True)
+        rows = [{
+            "creditor": row["party"].name,
+            "phone": row["party"].phone,
+            "email": row["party"].email,
+            "outstanding": row["outstanding"],
+            "overdue": row["overdue"],
+            "due_7": row["due_7_days"],
+            "open_bills": row["bill_count"],
+            "next_due": row["next_due"] or "",
+            "max_days_overdue": row["maximum_days_overdue"],
+            "purchases": row["total_purchases"],
+            "direct_bills": row["total_direct"],
+            "payments": row["total_paid"],
+        } for row in overview["rows"]]
+        return rows, [
+            ("creditor", "Creditor / supplier"), ("phone", "Phone"), ("email", "Email"),
+            ("outstanding", "Outstanding"), ("overdue", "Overdue"),
+            ("due_7", "Due next 7 days"), ("open_bills", "Open bills"),
+            ("next_due", "Next due"), ("max_days_overdue", "Max days overdue"),
+            ("purchases", "Purchase value"), ("direct_bills", "Direct bills"),
+            ("payments", "Supplier payments"),
+        ]
+
     if dataset == "inventory":
         balances = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
         quarantine = dict(QuarantineItem.objects.filter(branch=branch, status="held").values(
@@ -161,11 +188,14 @@ def _rows(request, dataset, branch, first, last):
             "staff": doc.created_by.username,
             "total": doc.total,
             "paid": doc.paid,
-            "balance": s.balance(doc) if doc.kind in ("sale", "purchase") else Decimal("0"),
+            "business_date": doc.document_date or doc.created_at.date(),
+            "supplier_reference": doc.external_reference,
+            "balance": s.balance(doc) if doc.kind in ("sale", "purchase", "creditor_charge") else Decimal("0"),
             "note": doc.note,
         } for doc in docs]
         return rows, [
-            ("reference", "Reference"), ("date", "Date"), ("type", "Type"), ("contact", "Contact"),
+            ("reference", "Reference"), ("date", "Entered at"), ("business_date", "Business date"),
+            ("type", "Type"), ("contact", "Contact"), ("supplier_reference", "Supplier reference"),
             ("staff", "Staff"), ("total", "Total"), ("paid", "Paid at posting"), ("balance", "Outstanding"),
             ("note", "Note"),
         ]
@@ -457,7 +487,7 @@ def download(request, format):
         s.audit(request.user, branch, "export.downloaded", dataset, {
             "format": format, "start": start, "end": end, "rows": len(rows),
         })
-        date_suffix = "" if dataset in {"customers", "suppliers", "inventory", "staff", "workers"} else f" · {start} to {end}"
+        date_suffix = "" if dataset in {"customers", "suppliers", "creditors", "inventory", "staff", "workers"} else f" · {start} to {end}"
         company = shell(request)["company"]
         return export(
             rows, format, f"{label}{date_suffix}", company, columns,
