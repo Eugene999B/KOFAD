@@ -160,16 +160,20 @@ def _due_soon_match(snapshot, policy, today):
     return False
 
 
-def _debt_eligible(snapshot, policy, today):
+def _debt_stage(snapshot, policy, today):
     if snapshot["outstanding"] < policy.minimum_balance:
-        return False
+        return None
     if policy.overdue_enabled and snapshot["overdue"] > 0:
-        return True
+        return "overdue"
     if policy.due_today_enabled and snapshot["due_today"] > 0:
-        return True
+        return "due_today"
     if policy.due_soon_enabled and _due_soon_match(snapshot, policy, today):
-        return True
-    return False
+        return "due_soon"
+    return None
+
+
+def _debt_eligible(snapshot, policy, today):
+    return _debt_stage(snapshot, policy, today) is not None
 
 
 def render_debt_account_message(party, today=None):
@@ -198,11 +202,13 @@ def _debt_frequency_allows(branch, party, policy, now, snapshot):
         source_key__startswith=f"auto:debt:{party.pk}:",
     ).order_by("-created_at")
     last = history.first()
-    if last:
-        minimum = timedelta(hours=policy.minimum_hours_between_sms)
-        if now - last.created_at < minimum:
-            return False
-        if snapshot["overdue"] > 0 and now - last.created_at < timedelta(days=policy.overdue_repeat_days):
+    if last and now - last.created_at < timedelta(hours=policy.minimum_hours_between_sms):
+        return False
+    if snapshot["overdue"] > 0:
+        last_overdue = history.filter(
+            source_key__startswith=f"auto:debt:{party.pk}:overdue:"
+        ).first()
+        if last_overdue and now - last_overdue.created_at < timedelta(days=policy.overdue_repeat_days):
             return False
     if history.filter(created_at__gte=now - timedelta(days=7)).count() >= policy.max_sms_7_days:
         return False
@@ -234,9 +240,10 @@ def run_debt_reminders(now=None):
             if not _debt_frequency_allows(branch, party, policy, now, snapshot):
                 continue
             body = render_debt_account_message(party, today)
-            if not body:
+            stage = _debt_stage(snapshot, policy, today)
+            if not body or not stage:
                 continue
-            source_key = f"auto:debt:{party.pk}:{today.isoformat()}"
+            source_key = f"auto:debt:{party.pk}:{stage}:{today.isoformat()}"
             message = create_automatic_customer_draft(actor, branch, party, body, source_key=source_key)
             _apply_mode(message, policy.delivery_mode, actor)
             created += 1
