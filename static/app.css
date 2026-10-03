@@ -1019,3 +1019,118 @@ html[data-theme="dark"] .trend svg rect{fill:#c9825f}
   .chalin-payment-card .payment-method-picker{gap:8px}
   .chalin-submit-hint{font-size:10px}
 }
+
+
+/* Coverage for workspaces that previously kept the older blue/teal visual language. */
+.inventory-hero,.sale-command-bar,.transaction-message-card,.debt-balance-card,.inventory-toolbar-panel{
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:#fff;
+  box-shadow:var(--kofad-shadow);
+}
+.inventory-hero{padding:22px 24px}
+.inventory-hero h2,.sale-command-bar h2{font-size:21px}
+.inventory-hero p,.sale-command-bar p{font-size:12px;color:var(--muted)}
+.sale-command-bar{padding:18px 20px}
+.sale-command-badges{gap:7px}
+.transaction-message-card{padding:20px 21px}
+.transaction-message-preview{background:#faf8f5;border-color:#e6e1dc;border-radius:12px;font-size:12px}
+.debt-balance-card{background:#faf8f5}
+.debt-toolbar,.inventory-toolbar-panel{border-color:var(--line)}
+
+.search-result-card{
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#fff;
+  box-shadow:var(--kofad-shadow);
+  transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+.search-result-card:hover{transform:translateY(-1px);border-color:#d1cbc4;box-shadow:var(--kofad-shadow-hover)}
+.search-result-symbol{border-radius:12px;background:var(--kofad-accent-soft);color:#95593b}
+.search-result-identity strong{font-size:14px}.search-result-identity small{font-size:11px;color:var(--muted)}
+.catalog-status{color:var(--muted)}
+.catalog-status h3{font-size:18px;color:var(--ink)}
+.catalog-status p{font-size:12px}
+.catalog-empty-icon{background:#f1ece7;color:#95593b;border-radius:16px}
+
+.customer-results,.counter-customer-results{
+  border-color:var(--line);
+  background:#fff;
+  border-radius:13px;
+  box-shadow:0 16px 42px rgba(29,29,31,.1);
+}
+.customer-result{font-size:13px}
+.customer-result:hover{background:#f7f4f1}
+.selected-customer{border-radius:12px;background:#f5f1ed;border-color:#dfd8d1}
+
+.kofad-dialog,.debt-payment-dialog-inner{
+  border:1px solid #ded9d3;
+  border-radius:24px;
+  background:#fff;
+  color:var(--ink);
+  box-shadow:0 30px 90px rgba(22,20,19,.2);
+}
+.kofad-dialog::backdrop,.debt-payment-dialog::backdrop{background:rgba(15,14,13,.5);backdrop-filter:blur(5px)}
+.dialog-heading,.debt-dialog-heading{border-color:var(--line)}
+.dialog-heading h2,.debt-dialog-heading h2{font-size:21px}
+.dialog-actions{border-color:var(--line)}
+
+.communication-workspace,.policy-workspace{gap:18px}
+.communication-workspace .panel,.policy-workspace .panel{border-radius:18px}
+.command-rail{border-color:var(--line);background:#faf8f5}
+.command-rail a{border-radius:11px;font-size:12px}
+.command-rail a:hover{background:#f1ece7}
+
+.form-panel{max-width:960px}
+.form-grid{gap:0 28px}
+.form-actions{gap:10px}
+.permission-box{border-radius:16px;background:#faf9f7}
+.check-card,.permission-row,.switch-row{
+  border-radius:13px;
+  background:#fff;
+  padding:14px;
+}
+.check-card strong,.permission-row strong,.switch-row strong{font-size:13px}
+.check-card small,.permission-row small,.switch-row small{font-size:11px}
+.role-card{padding:22px}.role-card p{font-size:13px}
+.permission-tags span{font-size:10px;background:#f2efeb;color:#77716b}
+
+.debt-account-card{border-radius:14px}
+.debt-account-card:hover{background:#faf8f5}
+.debt-account-card strong{font-size:13px}
+.debt-account-card small{font-size:11px}
+.debt-search-form,.inventory-search{background:#faf9f7;border-color:var(--line);border-radius:13px}
+.debt-search-form input,.inventory-search input{font-size:13px}
+.debt-filter-row a,.inventory-filters a{font-size:11px;border-color:#ddd8d2;background:#fff}
+.debt-filter-row a.active,.inventory-filters a.active{background:#24211f;color:#fff;border-color:#24211f}
+
+html[data-theme="dark"] .inventory-hero,
+html[data-theme="dark"] .sale-command-bar,
+html[data-theme="dark"] .transaction-message-card,
+html[data-theme="dark"] .debt-balance-card,
+html[data-theme="dark"] .inventory-toolbar-panel,
+html[data-theme="dark"] .search-result-card,
+html[data-theme="dark"] .kofad-dialog,
+html[data-theme="dark"] .debt-payment-dialog-inner,
+html[data-theme="dark"] .customer-results,
+html[data-theme="dark"] .counter-customer-results,
+html[data-theme="dark"] .check-card,
+html[data-theme="dark"] .permission-row,
+html[data-theme="dark"] .switch-row{
+  background:#191817;
+  border-color:#302d2a;
+  color:var(--ink);
+}
+html[data-theme="dark"] .transaction-message-preview,
+html[data-theme="dark"] .selected-customer,
+html[data-theme="dark"] .command-rail,
+html[data-theme="dark"] .permission-box,
+html[data-theme="dark"] .debt-search-form,
+html[data-theme="dark"] .inventory-search{background:#201e1c;border-color:#35312d}
+html[data-theme="dark"] .customer-result:hover,html[data-theme="dark"] .debt-account-card:hover{background:#211f1d}
+html[data-theme="dark"] .debt-filter-row a,html[data-theme="dark"] .inventory-filters a{background:#191817;border-color:#3a3632;color:#aaa49d}
+html[data-theme="dark"] .debt-filter-row a.active,html[data-theme="dark"] .inventory-filters a.active{background:#f0ece7;color:#171615;border-color:#f0ece7}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
