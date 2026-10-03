@@ -821,7 +821,9 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
 def verify_closing(user, closing):
     permit(user, closing.branch, "approve_operations")
     closing = Closing.objects.select_for_update().get(pk=closing.pk)
-    if closing.submitted_by_id == user.pk or closing.verified_by_id:
+    if closing.verified_by_id:
+        raise ValidationError("This closing has already been verified.")
+    if closing.submitted_by_id == user.pk and not (user.is_superuser or user.has_perm("core.manage_company")):
         raise ValidationError("A different authorized colleague must verify an unverified closing.")
     closing.verified_by = user
     closing.save(update_fields=["verified_by"])
@@ -860,7 +862,7 @@ def review_correction(user, branch, correction_id, approve):
     item = Correction.objects.select_for_update(of=("self",)).select_related("original").get(pk=correction_id, original__branch=branch)
     if item.status != "requested":
         raise ValidationError("This request has already been reviewed.")
-    if item.requested_by_id == user.pk:
+    if item.requested_by_id == user.pk and not (user.is_superuser or user.has_perm("core.manage_company")):
         raise ValidationError("A different authorized colleague must review the correction.")
     original = item.original
     if approve:
