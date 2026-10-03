@@ -1,7 +1,8 @@
 """Business communication automations.
 
 Automatic modes never bypass consent for customers. Management recipients are internal
-contacts configured by an owner. Source keys make every scheduled/event message idempotent.
+contacts configured by an owner. Live "send" mode submits to Arkesel immediately; source
+keys keep every scheduled/event message idempotent.
 """
 import re
 from datetime import timedelta
@@ -62,7 +63,7 @@ def _render(body, data):
 
 
 def _apply_mode(message, mode, actor=None):
-    if message and mode == "queue":
+    if message and mode in {"send", "queue"}:  # queue kept only for legacy rows during rollout
         queue_automatic(message, actor)
     return message
 
