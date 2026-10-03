@@ -424,6 +424,29 @@ class CreditorsTests(Fixtures, TestCase):
         self.assertEqual(snapshot["bill_rows"][0]["source"], "Purchase")
         self.assertEqual(s.party_debt(self.supplier), Decimal("60"))
 
+    def test_backdated_supplier_invoice_can_enter_as_already_overdue(self):
+        from . import creditors as creditor_service
+        invoice_date = timezone.localdate() - timedelta(days=45)
+        due_date = timezone.localdate() - timedelta(days=15)
+        purchase = s.post_trade(
+            self.user, self.branch,
+            {
+                "party": self.supplier.pk,
+                "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1, "price": "55"}],
+                "payments": [],
+                "document_date": invoice_date.isoformat(),
+                "due_date": due_date.isoformat(),
+                "external_reference": "HIST-55",
+                "note": "Historical unpaid stock invoice",
+            },
+            uuid.uuid4(), "purchase",
+        )
+        snapshot = creditor_service.supplier_account_snapshot(self.supplier)
+        self.assertEqual(purchase.document_date, invoice_date)
+        self.assertEqual(purchase.due_date, due_date)
+        self.assertEqual(snapshot["overdue"], Decimal("55"))
+        self.assertEqual(snapshot["maximum_days_overdue"], 15)
+
     def test_direct_creditor_bill_creates_liability_without_stock_movement(self):
         from . import creditors as creditor_service
         before = Stock.objects.get(branch=self.branch, product=self.product).quantity
