@@ -346,8 +346,10 @@ def statements(branch, first, last):
         cash_flow[bucket] += movement
     cash_flow["net_change"] = sum(cash_flow.values(), ZERO)
 
-    inventory_control = None
+    subledger_controls = None
     if last == timezone.localdate():
+        from . import creditors as creditor_service
+
         operational_sellable = sum(
             (row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")),
             ZERO,
@@ -356,17 +358,38 @@ def statements(branch, first, last):
             (row.quantity * row.unit_cost for row in QuarantineItem.objects.filter(branch=branch, status="held")),
             ZERO,
         )
-        ledger_inventory = ZERO
-        for row in cumulative_tb:
-            if row["code"] in {"1200", "1210"}:
-                ledger_inventory += row["debit"] - row["credit"]
         operational_inventory = operational_sellable + operational_quarantine
-        inventory_control = {
-            "operational": operational_inventory,
-            "ledger": ledger_inventory,
-            "difference": operational_inventory - ledger_inventory,
-            "sellable": operational_sellable,
-            "quarantine": operational_quarantine,
+        operational_receivables = sum(
+            (max(ZERO, s.balance(doc)) for doc in Document.objects.filter(branch=branch, kind="sale")),
+            ZERO,
+        )
+        operational_payables = creditor_service.creditors_overview(
+            branch, include_settled=False
+        )["total_payables"]
+
+        ledger_by_code = {row["code"]: row["debit"] - row["credit"] for row in cumulative_tb}
+        ledger_inventory = ledger_by_code.get("1200", ZERO) + ledger_by_code.get("1210", ZERO)
+        ledger_receivables = ledger_by_code.get("1100", ZERO)
+        ledger_payables = -ledger_by_code.get("2000", ZERO)
+
+        subledger_controls = {
+            "inventory": {
+                "operational": operational_inventory,
+                "ledger": ledger_inventory,
+                "difference": operational_inventory - ledger_inventory,
+                "sellable": operational_sellable,
+                "quarantine": operational_quarantine,
+            },
+            "receivables": {
+                "operational": operational_receivables,
+                "ledger": ledger_receivables,
+                "difference": operational_receivables - ledger_receivables,
+            },
+            "payables": {
+                "operational": operational_payables,
+                "ledger": ledger_payables,
+                "difference": operational_payables - ledger_payables,
+            },
         }
 
     return {
@@ -378,7 +401,8 @@ def statements(branch, first, last):
         "assets": assets, "liabilities": liabilities, "ledger_equity": ledger_equity,
         "equity": equity, "balance_check": assets - liabilities - equity,
         "cash_flow": cash_flow,
-        "inventory_control": inventory_control,
+        "subledger_controls": subledger_controls,
+        "inventory_control": subledger_controls["inventory"] if subledger_controls else None,
     }
 
 
