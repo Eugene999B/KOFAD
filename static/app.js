@@ -59,6 +59,42 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => ctx.close(), 750);
     } catch (_) {}
   }
+  const loginPassword = document.querySelector("[data-login-password]");
+  if (loginPassword && document.body.classList.contains("login-page")) {
+    let passwordEntryActive = false;
+    let passwordScrubber = null;
+    const guardPasswordUntilInteraction = () => {
+      passwordEntryActive = false;
+      loginPassword.value = "";
+      loginPassword.setAttribute("autocomplete", "new-password");
+      loginPassword.dataset.autofillState = "guarded";
+      if (passwordScrubber) clearInterval(passwordScrubber);
+      let checks = 0;
+      passwordScrubber = window.setInterval(() => {
+        checks += 1;
+        if (passwordEntryActive || document.activeElement === loginPassword || checks > 20) {
+          clearInterval(passwordScrubber);
+          passwordScrubber = null;
+          return;
+        }
+        if (loginPassword.value) loginPassword.value = "";
+      }, 100);
+    };
+    const allowPasswordEntry = () => {
+      if (passwordEntryActive) return;
+      passwordEntryActive = true;
+      loginPassword.setAttribute("autocomplete", "current-password");
+      loginPassword.dataset.autofillState = "interactive";
+      if (passwordScrubber) {
+        clearInterval(passwordScrubber);
+        passwordScrubber = null;
+      }
+    };
+    loginPassword.addEventListener("pointerdown", allowPasswordEntry);
+    loginPassword.addEventListener("focus", allowPasswordEntry);
+    guardPasswordUntilInteraction();
+    window.addEventListener("pageshow", guardPasswordUntilInteraction);
+  }
   const loginForm = document.querySelector(".login-card form");
   loginForm?.addEventListener("submit", () => {
     try { sessionStorage.setItem("kofad-welcome-after-login", "1"); } catch (_) {}
