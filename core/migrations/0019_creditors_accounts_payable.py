@@ -45,4 +45,12 @@ class Migration(migrations.Migration):
             model_name="document",
             index=models.Index(fields=["branch", "party", "external_reference"], name="supplier_invoice_ref_idx"),
         ),
+        migrations.AddConstraint(
+            model_name="document",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("kind__in", ["purchase", "creditor_charge"]), ~models.Q(("external_reference", ""))),
+                fields=("branch", "party", "external_reference"),
+                name="unique_supplier_payable_reference",
+            ),
+        ),
     ]
