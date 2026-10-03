@@ -8,7 +8,7 @@ from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from . import services as s
-from .models import Allocation, Document, Party
+from .models import Allocation, DebtSettings, Document, Party
 
 
 ZERO = Decimal("0.00")
@@ -30,18 +30,31 @@ def open_customer_invoices(party, for_update=False):
     return rows
 
 
-def _invoice_age(invoice, today):
+def debt_policy():
+    return DebtSettings.objects.first() or DebtSettings()
+
+
+def overdue_on(invoice, policy=None):
     if not invoice.due_date:
+        return None
+    policy = policy or debt_policy()
+    return invoice.due_date + timedelta(days=policy.overdue_grace_days)
+
+
+def _invoice_age(invoice, today, policy=None):
+    threshold = overdue_on(invoice, policy)
+    if not threshold or today <= threshold:
         return 0
-    return max((today - invoice.due_date).days, 0)
+    return (today - threshold).days
 
 
 def customer_account_snapshot(party):
     today = timezone.localdate()
+    policy = debt_policy()
     invoices = open_customer_invoices(party)
     outstanding = sum((amount for _, amount in invoices), ZERO)
     overdue = sum(
-        (amount for invoice, amount in invoices if invoice.due_date and invoice.due_date < today),
+        (amount for invoice, amount in invoices if overdue_on(invoice, policy) and today > overdue_on(invoice, policy)),
         ZERO,
     )
     due_today = sum(
@@ -63,7 +76,7 @@ def customer_account_snapshot(party):
     aging = {"current": ZERO, "days_1_30": ZERO, "days_31_60": ZERO, "days_61_plus": ZERO}
     maximum_days_overdue = 0
     for invoice, amount in invoices:
-        days_overdue = _invoice_age(invoice, today)
+        days_overdue = _invoice_age(invoice, today, policy)
         maximum_days_overdue = max(maximum_days_overdue, days_overdue)
         if days_overdue == 0:
             aging["current"] += amount
@@ -83,6 +96,7 @@ def customer_account_snapshot(party):
             "days_overdue": days_overdue,
             "status": status,
             "paid_so_far": invoice.total - amount,
+            "overdue_on": overdue_on(invoice, policy),
         })
 
     recent_payments = list(collections.select_related("created_by").order_by("-created_at")[:12])
@@ -112,6 +126,7 @@ def customer_account_snapshot(party):
         "aging": aging,
         "maximum_days_overdue": maximum_days_overdue,
         "next_due": next_due,
+        "overdue_grace_days": policy.overdue_grace_days,
         "credit_limit": credit_limit,
         "available_credit": available_credit,
         "credit_usage_percent": credit_usage_percent,
