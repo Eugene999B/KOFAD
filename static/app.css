@@ -400,6 +400,14 @@ html[data-theme="dark"] .debt-payment-dialog{background:#101d2a;border-color:var
 #pos .premium-cart>#cart{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;padding-right:5px;overscroll-behavior:contain}
 #pos .cart-total{flex:0 0 auto;margin-top:8px;padding:13px 12px}
 #pos .premium-cart>#checkout{flex:0 0 auto;min-height:auto}
+#pos .counter-customer-line{position:relative;flex:0 0 auto;margin-top:8px}
+#pos .counter-customer-line>#customer-search{min-height:40px;padding:9px 11px;font-size:11px}
+#pos .counter-customer-results{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;max-height:210px;overflow:auto;background:var(--white);border:1px solid var(--line);border-radius:10px;box-shadow:0 16px 36px #0718272b}
+#pos .counter-customer-results:empty{display:none}
+#pos .counter-customer-line>.selected-customer{margin:6px 0 0;padding:7px 9px;min-height:0}
+#pos .counter-customer-line>.selected-customer strong,#pos .counter-customer-line>.selected-customer small{display:inline}
+#pos .counter-customer-line>.selected-customer small{margin-left:6px}
+#pos .customer-sheet-hint{font-size:9px;color:var(--muted);margin:2px 0 7px}
 #pos .sale-checkout-bar{margin-top:8px;padding:10px 12px}
 #pos .sale-checkout-total strong{font-size:18px}
 #pos .sale-payment-open{min-height:44px}
