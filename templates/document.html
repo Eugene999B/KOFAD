@@ -14,7 +14,7 @@
 {% if transaction_message_preview %}
 <section class="transaction-message-card" aria-label="Customer transaction message">
 <div class="transaction-message-head">
-<div><p class="eyebrow">CUSTOMER MESSAGE</p><h2>{% if doc.kind == "collection" %}Payment confirmation ready{% else %}Receipt message ready{% endif %}</h2><p>To {{ doc.party.name }} · {{ doc.party.phone }}</p></div>
+<div><p class="eyebrow">CUSTOMER MESSAGE</p><h2>{% if doc.kind == "collection" %}Payment confirmation ready{% else %}Receipt message ready{% endif %}</h2><p>To {{ doc.party.name }}{% if company.receipt_show_contact_phone %} · {{ doc.party.phone }}{% endif %}</p></div>
 {% if transaction_message %}<span class="pill">{{ transaction_message.status|title }}</span>{% else %}<span class="pill">Ready</span>{% endif %}
 </div>
 <div class="transaction-message-preview">{{ transaction_message_preview }}</div>
