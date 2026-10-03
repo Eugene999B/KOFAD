@@ -329,8 +329,8 @@
       if (heading) heading.textContent = "No matching product";
       if (copy) copy.textContent = text || "Try another product name, SKU, barcode or category.";
     } else if (mode === "idle") {
-      if (heading) heading.textContent = "Find the first product";
-      if (copy) copy.textContent = "Nothing is listed until you search, keeping the counter fast and uncluttered.";
+      if (heading) heading.textContent = "Find a product";
+      if (copy) copy.textContent = "Search, choose the item, and it goes straight into the current sale.";
     }
   }
 
