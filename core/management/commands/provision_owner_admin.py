@@ -72,8 +72,8 @@ class Command(BaseCommand):
         access, _ = Access.objects.get_or_create(user=user)
         access.recovery_phone = canonical_phone
         if created:
-            access.must_change_password = True
-        access.save(update_fields=["recovery_phone", "must_change_password"])
+            access.force_password_change = True
+        access.save(update_fields=["recovery_phone", "force_password_change"])
         access.branches.set(Branch.objects.filter(active=True))
 
         audit(
@@ -85,7 +85,7 @@ class Command(BaseCommand):
                 "username": username,
                 "name": name,
                 "phone": canonical_phone,
-                "must_change_password": access.must_change_password,
+                "force_password_change": access.force_password_change,
             },
         )
         if created:
