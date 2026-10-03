@@ -1209,11 +1209,18 @@ def audit_log(request, branch):
         messages.error(request, "Choose valid audit dates.")
     rows = list(rows[:500])
     chain_ok = True
-    sealed = [row for row in reversed(rows) if row.event_hash]
-    for index, row in enumerate(sealed):
-        if index and row.previous_hash and row.previous_hash != sealed[index - 1].event_hash:
+    for row in rows:
+        if not row.event_hash:
+            row.integrity_ok = None
+            continue
+        digest_ok = s.audit_hash_for(row) == row.event_hash
+        predecessor_ok = (
+            not row.previous_hash
+            or Audit.objects.filter(branch=row.branch, event_hash=row.previous_hash).exists()
+        )
+        row.integrity_ok = digest_ok and predecessor_ok
+        if not row.integrity_ok:
             chain_ok = False
-            break
     categories = Audit.objects.filter(branch=branch).exclude(category="").values_list("category", flat=True).distinct()
     actors = User.objects.filter(audit__branch=branch).distinct().order_by("username")
     summary = {
