@@ -596,28 +596,103 @@
   });
   newCustomerToggle?.addEventListener("click", beginNewCustomer);
   clearCustomerButton?.addEventListener("click", clearCustomer);
+  function hasAttachedCustomer() {
+    return Boolean(
+      partyInput?.value ||
+      (newCustomerMode && customerName?.value.trim() && customerPhone?.value.trim())
+    );
+  }
+
+  function updateConsentAvailability() {
+    if (!customerConsent) return;
+    const available = hasAttachedCustomer();
+    customerConsent.disabled = !available;
+    if (!available) customerConsent.checked = false;
+  }
+
   customerConsent?.addEventListener("change", () => {
     changed();
     persist();
   });
+  customerName?.addEventListener("input", updateConsentAvailability);
+  customerPhone?.addEventListener("input", updateConsentAvailability);
 
-  function applyPaymentPlan() {
-    if (purchase || !paymentPlan) return;
-    const plan = paymentPlan.value;
-    const inputs = paymentMethods.map(method => document.querySelector("#pay-" + method)).filter(Boolean);
-    if (plan === "credit") {
-      inputs.forEach(input => {
-        input.value = "0";
-        input.disabled = true;
-      });
-      creditFields?.classList.remove("hidden");
-    } else {
-      inputs.forEach(input => input.disabled = false);
-      creditFields?.classList.toggle("hidden", plan === "full");
-      if (plan === "full" && dueDate) dueDate.value = "";
+  function zeroPaymentInputs() {
+    paymentMethods.forEach(method => {
+      const input = document.querySelector("#pay-" + method);
+      if (input) input.value = "0";
+    });
+  }
+
+  function syncSinglePayment() {
+    if (!singlePaymentValue || selectedPaymentMethod === "split" || !selectedPaymentMethod) return;
+    zeroPaymentInputs();
+    const input = document.querySelector("#pay-" + selectedPaymentMethod);
+    if (input) input.value = singlePaymentValue.value || "0";
+  }
+
+  function selectPaymentMethod(method, {preserveAmount = false} = {}) {
+    if (!method || (method !== "split" && !paymentMethods.includes(method))) return;
+    selectedPaymentMethod = method;
+    paymentMethodButtons.forEach(button => {
+      const active = button.dataset.paymentMethod === method;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    const split = method === "split";
+    splitPaymentGrid?.classList.toggle("hidden", !split);
+    singlePaymentWrap?.classList.toggle("hidden", split || paymentPlan?.value === "credit");
+    if (!split) {
+      if (!preserveAmount && singlePaymentValue) {
+        singlePaymentValue.value = (!paymentPlan || paymentPlan.value === "full")
+          ? formatted(total())
+          : "0";
+      }
+      syncSinglePayment();
     }
     persist();
   }
+
+  function applyPaymentPlan() {
+    const plan = purchase ? "purchase" : (paymentPlan?.value || "full");
+    const credit = plan === "credit";
+    const full = plan === "full";
+    paymentMethodPicker?.classList.toggle("hidden", credit);
+    if (credit) {
+      zeroPaymentInputs();
+      singlePaymentWrap?.classList.add("hidden");
+      splitPaymentGrid?.classList.add("hidden");
+      creditFields?.classList.remove("hidden");
+    } else {
+      if (purchase) creditFields?.classList.remove("hidden");
+      else creditFields?.classList.toggle("hidden", full);
+      if (full && dueDate) dueDate.value = "";
+      if (!selectedPaymentMethod) selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+      selectPaymentMethod(selectedPaymentMethod, {preserveAmount: plan === "part"});
+      if (full && selectedPaymentMethod !== "split" && singlePaymentValue) {
+        singlePaymentValue.value = formatted(total());
+        syncSinglePayment();
+      }
+    }
+    updateConsentAvailability();
+    persist();
+  }
+
+  paymentMethodButtons.forEach(button => button.addEventListener("click", () => {
+    changed();
+    selectPaymentMethod(button.dataset.paymentMethod);
+  }));
+  singlePaymentValue?.addEventListener("input", () => {
+    changed();
+    syncSinglePayment();
+    persist();
+  });
+  paymentMethods.forEach(method => {
+    document.querySelector("#pay-" + method)?.addEventListener("input", () => {
+      changed();
+      persist();
+    });
+  });
   paymentPlan?.addEventListener("change", () => {
     changed();
     applyPaymentPlan();
@@ -626,10 +701,14 @@
   function openPayment() {
     clearError();
     if (!cart.length) return fail("Add a product first.");
+    applyPaymentPlan();
     if (!paymentDialog) return;
     if (typeof paymentDialog.showModal === "function") paymentDialog.showModal();
     else paymentDialog.setAttribute("open", "");
-    requestAnimationFrame(() => paymentPlan?.focus());
+    requestAnimationFrame(() => {
+      const target = paymentMethodButtons.find(button => button.classList.contains("active")) || paymentPlan;
+      target?.focus();
+    });
   }
   function closePayment() {
     if (!paymentDialog?.open) return;
@@ -644,6 +723,15 @@
   paymentDialog?.addEventListener("cancel", event => {
     event.preventDefault();
     closePayment();
+  });
+
+  document.querySelector("#open-held-sales")?.addEventListener("click", () => {
+    if (typeof heldSalesDialog?.showModal === "function") heldSalesDialog.showModal();
+    else heldSalesDialog?.setAttribute("open", "");
+  });
+  document.querySelector("#close-held-sales")?.addEventListener("click", () => heldSalesDialog?.close?.());
+  heldSalesDialog?.addEventListener("click", event => {
+    if (event.target === heldSalesDialog) heldSalesDialog.close();
   });
 
   document.querySelector("#cart-jump").addEventListener("click", () => {
