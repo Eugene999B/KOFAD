@@ -559,3 +559,612 @@ html[data-theme="dark"] .chalin-customer-card,html[data-theme="dark"] .chalin-pa
   .chalin-complete-actions{grid-template-columns:1fr}.chalin-complete-actions .complete-sale-button{order:-1}
   .chalin-receipt-dialog{width:calc(100% - 18px);padding:18px 14px}.success-receipt-meta{flex-direction:column}.chalin-receipt-dialog .sale-success-actions{grid-template-columns:1fr}
 }
+
+
+/* ==========================================================================
+   KOFAD refined interface system · October 2026
+   Content-first, calm hierarchy, warm brand accent and system-native typography.
+   ========================================================================== */
+:root{
+  --paper:#f7f7f5;
+  --white:#ffffff;
+  --ink:#1d1d1f;
+  --muted:#6e6e73;
+  --line:#e5e3df;
+  --green:#1d1d1f;
+  --gold:#b66b45;
+  --red:#b94a40;
+  --soft:#f1efec;
+  --teal:#b66b45;
+  --kofad-accent:#b66b45;
+  --kofad-accent-soft:#f4e9e2;
+  --kofad-sidebar:#181716;
+  --kofad-sidebar-soft:#272421;
+  --kofad-shadow:0 1px 2px rgba(24,23,22,.04),0 10px 34px rgba(24,23,22,.055);
+  --kofad-shadow-hover:0 2px 4px rgba(24,23,22,.06),0 16px 40px rgba(24,23,22,.08);
+}
+
+html{font-size:16px}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px;
+  line-height:1.55;
+  letter-spacing:-.006em;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4,strong{color:var(--ink)}
+h1{font-size:clamp(30px,2.3vw,38px);font-weight:740;line-height:1.08;letter-spacing:-.035em}
+h2{font-size:23px;font-weight:720;line-height:1.18;letter-spacing:-.026em}
+h3{font-size:17px;font-weight:680;line-height:1.28;letter-spacing:-.018em}
+p{line-height:1.62}
+small{font-size:12px;line-height:1.45}
+.muted,.hint{color:var(--muted)}
+.hint{font-size:12px;line-height:1.55}
+.eyebrow{
+  margin-bottom:7px;
+  color:#8a8580;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.075em;
+  text-transform:none;
+}
+a{color:#895036}
+a:hover{color:#6f3f2a;text-decoration:none}
+.text-link,.text-button{color:#895036;font-size:13px;font-weight:650}
+
+label{margin:17px 0 7px;font-size:13px;font-weight:650;letter-spacing:-.008em}
+label small{font-size:11px;line-height:1.45;margin-top:2px}
+input,select,textarea{
+  min-height:48px;
+  border:1px solid #d7d4cf;
+  border-radius:12px;
+  background:#fff;
+  color:var(--ink);
+  padding:11px 13px;
+  font-size:14px;
+  box-shadow:0 1px 0 rgba(29,29,31,.015);
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+textarea{min-height:104px}
+input::placeholder,textarea::placeholder{color:#9a9692}
+input:hover,select:hover,textarea:hover{border-color:#c3beb8}
+input:focus,select:focus,textarea:focus{
+  outline:0;
+  border-color:#b66b45;
+  box-shadow:0 0 0 4px rgba(182,107,69,.13);
+}
+button:focus-visible,a:focus-visible{
+  outline:0;
+  box-shadow:0 0 0 4px rgba(182,107,69,.16);
+}
+.button{
+  min-height:46px;
+  border:1px solid #1d1d1f;
+  border-radius:12px;
+  background:#1d1d1f;
+  color:#fff;
+  padding:10px 17px;
+  gap:8px;
+  font-size:13px;
+  font-weight:680;
+  letter-spacing:-.01em;
+  box-shadow:none;
+  transition:transform .14s ease,background .14s ease,border-color .14s ease,box-shadow .14s ease;
+}
+.button:hover{background:#343331;border-color:#343331;transform:translateY(-1px);box-shadow:0 7px 18px rgba(29,29,31,.12)}
+.button:active{transform:translateY(0);box-shadow:none}
+.button.secondary{background:#fff;color:#272523;border-color:#d8d4ce}
+.button.secondary:hover{background:#f5f3f0;border-color:#c9c3bd}
+.icon-button{border-radius:11px;color:var(--ink)}
+.pill{
+  border-radius:999px;
+  padding:6px 10px;
+  background:#f0eeeb;
+  color:#625e59;
+  font-size:11px;
+  font-weight:650;
+  letter-spacing:-.005em;
+}
+.pill.amber{background:#f7eadc;color:#88552f}
+.notice{
+  border:1px solid #ddd9d4;
+  border-left:3px solid var(--kofad-accent);
+  border-radius:12px;
+  background:#fff;
+  padding:13px 16px;
+  font-size:13px;
+  box-shadow:0 1px 2px rgba(29,29,31,.025);
+}
+
+.workspace{grid-template-columns:254px minmax(0,1fr)}
+.sidebar{
+  background:var(--kofad-sidebar);
+  color:#f7f3ed;
+  padding:24px 14px 20px;
+  scrollbar-width:thin;
+  scrollbar-color:#4a4540 transparent;
+}
+.sidebar>.brand{margin:2px 8px 26px}
+.sidebar .brand-emblem{
+  width:52px;height:52px;border-radius:15px;
+  background:#f7f3ed;
+  box-shadow:0 0 0 1px rgba(255,255,255,.09);
+}
+.sidebar .brand-wordmark{font-size:23px;letter-spacing:.075em;color:#f7f3ed}
+.sidebar .brand-wordmark small{color:#bdb6ae;font-size:8px;letter-spacing:.16em}
+.nav-label{
+  margin:23px 12px 8px;
+  color:#8f8982;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+}
+.sidebar nav a{
+  min-height:44px;
+  margin:2px 0;
+  padding:10px 12px;
+  border-radius:11px;
+  color:#c9c4be;
+  font-size:13px;
+  font-weight:520;
+  transition:background .14s ease,color .14s ease,transform .14s ease;
+}
+.sidebar nav a .nav-icon{color:#aaa39b}
+.sidebar nav a:hover{background:#22201e;color:#fff;transform:translateX(1px)}
+.sidebar nav a.active{
+  background:#2a2724;
+  color:#fff;
+  box-shadow:inset 3px 0 var(--kofad-accent);
+}
+.sidebar nav a.active .nav-icon{color:#d49a7d}
+.sidebar kbd{border-color:#4d4843;color:#aaa39b;border-radius:5px}
+.sidebar-bottom{color:#9c958e;font-size:10px}
+.sidebar-bottom small{color:#77716b;font-size:10px}
+.status-dot{background:#c47c58;width:6px;height:6px}
+
+.body{background:var(--paper)}
+.topbar{
+  position:sticky;top:0;z-index:25;
+  height:76px;
+  padding:0 34px;
+  border-bottom:1px solid rgba(210,207,201,.82);
+  background:rgba(247,247,245,.86);
+  backdrop-filter:saturate(160%) blur(18px);
+  -webkit-backdrop-filter:saturate(160%) blur(18px);
+}
+.single-location{font-size:13px}.single-location strong{font-weight:650}
+.branch-form select{background:#fff;border-color:#ddd9d3;border-radius:11px}
+.theme-toggle{border:1px solid transparent}
+.theme-toggle:hover{background:#ece9e5;border-color:#dfd9d3}
+.top-user-card{padding:6px 9px;border-radius:13px}
+.top-user-card:hover{background:#efede9;border-color:transparent}
+.top-user-card strong{font-size:12px;font-weight:650}
+.top-user-card small{font-size:10px;color:#8a8580}
+.user-avatar{width:36px;height:36px;background:#eee9e4;color:#714a36;font-weight:700}
+
+main{max-width:1680px;padding:34px 38px 42px}
+.page-heading{margin-bottom:28px;align-items:flex-end}
+.page-heading h1{margin-top:1px}
+.page-heading .actions{gap:8px}
+
+.panel,
+.metrics article,
+.quick-action,
+.settings-card,
+.admin-metrics article,
+.role-card,
+.metric-card,
+.debt-account-pane,
+.debt-detail-pane{
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:#fff;
+  box-shadow:var(--kofad-shadow);
+}
+.panel{padding:24px;margin-bottom:22px}
+.panel:hover{border-color:#dedad4}
+.section-heading{margin-bottom:18px}.section-heading h2{font-size:20px}
+.section-heading .muted{font-size:12px}
+
+.overview-intro,.hero-panel,.debt-hero{
+  border:1px solid #2f2c29;
+  border-radius:22px;
+  background:
+    radial-gradient(circle at 88% 18%,rgba(182,107,69,.22),transparent 32%),
+    linear-gradient(145deg,#191817,#24211f 64%,#2b2420);
+  color:#f7f3ed;
+  box-shadow:0 14px 38px rgba(29,29,31,.12);
+}
+.overview-intro{padding:28px 30px;margin-bottom:20px}
+.overview-intro .eyebrow,.hero-panel .eyebrow,.debt-hero .eyebrow{color:#d39a7d}
+.overview-intro h2,.hero-panel h2,.debt-hero h2{color:#fff}
+.overview-intro p:last-child,.hero-panel p:last-child,.debt-hero p{color:#c5beb7;font-size:13px}
+.overview-intro .pill,.hero-panel>.pill{background:rgba(255,255,255,.08);color:#f2e4db;border:1px solid rgba(255,255,255,.09)}
+
+.metrics{
+  gap:14px;
+  border:0;background:transparent;
+  margin-bottom:22px;
+}
+.metrics article{padding:22px 20px;border:1px solid var(--line)!important}
+.metrics article:before{display:none}
+.metrics p{margin-bottom:11px;color:#79746f;font-size:12px;font-weight:620}
+.metrics strong{font-size:29px;font-weight:720;color:#201f1d;letter-spacing:-.035em}
+.metrics strong small{font-size:12px;color:#8f8983}
+.metrics a,.metrics article>span{margin-top:12px;font-size:11px;color:#857f79}
+
+.quick-actions{gap:12px}
+.quick-action{
+  min-height:78px;
+  padding:15px 16px;
+  color:var(--ink);
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.quick-action:hover{background:#fff;border-color:#d2ccc5;box-shadow:var(--kofad-shadow-hover);transform:translateY(-2px)}
+.quick-action>span{
+  width:40px;height:40px;border-radius:12px;
+  background:var(--kofad-accent-soft);color:#94583b;font-size:19px;
+}
+.quick-action strong{font-size:13px;font-weight:680}
+.quick-action small{font-size:11px;color:#817b75;margin-top:3px}
+
+table{font-size:13px}
+th{
+  padding:12px 14px;
+  background:#faf9f7;
+  color:#817b75;
+  font-size:11px;
+  font-weight:650;
+  letter-spacing:.035em;
+  text-transform:none;
+}
+td{padding:15px 14px;border-bottom-color:#ece9e5}
+tbody tr{transition:background .12s ease}
+tbody tr:hover{background:#fbfaf8}
+td small{font-size:11px}.reference{font-size:12px;color:#55514c}
+.table-wrap{border-radius:13px}
+
+.product-card{border-radius:16px;box-shadow:var(--kofad-shadow)}
+.product-symbol,.settings-icon,.metric-icon,.export-catalog article>span{
+  background:var(--kofad-accent-soft);
+  color:#95593b;
+}
+.product-card button{background:#f7f4f1;border-color:#dfd8d1;color:#4a403a}
+
+.settings-card{padding:22px;min-height:152px;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.settings-card:hover{border-color:#d2cbc4;box-shadow:var(--kofad-shadow-hover);transform:translateY(-2px)}
+.settings-card h3{font-size:17px}.settings-card p{font-size:13px}.settings-card strong{font-size:12px;color:#895036}
+.admin-metrics small{font-size:11px}.admin-metrics strong{font-size:25px}
+
+.chalin-sale-layout{gap:20px}
+.chalin-cart-panel,.chalin-checkout-panel,.chalin-customer-card,.chalin-payment-card,.chalin-total-panel{
+  border-color:var(--line);
+  border-radius:18px;
+  box-shadow:var(--kofad-shadow);
+}
+.chalin-cart-panel,.chalin-checkout-panel{background:#fff}
+.chalin-customer-card,.chalin-payment-card{background:#fbfaf8}
+.chalin-checkout-head h2{font-size:22px}
+.chalin-checkout-head .muted,.chalin-cart-panel .counter-sale-head .muted{font-size:12px}
+.chalin-section-title h3{font-size:17px}
+.payment-method-option{
+  min-height:46px;
+  border-radius:12px;
+  border-color:#d9d5cf;
+  background:#fff;
+  color:#3d3935;
+  font-size:12px;
+  font-weight:650;
+}
+.payment-method-option:hover{border-color:#c6b3a8;background:#fcf8f5}
+.payment-method-option.active{background:#24211f;color:#fff;border-color:#24211f}
+.chalin-total-panel{background:#f5f2ee}
+.chalin-total-row{font-size:12px}.chalin-total-row strong{font-size:14px}
+.checkout-progress{height:6px;background:#e6e1dc}.checkout-progress span{background:#b66b45}
+.chalin-submit-hint{font-size:11px;color:#8a8580}
+.chalin-complete-actions .complete-sale-button{font-size:13px}
+.sale-success-dialog,.held-sales-dialog{
+  border-radius:24px;
+  border-color:#ded9d3;
+  box-shadow:0 30px 90px rgba(22,20,19,.22);
+}
+.sale-success-mark{background:#f2e8e2;color:#9d5c3c}
+.success-mini-receipt{background:#faf8f5;border-color:#e4dfd9}
+
+.login-page{background:#f7f5f2}
+.login-header .brand{color:#1d1d1f}
+.login-card h2{font-size:36px;font-weight:740;letter-spacing:-.035em}
+.login-card>.muted{font-size:15px;color:#77716b}
+.login-card input{min-height:54px;border-radius:13px;border-color:#d7d2cc;font-size:15px}
+.login-submit{min-height:52px;border-radius:13px;background:#1d1d1f;border-color:#1d1d1f;font-size:14px}
+.login-story{
+  background:
+    radial-gradient(circle at 80% 18%,rgba(182,107,69,.24),transparent 31%),
+    linear-gradient(145deg,#191817,#26221f);
+  border-radius:28px;
+  box-shadow:0 24px 70px rgba(29,29,31,.16);
+}
+.login-story .eyebrow{color:#d39a7d}
+.login-story h1{font-size:clamp(38px,3.6vw,54px);font-weight:730;letter-spacing:-.045em}
+.login-story h1 span{color:#d79a79}
+.story-copy{color:#c7c0ba;font-size:14px}
+.trade-node{background:#292624;border-color:#3d3834;box-shadow:none}
+.trade-node small{color:#aaa39d}.trade-node strong{color:#fff}.node-icon{background:#342f2c;color:#d49979}
+.story-footer{border-color:#3a3531;color:#aaa39d}
+
+.login-welcome-overlay{
+  background:
+    radial-gradient(circle at 50% 40%,rgba(182,107,69,.18),transparent 28%),
+    #171615;
+}
+.login-welcome-overlay .welcome-logo{background:#f7f3ed;box-shadow:0 24px 70px #0008,0 0 0 1px #ffffff16}
+.login-welcome-overlay p{color:#d49a7c}
+.login-welcome-overlay small{color:#aaa39d}
+.welcome-orbit{border-color:#b66b453d;box-shadow:0 0 0 58px #b66b450b,0 0 0 118px #b66b4506}
+
+.page-footer{color:#9a948e;font-size:10px;letter-spacing:.035em}
+::selection{background:#ead5ca;color:#1d1d1f}
+*{scrollbar-color:#c7c1bb transparent;scrollbar-width:thin}
+
+/* Refined dark appearance: graphite, not blue. */
+html[data-theme="dark"]{
+  --paper:#11100f;
+  --white:#191817;
+  --ink:#f4f1ed;
+  --muted:#aaa49d;
+  --line:#302d2a;
+  --green:#f4f1ed;
+  --gold:#c9825f;
+  --red:#ef8278;
+  --soft:#22201e;
+  --teal:#c9825f;
+  --kofad-accent:#c9825f;
+  --kofad-accent-soft:#33251f;
+  color-scheme:dark;
+}
+html[data-theme="dark"] body{background:#11100f;color:var(--ink)}
+html[data-theme="dark"] a,html[data-theme="dark"] .text-link,html[data-theme="dark"] .text-button{color:#d79a79}
+html[data-theme="dark"] .sidebar{background:#0d0c0c;scrollbar-color:#49433e transparent}
+html[data-theme="dark"] .sidebar nav a{color:#bbb5ae}
+html[data-theme="dark"] .sidebar nav a:hover{background:#1d1b19;color:#fff}
+html[data-theme="dark"] .sidebar nav a.active{background:#27231f;color:#fff}
+html[data-theme="dark"] .topbar{
+  background:rgba(17,16,15,.82);
+  border-color:#2d2a27;
+}
+html[data-theme="dark"] .top-user-card:hover,html[data-theme="dark"] .theme-toggle:hover{background:#211f1d}
+html[data-theme="dark"] .user-avatar{background:#2a2522;color:#dda182}
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .metrics article,
+html[data-theme="dark"] .quick-action,
+html[data-theme="dark"] .settings-card,
+html[data-theme="dark"] .admin-metrics article,
+html[data-theme="dark"] .role-card,
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .debt-account-pane,
+html[data-theme="dark"] .debt-detail-pane,
+html[data-theme="dark"] .chalin-cart-panel,
+html[data-theme="dark"] .chalin-checkout-panel{background:#191817;border-color:#302d2a;color:var(--ink)}
+html[data-theme="dark"] .chalin-customer-card,
+html[data-theme="dark"] .chalin-payment-card,
+html[data-theme="dark"] .chalin-total-panel,
+html[data-theme="dark"] .success-mini-receipt{background:#201e1c;border-color:#35312d}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .branch-form select,
+html[data-theme="dark"] .login-card input{
+  background:#171614;border-color:#3a3632;color:#f4f1ed;
+}
+html[data-theme="dark"] input:hover,html[data-theme="dark"] select:hover,html[data-theme="dark"] textarea:hover{border-color:#504941}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#77716a}
+html[data-theme="dark"] th{background:#1e1c1a;color:#a9a39c;border-color:#302d2a}
+html[data-theme="dark"] td{border-color:#2c2926}
+html[data-theme="dark"] tbody tr:hover{background:#1f1d1b}
+html[data-theme="dark"] .button{background:#f1eee9;color:#171615;border-color:#f1eee9}
+html[data-theme="dark"] .button:hover{background:#fff;border-color:#fff}
+html[data-theme="dark"] .button.secondary{background:#211f1d;color:#ece7e1;border-color:#3b3632}
+html[data-theme="dark"] .button.secondary:hover{background:#2a2724}
+html[data-theme="dark"] .pill{background:#292622;color:#c7c0b8}
+html[data-theme="dark"] .product-symbol,
+html[data-theme="dark"] .quick-action>span,
+html[data-theme="dark"] .settings-icon,
+html[data-theme="dark"] .metric-icon{background:#33251f;color:#d59573}
+html[data-theme="dark"] .payment-method-option{background:#171614;border-color:#3a3632;color:#d9d3cc}
+html[data-theme="dark"] .payment-method-option:hover{background:#211d1a;border-color:#5b463b}
+html[data-theme="dark"] .payment-method-option.active{background:#eee9e3;color:#171615;border-color:#eee9e3}
+html[data-theme="dark"] .mobile-dock{background:rgba(24,23,22,.9);border-color:#302d2a;backdrop-filter:blur(18px)}
+html[data-theme="dark"] .mobile-dock a{color:#aaa39b}
+html[data-theme="dark"] .mobile-dock a.active{background:#33251f;color:#e0a284}
+html[data-theme="dark"] .login-page{background:#11100f}
+html[data-theme="dark"] .login-header .brand{color:#f4f1ed}
+html[data-theme="dark"] .welcome-icon{background:#1b1917;border-color:#39342f;color:#d69b7b}
+html[data-theme="dark"] .notice{background:#1d1b19;border-color:#37322e}
+html[data-theme="dark"] .trend svg text{fill:#aaa49d}
+html[data-theme="dark"] .trend svg rect{fill:#c9825f}
+
+@media(max-width:1200px){
+  .workspace{grid-template-columns:224px minmax(0,1fr)}
+  main{padding:28px}
+  .sidebar .brand-wordmark{font-size:21px}
+}
+@media(max-width:950px){
+  .sidebar{width:286px}
+  .topbar{padding-left:18px;padding-right:18px}
+}
+@media(max-width:680px){
+  body{font-size:14px}
+  main{padding:22px 15px 94px}
+  .topbar{height:66px}
+  .page-heading{margin-bottom:20px}
+  h1{font-size:29px}
+  h2{font-size:21px}
+  .panel{padding:17px;border-radius:16px}
+  .metrics article{padding:17px 14px;border-radius:15px}
+  .metrics strong{font-size:24px}
+  .overview-intro{padding:22px 19px;border-radius:19px}
+  .quick-action{min-height:70px}
+  .mobile-dock{
+    background:rgba(255,255,255,.9);
+    backdrop-filter:saturate(170%) blur(18px);
+    -webkit-backdrop-filter:saturate(170%) blur(18px);
+    box-shadow:0 -8px 26px rgba(29,29,31,.07);
+  }
+  .mobile-dock a{font-size:10px;color:#7d7771;border-radius:12px}
+  .mobile-dock a.active{background:#f2e8e2;color:#8d5237}
+  .chalin-cart-panel,.chalin-checkout-panel{border-radius:17px}
+  .chalin-payment-card .payment-method-picker{gap:8px}
+  .chalin-submit-hint{font-size:10px}
+}
+
+
+/* Coverage for workspaces that previously kept the older blue/teal visual language. */
+.inventory-hero,.sale-command-bar,.transaction-message-card,.debt-balance-card,.inventory-toolbar-panel{
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:#fff;
+  box-shadow:var(--kofad-shadow);
+}
+.inventory-hero{padding:22px 24px}
+.inventory-hero h2,.sale-command-bar h2{font-size:21px}
+.inventory-hero p,.sale-command-bar p{font-size:12px;color:var(--muted)}
+.sale-command-bar{padding:18px 20px}
+.sale-command-badges{gap:7px}
+.transaction-message-card{padding:20px 21px}
+.transaction-message-preview{background:#faf8f5;border-color:#e6e1dc;border-radius:12px;font-size:12px}
+.debt-balance-card{background:#faf8f5}
+.debt-toolbar,.inventory-toolbar-panel{border-color:var(--line)}
+
+.search-result-card{
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#fff;
+  box-shadow:var(--kofad-shadow);
+  transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;
+}
+.search-result-card:hover{transform:translateY(-1px);border-color:#d1cbc4;box-shadow:var(--kofad-shadow-hover)}
+.search-result-symbol{border-radius:12px;background:var(--kofad-accent-soft);color:#95593b}
+.search-result-identity strong{font-size:14px}.search-result-identity small{font-size:11px;color:var(--muted)}
+.catalog-status{color:var(--muted)}
+.catalog-status h3{font-size:18px;color:var(--ink)}
+.catalog-status p{font-size:12px}
+.catalog-empty-icon{background:#f1ece7;color:#95593b;border-radius:16px}
+
+.customer-results,.counter-customer-results{
+  border-color:var(--line);
+  background:#fff;
+  border-radius:13px;
+  box-shadow:0 16px 42px rgba(29,29,31,.1);
+}
+.customer-result{font-size:13px}
+.customer-result:hover{background:#f7f4f1}
+.selected-customer{border-radius:12px;background:#f5f1ed;border-color:#dfd8d1}
+
+.kofad-dialog,.debt-payment-dialog-inner{
+  border:1px solid #ded9d3;
+  border-radius:24px;
+  background:#fff;
+  color:var(--ink);
+  box-shadow:0 30px 90px rgba(22,20,19,.2);
+}
+.kofad-dialog::backdrop,.debt-payment-dialog::backdrop{background:rgba(15,14,13,.5);backdrop-filter:blur(5px)}
+.dialog-heading,.debt-dialog-heading{border-color:var(--line)}
+.dialog-heading h2,.debt-dialog-heading h2{font-size:21px}
+.dialog-actions{border-color:var(--line)}
+
+.communication-workspace,.policy-workspace{gap:18px}
+.communication-workspace .panel,.policy-workspace .panel{border-radius:18px}
+.command-rail{border-color:var(--line);background:#faf8f5}
+.command-rail a{border-radius:11px;font-size:12px}
+.command-rail a:hover{background:#f1ece7}
+
+.form-panel{max-width:960px}
+.form-grid{gap:0 28px}
+.form-actions{gap:10px}
+.permission-box{border-radius:16px;background:#faf9f7}
+.check-card,.permission-row,.switch-row{
+  border-radius:13px;
+  background:#fff;
+  padding:14px;
+}
+.check-card strong,.permission-row strong,.switch-row strong{font-size:13px}
+.check-card small,.permission-row small,.switch-row small{font-size:11px}
+.role-card{padding:22px}.role-card p{font-size:13px}
+.permission-tags span{font-size:10px;background:#f2efeb;color:#77716b}
+
+.debt-account-card{border-radius:14px}
+.debt-account-card:hover{background:#faf8f5}
+.debt-account-card strong{font-size:13px}
+.debt-account-card small{font-size:11px}
+.debt-search-form,.inventory-search{background:#faf9f7;border-color:var(--line);border-radius:13px}
+.debt-search-form input,.inventory-search input{font-size:13px}
+.debt-filter-row a,.inventory-filters a{font-size:11px;border-color:#ddd8d2;background:#fff}
+.debt-filter-row a.active,.inventory-filters a.active{background:#24211f;color:#fff;border-color:#24211f}
+
+html[data-theme="dark"] .inventory-hero,
+html[data-theme="dark"] .sale-command-bar,
+html[data-theme="dark"] .transaction-message-card,
+html[data-theme="dark"] .debt-balance-card,
+html[data-theme="dark"] .inventory-toolbar-panel,
+html[data-theme="dark"] .search-result-card,
+html[data-theme="dark"] .kofad-dialog,
+html[data-theme="dark"] .debt-payment-dialog-inner,
+html[data-theme="dark"] .customer-results,
+html[data-theme="dark"] .counter-customer-results,
+html[data-theme="dark"] .check-card,
+html[data-theme="dark"] .permission-row,
+html[data-theme="dark"] .switch-row{
+  background:#191817;
+  border-color:#302d2a;
+  color:var(--ink);
+}
+html[data-theme="dark"] .transaction-message-preview,
+html[data-theme="dark"] .selected-customer,
+html[data-theme="dark"] .command-rail,
+html[data-theme="dark"] .permission-box,
+html[data-theme="dark"] .debt-search-form,
+html[data-theme="dark"] .inventory-search{background:#201e1c;border-color:#35312d}
+html[data-theme="dark"] .customer-result:hover,html[data-theme="dark"] .debt-account-card:hover{background:#211f1d}
+html[data-theme="dark"] .debt-filter-row a,html[data-theme="dark"] .inventory-filters a{background:#191817;border-color:#3a3632;color:#aaa49d}
+html[data-theme="dark"] .debt-filter-row a.active,html[data-theme="dark"] .inventory-filters a.active{background:#f0ece7;color:#171615;border-color:#f0ece7}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+
+/* Final visual QA fixes from browser evidence. */
+.login-brand-intro{
+  background:
+    radial-gradient(circle at 50% 42%,rgba(182,107,69,.17),transparent 25%),
+    #171615;
+  color:#d69a79;
+}
+.intro-mark{background:#f7f3ed;box-shadow:0 20px 60px rgba(0,0,0,.28),0 0 0 1px rgba(255,255,255,.08)}
+.trade-map:before{border-color:#4b443f}
+.trade-map:after{background:#514943}
+.trade-hub{border-color:#302c29}
+.trend svg rect{fill:#b66b45}
+.chalin-complete-actions .complete-sale-button{
+  white-space:normal;
+  line-height:1.18;
+  text-align:center;
+  min-height:52px;
+  padding-left:12px;
+  padding-right:12px;
+}
+@media(max-width:950px){
+  .workspace{grid-template-columns:1fr!important}
+}
+@media(max-width:680px){
+  .workspace{display:block!important}
+  .body{width:100%!important;min-width:0!important}
+  .branch-form{min-width:0}
+  .branch-form select{min-width:104px;max-width:128px}
+  .chalin-sale-layout,.chalin-sale-builder,.chalin-cart-panel,.chalin-checkout-panel{width:100%!important;min-width:0!important}
+  .counter-search-shell{width:100%!important}
+}
+html[data-theme="dark"] .trend svg rect{fill:#c9825f}
