@@ -25,9 +25,9 @@ The repository now contains a Django/PostgreSQL implementation of the core opera
 
 - Search-first sales counter: no catalog wall on entry, live name/SKU/barcode/category search, focused product composer, retail/wholesale selection, full-pack plus loose-unit selling, exact base-unit stock, held sales, inline customer search/creation, configurable payment channels, controlled discounts/price overrides and full/part/credit settlement.
 - Products, additive quick restock with before/after audit evidence, supplier purchasing, stock movements, independent adjustment approvals, dispatch/receive transfers, damaged-stock quarantine and inventory-loss evidence.
-- Customer/supplier records, Ghana-normalized customer phones, customer account profiles, an account-centric Debt Desk with aging buckets, credit usage, recent payment history, allocation preview and partial/full oldest-due-first settlement, purchase receiving, customer returns, independently reviewed supplier returns, expenses and independently approved corrections.
+- Customer/supplier records, Ghana-normalized customer phones, customer account profiles, an account-centric Debt Desk with configurable overdue grace periods, aging buckets, credit usage, recent payment history, fixed desktop/mobile payment sheet, allocation preview and partial/full oldest-due-first settlement, purchase receiving, customer returns, independently reviewed supplier returns, expenses and independently approved corrections.
 - Daily closing intelligence separating sales, credit created, debt collections, refunds, expenses, purchases and payment channels, with opening cash, other cash in/out, counted-vs-expected variance, independent verification and a posting lock after closing.
-- Receipts, statements, debt summaries, transaction/profit/stock/aging/closing reports and PDF/Excel/Word/CSV exports.
+- Receipts with separate public business contacts/location, sharp vector A4/80mm/58mm PDFs, statements, debt summaries, transaction/profit/stock/aging/closing reports and PDF/Excel/Word/CSV exports.
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
 - Original identity, a distinct login experience, personalized post-login welcome transition, consistent responsive desktop/mobile workspaces and light/dark themes.
 
@@ -51,7 +51,7 @@ No default administrator is silently created at startup. Bootstrap creates role 
 
 ## SMS and initial administrator
 
-Arkesel SMS now has a durable outbox, editable receipt/payment/reminder templates, sandbox mode, delivery callbacks and retry controls. Future providers use a registered adapter. See [SMS setup](docs/SMS.md).
+Arkesel SMS has a durable outbox, editable customer templates, consent checks, delivery callbacks and retry controls. Debt Settings now define due/overdue timing, reminder cadence and anti-spam limits; Communication Settings define sale/payment/closing/low-stock event behaviour and management notification numbers. Live provider delivery remains disabled until approved Arkesel credentials are configured and validated. See [SMS setup](docs/SMS.md).
 
 The requested ADMIN account signs in directly. Password changes are optional under My account; SMS password recovery uses an individual account recovery phone. See [account recovery](docs/ACCOUNT_RECOVERY.md) and [initial administrator setup](docs/RAILWAY.md#requested-initial-administrator).
 
