@@ -595,6 +595,14 @@ def channel_totals(branch, day):
     totals = {method: ZERO for method, _ in Payment.METHODS}
     for row in rows:
         totals[row.method] += row.amount * row.direction
+    # Payroll salary payments are direct controlled outflows rather than sales-ledger
+    # documents, but they still move real cash/bank/MoMo and must reconcile at closing.
+    from .models import PayrollPayment
+    payroll_rows = PayrollPayment.objects.filter(
+        entry__period__branch=branch, created_at__date=day
+    )
+    for row in payroll_rows:
+        totals[row.method] -= row.amount
     return totals
 
 
