@@ -175,6 +175,25 @@ def _debt_eligible(snapshot, policy, today):
     return False
 
 
+def render_debt_account_message(party, today=None):
+    policy = _debt_policy()
+    today = today or timezone.localdate()
+    snapshot = debt_service.customer_account_snapshot(party)
+    if not _debt_eligible(snapshot, policy, today):
+        return None
+    company = _company()
+    return _render(policy.message_template, {
+        "company": company.name,
+        "customer": party.name,
+        "currency": company.currency,
+        "balance": f"{snapshot['outstanding']:.2f}",
+        "debt_count": snapshot["invoice_count"],
+        "due_sentence": _debt_due_sentence(snapshot, today),
+        "business_phone": _business_phone(company),
+        "location": _location(party.branch, company),
+    })
+
+
 def _debt_frequency_allows(branch, party, policy, now):
     history = Message.objects.filter(
         branch=branch,
@@ -216,17 +235,9 @@ def run_debt_reminders(now=None):
                 continue
             if not _debt_frequency_allows(branch, party, policy, now):
                 continue
-            data = {
-                "company": company.name,
-                "customer": party.name,
-                "currency": company.currency,
-                "balance": f"{snapshot['outstanding']:.2f}",
-                "debt_count": snapshot["invoice_count"],
-                "due_sentence": _debt_due_sentence(snapshot, today),
-                "business_phone": _business_phone(company),
-                "location": _location(branch, company),
-            }
-            body = _render(policy.message_template, data)
+            body = render_debt_account_message(party, today)
+            if not body:
+                continue
             source_key = f"auto:debt:{party.pk}:{today.isoformat()}"
             message = create_automatic_customer_draft(actor, branch, party, body, source_key=source_key)
             _apply_mode(message, policy.delivery_mode, actor)
