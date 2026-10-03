@@ -1134,3 +1134,37 @@ html[data-theme="dark"] .debt-filter-row a.active,html[data-theme="dark"] .inven
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* Final visual QA fixes from browser evidence. */
+.login-brand-intro{
+  background:
+    radial-gradient(circle at 50% 42%,rgba(182,107,69,.17),transparent 25%),
+    #171615;
+  color:#d69a79;
+}
+.intro-mark{background:#f7f3ed;box-shadow:0 20px 60px rgba(0,0,0,.28),0 0 0 1px rgba(255,255,255,.08)}
+.trade-map:before{border-color:#4b443f}
+.trade-map:after{background:#514943}
+.trade-hub{border-color:#302c29}
+.trend svg rect{fill:#b66b45}
+.chalin-complete-actions .complete-sale-button{
+  white-space:normal;
+  line-height:1.18;
+  text-align:center;
+  min-height:52px;
+  padding-left:12px;
+  padding-right:12px;
+}
+@media(max-width:950px){
+  .workspace{grid-template-columns:1fr!important}
+}
+@media(max-width:680px){
+  .workspace{display:block!important}
+  .body{width:100%!important;min-width:0!important}
+  .branch-form{min-width:0}
+  .branch-form select{min-width:104px;max-width:128px}
+  .chalin-sale-layout,.chalin-sale-builder,.chalin-cart-panel,.chalin-checkout-panel{width:100%!important;min-width:0!important}
+  .counter-search-shell{width:100%!important}
+}
+html[data-theme="dark"] .trend svg rect{fill:#c9825f}
