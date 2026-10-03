@@ -105,7 +105,7 @@ with sync_playwright() as p:
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
     assert counter_panel.evaluate("el => el.scrollHeight <= el.clientHeight + 2"), "customer selection must not reintroduce nested checkout scrolling"
-    page.get_by_role("button",name="Payment & finish",exact=True).click()
+    page.locator("#open-payment").click()
     payment_dialog = page.locator("#sale-payment-dialog")
     payment_dialog.wait_for(state="visible")
     payment_box = payment_dialog.bounding_box()
@@ -201,7 +201,7 @@ with sync_playwright() as p:
     assert page.locator("#mobile-cart-count").inner_text() == "1"
     page.locator("#cart-jump").click()
     assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
-    page.get_by_role("button",name="Payment & finish",exact=True).click()
+    page.locator("#open-payment").click()
     mobile_payment = page.locator("#sale-payment-dialog")
     mobile_payment.wait_for(state="visible")
     mobile_payment_box = mobile_payment.bounding_box()
