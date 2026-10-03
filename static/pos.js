@@ -130,6 +130,23 @@
   function paymentTotal() {
     return paymentMethods.reduce((sum, method) => sum + cents(document.querySelector("#pay-" + method)?.value || "0"), 0);
   }
+  function renderCheckoutSummary() {
+    const grandTotal = total();
+    let paidNow = 0;
+    try { paidNow = paymentTotal(); } catch (_) { paidNow = 0; }
+    const balance = Math.max(grandTotal - paidNow, 0);
+    const due = document.querySelector("#checkout-total-due");
+    const paid = document.querySelector("#checkout-paid-now");
+    const balanceNode = document.querySelector("#checkout-balance");
+    const progress = document.querySelector("#checkout-progress-fill");
+    if (due) due.textContent = formatted(grandTotal);
+    if (paid) paid.textContent = formatted(paidNow);
+    if (balanceNode) balanceNode.textContent = formatted(balance);
+    if (progress) {
+      const percent = grandTotal > 0 ? Math.min(100, Math.round((paidNow / grandTotal) * 100)) : 0;
+      progress.style.width = percent + "%";
+    }
+  }
   function normalizeGhanaPhone(value) {
     let digits = String(value || "").replace(/\D/g, "");
     if (digits.startsWith("233")) digits = digits.slice(3);
@@ -270,10 +287,11 @@
     document.querySelector("#cart-count").textContent = cart.length + " lines";
     document.querySelector("#mobile-cart-count").textContent = cart.length;
     document.querySelector("#mobile-cart-total").textContent = formatted(total());
-    const paymentTotal = document.querySelector("#payment-total");
+    const paymentTotalNode = document.querySelector("#payment-total");
     const dialogTotal = document.querySelector("#payment-dialog-total");
-    if (paymentTotal) paymentTotal.textContent = formatted(total());
+    if (paymentTotalNode) paymentTotalNode.textContent = formatted(total());
     if (dialogTotal) dialogTotal.textContent = formatted(total());
+    renderCheckoutSummary();
     persist();
   }
 
@@ -637,6 +655,7 @@
     zeroPaymentInputs();
     const input = document.querySelector("#pay-" + selectedPaymentMethod);
     if (input) input.value = singlePaymentValue.value || "0";
+    renderCheckoutSummary();
   }
 
   function selectPaymentMethod(method, {preserveAmount = false} = {}) {
@@ -683,6 +702,7 @@
       }
     }
     updateConsentAvailability();
+    renderCheckoutSummary();
     persist();
   }
 
@@ -698,6 +718,7 @@
   paymentMethods.forEach(method => {
     document.querySelector("#pay-" + method)?.addEventListener("input", () => {
       changed();
+      renderCheckoutSummary();
       persist();
     });
   });
@@ -706,11 +727,39 @@
     applyPaymentPlan();
   });
 
+  document.querySelector("#exact-payment")?.addEventListener("click", () => {
+    changed();
+    if (paymentPlan && paymentPlan.value !== "full") paymentPlan.value = "full";
+    if (selectedPaymentMethod === "split") {
+      selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+    }
+    applyPaymentPlan();
+    if (singlePaymentValue) {
+      singlePaymentValue.value = formatted(total());
+      syncSinglePayment();
+    }
+    renderCheckoutSummary();
+    persist();
+  });
+
+  document.querySelector("#clear-payment")?.addEventListener("click", () => {
+    changed();
+    if (singlePaymentValue) singlePaymentValue.value = "0";
+    zeroPaymentInputs();
+    renderCheckoutSummary();
+    persist();
+  });
+
   function openPayment() {
     clearError();
     if (!cart.length) return fail("Add a product first.");
     applyPaymentPlan();
-    if (!paymentDialog) return;
+    if (!paymentDialog) {
+      const checkoutPanel = document.querySelector("#checkout-panel");
+      checkoutPanel?.scrollIntoView({block: "start", behavior: "smooth"});
+      checkoutPanel?.focus({preventScroll: true});
+      return;
+    }
     if (typeof paymentDialog.showModal === "function") paymentDialog.showModal();
     else paymentDialog.setAttribute("open", "");
     requestAnimationFrame(() => {
@@ -882,9 +931,31 @@
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = false);
     document.querySelector("#success-reference").textContent = result.reference || "Receipt";
     document.querySelector("#success-total").textContent = Number(result.total || 0).toFixed(2);
+    const successPaid = document.querySelector("#success-paid");
+    const successBalance = document.querySelector("#success-balance");
+    const successPayment = document.querySelector("#success-payment");
+    if (successPaid) successPaid.textContent = Number(result.paid || 0).toFixed(2);
+    if (successBalance) successBalance.textContent = Math.max(Number(result.total || 0) - Number(result.paid || 0), 0).toFixed(2);
+    if (successPayment) {
+      successPayment.textContent = selectedPaymentMethod === "split"
+        ? "Mixed payment"
+        : (selectedPaymentMethod ? selectedPaymentMethod.toUpperCase() + " payment" : "Payment recorded");
+    }
     document.querySelector("#success-customer").textContent = result.customer
       ? result.customer.name + (result.customer.phone ? " · " + result.customer.phone : "")
       : "Walk-in customer";
+
+    const successItems = document.querySelector("#success-items");
+    if (successItems) {
+      successItems.replaceChildren();
+      cart.forEach(line => {
+        const row = el("div", undefined, "success-receipt-line");
+        const copy = el("span");
+        copy.append(el("strong", line.name), el("small", line.quantity + " × " + formatted(effectiveUnit(line))));
+        row.append(copy, el("strong", formatted(effectiveUnit(line) * line.quantity)));
+        successItems.append(row);
+      });
+    }
 
     const printLink = document.querySelector("#receipt-print");
     const a4Link = document.querySelector("#receipt-a4");
@@ -1113,6 +1184,6 @@
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
     document.querySelector("#complete").disabled = false;
     openPayment();
-    fail("A checkout was interrupted. Retry to recover its original result before making changes.");
+    fail("A checkout was interrupted. Review the unchanged checkout and click Complete Sale & Generate Receipt to recover the original result.");
   }
 })();
