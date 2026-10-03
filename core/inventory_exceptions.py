@@ -220,23 +220,28 @@ def request_quarantine(user, branch, product_id, quantity, reason):
         reason=reason,
         requested_by=user,
     )
+    direct = is_owner(user)
     s.audit(user, branch, "quarantine.requested", item.pk, {
         "product": product.sku,
         "quantity": quantity,
         "unit_cost": str(product.cost),
         "reason": reason,
-    })
+        "direct_authority": direct,
+    }, category="inventory", severity="high", entity_type="quarantine")
+    if direct:
+        return review_quarantine(user, branch, item.pk, True, direct=True)
     return item
 
 
 @transaction.atomic
-def review_quarantine(user, branch, item_id, approve):
-    s.permit(user, branch, "approve_operations")
+def review_quarantine(user, branch, item_id, approve, direct=False):
+    if not direct:
+        s.permit(user, branch, "approve_operations")
     branch = s.lock_branch(branch)
     item = QuarantineItem.objects.select_for_update().select_related("product").get(pk=item_id, branch=branch)
     if item.status != "requested":
         raise ValidationError("This quarantine request has already been reviewed.")
-    if item.requested_by_id == user.pk:
+    if item.requested_by_id == user.pk and not (direct and is_owner(user)):
         raise ValidationError("A different authorized colleague must review this quarantine request.")
     if approve:
         s.ensure_open(branch)
@@ -267,7 +272,7 @@ def resolve_quarantine(user, branch, item_id, action, note):
     item = QuarantineItem.objects.select_for_update().select_related("product").get(pk=item_id, branch=branch)
     if item.status != "held":
         raise ValidationError("Only stock currently held in quarantine can be resolved.")
-    if item.requested_by_id == user.pk:
+    if item.requested_by_id == user.pk and not is_owner(user):
         raise ValidationError("A different authorized colleague must resolve this quarantine item.")
     note = _meaningful(note, label="resolution note")
     s.ensure_open(branch)
