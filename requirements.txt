@@ -6,3 +6,5 @@ whitenoise>=6.9,<7
 openpyxl>=3.1.5,<3.2
 python-docx>=1.1.2,<2
 reportlab>=4.4,<5
+
+requests>=2.32,<3
