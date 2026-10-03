@@ -484,3 +484,78 @@ html[data-theme="dark"] .sale-success-mark{background:#143a2c;color:#86d5ae}
   .payment-dialog-actions{padding:10px 15px max(14px,env(safe-area-inset-bottom))}
   .sale-success-dialog{width:calc(100% - 22px);padding:20px 16px}.sale-success-actions{grid-template-columns:1fr 1fr}
 }
+
+
+/* CHALIN03-inspired sales flow: natural page scrolling, cart left, customer/payment right. */
+.chalin-sale-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(360px,.78fr);gap:18px;align-items:start;height:auto!important;min-height:0}
+.chalin-sale-builder{display:block!important;min-height:0}
+.chalin-sale-builder .counter-results{overflow:visible!important;max-height:none!important;padding-right:0}
+.chalin-sale-builder .counter-empty-state{min-height:260px}
+.chalin-cart-panel{margin-top:16px;padding:18px;overflow:visible}
+.chalin-cart-panel .counter-sale-head{padding-bottom:12px}.chalin-cart-panel .counter-sale-head h2{font-size:20px}.chalin-cart-panel .counter-sale-head .muted{font-size:10px;margin:4px 0 0}
+.chalin-cart-list{max-height:none!important;overflow:visible!important;padding:0!important}
+.chalin-cart-list .cart-empty{min-height:110px}
+.chalin-cart-total{margin:12px 0 0!important}
+
+.chalin-checkout-panel{height:auto!important;max-height:none!important;overflow:visible!important;display:block!important;align-self:start;padding:18px;position:sticky!important;top:90px!important}
+.chalin-checkout-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding-bottom:14px;margin-bottom:12px;border-bottom:1px solid var(--line)}
+.chalin-checkout-head h2{font-size:21px;margin:2px 0 4px}.chalin-checkout-head .muted{font-size:10px;line-height:1.55;margin:0}.chalin-checkout-head .held-sales-launch{margin:0;white-space:nowrap}
+.chalin-checkout-panel>#checkout{display:grid!important;gap:12px}
+.chalin-customer-card{padding:12px;border-radius:13px;margin:0;background:var(--white)}
+.chalin-customer-card .counter-customer-results{position:static!important;left:auto!important;right:auto!important;top:auto!important;margin-top:7px;box-shadow:none;max-height:190px}
+.chalin-customer-card .counter-new-customer{grid-template-columns:1fr;gap:7px}
+.chalin-customer-card .compact-consent{margin-top:10px}
+
+.chalin-payment-card{padding:13px;border:1px solid var(--line);border-radius:13px;background:var(--white)}
+.chalin-section-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}.chalin-section-title h3{font-size:15px;margin:2px 0 0}.chalin-section-title>strong{font-size:17px;white-space:nowrap}
+.chalin-payment-card>label{margin-top:7px}.chalin-payment-card select{min-height:42px}
+.chalin-payment-card .counter-payment-fieldset{margin-top:12px}.chalin-payment-card .payment-method-picker{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.chalin-single-payment{display:grid!important;grid-template-columns:minmax(0,1fr) 130px auto!important;align-items:end;gap:8px;margin-top:10px}
+.chalin-single-payment label{margin:0}.chalin-single-payment input{min-height:42px;height:42px;text-align:right;font-weight:750}
+.quick-money-row{display:flex;align-items:center;gap:5px}.quick-money-row .button,.quick-money-row .text-button{margin:0;min-height:42px;padding:8px 11px;font-size:10px}
+.chalin-payment-card .compact-payment-grid{margin-top:10px}.chalin-payment-card #credit-fields{margin-top:10px}
+.chalin-payment-card .counter-override{margin-top:10px}
+
+.chalin-total-panel{padding:14px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(145deg,var(--paper),var(--white))}
+.chalin-total-panel>.eyebrow{margin-bottom:7px}
+.chalin-total-row{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:7px 0;border-bottom:1px solid var(--line);font-size:11px}
+.chalin-total-row strong{font-size:13px}.chalin-balance-row{border-bottom:0;padding-bottom:4px}
+.checkout-progress{height:5px;border-radius:99px;background:var(--line);overflow:hidden;margin:10px 0 12px}.checkout-progress span{display:block;height:100%;width:0;background:var(--teal);transition:width .18s ease}
+.chalin-complete-actions{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}.chalin-complete-actions .button{margin:0;min-height:48px}.chalin-complete-actions .complete-sale-button{font-size:12px;font-weight:800}
+.chalin-submit-hint{margin:8px 0 0;font-size:8.5px;line-height:1.5}
+
+.chalin-receipt-dialog{width:min(560px,calc(100vw - 28px));max-height:90dvh;overflow:auto}
+.success-mini-receipt{border:1px solid var(--line);border-radius:13px;background:var(--paper);padding:12px;margin:10px 0 12px;text-align:left}
+.success-receipt-meta{display:flex;justify-content:space-between;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:9px;color:var(--muted)}
+.success-receipt-items{display:grid}.success-receipt-line{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:10px}.success-receipt-line span strong,.success-receipt-line span small{display:block}.success-receipt-line span small{color:var(--muted);font-size:8px;margin-top:2px}
+.success-receipt-totals{padding-top:6px}.success-receipt-totals p{display:flex;justify-content:space-between;gap:12px;margin:0;padding:4px 0;font-size:10px}.success-receipt-totals p:first-child strong{font-size:13px}
+.chalin-receipt-dialog .sale-success-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.chalin-receipt-dialog #receipt-view{display:flex;align-items:center;justify-content:center;text-decoration:none}
+
+html[data-theme="dark"] .chalin-customer-card,html[data-theme="dark"] .chalin-payment-card,html[data-theme="dark"] .chalin-total-panel,html[data-theme="dark"] .success-mini-receipt{background:#101d2a;border-color:var(--line)}
+
+@media(min-width:681px){
+  body:has(#pos){overflow:auto!important}
+  body:has(#pos) .body{height:auto!important;min-height:100vh!important;overflow:visible!important}
+  body:has(#pos) main{height:auto!important;max-height:none!important;display:block!important;overflow:visible!important;padding:24px 28px 30px!important}
+  body:has(#pos) .page-heading{margin-bottom:18px!important;min-height:0!important}
+  body:has(#pos) .page-footer{display:flex!important}
+  #pos{display:block!important;min-height:0!important}
+  #pos>.notice{margin-bottom:12px!important}
+}
+@media(max-width:1100px) and (min-width:681px){
+  .chalin-sale-layout{grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);gap:14px}
+  .chalin-checkout-panel{position:static!important}
+  .chalin-single-payment{grid-template-columns:1fr 115px!important}.quick-money-row{grid-column:1/-1}
+}
+@media(max-width:680px){
+  body:has(#pos) main{padding-bottom:145px!important}
+  .chalin-sale-layout{grid-template-columns:1fr;gap:14px}
+  .chalin-sale-builder .counter-empty-state{min-height:190px}.chalin-sale-builder .counter-results{max-height:none!important}
+  .chalin-cart-panel{padding:14px;margin-top:12px}.chalin-cart-list{max-height:none!important}
+  .chalin-checkout-panel{position:static!important;padding:14px!important}
+  .chalin-checkout-head{flex-direction:column}.chalin-checkout-head .held-sales-launch{width:100%}
+  .chalin-payment-card .payment-method-picker{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .chalin-single-payment{grid-template-columns:1fr 120px!important}.quick-money-row{grid-column:1/-1}
+  .chalin-complete-actions{grid-template-columns:1fr}.chalin-complete-actions .complete-sale-button{order:-1}
+  .chalin-receipt-dialog{width:calc(100% - 18px);padding:18px 14px}.success-receipt-meta{flex-direction:column}.chalin-receipt-dialog .sale-success-actions{grid-template-columns:1fr}
+}
