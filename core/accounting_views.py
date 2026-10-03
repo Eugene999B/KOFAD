@@ -58,7 +58,7 @@ def _journal_lines(request):
     return rows
 
 
-@protected("view_reports|operate_finance")
+@protected("view_reports|operate_finance|manage_company")
 def accounting(request, branch):
     first, last, start, end = _range(request)
     view = request.GET.get("view", "overview")
@@ -126,7 +126,7 @@ def accounting(request, branch):
     })
 
 
-@protected("view_reports|operate_finance")
+@protected("view_reports|operate_finance|manage_company")
 def accounting_export(request, branch, format):
     first, last, start, end = _range(request)
     view = request.GET.get("view", "trial")
