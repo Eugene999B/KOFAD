@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const mediaDark = matchMedia("(prefers-color-scheme: dark)");
   function themePreference() {
-    try { return localStorage.getItem("kofad-theme") || "system"; } catch (_) { return "system"; }
+    try { return localStorage.getItem("kofad-theme") || "light"; } catch (_) { return "light"; }
   }
   function applyTheme(preference) {
     const resolved = preference === "system" ? (mediaDark.matches ? "dark" : "light") : preference;
@@ -11,6 +11,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const active = button.dataset.themeChoice === preference;
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
+    });
+    document.querySelectorAll("[data-theme-toggle]").forEach(button => {
+      const dark = resolved === "dark";
+      const label = button.querySelector("[data-theme-label]");
+      const icon = button.querySelector("[data-theme-icon]");
+      if (label) label.textContent = dark ? "Light mode" : "Dark mode";
+      if (icon) icon.textContent = dark ? "☀" : "☾";
+      button.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+      button.setAttribute("title", dark ? "Switch to light mode" : "Switch to dark mode");
     });
   }
   applyTheme(themePreference());

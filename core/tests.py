@@ -1,10 +1,13 @@
+import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.management import call_command
 from django.db import close_old_connections, connection, connections, transaction, DatabaseError
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
@@ -210,6 +213,37 @@ class BusinessTests(Fixtures, TestCase):
         self.assertEqual(response.status_code,302)
         self.assertEqual(self.client.get("/mfa/").url,"/")
         self.assertEqual(self.client.get("/").status_code,200)
+
+    def test_login_accepts_ghana_phone_and_forces_temporary_password_change(self):
+        self.user.access.recovery_phone = "+233241234567"
+        self.user.access.force_password_change = True
+        self.user.access.save(update_fields=["recovery_phone", "force_password_change"])
+        response = self.client.post("/login/", {
+            "username": "0241234567",
+            "password": "test-password-long-enough",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/account/password/")
+        self.assertEqual(self.client.get("/").url, "/account/password/")
+
+    def test_owner_provision_command_creates_equal_full_admin_without_storing_password_in_code(self):
+        with patch.dict(os.environ, {
+            "KOFAD_OWNER_ADMIN_NAME": "Test Owner",
+            "KOFAD_OWNER_ADMIN_PHONE": "0249998877",
+            "KOFAD_OWNER_ADMIN_INITIAL_PASSWORD": "0249998877",
+        }, clear=False):
+            call_command("provision_owner_admin", confirm_owner_admin=True)
+        owner = User.objects.get(username="0249998877")
+        self.assertEqual(owner.get_full_name(), "Test Owner")
+        self.assertTrue(owner.is_superuser)
+        self.assertTrue(owner.is_staff)
+        self.assertTrue(owner.check_password("0249998877"))
+        self.assertEqual(owner.access.recovery_phone, "+233249998877")
+        self.assertTrue(owner.access.force_password_change)
+        self.assertEqual(
+            set(owner.access.branches.values_list("pk", flat=True)),
+            set(Branch.objects.filter(active=True).values_list("pk", flat=True)),
+        )
 
     def test_malformed_report_range_returns_400(self):
         self.authenticate_client()

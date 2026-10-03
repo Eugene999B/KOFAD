@@ -23,6 +23,7 @@ class Access(models.Model):
     recovery_phone = models.CharField(max_length=20, blank=True)
     session_version = models.PositiveIntegerField(default=1)
     must_change_password = models.BooleanField(default=False)
+    force_password_change = models.BooleanField(default=False)
     totp_secret = models.CharField(max_length=64, blank=True)
     totp_last_step = models.BigIntegerField(default=-1)
 
