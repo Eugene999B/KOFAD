@@ -7,7 +7,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from .models import (
-    Branch, Document, Line, Party, Payment, PayrollEntry, Product,
+    Branch, Document, Line, Party, Payment, PayrollEntry, PayrollPayment, Product,
     QuarantineItem, Stock, Worker,
 )
 from .services import balance
@@ -249,6 +249,21 @@ def build_report(branch, first, last, family="register", query="", category="", 
                 "method": payment.get_method_display(), "direction": "In" if payment.direction > 0 else "Out",
                 "amount": payment.amount, "provider_reference": payment.reference,
             })
+        salary_payments = PayrollPayment.objects.filter(
+            entry__period__branch=branch, created_at__date__range=(first, last)
+        ).select_related("entry__period", "entry__worker")
+        if method:
+            salary_payments = salary_payments.filter(method=method)
+        for payment in salary_payments:
+            rows.append({
+                "date": payment.created_at.strftime("%Y-%m-%d %H:%M"),
+                "reference": f"Payroll {payment.entry.period.label}",
+                "type": "Salary payment",
+                "party": payment.entry.worker.full_name,
+                "method": payment.get_method_display(), "direction": "Out",
+                "amount": payment.amount, "provider_reference": payment.reference,
+            })
+        rows.sort(key=lambda row: row["date"], reverse=True)
         rows = _match(rows, query)
         return rows, [
             ("date", "Date"), ("reference", "Document"), ("type", "Type"), ("party", "Party"),
