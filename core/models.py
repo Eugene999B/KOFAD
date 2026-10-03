@@ -225,6 +225,7 @@ class Document(models.Model):
     paid = models.DecimalField(max_digits=14, decimal_places=2)
     due_date = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
+    expense_category = models.CharField(max_length=40, blank=True, default="")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
@@ -574,3 +575,223 @@ class PasswordRecovery(models.Model):
     used = models.BooleanField(default=False)
     sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Worker(models.Model):
+    EMPLOYMENT_TYPES = [
+        ("permanent", "Permanent"), ("contract", "Contract"), ("casual", "Casual"),
+        ("intern", "Intern / trainee"), ("probation", "Probation"),
+    ]
+    STATUSES = [
+        ("active", "Active"), ("leave", "On leave"), ("suspended", "Suspended"), ("exited", "Exited"),
+    ]
+    SALARY_BASIS = [("monthly", "Monthly"), ("daily", "Daily"), ("hourly", "Hourly")]
+    TAX_MODES = [
+        ("resident", "Resident PAYE"), ("nonresident", "Non-resident"), ("casual", "Casual worker"), ("exempt", "Exempt"),
+    ]
+
+    employee_code = models.CharField(max_length=30, unique=True)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="workers")
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="worker_profile")
+    first_name = models.CharField(max_length=80)
+    last_name = models.CharField(max_length=80)
+    other_names = models.CharField(max_length=120, blank=True)
+    preferred_name = models.CharField(max_length=80, blank=True)
+    gender = models.CharField(max_length=20, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    nationality = models.CharField(max_length=60, default="Ghanaian")
+    marital_status = models.CharField(max_length=30, blank=True)
+    phone = models.CharField(max_length=30)
+    alternate_phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    residential_address = models.TextField(blank=True)
+    digital_address = models.CharField(max_length=80, blank=True)
+    ghana_card_number = models.CharField(max_length=40, blank=True)
+    tax_id = models.CharField(max_length=50, blank=True)
+    ssnit_number = models.CharField(max_length=50, blank=True)
+    department = models.CharField(max_length=100, blank=True)
+    job_title = models.CharField(max_length=120)
+    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPES, default="permanent")
+    status = models.CharField(max_length=20, choices=STATUSES, default="active")
+    hire_date = models.DateField()
+    contract_start = models.DateField(null=True, blank=True)
+    contract_end = models.DateField(null=True, blank=True)
+    exit_date = models.DateField(null=True, blank=True)
+    exit_reason = models.TextField(blank=True)
+    salary_basis = models.CharField(max_length=12, choices=SALARY_BASIS, default="monthly")
+    base_salary = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    recurring_allowance = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    ssnit_enabled = models.BooleanField(default=True)
+    tax_mode = models.CharField(max_length=14, choices=TAX_MODES, default="resident")
+    junior_staff = models.BooleanField(default=False)
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_branch = models.CharField(max_length=100, blank=True)
+    bank_account_name = models.CharField(max_length=120, blank=True)
+    bank_account_number = models.CharField(max_length=80, blank=True)
+    momo_network = models.CharField(max_length=40, blank=True)
+    momo_number = models.CharField(max_length=30, blank=True)
+    emergency_name = models.CharField(max_length=120, blank=True)
+    emergency_relationship = models.CharField(max_length=60, blank=True)
+    emergency_phone = models.CharField(max_length=30, blank=True)
+    notes = models.TextField(blank=True)
+    card_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["last_name", "first_name", "employee_code"]
+        indexes = [
+            models.Index(fields=["branch", "status", "department"]),
+            models.Index(fields=["employee_code"]),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=Q(base_salary__gte=0) & Q(recurring_allowance__gte=0), name="worker_compensation_nonnegative"),
+        ]
+
+    @property
+    def full_name(self):
+        return " ".join(part for part in [self.first_name, self.other_names, self.last_name] if part).strip()
+
+    def __str__(self):
+        return f"{self.employee_code} · {self.full_name}"
+
+
+class WorkerDocument(models.Model):
+    CATEGORIES = [
+        ("photo", "Profile photo"), ("identity", "Identity document"), ("contract", "Employment contract"),
+        ("certificate", "Certificate / qualification"), ("tax", "Tax document"), ("ssnit", "SSNIT document"),
+        ("medical", "Medical / welfare"), ("disciplinary", "Disciplinary record"), ("other", "Other"),
+    ]
+    worker = models.ForeignKey(Worker, related_name="documents", on_delete=models.CASCADE)
+    category = models.CharField(max_length=20, choices=CATEGORIES, default="other")
+    title = models.CharField(max_length=180)
+    document_type = models.CharField(max_length=100, blank=True)
+    document_number = models.CharField(max_length=120, blank=True)
+    original_filename = models.CharField(max_length=220)
+    mime_type = models.CharField(max_length=100)
+    file_size_bytes = models.PositiveIntegerField()
+    checksum_sha256 = models.CharField(max_length=64)
+    file_data = models.BinaryField()
+    issued_date = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    is_current = models.BooleanField(default=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["worker", "category", "is_current"])]
+
+
+class PayrollRule(models.Model):
+    code = models.CharField(max_length=40, default="GH-PAYROLL")
+    name = models.CharField(max_length=160)
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    resident_bands = models.JSONField(default=list)
+    employee_ssnit_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("5.5"))
+    employer_pension_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("13"))
+    first_tier_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("13.5"))
+    tier2_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("5"))
+    min_insurable_earnings = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    max_insurable_earnings = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    nonresident_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("25"))
+    casual_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("5"))
+    bonus_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("5"))
+    bonus_limit_percent = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("15"))
+    junior_overtime_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("5"))
+    junior_overtime_excess_rate = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("10"))
+    junior_overtime_basic_limit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("18000"))
+    notes = models.TextField(blank=True)
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_from", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["code", "effective_from"], name="payroll_rule_effective_version")]
+
+
+class PayrollPeriod(models.Model):
+    STATUSES = [
+        ("draft", "Draft"), ("prepared", "Prepared for review"), ("approved", "Approved"),
+        ("locked", "Locked for payment"), ("reconciled", "Reconciled"),
+    ]
+    branch = models.ForeignKey(Branch, related_name="payroll_periods", on_delete=models.PROTECT)
+    year = models.PositiveIntegerField()
+    month = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    start_date = models.DateField()
+    end_date = models.DateField()
+    rule = models.ForeignKey(PayrollRule, on_delete=models.PROTECT)
+    status = models.CharField(max_length=16, choices=STATUSES, default="draft")
+    note = models.TextField(blank=True)
+    prepared_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    prepared_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    locked_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-year", "-month", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["branch", "year", "month"], name="one_payroll_period_per_branch_month")]
+        indexes = [models.Index(fields=["branch", "year", "month", "status"])]
+
+    @property
+    def label(self):
+        return self.start_date.strftime("%B %Y")
+
+
+class PayrollEntry(models.Model):
+    period = models.ForeignKey(PayrollPeriod, related_name="entries", on_delete=models.PROTECT)
+    worker = models.ForeignKey(Worker, related_name="payroll_entries", on_delete=models.PROTECT)
+    basic_salary = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    allowances = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    bonus = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    overtime = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    other_earnings = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    pretax_relief = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    other_deductions = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    gross_pay = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    ssnit_employee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    employer_pension = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    first_tier_remittance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tier2_contribution = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    chargeable_income = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    paye_tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    bonus_tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    overtime_tax = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    net_pay = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    calculation_snapshot = models.JSONField(default=dict)
+    validation_flags = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["worker__last_name", "worker__first_name", "worker__employee_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["period", "worker"], name="one_payroll_entry_per_worker_period"),
+            models.CheckConstraint(condition=Q(paid_amount__gte=0), name="payroll_paid_nonnegative"),
+        ]
+
+    @property
+    def balance(self):
+        return max(Decimal("0"), self.net_pay - self.paid_amount)
+
+
+class PayrollPayment(models.Model):
+    entry = models.ForeignKey(PayrollEntry, related_name="payments", on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
+    method = models.CharField(max_length=12, choices=Payment.METHODS)
+    reference = models.CharField(max_length=120, blank=True)
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
