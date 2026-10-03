@@ -195,7 +195,7 @@ class BusinessTests(Fixtures, TestCase):
             if format == "xlsx":
                 sheet = load_workbook(BytesIO(response.content)).active
                 self.assertEqual(sheet["A1"].value, Company.objects.first().name)
-                self.assertIn("Metric", [cell.value for cell in sheet["A"]])
+                self.assertIn("Reference", [cell.value for cell in sheet["A"]])
                 self.assertIsNotNone(sheet.freeze_panes)
             if format == "docx":
                 document = WordDocument(BytesIO(response.content))
