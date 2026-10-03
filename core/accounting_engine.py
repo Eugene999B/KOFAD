@@ -242,27 +242,57 @@ def trial_balance(branch, first, last):
 
 
 def statements(branch, first, last):
-    tb = trial_balance(branch, first, last)
-    by_type = defaultdict(lambda: ZERO)
-    for row in tb:
+    # Performance and cash flow are period statements. Financial position is
+    # cumulative through the reporting date, otherwise receivables/cash/payables
+    # would incorrectly show only this month's movement.
+    period_tb = trial_balance(branch, first, last)
+    cumulative_tb = trial_balance(branch, date(1900, 1, 1), last)
+
+    period_type = defaultdict(lambda: ZERO)
+    for row in period_tb:
         typ = row["type"]
         if typ in {"asset", "expense", "contra_revenue"}:
             value = row["debit"] - row["credit"]
         else:
             value = row["credit"] - row["debit"]
         if typ == "contra_asset":
-            by_type["asset"] -= value
+            period_type["asset"] -= value
         elif typ == "contra_revenue":
-            by_type["revenue"] -= value
+            period_type["revenue"] -= value
         else:
-            by_type[typ] += value
+            period_type[typ] += value
 
-    revenue = by_type["revenue"]
-    expenses = by_type["expense"]
+    cumulative_type = defaultdict(lambda: ZERO)
+    balance_sheet = []
+    for row in cumulative_tb:
+        typ = row["type"]
+        if typ == "asset":
+            value = row["debit"] - row["credit"]
+        elif typ == "contra_asset":
+            value = -(row["credit"] - row["debit"])
+        else:
+            value = row["credit"] - row["debit"]
+        if typ == "contra_revenue":
+            cumulative_type["revenue"] -= row["debit"] - row["credit"]
+        elif typ == "expense":
+            cumulative_type["expense"] += row["debit"] - row["credit"]
+        elif typ == "revenue":
+            cumulative_type["revenue"] += row["credit"] - row["debit"]
+        elif typ in {"asset", "contra_asset"}:
+            cumulative_type["asset"] += value
+            balance_sheet.append({**row, "statement_balance": value})
+        elif typ in {"liability", "equity"}:
+            cumulative_type[typ] += value
+            balance_sheet.append({**row, "statement_balance": value})
+
+    revenue = period_type["revenue"]
+    expenses = period_type["expense"]
     profit = revenue - expenses
-    assets = by_type["asset"]
-    liabilities = by_type["liability"]
-    equity = by_type["equity"] + profit
+    accumulated_result = cumulative_type["revenue"] - cumulative_type["expense"]
+    assets = cumulative_type["asset"]
+    liabilities = cumulative_type["liability"]
+    ledger_equity = cumulative_type["equity"]
+    equity = ledger_equity + accumulated_result
 
     cash_flow = {"operating": ZERO, "investing": ZERO, "financing": ZERO}
     for row in ledger(branch, first, last):
@@ -270,19 +300,26 @@ def statements(branch, first, last):
             continue
         movement = row["debit"] - row["credit"]
         if row["source"] == "Manual journal":
-            # Manual cash entries are conservatively classified as financing unless the memo is an asset acquisition.
             desc = row["description"].lower()
-            bucket = "investing" if any(word in desc for word in ("asset", "equipment", "vehicle", "machine")) else "financing"
+            if any(word in desc for word in ("asset", "equipment", "vehicle", "machine", "plant")):
+                bucket = "investing"
+            elif any(word in desc for word in ("capital", "loan", "borrowing", "owner", "financing")):
+                bucket = "financing"
+            else:
+                bucket = "operating"
         else:
             bucket = "operating"
         cash_flow[bucket] += movement
     cash_flow["net_change"] = sum(cash_flow.values(), ZERO)
 
     return {
-        "trial_balance": tb,
+        "trial_balance": period_tb,
+        "cumulative_trial_balance": cumulative_tb,
+        "balance_sheet": balance_sheet,
         "revenue": revenue, "expenses": expenses, "profit": profit,
-        "assets": assets, "liabilities": liabilities, "equity": equity,
-        "balance_check": assets - liabilities - equity,
+        "accumulated_result": accumulated_result,
+        "assets": assets, "liabilities": liabilities, "ledger_equity": ledger_equity,
+        "equity": equity, "balance_check": assets - liabilities - equity,
         "cash_flow": cash_flow,
     }
 
