@@ -9,7 +9,7 @@ from .models import Product, StockCount
 from .views import protected, problem
 
 
-@protected("operate_inventory|approve_operations")
+@protected("operate_inventory|approve_operations|manage_company")
 def index(request, branch):
     if request.method == "POST":
         count = counts.start_count(request.user, branch, request.POST.get("key"), request.POST.get("category", ""))
@@ -21,7 +21,7 @@ def index(request, branch):
     })
 
 
-@protected("operate_inventory|approve_operations")
+@protected("operate_inventory|approve_operations|manage_company")
 def detail(request, branch, pk):
     count = get_object_or_404(StockCount, pk=pk, branch=branch)
     lines = list(count.lines.select_related("product"))
