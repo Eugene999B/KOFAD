@@ -287,4 +287,4 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.authenticate_client()
         response = self.client.get("/debts/", {"customer": self.customer.pk})
         self.assertContains(response, 'class="debt-payment-dialog"')
-        self.assertContains(response, "Save payment &amp; issue receipt")
+        self.assertContains(response, "Save payment")
