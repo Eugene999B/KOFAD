@@ -1507,3 +1507,46 @@ html[data-theme="dark"] [data-sms-status][data-delivery-state="accepted"]{color:
 .comms-one-customer-row.active em::after{content:" ✓"}
 html[data-theme="dark"] .comms-one-customer-row{color:#fff}
 html[data-theme="dark"] .comms-one-customer-row em{color:#d79a79}
+
+
+/* Workforce, payroll, accounting & intelligence workspaces */
+.advanced-filter{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:14px;align-items:end}
+.report-filter-panel .advanced-filter{display:block}
+.form-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.span-2{grid-column:span 2}.span-3{grid-column:span 3}
+.table-sub{display:block;margin-top:3px;color:#788078;font-size:.78rem}
+.profile-hero{display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;background:linear-gradient(135deg,#171717 0%,#252522 100%);color:#fff;overflow:hidden;position:relative}
+.profile-hero:after{content:"";position:absolute;width:260px;height:260px;border:1px solid rgba(184,115,51,.26);border-radius:50%;right:-90px;top:-110px}
+.worker-avatar{width:92px;height:112px;border-radius:16px;overflow:hidden;background:#2d2d2b;border:2px solid rgba(184,115,51,.75);display:grid;place-items:center;position:relative;z-index:1}
+.worker-avatar img{width:100%;height:100%;object-fit:cover}.worker-avatar span{font-size:2rem;font-weight:800;color:#d59a62}
+.profile-title{position:relative;z-index:1}.profile-title h2{font-size:1.7rem;margin:.15rem 0}.profile-title p{color:#d8d8d2;margin:.2rem 0}
+.profile-pills{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.profile-pay{text-align:right;position:relative;z-index:1}.profile-pay small,.profile-pay span{display:block;color:#c8c8c1}.profile-pay strong{display:block;font-size:1.35rem;margin:4px 0}
+.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.detail-grid>div{padding:13px;border:1px solid rgba(130,130,120,.16);border-radius:12px;background:rgba(128,128,112,.035)}
+.detail-grid small{display:block;color:#777e77;text-transform:uppercase;letter-spacing:.06em;font-size:.68rem;margin-bottom:4px}.detail-grid strong{display:block;word-break:break-word}.detail-grid span{display:block;color:#777e77;font-size:.82rem;margin-top:3px}
+.document-upload-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;align-items:end;margin:18px 0 22px}
+.people-hero,.payroll-hero,.accounting-hero,.intelligence-hero{border-left:4px solid #b87333}
+.payroll-status{display:flex;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(135deg,rgba(184,115,51,.09),rgba(24,24,23,.02))}
+.status-rail{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.status-rail span{padding:8px 10px;border-radius:999px;background:rgba(120,120,110,.10);color:#838a82;font-size:.78rem;font-weight:700}
+.status-rail span.done{background:rgba(21,139,117,.12);color:#137b68}
+.workflow-actions{display:flex;align-items:center;justify-content:space-between;gap:20px;border-left:4px solid #b87333}
+.workflow-actions form{display:flex;gap:8px;flex-wrap:wrap}
+.payroll-table .flag{display:block;font-size:.72rem;padding:3px 6px;border-radius:6px;background:rgba(189,130,20,.11);color:#8a620f;margin:2px 0;max-width:210px}
+.detail-row td{background:rgba(128,128,112,.035)!important}
+.detail-row details{padding:4px 0}.detail-row summary{cursor:pointer;font-weight:700;color:#7e5129}
+.payroll-edit-grid{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;align-items:end;margin-top:12px;padding:14px;border-radius:12px;background:rgba(128,128,112,.05)}
+.rule-bands{display:grid;gap:7px;margin:14px 0}.band-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
+.accounting-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr);gap:18px}
+.pnl{display:grid;gap:2px}.pnl>div{display:flex;justify-content:space-between;gap:20px;padding:10px 12px;border-bottom:1px solid rgba(128,128,112,.12)}
+.pnl .indent{padding-left:26px;color:#656b65}.pnl .subtotal{font-weight:800;background:rgba(184,115,51,.07);border-top:1px solid rgba(184,115,51,.2)}.pnl .total{font-weight:900;font-size:1.08rem;background:#171717;color:#fff;border-radius:10px;margin-top:5px}
+.analytics-bars{display:grid;gap:16px}.analytics-row{display:grid;grid-template-columns:90px 1fr 210px;gap:14px;align-items:center}.analytics-row>div:last-child{display:flex;justify-content:space-between;gap:10px;font-size:.75rem;color:#747a74}
+.bar-pair{display:grid;gap:4px}.sales-bar,.cost-bar{height:7px;border-radius:999px;display:block;min-width:2px}.sales-bar{background:#238a83}.cost-bar{background:#b87333}
+.record-form{display:grid;gap:18px}.record-form .panel{margin:0}.record-form .form-actions{margin-top:16px}
+.check-row{display:flex!important;gap:8px;align-items:center!important}.check-row input[type=checkbox]{width:auto}
+.pagination{display:flex;justify-content:flex-end;gap:8px;align-items:center;margin-top:16px}.pagination p{margin-right:auto;color:#747a74}
+.format-card,.profile-hero,.payroll-status{box-shadow:0 12px 34px rgba(27,27,24,.05)}
+@media(max-width:1050px){.advanced-filter{grid-template-columns:repeat(2,minmax(0,1fr))}.profile-grid,.accounting-layout{grid-template-columns:1fr}.document-upload-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.payroll-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-row{grid-template-columns:80px 1fr}.analytics-row>div:last-child{grid-column:2}}
+@media(max-width:720px){.form-grid.three,.advanced-filter,.document-upload-grid,.payroll-edit-grid{grid-template-columns:1fr}.span-2,.span-3{grid-column:auto}.profile-hero{grid-template-columns:auto 1fr}.profile-pay{grid-column:1/-1;text-align:left}.worker-avatar{width:74px;height:90px}.detail-grid{grid-template-columns:1fr}.payroll-status,.workflow-actions{align-items:flex-start;flex-direction:column}.status-rail{justify-content:flex-start}.analytics-row{grid-template-columns:1fr}.analytics-row>div:last-child{grid-column:auto}.pagination{align-items:flex-start;flex-wrap:wrap}}
