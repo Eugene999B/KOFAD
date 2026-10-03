@@ -16,7 +16,7 @@ from django.utils import timezone
 from core.models import Access, Message, MessageTemplate, SmsAttempt, SmsEvent
 from core.tests import Fixtures
 from core.sms.providers import Arkesel, Submission, get_provider
-from core.sms.service import create_draft,queue_message,process_one,receive_callback,recover_stale,estimate,normalize_phone
+from core.sms.service import create_draft,send_message_now,receive_callback,recover_stale,estimate,normalize_phone
 from core.sms.templates import validate_template
 
 SETTINGS = dict(SMS_ENABLED=True,SMS_PROVIDER="arkesel",SMS_SENDER_ID="KOFAD",SMS_SANDBOX=False,
@@ -44,67 +44,86 @@ class SmsTests(Fixtures,TestCase):
         self.assertEqual(estimate("😀"*36),("utf16",2))
         self.assertEqual(estimate("界"*70),("utf16",1))
 
-    def test_draft_key_and_queue_duplicate_protection(self):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_draft_key_and_direct_send_duplicate_protection(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "provider-1", 200, recipient="+233241234567")
+        ]
         one = create_draft(self.user,self.branch,self.customer,"Hello",source_key="receipt:1")
         two = create_draft(self.user,self.branch,self.customer,"Hello",source_key="receipt:1")
         self.assertEqual(one.pk,two.pk)
-        queue_message(self.user,self.branch,one.pk)
+        send_message_now(self.user,self.branch,one.pk)
         with self.assertRaises(ValidationError):
-            queue_message(self.user,self.branch,one.pk)
+            send_message_now(self.user,self.branch,one.pk)
+        self.assertEqual(submit_many.call_count, 1)
 
     def test_permission_and_consent(self):
         viewer = User.objects.create_user("viewer",password="viewer-password-long")
         viewer.access.branches.add(self.branch)
         message = self.draft()
         with self.assertRaises(PermissionDenied):
-            queue_message(viewer,self.branch,message.pk)
+            send_message_now(viewer,self.branch,message.pk)
         self.customer.consent = False
         self.customer.save()
         with self.assertRaises(ValidationError):
-            queue_message(self.user,self.branch,message.pk)
+            send_message_now(self.user,self.branch,message.pk)
 
     def test_disabled_configuration_leaves_draft(self):
         message = self.draft()
         with override_settings(SMS_ENABLED=False),self.assertRaises(ValidationError):
-            queue_message(self.user,self.branch,message.pk)
+            send_message_now(self.user,self.branch,message.pk)
         message.refresh_from_db()
         self.assertEqual(message.status,"draft")
 
-    @patch("core.sms.providers.Arkesel.submit",return_value=Submission("accepted","provider-123",200))
-    def test_worker_acceptance_is_not_delivery(self,submit):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_direct_acceptance_is_sent_not_delivery(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "provider-123", 200, recipient="+233241234567")
+        ]
         message = self.draft()
-        queue_message(self.user,self.branch,message.pk)
-        self.assertTrue(process_one())
-        self.assertFalse(process_one())
-        message.refresh_from_db()
-        self.assertEqual(message.status,"accepted")
-        self.assertEqual(submit.call_count,1)
-        self.assertEqual(message.delivery_attempts.count(),1)
-        callback = submit.call_args.args[3]
-        self.assertIn("/sms/callback/",callback)
-        self.assertIn("token=",callback)
+        sent = send_message_now(self.user,self.branch,message.pk)
+        self.assertEqual(sent.status,"accepted")
+        self.assertEqual(submit_many.call_count,1)
+        self.assertEqual(sent.delivery_attempts.count(),1)
+        self.assertIn("/sms/delivery/", submit_many.call_args.args[3])
+        self.assertIn("token=", submit_many.call_args.args[3])
 
-    @patch("core.sms.providers.Arkesel.submit",return_value=Submission("unknown",error_code="uncertain_network_result"))
-    def test_unknown_never_auto_retries_or_fails_over(self,submit):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_unknown_never_auto_retries_or_fails_over(self, submit_many):
+        submit_many.return_value = [
+            Submission(
+                "unknown",
+                error_code="uncertain_network_result",
+                error_detail="Provider result is unknown.",
+                recipient="+233241234567",
+            )
+        ]
         message = self.draft()
-        queue_message(self.user,self.branch,message.pk)
-        process_one()
-        self.assertFalse(process_one())
+        sent = send_message_now(self.user,self.branch,message.pk)
+        self.assertEqual(sent.status, "unknown")
         with self.assertRaises(ValidationError):
-            queue_message(self.user,self.branch,message.pk,retry=True)
-        self.assertEqual(submit.call_count,1)
+            send_message_now(self.user,self.branch,message.pk,retry=True)
+        self.assertEqual(submit_many.call_count,1)
 
-    @patch("core.sms.providers.Arkesel.submit",return_value=Submission("retry_wait",http_status=429))
-    def test_throttled_attempt_retries_later(self,submit):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_throttled_direct_send_fails_safely_and_requires_manual_retry(self, submit_many):
+        submit_many.side_effect = [
+            [Submission(
+                "retry_wait",
+                http_status=429,
+                error_code="rate_limited",
+                error_detail="Arkesel rate limit reached.",
+                recipient="+233241234567",
+            )],
+            [Submission("accepted", "provider-after-retry", 200, recipient="+233241234567")],
+        ]
         message = self.draft()
-        queue_message(self.user,self.branch,message.pk)
-        process_one()
-        message.refresh_from_db()
-        self.assertEqual(message.status,"retry_wait")
-        self.assertFalse(process_one())
-        Message.objects.filter(pk=message.pk).update(next_attempt_at=timezone.now()-timedelta(seconds=1))
-        process_one()
-        self.assertEqual(submit.call_count,2)
+        sent = send_message_now(self.user,self.branch,message.pk)
+        self.assertEqual(sent.status,"failed")
+        self.assertIn("rate limit", sent.last_error.lower())
+        retried = send_message_now(self.user,self.branch,message.pk,retry=True)
+        self.assertEqual(retried.status, "accepted")
+        self.assertEqual(submit_many.call_count,2)
 
     def test_authenticated_callbacks_are_idempotent_and_monotonic(self):
         message = self.draft()
@@ -142,7 +161,6 @@ class SmsTests(Fixtures,TestCase):
         self.assertEqual(recover_stale(),1)
         message.refresh_from_db()
         self.assertEqual(message.status,"unknown")
-        self.assertFalse(process_one())
 
     def test_templates_reject_attribute_and_format_access(self):
         for body in ("{customer.password}","{total:03}","{missing}","{company"):
@@ -165,7 +183,7 @@ class SmsTests(Fixtures,TestCase):
         self.assertEqual(request.full_url,"https://sms.arkesel.com/api/v2/sms/send")
         payload = json.loads(request.data)
         self.assertEqual(payload["recipients"],["233241234567"])
-        self.assertFalse(payload["sandbox"])
+        self.assertNotIn("sandbox", payload)
         response.read.return_value = b"not json"
         self.assertEqual(Arkesel().submit("+233241234567","Hello","KOFAD","https://kofad.example/callback",False).status,"unknown")
 
@@ -215,20 +233,30 @@ class SmsConcurrencyTests(Fixtures,TransactionTestCase):
         self.customer.phone,self.customer.consent = "+233241234567",True
         self.customer.save()
 
-    @patch("core.sms.providers.Arkesel.submit",return_value=Submission("accepted","sms-concurrent",200))
-    def test_two_workers_submit_once(self,submit):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_two_direct_senders_submit_once(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "sms-concurrent", 200, recipient="+233241234567")
+        ]
         message = create_draft(self.user,self.branch,self.customer,"Single submission")
-        queue_message(self.user,self.branch,message.pk)
-        def worker(_):
+
+        def sender(_):
             close_old_connections()
             try:
-                return process_one()
+                user = User.objects.get(pk=self.user.pk)
+                branch = type(self.branch).objects.get(pk=self.branch.pk)
+                try:
+                    send_message_now(user, branch, message.pk)
+                    return "sent"
+                except ValidationError:
+                    return "blocked"
             finally:
                 connections.close_all()
+
         with ThreadPoolExecutor(max_workers=2) as pool:
-            outcomes = list(pool.map(worker,range(2)))
-        self.assertCountEqual(outcomes,[True,False])
-        self.assertEqual(submit.call_count,1)
+            outcomes = list(pool.map(sender,range(2)))
+        self.assertCountEqual(outcomes,["sent","blocked"])
+        self.assertEqual(submit_many.call_count,1)
         self.assertEqual(SmsAttempt.objects.filter(message=message).count(),1)
 
 
@@ -239,37 +267,42 @@ class SmsEvidenceTests(Fixtures,TestCase):
         self.customer.phone,self.customer.consent = "+233241234567",True
         self.customer.save()
 
-    def test_callback_before_submission_response_keeps_delivered(self):
-        from urllib.parse import urlsplit,parse_qs
-        message = create_draft(self.user,self.branch,self.customer,"Callback race test")
-        queue_message(self.user,self.branch,message.pk)
-        def callback_first(recipient,body,sender,callback,sandbox):
-            url = urlsplit(callback)
-            attempt_id = uuid.UUID(url.path.strip("/").split("/")[-1])
-            self.assertTrue(receive_callback(attempt_id,parse_qs(url.query)["token"][0],"fast-1","DELIVERED"))
-            return Submission("accepted","fast-1",200)
-        with patch("core.sms.providers.Arkesel.submit",side_effect=callback_first):
-            process_one()
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_provider_acceptance_then_delivery_callback_is_monotonic(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "fast-1", 200, recipient="+233241234567")
+        ]
+        message = create_draft(self.user,self.branch,self.customer,"Callback delivery test")
+        send_message_now(self.user,self.branch,message.pk)
+        message.refresh_from_db()
+        self.assertEqual(message.status, "accepted")
+        from core.sms.service import receive_delivery_callback, _delivery_callback_token
+        self.assertTrue(receive_delivery_callback(_delivery_callback_token(), "fast-1", "DELIVERED"))
+        self.assertTrue(receive_delivery_callback(_delivery_callback_token(), "fast-1", "QUEUED"))
         message.refresh_from_db()
         self.assertEqual(message.status,"delivered")
 
-    def test_queued_content_cannot_be_rewritten(self):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_sent_content_cannot_be_rewritten(self, submit_many):
         from django.db import DatabaseError,transaction
+        submit_many.return_value = [
+            Submission("accepted", "immutable-1", 200, recipient="+233241234567")
+        ]
         message = create_draft(self.user,self.branch,self.customer,"Original SMS")
-        queue_message(self.user,self.branch,message.pk)
+        send_message_now(self.user,self.branch,message.pk)
         with self.assertRaises(DatabaseError),transaction.atomic():
             Message.objects.filter(pk=message.pk).update(body="Changed after approval")
 
-    def test_consent_revoked_after_queue_blocks_network(self):
+    def test_consent_revoked_before_direct_send_blocks_network(self):
         message = create_draft(self.user,self.branch,self.customer,"Consent test")
-        queue_message(self.user,self.branch,message.pk)
         self.customer.consent = False
         self.customer.save()
-        with patch("core.sms.providers.Arkesel.submit") as submit:
-            process_one()
+        with patch("core.sms.providers.Arkesel.submit_many") as submit:
+            with self.assertRaises(ValidationError):
+                send_message_now(self.user,self.branch,message.pk)
             submit.assert_not_called()
         message.refresh_from_db()
-        self.assertEqual(message.status,"failed")
+        self.assertEqual(message.status,"draft")
 
 
 @override_settings(**SETTINGS)
@@ -282,16 +315,16 @@ class ReminderTests(Fixtures,TestCase):
         for code,(name,body) in DEFAULTS.items():
             MessageTemplate.objects.get_or_create(code=code,defaults={"name":name,"body":body})
 
-    def test_paid_invoice_stops_queued_reminder(self):
+    def test_paid_invoice_stops_stale_reminder_before_direct_send(self):
         from core.sms.templates import render_for_document
         from core import services
         invoice = self.sale(payments=[],party=self.customer.pk,due_date=timezone.localdate().isoformat())
         message = create_draft(self.user,self.branch,self.customer,render_for_document(invoice,"debt"),
             source_key=f"debt:{invoice.pk}:50:{timezone.localdate()}")
-        queue_message(self.user,self.branch,message.pk)
         services.post_payment(self.user,self.branch,{"invoice":str(invoice.pk),"amount":"50","method":"cash"},uuid.uuid4())
-        with patch("core.sms.providers.Arkesel.submit") as submit:
-            process_one()
+        with patch("core.sms.providers.Arkesel.submit_many") as submit:
+            with self.assertRaises(ValidationError):
+                send_message_now(self.user,self.branch,message.pk)
             submit.assert_not_called()
         message.refresh_from_db()
-        self.assertEqual(message.status,"failed")
+        self.assertEqual(message.status,"draft")

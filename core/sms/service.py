@@ -1,7 +1,6 @@
 import hashlib
 import hmac
 import re
-import secrets
 from datetime import timedelta
 from urllib.parse import urlencode, urlsplit
 
@@ -229,55 +228,42 @@ def _recipient_is_current(message):
     return False
 
 
-def _automation_queue_actor(actor):
+def _automation_sender(actor):
     if actor and actor.is_active and actor.has_perm("core.send_messages"):
         return actor
     from django.contrib.auth.models import User
     return User.objects.filter(is_active=True, is_superuser=True).order_by("pk").first()
 
 
-@transaction.atomic
-def queue_automatic(message, actor=None):
-    if message.status != "draft":
+def send_automatic(message, actor=None):
+    """Submit an eligible automatic SMS immediately when live SMS is enabled."""
+    if message.status != "draft" or message.channel != "sms" or not settings.SMS_ENABLED:
         return message
-    if message.channel != "sms":
-        return message
-    if not settings.SMS_ENABLED:
-        return message
-    if not _recipient_is_current(message):
-        raise ValidationError("Automatic message recipient is no longer eligible.")
-    queued_by = _automation_queue_actor(actor)
-    if not queued_by:
-        raise ValidationError("No active system administrator is available to authorize automatic SMS.")
-    provider = message.provider or settings.SMS_PROVIDER
-    try:
-        validate_config(provider)
-    except ValidationError:
-        return message
-    message.provider = provider
-    message.sender = message.sender or settings.SMS_SENDER_ID
-    message.sandbox = settings.SMS_SANDBOX
-    message.status = "queued"
-    message.queued_by = queued_by
-    message.next_attempt_at = timezone.now()
-    message.last_error = ""
-    message.save(update_fields=[
-        "provider", "sender", "sandbox", "status", "queued_by", "next_attempt_at", "last_error"
-    ])
-    audit(actor, message.branch, "sms.automatic_queued", message.pk, {
-        "provider": provider, "sandbox": message.sandbox,
-    })
-    return message
+    sender = _automation_sender(actor)
+    if not sender:
+        raise ValidationError("No active administrator is available to authorize automatic SMS.")
+    return send_message_now(sender, message.branch, message.pk, automatic=True)
 
-@transaction.atomic
-def queue_message(user,branch,pk,retry=False):
-    permit(user,branch,"send_messages")
-    message = Message.objects.select_for_update(of=("self",)).select_related("party", "management_contact").get(pk=pk,branch=branch)
-    allowed = ("failed","undelivered","expired") if retry else ("draft",)
+
+def _delivery_callback_token():
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        b"kofad-sms-delivery-v1",
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _delivery_callback_url():
+    origin = settings.SMS_PUBLIC_ORIGIN.rstrip("/")
+    return origin + "/sms/delivery/?" + urlencode({"token": _delivery_callback_token()})
+
+
+def _prepare_direct_attempt(user, message, retry=False):
+    allowed = ("failed", "undelivered", "expired") if retry else ("draft",)
     if message.status not in allowed:
-        raise ValidationError("Only drafts or definitively failed messages can be queued. Unknown outcomes require provider investigation.")
+        raise ValidationError("Only a new message or a definitively failed SMS can be sent.")
     if message.channel != "sms":
-        raise ValidationError("WhatsApp delivery is not configured.")
+        raise ValidationError("Only SMS can be submitted to Arkesel.")
     if not _recipient_is_current(message):
         raise ValidationError("Recipient details or sending eligibility changed. Prepare a new message.")
     validate_current_context(message)
@@ -285,17 +271,123 @@ def queue_message(user,branch,pk,retry=False):
     validate_config(provider)
     if message.attempts >= settings.SMS_MAX_ATTEMPTS:
         raise ValidationError("This message reached its attempt limit.")
+
     message.provider = provider
     message.sender = message.sender or settings.SMS_SENDER_ID
     if not retry:
         message.sandbox = settings.SMS_SANDBOX
-    message.status = "queued"
-    message.queued_by = user
-    message.next_attempt_at = timezone.now()
+    message.attempts += 1
+    message.status = "sending"
+    message.submitted_by = user
     message.last_error = ""
-    message.save()
-    audit(user,branch,"sms.queued",message.pk,{"provider":provider,"sandbox":message.sandbox,"retry":retry})
-    return message
+    message.save(update_fields=[
+        "provider", "sender", "sandbox", "attempts", "status",
+        "submitted_by", "last_error",
+    ])
+    attempt = SmsAttempt.objects.create(
+        message=message,
+        number=message.attempts,
+        provider=provider,
+        callback_digest=hashlib.sha256(_delivery_callback_token().encode()).hexdigest(),
+    )
+    return attempt
+
+
+def _finalize_direct_result(message_id, attempt_id, result, actor):
+    with transaction.atomic():
+        message = Message.objects.select_for_update().get(pk=message_id)
+        attempt = SmsAttempt.objects.select_for_update().get(pk=attempt_id)
+        incoming = result.status
+        if incoming == "retry_wait":
+            incoming = "failed"
+            detail = result.error_detail or "Arkesel rate limit reached. Try again shortly."
+        else:
+            detail = result.error_detail
+        attempt.status = incoming
+        attempt.provider_id = result.provider_id or attempt.provider_id
+        attempt.http_status = result.http_status
+        attempt.error_code = result.error_code
+        attempt.save()
+
+        message.status = "simulated" if message.sandbox and incoming in ("accepted", "delivered") else incoming
+        message.last_error = (detail or result.error_code or "")[:240]
+        message.save(update_fields=["status", "last_error"])
+        audit(actor, message.branch, "sms." + message.status, message.pk, {
+            "attempt": str(attempt.pk),
+            "provider": message.provider,
+            "provider_id": attempt.provider_id,
+            "http_status": attempt.http_status,
+            "error_code": attempt.error_code,
+            "direct": True,
+        })
+        return message
+
+
+def send_messages_now(user, branch, message_ids, retry=False, automatic=False):
+    """Submit staff/automatic SMS to Arkesel now. No intermediate queued state."""
+    if not automatic:
+        permit(user, branch, "send_messages")
+    ids = list(dict.fromkeys(message_ids))
+    if not ids:
+        raise ValidationError("Choose at least one message to send.")
+
+    prepared = []
+    with transaction.atomic():
+        messages = list(
+            Message.objects.select_for_update(of=("self",))
+            .select_related("party", "management_contact")
+            .filter(pk__in=ids, branch=branch)
+            .order_by("created_at", "pk")
+        )
+        if len(messages) != len(ids):
+            raise ValidationError("One or more SMS messages could not be found.")
+        for message in messages:
+            attempt = _prepare_direct_attempt(user, message, retry=retry)
+            prepared.append((message.pk, attempt.pk, message.provider, message.sender, message.sandbox, message.body, message.recipient))
+
+    # Group identical message bodies so multi-recipient campaigns use one Arkesel API call.
+    groups = {}
+    for row in prepared:
+        key = (row[2], row[3], row[4], row[5])
+        groups.setdefault(key, []).append(row)
+
+    results_by_message = {}
+    callback_url = _delivery_callback_url()
+    for (provider, sender, sandbox, body), rows in groups.items():
+        recipients = list(dict.fromkeys(row[6] for row in rows))
+        try:
+            results = get_provider(provider).submit_many(recipients, body, sender, callback_url, sandbox)
+        except Exception as exc:
+            from .providers import Submission
+            results = [
+                Submission(
+                    "unknown",
+                    error_code="adapter_outcome_unknown",
+                    error_detail=f"Provider result is unknown: {exc}",
+                    recipient=recipient,
+                )
+                for recipient in recipients
+            ]
+        by_recipient = {result.recipient: result for result in results}
+        for message_id, attempt_id, _, _, _, _, recipient in rows:
+            result = by_recipient.get(recipient)
+            if result is None:
+                from .providers import Submission
+                result = Submission(
+                    "unknown",
+                    error_code="missing_provider_result",
+                    error_detail="Arkesel did not return a result for this recipient.",
+                    recipient=recipient,
+                )
+            results_by_message[message_id] = _finalize_direct_result(
+                message_id, attempt_id, result, user
+            )
+
+    return [results_by_message[pk] for pk in ids]
+
+
+def send_message_now(user, branch, pk, retry=False, automatic=False):
+    return send_messages_now(user, branch, [pk], retry=retry, automatic=automatic)[0]
 
 
 def transition(current,incoming):
@@ -304,58 +396,6 @@ def transition(current,incoming):
     if current in FINAL:
         return current
     return incoming
-
-
-def process_one():
-    # Validate before claiming. A misconfigured worker leaves the queue intact.
-    with transaction.atomic():
-        message = Message.objects.select_for_update(of=("self",), skip_locked=True).select_related("party", "management_contact").filter(
-            status__in=["queued","retry_wait"], next_attempt_at__lte=timezone.now()
-        ).order_by("created_at").first()
-        if not message:
-            return False
-        validate_config(message.provider)
-        try:
-            permit(message.queued_by,message.branch,"send_messages")
-            validate_current_context(message)
-            if not _recipient_is_current(message):
-                raise ValidationError("Consent or recipient changed.")
-        except Exception:
-            message.status,message.last_error = "failed","Recipient consent or sender access no longer valid."
-            message.save(update_fields=["status","last_error"])
-            audit(None,message.branch,"sms.blocked",message.pk)
-            return True
-        token = secrets.token_urlsafe(32)
-        message.attempts += 1
-        attempt = SmsAttempt.objects.create(message=message,number=message.attempts,provider=message.provider,
-            callback_digest=hashlib.sha256(token.encode()).hexdigest())
-        message.status = "sending"
-        message.save(update_fields=["status","attempts"])
-    callback = settings.SMS_PUBLIC_ORIGIN + f"/sms/callback/{attempt.pk}/?" + urlencode({"token":token})
-    try:
-        result = get_provider(message.provider).submit(message.recipient,message.body,message.sender,callback,message.sandbox)
-    except Exception:
-        # Adapter bugs or interrupted transport cannot establish whether a charge occurred.
-        from .providers import Submission
-        result = Submission("unknown",error_code="adapter_outcome_unknown")
-    with transaction.atomic():
-        locked = Message.objects.select_for_update().get(pk=message.pk)
-        current = SmsAttempt.objects.select_for_update().get(pk=attempt.pk)
-        incoming = result.status
-        if incoming == "retry_wait" and locked.attempts >= settings.SMS_MAX_ATTEMPTS:
-            incoming = "failed"
-        current.status = transition(current.status,incoming)
-        if not current.provider_id:
-            current.provider_id = result.provider_id
-        current.http_status,current.error_code = result.http_status,result.error_code
-        current.save()
-        locked.status = "simulated" if locked.sandbox and current.status in ("accepted","delivered") else current.status
-        locked.last_error = result.error_code
-        if locked.status == "retry_wait":
-            locked.next_attempt_at = timezone.now()+timedelta(seconds=60*2**(locked.attempts-1))
-        locked.save(update_fields=["status","last_error","next_attempt_at"])
-        audit(locked.queued_by,locked.branch,"sms."+locked.status,locked.pk,{"attempt":str(current.pk),"provider":locked.provider})
-    return True
 
 
 @transaction.atomic
@@ -383,6 +423,114 @@ def receive_callback(attempt_id,token,sms_id,status):
             message.save(update_fields=["status"])
         audit(None,message.branch,"sms.callback",message.pk,{"status":attempt.status,"attempt":str(attempt.pk)})
     return True
+
+
+def _map_provider_status(value):
+    status = str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
+    if status in {"DELIVERED", "DELIVERED_TO_HANDSET"}:
+        return "delivered"
+    if status in {"NOT_DELIVERED", "UNDELIVERED", "PROHIBITED", "REJECTED"}:
+        return "undelivered"
+    if status in {"EXPIRED"}:
+        return "expired"
+    if status in {"FAILED", "ERROR"}:
+        return "failed"
+    if status in {"SUBMITTED", "QUEUED", "SENT", "ACCEPTED", "SUCCESS"}:
+        return "accepted"
+    return ""
+
+
+def receive_delivery_callback(token, sms_id, status):
+    expected = _delivery_callback_token()
+    if not token or not hmac.compare_digest(expected, token):
+        return False
+    sms_id = str(sms_id or "").strip()
+    mapped = _map_provider_status(status)
+    if not sms_id or len(sms_id) > 180 or not mapped:
+        return False
+
+    hint = SmsAttempt.objects.filter(provider_id=sms_id).values("pk", "message_id").order_by("-started_at").first()
+    if not hint:
+        return False
+    with transaction.atomic():
+        message = Message.objects.select_for_update().get(pk=hint["message_id"])
+        attempt = SmsAttempt.objects.select_for_update().get(pk=hint["pk"])
+        fingerprint = hashlib.sha256(f"global:{attempt.pk}:{sms_id}:{mapped}".encode()).hexdigest()
+        _, created = SmsEvent.objects.get_or_create(
+            fingerprint=fingerprint,
+            defaults={"attempt": attempt, "provider_id": sms_id, "status": mapped},
+        )
+        if created:
+            attempt.status = "simulated" if message.sandbox else transition(attempt.status, mapped)
+            attempt.save(update_fields=["status", "updated_at"])
+            if attempt.number == message.attempts:
+                message.status = attempt.status
+                if message.status in {"delivered", "accepted"}:
+                    message.last_error = ""
+                message.save(update_fields=["status", "last_error"])
+            audit(None, message.branch, "sms.callback", message.pk, {
+                "status": attempt.status,
+                "attempt": str(attempt.pk),
+                "provider_id": sms_id,
+            })
+    return True
+
+
+def sync_delivery_reports(limit=200):
+    """Fallback to Arkesel message reports when callbacks are delayed or missed."""
+    cutoff = timezone.now() - timedelta(seconds=8)
+    attempts = list(
+        SmsAttempt.objects.select_related("message")
+        .filter(
+            provider="arkesel",
+            provider_id__gt="",
+            status__in=["accepted", "sending"],
+            updated_at__lte=cutoff,
+            message__status__in=["accepted", "sending"],
+        )
+        .order_by("updated_at")[:limit]
+    )
+    if not attempts:
+        return 0
+    try:
+        reports = get_provider("arkesel").reports([attempt.provider_id for attempt in attempts])
+    except ValidationError:
+        return 0
+
+    changed = 0
+    for attempt in attempts:
+        entry = reports.get(attempt.provider_id)
+        if not isinstance(entry, dict):
+            # Touch the attempt so we do not hammer the provider every second.
+            SmsAttempt.objects.filter(pk=attempt.pk).update(updated_at=timezone.now())
+            continue
+        raw_status = (
+            entry.get("status") or entry.get("message_status") or entry.get("messageStatus")
+            or entry.get("delivery_status") or entry.get("deliveryStatus")
+            or entry.get("sms_status") or entry.get("state")
+        )
+        mapped = _map_provider_status(raw_status)
+        if not mapped:
+            SmsAttempt.objects.filter(pk=attempt.pk).update(updated_at=timezone.now())
+            continue
+        with transaction.atomic():
+            message = Message.objects.select_for_update().get(pk=attempt.message_id)
+            locked = SmsAttempt.objects.select_for_update().get(pk=attempt.pk)
+            new_status = transition(locked.status, mapped)
+            locked.status = "simulated" if message.sandbox else new_status
+            locked.save(update_fields=["status", "updated_at"])
+            if locked.number == message.attempts and message.status != locked.status:
+                message.status = locked.status
+                if message.status in {"delivered", "accepted"}:
+                    message.last_error = ""
+                message.save(update_fields=["status", "last_error"])
+                changed += 1
+                audit(None, message.branch, "sms.delivery_sync", message.pk, {
+                    "status": message.status,
+                    "attempt": str(locked.pk),
+                    "provider_id": locked.provider_id,
+                })
+    return changed
 
 
 @transaction.atomic

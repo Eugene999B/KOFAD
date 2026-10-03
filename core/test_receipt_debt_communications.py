@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
@@ -13,7 +14,8 @@ from .models import (
     Closing, CommunicationSettings, Company, DebtSettings, Document, ManagementContact,
     Message, Party, Product, Stock,
 )
-from .sms.service import create_internal_draft, queue_automatic
+from .sms.providers import Submission
+from .sms.service import _delivery_callback_token, create_internal_draft, send_automatic
 from .tests import Fixtures
 
 
@@ -244,8 +246,47 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertIn("500.00", message.body)
         self.assertIn("variance GHS -2.00", message.body)
 
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_daily_closing_sends_immediately_to_all_configured_management_numbers(self, submit_many):
+        submit_many.side_effect = lambda recipients, body, sender, callback_url, sandbox: [
+            Submission("accepted", provider_id=f"close-{index}", http_status=200, recipient=recipient)
+            for index, recipient in enumerate(recipients, 1)
+        ]
+        ManagementContact.objects.create(
+            name="Owner One", phone="+233244444444", receive_closing=True
+        )
+        ManagementContact.objects.create(
+            name="Owner Two", phone="+233255555555", receive_closing=True
+        )
+        CommunicationSettings.objects.update_or_create(
+            pk=1, defaults={"daily_closing_mode": "send"}
+        )
+        closing = Closing.objects.create(
+            branch=self.branch,
+            date=timezone.localdate(),
+            expected={"cash": "100.00", "momo": "0.00", "bank": "0.00", "card": "0.00"},
+            counted={"cash": "100.00", "momo": "0.00", "bank": "0.00", "card": "0.00"},
+            summary={"sales_total": "900.00", "debt_collections": "0.00", "expenses_total": "20.00"},
+            submitted_by=self.user,
+        )
+        sent = automations.prepare_closing_notifications(closing, self.user)
+        self.assertEqual(len(sent), 2)
+        self.assertTrue(all(message.status == "accepted" for message in sent))
+        submit_many.assert_called_once()
+        self.assertEqual(set(submit_many.call_args.args[0]), {
+            "+233244444444", "+233255555555"
+        })
+
     @override_settings(SMS_ENABLED=False)
-    def test_automatic_queue_mode_stays_draft_when_live_sms_is_unavailable(self):
+    def test_automatic_send_mode_stays_draft_when_live_sms_is_unavailable(self):
         contact = ManagementContact.objects.create(
             name="Owner alerts",
             phone="+233245555555",
@@ -254,10 +295,10 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         message = create_internal_draft(
             self.user, self.branch, contact, "Internal closing draft", "auto:test:provider-off"
         )
-        queue_automatic(message, self.user)
+        send_automatic(message, self.user)
         message.refresh_from_db()
         self.assertEqual(message.status, "draft")
-        self.assertIsNone(message.queued_by)
+        self.assertIsNone(message.submitted_by)
 
     def test_source_key_cannot_be_rebound_to_another_management_recipient(self):
         first = ManagementContact.objects.create(name="First", phone="+233246666666")
@@ -351,7 +392,12 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         ARKESEL_API_KEY="ci-test-key",
         SMS_SENDER_ID="KOFAD",
     )
-    def test_manual_sms_is_normalized_and_queued_immediately(self):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_manual_sms_is_normalized_and_sent_immediately(self, submit_many):
+        submit_many.side_effect = lambda recipients, body, sender, callback_url, sandbox: [
+            Submission("accepted", provider_id=f"msg-{index}", http_status=200, recipient=recipient)
+            for index, recipient in enumerate(recipients, 1)
+        ]
         self.authenticate_client()
         response = self.client.post("/communications/", {
             "action": "send_compose",
@@ -365,9 +411,13 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         message = Message.objects.get(channel="sms", body="KOFAD test message")
         self.assertEqual(message.recipient, "+233241234567")
         self.assertTrue(message.manual_override)
-        self.assertEqual(message.status, "queued")
+        self.assertEqual(message.status, "accepted")
         self.assertEqual(message.provider, "arkesel")
-        self.assertIsNotNone(message.queued_by)
+        self.assertIsNotNone(message.submitted_by)
+        attempt = message.delivery_attempts.get()
+        self.assertEqual(attempt.provider_id, "msg-1")
+        self.assertEqual(attempt.status, "accepted")
+        submit_many.assert_called_once()
 
     @override_settings(
         SMS_ENABLED=True,
@@ -377,7 +427,12 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         ARKESEL_API_KEY="ci-test-key",
         SMS_SENDER_ID="KOFAD",
     )
-    def test_selected_customers_can_be_queued_together(self):
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_selected_customers_are_sent_in_one_provider_batch(self, submit_many):
+        submit_many.side_effect = lambda recipients, body, sender, callback_url, sandbox: [
+            Submission("accepted", provider_id=f"batch-{index}", http_status=200, recipient=recipient)
+            for index, recipient in enumerate(recipients, 1)
+        ]
         self.customer.phone = "0241234567"
         self.customer.save(update_fields=["phone"])
         other = Party.objects.create(
@@ -393,11 +448,82 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
             "body": "Stock has arrived",
         })
         self.assertEqual(response.status_code, 302)
-        queued = Message.objects.filter(channel="sms", body="Stock has arrived", status="queued")
-        self.assertEqual(queued.count(), 2)
-        self.assertEqual(set(queued.values_list("recipient", flat=True)), {
+        sent = Message.objects.filter(channel="sms", body="Stock has arrived", status="accepted")
+        self.assertEqual(sent.count(), 2)
+        self.assertEqual(set(sent.values_list("recipient", flat=True)), {
             "+233241234567", "+233207654321"
         })
+        submit_many.assert_called_once()
+        recipients = set(submit_many.call_args.args[0])
+        self.assertEqual(recipients, {"+233241234567", "+233207654321"})
+
+
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_delivery_callback_changes_sent_to_delivered(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", provider_id="ark-123", http_status=200, recipient="+233241234567")
+        ]
+        self.authenticate_client()
+        self.client.post("/communications/", {
+            "action": "send_compose",
+            "key": str(uuid.uuid4()),
+            "channel": "sms",
+            "target": "manual",
+            "phone": "0241234567",
+            "body": "Delivery tracking test",
+        })
+        message = Message.objects.get(body="Delivery tracking test")
+        self.assertEqual(message.status, "accepted")
+        response = self.client.get("/sms/delivery/", {
+            "token": _delivery_callback_token(),
+            "sms_id": "ark-123",
+            "status": "DELIVERED",
+        })
+        self.assertEqual(response.status_code, 200)
+        message.refresh_from_db()
+        self.assertEqual(message.status, "delivered")
+
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_provider_failure_reason_is_saved_for_staff(self, submit_many):
+        submit_many.return_value = [
+            Submission(
+                "failed",
+                http_status=422,
+                error_code="provider_rejected",
+                error_detail="Sender ID is not approved.",
+                recipient="+233241234567",
+            )
+        ]
+        self.authenticate_client()
+        self.client.post("/communications/", {
+            "action": "send_compose",
+            "key": str(uuid.uuid4()),
+            "channel": "sms",
+            "target": "manual",
+            "phone": "0241234567",
+            "body": "Failure detail test",
+        })
+        message = Message.objects.get(body="Failure detail test")
+        self.assertEqual(message.status, "failed")
+        self.assertEqual(message.last_error, "Sender ID is not approved.")
+        page = self.client.get("/communications/")
+        self.assertContains(page, "Sender ID is not approved.")
 
     def test_manual_whatsapp_prepares_direct_chat_link_without_claiming_delivery(self):
         self.authenticate_client()

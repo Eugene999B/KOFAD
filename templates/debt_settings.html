@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/debts/">Open Debt Desk</a><a class="button secondary" href="/settings/">← Settings</a></div>{% endblock %}
 {% block content %}
-<section class="hero-panel settings-hero"><div><p class="eyebrow">RECEIVABLES POLICY</p><h2>Debt settings</h2><p>Control when an unpaid receipt becomes overdue, when customers are reminded, how often KOFAD may contact them and the exact default SMS wording.</p></div><span class="pill">{% if item.delivery_mode == "off" %}Automation off{% elif item.delivery_mode == "draft" %}Drafts only{% else %}Automatic queue{% endif %}</span></section>
+<section class="hero-panel settings-hero"><div><p class="eyebrow">RECEIVABLES POLICY</p><h2>Debt settings</h2><p>Control when an unpaid receipt becomes overdue, when customers are reminded, how often KOFAD may contact them and the exact default SMS wording.</p></div><span class="pill">{% if item.delivery_mode == "off" %}Automation off{% elif item.delivery_mode == "draft" %}Drafts only{% else %}Automatic send{% endif %}</span></section>
 
 <div class="settings-explainer-grid">
 <article class="panel"><small>OVERDUE RULE</small><strong>{{ item.overdue_grace_value }} {{ item.get_overdue_grace_unit_display }}</strong><p>A receipt becomes overdue after its due date plus this grace period. Zero means the next day is overdue.</p></article>

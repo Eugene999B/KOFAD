@@ -1,12 +1,14 @@
 """Business communication automations.
 
 Automatic modes never bypass consent for customers. Management recipients are internal
-contacts configured by an owner. Source keys make every scheduled/event message idempotent.
+contacts configured by an owner. Live "send" mode submits to Arkesel immediately; source
+keys keep every scheduled/event message idempotent.
 """
 import re
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
@@ -17,7 +19,7 @@ from .models import (
     Message, Party, Product, Stock,
 )
 from .sms.service import (
-    create_automatic_customer_draft, create_internal_draft, queue_automatic,
+    create_automatic_customer_draft, create_internal_draft, send_automatic, send_messages_now,
 )
 from .sms.templates import render_for_document
 
@@ -62,8 +64,8 @@ def _render(body, data):
 
 
 def _apply_mode(message, mode, actor=None):
-    if message and mode == "queue":
-        queue_automatic(message, actor)
+    if message and mode == "send":
+        send_automatic(message, actor)
     return message
 
 
@@ -126,13 +128,16 @@ def prepare_closing_notifications(closing, actor=None):
         "location": _location(closing.branch, company),
     }
     body = _render(policy.closing_template, data)
+    sender = _actor(actor)
     created = []
     for contact in management_contacts(closing.branch, "receive_closing").distinct():
         message = create_internal_draft(
-            _actor(actor), closing.branch, contact, body,
+            sender, closing.branch, contact, body,
             source_key=f"auto:closing:{closing.pk}:{contact.pk}",
         )
-        created.append(_apply_mode(message, policy.daily_closing_mode, actor))
+        created.append(message)
+    if created and policy.daily_closing_mode == "send" and settings.SMS_ENABLED:
+        return send_messages_now(sender, closing.branch, [message.pk for message in created], automatic=True)
     return created
 
 
@@ -279,11 +284,14 @@ def run_low_stock_summary(now=None):
             "out_count": out_count,
             "location": _location(branch, company),
         })
+        messages_for_branch = []
         for contact in management_contacts(branch, "receive_low_stock").distinct():
             source_key = f"auto:lowstock:{branch.pk}:{contact.pk}:{today.isoformat()}"
             message = create_internal_draft(actor, branch, contact, body, source_key=source_key)
-            _apply_mode(message, policy.low_stock_mode, actor)
+            messages_for_branch.append(message)
             created += 1
+        if messages_for_branch and policy.low_stock_mode == "send" and settings.SMS_ENABLED:
+            send_messages_now(actor, branch, [message.pk for message in messages_for_branch], automatic=True)
     return created
 
 

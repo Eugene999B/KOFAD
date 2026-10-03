@@ -1028,8 +1028,8 @@
     receiptSmsButton.textContent = "Sending…";
     try {
       const result = await api("/api/documents/" + lastCompletedSale.document_id + "/send-sms/", {});
-      receiptSmsButton.textContent = "Message queued ✓";
-      setSuccessStatus(result.message || "Receipt SMS queued.");
+      receiptSmsButton.textContent = result.status === "delivered" ? "Delivered ✓" : "SMS sent ✓";
+      setSuccessStatus(result.message || (result.status === "delivered" ? "Receipt SMS delivered." : "Receipt SMS sent."));
     } catch (error) {
       receiptSmsButton.disabled = false;
       receiptSmsButton.textContent = "Send SMS";

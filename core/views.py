@@ -341,7 +341,7 @@ def send_transaction_message_api(request, pk):
     if not settings.SMS_ENABLED:
         return JsonResponse({"error": "SMS delivery is not enabled for this deployment."}, status=400)
 
-    from .sms.service import create_draft, queue_message
+    from .sms.service import create_draft, send_message_now
     from .sms.templates import render_for_document
 
     try:
@@ -355,27 +355,45 @@ def send_transaction_message_api(request, pk):
         ).order_by("-created_at").first()
 
         retryable = {"failed", "undelivered", "expired"}
-        in_flight = {"queued", "sending", "retry_wait", "accepted", "delivered", "simulated"}
+        in_flight = {"sending", "accepted", "delivered", "simulated"}
         if item and item.status in in_flight:
+            label = {
+                "sending": "sending",
+                "accepted": "sent",
+                "delivered": "delivered",
+                "simulated": "test sent",
+            }.get(item.status, item.status)
             return JsonResponse({
                 "ok": True,
                 "status": item.status,
-                "message": f"Receipt SMS is already {item.status}.",
+                "message": f"Receipt SMS is already {label}.",
             })
         if item and item.status == "unknown":
             return JsonResponse({
-                "error": "The previous SMS result is unknown. Verify it before sending again."
+                "error": "The previous SMS delivery result is unknown. Check the provider result before sending again."
             }, status=409)
         if item and item.status in retryable:
-            queue_message(request.user, branch, item.pk, retry=True)
-            return JsonResponse({"ok": True, "status": "queued", "message": "Receipt SMS retry queued."})
+            sent = send_message_now(request.user, branch, item.pk, retry=True)
+            return JsonResponse({
+                "ok": sent.status in {"accepted", "delivered", "simulated"},
+                "status": sent.status,
+                "message": "Receipt SMS sent to Arkesel." if sent.status == "accepted"
+                    else "Receipt SMS delivered." if sent.status == "delivered"
+                    else sent.last_error or f"Receipt SMS {sent.status}.",
+            }, status=200 if sent.status in {"accepted", "delivered", "simulated"} else 502)
         if not item:
             item = create_draft(
                 request.user, branch, doc.party, body,
                 source_key=f"document:receipt:{doc.pk}",
             )
-        queue_message(request.user, branch, item.pk)
-        return JsonResponse({"ok": True, "status": "queued", "message": "Receipt SMS queued."})
+        sent = send_message_now(request.user, branch, item.pk)
+        return JsonResponse({
+            "ok": sent.status in {"accepted", "delivered", "simulated"},
+            "status": sent.status,
+            "message": "Receipt SMS sent to Arkesel." if sent.status == "accepted"
+                else "Receipt SMS delivered." if sent.status == "delivered"
+                else sent.last_error or f"Receipt SMS {sent.status}.",
+        }, status=200 if sent.status in {"accepted", "delivered", "simulated"} else 502)
     except (ValidationError, ValueError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 
@@ -1171,16 +1189,23 @@ def receipt_policy_settings(request, branch):
 def communications(request, branch):
     from urllib.parse import quote
     from django.conf import settings
-    from .sms.service import create_draft, create_direct_draft, normalize_phone, queue_message
+    from .sms.service import create_draft, create_direct_draft, normalize_phone, send_message_now, send_messages_now
 
     redirect_suffix = ""
     if request.method == "POST":
         try:
             action = request.POST.get("action", "send_compose")
-            if action in ("queue", "retry"):
+            if action in ("send", "queue", "retry"):
                 item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch)
-                queue_message(request.user, branch, item.pk, action == "retry")
-                messages.success(request, "SMS queued for sending.")
+                sent = send_message_now(request.user, branch, item.pk, action == "retry")
+                if sent.status == "accepted":
+                    messages.success(request, "SMS sent to Arkesel. Delivery confirmation is being tracked.")
+                elif sent.status == "delivered":
+                    messages.success(request, "SMS delivered.")
+                elif sent.status == "simulated":
+                    messages.success(request, "SMS sandbox submission completed.")
+                else:
+                    messages.error(request, sent.last_error or f"SMS {sent.status}.")
             elif action == "document":
                 from .sms.templates import render_for_document
                 doc = get_object_or_404(Document, pk=request.POST.get("document"), branch=branch)
@@ -1270,19 +1295,33 @@ def communications(request, branch):
                         phone=phone,
                         label=label,
                     )
-                    if channel == "sms":
-                        queue_message(request.user, branch, item.pk)
-                    else:
+                    if channel == "whatsapp":
                         item.provider = "whatsapp-link"
                         item.status = "ready"
                         item.save(update_fields=["provider", "status"])
                     prepared.append(item)
 
                 if channel == "sms":
-                    messages.success(
-                        request,
-                        f"{len(prepared)} SMS message{'' if len(prepared) == 1 else 's'} queued for immediate sending."
+                    sent = send_messages_now(
+                        request.user,
+                        branch,
+                        [item.pk for item in prepared],
                     )
+                    accepted = sum(1 for item in sent if item.status in {"accepted", "delivered", "simulated"})
+                    failed = sum(1 for item in sent if item.status in {"failed", "undelivered", "expired"})
+                    unknown = sum(1 for item in sent if item.status == "unknown")
+                    if accepted:
+                        messages.success(
+                            request,
+                            f"{accepted} SMS message{'' if accepted == 1 else 's'} sent to Arkesel. Delivery status will update automatically."
+                        )
+                    if failed or unknown:
+                        first_problem = next((item.last_error for item in sent if item.last_error), "")
+                        messages.error(
+                            request,
+                            f"{failed + unknown} SMS message{'' if failed + unknown == 1 else 's'} not confirmed. "
+                            + (first_problem or "Check Recent messages for the provider result.")
+                        )
                 else:
                     messages.success(
                         request,
@@ -1302,11 +1341,24 @@ def communications(request, branch):
     debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
     rows = list(
         Message.objects.filter(branch=branch).select_related(
-            "party", "management_contact", "created_by", "queued_by"
+            "party", "management_contact", "created_by", "submitted_by"
         ).order_by("-created_at")[:120]
     )
+    status_labels = {
+        "draft": "Ready to send",
+        "sending": "Sending…",
+        "accepted": "Sent",
+        "delivered": "Delivered",
+        "undelivered": "Not delivered",
+        "expired": "Expired",
+        "failed": "Failed",
+        "unknown": "Delivery unknown",
+        "simulated": "Test sent",
+        "ready": "Ready to open",
+    }
     for row in rows:
         row.whatsapp_url = ""
+        row.status_label = status_labels.get(row.status, row.status.replace("_", " ").title())
         if row.channel == "whatsapp" and row.recipient:
             digits = "".join(ch for ch in row.recipient if ch.isdigit())
             row.whatsapp_url = f"https://wa.me/{digits}?text={quote(row.body)}"
@@ -1346,6 +1398,29 @@ def communications(request, branch):
         "sms_sandbox": settings.SMS_SANDBOX,
         "sms_provider": settings.SMS_PROVIDER,
     })
+
+
+@protected("operate_sales|send_messages")
+def communication_status(request, branch):
+    raw_ids = [value for value in request.GET.get("ids", "").split(",") if value.strip().isdigit()][:80]
+    ids = [int(value) for value in raw_ids]
+    if not ids:
+        return JsonResponse({"messages": []})
+    rows = list(
+        Message.objects.filter(branch=branch, pk__in=ids, channel="sms")
+        .prefetch_related("delivery_attempts")
+    )
+    payload = []
+    for row in rows:
+        latest = max(row.delivery_attempts.all(), key=lambda attempt: attempt.number, default=None)
+        payload.append({
+            "id": row.pk,
+            "status": row.status,
+            "last_error": row.last_error,
+            "provider_id": latest.provider_id if latest else "",
+            "updated_at": latest.updated_at.isoformat() if latest else row.created_at.isoformat(),
+        })
+    return JsonResponse({"messages": payload})
 
 
 @protected("operate_finance")

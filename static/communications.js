@@ -53,7 +53,7 @@
     if (channel === "sms") {
       body.maxLength = 480;
       sendButton.textContent = "Send SMS →";
-      sendHint.textContent = "SMS is queued immediately to Arkesel.";
+      sendHint.textContent = "SMS is sent directly to Arkesel.";
     } else {
       body.maxLength = 1000;
       sendButton.textContent = "Prepare WhatsApp →";
@@ -131,4 +131,49 @@
 
   setChannel(channelInput.value || "sms");
   setTarget(targetInput.value || "one");
+
+  const SMS_STATUS_LABELS = {
+    draft: "Ready to send",
+    sending: "Sending…",
+    accepted: "Sent",
+    delivered: "Delivered",
+    undelivered: "Not delivered",
+    expired: "Expired",
+    failed: "Failed",
+    unknown: "Delivery unknown",
+    simulated: "Test sent",
+  };
+
+  async function refreshSmsStatuses() {
+    const rows = [...document.querySelectorAll('[data-history-row="sms"][data-message-id]')];
+    if (!rows.length || document.hidden) return;
+    const ids = rows.map(row => row.dataset.messageId).filter(Boolean);
+    if (!ids.length) return;
+    try {
+      const response = await fetch("/api/communications/status/?ids=" + encodeURIComponent(ids.join(",")), {
+        headers: {"Accept": "application/json"},
+        credentials: "same-origin",
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      (payload.messages || []).forEach(item => {
+        const status = document.querySelector('[data-sms-status="' + item.id + '"]');
+        const error = document.querySelector('[data-sms-error="' + item.id + '"]');
+        if (status) {
+          status.textContent = SMS_STATUS_LABELS[item.status] || String(item.status || "").replaceAll("_", " ");
+          status.dataset.deliveryState = item.status || "";
+        }
+        if (error) {
+          error.textContent = item.last_error || "";
+          error.classList.toggle("hidden", !item.last_error);
+        }
+      });
+    } catch (_) {
+      // Delivery tracking is best-effort in the browser; the server remains authoritative.
+    }
+  }
+
+  refreshSmsStatuses();
+  window.setInterval(refreshSmsStatuses, 4000);
+
 })();

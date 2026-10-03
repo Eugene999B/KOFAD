@@ -90,7 +90,7 @@ class Company(models.Model):
 
 
 class DebtSettings(models.Model):
-    DELIVERY = [("off", "Off"), ("draft", "Prepare drafts"), ("queue", "Queue SMS automatically")]
+    DELIVERY = [("off", "Off"), ("draft", "Prepare drafts"), ("send", "Send SMS immediately")]
     GRACE_UNITS = [("days", "Days"), ("weeks", "Weeks"), ("months", "Months (30 days)")]
 
     delivery_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
@@ -126,7 +126,7 @@ class CommunicationSettings(models.Model):
 
     sale_receipt_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     payment_confirmation_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
-    daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="draft")
+    daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="send")
     low_stock_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     low_stock_time = models.TimeField(default=time(17, 0))
     closing_template = models.TextField(default=(
@@ -386,13 +386,12 @@ class Message(models.Model):
     segments = models.PositiveIntegerField(default=1)
     encoding = models.CharField(max_length=12, default="gsm7")
     attempts = models.PositiveIntegerField(default=0)
-    next_attempt_at = models.DateTimeField(null=True, blank=True)
-    queued_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
     source_key = models.CharField(max_length=150, null=True, blank=True)
     last_error = models.CharField(max_length=240, blank=True)
     class Meta:
         ordering = ["-created_at"]
-        permissions = [("send_messages", "Queue and retry customer SMS")]
+        permissions = [("send_messages", "Send and retry customer SMS")]
         constraints = [
             models.UniqueConstraint(fields=["branch", "source_key"], name="unique_message_source"),
             models.CheckConstraint(

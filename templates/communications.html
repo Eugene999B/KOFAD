@@ -124,7 +124,7 @@
       <div class="comms-send-bar">
         <div>
           <strong id="comms-recipient-summary">1 customer</strong>
-          <small id="comms-send-hint">SMS is queued immediately to Arkesel.</small>
+          <small id="comms-send-hint">SMS is sent directly to Arkesel.</small>
         </div>
         <div class="comms-send-action">
           <span id="comms-char-count">0 / 480</span>
@@ -137,7 +137,7 @@
   <aside class="comms-help-panel">
     <div class="comms-help-icon">↗</div>
     <h3 id="comms-help-title">Fast SMS</h3>
-    <p id="comms-help-copy">Press send once. KOFAD queues every recipient immediately and the SMS worker picks up new messages continuously.</p>
+    <p id="comms-help-copy">Press send once. KOFAD submits the SMS to Arkesel immediately, then updates Sent / Delivered / Failed automatically.</p>
     <div class="comms-help-rule"></div>
     <strong>WhatsApp</strong>
     <p>For WhatsApp, KOFAD prepares the chat and message, then opens WhatsApp Web or the app. Nothing is falsely marked as sent before you press Send inside WhatsApp.</p>
@@ -146,7 +146,7 @@
 
 <section class="panel comms-automation-panel">
   <div class="section-heading">
-    <div><p class="eyebrow">AUTOMATIC MESSAGES</p><h2>Messages KOFAD can prepare automatically</h2></div>
+    <div><p class="eyebrow">AUTOMATIC MESSAGES</p><h2>Automatic messages</h2></div>
     {% if perms.core.manage_company %}<a href="/settings/communications/">Change rules →</a>{% endif %}
   </div>
   <div class="auto-message-list compact-auto-list">
@@ -159,7 +159,7 @@
 
 <section class="panel comms-history-panel">
   <div class="section-heading">
-    <div><p class="eyebrow">HISTORY</p><h2>Recent messages</h2><p class="muted">SMS delivery evidence and prepared WhatsApp chats stay together here.</p></div>
+    <div><p class="eyebrow">HISTORY</p><h2>Recent messages</h2><p class="muted">Sent means Arkesel accepted the SMS. Delivered appears only after delivery to the handset is confirmed.</p></div>
     <div class="comms-history-filter" role="group" aria-label="Message history channel">
       <button type="button" class="active" data-history-channel="all">All</button>
       <button type="button" data-history-channel="sms">SMS</button>
@@ -171,19 +171,19 @@
       <thead><tr><th>Recipient</th><th>Message</th><th>Channel / status</th><th>Time</th><th></th></tr></thead>
       <tbody>
       {% for row in rows %}
-      <tr data-history-row="{{ row.channel }}">
+      <tr data-history-row="{{ row.channel }}"{% if row.channel == "sms" %} data-message-id="{{ row.pk }}"{% endif %}>
         <td>
           <strong>{% if row.party %}{{ row.party.name }}{% elif row.management_contact %}{{ row.management_contact.name }}{% elif row.recipient_name %}{{ row.recipient_name }}{% else %}Direct number{% endif %}</strong>
           <small>{{ row.recipient }}</small>
         </td>
         <td><span class="message-body-preview">{{ row.body }}</span></td>
-        <td><span class="pill">{{ row.channel|upper }}</span><small>{% if row.channel == "whatsapp" and row.status == "ready" %}Ready to open{% else %}{{ row.status|title }}{% endif %}</small></td>
+        <td><span class="pill">{{ row.channel|upper }}</span><small{% if row.channel == "sms" %} data-sms-status="{{ row.pk }}"{% endif %}>{{ row.status_label }}</small>{% if row.channel == "sms" %}<small class="comms-status-error{% if not row.last_error %} hidden{% endif %}" data-sms-error="{{ row.pk }}">{{ row.last_error }}</small>{% endif %}</td>
         <td>{{ row.created_at|date:"d M, H:i" }}</td>
         <td class="comms-row-action">
           {% if row.channel == "whatsapp" and row.whatsapp_url %}
           <a class="button secondary comms-whatsapp-button" href="{{ row.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp</a>
           {% elif perms.core.send_messages and row.channel == "sms" %}
-            {% if row.status == "draft" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="queue">Send SMS</button></form>
+            {% if row.status == "draft" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="send">Send SMS</button></form>
             {% elif row.status == "failed" or row.status == "undelivered" or row.status == "expired" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="retry">Retry</button></form>
             {% endif %}
           {% endif %}

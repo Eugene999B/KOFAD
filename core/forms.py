@@ -154,7 +154,7 @@ class DebtSettingsForm(forms.ModelForm):
         }
         widgets = {"reminder_time": forms.TimeInput(attrs={"type": "time"})}
         help_texts = {
-            "delivery_mode": "Off does nothing. Draft prepares messages for review. Queue submits automatically only when live SMS is configured.",
+            "delivery_mode": "Off does nothing. Draft prepares messages for review. Send SMS immediately submits straight to Arkesel when live SMS is configured.",
             "reminder_time": "Africa/Accra local time.",
             "due_soon_days": "Comma-separated days before due date, for example 7,3,1.",
             "overdue_grace_value": "Zero means a debt becomes overdue immediately after its due date.",
@@ -215,10 +215,10 @@ class CommunicationSettingsForm(forms.ModelForm):
             "low_stock_template": forms.Textarea(attrs={"rows": 4}),
         }
         help_texts = {
-            "sale_receipt_mode": "Customer must have messaging consent. Draft or queue the existing receipt template.",
-            "payment_confirmation_mode": "Customer must have messaging consent. Draft or queue the existing payment template.",
-            "daily_closing_mode": "Sent to active management contacts marked for closing notifications.",
-            "low_stock_mode": "Sent at most once per day to management contacts marked for stock notifications.",
+            "sale_receipt_mode": "Customer must have messaging consent. Choose draft or send the receipt immediately.",
+            "payment_confirmation_mode": "Customer must have messaging consent. Choose draft or send the confirmation immediately.",
+            "daily_closing_mode": "When set to Send SMS immediately, closing summaries go straight to every active management number marked for closing.",
+            "low_stock_mode": "When enabled, sends at most once per day to management contacts marked for stock notifications.",
             "low_stock_time": "Africa/Accra local time.",
             "closing_template": "Placeholders: {company}, {date}, {currency}, {sales_total}, {expected_cash}, {counted_cash}, {cash_variance}, {debt_collections}, {expenses}, {staff}, {location}.",
             "low_stock_template": "Placeholders: {company}, {low_count}, {out_count}, {location}.",

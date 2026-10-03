@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/communications/">Open outbox</a><a class="button secondary" href="/settings/">← Settings</a></div>{% endblock %}
 {% block content %}
-<section class="hero-panel settings-hero"><div><p class="eyebrow">COMMUNICATION CONTROL</p><h2>Who gets what message, and when.</h2><p>Keep customer messages, management alerts and provider delivery controls separate. Every automatic event can be off, prepared as a draft, or queued when live SMS is available.</p></div><span class="pill">{% if sms_enabled %}{% if sms_sandbox %}SMS sandbox{% else %}SMS live{% endif %}{% else %}SMS disabled{% endif %}</span></section>
+<section class="hero-panel settings-hero"><div><p class="eyebrow">COMMUNICATION CONTROL</p><h2>Who gets what message, and when.</h2><p>Choose whether each automatic event stays off, becomes a reviewable draft, or sends immediately through Arkesel.</p></div><span class="pill">{% if sms_enabled %}{% if sms_sandbox %}SMS sandbox{% else %}SMS live{% endif %}{% else %}SMS disabled{% endif %}</span></section>
 
 <div class="automation-catalog">
 <article><span>SALE</span><div><strong>Customer sale receipt</strong><small>Recipient: opted-in customer · Template: Sale receipt</small></div><b>{{ item.get_sale_receipt_mode_display }}</b></article>
@@ -12,7 +12,7 @@
 </div>
 
 <form method="post" class="panel policy-workspace">{% csrf_token %}<input type="hidden" name="action" value="save_policy">
-<div class="section-heading"><div><p class="eyebrow">AUTOMATIC EVENTS</p><h2>Delivery behaviour</h2><p class="muted">“Prepare drafts” creates reviewable outbox items. “Queue automatically” is effective only when live provider credentials are configured.</p></div></div>
+<div class="section-heading"><div><p class="eyebrow">AUTOMATIC EVENTS</p><h2>Delivery behaviour</h2><p class="muted">“Prepare drafts” keeps the message for review. “Send SMS immediately” submits it straight to Arkesel and tracks delivery automatically.</p></div></div>
 {{ form.non_field_errors }}
 <div class="two-column">
 <label>{{ form.sale_receipt_mode.label }}{{ form.sale_receipt_mode }}<small>{{ form.sale_receipt_mode.help_text }}</small>{{ form.sale_receipt_mode.errors }}</label>
@@ -27,11 +27,11 @@
 </form>
 
 <section class="panel">
-<div class="section-heading"><div><p class="eyebrow">MANAGEMENT RECIPIENTS</p><h2>Boss / management notification numbers</h2><p class="muted">These are internal recipients for closing and stock alerts. They are separate from the public business numbers printed on receipts.</p></div></div>
+<div class="section-heading"><div><p class="eyebrow">MANAGEMENT RECIPIENTS</p><h2>Daily closing & management numbers</h2><p class="muted">Add one or several numbers. For each number, choose whether it receives Daily Closing, Low Stock and System alerts. These are separate from public business numbers printed on receipts.</p></div></div>
 <div class="management-contact-grid">
 {% for contact in contacts %}<article class="{% if not contact.active %}muted-card{% endif %}"><div><strong>{{ contact.name }}</strong><small>{{ contact.phone }}{% if contact.branch %} · {{ contact.branch.name }}{% else %} · All locations{% endif %}</small></div><div class="permission-tags">{% if contact.receive_closing %}<span>Closing</span>{% endif %}{% if contact.receive_low_stock %}<span>Low stock</span>{% endif %}{% if contact.receive_system_alerts %}<span>System</span>{% endif %}{% if not contact.active %}<span>Inactive</span>{% endif %}</div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_contact"><input type="hidden" name="id" value="{{ contact.pk }}"><button class="text-button">{% if contact.active %}Remove / deactivate{% else %}Inactive{% endif %}</button></form></article>{% empty %}<div class="empty">No management notification numbers have been added yet.</div>{% endfor %}
 </div>
-<details class="settings-add-contact"><summary>＋ Add management notification number</summary>
+<details class="settings-add-contact" open><summary>＋ Add another management notification number</summary>
 <form method="post" class="admin-form">{% csrf_token %}<input type="hidden" name="action" value="add_contact">{{ contact_form.as_p }}<button class="button">Add contact</button></form>
 </details>
 </section>
@@ -45,5 +45,5 @@
 </div>
 </section>
 
-<div class="notice"><strong>Provider state:</strong> {% if not sms_enabled %}SMS sending is disabled at deployment level. KOFAD can still prepare drafts and show exactly what would be sent.{% elif sms_sandbox %}Sandbox mode is enabled; provider activity is not proof of customer delivery.{% else %}Live SMS is enabled through {{ sms_provider }}. Queueing an automatic mode can create billable provider submissions.{% endif %}</div>
+<div class="notice"><strong>Provider state:</strong> {% if not sms_enabled %}SMS sending is disabled at deployment level. KOFAD can still prepare drafts.{% elif sms_sandbox %}Sandbox mode is enabled; provider activity is not proof of customer delivery.{% else %}Live SMS is enabled through {{ sms_provider }}. “Send SMS immediately” creates a live billable provider submission and KOFAD tracks the delivery result.{% endif %}</div>
 {% endblock %}
