@@ -16,11 +16,14 @@ class Command(BaseCommand):
         last_automation = 0.0
         while True:
             close_old_connections()
-            try:
-                now = time.monotonic()
-                if now - last_automation >= 60:
+            now = time.monotonic()
+            if now - last_automation >= 60:
+                try:
                     run_scheduled_automations()
-                    last_automation = now
+                except Exception as exc:
+                    self.stderr.write(f"Communication automation check failed safely: {exc}")
+                last_automation = now
+            try:
                 recover_stale()
                 found = process_one()
             except ValidationError as exc:
