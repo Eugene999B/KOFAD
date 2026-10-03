@@ -156,10 +156,17 @@ def creditor_accounts(branch, query="", include_settled=False):
     parties = Party.objects.filter(branch=branch, kind="supplier")
     query = str(query or "").strip()[:100]
     if query:
+        matching_party_ids = Document.objects.filter(
+            branch=branch, kind__in=PAYABLE_KINDS,
+        ).filter(
+            Q(reference__icontains=query) | Q(external_reference__icontains=query) |
+            Q(note__icontains=query)
+        ).values_list("party_id", flat=True)
         parties = parties.filter(
             Q(name__icontains=query) | Q(phone__icontains=query) |
-            Q(email__icontains=query) | Q(address__icontains=query)
-        )
+            Q(email__icontains=query) | Q(address__icontains=query) |
+            Q(pk__in=matching_party_ids)
+        ).distinct()
     rows = []
     for party in parties.order_by("name")[:600]:
         snapshot = supplier_account_snapshot(party)
