@@ -133,6 +133,12 @@ def create_draft(user, branch, party, body, channel="sms", source_key=None):
 
 
 @transaction.atomic
+def create_automatic_customer_draft(user, branch, party, body, source_key=None):
+    lock_branch(branch)
+    return _create_draft_record(user, branch, body, "sms", source_key, party=party)
+
+
+@transaction.atomic
 def create_internal_draft(user, branch, management_contact, body, source_key=None):
     lock_branch(branch)
     return _create_draft_record(
