@@ -1570,3 +1570,9 @@ html[data-theme="dark"] .comms-one-customer-row em{color:#d79a79}
 .creditor-payment-success .actions{flex-shrink:0}
 @media(max-width:1050px){.creditor-layout{grid-template-columns:1fr}.creditor-account-list{max-height:none}.aging-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:720px){.aging-grid{grid-template-columns:1fr 1fr}.creditor-payment-success{align-items:flex-start;flex-direction:column}}
+
+.purchase-invoice-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(128,128,112,.14)}
+.purchase-invoice-fields label:last-child{grid-column:1/-1}
+.purchase-invoice-fields textarea{min-height:74px}
+.supplier-search-card .selected-customer{margin-top:10px}
+@media(max-width:720px){.purchase-invoice-fields{grid-template-columns:1fr}.purchase-invoice-fields label:last-child{grid-column:auto}}
