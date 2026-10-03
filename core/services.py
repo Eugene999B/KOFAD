@@ -756,8 +756,12 @@ def _closing_json(value):
 
 
 @transaction.atomic
-def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, cash_out=0):
-    permit(user, branch, "operate_finance")
+def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, cash_out=0, owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
+        permit(user, branch, "operate_finance")
     branch = lock_branch(branch)
     if day > timezone.localdate():
         raise ValidationError("Cannot close a future day.")
@@ -799,6 +803,7 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
         summary=_closing_json(summary),
         note=str(note or "").strip()[:2000],
         submitted_by=user,
+        verified_by=user if owner_direct else None,
     )
     audit(user, branch, "closing.submitted", closing.pk, {
         "date": str(day),
@@ -808,7 +813,8 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
         "opening_cash": str(opening_cash),
         "cash_in": str(cash_in),
         "cash_out": str(cash_out),
-    })
+        "owner_direct": bool(owner_direct),
+    }, category="finance", severity="high" if owner_direct else "notice", entity_type="closing", entity_id=str(closing.pk))
     from . import automations
     transaction.on_commit(
         lambda closing_id=closing.pk, actor_id=user.pk:
@@ -818,14 +824,17 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
 
 
 @transaction.atomic
-def verify_closing(user, closing):
-    if not (user.is_superuser or user.has_perm("core.manage_company")):
+def verify_closing(user, closing, owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
         permit(user, closing.branch, "approve_operations")
     closing = Closing.objects.select_for_update().get(pk=closing.pk)
     if closing.verified_by_id:
         raise ValidationError("This closing has already been verified.")
-    if closing.submitted_by_id == user.pk and not (user.is_superuser or user.has_perm("core.manage_company")):
-        raise ValidationError("A different authorized colleague must verify an unverified closing.")
+    if closing.submitted_by_id == user.pk:
+        raise ValidationError("A submitted closing must be independently verified. Owner-direct closings are finalized at submission instead.")
     closing.verified_by = user
     closing.save(update_fields=["verified_by"])
     audit(user, closing.branch, "closing.verified", closing.pk)
@@ -857,14 +866,17 @@ def request_correction(user, branch, original_id, reason, refund_method="cash"):
 
 
 @transaction.atomic
-def review_correction(user, branch, correction_id, approve):
-    if not (user.is_superuser or user.has_perm("core.manage_company")):
+def review_correction(user, branch, correction_id, approve, owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
         permit(user, branch, "approve_operations")
     branch = lock_branch(branch)
     item = Correction.objects.select_for_update(of=("self",)).select_related("original").get(pk=correction_id, original__branch=branch)
     if item.status != "requested":
         raise ValidationError("This request has already been reviewed.")
-    if item.requested_by_id == user.pk and not (user.is_superuser or user.has_perm("core.manage_company")):
+    if item.requested_by_id == user.pk and not owner_direct:
         raise ValidationError("A different authorized colleague must review the correction.")
     original = item.original
     if approve:
