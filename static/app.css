@@ -1168,3 +1168,214 @@ html[data-theme="dark"] .debt-filter-row a.active,html[data-theme="dark"] .inven
   .counter-search-shell{width:100%!important}
 }
 html[data-theme="dark"] .trend svg rect{fill:#c9825f}
+
+
+/* Owner-access, theme clarity and viewport-fit login refinements. */
+.mode-toggle{
+  width:auto!important;
+  min-width:104px;
+  min-height:38px;
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:7px 11px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--white);
+  color:var(--ink);
+  font-size:11px!important;
+  font-weight:650;
+  white-space:nowrap;
+}
+.mode-toggle [data-theme-icon]{font-size:16px;line-height:1}
+.mode-toggle:hover{background:var(--soft);border-color:#d2ccc5}
+.login-header-actions{display:flex;align-items:center;gap:14px}
+.login-theme-toggle{min-width:106px}
+.login-header-meta{white-space:nowrap}
+
+/* The login gateway is one viewport, not a document that needs scrolling. */
+html:has(body.login-page){
+  width:100%;
+  height:100dvh;
+  min-height:100dvh;
+  overflow:hidden!important;
+}
+body.login-page{
+  width:100%;
+  height:100dvh;
+  min-height:100dvh;
+  max-height:100dvh;
+  overflow:hidden!important;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+}
+.login-header{
+  width:100%;
+  min-height:0;
+  padding:14px 32px;
+}
+.login-header .brand-emblem{width:50px;height:50px}
+.login-header .brand-wordmark{font-size:22px}
+.login-layout,.premium-login-layout{
+  width:100%;
+  height:100%;
+  min-height:0;
+  margin:0 auto;
+  padding:8px 32px 10px;
+  align-items:center;
+}
+.premium-login-story{
+  width:100%;
+  height:100%;
+  min-height:0!important;
+  max-height:650px;
+  padding:32px 38px 26px;
+}
+.premium-login-story h1{font-size:clamp(34px,3.45vw,50px);margin:10px 0 14px}
+.premium-login-story .story-copy{line-height:1.62}
+.login-command-map{margin:22px 0 18px;gap:6px}
+.login-command-map article{padding:10px 13px}
+.login-story-bottom{padding-top:14px}
+.premium-login-card{
+  width:100%;
+  max-height:100%;
+  overflow:hidden;
+  padding:23px 27px 22px;
+}
+.login-access-chip{padding-bottom:12px;margin-bottom:15px}
+.premium-login-card .login-card-top{margin-bottom:7px}
+.premium-login-card .login-card-top h2{font-size:27px}
+.login-intro-copy{margin-bottom:13px!important}
+.premium-login-form label{margin-top:10px}
+.premium-login-form .login-input-shell input{min-height:44px}
+.login-form-row{margin-top:9px}
+.premium-login-submit{min-height:47px;margin-top:13px}
+.login-assurance{margin-top:13px}
+.login-assurance>div{padding:8px}
+.premium-login-card .login-security{margin-top:11px}
+.login-footer{padding:8px 32px 12px;font-size:9px}
+
+/* Dark mode needs true contrast for business figures, not inherited light-theme ink. */
+html[data-theme="dark"] body{color:#f5f5f7}
+html[data-theme="dark"] :is(
+  h1,h2,h3,h4,
+  .page-heading h1,
+  .section-heading h2,
+  .single-location strong,
+  .top-user-card strong,
+  .metrics strong,
+  .metric-card strong,
+  .admin-metrics strong,
+  .number,
+  td,
+  td strong,
+  .cart-total strong,
+  .chalin-section-title strong,
+  .chalin-total-row strong,
+  .checkout-total strong,
+  .payment-dialog-total strong,
+  .debt-account-balance,
+  .debt-account-balance strong,
+  .debt-hero-actions strong,
+  .debt-balance-card strong,
+  .receipt-totals strong,
+  .receipt-payment-list strong,
+  .success-receipt-totals strong,
+  .sale-success-reference,
+  .transaction-message-card h2,
+  .customer-result strong,
+  .selected-customer strong
+){color:#fff!important}
+html[data-theme="dark"] :is(
+  .muted,.hint,
+  .metrics p,
+  .metrics article>span,
+  .metric-card span,
+  .quick-action small,
+  .settings-card p,
+  td small,
+  .section-heading .muted,
+  .page-footer,
+  .chalin-submit-hint,
+  .chalin-checkout-head .muted,
+  .counter-sale-head .muted,
+  .login-intro-copy,
+  .login-security,
+  .login-header-meta
+){color:#c7c7cc!important}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea{color:#fff!important}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder{color:#8e8e93!important}
+html[data-theme="dark"] .premium-login-card{background:#191817;border-color:#34312e}
+html[data-theme="dark"] .login-input-shell{background:#171614;border-color:#3a3632}
+html[data-theme="dark"] .login-assurance>div{background:#201e1c;border-color:#35312d}
+html[data-theme="dark"] .mode-toggle{background:#211f1d;border-color:#3a3632;color:#fff}
+html[data-theme="dark"] .mode-toggle:hover{background:#2a2724}
+html[data-theme="dark"] .button strong,
+html[data-theme="dark"] .pill strong,
+html[data-theme="dark"] .payment-method-option strong{color:inherit!important}
+
+/* Compress gracefully on laptop-height screens while keeping every login control visible. */
+@media(max-height:780px) and (min-width:761px){
+  .login-header{padding-top:9px;padding-bottom:9px}
+  .login-header .brand-emblem{width:44px;height:44px}
+  .premium-login-story{max-height:560px;padding:25px 30px 20px}
+  .premium-login-story h1{font-size:36px;margin:7px 0 10px}
+  .premium-login-story .story-copy{font-size:12px}
+  .login-command-map{margin:14px 0 12px}
+  .login-command-map article{padding:7px 10px}
+  .login-command-map article small{display:none}
+  .premium-login-card{padding:18px 23px 17px}
+  .login-assurance{margin-top:9px}
+  .login-assurance>div{padding:6px 8px}
+  .login-footer{padding-top:5px;padding-bottom:7px}
+}
+
+@media(max-width:760px){
+  body.login-page{grid-template-rows:auto minmax(0,1fr)}
+  .login-header{padding:10px 16px}
+  .login-header .brand-emblem{width:44px;height:44px}
+  .login-header .brand-wordmark{font-size:20px}
+  .login-header-actions{gap:7px}
+  .login-header-meta{display:none}
+  .login-theme-toggle{min-width:99px;padding-left:9px;padding-right:9px}
+  .premium-login-layout{
+    display:grid!important;
+    place-items:center;
+    height:100%;
+    min-height:0;
+    padding:4px 16px 10px;
+  }
+  .premium-login-story{display:none}
+  .premium-login-card{
+    width:min(100%,430px);
+    max-height:100%;
+    margin:0 auto!important;
+    padding:18px 20px;
+    overflow:hidden;
+  }
+  .premium-login-card .login-card-top{margin-bottom:6px}
+  .premium-login-card .login-card-top h2{font-size:25px}
+  .premium-welcome-icon{width:48px;height:48px}
+  .premium-welcome-icon img{width:42px;height:42px}
+  .login-access-chip{margin-bottom:11px;padding-bottom:9px}
+  .login-intro-copy{margin-bottom:9px!important}
+  .premium-login-form label{margin-top:8px}
+  .login-form-row{margin-top:7px}
+  .premium-login-submit{margin-top:10px}
+  .login-assurance,.premium-login-card .login-security{display:none}
+  .login-footer{display:none!important}
+}
+@media(max-width:380px){
+  .login-header{padding-left:12px;padding-right:12px}
+  .login-header .brand-wordmark{font-size:18px}
+  .login-header .brand-wordmark small{font-size:6px}
+  .login-theme-toggle{min-width:92px;font-size:10px!important}
+  .premium-login-layout{padding-left:11px;padding-right:11px}
+  .premium-login-card{padding:15px 15px}
+  .welcome-icon{display:none}
+  .premium-login-card .login-card-top h2{font-size:23px}
+}
