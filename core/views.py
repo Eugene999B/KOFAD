@@ -1523,7 +1523,7 @@ def corrections(request, branch):
         except (ValidationError,ValueError) as exc:
             messages.error(request,problem(exc))
     return render(request,"corrections.html",{"title":"Corrections", "methods":s.active_payment_methods(),
-        "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment"],correction__isnull=True)[:200],
+        "documents":Document.objects.filter(branch=branch,kind__in=["sale","expense","collection","supplier_payment","creditor_charge"],correction__isnull=True)[:200],
         "rows":Correction.objects.filter(original__branch=branch).select_related("original","requested_by","reviewed_by","posted")[:100]})
 
 
@@ -1547,10 +1547,10 @@ def search(request):
         if request.user.has_perm("core.operate_inventory"):
             allowed += ["purchase","supplier_return","inventory_writeoff"]
         if request.user.has_perm("core.operate_finance"):
-            allowed += ["expense","collection","supplier_payment","supplier_return","inventory_writeoff","reversal"]
+            allowed += ["expense","collection","supplier_payment","creditor_charge","supplier_return","inventory_writeoff","reversal"]
         if request.user.has_perm("core.view_reports"):
             allowed = list(dict(Document.KINDS))
-        docs = Document.objects.filter(branch=branch,kind__in=allowed,reference__icontains=q)[:20]
+        docs = Document.objects.filter(branch=branch,kind__in=allowed).filter(Q(reference__icontains=q)|Q(external_reference__icontains=q)|Q(party__name__icontains=q))[:20]
     return render(request,"search.html",{"title":"Search workspace","q":q,"products":products,"parties":parties,"documents":docs})
 
 
