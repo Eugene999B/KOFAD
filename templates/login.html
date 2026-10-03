@@ -56,7 +56,7 @@
 {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
 <form method="post" class="premium-login-form">{% csrf_token %}
-<label for="username">Username</label><p class="login-field-hint">You can also sign in with your Ghana phone number.</p>
+<label for="username">Username or phone number</label>
 <div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username or Ghana phone number"></div>
 
 <label for="password">Password</label>
