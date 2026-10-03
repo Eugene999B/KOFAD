@@ -73,6 +73,11 @@
 </section>
 {% else %}
 <input type="hidden" id="party" name="party">
+<div class="counter-customer-line">
+  <input id="customer-search" type="search" autocomplete="off" placeholder="Customer (optional) · name or Ghana phone">
+  <div id="customer-results" class="customer-results counter-customer-results" role="listbox" aria-label="Customer search results"></div>
+  <div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
+</div>
 {% endif %}
 
 <div class="sale-checkout-bar" aria-label="Checkout actions">
@@ -92,10 +97,7 @@
 <section class="checkout-customer checkout-stage payment-dialog-customer">
 <div class="stage-heading"><span>2</span><div><strong>Customer</strong><small>Optional for a paid-in-full walk-in sale. Required for credit or SMS.</small></div></div>
 <div class="quick-customer-actions"><button type="button" class="button secondary" id="walk-in-customer">Walk-in sale</button><button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button><button type="button" class="text-button hidden" id="clear-customer">Change customer</button></div>
-<label class="sr-only" for="customer-search">Find returning customer</label>
-<input id="customer-search" type="search" autocomplete="off" placeholder="Search customer name or Ghana phone">
-<div id="customer-results" class="customer-results" role="listbox" aria-label="Customer search results"></div>
-<div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
+<p class="customer-sheet-hint">Use the compact customer search on the sale panel for returning customers, or continue as walk-in.</p>
 <div id="new-customer-fields" class="new-customer-fields hidden">
 <div class="new-customer-grid">
 <label>Customer name<input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer full name"></label>
@@ -120,7 +122,7 @@
 {% endif %}
 
 <fieldset class="payment-method-fieldset"><legend>Payment channel</legend>
-<div class="quick-payment-methods">{% for value,label in payment_methods %}<button type="button" class="button secondary quick-pay" data-payment-method="{{ value }}">{{ label }}</button>{% endfor %}<button type="button" class="button secondary" id="split-payment-toggle">Split payment</button></div>
+<div class="quick-payment-methods">{% for value,label in payment_methods %}<button type="button" class="button secondary quick-pay" data-payment-method="{{ value }}"{% if value == "cash" %} aria-label="Pay full amount by cash"{% endif %}>{{ label }}</button>{% endfor %}<button type="button" class="button secondary" id="split-payment-toggle">Split payment</button></div>
 <div id="payment-split-fields" class="payment-split-fields hidden">
 <div class="payment-grid compact-payment-grid">{% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}</div>
 </div>
