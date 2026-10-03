@@ -1490,3 +1490,14 @@ html[data-theme="dark"] .comms-wa-ready span{color:#abc6b2}
   .compact-auto-list{grid-template-columns:1fr}
   .comms-history-filter{width:100%}.comms-history-filter button{flex:1}
 }
+
+.comms-status-error{display:block!important;max-width:260px;margin-top:4px;color:#a43f36!important;font-size:9px!important;line-height:1.35}
+[data-sms-status][data-delivery-state="delivered"]{color:#2f7d50!important;font-weight:700}
+[data-sms-status][data-delivery-state="accepted"]{color:#6a5a45!important;font-weight:650}
+[data-sms-status][data-delivery-state="failed"],
+[data-sms-status][data-delivery-state="undelivered"],
+[data-sms-status][data-delivery-state="expired"],
+[data-sms-status][data-delivery-state="unknown"]{color:#a43f36!important;font-weight:700}
+html[data-theme="dark"] .comms-status-error{color:#ff9b91!important}
+html[data-theme="dark"] [data-sms-status][data-delivery-state="delivered"]{color:#78d99a!important}
+html[data-theme="dark"] [data-sms-status][data-delivery-state="accepted"]{color:#e5c7ad!important}
