@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from core.models import Company, MessageTemplate
 from core.services import balance
 
-TOKENS = {"company","customer","reference","total","paid","balance","due_date","currency"}
+TOKENS = {"company","customer","reference","total","paid","balance","due_date","currency","business_phone","location"}
 DEFAULTS = {
     "receipt":("Sale receipt","{company}: Receipt {reference}. Total {currency} {total}; paid {paid}; balance {balance}. Thank you."),
     "payment":("Payment confirmation","{company}: Payment {currency} {paid} received. Reference {reference}. Thank you."),
@@ -33,7 +33,12 @@ def render_for_document(document,code):
         raise ValidationError("This message template is unavailable.")
     validate_template(template.body)
     company = Company.objects.first() or Company()
+    business_phone = " / ".join(
+        value.strip() for value in (company.phone, company.secondary_phone) if value and value.strip()
+    )
+    location = document.branch.address.strip() if document.branch.address else (company.address.strip() if company.address else document.branch.name)
     data = {"company":company.name,"customer":document.party.name,"reference":document.reference,
         "total":str(document.total),"paid":str(document.paid),"balance":str(balance(document)) if document.kind=="sale" else "0.00",
-        "due_date":str(document.due_date or ""),"currency":company.currency}
+        "due_date":str(document.due_date or ""),"currency":company.currency,
+        "business_phone": business_phone, "location": location}
     return re.sub(r"\{([^{}]+)\}",lambda match:data[match.group(1)],template.body)
