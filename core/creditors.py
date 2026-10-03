@@ -388,7 +388,7 @@ def creditor_statement_rows(party):
         branch=party.branch,
         party=party,
     ).filter(
-        Q(kind__in=PAYABLE_KINDS) | Q(kind="supplier_payment") |
+        Q(kind__in=PAYABLE_KINDS) | Q(kind__in=["supplier_payment", "supplier_return"]) |
         Q(kind="reversal", original__kind__in=["supplier_payment", "creditor_charge"])
     ).select_related("original", "created_by").order_by("created_at", "pk")
 
@@ -405,7 +405,7 @@ def creditor_statement_rows(party):
             change = doc.total
             debit = ZERO
             credit = doc.total
-        elif doc.kind == "supplier_payment":
+        elif doc.kind in ("supplier_payment", "supplier_return"):
             allocated = sum((a.amount for a in doc.allocations.all()), ZERO)
             change = -allocated
             debit = allocated
