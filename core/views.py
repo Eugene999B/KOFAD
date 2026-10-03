@@ -1341,14 +1341,12 @@ def communications(request, branch):
     debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
     rows = list(
         Message.objects.filter(branch=branch).select_related(
-            "party", "management_contact", "created_by", "queued_by"
+            "party", "management_contact", "created_by", "submitted_by"
         ).order_by("-created_at")[:120]
     )
     status_labels = {
         "draft": "Ready to send",
         "sending": "Sending…",
-        "queued": "Sending…",
-        "retry_wait": "Failed · retry",
         "accepted": "Sent",
         "delivered": "Delivered",
         "undelivered": "Not delivered",
