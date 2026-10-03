@@ -37,9 +37,14 @@ def detail(request, branch, pk):
                     counts.review_count(
                         request.user, branch, pk, "approve",
                         "Owner direct authority — inventory verification posted after complete blind count.",
+                        owner_direct=True,
                     )
             else:
-                counts.review_count(request.user, branch, pk, action, request.POST.get("review_note", ""))
+                owner = request.user.is_superuser or request.user.has_perm("core.manage_company")
+                counts.review_count(
+                    request.user, branch, pk, action, request.POST.get("review_note", ""),
+                    owner_direct=owner,
+                )
             messages.success(request, "Stock count recorded.")
             return redirect("stock_count", pk=pk)
         except ValidationError as exc:
@@ -65,7 +70,8 @@ def detail(request, branch, pk):
     owner = request.user.is_superuser or request.user.has_perm("core.manage_company")
     return render(request, "count.html", {"title": "Inventory verification", "count": count, "lines": lines,
         "editable": count.status == "draft" and count.created_by_id == request.user.pk,
-        "can_review": count.status == "submitted" and request.user.has_perm("core.approve_operations")
+        "can_review": count.status == "submitted"
+            and (request.user.has_perm("core.approve_operations") or owner)
             and (count.created_by_id != request.user.pk or owner),
         "variance_units": variance_units, "variance_value": variance_value,
         "exception_count": len(exception_lines), "owner_direct": owner,
