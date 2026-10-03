@@ -9,6 +9,11 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="document",
+            name="document_date",
+            field=models.DateField(blank=True, null=True),
+        ),
+        migrations.AddField(
+            model_name="document",
             name="external_reference",
             field=models.CharField(blank=True, default="", max_length=120),
         ),
