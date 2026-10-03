@@ -125,7 +125,7 @@ def login_view(request):
                     attempt.failures = 0
                     attempt.save()
                     s.audit(user, None, "session.login", user.pk)
-                    if access.must_change_password:
+                    if access.force_password_change:
                         messages.info(request, "Change the temporary password before continuing.")
                         return redirect("password_change")
                     return redirect("dashboard")
@@ -1345,7 +1345,7 @@ def password_change(request):
             form = PasswordChangeForm(current, request.POST)
             if form.is_valid():
                 user = form.save()
-                Access.objects.filter(user=user).update(must_change_password=False)
+                Access.objects.filter(user=user).update(must_change_password=False, force_password_change=False)
                 update_session_auth_hash(request, user)
                 user.access.refresh_from_db()
                 request.session["access_version"] = user.access.session_version
