@@ -80,7 +80,12 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
     assert page.locator(".search-result-card").count() == 0
-    assert page.get_by_text("Find the first product", exact=True).is_visible()
+    assert page.get_by_text("Find a product", exact=True).is_visible()
+    counter_panel = page.locator("#checkout-panel")
+    counter_box = counter_panel.bounding_box()
+    assert counter_box["y"] >= 0 and counter_box["y"] + counter_box["height"] <= page.viewport_size["height"] + 2
+    assert counter_panel.evaluate("el => el.scrollHeight <= el.clientHeight + 2"), "checkout panel must not have its own page-style scrollbar"
+    assert page.evaluate("document.scrollingElement.scrollHeight <= window.innerHeight + 2"), "desktop counter should fit one viewport"
     page.locator("#product-query").fill("Classic leather")
     page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
     first_product = page.locator(".search-result-card").filter(has_text="Classic leather sandals")
@@ -99,7 +104,16 @@ with sync_playwright() as p:
     assert page.locator("#cart-count").inner_text() == "2 lines"
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
-    page.get_by_role("button",name="Pay full amount by cash",exact=True).click()
+    assert counter_panel.evaluate("el => el.scrollHeight <= el.clientHeight + 2"), "customer selection must not reintroduce nested checkout scrolling"
+    page.get_by_role("button",name="Payment & finish",exact=True).click()
+    payment_dialog = page.locator("#sale-payment-dialog")
+    payment_dialog.wait_for(state="visible")
+    payment_box = payment_dialog.bounding_box()
+    assert payment_box["y"] >= 0 and payment_box["y"] + payment_box["height"] <= page.viewport_size["height"] + 2
+    assert page.locator("#single-payment-value").input_value() == page.locator("#total").inner_text()
+    assert page.locator("#pay-cash").input_value() == page.locator("#total").inner_text()
+    page.screenshot(path=str(out / "pos-payment-desktop.png"), full_page=True)
+
     lost_response = []
     def lose_confirmed_response(route):
         response = route.fetch()
@@ -107,20 +121,30 @@ with sync_playwright() as p:
         lost_response.append(response.json())
         route.abort()
     page.route("**/api/trades/",lose_confirmed_response)
-    page.get_by_role("button",name="Complete sale",exact=False).click()
+    payment_dialog.get_by_role("button",name="Complete sale",exact=True).click()
     page.locator("#pos-error").wait_for(state="visible")
     assert page.locator("#party").is_disabled()
     page.unroute("**/api/trades/",lose_confirmed_response)
     page.once("dialog",lambda dialog: dialog.accept())
     page.reload()
     assert page.locator("#cart-count").inner_text() == "2 lines"
-    page.get_by_role("button",name="Complete sale",exact=False).click()
-    page.wait_for_url("**/documents/**/")
-    assert page.url.endswith(lost_response[0]["url"])
-    assert page.get_by_role("link", name="A4 PDF / print", exact=True).is_visible()
-    assert page.get_by_role("link", name="Thermal 80mm PDF", exact=True).is_visible()
-    assert page.get_by_role("link", name="Thermal 58mm PDF", exact=True).is_visible()
-    page.screenshot(path=str(out / "receipt-desktop.png"), full_page=True)
+    payment_dialog = page.locator("#sale-payment-dialog")
+    payment_dialog.wait_for(state="visible")
+    payment_dialog.get_by_role("button",name="Complete sale",exact=True).click()
+
+    success_dialog = page.locator("#sale-success-dialog")
+    success_dialog.wait_for(state="visible")
+    assert page.url.endswith("/sales/new/")
+    assert success_dialog.get_by_text(lost_response[0]["reference"], exact=True).is_visible()
+    document_id = lost_response[0]["document_id"]
+    assert page.locator("#receipt-print").get_attribute("href") == f"/documents/{document_id}/pdf/thermal80/"
+    assert page.locator("#receipt-a4").get_attribute("href") == f"/documents/{document_id}/pdf/a4/"
+    assert page.locator("#receipt-view").get_attribute("href") == lost_response[0]["url"]
+    assert page.locator("#receipt-sms").is_visible()
+    page.screenshot(path=str(out / "receipt-actions-desktop.png"), full_page=True)
+    page.get_by_role("button",name="Start next sale",exact=True).click()
+    assert page.locator("#cart-count").inner_text() == "0 lines"
+    assert page.locator("#product-query").evaluate("el => el === document.activeElement")
 
     page.goto("http://127.0.0.1:8000/debts/?customer=" + str(demo_customer.pk))
     page.get_by_role("button", name="Record partial payment", exact=True).click()
@@ -177,6 +201,14 @@ with sync_playwright() as p:
     assert page.locator("#mobile-cart-count").inner_text() == "1"
     page.locator("#cart-jump").click()
     assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
+    page.get_by_role("button",name="Payment & finish",exact=True).click()
+    mobile_payment = page.locator("#sale-payment-dialog")
+    mobile_payment.wait_for(state="visible")
+    mobile_payment_box = mobile_payment.bounding_box()
+    assert mobile_payment_box["height"] <= 844 * .9 + 2
+    assert abs((mobile_payment_box["y"] + mobile_payment_box["height"]) - 844) < 8
+    page.screenshot(path=str(out / "pos-payment-mobile.png"), full_page=True)
+    mobile_payment.get_by_role("button",name="Close payment",exact=True).click()
     page.locator("#cart").get_by_role("button",name="Remove",exact=False).click()
     for width in (320, 768):
         page.set_viewport_size({"width":width,"height":900})
@@ -273,4 +305,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Direct admin login, exact receipt formats, fixed debt-payment dialog/sheet, single-unit product UX, search checkout, lost-response recovery, stock counts, transfers, and desktop/mobile checks passed.")
+print("Direct admin login, compact one-screen sales counter, modal payment, inline receipt actions, lost-response recovery, debt payment, stock counts, transfers, and desktop/mobile checks passed.")
