@@ -96,6 +96,7 @@ def creditors(request, branch):
     if selected is None and rows:
         selected = rows[0]
 
+    selected_invoice = request.GET.get("invoice", "").strip()
     payment_doc = None
     payment_id = request.GET.get("payment", "")
     if payment_id:
@@ -117,6 +118,7 @@ def creditors(request, branch):
         "today": timezone.localdate(),
         "key": str(uuid.uuid4()),
         "payment_doc": payment_doc,
+        "selected_invoice": selected_invoice,
     })
 
 
