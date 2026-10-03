@@ -163,7 +163,7 @@ def creditor_accounts(branch, query="", include_settled=False):
     rows = []
     for party in parties.order_by("name")[:600]:
         snapshot = supplier_account_snapshot(party)
-        if include_settled or snapshot["outstanding"] > 0:
+        if snapshot["outstanding"] > 0 or (include_settled and snapshot["total_billed"] > 0):
             rows.append({"party": party, **snapshot})
     rows.sort(key=lambda row: (
         -int(row["maximum_days_overdue"]),
