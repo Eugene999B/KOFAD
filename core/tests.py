@@ -109,6 +109,20 @@ class BusinessTests(Fixtures, TestCase):
         with self.assertRaises(ValidationError):
             self.sale(payments=[{"method":"cash","amount":"51"}])
 
+    def test_paid_in_full_walk_in_sale_does_not_require_customer_profile(self):
+        doc = s.post_trade(
+            self.user,
+            self.branch,
+            {
+                "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1}],
+                "payments": [{"method": "cash", "amount": "50"}],
+            },
+            uuid.uuid4(),
+        )
+        self.assertIsNone(doc.party)
+        self.assertEqual(doc.total, Decimal("50.00"))
+        self.assertEqual(doc.paid, Decimal("50.00"))
+
     def test_purchase_pack_receipt(self):
         doc = s.post_trade(self.user,self.branch,{"party":self.supplier.pk,"items":[{"product":self.product.pk,
             "mode":"retail_pack","quantity":100,"price":"240"}],"payments":[{"method":"bank","amount":"24000"}]},uuid.uuid4(),"purchase")
