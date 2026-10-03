@@ -90,7 +90,7 @@ class Company(models.Model):
 
 
 class DebtSettings(models.Model):
-    DELIVERY = [("off", "Off"), ("draft", "Prepare drafts"), ("queue", "Queue SMS automatically")]
+    DELIVERY = [("off", "Off"), ("draft", "Prepare drafts"), ("send", "Send SMS immediately")]
     GRACE_UNITS = [("days", "Days"), ("weeks", "Weeks"), ("months", "Months (30 days)")]
 
     delivery_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
@@ -126,7 +126,7 @@ class CommunicationSettings(models.Model):
 
     sale_receipt_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     payment_confirmation_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
-    daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="draft")
+    daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="send")
     low_stock_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     low_stock_time = models.TimeField(default=time(17, 0))
     closing_template = models.TextField(default=(
@@ -392,7 +392,7 @@ class Message(models.Model):
     last_error = models.CharField(max_length=240, blank=True)
     class Meta:
         ordering = ["-created_at"]
-        permissions = [("send_messages", "Queue and retry customer SMS")]
+        permissions = [("send_messages", "Send and retry customer SMS")]
         constraints = [
             models.UniqueConstraint(fields=["branch", "source_key"], name="unique_message_source"),
             models.CheckConstraint(
