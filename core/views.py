@@ -919,7 +919,7 @@ def returns(request, branch):
     })
 
 
-@protected("operate_inventory|approve_operations|operate_finance")
+@protected("operate_inventory|approve_operations|operate_finance|manage_company")
 def supplier_returns(request, branch):
     from . import inventory_exceptions as ix
     from .returns import can_direct_return
@@ -976,7 +976,7 @@ def supplier_returns(request, branch):
     })
 
 
-@protected("operate_inventory|approve_operations")
+@protected("operate_inventory|approve_operations|manage_company")
 def quarantine(request, branch):
     from . import inventory_exceptions as ix
     if request.method == "POST":
@@ -1132,7 +1132,7 @@ def report_data(request, branch):
     }, FAMILIES
 
 
-@protected("view_reports")
+@protected("view_reports|manage_company")
 def reports(request, branch):
     from .accounting_views import EXPENSE_CATEGORIES
     from .approval_views import _approval_items
@@ -1183,7 +1183,7 @@ def export_report(request, branch, format):
     )
 
 
-@protected("view_reports")
+@protected("view_reports|manage_company")
 def audit_log(request, branch):
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:32]
@@ -1645,7 +1645,7 @@ def communication_status(request, branch):
     return JsonResponse({"messages": payload})
 
 
-@protected("operate_finance")
+@protected("operate_finance|manage_company")
 def corrections(request, branch):
     if request.method == "POST":
         try:
