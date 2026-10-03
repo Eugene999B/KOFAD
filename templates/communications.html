@@ -27,6 +27,12 @@
   <a class="button comms-whatsapp-button" href="{{ whatsapp_launch.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp →</a>
 </section>
 {% endif %}
+{% if whatsapp_batch %}
+<section class="comms-wa-ready">
+  <div><strong>{{ whatsapp_batch|length }} WhatsApp chats are ready.</strong><span>Open the first chat now, then continue from Recent messages.</span></div>
+  <a class="button comms-whatsapp-button" href="{{ whatsapp_batch.0.whatsapp_url }}" target="_blank" rel="noopener">Open first WhatsApp →</a>
+</section>
+{% endif %}
 
 <div class="comms-workspace">
   <section class="panel comms-composer">
