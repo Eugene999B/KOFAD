@@ -19,7 +19,7 @@ from .models import (
     Message, Party, Product, Stock,
 )
 from .sms.service import (
-    create_automatic_customer_draft, create_internal_draft, queue_automatic, send_messages_now,
+    create_automatic_customer_draft, create_internal_draft, send_automatic, send_messages_now,
 )
 from .sms.templates import render_for_document
 
@@ -64,8 +64,8 @@ def _render(body, data):
 
 
 def _apply_mode(message, mode, actor=None):
-    if message and mode in {"send", "queue"}:  # queue kept only for legacy rows during rollout
-        queue_automatic(message, actor)
+    if message and mode == "send":
+        send_automatic(message, actor)
     return message
 
 
@@ -136,7 +136,7 @@ def prepare_closing_notifications(closing, actor=None):
             source_key=f"auto:closing:{closing.pk}:{contact.pk}",
         )
         created.append(message)
-    if created and policy.daily_closing_mode in {"send", "queue"} and settings.SMS_ENABLED:
+    if created and policy.daily_closing_mode == "send" and settings.SMS_ENABLED:
         return send_messages_now(sender, closing.branch, [message.pk for message in created], automatic=True)
     return created
 
@@ -290,7 +290,7 @@ def run_low_stock_summary(now=None):
             message = create_internal_draft(actor, branch, contact, body, source_key=source_key)
             messages_for_branch.append(message)
             created += 1
-        if messages_for_branch and policy.low_stock_mode in {"send", "queue"} and settings.SMS_ENABLED:
+        if messages_for_branch and policy.low_stock_mode == "send" and settings.SMS_ENABLED:
             send_messages_now(actor, branch, [message.pk for message in messages_for_branch], automatic=True)
     return created
 
