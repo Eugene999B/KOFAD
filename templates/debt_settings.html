@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/debts/">Open Debt Desk</a><a class="button secondary" href="/settings/">← Settings</a></div>{% endblock %}
+{% block content %}
+<section class="hero-panel settings-hero"><div><p class="eyebrow">RECEIVABLES POLICY</p><h2>Debt settings</h2><p>Control when an unpaid receipt becomes overdue, when customers are reminded, how often KOFAD may contact them and the exact default SMS wording.</p></div><span class="pill">{% if item.delivery_mode == "off" %}Automation off{% elif item.delivery_mode == "draft" %}Drafts only{% else %}Automatic queue{% endif %}</span></section>
+
+<div class="settings-explainer-grid">
+<article class="panel"><small>OVERDUE RULE</small><strong>{{ item.overdue_grace_value }} {{ item.get_overdue_grace_unit_display }}</strong><p>A receipt becomes overdue after its due date plus this grace period. Zero means the next day is overdue.</p></article>
+<article class="panel"><small>REMINDER TIME</small><strong>{{ item.reminder_time|time:"H:i" }}</strong><p>Africa/Accra time. Automatic runs still respect consent, frequency limits and provider availability.</p></article>
+<article class="panel"><small>SMS PROVIDER</small><strong>{% if sms_enabled %}{% if sms_sandbox %}Sandbox{% else %}Live{% endif %}{% else %}Disabled{% endif %}</strong><p>{% if not sms_enabled %}Rules can be configured now; no live SMS can be sent until deployment credentials are enabled.{% else %}Delivery still depends on customer consent and provider acceptance.{% endif %}</p></article>
+</div>
+
+<form method="post" class="panel policy-workspace">{% csrf_token %}
+{{ form.non_field_errors }}
+<div class="policy-section">
+<div class="section-heading"><div><p class="eyebrow">1 · WHEN IS DEBT DUE?</p><h2>Timing & overdue definition</h2></div></div>
+<div class="three-column">
+<label>{{ form.overdue_grace_value.label }}{{ form.overdue_grace_value }}<small>{{ form.overdue_grace_value.help_text }}</small>{{ form.overdue_grace_value.errors }}</label>
+<label>{{ form.overdue_grace_unit.label }}{{ form.overdue_grace_unit }}<small>{{ form.overdue_grace_unit.help_text }}</small>{{ form.overdue_grace_unit.errors }}</label>
+<label>{{ form.reminder_time.label }}{{ form.reminder_time }}<small>{{ form.reminder_time.help_text }}</small>{{ form.reminder_time.errors }}</label>
+</div>
+<div class="check-grid">
+<label class="switch-row">{{ form.due_soon_enabled }}<span><strong>Due-soon reminders</strong><small>Prepare reminders before the due date using the configured day list.</small></span></label>
+<label class="switch-row">{{ form.due_today_enabled }}<span><strong>Due-today reminders</strong><small>Include accounts whose effective due date is today.</small></span></label>
+<label class="switch-row">{{ form.overdue_enabled }}<span><strong>Overdue reminders</strong><small>Include accounts beyond the due date plus grace period.</small></span></label>
+<label class="switch-row">{{ form.skip_weekends }}<span><strong>Skip weekends</strong><small>Do not run automatic debt reminders on Saturday or Sunday.</small></span></label>
+</div>
+<label>{{ form.due_soon_days.label }}{{ form.due_soon_days }}<small>{{ form.due_soon_days.help_text }}</small>{{ form.due_soon_days.errors }}</label>
+</div>
+
+<div class="policy-section">
+<div class="section-heading"><div><p class="eyebrow">2 · ANTI-SPAM & ELIGIBILITY</p><h2>How often KOFAD may follow up</h2></div></div>
+<div class="three-column">
+<label>{{ form.overdue_repeat_days.label }}{{ form.overdue_repeat_days }}<small>Days between eligible overdue reminders.</small>{{ form.overdue_repeat_days.errors }}</label>
+<label>{{ form.minimum_hours_between_sms.label }}{{ form.minimum_hours_between_sms }}{{ form.minimum_hours_between_sms.errors }}</label>
+<label>{{ form.minimum_balance.label }}{{ form.minimum_balance }}<small>{{ company.currency }}. Tiny balances below this are ignored.</small>{{ form.minimum_balance.errors }}</label>
+<label>{{ form.max_sms_7_days.label }}{{ form.max_sms_7_days }}{{ form.max_sms_7_days.errors }}</label>
+<label>{{ form.max_sms_30_days.label }}{{ form.max_sms_30_days }}{{ form.max_sms_30_days.errors }}</label>
+</div>
+</div>
+
+<div class="policy-section">
+<div class="section-heading"><div><p class="eyebrow">3 · AUTOMATION & MESSAGE</p><h2>What KOFAD should do</h2></div></div>
+<label>{{ form.delivery_mode.label }}{{ form.delivery_mode }}<small>{{ form.delivery_mode.help_text }}</small>{{ form.delivery_mode.errors }}</label>
+<label>{{ form.message_template.label }}{{ form.message_template }}<small>{{ form.message_template.help_text }}</small>{{ form.message_template.errors }}</label>
+<div class="notice subtle"><strong>Customer consent still applies.</strong> Automatic debt reminders only target opted-in customer records. A saved phone number alone does not make a customer eligible for recurring messages.</div>
+</div>
+<button class="button">Save debt settings</button>
+</form>
+{% endblock %}
