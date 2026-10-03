@@ -1,44 +1,191 @@
-{% extends "base.html" %}
-{% block actions %}<div class="actions">{% if perms.core.manage_company %}<a class="button secondary" href="/settings/communications/">Communication settings</a><a class="button secondary" href="/settings/debt/">Debt settings</a>{% endif %}</div>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'communications.js' %}"></script>{% endblock %}
+{% block actions %}
+<div class="actions">
+  {% if perms.core.manage_company %}
+  <a class="button secondary" href="/settings/communications/">Communication settings</a>
+  <a class="button secondary" href="/settings/debt/">Debt settings</a>
+  {% endif %}
+</div>
+{% endblock %}
 {% block content %}
-<section class="hero-panel compact-hero"><div><p class="eyebrow">MESSAGE CENTRE</p><h2>Communications</h2><p>Manual messages, automatic-message rules and provider delivery evidence are separated so staff can tell exactly what KOFAD is doing.</p></div><span class="pill">{% if not sms_enabled %}SMS disabled{% elif sms_sandbox %}SMS sandbox{% else %}SMS live · {{ sms_provider }}{% endif %}</span></section>
-
-<section class="communication-workspace">
-<div class="panel communication-composer">
-<div class="section-heading"><div><p class="eyebrow">MANUAL MESSAGE</p><h2>Prepare a customer message</h2><p class="muted">Only customers who have messaging consent appear here.</p></div></div>
-<form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="action" value="draft">
-<label for="recipient">Customer<select id="recipient" name="party" required><option value="">Choose customer</option>{% for p in parties %}<option value="{{ p.pk }}">{{ p.name }} · {{ p.phone }}</option>{% empty %}<option value="">No opted-in customers</option>{% endfor %}</select></label>
-<label for="channel">Channel<select id="channel" name="channel"><option value="sms">SMS</option><option value="whatsapp">WhatsApp draft only</option></select></label>
-<label for="body">Message<textarea id="body" name="body" maxlength="2000" required placeholder="Write the message the customer should receive"></textarea></label>
-<button class="button">Prepare reviewable draft</button>
-</form>
-<div class="notice subtle"><strong>Draft first.</strong> Preparing a message does not send it. SMS is sent only after it is queued, and live sending is impossible while deployment-level SMS remains disabled.</div>
-</div>
-
-<div class="panel communication-automation">
-<div class="section-heading"><div><p class="eyebrow">AUTOMATIC MESSAGES</p><h2>What happens without staff typing</h2></div>{% if perms.core.manage_company %}<a href="/settings/communications/">Change rules →</a>{% endif %}</div>
-<div class="auto-message-list">
-<div><span>Sale completed</span><strong>{{ communication_policy.get_sale_receipt_mode_display }}</strong><small>Opted-in customer · Sale receipt template</small></div>
-<div><span>Debt payment received</span><strong>{{ communication_policy.get_payment_confirmation_mode_display }}</strong><small>Opted-in customer · Payment confirmation</small></div>
-<div><span>Debt schedule</span><strong>{{ debt_policy.get_delivery_mode_display }}</strong><small>Opted-in customer · Debt Settings decide due/overdue timing and frequency</small></div>
-<div><span>Daily closing submitted</span><strong>{{ communication_policy.get_daily_closing_mode_display }}</strong><small>Boss / management numbers configured for closing</small></div>
-<div><span>Low-stock daily check</span><strong>{{ communication_policy.get_low_stock_mode_display }}</strong><small>Management stock recipients at {{ communication_policy.low_stock_time|time:"H:i" }}</small></div>
-</div>
-</div>
+<section class="comms-hero">
+  <div>
+    <p class="eyebrow">COMMUNICATIONS</p>
+    <h2>Message customers without the extra steps.</h2>
+    <p>Choose who should receive it, write once, and send through SMS or WhatsApp.</p>
+  </div>
+  <div class="comms-live-state">
+    <span class="comms-live-dot {% if sms_enabled and not sms_sandbox %}is-live{% endif %}"></span>
+    <strong>{% if sms_enabled and not sms_sandbox %}Arkesel live{% elif sms_enabled %}SMS sandbox{% else %}SMS unavailable{% endif %}</strong>
+  </div>
 </section>
 
-<section class="panel">
-<div class="section-heading"><div><p class="eyebrow">OUTBOX & DELIVERY EVIDENCE</p><h2>Message history</h2><p class="muted">Draft = prepared only. Queued = waiting for worker. Accepted = provider accepted submission. Delivered requires a verified callback.</p></div></div>
-<div class="table-wrap"><table><thead><tr><th>Recipient</th><th>Source / message</th><th>Delivery</th><th>Created</th><th></th></tr></thead><tbody>
-{% for row in rows %}
-<tr>
-<td>{% if row.party %}<strong>{{ row.party.name }}</strong><small>Customer · {{ row.recipient }}</small>{% elif row.management_contact %}<strong>{{ row.management_contact.name }}</strong><small>Management · {{ row.recipient }}</small>{% else %}<strong>{{ row.recipient }}</strong>{% endif %}</td>
-<td><small>{% if row.source_key %}{{ row.source_key }}{% else %}Manual{% endif %}</small><span class="message-body-preview">{{ row.body }}</span><small>{{ row.segments }} segment{{ row.segments|pluralize }} · {{ row.encoding }}</small></td>
-<td><span class="pill">{{ row.status }}</span><small>{{ row.provider }}{% if row.sandbox %} · sandbox{% endif %}</small>{% if row.last_error %}<small class="danger">{{ row.last_error }}</small>{% endif %}</td>
-<td>{{ row.created_at|date:"d M Y, H:i" }}<small>by {{ row.created_by }}</small></td>
-<td>{% if perms.core.send_messages and row.channel == 'sms' %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}">{% if row.status == 'draft' %}<button class="button secondary" name="action" value="queue">Queue SMS</button>{% elif row.status == 'failed' or row.status == 'undelivered' or row.status == 'expired' %}<button class="button secondary" name="action" value="retry">Retry</button>{% elif row.status == 'unknown' %}<small>Verify with provider before resend.</small>{% endif %}</form>{% endif %}</td>
-</tr>
-{% empty %}<tr><td colspan="5"><div class="empty"><h3>No messages yet.</h3><p>Prepare a manual draft or enable an automatic message rule.</p></div></td></tr>{% endfor %}
-</tbody></table></div>
+{% if whatsapp_launch %}
+<section class="comms-wa-ready">
+  <div><strong>WhatsApp is ready for {{ whatsapp_launch.recipient_name|default:whatsapp_launch.recipient }}.</strong><span>The message is already filled in.</span></div>
+  <a class="button comms-whatsapp-button" href="{{ whatsapp_launch.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp →</a>
+</section>
+{% endif %}
+
+<div class="comms-workspace">
+  <section class="panel comms-composer">
+    <form method="post" id="comms-compose">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="send_compose">
+      <input type="hidden" name="key" value="{{ key }}">
+      <input type="hidden" name="channel" id="comms-channel" value="sms">
+      <input type="hidden" name="target" id="comms-target" value="one">
+
+      <div class="comms-section-head">
+        <div>
+          <p class="eyebrow">CHANNEL</p>
+          <h2>Send a message</h2>
+        </div>
+        <div class="comms-channel-switch" role="group" aria-label="Message channel">
+          <button type="button" class="active" data-comms-channel="sms">SMS</button>
+          <button type="button" data-comms-channel="whatsapp">WhatsApp</button>
+        </div>
+      </div>
+
+      <div class="comms-target-switch" role="group" aria-label="Recipients">
+        <button type="button" class="active" data-comms-target="one">One customer</button>
+        <button type="button" data-comms-target="selected">Select customers</button>
+        <button type="button" data-comms-target="all">All customers</button>
+        <button type="button" data-comms-target="manual">Any number</button>
+      </div>
+
+      <div class="comms-target-pane" data-comms-pane="one">
+        <label for="comms-one-customer">Customer</label>
+        <select id="comms-one-customer" name="party">
+          <option value="">Choose customer</option>
+          {% for p in parties %}<option value="{{ p.pk }}">{{ p.name }} · {{ p.phone }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div class="comms-target-pane hidden" data-comms-pane="selected">
+        <div class="comms-recipient-tools">
+          <div class="comms-search-wrap">
+            <label for="comms-customer-search">Find customers</label>
+            <input id="comms-customer-search" type="search" placeholder="Search name or phone" autocomplete="off">
+          </div>
+          <div class="comms-recipient-actions">
+            <button class="text-button" type="button" id="comms-select-filtered">Select shown</button>
+            <button class="text-button" type="button" id="comms-clear-selected">Clear</button>
+          </div>
+        </div>
+        <div class="comms-selected-count"><strong id="comms-selected-count">0</strong> selected</div>
+        <div class="comms-customer-list" id="comms-customer-list">
+          {% for p in parties %}
+          <label class="comms-customer-row" data-search="{{ p.name|lower }} {{ p.phone|lower }}">
+            <input type="checkbox" name="customer_ids" value="{{ p.pk }}">
+            <span><strong>{{ p.name }}</strong><small>{{ p.phone }}</small></span>
+          </label>
+          {% empty %}<p class="muted">No customers with phone numbers yet.</p>{% endfor %}
+        </div>
+      </div>
+
+      <div class="comms-target-pane hidden" data-comms-pane="all">
+        <div class="comms-all-summary">
+          <span>Recipients</span>
+          <strong>{{ customer_count }} customer{{ customer_count|pluralize }}</strong>
+          <small>Every customer in this location with a saved phone number.</small>
+        </div>
+        <label class="comms-confirm-all">
+          <input type="checkbox" name="confirm_all" value="yes">
+          <span>Confirm send to all {{ customer_count }} customer{{ customer_count|pluralize }}</span>
+        </label>
+      </div>
+
+      <div class="comms-target-pane hidden" data-comms-pane="manual">
+        <label for="comms-manual-phone">Phone number</label>
+        <input id="comms-manual-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="0240000000 or +233240000000">
+      </div>
+
+      <div class="comms-quick-messages">
+        <div class="comms-mini-head"><strong>Quick messages</strong><small>Tap to use</small></div>
+        <div class="comms-template-row">
+          <button type="button" data-comms-template="KOFAD IMPEX ENTERPRISE: Thank you for doing business with us. We appreciate you.">Thank you</button>
+          <button type="button" data-comms-template="KOFAD IMPEX ENTERPRISE: Your order is ready for collection. Thank you.">Order ready</button>
+          <button type="button" data-comms-template="KOFAD IMPEX ENTERPRISE: Kindly contact us regarding your account. Thank you.">Account notice</button>
+          <button type="button" data-comms-template="KOFAD IMPEX ENTERPRISE: New stock is now available. Contact us for details.">New stock</button>
+        </div>
+      </div>
+
+      <label for="comms-body">Message</label>
+      <textarea id="comms-body" name="body" rows="7" maxlength="480" required placeholder="Type your message…"></textarea>
+
+      <div class="comms-send-bar">
+        <div>
+          <strong id="comms-recipient-summary">1 customer</strong>
+          <small id="comms-send-hint">SMS is queued immediately to Arkesel.</small>
+        </div>
+        <div class="comms-send-action">
+          <span id="comms-char-count">0 / 480</span>
+          <button class="button" id="comms-send-button" type="submit" {% if not perms.core.send_messages %}disabled{% endif %}>Send SMS →</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <aside class="comms-help-panel">
+    <div class="comms-help-icon">↗</div>
+    <h3 id="comms-help-title">Fast SMS</h3>
+    <p id="comms-help-copy">Press send once. KOFAD queues every recipient immediately and the SMS worker picks up new messages continuously.</p>
+    <div class="comms-help-rule"></div>
+    <strong>WhatsApp</strong>
+    <p>For WhatsApp, KOFAD prepares the chat and message, then opens WhatsApp Web or the app. Nothing is falsely marked as sent before you press Send inside WhatsApp.</p>
+  </aside>
+</div>
+
+<section class="panel comms-automation-panel">
+  <div class="section-heading">
+    <div><p class="eyebrow">AUTOMATIC MESSAGES</p><h2>Messages KOFAD can prepare automatically</h2></div>
+    {% if perms.core.manage_company %}<a href="/settings/communications/">Change rules →</a>{% endif %}
+  </div>
+  <div class="auto-message-list compact-auto-list">
+    <div><span>Sale completed</span><strong>{{ communication_policy.get_sale_receipt_mode_display }}</strong></div>
+    <div><span>Debt payment received</span><strong>{{ communication_policy.get_payment_confirmation_mode_display }}</strong></div>
+    <div><span>Debt reminders</span><strong>{{ debt_policy.get_delivery_mode_display }}</strong></div>
+    <div><span>Daily closing</span><strong>{{ communication_policy.get_daily_closing_mode_display }}</strong></div>
+  </div>
+</section>
+
+<section class="panel comms-history-panel">
+  <div class="section-heading">
+    <div><p class="eyebrow">HISTORY</p><h2>Recent messages</h2><p class="muted">SMS delivery evidence and prepared WhatsApp chats stay together here.</p></div>
+    <div class="comms-history-filter" role="group" aria-label="Message history channel">
+      <button type="button" class="active" data-history-channel="all">All</button>
+      <button type="button" data-history-channel="sms">SMS</button>
+      <button type="button" data-history-channel="whatsapp">WhatsApp</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="comms-history-table">
+      <thead><tr><th>Recipient</th><th>Message</th><th>Channel / status</th><th>Time</th><th></th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+      <tr data-history-row="{{ row.channel }}">
+        <td>
+          <strong>{% if row.party %}{{ row.party.name }}{% elif row.management_contact %}{{ row.management_contact.name }}{% elif row.recipient_name %}{{ row.recipient_name }}{% else %}Direct number{% endif %}</strong>
+          <small>{{ row.recipient }}</small>
+        </td>
+        <td><span class="message-body-preview">{{ row.body }}</span></td>
+        <td><span class="pill">{{ row.channel|upper }}</span><small>{% if row.channel == "whatsapp" and row.status == "ready" %}Ready to open{% else %}{{ row.status|title }}{% endif %}</small></td>
+        <td>{{ row.created_at|date:"d M, H:i" }}</td>
+        <td class="comms-row-action">
+          {% if row.channel == "whatsapp" and row.whatsapp_url %}
+          <a class="button secondary comms-whatsapp-button" href="{{ row.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp</a>
+          {% elif perms.core.send_messages and row.channel == "sms" %}
+            {% if row.status == "draft" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="queue">Send SMS</button></form>
+            {% elif row.status == "failed" or row.status == "undelivered" or row.status == "expired" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="retry">Retry</button></form>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="5"><div class="empty"><h3>No messages yet.</h3><p>Your SMS and WhatsApp activity will appear here.</p></div></td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}
