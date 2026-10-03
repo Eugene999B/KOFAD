@@ -33,17 +33,22 @@ def detail(request, branch, pk):
                 values = {str(line.pk): (request.POST.get("quantity_" + str(line.pk), ""),
                     request.POST.get("reason_" + str(line.pk), "")) for line in lines}
                 counts.save_count(request.user, branch, pk, values, request.POST.get("note", ""), action == "submit")
-                if action == "submit" and (request.user.is_superuser or request.user.has_perm("core.manage_company")):
+                owner_direct = request.POST.get("owner_direct") == "1" and (
+                    request.user.is_superuser or request.user.has_perm("core.manage_company")
+                )
+                if action == "submit" and owner_direct:
                     counts.review_count(
                         request.user, branch, pk, "approve",
                         "Owner direct authority — inventory verification posted after complete blind count.",
                         owner_direct=True,
                     )
             else:
-                owner = request.user.is_superuser or request.user.has_perm("core.manage_company")
+                owner_direct = request.POST.get("owner_direct") == "1" and (
+                    request.user.is_superuser or request.user.has_perm("core.manage_company")
+                )
                 counts.review_count(
                     request.user, branch, pk, action, request.POST.get("review_note", ""),
-                    owner_direct=owner,
+                    owner_direct=owner_direct,
                 )
             messages.success(request, "Stock count recorded.")
             return redirect("stock_count", pk=pk)
