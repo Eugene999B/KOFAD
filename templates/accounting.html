@@ -18,6 +18,13 @@
   <a href="?view=journals&start={{ start }}&end={{ end }}" class="{% if view == 'journals' %}active{% endif %}">Journals</a>
 </nav>
 
+{% if report.inventory_control %}
+<section class="panel accounting-control-check {% if report.inventory_control.difference != 0 %}control-warning{% else %}control-ok{% endif %}">
+  <div class="section-heading"><div><p class="eyebrow">SUBLEDGER RECONCILIATION</p><h2>Inventory ledger vs operational stock</h2><p class="muted">KOFAD compares sellable + quarantined inventory cost to double-entry inventory accounts 1200/1210.</p></div><span class="pill">{% if report.inventory_control.difference == 0 %}Reconciled{% else %}Opening balance / adjustment required{% endif %}</span></div>
+  <div class="mini-metrics"><div><small>Operational inventory</small><strong>{{ company.currency }} {{ report.inventory_control.operational|floatformat:2 }}</strong></div><div><small>Accounting ledger inventory</small><strong>{{ company.currency }} {{ report.inventory_control.ledger|floatformat:2 }}</strong></div><div><small>Control difference</small><strong>{{ company.currency }} {{ report.inventory_control.difference|floatformat:2 }}</strong></div></div>
+  {% if report.inventory_control.difference != 0 %}<p class="hint">This usually means inventory existed before KOFAD’s double-entry ledger started, or a historical stock adjustment needs an opening-balance/manual journal. KOFAD does not hide the difference.</p>{% endif %}
+</section>
+{% endif %}
 <div class="accounting-metrics">
   <article><small>Revenue</small><strong>{{ company.currency }} {{ report.revenue|floatformat:2 }}</strong></article>
   <article><small>Expenses</small><strong>{{ company.currency }} {{ report.expenses|floatformat:2 }}</strong></article>
