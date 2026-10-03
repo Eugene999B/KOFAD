@@ -42,6 +42,8 @@ class ProductForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["pack_enabled"].initial = "yes" if (not self.instance.pk or self.instance.pack_size > 1) else "no"
+        self.fields["pack_name"].required = False
+        self.fields["pack_size"].required = False
         if self.instance.pk:
             self.fields.pop("opening_packs", None)
             self.fields.pop("opening_units", None)
@@ -55,6 +57,8 @@ class ProductForm(forms.ModelForm):
         data = super().clean()
         packed = data.get("pack_enabled") == "yes"
         if packed:
+            if not str(data.get("pack_name") or "").strip():
+                self.add_error("pack_name", "Enter the pack, box, carton or bundle name.")
             if (data.get("pack_size") or 0) < 2:
                 self.add_error("pack_size", "A packed product must contain at least two base units per pack.")
             pack_size = data.get("pack_size") or 1
