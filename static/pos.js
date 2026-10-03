@@ -37,6 +37,12 @@
       heldId = restoredState.heldId || null;
       selectedCustomer = restoredState.selectedCustomer || null;
       newCustomerMode = Boolean(restoredState.newCustomerMode);
+      if (
+        restoredState.selectedPaymentMethod === "split" ||
+        paymentMethods.includes(restoredState.selectedPaymentMethod)
+      ) {
+        selectedPaymentMethod = restoredState.selectedPaymentMethod;
+      }
     }
   } catch (_) { restoredState = null; }
 
@@ -926,9 +932,9 @@
     if (singlePaymentValue) singlePaymentValue.value = "0";
     const reason = document.querySelector("#override-reason");
     if (reason) reason.value = "";
-    clearStored();
     applyPaymentPlan();
     render();
+    clearStored();
     clearError();
     productQuery?.focus();
   }
@@ -949,6 +955,9 @@
     }
   });
   document.querySelector("#new-sale-after-success")?.addEventListener("click", resetForNextSale);
+  successDialog?.addEventListener("cancel", event => {
+    event.preventDefault();
+  });
 
   document.querySelector("#checkout").addEventListener("submit", async event => {
     event.preventDefault();
@@ -1045,6 +1054,7 @@
       if (customerConsent) customerConsent.checked = Boolean(saved.customer_consent || saved.customer?.consent);
       applyPaymentPlan();
       render();
+      heldSalesDialog?.close?.();
     } catch (error) {
       fail(error.message);
     }
@@ -1065,6 +1075,12 @@
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
     if (customerConsent) customerConsent.checked = Boolean(restoredState.customerConsent || selectedCustomer?.consent);
+    if (
+      restoredState.selectedPaymentMethod === "split" ||
+      paymentMethods.includes(restoredState.selectedPaymentMethod)
+    ) {
+      selectedPaymentMethod = restoredState.selectedPaymentMethod;
+    }
   }
   applyPaymentPlan();
   render();
@@ -1082,6 +1098,16 @@
       const input = document.querySelector("#pay-" + payment.method);
       if (input) input.value = payment.amount;
     });
+    const nonZeroPayments = pendingBody.payments.filter(payment => {
+      try { return cents(payment.amount) > 0; } catch (_) { return false; }
+    });
+    if (nonZeroPayments.length === 1) {
+      selectedPaymentMethod = nonZeroPayments[0].method;
+      if (singlePaymentValue) singlePaymentValue.value = nonZeroPayments[0].amount;
+    } else if (nonZeroPayments.length > 1) {
+      selectedPaymentMethod = "split";
+    }
+    selectPaymentMethod(selectedPaymentMethod, {preserveAmount: true});
     const reason = document.querySelector("#override-reason");
     if (reason) reason.value = pendingBody.override_reason || "";
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
