@@ -344,7 +344,6 @@ def post_supplier_account_payment(user, branch, payload, key):
         reference=s.reference("supplier_payment", branch),
         total=amount,
         paid=amount,
-        document_date=timezone.localdate(),
         note=("Creditor account payment · oldest due first" + (f" · {note}" if note else "")),
         created_by=user,
     )
