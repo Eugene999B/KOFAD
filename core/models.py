@@ -232,7 +232,10 @@ class Document(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["branch", "kind", "created_at"])]
+        indexes = [
+            models.Index(fields=["branch", "kind", "created_at"]),
+            models.Index(fields=["branch", "party", "external_reference"], name="supplier_invoice_ref_idx"),
+        ]
         constraints = [
             models.CheckConstraint(condition=Q(total__gte=0), name="document_total_positive"),
             models.CheckConstraint(condition=Q(paid__gte=0) & Q(paid__lte=models.F("total")), name="document_paid_valid"),
