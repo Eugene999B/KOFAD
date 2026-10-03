@@ -1,22 +1,19 @@
 import time
 
-from django.core.exceptions import ValidationError
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 
 from core.automations import run_scheduled_automations
-from core.sms.service import process_one, recover_stale, sync_delivery_reports
+from core.sms.service import recover_stale, sync_delivery_reports
 
 
 class Command(BaseCommand):
-    help = "Run SMS automations and delivery tracking. Use --loop in a separate Railway worker."
+    help = "Run communication automations and Arkesel delivery tracking."
 
     def add_arguments(self, parser):
         parser.add_argument("--loop", action="store_true")
-        parser.add_argument("--limit", type=int, default=100)
 
     def handle(self, *args, **options):
-        legacy_processed = 0
         delivery_updates = 0
         last_automation = 0.0
         last_delivery_sync = 0.0
@@ -39,23 +36,12 @@ class Command(BaseCommand):
                     self.stderr.write(f"SMS delivery-status check failed safely: {exc}")
                 last_delivery_sync = now
 
-            try:
-                recover_stale()
-                # Compatibility drain only: new sends never enter a queued state.
-                found_legacy = process_one()
-            except ValidationError as exc:
-                raise CommandError("; ".join(exc.messages))
-
-            if found_legacy:
-                legacy_processed += 1
+            recover_stale()
 
             if not options["loop"]:
-                if not found_legacy or legacy_processed >= options["limit"]:
-                    break
-            if not found_legacy:
-                time.sleep(1)
+                break
+            time.sleep(1)
 
         self.stdout.write(
-            f"Delivery tracking updated {delivery_updates} SMS record(s); "
-            f"processed {legacy_processed} legacy pending record(s)."
+            f"Communication automation complete; delivery tracking updated {delivery_updates} SMS record(s)."
         )
