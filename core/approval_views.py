@@ -256,7 +256,7 @@ def return_privileges(request):
     branch = branch_for(request)
     if not _owner(request.user):
         raise PermissionDenied("Only the owner / company administrator can manage direct-return privileges.")
-    users = list(User.objects.filter(is_active=True, access__branches=branch).distinct().order_by("username"))
+    users = list(User.objects.filter(is_active=True).distinct().order_by("username"))
     if request.method == "POST":
         for user in users:
             if _owner(user):
