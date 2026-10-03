@@ -62,11 +62,16 @@
       </div>
 
       <div class="comms-target-pane" data-comms-pane="one">
-        <label for="comms-one-customer">Customer</label>
-        <select id="comms-one-customer" name="party">
-          <option value="">Choose customer</option>
-          {% for p in parties %}<option value="{{ p.pk }}">{{ p.name }} · {{ p.phone }}</option>{% endfor %}
-        </select>
+        <label for="comms-one-search">Customer</label>
+        <input type="hidden" id="comms-one-customer" name="party">
+        <input id="comms-one-search" type="search" placeholder="Search customer by name or phone" autocomplete="off">
+        <div class="comms-customer-list comms-one-results" id="comms-one-results">
+          {% for p in parties %}
+          <button type="button" class="comms-customer-row comms-one-customer-row" data-one-customer="{{ p.pk }}" data-name="{{ p.name }}" data-phone="{{ p.phone }}" data-search="{{ p.name|lower }} {{ p.phone|lower }}">
+            <span><strong>{{ p.name }}</strong><small>{{ p.phone }}</small></span><em>Choose</em>
+          </button>
+          {% empty %}<p class="muted">No customers with phone numbers yet.</p>{% endfor %}
+        </div>
       </div>
 
       <div class="comms-target-pane hidden" data-comms-pane="selected">

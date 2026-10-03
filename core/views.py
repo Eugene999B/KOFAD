@@ -279,6 +279,63 @@ def trade_screen(request, branch, kind):
         ),
     })
 
+def _receipt_sms_result(user, branch, doc):
+    """Send or resolve the receipt SMS for one sale without duplicating a prior accepted send."""
+    if not user.has_perm("core.send_messages"):
+        raise PermissionDenied
+    if not doc.party_id:
+        raise ValidationError("This is a walk-in sale with no customer phone number.")
+    if not doc.party.consent:
+        raise ValidationError("Customer SMS consent is not enabled for this sale.")
+    if not settings.SMS_ENABLED:
+        raise ValidationError("SMS delivery is not enabled for this deployment.")
+
+    from .sms.service import create_draft, send_message_now
+    from .sms.templates import render_for_document
+
+    body = render_for_document(doc, "receipt")
+    item = Message.objects.filter(
+        branch=branch, party=doc.party
+    ).filter(
+        Q(source_key=f"auto:receipt:{doc.pk}")
+        | Q(source_key=f"document:receipt:{doc.pk}")
+        | Q(source_key__startswith=f"receipt:{doc.pk}:")
+    ).order_by("-created_at").first()
+
+    retryable = {"failed", "undelivered", "expired"}
+    settled = {"sending", "accepted", "delivered", "simulated"}
+    if item and item.status in settled:
+        label = {
+            "sending": "sending",
+            "accepted": "sent",
+            "delivered": "delivered",
+            "simulated": "test sent",
+        }.get(item.status, item.status)
+        return item, f"Receipt SMS is already {label}."
+    if item and item.status == "unknown":
+        return item, "The previous SMS delivery result is unknown. Check the provider result before sending again."
+    if item and item.status in retryable:
+        sent = send_message_now(user, branch, item.pk, retry=True)
+    else:
+        if not item:
+            item = create_draft(
+                user, branch, doc.party, body,
+                source_key=f"document:receipt:{doc.pk}",
+            )
+        sent = send_message_now(user, branch, item.pk)
+
+    message = (
+        "Receipt SMS sent to Arkesel."
+        if sent.status == "accepted"
+        else "Receipt SMS delivered."
+        if sent.status == "delivered"
+        else "Receipt SMS test completed."
+        if sent.status == "simulated"
+        else sent.last_error or f"Receipt SMS {sent.status}."
+    )
+    return sent, message
+
+
 @login_required
 @require_POST
 def complete_trade(request):
@@ -286,8 +343,14 @@ def complete_trade(request):
         data = json.loads(request.body)
         if not isinstance(data, dict):
             raise ValidationError("Expected a transaction object.")
-        doc = s.post_trade(request.user, branch_for(request), data, request.headers.get("Idempotency-Key"),
-                           kind=data.get("kind", "sale"))
+        branch = branch_for(request)
+        doc = s.post_trade(
+            request.user,
+            branch,
+            data,
+            request.headers.get("Idempotency-Key"),
+            kind=data.get("kind", "sale"),
+        )
         party = doc.party
         can_send_sms = bool(
             doc.kind == "sale"
@@ -296,6 +359,33 @@ def complete_trade(request):
             and request.user.has_perm("core.send_messages")
             and settings.SMS_ENABLED
         )
+        sms_reason = (
+            ""
+            if can_send_sms
+            else "No customer is attached to this sale."
+            if not party
+            else "Customer SMS consent is not enabled."
+            if not party.consent
+            else "Your account does not have message-sending permission."
+            if not request.user.has_perm("core.send_messages")
+            else "SMS delivery is not enabled for this deployment."
+        )
+
+        sms_requested = bool(doc.kind == "sale" and data.get("customer_consent") is True)
+        sms_status = ""
+        sms_message = ""
+        if sms_requested:
+            if can_send_sms:
+                try:
+                    sent, sms_message = _receipt_sms_result(request.user, branch, doc)
+                    sms_status = sent.status
+                except (ValidationError, ValueError) as exc:
+                    sms_status = "failed"
+                    sms_message = problem(exc)
+            else:
+                sms_status = "failed"
+                sms_message = sms_reason
+
         return JsonResponse({
             "url": f"/documents/{doc.pk}/",
             "document_id": str(doc.pk),
@@ -307,17 +397,10 @@ def complete_trade(request):
                 if party else None
             ),
             "can_send_sms": can_send_sms,
-            "sms_reason": (
-                ""
-                if can_send_sms
-                else "No customer is attached to this sale."
-                if not party
-                else "Customer SMS consent is not enabled."
-                if not party.consent
-                else "Your account does not have message-sending permission."
-                if not request.user.has_perm("core.send_messages")
-                else "SMS delivery is not enabled for this deployment."
-            ),
+            "sms_reason": sms_reason,
+            "sms_requested": sms_requested,
+            "sms_status": sms_status,
+            "sms_message": sms_message,
         })
     except (ValidationError, ValueError, TypeError, KeyError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
@@ -332,68 +415,17 @@ def send_transaction_message_api(request, pk):
     )
     if not request.user.has_perm("core.operate_sales"):
         raise PermissionDenied
-    if not request.user.has_perm("core.send_messages"):
-        return JsonResponse({"error": "Message-sending permission is required."}, status=403)
-    if not doc.party_id:
-        return JsonResponse({"error": "This is a walk-in sale with no customer phone number."}, status=400)
-    if not doc.party.consent:
-        return JsonResponse({"error": "Customer SMS consent is not enabled for this sale."}, status=400)
-    if not settings.SMS_ENABLED:
-        return JsonResponse({"error": "SMS delivery is not enabled for this deployment."}, status=400)
-
-    from .sms.service import create_draft, send_message_now
-    from .sms.templates import render_for_document
-
     try:
-        body = render_for_document(doc, "receipt")
-        item = Message.objects.filter(
-            branch=branch, party=doc.party
-        ).filter(
-            Q(source_key=f"auto:receipt:{doc.pk}")
-            | Q(source_key=f"document:receipt:{doc.pk}")
-            | Q(source_key__startswith=f"receipt:{doc.pk}:")
-        ).order_by("-created_at").first()
-
-        retryable = {"failed", "undelivered", "expired"}
-        in_flight = {"sending", "accepted", "delivered", "simulated"}
-        if item and item.status in in_flight:
-            label = {
-                "sending": "sending",
-                "accepted": "sent",
-                "delivered": "delivered",
-                "simulated": "test sent",
-            }.get(item.status, item.status)
-            return JsonResponse({
-                "ok": True,
-                "status": item.status,
-                "message": f"Receipt SMS is already {label}.",
-            })
-        if item and item.status == "unknown":
-            return JsonResponse({
-                "error": "The previous SMS delivery result is unknown. Check the provider result before sending again."
-            }, status=409)
-        if item and item.status in retryable:
-            sent = send_message_now(request.user, branch, item.pk, retry=True)
-            return JsonResponse({
-                "ok": sent.status in {"accepted", "delivered", "simulated"},
-                "status": sent.status,
-                "message": "Receipt SMS sent to Arkesel." if sent.status == "accepted"
-                    else "Receipt SMS delivered." if sent.status == "delivered"
-                    else sent.last_error or f"Receipt SMS {sent.status}.",
-            }, status=200 if sent.status in {"accepted", "delivered", "simulated"} else 502)
-        if not item:
-            item = create_draft(
-                request.user, branch, doc.party, body,
-                source_key=f"document:receipt:{doc.pk}",
-            )
-        sent = send_message_now(request.user, branch, item.pk)
-        return JsonResponse({
-            "ok": sent.status in {"accepted", "delivered", "simulated"},
-            "status": sent.status,
-            "message": "Receipt SMS sent to Arkesel." if sent.status == "accepted"
-                else "Receipt SMS delivered." if sent.status == "delivered"
-                else sent.last_error or f"Receipt SMS {sent.status}.",
-        }, status=200 if sent.status in {"accepted", "delivered", "simulated"} else 502)
+        sent, message = _receipt_sms_result(request.user, branch, doc)
+        ok = sent.status in {"accepted", "delivered", "simulated", "sending"}
+        if sent.status == "unknown":
+            return JsonResponse({"error": message, "status": sent.status}, status=409)
+        return JsonResponse(
+            {"ok": ok, "status": sent.status, "message": message},
+            status=200 if ok else 502,
+        )
+    except PermissionDenied:
+        return JsonResponse({"error": "Message-sending permission is required."}, status=403)
     except (ValidationError, ValueError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 

@@ -978,10 +978,27 @@
     }
 
     if (receiptSmsButton) {
-      receiptSmsButton.disabled = !result.can_send_sms;
-      receiptSmsButton.textContent = result.can_send_sms ? "Send SMS" : "SMS unavailable";
+      const smsDone = ["accepted", "delivered", "simulated", "sending"].includes(result.sms_status);
+      const smsFailed = ["failed", "undelivered", "expired", "unknown"].includes(result.sms_status);
+      receiptSmsButton.disabled = smsDone || !result.can_send_sms;
+      receiptSmsButton.textContent = result.sms_status === "delivered"
+        ? "Delivered ✓"
+        : smsDone
+        ? "SMS sent ✓"
+        : smsFailed
+        ? "Retry SMS"
+        : result.can_send_sms
+        ? "Send SMS"
+        : "SMS unavailable";
     }
-    setSuccessStatus(result.can_send_sms ? "" : (result.sms_reason || ""));
+    if (result.sms_requested) {
+      setSuccessStatus(
+        result.sms_message || (result.sms_status === "delivered" ? "Receipt SMS delivered." : ""),
+        ["failed", "undelivered", "expired", "unknown"].includes(result.sms_status) ? "error" : "subtle"
+      );
+    } else {
+      setSuccessStatus(result.can_send_sms ? "" : (result.sms_reason || ""));
+    }
     if (typeof successDialog?.showModal === "function") successDialog.showModal();
     else successDialog?.setAttribute("open", "");
   }
@@ -1021,21 +1038,23 @@
     productQuery?.focus();
   }
 
-  receiptSmsButton?.addEventListener("click", async () => {
-    if (!lastCompletedSale?.document_id) return;
+  async function sendReceiptSmsNow() {
+    if (!lastCompletedSale?.document_id || !receiptSmsButton) return;
     setSuccessStatus("");
     receiptSmsButton.disabled = true;
-    receiptSmsButton.textContent = "Sending…";
+    receiptSmsButton.textContent = "Sending SMS…";
     try {
       const result = await api("/api/documents/" + lastCompletedSale.document_id + "/send-sms/", {});
       receiptSmsButton.textContent = result.status === "delivered" ? "Delivered ✓" : "SMS sent ✓";
       setSuccessStatus(result.message || (result.status === "delivered" ? "Receipt SMS delivered." : "Receipt SMS sent."));
     } catch (error) {
       receiptSmsButton.disabled = false;
-      receiptSmsButton.textContent = "Send SMS";
+      receiptSmsButton.textContent = "Retry SMS";
       setSuccessStatus(error.message, "error");
     }
-  });
+  }
+
+  receiptSmsButton?.addEventListener("click", sendReceiptSmsNow);
   document.querySelector("#new-sale-after-success")?.addEventListener("click", resetForNextSale);
   successDialog?.addEventListener("cancel", event => {
     event.preventDefault();

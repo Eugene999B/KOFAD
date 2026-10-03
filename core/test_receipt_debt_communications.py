@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -345,6 +346,55 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.customer.refresh_from_db()
         self.assertTrue(self.customer.consent)
 
+
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_checkout_sms_checkbox_sends_receipt_immediately(self, submit_many):
+        submit_many.return_value = [
+            Submission(
+                "accepted",
+                provider_id="checkout-sms-1",
+                http_status=200,
+                recipient="+233241234567",
+            )
+        ]
+        self.customer.phone = "+233241234567"
+        self.customer.consent = False
+        self.customer.save(update_fields=["phone", "consent"])
+        self.authenticate_client()
+        response = self.client.post(
+            "/api/trades/",
+            data=json.dumps({
+                "kind": "sale",
+                "party": self.customer.pk,
+                "customer_consent": True,
+                "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1}],
+                "payments": [{"method": "cash", "amount": "50.00"}],
+                "due_date": "",
+                "override_reason": "",
+            }),
+            content_type="application/json",
+            HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["sms_requested"])
+        self.assertEqual(payload["sms_status"], "accepted")
+        self.assertEqual(payload["sms_message"], "Receipt SMS sent to Arkesel.")
+        self.customer.refresh_from_db()
+        self.assertTrue(self.customer.consent)
+        message = Message.objects.get(source_key=f"document:receipt:{payload['document_id']}")
+        self.assertEqual(message.status, "accepted")
+        self.assertEqual(message.delivery_attempts.get().provider_id, "checkout-sms-1")
+        submit_many.assert_called_once()
+
     @override_settings(SMS_ENABLED=True)
     def test_sales_history_receipt_detail_stays_focused_on_transaction(self):
         self.customer.phone = "+233241234567"
@@ -383,6 +433,9 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         response = self.client.get("/communications/")
         for phrase in ("One customer", "Select customers", "All customers", "Any number", "WhatsApp"):
             self.assertContains(response, phrase)
+        self.assertContains(response, 'id="comms-one-search"')
+        self.assertContains(response, 'placeholder="Search customer by name or phone"')
+        self.assertContains(response, 'id="comms-customer-search"')
 
     @override_settings(
         SMS_ENABLED=True,
