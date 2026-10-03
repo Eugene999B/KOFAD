@@ -93,7 +93,7 @@ def accounting_snapshot(branch, first, last, category="", method=""):
     for doc in Document.objects.filter(branch=branch, kind="sale", party__isnull=False):
         current_receivables += max(ZERO, balance(doc))
     current_payables = ZERO
-    for doc in Document.objects.filter(branch=branch, kind="purchase", party__isnull=False):
+    for doc in Document.objects.filter(branch=branch, kind__in=["purchase", "creditor_charge"], party__isnull=False):
         current_payables += max(ZERO, balance(doc))
     stock_value = sum((row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")), ZERO)
 
