@@ -270,11 +270,33 @@ def post_trade(user, branch, payload, key, kind="sale"):
     if kind == "purchase" and not party:
         raise ValidationError("A supplier is required.")
 
+    external_reference = str(payload.get("external_reference", "")).strip()[:120] if kind == "purchase" else ""
+    document_date = timezone.localdate()
+    if kind == "purchase":
+        raw_document_date = str(payload.get("document_date", "")).strip()
+        if raw_document_date:
+            try:
+                document_date = date.fromisoformat(raw_document_date)
+            except ValueError:
+                raise ValidationError("Supplier invoice date must be a valid date.")
+        if document_date > timezone.localdate():
+            raise ValidationError("Supplier invoice date cannot be in the future.")
+        if external_reference and Document.objects.filter(
+            branch=branch, party=party, kind__in=["purchase", "creditor_charge"],
+            external_reference__iexact=external_reference,
+        ).exists():
+            raise ValidationError("This supplier invoice/reference is already recorded for this supplier.")
+
     override_reason = str(payload.get("override_reason", "")).strip()
     elevated = []
     overrides = []
-    doc = Document.objects.create(branch=branch, kind=kind, party=party, total=0, paid=0, finalized=False,
-        created_by=user, reference=reference(kind, branch), note=str(payload.get("note", ""))[:2000])
+    doc = Document.objects.create(
+        branch=branch, kind=kind, party=party, total=0, paid=0, finalized=False,
+        created_by=user, reference=reference(kind, branch), note=str(payload.get("note", ""))[:2000],
+        document_date=document_date if kind == "purchase" else timezone.localdate(),
+        external_reference=external_reference,
+        payable_category="inventory" if kind == "purchase" else "",
+    )
     total = ZERO
 
     for row in rows:
@@ -418,6 +440,8 @@ def post_trade(user, branch, payload, key, kind="sale"):
         "total": str(total), "paid": str(paid), "overrides": overrides,
         "elevated_authority": elevated, "credit_override": str(credit_override),
         "override_reason": override_reason if overrides or credit_override else "",
+        "external_reference": external_reference if kind == "purchase" else "",
+        "document_date": str(document_date) if kind == "purchase" else "",
     })
     if kind == "sale":
         from . import automations
@@ -435,8 +459,8 @@ def post_payment(user, branch, payload, key, supplier=False):
     if request.document_id:
         return request.document
     ensure_open(branch)
-    invoice = Document.objects.filter(pk=payload.get("invoice"), branch=branch,
-        kind="purchase" if supplier else "sale").first()
+    invoice_qs = Document.objects.filter(pk=payload.get("invoice"), branch=branch)
+    invoice = invoice_qs.filter(kind__in=["purchase", "creditor_charge"]).first() if supplier else invoice_qs.filter(kind="sale").first()
     if not invoice:
         raise ValidationError("Choose a valid outstanding invoice.")
     amount = money(payload.get("amount"))
