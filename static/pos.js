@@ -978,10 +978,27 @@
     }
 
     if (receiptSmsButton) {
-      receiptSmsButton.disabled = !result.can_send_sms;
-      receiptSmsButton.textContent = result.can_send_sms ? "Send SMS" : "SMS unavailable";
+      const smsDone = ["accepted", "delivered", "simulated", "sending"].includes(result.sms_status);
+      const smsFailed = ["failed", "undelivered", "expired", "unknown"].includes(result.sms_status);
+      receiptSmsButton.disabled = smsDone || !result.can_send_sms;
+      receiptSmsButton.textContent = result.sms_status === "delivered"
+        ? "Delivered ✓"
+        : smsDone
+        ? "SMS sent ✓"
+        : smsFailed
+        ? "Retry SMS"
+        : result.can_send_sms
+        ? "Send SMS"
+        : "SMS unavailable";
     }
-    setSuccessStatus(result.can_send_sms ? "" : (result.sms_reason || ""));
+    if (result.sms_requested) {
+      setSuccessStatus(
+        result.sms_message || (result.sms_status === "delivered" ? "Receipt SMS delivered." : ""),
+        ["failed", "undelivered", "expired", "unknown"].includes(result.sms_status) ? "error" : "subtle"
+      );
+    } else {
+      setSuccessStatus(result.can_send_sms ? "" : (result.sms_reason || ""));
+    }
     if (typeof successDialog?.showModal === "function") successDialog.showModal();
     else successDialog?.setAttribute("open", "");
   }
@@ -1063,15 +1080,7 @@
         location.href = result.url;
         return;
       }
-      const autoSendReceipt = Boolean(pendingBody?.customer_consent);
       showSaleSuccess(result);
-      if (autoSendReceipt) {
-        if (result.can_send_sms) {
-          void sendReceiptSmsNow();
-        } else {
-          setSuccessStatus(result.sms_reason || "Receipt SMS could not be sent.", "error");
-        }
-      }
     } catch (error) {
       if (error.rejected || !pendingBody) {
         pendingBody = null;
