@@ -292,9 +292,9 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.authenticate_client()
         page = self.client.get("/sales/new/")
         self.assertNotContains(page, 'id="sale-payment-dialog"')
-        self.assertContains(page, "Customer &amp; payment")
+        self.assertContains(page, "Customer & payment")
         self.assertContains(page, "Payment method")
-        self.assertContains(page, "Complete Sale &amp; Generate Receipt")
+        self.assertContains(page, "Complete Sale & Generate Receipt")
         self.assertContains(page, 'id="customer-consent"')
 
         self.customer.phone = "+233241234567"
