@@ -288,11 +288,13 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertContains(response, "Save payment")
 
 
-    def test_sale_checkout_uses_payment_dialog_and_can_capture_sms_consent(self):
+    def test_sale_checkout_keeps_payment_inline_and_can_capture_sms_consent(self):
         self.authenticate_client()
         page = self.client.get("/sales/new/")
-        self.assertContains(page, 'id="sale-payment-dialog"')
-        self.assertContains(page, "Payment & finish")
+        self.assertNotContains(page, 'id="sale-payment-dialog"')
+        self.assertContains(page, "Customer &amp; payment")
+        self.assertContains(page, "Payment method")
+        self.assertContains(page, "Complete Sale &amp; Generate Receipt")
         self.assertContains(page, 'id="customer-consent"')
 
         self.customer.phone = "+233241234567"
