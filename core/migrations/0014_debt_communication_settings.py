@@ -84,8 +84,8 @@ class Migration(migrations.Migration):
             model_name="message",
             constraint=models.CheckConstraint(
                 condition=(
-                    models.Q(("party__isnull", False), ("management_contact__isnull", True)) |
-                    models.Q(("party__isnull", True), ("management_contact__isnull", False))
+                    models.Q(party__isnull=False, management_contact__isnull=True) |
+                    models.Q(party__isnull=True, management_contact__isnull=False)
                 ),
                 name="message_exactly_one_recipient",
             ),
