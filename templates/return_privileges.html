@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block actions %}<a class="button secondary" href="{% url 'approval_center' %}">← Approval Center</a>{% endblock %}
+{% block content %}
+<section class="hero-panel"><div><p class="eyebrow">OWNER CONTROL</p><h2>Choose who can complete returns without approval.</h2><p>Owner and company-administrator accounts always have direct authority. Everyone else can be granted Customer Return and Supplier Return authority separately. Staff without direct authority can still submit requests when their role permits the underlying work.</p></div><span class="pill">Owner-managed</span></section>
+<form method="post" class="panel">{% csrf_token %}
+<div class="table-wrap"><table><thead><tr><th>Account</th><th>Role / status</th><th>Customer Returns</th><th>Supplier Returns</th></tr></thead><tbody>
+{% for row in rows %}<tr>
+<td><strong>{{ row.user.get_full_name|default:row.user.username }}</strong><small>{{ row.user.username }}</small></td>
+<td>{% if row.owner %}<span class="pill">Owner / administrator</span>{% else %}<span class="muted">Active staff account</span>{% endif %}</td>
+<td><label class="privilege-toggle"><input type="checkbox" name="customer_{{ row.user.pk }}" {% if row.customer %}checked{% endif %} {% if row.owner %}disabled{% endif %}><span>{% if row.owner %}Always direct{% else %}No approval required{% endif %}</span></label></td>
+<td><label class="privilege-toggle"><input type="checkbox" name="supplier_{{ row.user.pk }}" {% if row.supplier %}checked{% endif %} {% if row.owner %}disabled{% endif %}><span>{% if row.owner %}Always direct{% else %}No approval required{% endif %}</span></label></td>
+</tr>{% empty %}<tr><td colspan="4" class="empty">No active staff accounts are assigned to this location.</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="form-actions"><button class="button">Save return privileges</button></div>
+</form>
+{% endblock %}
