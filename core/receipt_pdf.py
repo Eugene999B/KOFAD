@@ -160,7 +160,7 @@ def render_receipt_pdf(document, format_name="a4"):
     party_name = "Internal record"
     party_phone = ""
     if document.party:
-        party_label = "SUPPLIER" if document.kind in ("purchase", "supplier_return", "supplier_payment") else "CUSTOMER"
+        party_label = "SUPPLIER / CREDITOR" if document.kind in ("purchase", "creditor_charge", "supplier_return", "supplier_payment") else "CUSTOMER"
         party_name = document.party.name
         if company.receipt_show_contact_phone:
             party_phone = document.party.phone
@@ -192,6 +192,12 @@ def render_receipt_pdf(document, format_name="a4"):
         staff = document.created_by.get_full_name() or document.created_by.username
         story.append(Spacer(1, 1.5 * mm))
         story.append(Paragraph(f"<font color='#657585'>Recorded by</font> <b>{_text(staff)}</b>", small))
+    if document.document_date:
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(f"<font color='#657585'>Business / invoice date</font> <b>{_text(document.document_date.strftime('%d %b %Y'))}</b>", body))
+    if document.external_reference:
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(f"<font color='#657585'>Supplier reference</font> <b>{_text(document.external_reference)}</b>", body))
     if document.due_date:
         story.append(Spacer(1, 1.5 * mm))
         story.append(Paragraph(f"<font color='#657585'>Due date</font> <b>{_text(document.due_date.strftime('%d %b %Y'))}</b>", body))
