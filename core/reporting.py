@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import F, Sum
+from django.db.models import Sum
 from django.utils import timezone
 
 from .models import (
