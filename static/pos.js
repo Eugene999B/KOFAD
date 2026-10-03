@@ -522,6 +522,7 @@
     if (customerConsent) customerConsent.checked = Boolean(customer.consent);
     changed();
     persist();
+    if (cart.length) requestAnimationFrame(openPayment);
   }
 
   function clearCustomer() {
