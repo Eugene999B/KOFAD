@@ -322,6 +322,25 @@ def document(request, pk):
         "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None})
 
 
+@login_required
+def document_pdf(request, pk, format):
+    if format not in {"a4", "thermal80", "thermal58"}:
+        raise ValidationError("Choose A4, 80mm or 58mm receipt format.")
+    branch = branch_for(request)
+    doc = get_object_or_404(
+        Document.objects.select_related("party", "created_by", "branch", "original"),
+        pk=pk, branch=branch
+    )
+    permission = "operate_sales" if doc.kind in ("sale", "return") else (
+        "operate_inventory" if doc.kind in ("purchase", "supplier_return", "inventory_writeoff") else "operate_finance"
+    )
+    if not request.user.has_perm("core.view_reports"):
+        s.permit(request.user, branch, permission)
+    from .receipt_pdf import render_receipt_pdf
+    s.audit(request.user, branch, "receipt.pdf_opened", doc.reference, {"format": format})
+    return render_receipt_pdf(doc, format)
+
+
 @protected("operate_inventory|view_reports")
 def inventory(request, branch):
     if request.method == "POST":
