@@ -81,10 +81,27 @@
 <div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
 <p class="hint">You may also enter 0241234567; KOFAD stores one clean +233 format and reuses a matching customer.</p>
 </div>
+<label class="checkout-consent" id="customer-consent-wrap">
+<input id="customer-consent" type="checkbox">
+<span><strong>SMS receipt</strong><small>Tick only after the customer agrees to receive transaction messages on this number.</small></span>
+</label>
 </section>
 {% endif %}
 
-<section class="checkout-stage">
+<div class="sale-checkout-bar" aria-label="Checkout actions">
+<div class="sale-checkout-total"><small>{% if purchase %}DELIVERY TOTAL{% else %}SALE TOTAL{% endif %}</small><strong>{{ company.currency }} <span id="payment-total">0.00</span></strong></div>
+<button class="button sale-payment-open" type="button" id="open-payment">{% if purchase %}Record payment & post{% else %}Payment & finish{% endif %} →</button>
+</div>
+
+<dialog id="sale-payment-dialog" class="kofad-dialog sale-payment-dialog">
+<div class="dialog-heading payment-dialog-heading">
+<div><p class="eyebrow">STEP 3 OF 4</p><h2>{% if purchase %}Payment & receive stock{% else %}Take payment{% endif %}</h2><p class="muted">{% if purchase %}Record what was paid now, then post the delivery.{% else %}Choose the settlement and payment channel without leaving the counter.{% endif %}</p></div>
+<button class="icon-button" type="button" id="close-payment" aria-label="Close payment">×</button>
+</div>
+<div id="payment-error" class="notice error hidden" role="alert"></div>
+<div class="payment-dialog-total"><span>Amount due</span><strong>{{ company.currency }} <span id="payment-dialog-total">0.00</span></strong></div>
+
+<section class="checkout-stage payment-dialog-stage">
 <div class="stage-heading"><span>3</span><div><strong>Payment</strong><small>{% if purchase %}Record what was paid to the supplier now.{% else %}Choose how much the customer pays now.{% endif %}</small></div></div>
 {% if not purchase %}
 <label for="payment-plan">Settlement</label>
@@ -95,8 +112,8 @@
 {% endif %}
 
 <fieldset><legend>Payment channels</legend>
-<div class="payment-grid">{% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}</div>
-{% if cash_enabled %}<button type="button" id="exact-cash" class="text-button">{% if purchase %}Fill exact amount{% else %}Pay full amount by cash{% endif %}</button>{% endif %}
+<div class="payment-grid compact-payment-grid">{% for value,label in payment_methods %}<label>{{ label }}<input id="pay-{{ value }}" inputmode="decimal" type="number" min="0" step=".01" value="0"></label>{% endfor %}</div>
+{% if cash_enabled %}<button type="button" id="exact-cash" class="button secondary exact-payment-button">{% if purchase %}Fill exact amount{% else %}Pay full amount by cash{% endif %}</button>{% endif %}
 </fieldset>
 
 <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
@@ -108,11 +125,12 @@
 
 {% if policy_controls %}<label for="override-reason">Override reason <small>Required only for a discount, custom price or manager credit override.</small></label><textarea id="override-reason" maxlength="500" placeholder="Why is this exception authorized?"></textarea>{% endif %}
 
-<section class="checkout-stage final-stage">
+<section class="checkout-stage final-stage payment-dialog-final">
 <div class="stage-heading"><span>4</span><div><strong>Review & post</strong><small>The server checks stock, customer, pricing, credit and payments again.</small></div></div>
 <button class="button wide complete-sale-button" id="complete">{% if purchase %}Post purchase & receive stock{% else %}Complete sale & create receipt{% endif %} →</button>
 {% if not purchase %}<button class="button secondary wide" type="button" id="hold">Hold sale for later</button>{% endif %}
 </section>
+</dialog>
 </form>
 
 {% if not purchase %}

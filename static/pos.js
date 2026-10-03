@@ -51,6 +51,11 @@
   const paymentPlan = document.querySelector("#payment-plan");
   const creditFields = document.querySelector("#credit-fields");
   const dueDate = document.querySelector("#due-date");
+  const customerConsent = document.querySelector("#customer-consent");
+  const paymentDialog = document.querySelector("#sale-payment-dialog");
+  const openPaymentButton = document.querySelector("#open-payment");
+  const closePaymentButton = document.querySelector("#close-payment");
+  const paymentErrorBox = document.querySelector("#payment-error");
 
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
@@ -83,9 +88,18 @@
   const fail = msg => {
     errorBox.textContent = msg;
     errorBox.classList.remove("hidden");
+    if (paymentErrorBox && paymentDialog?.open) {
+      paymentErrorBox.textContent = msg;
+      paymentErrorBox.classList.remove("hidden");
+      paymentErrorBox.scrollIntoView({block: "nearest"});
+      return;
+    }
     errorBox.scrollIntoView({block: "nearest"});
   };
-  const clearError = () => errorBox.classList.add("hidden");
+  const clearError = () => {
+    errorBox.classList.add("hidden");
+    if (paymentErrorBox) paymentErrorBox.classList.add("hidden");
+  };
   const changed = () => {
     if (hydrating) return;
     if (pendingBody) {
@@ -127,7 +141,8 @@
         customerName: customerName?.value || "",
         customerPhone: customerPhone?.value || "",
         paymentPlan: paymentPlan?.value || "",
-        dueDate: dueDate?.value || ""
+        dueDate: dueDate?.value || "",
+        customerConsent: Boolean(customerConsent?.checked)
       }));
     } catch (_) {}
   }
@@ -237,6 +252,10 @@
     document.querySelector("#cart-count").textContent = cart.length + " lines";
     document.querySelector("#mobile-cart-count").textContent = cart.length;
     document.querySelector("#mobile-cart-total").textContent = formatted(total());
+    const paymentTotal = document.querySelector("#payment-total");
+    const dialogTotal = document.querySelector("#payment-dialog-total");
+    if (paymentTotal) paymentTotal.textContent = formatted(total());
+    if (dialogTotal) dialogTotal.textContent = formatted(total());
     persist();
   }
 
@@ -500,8 +519,10 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
+    if (customerConsent) customerConsent.checked = Boolean(customer.consent);
     changed();
     persist();
+    if (cart.length) requestAnimationFrame(openPayment);
   }
 
   function clearCustomer() {
@@ -514,6 +535,7 @@
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
+    if (customerConsent) customerConsent.checked = false;
     changed();
     persist();
   }
@@ -524,6 +546,7 @@
     newCustomerFields?.classList.remove("hidden");
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
+    if (customerConsent) customerConsent.checked = false;
     customerName?.focus();
     persist();
   }
@@ -546,7 +569,7 @@
           button.setAttribute("role", "option");
           button.append(
             el("strong", customer.name),
-            el("small", customer.phone + " · " + customer.purchase_count + " purchases · owes " + root.dataset.currency + " " + customer.outstanding, "muted")
+            el("small", customer.phone + " · " + customer.purchase_count + " purchases · owes " + root.dataset.currency + " " + customer.outstanding + (customer.consent ? " · SMS enabled" : ""), "muted")
           );
           button.addEventListener("click", () => showSelectedCustomer(customer));
           customerResults.append(button);
@@ -561,6 +584,10 @@
   });
   newCustomerToggle?.addEventListener("click", beginNewCustomer);
   clearCustomerButton?.addEventListener("click", clearCustomer);
+  customerConsent?.addEventListener("change", () => {
+    changed();
+    persist();
+  });
 
   function applyPaymentPlan() {
     if (purchase || !paymentPlan) return;
@@ -582,6 +609,29 @@
   paymentPlan?.addEventListener("change", () => {
     changed();
     applyPaymentPlan();
+  });
+
+  function openPayment() {
+    clearError();
+    if (!cart.length) return fail("Add a product first.");
+    if (!paymentDialog) return;
+    if (typeof paymentDialog.showModal === "function") paymentDialog.showModal();
+    else paymentDialog.setAttribute("open", "");
+    requestAnimationFrame(() => paymentPlan?.focus());
+  }
+  function closePayment() {
+    if (!paymentDialog?.open) return;
+    if (typeof paymentDialog.close === "function") paymentDialog.close();
+    else paymentDialog.removeAttribute("open");
+  }
+  openPaymentButton?.addEventListener("click", openPayment);
+  closePaymentButton?.addEventListener("click", closePayment);
+  paymentDialog?.addEventListener("click", event => {
+    if (event.target === paymentDialog) closePayment();
+  });
+  paymentDialog?.addEventListener("cancel", event => {
+    event.preventDefault();
+    closePayment();
   });
 
   document.querySelector("#cart-jump").addEventListener("click", () => {
@@ -693,6 +743,7 @@
       })),
       party,
       ...(!purchase && !party ? {customer_name: newName, customer_phone: newPhone} : {}),
+      ...(!purchase ? {customer_consent: Boolean(customerConsent?.checked)} : {}),
       due_date: dueDate?.value || "",
       override_reason: document.querySelector("#override-reason")?.value || "",
       payments: paymentMethods.map(method => ({
@@ -744,6 +795,7 @@
         customer: selectedCustomer,
         customer_name: customerName?.value.trim() || "",
         customer_phone: customerPhone?.value || "",
+        customer_consent: Boolean(customerConsent?.checked),
         payment_plan: paymentPlan?.value || "full",
         due_date: dueDate?.value || ""
       };
@@ -789,6 +841,7 @@
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
+      if (customerConsent) customerConsent.checked = Boolean(saved.customer_consent || saved.customer?.consent);
       applyPaymentPlan();
       render();
     } catch (error) {
@@ -810,6 +863,7 @@
     if (customerPhone && restoredState.customerPhone) customerPhone.value = restoredState.customerPhone;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
+    if (customerConsent) customerConsent.checked = Boolean(restoredState.customerConsent || selectedCustomer?.consent);
   }
   applyPaymentPlan();
   render();
@@ -831,6 +885,7 @@
     if (reason) reason.value = pendingBody.override_reason || "";
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
     document.querySelector("#complete").disabled = false;
+    openPayment();
     fail("A checkout was interrupted. Retry to recover its original result before making changes.");
   }
 })();

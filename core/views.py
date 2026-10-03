@@ -312,14 +312,92 @@ def documents(request):
 @login_required
 def document(request, pk):
     branch = branch_for(request)
-    doc = get_object_or_404(Document.objects.select_related("party", "created_by", "branch", "original"), pk=pk, branch=branch)
+    doc = get_object_or_404(
+        Document.objects.select_related("party", "created_by", "branch", "original"),
+        pk=pk, branch=branch,
+    )
     permission = "operate_sales" if doc.kind in ("sale", "return") else (
         "operate_inventory" if doc.kind in ("purchase", "supplier_return", "inventory_writeoff") else "operate_finance"
     )
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
-    return render(request, "document.html", {"title": doc.reference, "doc": doc,
-        "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None})
+
+    message_code = "receipt" if doc.kind == "sale" else ("payment" if doc.kind == "collection" else "")
+    message_preview = ""
+    message_item = None
+    message_action = ""
+    if doc.party_id and message_code:
+        from .sms.templates import render_for_document
+        try:
+            message_preview = render_for_document(doc, message_code)
+        except ValidationError:
+            message_preview = ""
+        message_item = Message.objects.filter(
+            branch=branch, party=doc.party
+        ).filter(
+            Q(source_key=f"auto:{message_code}:{doc.pk}")
+            | Q(source_key=f"document:{message_code}:{doc.pk}")
+            | Q(source_key__startswith=f"{message_code}:{doc.pk}:")
+        ).order_by("-created_at").first()
+
+        if request.method == "POST" and request.POST.get("action") == "send_transaction_message":
+            if not request.user.has_perm("core.send_messages"):
+                raise PermissionDenied("Message-sending permission is required.")
+            try:
+                if not doc.party.consent:
+                    raise ValidationError("Customer SMS consent is not enabled. Confirm consent during checkout or on the customer profile.")
+                if not settings.SMS_ENABLED:
+                    raise ValidationError("SMS sending is disabled in deployment settings.")
+                if not message_preview:
+                    raise ValidationError("The transaction message template is unavailable.")
+
+                from .sms.service import create_draft, queue_message
+                retryable = {"failed", "undelivered", "expired"}
+                in_flight = {"queued", "sending", "retry_wait", "accepted", "delivered", "simulated"}
+
+                if message_item and message_item.status in in_flight:
+                    messages.success(request, f"SMS is already {message_item.status}. No duplicate was created.")
+                elif message_item and message_item.status == "unknown":
+                    raise ValidationError("The previous SMS result is unknown. Verify it with the provider before sending again.")
+                elif message_item and message_item.status in retryable:
+                    queue_message(request.user, branch, message_item.pk, retry=True)
+                    messages.success(request, f"SMS retry queued for {doc.party.phone}.")
+                else:
+                    if not message_item:
+                        message_item = create_draft(
+                            request.user, branch, doc.party, message_preview,
+                            source_key=f"document:{message_code}:{doc.pk}",
+                        )
+                    queue_message(request.user, branch, message_item.pk)
+                    messages.success(request, f"SMS queued for immediate sending to {doc.party.phone}.")
+            except (ValidationError, ValueError) as exc:
+                messages.error(request, problem(exc))
+            return redirect("document", pk=doc.pk)
+
+        if not doc.party.consent:
+            message_action = "consent"
+        elif not request.user.has_perm("core.send_messages"):
+            message_action = "permission"
+        elif not settings.SMS_ENABLED:
+            message_action = "disabled"
+        elif not message_item or message_item.status == "draft":
+            message_action = "send"
+        elif message_item.status in {"failed", "undelivered", "expired"}:
+            message_action = "retry"
+        elif message_item.status == "unknown":
+            message_action = "unknown"
+        else:
+            message_action = "sent"
+
+    return render(request, "document.html", {
+        "title": doc.reference,
+        "doc": doc,
+        "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None,
+        "transaction_message_preview": message_preview,
+        "transaction_message": message_item,
+        "transaction_message_action": message_action,
+        "sms_enabled": settings.SMS_ENABLED,
+    })
 
 
 @login_required
@@ -492,6 +570,7 @@ def customer_search(request, branch):
             "id": party.pk,
             "name": party.name,
             "phone": party.phone,
+            "consent": party.consent,
             "outstanding": str(s.party_debt(party)),
             "purchase_count": sales.count(),
             "last_purchase_at": last_sale.created_at.isoformat() if last_sale else "",

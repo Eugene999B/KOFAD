@@ -35,10 +35,16 @@ def customer_by_phone(branch, value):
 
 def resolve_sale_customer(user, branch, payload, audit):
     """Select an existing customer or create/reuse one directly from checkout."""
+    consent_requested = payload.get("customer_consent") is True
+
     if payload.get("party"):
         party = Party.objects.filter(pk=payload["party"], branch=branch, kind="customer").first()
         if not party:
             raise ValidationError("Choose a valid customer at this location.")
+        if consent_requested and not party.consent:
+            party.consent = True
+            party.save(update_fields=["consent"])
+            audit(user, branch, "customer.messaging_consent_enabled_at_checkout", party.pk)
         return party
 
     name = str(payload.get("customer_name", "")).strip()
@@ -48,6 +54,10 @@ def resolve_sale_customer(user, branch, payload, audit):
     canonical = normalize_ghana_phone(phone)
     existing = customer_by_phone(branch, canonical)
     if existing:
+        if consent_requested and not existing.consent:
+            existing.consent = True
+            existing.save(update_fields=["consent"])
+            audit(user, branch, "customer.messaging_consent_enabled_at_checkout", existing.pk)
         audit(user, branch, "customer.reused_at_checkout", existing.pk, {
             "submitted_name": name,
             "phone": canonical,
@@ -59,9 +69,11 @@ def resolve_sale_customer(user, branch, payload, audit):
         kind="customer",
         name=name,
         phone=canonical,
+        consent=consent_requested,
     )
     audit(user, branch, "customer.created_at_checkout", party.pk, {
         "name": party.name,
         "phone": party.phone,
+        "messaging_consent": party.consent,
     })
     return party
