@@ -295,7 +295,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
     doc = Document.objects.create(
         branch=branch, kind=kind, party=party, total=0, paid=0, finalized=False,
         created_by=user, reference=reference(kind, branch), note=str(payload.get("note", ""))[:2000],
-        document_date=document_date if kind == "purchase" else timezone.localdate(),
+        document_date=document_date if kind == "purchase" else None,
         external_reference=external_reference,
         payable_category="inventory" if kind == "purchase" else "",
     )
