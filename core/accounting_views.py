@@ -73,6 +73,18 @@ def accounting_snapshot(branch, first, last, category="", method=""):
     if category:
         reversals = reversals.filter(original__expense_category=category)
     expenses -= _sum(reversals)
+    payable_expense_categories = {
+        "transport", "fuel", "utilities", "rent", "maintenance",
+        "professional", "tax", "staff", "other",
+    }
+    creditor_expenses = Document.objects.filter(
+        branch=branch, kind="creditor_charge",
+        document_date__range=(first, last),
+        payable_category__in=payable_expense_categories,
+    ).exclude(correction__status="approved")
+    if category:
+        creditor_expenses = creditor_expenses.filter(payable_category=category)
+    expenses += _sum(creditor_expenses)
     inventory_losses = _sum(docs.filter(kind="inventory_writeoff"))
 
     payroll_entries = PayrollEntry.objects.filter(
@@ -126,6 +138,12 @@ def accounting_snapshot(branch, first, last, category="", method=""):
         expense_breakdown[row.expense_category or "other"] += row.total
     for row in docs.filter(kind="reversal", original__kind="expense").select_related("original"):
         expense_breakdown[row.original.expense_category or "other"] -= row.total
+    for row in Document.objects.filter(
+        branch=branch, kind="creditor_charge",
+        document_date__range=(first, last),
+        payable_category__in=payable_expense_categories,
+    ).exclude(correction__status="approved"):
+        expense_breakdown[row.payable_category or "other"] += row.total
     expense_rows = [
         {"code": code, "category": CATEGORY_LABELS.get(code, code.replace("_", " ").title()), "amount": amount}
         for code, amount in sorted(expense_breakdown.items(), key=lambda item: item[1], reverse=True)
