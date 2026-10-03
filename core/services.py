@@ -511,6 +511,10 @@ def post_expense(user, branch, payload, key):
     ensure_open(branch)
     amount = money(payload.get("amount"))
     note = str(payload.get("note", "")).strip()
+    category = str(payload.get("category", "other")).strip().lower()
+    categories = {"transport", "fuel", "utilities", "rent", "maintenance", "marketing", "salary", "tax", "office", "security", "professional", "other"}
+    if category not in categories:
+        raise ValidationError("Choose a valid expense category.")
     if amount <= 0 or len(note) < 5:
         raise ValidationError("Provide a positive amount and a meaningful expense description.")
     company = company_policy()
@@ -521,12 +525,12 @@ def post_expense(user, branch, payload, key):
             f"{company.currency} {company.expense_manager_threshold}."
         )
     doc = Document.objects.create(branch=branch, kind="expense", reference=reference("expense", branch),
-        total=amount, paid=amount, note=note, created_by=user)
+        total=amount, paid=amount, note=note, expense_category=category, created_by=user)
     payments(doc, [{"method": payload.get("method"), "amount": amount}], -1)
     request.document = doc
     request.save(update_fields=["document"])
     audit(user, branch, "expense.posted", doc.reference, {
-        "amount": str(amount), "note": note, "manager_threshold": elevated,
+        "amount": str(amount), "note": note, "category": category, "manager_threshold": elevated,
     })
     return doc
 
@@ -591,6 +595,14 @@ def channel_totals(branch, day):
     totals = {method: ZERO for method, _ in Payment.METHODS}
     for row in rows:
         totals[row.method] += row.amount * row.direction
+    # Payroll salary payments are direct controlled outflows rather than sales-ledger
+    # documents, but they still move real cash/bank/MoMo and must reconcile at closing.
+    from .models import PayrollPayment
+    payroll_rows = PayrollPayment.objects.filter(
+        entry__period__branch=branch, created_at__date=day
+    )
+    for row in payroll_rows:
+        totals[row.method] -= row.amount
     return totals
 
 

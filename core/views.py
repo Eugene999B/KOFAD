@@ -837,8 +837,10 @@ def finance(request, branch):
             messages.error(request, problem(exc))
     invoices = Document.objects.filter(branch=branch, kind__in=["sale", "purchase"], party__isnull=False)
     outstanding = [{"doc": d, "balance": s.balance(d)} for d in invoices]
+    from .accounting_views import EXPENSE_CATEGORIES
     return render(request, "finance.html", {"title": "Expenses", "key": request.POST.get("key") or str(uuid.uuid4()),
         "outstanding": [r for r in outstanding if r["balance"] > 0], "methods": s.active_payment_methods(),
+        "expense_categories": EXPENSE_CATEGORIES,
         "recent": Document.objects.filter(branch=branch, kind__in=["expense", "collection", "supplier_payment"])[:20]})
 
 
@@ -1006,39 +1008,78 @@ def closings(request, branch):
 
 
 def report_data(request, branch):
-    from .reporting import build_report, branch_comparison, FAMILIES
+    from .reporting import FAMILIES, branch_comparison, build_report
     start = request.GET.get("start", timezone.localdate().replace(day=1).isoformat())
     end = request.GET.get("end", timezone.localdate().isoformat())
-    family = request.GET.get("family","register")
+    family = request.GET.get("family", "register")
+    query = request.GET.get("q", "").strip()[:100]
+    category = request.GET.get("category", "").strip()[:40]
+    method = request.GET.get("method", "").strip()[:12]
     try:
-        first,last = date.fromisoformat(start),date.fromisoformat(end)
+        first, last = date.fromisoformat(start), date.fromisoformat(end)
         if first > last or family not in FAMILIES:
             raise ValueError
     except ValueError:
         raise ValidationError("Enter a valid date range and report family.")
-    rows,columns = branch_comparison(request.user,first,last) if family == 'branches' else build_report(branch,first,last,family)
-    return rows,columns,{"start":start,"end":end,"family":family},FAMILIES
+    rows, columns = (
+        branch_comparison(request.user, first, last)
+        if family == "branches"
+        else build_report(branch, first, last, family, query=query, category=category, method=method)
+    )
+    return rows, columns, {
+        "start": start, "end": end, "family": family, "q": query,
+        "category": category, "method": method,
+    }, FAMILIES
 
 
 @protected("view_reports")
 def reports(request, branch):
-    rows,columns,filters,families = report_data(request,branch)
+    from .accounting_views import EXPENSE_CATEGORIES
+    from .reporting import business_kpis
+    rows, columns, filters, families = report_data(request, branch)
     page = Paginator(rows, 100).get_page(request.GET.get("page"))
     page_query = request.GET.copy()
     page_query.pop("page", None)
-    return render(request,"reports.html",{"title":"Reports","rows":[[row[key] for key,label in columns] for row in page],
-        "page":page, "page_query":page_query.urlencode(),
-        "headers":[label for key,label in columns],"filters":filters,"families":families.items(),
-        "report_title":families[filters["family"]],"query":request.GET.urlencode()})
+    first, last = date.fromisoformat(filters["start"]), date.fromisoformat(filters["end"])
+    kpis = business_kpis(branch, first, last)
+    return render(request, "reports.html", {
+        "title": "Business intelligence",
+        "rows": [[row[key] for key, label in columns] for row in page],
+        "page": page, "page_query": page_query.urlencode(),
+        "headers": [label for key, label in columns], "filters": filters,
+        "families": families.items(), "report_title": families[filters["family"]],
+        "query": request.GET.urlencode(), "kpis": kpis,
+        "expense_categories": EXPENSE_CATEGORIES, "payment_methods": Payment.METHODS,
+    })
 
 
 @protected("view_reports")
 def export_report(request, branch, format):
     from .exports import export
-    rows,columns,filters,families = report_data(request,branch)
-    s.audit(request.user,branch,"report.export",format,filters)
+    from .reporting import business_kpis
+    rows, columns, filters, families = report_data(request, branch)
+    first, last = date.fromisoformat(filters["start"]), date.fromisoformat(filters["end"])
+    kpis = business_kpis(branch, first, last)
+    s.audit(request.user, branch, "report.export", format, filters)
     scope = "Authorized branches" if filters["family"] == "branches" else branch.name
-    return export(rows,format,f"{scope} / {families[filters['family']]}",Company.objects.first() or Company(),columns)
+    return export(
+        rows, format, f"{scope} · {families[filters['family']]}",
+        Company.objects.first() or Company(), columns,
+        filename=f"kofad-{filters['family']}-{filters['start']}-{filters['end']}",
+        sheet_name=families[filters["family"]][:31],
+        metadata={
+            "Scope": scope, "From": first, "To": last,
+            "Search": filters["q"] or "All", "Category": filters["category"] or "All",
+            "Payment channel": filters["method"] or "All",
+        },
+        summary={
+            "Net sales": kpis["net_sales"]["value"],
+            "Gross profit": kpis["gross_profit"]["value"],
+            "Expenses": kpis["expenses"]["value"],
+            "Operating result": kpis["operating_result"]["value"],
+        },
+        notes=["Previous-period comparisons use the immediately preceding period of equal length."],
+    )
 
 
 @protected("view_reports")
