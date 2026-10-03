@@ -20,6 +20,8 @@
   let newCustomerMode = false;
   let restoredState = null;
   let hydrating = true;
+  let selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+  let lastCompletedSale = null;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
   try {
@@ -56,6 +58,15 @@
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
   const paymentErrorBox = document.querySelector("#payment-error");
+  const paymentMethodPicker = document.querySelector("#payment-method-picker");
+  const paymentMethodButtons = [...document.querySelectorAll("[data-payment-method]")];
+  const splitPaymentGrid = document.querySelector("#split-payment-grid");
+  const singlePaymentWrap = document.querySelector("#single-payment-wrap");
+  const singlePaymentValue = document.querySelector("#single-payment-value");
+  const heldSalesDialog = document.querySelector("#held-sales-dialog");
+  const successDialog = document.querySelector("#sale-success-dialog");
+  const receiptSmsButton = document.querySelector("#receipt-sms");
+  const successMessageStatus = document.querySelector("#success-message-status");
 
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
@@ -142,7 +153,8 @@
         customerPhone: customerPhone?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
-        customerConsent: Boolean(customerConsent?.checked)
+        customerConsent: Boolean(customerConsent?.checked),
+        selectedPaymentMethod
       }));
     } catch (_) {}
   }
