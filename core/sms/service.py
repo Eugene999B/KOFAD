@@ -112,12 +112,14 @@ def _create_draft_record(user, branch, body, channel="sms", source_key=None, par
                 existing.party_id == getattr(party, "pk", None)
                 and existing.management_contact_id == getattr(management_contact, "pk", None)
             )
+            if not same_recipient or existing.channel != channel:
+                raise ValidationError("This draft key already belongs to another message.")
             if existing.status == "draft":
                 existing.body, existing.encoding, existing.segments = body, encoding, segments
                 existing.recipient = recipient
                 existing.save(update_fields=["body", "encoding", "segments", "recipient"])
-            elif existing.body != body or not same_recipient or existing.channel != channel:
-                raise ValidationError("This draft key already belongs to another message.")
+            elif existing.body != body:
+                raise ValidationError("This prepared message is already in delivery history with different content.")
             return existing
 
     message = Message.objects.create(
@@ -184,7 +186,6 @@ def queue_automatic(message, actor=None):
     if message.channel != "sms":
         return message
     if not settings.SMS_ENABLED:
-        audit(actor, message.branch, "sms.automatic_waiting_for_provider", message.pk)
         return message
     if not _recipient_is_current(message):
         raise ValidationError("Automatic message recipient is no longer eligible.")
@@ -195,7 +196,6 @@ def queue_automatic(message, actor=None):
     try:
         validate_config(provider)
     except ValidationError:
-        audit(actor, message.branch, "sms.automatic_waiting_for_provider", message.pk, {"provider": provider})
         return message
     message.provider = provider
     message.sender = message.sender or settings.SMS_SENDER_ID
