@@ -215,7 +215,7 @@ def queue_automatic(message, actor=None):
 @transaction.atomic
 def queue_message(user,branch,pk,retry=False):
     permit(user,branch,"send_messages")
-    message = Message.objects.select_for_update().select_related("party", "management_contact").get(pk=pk,branch=branch)
+    message = Message.objects.select_for_update(of=("self",)).select_related("party", "management_contact").get(pk=pk,branch=branch)
     allowed = ("failed","undelivered","expired") if retry else ("draft",)
     if message.status not in allowed:
         raise ValidationError("Only drafts or definitively failed messages can be queued. Unknown outcomes require provider investigation.")
@@ -252,7 +252,7 @@ def transition(current,incoming):
 def process_one():
     # Validate before claiming. A misconfigured worker leaves the queue intact.
     with transaction.atomic():
-        message = Message.objects.select_for_update(skip_locked=True).select_related("party", "management_contact").filter(
+        message = Message.objects.select_for_update(of=("self",), skip_locked=True).select_related("party", "management_contact").filter(
             status__in=["queued","retry_wait"], next_attempt_at__lte=timezone.now()
         ).order_by("created_at").first()
         if not message:
