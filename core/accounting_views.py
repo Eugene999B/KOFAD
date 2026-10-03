@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from .context import shell
 from .exports import export
-from .models import Document, Line, Payment, PayrollEntry, Stock
+from .models import Document, Line, Payment, PayrollEntry, PayrollPayment, Stock
 from .services import audit, balance
 from .views import protected
 
@@ -110,6 +110,15 @@ def accounting_snapshot(branch, first, last, category="", method=""):
         else:
             bucket["out"] += payment.amount
         bucket["net"] += payment.amount * payment.direction
+    salary_payments = PayrollPayment.objects.filter(
+        entry__period__branch=branch, created_at__date__range=(first, last)
+    )
+    if method:
+        salary_payments = salary_payments.filter(method=method)
+    for payment in salary_payments:
+        bucket = channels[payment.method]
+        bucket["out"] += payment.amount
+        bucket["net"] -= payment.amount
 
     expense_breakdown = defaultdict(lambda: ZERO)
     base_expenses = docs.filter(kind="expense")
@@ -164,7 +173,7 @@ def accounting(request, branch):
     prior_days = (last - first).days + 1
     prior_last = first - timedelta(days=1)
     prior_first = prior_last - timedelta(days=prior_days - 1)
-    prior = accounting_snapshot(branch, prior_first, prior_last)
+    prior = accounting_snapshot(branch, prior_first, prior_last, category, method)
     comparisons = {}
     for key in ["net_sales", "gross_profit", "expenses", "payroll_cost", "operating_result"]:
         old, new = prior[key], data[key]
