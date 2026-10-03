@@ -140,7 +140,7 @@ class Arkesel:
                 fallback = "Arkesel blocked the API request at its security edge. The message was not sent."
             detail = _provider_error(data, fallback)
             code = "rate_limited" if http_status == 429 else (
-                "provider_rejected" if http_status in (400, 401, 403, 404, 405, 413, 415, 422)
+                "provider_rejected" if http_status in (400, 401, 402, 403, 404, 405, 413, 415, 422)
                 else "uncertain_http_response"
             )
             status = "failed" if code == "provider_rejected" else ("retry_wait" if code == "rate_limited" else "unknown")
