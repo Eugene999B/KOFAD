@@ -1291,7 +1291,7 @@ def communications(request, branch):
                         redirect_suffix = f"?wa={prepared[0].pk}"
             else:
                 raise ValidationError("Unknown message action.")
-            return redirect("communications" + redirect_suffix)
+            return redirect("/communications/" + redirect_suffix)
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
 
