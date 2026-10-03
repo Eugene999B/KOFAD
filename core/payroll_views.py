@@ -52,7 +52,7 @@ def _period_summary(period):
     }
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payroll(request, branch):
     if request.method == "POST":
         permit(request.user, branch, "operate_finance")
@@ -89,7 +89,7 @@ def payroll(request, branch):
     })
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payroll_period(request, branch, pk):
     period = get_object_or_404(
         PayrollPeriod.objects.select_related("rule", "prepared_by", "approved_by", "locked_by"),
@@ -145,7 +145,7 @@ def payroll_entry_update(request, branch, pk, entry_id):
     return redirect("payroll_period", pk=period.pk)
 
 
-@protected("operate_finance")
+@protected("operate_finance|manage_company")
 @require_POST
 def payroll_action(request, branch, pk):
     period = get_object_or_404(PayrollPeriod, pk=pk, branch=branch)
@@ -217,7 +217,7 @@ def payroll_payment(request, branch, pk, entry_id):
     return redirect("payroll_period", pk=period.pk)
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payroll_export(request, branch, pk, format):
     period = get_object_or_404(PayrollPeriod.objects.select_related("rule"), pk=pk, branch=branch)
     rows = []
@@ -258,7 +258,7 @@ def payroll_export(request, branch, pk, format):
     )
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payslip(request, branch, pk, entry_id, format="pdf"):
     period = get_object_or_404(PayrollPeriod, pk=pk, branch=branch)
     entry = get_object_or_404(PayrollEntry.objects.select_related("worker", "period__rule"), pk=entry_id, period=period)
