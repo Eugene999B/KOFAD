@@ -131,7 +131,7 @@ class Arkesel:
 
         try:
             data = response.json()
-        except (ValueError, requests.JSONDecodeError):
+        except ValueError:
             data = None
 
         if http_status < 200 or http_status >= 300:
@@ -228,14 +228,14 @@ class Arkesel:
         if response.status_code < 200 or response.status_code >= 300:
             try:
                 data = response.json()
-            except (ValueError, requests.JSONDecodeError):
+            except ValueError:
                 data = None
             raise ValidationError(_provider_error(
                 data, f"Delivery report request failed (HTTP {response.status_code})."
             ))
         try:
             data = response.json()
-        except (ValueError, requests.JSONDecodeError):
+        except ValueError:
             raise ValidationError("Arkesel returned an invalid delivery-report response.")
         if not isinstance(data, dict):
             raise ValidationError("Arkesel returned an invalid delivery-report response.")
