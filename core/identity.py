@@ -49,6 +49,12 @@ def resolve_sale_customer(user, branch, payload, audit):
 
     name = str(payload.get("customer_name", "")).strip()
     phone = str(payload.get("customer_phone", "")).strip()
+
+    # A fully paid counter sale may remain a walk-in sale. Named customer
+    # identity is required only when the cashier actually enters customer
+    # details (or downstream credit/threshold policy requires a customer).
+    if not name and not phone and not consent_requested:
+        return None
     if len(name) < 2 or len(name) > 120:
         raise ValidationError("Enter the new customer's name.")
     canonical = normalize_ghana_phone(phone)

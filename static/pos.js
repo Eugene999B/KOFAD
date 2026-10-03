@@ -20,6 +20,8 @@
   let newCustomerMode = false;
   let restoredState = null;
   let hydrating = true;
+  let selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+  let lastCompletedSale = null;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
   try {
@@ -35,6 +37,12 @@
       heldId = restoredState.heldId || null;
       selectedCustomer = restoredState.selectedCustomer || null;
       newCustomerMode = Boolean(restoredState.newCustomerMode);
+      if (
+        restoredState.selectedPaymentMethod === "split" ||
+        paymentMethods.includes(restoredState.selectedPaymentMethod)
+      ) {
+        selectedPaymentMethod = restoredState.selectedPaymentMethod;
+      }
     }
   } catch (_) { restoredState = null; }
 
@@ -56,6 +64,15 @@
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
   const paymentErrorBox = document.querySelector("#payment-error");
+  const paymentMethodPicker = document.querySelector("#payment-method-picker");
+  const paymentMethodButtons = [...document.querySelectorAll("[data-payment-method]")];
+  const splitPaymentGrid = document.querySelector("#split-payment-grid");
+  const singlePaymentWrap = document.querySelector("#single-payment-wrap");
+  const singlePaymentValue = document.querySelector("#single-payment-value");
+  const heldSalesDialog = document.querySelector("#held-sales-dialog");
+  const successDialog = document.querySelector("#sale-success-dialog");
+  const receiptSmsButton = document.querySelector("#receipt-sms");
+  const successMessageStatus = document.querySelector("#success-message-status");
 
   const el = (tag, text, cls) => {
     const node = document.createElement(tag);
@@ -142,7 +159,8 @@
         customerPhone: customerPhone?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
-        customerConsent: Boolean(customerConsent?.checked)
+        customerConsent: Boolean(customerConsent?.checked),
+        selectedPaymentMethod
       }));
     } catch (_) {}
   }
@@ -311,8 +329,8 @@
       if (heading) heading.textContent = "No matching product";
       if (copy) copy.textContent = text || "Try another product name, SKU, barcode or category.";
     } else if (mode === "idle") {
-      if (heading) heading.textContent = "Find the first product";
-      if (copy) copy.textContent = "Nothing is listed until you search, keeping the counter fast and uncluttered.";
+      if (heading) heading.textContent = "Find a product";
+      if (copy) copy.textContent = "Search, choose the item, and it goes straight into the current sale.";
     }
   }
 
@@ -521,8 +539,8 @@
     if (customerSearch) customerSearch.value = "";
     if (customerConsent) customerConsent.checked = Boolean(customer.consent);
     changed();
+    updateConsentAvailability();
     persist();
-    if (cart.length) requestAnimationFrame(openPayment);
   }
 
   function clearCustomer() {
@@ -537,6 +555,7 @@
     clearCustomerButton?.classList.add("hidden");
     if (customerConsent) customerConsent.checked = false;
     changed();
+    updateConsentAvailability();
     persist();
   }
 
@@ -547,6 +566,7 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerConsent) customerConsent.checked = false;
+    updateConsentAvailability();
     customerName?.focus();
     persist();
   }
@@ -584,28 +604,103 @@
   });
   newCustomerToggle?.addEventListener("click", beginNewCustomer);
   clearCustomerButton?.addEventListener("click", clearCustomer);
+  function hasAttachedCustomer() {
+    return Boolean(
+      partyInput?.value ||
+      (newCustomerMode && customerName?.value.trim() && customerPhone?.value.trim())
+    );
+  }
+
+  function updateConsentAvailability() {
+    if (!customerConsent) return;
+    const available = hasAttachedCustomer();
+    customerConsent.disabled = !available;
+    if (!available) customerConsent.checked = false;
+  }
+
   customerConsent?.addEventListener("change", () => {
     changed();
     persist();
   });
+  customerName?.addEventListener("input", updateConsentAvailability);
+  customerPhone?.addEventListener("input", updateConsentAvailability);
 
-  function applyPaymentPlan() {
-    if (purchase || !paymentPlan) return;
-    const plan = paymentPlan.value;
-    const inputs = paymentMethods.map(method => document.querySelector("#pay-" + method)).filter(Boolean);
-    if (plan === "credit") {
-      inputs.forEach(input => {
-        input.value = "0";
-        input.disabled = true;
-      });
-      creditFields?.classList.remove("hidden");
-    } else {
-      inputs.forEach(input => input.disabled = false);
-      creditFields?.classList.toggle("hidden", plan === "full");
-      if (plan === "full" && dueDate) dueDate.value = "";
+  function zeroPaymentInputs() {
+    paymentMethods.forEach(method => {
+      const input = document.querySelector("#pay-" + method);
+      if (input) input.value = "0";
+    });
+  }
+
+  function syncSinglePayment() {
+    if (!singlePaymentValue || selectedPaymentMethod === "split" || !selectedPaymentMethod) return;
+    zeroPaymentInputs();
+    const input = document.querySelector("#pay-" + selectedPaymentMethod);
+    if (input) input.value = singlePaymentValue.value || "0";
+  }
+
+  function selectPaymentMethod(method, {preserveAmount = false} = {}) {
+    if (!method || (method !== "split" && !paymentMethods.includes(method))) return;
+    selectedPaymentMethod = method;
+    paymentMethodButtons.forEach(button => {
+      const active = button.dataset.paymentMethod === method;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    const split = method === "split";
+    splitPaymentGrid?.classList.toggle("hidden", !split);
+    singlePaymentWrap?.classList.toggle("hidden", split || paymentPlan?.value === "credit");
+    if (!split) {
+      if (!preserveAmount && singlePaymentValue) {
+        singlePaymentValue.value = (!paymentPlan || paymentPlan.value === "full")
+          ? formatted(total())
+          : "0";
+      }
+      syncSinglePayment();
     }
     persist();
   }
+
+  function applyPaymentPlan() {
+    const plan = purchase ? "purchase" : (paymentPlan?.value || "full");
+    const credit = plan === "credit";
+    const full = plan === "full";
+    paymentMethodPicker?.classList.toggle("hidden", credit);
+    if (credit) {
+      zeroPaymentInputs();
+      singlePaymentWrap?.classList.add("hidden");
+      splitPaymentGrid?.classList.add("hidden");
+      creditFields?.classList.remove("hidden");
+    } else {
+      if (purchase) creditFields?.classList.remove("hidden");
+      else creditFields?.classList.toggle("hidden", full);
+      if (full && dueDate) dueDate.value = "";
+      if (!selectedPaymentMethod) selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+      selectPaymentMethod(selectedPaymentMethod, {preserveAmount: plan === "part"});
+      if (full && selectedPaymentMethod !== "split" && singlePaymentValue) {
+        singlePaymentValue.value = formatted(total());
+        syncSinglePayment();
+      }
+    }
+    updateConsentAvailability();
+    persist();
+  }
+
+  paymentMethodButtons.forEach(button => button.addEventListener("click", () => {
+    changed();
+    selectPaymentMethod(button.dataset.paymentMethod);
+  }));
+  singlePaymentValue?.addEventListener("input", () => {
+    changed();
+    syncSinglePayment();
+    persist();
+  });
+  paymentMethods.forEach(method => {
+    document.querySelector("#pay-" + method)?.addEventListener("input", () => {
+      changed();
+      persist();
+    });
+  });
   paymentPlan?.addEventListener("change", () => {
     changed();
     applyPaymentPlan();
@@ -614,10 +709,14 @@
   function openPayment() {
     clearError();
     if (!cart.length) return fail("Add a product first.");
+    applyPaymentPlan();
     if (!paymentDialog) return;
     if (typeof paymentDialog.showModal === "function") paymentDialog.showModal();
     else paymentDialog.setAttribute("open", "");
-    requestAnimationFrame(() => paymentPlan?.focus());
+    requestAnimationFrame(() => {
+      const target = paymentMethodButtons.find(button => button.classList.contains("active")) || paymentPlan;
+      target?.focus();
+    });
   }
   function closePayment() {
     if (!paymentDialog?.open) return;
@@ -632,6 +731,15 @@
   paymentDialog?.addEventListener("cancel", event => {
     event.preventDefault();
     closePayment();
+  });
+
+  document.querySelector("#open-held-sales")?.addEventListener("click", () => {
+    if (typeof heldSalesDialog?.showModal === "function") heldSalesDialog.showModal();
+    else heldSalesDialog?.setAttribute("open", "");
+  });
+  document.querySelector("#close-held-sales")?.addEventListener("click", () => heldSalesDialog?.close?.());
+  heldSalesDialog?.addEventListener("click", event => {
+    if (event.target === heldSalesDialog) heldSalesDialog.close();
   });
 
   document.querySelector("#cart-jump").addEventListener("click", () => {
@@ -711,21 +819,28 @@
 
     if (!purchase) {
       if (!party) {
-        newName = customerName?.value.trim() || "";
-        if (!newCustomerMode && !newName) throw new Error("Choose a returning customer or enter a new customer.");
-        if (newName.length < 2) throw new Error("Enter the new customer's name.");
-        newPhone = normalizeGhanaPhone(customerPhone?.value || "");
+        const rawName = customerName?.value.trim() || "";
+        const rawPhone = customerPhone?.value.trim() || "";
+        const wantsNamedCustomer = newCustomerMode || rawName || rawPhone;
+        if (wantsNamedCustomer) {
+          if (rawName.length < 2) throw new Error("Enter the new customer's name.");
+          newName = rawName;
+          newPhone = normalizeGhanaPhone(rawPhone);
+        }
       }
       const plan = paymentPlan?.value || "full";
       if (!allowCredit && plan !== "full") throw new Error("Credit sales are disabled by company policy.");
+      if ((plan === "part" || plan === "credit") && !party && !newName) {
+        throw new Error("Choose or enter a customer for a sale that leaves a balance.");
+      }
       if (plan === "full" && paidNow !== grandTotal) {
-        throw new Error("For “Paid in full”, the channel split must exactly equal the sale total.");
+        throw new Error("The payment amount must exactly equal the sale total.");
       }
       if (plan === "part" && !(paidNow > 0 && paidNow < grandTotal)) {
         throw new Error("Part payment must be greater than zero and less than the sale total.");
       }
       if (plan === "credit" && paidNow !== 0) {
-        throw new Error("Credit / pay later starts with zero payment. Choose Part payment if money is received now.");
+        throw new Error("Credit / pay later starts with zero payment.");
       }
       if ((plan === "part" || plan === "credit") && !dueDate?.value) {
         throw new Error("Choose a due date for the unpaid balance.");
@@ -742,8 +857,8 @@
         ...(!purchase && allowDiscounts ? {discount: discount || "0"} : {})
       })),
       party,
-      ...(!purchase && !party ? {customer_name: newName, customer_phone: newPhone} : {}),
-      ...(!purchase ? {customer_consent: Boolean(customerConsent?.checked)} : {}),
+      ...(!purchase && !party && newName ? {customer_name: newName, customer_phone: newPhone} : {}),
+      ...(!purchase ? {customer_consent: Boolean((party || newName) && customerConsent?.checked)} : {}),
       due_date: dueDate?.value || "",
       override_reason: document.querySelector("#override-reason")?.value || "",
       payments: paymentMethods.map(method => ({
@@ -752,6 +867,97 @@
       }))
     };
   }
+
+  function setSuccessStatus(message, tone = "subtle") {
+    if (!successMessageStatus) return;
+    successMessageStatus.textContent = message || "";
+    successMessageStatus.classList.toggle("hidden", !message);
+    successMessageStatus.classList.toggle("error", tone === "error");
+    successMessageStatus.classList.toggle("subtle", tone !== "error");
+  }
+
+  function showSaleSuccess(result) {
+    lastCompletedSale = result;
+    closePayment();
+    root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = false);
+    document.querySelector("#success-reference").textContent = result.reference || "Receipt";
+    document.querySelector("#success-total").textContent = Number(result.total || 0).toFixed(2);
+    document.querySelector("#success-customer").textContent = result.customer
+      ? result.customer.name + (result.customer.phone ? " · " + result.customer.phone : "")
+      : "Walk-in customer";
+
+    const printLink = document.querySelector("#receipt-print");
+    const a4Link = document.querySelector("#receipt-a4");
+    const viewLink = document.querySelector("#receipt-view");
+    if (result.document_id) {
+      printLink.href = "/documents/" + result.document_id + "/pdf/thermal80/";
+      a4Link.href = "/documents/" + result.document_id + "/pdf/a4/";
+      viewLink.href = result.url;
+    }
+
+    if (receiptSmsButton) {
+      receiptSmsButton.disabled = !result.can_send_sms;
+      receiptSmsButton.textContent = result.can_send_sms ? "Send SMS" : "SMS unavailable";
+    }
+    setSuccessStatus(result.can_send_sms ? "" : (result.sms_reason || ""));
+    if (typeof successDialog?.showModal === "function") successDialog.showModal();
+    else successDialog?.setAttribute("open", "");
+  }
+
+  function resetForNextSale() {
+    successDialog?.close?.();
+    completed = false;
+    lastCompletedSale = null;
+    pendingBody = null;
+    heldId = null;
+    requestKey = crypto.randomUUID();
+    cart.splice(0, cart.length);
+    selectedCustomer = null;
+    newCustomerMode = false;
+    if (partyInput) partyInput.value = "";
+    selectedCustomerBox?.classList.add("hidden");
+    selectedCustomerBox?.replaceChildren();
+    customerResults?.replaceChildren();
+    newCustomerFields?.classList.add("hidden");
+    newCustomerToggle?.classList.remove("hidden");
+    clearCustomerButton?.classList.add("hidden");
+    if (customerSearch) customerSearch.value = "";
+    if (customerName) customerName.value = "";
+    if (customerPhone) customerPhone.value = "";
+    if (customerConsent) customerConsent.checked = false;
+    if (paymentPlan) paymentPlan.value = "full";
+    if (dueDate) dueDate.value = "";
+    selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
+    zeroPaymentInputs();
+    if (singlePaymentValue) singlePaymentValue.value = "0";
+    const reason = document.querySelector("#override-reason");
+    if (reason) reason.value = "";
+    applyPaymentPlan();
+    render();
+    clearStored();
+    clearError();
+    productQuery?.focus();
+  }
+
+  receiptSmsButton?.addEventListener("click", async () => {
+    if (!lastCompletedSale?.document_id) return;
+    setSuccessStatus("");
+    receiptSmsButton.disabled = true;
+    receiptSmsButton.textContent = "Sending…";
+    try {
+      const result = await api("/api/documents/" + lastCompletedSale.document_id + "/send-sms/", {});
+      receiptSmsButton.textContent = "Message queued ✓";
+      setSuccessStatus(result.message || "Receipt SMS queued.");
+    } catch (error) {
+      receiptSmsButton.disabled = false;
+      receiptSmsButton.textContent = "Send SMS";
+      setSuccessStatus(error.message, "error");
+    }
+  });
+  document.querySelector("#new-sale-after-success")?.addEventListener("click", resetForNextSale);
+  successDialog?.addEventListener("cancel", event => {
+    event.preventDefault();
+  });
 
   document.querySelector("#checkout").addEventListener("submit", async event => {
     event.preventDefault();
@@ -769,7 +975,11 @@
       }
       completed = true;
       clearStored();
-      location.href = result.url;
+      if (purchase) {
+        location.href = result.url;
+        return;
+      }
+      showSaleSuccess(result);
     } catch (error) {
       if (error.rejected || !pendingBody) {
         pendingBody = null;
@@ -844,6 +1054,7 @@
       if (customerConsent) customerConsent.checked = Boolean(saved.customer_consent || saved.customer?.consent);
       applyPaymentPlan();
       render();
+      heldSalesDialog?.close?.();
     } catch (error) {
       fail(error.message);
     }
@@ -864,6 +1075,12 @@
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
     if (customerConsent) customerConsent.checked = Boolean(restoredState.customerConsent || selectedCustomer?.consent);
+    if (
+      restoredState.selectedPaymentMethod === "split" ||
+      paymentMethods.includes(restoredState.selectedPaymentMethod)
+    ) {
+      selectedPaymentMethod = restoredState.selectedPaymentMethod;
+    }
   }
   applyPaymentPlan();
   render();
@@ -881,6 +1098,16 @@
       const input = document.querySelector("#pay-" + payment.method);
       if (input) input.value = payment.amount;
     });
+    const nonZeroPayments = pendingBody.payments.filter(payment => {
+      try { return cents(payment.amount) > 0; } catch (_) { return false; }
+    });
+    if (nonZeroPayments.length === 1) {
+      selectedPaymentMethod = nonZeroPayments[0].method;
+      if (singlePaymentValue) singlePaymentValue.value = nonZeroPayments[0].amount;
+    } else if (nonZeroPayments.length > 1) {
+      selectedPaymentMethod = "split";
+    }
+    selectPaymentMethod(selectedPaymentMethod, {preserveAmount: true});
     const reason = document.querySelector("#override-reason");
     if (reason) reason.value = pendingBody.override_reason || "";
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);

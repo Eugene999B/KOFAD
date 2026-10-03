@@ -385,3 +385,102 @@ html[data-theme="dark"] .debt-payment-dialog{background:#101d2a;border-color:var
   .compact-payment-grid{grid-template-columns:1fr 1fr}
   .transaction-message-card{padding:15px;margin-bottom:12px}.transaction-message-head{gap:10px}.transaction-message-preview{font-size:10px}
 }
+
+
+/* 2026-10-03 counter-first sale flow: one screen, modal payment, immediate receipt actions */
+.counter-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(410px,.95fr);gap:18px;min-height:0;height:100%;align-items:stretch}
+.counter-products{min-width:0;min-height:0;display:flex;flex-direction:column}
+.counter-search-shell{flex:0 0 auto;margin-bottom:12px}
+.counter-results{min-height:0;overflow:auto;align-content:start;padding-right:4px;overscroll-behavior:contain}
+.counter-empty-state{flex:1;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.counter-sale-panel{height:100%;min-height:0;max-height:none!important;overflow:hidden!important;padding:16px 16px 14px;display:flex;flex-direction:column;align-self:stretch;position:relative;top:auto}
+.counter-sale-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex:0 0 auto;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.counter-sale-head .eyebrow{margin-bottom:3px}.counter-sale-head h2{margin:0;font-size:20px}
+.counter-sale-head-actions{display:flex;align-items:center;gap:8px}.held-sales-launch{padding:4px 6px;margin:0}
+.counter-cart{flex:1 1 auto;min-height:72px;max-height:none!important;overflow:auto;overscroll-behavior:contain;padding:2px 4px 2px 0}
+.counter-cart .cart-empty{min-height:82px;display:grid;place-items:center;padding:18px 8px}
+.counter-cart .cart-line{padding:9px 0}.counter-cart .cart-line .section-heading{margin:0 0 3px}.counter-cart .cart-controls{margin-top:5px}
+.counter-cart .cart-controls input{min-height:36px;height:36px}.counter-cart .cart-control-field{min-width:90px}
+.counter-total{flex:0 0 auto;margin:7px 0 8px!important;padding:11px 12px!important}.counter-total strong{font-size:23px}
+.counter-sale-panel>#checkout{display:flex!important;flex-direction:column;flex:0 0 auto;min-height:0}
+.counter-customer{position:relative;flex:0 0 auto;padding:9px 10px 10px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--white) 94%,var(--soft))}
+.counter-customer-title{display:flex;align-items:center;gap:8px;margin-bottom:6px}.counter-customer-title label{flex:1;margin:0;font-size:11px}.counter-customer-title label small{display:inline;margin-left:5px;font-size:8px;font-weight:400}
+.counter-customer-title .text-button{margin:0;padding:2px 4px}
+.counter-customer>input[type=search],.counter-customer>select{min-height:40px;height:40px;padding:8px 10px}
+.counter-customer-results{position:absolute;left:10px;right:10px;top:78px;z-index:20;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--white);box-shadow:0 14px 34px #07182728}
+.counter-customer-results:empty{display:none}.counter-customer-results .customer-result{padding:10px 11px}
+.counter-customer .selected-customer{margin-top:6px;padding:8px 10px}
+.counter-new-customer{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px}
+.counter-new-customer input{min-height:40px;height:40px;margin:0}.counter-new-customer .phone-input{margin:0}
+.counter-finish-bar{flex:0 0 auto;margin:9px 0 0!important;padding:9px 10px!important;border-radius:11px!important;box-shadow:none!important}
+.counter-finish-bar .sale-checkout-total strong{font-size:18px}.counter-finish-bar .sale-payment-open{min-height:42px;padding:9px 15px}
+
+.sale-payment-dialog{width:min(520px,calc(100vw - 28px));max-height:min(760px,92dvh);padding:0;overflow:hidden;border:1px solid var(--line);border-radius:20px;background:var(--white);color:var(--ink);box-shadow:0 28px 80px #06182955}
+.sale-payment-dialog::backdrop,.held-sales-dialog::backdrop,.sale-success-dialog::backdrop{background:#06142199;backdrop-filter:blur(3px)}
+.payment-dialog-heading{padding:16px 18px 11px;position:static}.payment-dialog-heading h2{font-size:21px}
+.payment-dialog-total{margin:12px 18px 0;padding:12px 14px}.payment-dialog-total strong{font-size:22px}
+.payment-dialog-body{padding:11px 18px 4px;overflow:auto;overscroll-behavior:contain}
+.compact-field{display:grid;grid-template-columns:100px 1fr;gap:10px;align-items:center;margin-bottom:9px}.compact-field label{margin:0}
+.counter-payment-fieldset{margin:8px 0 0}.counter-payment-fieldset legend{margin-bottom:7px}
+.payment-method-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.payment-method-option{min-height:43px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font-weight:750;font-size:11px;padding:8px}
+.payment-method-option:hover{border-color:#73aeb8}.payment-method-option.active{background:var(--green);color:#fff;border-color:var(--green)}
+.single-payment-wrap{display:grid;grid-template-columns:1fr 150px;align-items:end;gap:10px;margin-top:10px}.single-payment-wrap label{margin:0}.single-payment-wrap input{min-height:44px;font-size:16px;font-weight:750;text-align:right}
+.compact-payment-grid{margin-top:9px;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.compact-payment-grid label{margin:0;font-size:9px}.compact-payment-grid input{min-height:40px}
+#credit-fields{margin-top:9px}#credit-fields label{margin:0 0 4px}
+.compact-consent{margin:9px 0 0;padding:8px 9px}.compact-consent strong{font-size:10px}.compact-consent small{font-size:8px}
+.counter-override{margin-top:8px;border-top:1px solid var(--line);padding-top:7px}.counter-override summary{font-size:10px;color:var(--muted)}.counter-override textarea{min-height:58px;margin-top:6px}
+.payment-dialog-actions{display:flex;justify-content:flex-end;gap:9px;padding:11px 18px 15px;border-top:1px solid var(--line);background:var(--white)}
+.payment-dialog-actions .button{margin:0;min-height:44px}.payment-dialog-actions .complete-sale-button{min-width:160px}
+
+.held-sales-dialog{width:min(470px,calc(100vw - 28px));max-height:76dvh;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:var(--white);color:var(--ink)}
+.held-sales-dialog .dialog-heading{padding:16px 18px;border-bottom:1px solid var(--line)}
+.held-sales-list{padding:10px;max-height:60dvh;overflow:auto}.held-sale-row{width:100%;display:flex;justify-content:space-between;gap:12px;align-items:center;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);padding:12px 10px;text-align:left}.held-sale-row:hover{background:var(--soft)}.held-sale-row small{color:var(--muted)}
+
+.sale-success-dialog{width:min(500px,calc(100vw - 28px));padding:24px;border:1px solid var(--line);border-radius:22px;background:var(--white);color:var(--ink);text-align:center;box-shadow:0 30px 90px #06182966}
+.sale-success-mark{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;margin:0 auto 11px;background:#dff5eb;color:#166846;font-size:27px;font-weight:900}
+.sale-success-dialog .eyebrow{margin-bottom:4px}.sale-success-dialog h2{font-size:25px;margin-bottom:4px}.sale-success-reference{display:block;font-family:Consolas,monospace;font-size:13px;color:var(--muted);margin-bottom:14px}
+.sale-success-summary{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;background:var(--soft);margin-bottom:9px}.sale-success-summary span{font-size:11px}.sale-success-summary strong{font-size:20px}
+.sale-success-customer{font-size:11px;color:var(--muted);margin:7px 0 12px}.sale-success-dialog .notice{margin:8px 0 12px;text-align:left}
+.sale-success-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sale-success-actions .button,.sale-success-actions .text-button{margin:0;min-height:43px}.sale-success-actions .text-button{display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px}
+.new-sale-button{margin-top:10px!important;min-height:45px}
+
+html[data-theme="dark"] .counter-customer,html[data-theme="dark"] .payment-method-option{background:#0d1824;border-color:#31465a}
+html[data-theme="dark"] .counter-customer-results,html[data-theme="dark"] .sale-payment-dialog,html[data-theme="dark"] .held-sales-dialog,html[data-theme="dark"] .sale-success-dialog{background:#101d2a;border-color:#31465a;color:var(--ink)}
+html[data-theme="dark"] .payment-method-option.active{background:#3ea6b1;color:#071827;border-color:#3ea6b1}
+html[data-theme="dark"] .sale-success-mark{background:#143a2c;color:#86d5ae}
+
+@media(min-width:681px){
+  body:has(#pos){overflow:hidden}
+  body:has(#pos) .body{height:100vh;overflow:hidden}
+  body:has(#pos) main{height:calc(100vh - 74px);max-height:calc(100vh - 74px);padding:18px 28px;display:flex;flex-direction:column;overflow:hidden}
+  body:has(#pos) .page-heading{flex:0 0 auto;margin-bottom:12px;min-height:46px}
+  body:has(#pos) .page-heading h1{font-size:25px}
+  body:has(#pos) .page-heading .eyebrow{margin-bottom:3px}
+  body:has(#pos) .page-footer{display:none}
+  #pos{display:flex;flex-direction:column;flex:1;min-height:0}
+  #pos>.notice{flex:0 0 auto;margin-bottom:9px}
+}
+
+@media(max-width:1100px) and (min-width:681px){
+  .counter-layout{grid-template-columns:minmax(0,1.15fr) minmax(360px,.9fr);gap:13px}
+  body:has(#pos) main{padding-left:18px;padding-right:18px}
+  .counter-sale-panel{padding:13px}
+}
+
+@media(max-width:680px){
+  body:has(#pos) main{padding-bottom:150px}
+  .counter-layout{grid-template-columns:1fr;height:auto;gap:14px}
+  .counter-products{min-height:360px}.counter-results{max-height:420px}
+  .counter-sale-panel{height:auto;max-height:none!important;overflow:visible!important;padding:14px}
+  .counter-cart{max-height:210px!important;min-height:70px}
+  .counter-customer-results{position:static;margin-top:6px;max-height:190px;box-shadow:none}
+  .counter-new-customer{grid-template-columns:1fr}
+  .counter-finish-bar{position:sticky;bottom:76px;z-index:8}
+  .sale-payment-dialog{width:100%;max-width:none;max-height:90dvh;margin:auto 0 0;border-radius:20px 20px 0 0}
+  .payment-dialog-body{max-height:58dvh;padding-left:15px;padding-right:15px}
+  .payment-method-picker{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .single-payment-wrap{grid-template-columns:1fr 130px}
+  .payment-dialog-actions{padding:10px 15px max(14px,env(safe-area-inset-bottom))}
+  .sale-success-dialog{width:calc(100% - 22px);padding:20px 16px}.sale-success-actions{grid-template-columns:1fr 1fr}
+}
