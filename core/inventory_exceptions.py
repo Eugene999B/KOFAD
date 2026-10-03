@@ -57,7 +57,7 @@ def _inventory_loss_document(user, branch, product, quantity, unit_cost, note, o
 
 
 @transaction.atomic
-def request_supplier_return(user, branch, source_line_id, quantity, reason, refund_method):
+def request_supplier_return(user, branch, source_line_id, quantity, reason, refund_method, direct=False):
     s.permit(user, branch, "operate_inventory")
     branch = s.lock_branch(branch)
     source = Line.objects.select_related("document", "product", "document__party").filter(
@@ -87,7 +87,8 @@ def request_supplier_return(user, branch, source_line_id, quantity, reason, refu
         reason=reason,
         requested_by=user,
     )
-    direct = can_direct_return(user, branch, "supplier")
+    if direct and not can_direct_return(user, branch, "supplier"):
+        raise PermissionDenied("Direct supplier-return authority is required.")
     s.audit(user, branch, "supplier_return.requested", item.pk, {
         "purchase": source.document.reference,
         "product": source.product.sku,
@@ -110,13 +111,14 @@ def review_supplier_return(user, branch, return_id, approve, direct=False):
     if item.status != "requested":
         raise ValidationError("This supplier return has already been reviewed.")
     if direct:
-        if item.requested_by_id != user.pk or not can_direct_return(user, branch, "supplier"):
+        if is_owner(user):
+            pass
+        elif item.requested_by_id != user.pk or not can_direct_return(user, branch, "supplier"):
             raise PermissionDenied("Direct supplier-return authority is required.")
     else:
-        if not is_owner(user):
-            s.permit(user, branch, "approve_operations")
-            s.permit(user, branch, "operate_finance")
-        if item.requested_by_id == user.pk and not is_owner(user):
+        s.permit(user, branch, "approve_operations")
+        s.permit(user, branch, "operate_finance")
+        if item.requested_by_id == user.pk:
             raise ValidationError("A different authorized colleague must review this supplier return.")
     if not approve:
         item.status = "rejected"
@@ -202,7 +204,7 @@ def review_supplier_return(user, branch, return_id, approve, direct=False):
 
 
 @transaction.atomic
-def request_quarantine(user, branch, product_id, quantity, reason):
+def request_quarantine(user, branch, product_id, quantity, reason, direct=False):
     s.permit(user, branch, "operate_inventory")
     branch = s.lock_branch(branch)
     product = Product.objects.filter(pk=product_id, active=True).first()
@@ -221,7 +223,8 @@ def request_quarantine(user, branch, product_id, quantity, reason):
         reason=reason,
         requested_by=user,
     )
-    direct = is_owner(user)
+    if direct and not is_owner(user):
+        raise PermissionDenied("Owner / company administrator authority is required.")
     s.audit(user, branch, "quarantine.requested", item.pk, {
         "product": product.sku,
         "quantity": quantity,
@@ -236,7 +239,10 @@ def request_quarantine(user, branch, product_id, quantity, reason):
 
 @transaction.atomic
 def review_quarantine(user, branch, item_id, approve, direct=False):
-    if not direct and not is_owner(user):
+    if direct:
+        if not is_owner(user):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
         s.permit(user, branch, "approve_operations")
     branch = s.lock_branch(branch)
     item = QuarantineItem.objects.select_for_update().select_related("product").get(pk=item_id, branch=branch)
@@ -267,14 +273,17 @@ def review_quarantine(user, branch, item_id, approve, direct=False):
 
 
 @transaction.atomic
-def resolve_quarantine(user, branch, item_id, action, note):
-    if not is_owner(user):
+def resolve_quarantine(user, branch, item_id, action, note, owner_direct=False):
+    if owner_direct:
+        if not is_owner(user):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
         s.permit(user, branch, "approve_operations")
     branch = s.lock_branch(branch)
     item = QuarantineItem.objects.select_for_update().select_related("product").get(pk=item_id, branch=branch)
     if item.status != "held":
         raise ValidationError("Only stock currently held in quarantine can be resolved.")
-    if item.requested_by_id == user.pk and not is_owner(user):
+    if item.requested_by_id == user.pk and not owner_direct:
         raise ValidationError("A different authorized colleague must resolve this quarantine item.")
     note = _meaningful(note, label="resolution note")
     s.ensure_open(branch)
