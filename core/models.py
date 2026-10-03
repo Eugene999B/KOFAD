@@ -369,14 +369,25 @@ class Idempotency(models.Model):
 
 
 class Audit(models.Model):
+    event_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     branch = models.ForeignKey(Branch, null=True, on_delete=models.PROTECT)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)
     action = models.CharField(max_length=80)
     reference = models.CharField(max_length=100)
+    category = models.CharField(max_length=32, blank=True, default="system")
+    severity = models.CharField(max_length=12, blank=True, default="info")
+    entity_type = models.CharField(max_length=60, blank=True, default="")
+    entity_id = models.CharField(max_length=100, blank=True, default="")
     detail = models.JSONField(default=dict)
+    previous_hash = models.CharField(max_length=64, blank=True, default="")
+    event_hash = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["branch", "category", "created_at"], name="audit_category_time_idx"),
+            models.Index(fields=["branch", "severity", "created_at"], name="audit_severity_time_idx"),
+        ]
 
 
 class Message(models.Model):
@@ -467,6 +478,94 @@ class Correction(models.Model):
 
 
 
+
+
+
+class ReturnPrivilege(models.Model):
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="return_privileges")
+    customer_returns = models.BooleanField(default=False)
+    supplier_returns = models.BooleanField(default=False)
+    granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["user__username"]
+        constraints = [models.UniqueConstraint(fields=["branch", "user"], name="one_return_privilege_per_user_branch")]
+
+    def __str__(self):
+        return f"{self.user} · {self.branch}"
+
+
+class CustomerReturnRequest(models.Model):
+    STATUS = [("requested", "Waiting approval"), ("approved", "Approved"), ("rejected", "Rejected")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    sale = models.ForeignKey(Document, related_name="customer_return_requests", on_delete=models.PROTECT)
+    refund_method = models.CharField(max_length=8, choices=Payment.METHODS, default="cash")
+    reason = models.TextField()
+    status = models.CharField(max_length=12, choices=STATUS, default="requested")
+    direct = models.BooleanField(default=False)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    posted = models.OneToOneField(Document, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["branch", "status", "created_at"], name="customer_return_queue_idx")]
+
+
+class CustomerReturnRequestLine(models.Model):
+    DISPOSITIONS = [("sellable", "Return to sellable stock"), ("quarantine", "Damaged / hold outside sellable stock")]
+    request = models.ForeignKey(CustomerReturnRequest, related_name="lines", on_delete=models.PROTECT)
+    source_line = models.ForeignKey(Line, related_name="customer_return_request_lines", on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    disposition = models.CharField(max_length=12, choices=DISPOSITIONS, default="sellable")
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["request", "source_line"], name="one_source_line_per_customer_return_request"),
+            models.CheckConstraint(condition=Q(quantity__gt=0), name="customer_return_request_quantity_positive"),
+        ]
+
+
+class ManualJournal(models.Model):
+    STATUS = [("requested", "Waiting approval"), ("posted", "Posted"), ("rejected", "Rejected")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    journal_date = models.DateField()
+    reference = models.CharField(max_length=40)
+    memo = models.TextField()
+    status = models.CharField(max_length=12, choices=STATUS, default="requested")
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-journal_date", "-created_at"]
+        constraints = [models.UniqueConstraint(fields=["branch", "reference"], name="unique_manual_journal_reference")]
+        indexes = [models.Index(fields=["branch", "status", "journal_date"], name="manual_journal_status_idx")]
+
+
+class ManualJournalLine(models.Model):
+    journal = models.ForeignKey(ManualJournal, related_name="lines", on_delete=models.PROTECT)
+    account_code = models.CharField(max_length=20)
+    description = models.CharField(max_length=200, blank=True)
+    debit = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    credit = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(Q(debit__gt=0, credit=0) | Q(credit__gt=0, debit=0)),
+                name="manual_journal_line_one_side",
+            ),
+        ]
 
 
 class SupplierReturn(models.Model):
