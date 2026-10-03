@@ -4,6 +4,7 @@ from xml.sax.saxutils import escape
 
 from django.conf import settings
 from django.http import HttpResponse
+from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -129,7 +130,7 @@ def render_receipt_pdf(document, format_name="a4"):
     receipt_title = Paragraph(
         f"<font color='#138895'><b>{_text(document.get_kind_display().upper())}</b></font><br/>"
         f"<b>{_text(document.reference)}</b><br/>"
-        f"<font color='#657585'>{_text(document.created_at.strftime('%d %B %Y, %H:%M'))}</font>",
+        f"<font color='#657585'>{_text(timezone.localtime(document.created_at).strftime('%d %B %Y, %H:%M'))}</font>",
         right_style if not thermal else center,
     )
     if thermal:
