@@ -55,9 +55,10 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
             1,
         )
 
-    def test_sale_requires_existing_or_inline_customer(self):
-        with self.assertRaisesRegex(ValidationError, "new customer's name"):
-            s.post_trade(self.user, self.branch, self.payload(), uuid.uuid4())
+    def test_fully_paid_sale_can_remain_walk_in(self):
+        sale = s.post_trade(self.user, self.branch, self.payload(), uuid.uuid4())
+        self.assertIsNone(sale.party_id)
+        self.assertEqual(sale.paid, sale.total)
 
     def test_two_and_half_packs_leave_exact_twenty_seven_and_half(self):
         Stock.objects.filter(branch=self.branch, product=self.product).update(quantity=360)
