@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" role="img" aria-labelledby="t d">
+<title id="t">KOFAD IMPEX — Merchant Seal</title><desc id="d">A premium circular trade seal with KOFAD and IMPEX integrated into the emblem.</desc>
+<rect width="720" height="720" rx="56" fill="#FBFCFD"/>
+<circle cx="360" cy="310" r="214" fill="none" stroke="#0B2F4B" stroke-width="30"/>
+<circle cx="360" cy="310" r="173" fill="#FFFFFF" stroke="#E6EBEF" stroke-width="2"/>
+<path d="M236 207V413" stroke="#0B2F4B" stroke-width="40" stroke-linecap="round"/>
+<path d="M255 308L382 206" stroke="#D99A24" stroke-width="34" stroke-linecap="round"/>
+<path d="M255 308L404 420" stroke="#0E8993" stroke-width="34" stroke-linecap="round"/>
+<path d="M448 216V404" stroke="#0B2F4B" stroke-width="34" stroke-linecap="round"/>
+<path d="M424 216H491" stroke="#0B2F4B" stroke-width="34" stroke-linecap="round"/>
+<circle cx="360" cy="310" r="20" fill="#FFFFFF" stroke="#0B2F4B" stroke-width="7"/>
+<path d="M335 286L360 273L385 286L360 299Z" fill="#D99A24"/>
+<path d="M335 286L360 299V326L335 313Z" fill="#0B2F4B"/>
+<path d="M385 286L360 299V326L385 313Z" fill="#0E8993"/>
+<path d="M202 147Q360 56 518 147" fill="none" stroke="#FFFFFF" stroke-width="1" id="topArc"/>
+<text fill="#0B2F4B" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="27" font-weight="800" letter-spacing="7"><textPath href="#topArc" startOffset="50%" text-anchor="middle">KOFAD</textPath></text>
+<path d="M190 453Q360 548 530 453" fill="none" stroke="#FFFFFF" stroke-width="1" id="bottomArc"/>
+<text fill="#0B2F4B" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="23" font-weight="700" letter-spacing="6"><textPath href="#bottomArc" startOffset="50%" text-anchor="middle">IMPEX</textPath></text>
+<circle cx="159" cy="310" r="7" fill="#D99A24"/><circle cx="561" cy="310" r="7" fill="#0E8993"/>
+<text x="360" y="590" text-anchor="middle" fill="#0B2F4B" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="78" font-weight="800" letter-spacing="6">KOFAD</text>
+<text x="360" y="634" text-anchor="middle" fill="#6C7B87" font-family="Aptos,Segoe UI,Arial,sans-serif" font-size="19" font-weight="700" letter-spacing="8">IMPEX ENTERPRISE</text>
+</svg>
