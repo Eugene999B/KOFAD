@@ -15,7 +15,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import F, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -325,7 +325,7 @@ def document(request, pk):
 @login_required
 def document_pdf(request, pk, format):
     if format not in {"a4", "thermal80", "thermal58"}:
-        raise ValidationError("Choose A4, 80mm or 58mm receipt format.")
+        raise Http404("Unknown receipt format.")
     branch = branch_for(request)
     doc = get_object_or_404(
         Document.objects.select_related("party", "created_by", "branch", "original"),
@@ -337,8 +337,9 @@ def document_pdf(request, pk, format):
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
     from .receipt_pdf import render_receipt_pdf
+    response = render_receipt_pdf(doc, format)
     s.audit(request.user, branch, "receipt.pdf_opened", doc.reference, {"format": format})
-    return render_receipt_pdf(doc, format)
+    return response
 
 
 @protected("operate_inventory|view_reports")
