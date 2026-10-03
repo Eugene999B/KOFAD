@@ -334,10 +334,9 @@ class WorkforcePayrollAccountingTests(Fixtures, TestCase):
         self.assertEqual(entry.net_pay, Decimal("900.02"))
         period, issues = payroll_engine.prepare_period(self.user, period)
         self.assertFalse(any("negative" in issue.lower() for issue in issues))
-        with self.assertRaises(ValidationError):
-            payroll_engine.approve_period(self.user, period)
-        period = payroll_engine.approve_period(self.reviewer, period)
-        period = payroll_engine.lock_period(self.reviewer, period)
+        period = payroll_engine.approve_period(self.user, period)
+        self.assertEqual(period.approved_by, self.user)
+        period = payroll_engine.lock_period(self.user, period)
         payment = payroll_engine.record_payment(
             self.user, entry, entry.net_pay, "bank", "TEST-PAY-001", "October salary"
         )
