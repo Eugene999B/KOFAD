@@ -334,9 +334,10 @@ class WorkforcePayrollAccountingTests(Fixtures, TestCase):
         self.assertEqual(entry.net_pay, Decimal("900.02"))
         period, issues = payroll_engine.prepare_period(self.user, period)
         self.assertFalse(any("negative" in issue.lower() for issue in issues))
-        period = payroll_engine.approve_period(self.user, period)
-        self.assertEqual(period.approved_by, self.user)
-        period = payroll_engine.lock_period(self.user, period)
+        with self.assertRaises(ValidationError):
+            payroll_engine.approve_period(self.user, period)
+        period = payroll_engine.approve_period(self.reviewer, period)
+        period = payroll_engine.lock_period(self.reviewer, period)
         payment = payroll_engine.record_payment(
             self.user, entry, entry.net_pay, "bank", "TEST-PAY-001", "October salary"
         )
@@ -743,7 +744,7 @@ class ControlCentreIntelligenceTests(Fixtures, TestCase):
         before = Stock.objects.get(branch=self.branch, product=self.product).quantity
         item = inventory_exceptions.request_supplier_return(
             keeper, self.branch, purchase.lines.get().pk, 1,
-            "Supplier accepted one incorrect item back", "cash",
+            "Supplier accepted one incorrect item back", "cash", direct=True,
         )
         item = SupplierReturn.objects.get(pk=item.pk)
         self.assertEqual(item.status, "approved")
