@@ -1,1 +1,9 @@
-{% extends "base.html" %}{% block content %}<div class="actions">{% for item in templates %}<a class="button secondary" href="?code={{ item.code }}">{{ item.name }}</a>{% endfor %}</div><section class="panel form-panel"><p class="hint">Placeholders: {company}, {customer}, {reference}, {currency}, {total}, {paid}, {balance}, {due_date}. Existing messages retain the content originally prepared.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="button">Save template</button></form></section>{% endblock %}
+{% extends "base.html" %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/settings/communications/">Communication settings</a>{% for item in templates %}<a class="button secondary" href="?code={{ item.code }}">{{ item.name }}</a>{% endfor %}</div>{% endblock %}
+{% block content %}
+<section class="panel form-panel">
+<div class="section-heading"><div><p class="eyebrow">CUSTOMER TEMPLATE</p><h2>{{ form.instance.name }}</h2><p class="muted">Existing prepared messages keep the wording they were created with; template edits affect future messages only.</p></div></div>
+<div class="notice subtle"><strong>Available placeholders:</strong> {company}, {customer}, {reference}, {currency}, {total}, {paid}, {balance}, {due_date}, {business_phone}, {location}.</div>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button class="button">Save template</button></form>
+</section>
+{% endblock %}

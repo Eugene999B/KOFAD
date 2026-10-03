@@ -1,1 +1,51 @@
-{% extends "base.html" %}{% block actions %}{% if perms.core.manage_company %}<a class="button secondary" href="/message-templates/">Message templates</a>{% endif %}{% endblock %}{% block content %}<div class="notice">{% if not sms_enabled %}SMS is disabled until deployment credentials are configured.{% elif sms_sandbox %}Sandbox mode: submissions do not represent live customer delivery.{% else %}Live SMS · {{ sms_provider }} · Queueing a message authorizes a billable provider submission.{% endif %} Accepted means the provider received the request; only a verified delivery callback confirms delivery.</div><section class="panel form-panel"><h2>Prepare a message</h2><form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="action" value="draft"><label for="recipient">Opted-in contact</label><select id="recipient" name="party" required>{% for p in parties %}<option value="{{ p.pk }}">{{ p.name }} · {{ p.phone }}</option>{% empty %}<option value="">No opted-in contacts</option>{% endfor %}</select><label for="channel">Channel</label><select id="channel" name="channel"><option value="sms">SMS</option><option value="whatsapp">WhatsApp draft only</option></select><label for="body">Message</label><textarea id="body" name="body" maxlength="2000" required></textarea><button class="button">Prepare draft</button></form></section><section class="panel"><h2>Outbox and delivery history</h2><div class="table-wrap"><table><thead><tr><th>Recipient</th><th>Message</th><th>Estimate</th><th>Status</th><th>Action</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.party }}<small>{{ row.recipient }}</small><small>{{ row.provider }}{% if row.sandbox %} · sandbox{% endif %}</small></td><td>{{ row.body }}<small>{{ row.created_at }}</small></td><td>{{ row.segments }} segment{{ row.segments|pluralize }}<small>{{ row.encoding }}</small></td><td><span class="pill">{{ row.status }}</span><small>{{ row.last_error }}</small><small>{{ row.attempts }} attempt{{ row.attempts|pluralize }}</small></td><td>{% if perms.core.send_messages and row.channel == 'sms' %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}">{% if row.status == 'draft' %}<button class="button secondary" name="action" value="queue">Queue SMS</button>{% elif row.status == 'failed' or row.status == 'undelivered' or row.status == 'expired' %}<button class="button secondary" name="action" value="retry">Retry failed SMS</button>{% endif %}</form>{% endif %}{% if row.status == 'unknown' %}<small>Check Arkesel before any resend.</small>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No messages yet. Prepare a draft or generate one from a receipt.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends "base.html" %}
+{% block actions %}<div class="actions">{% if perms.core.manage_company %}<a class="button secondary" href="/settings/communications/">Communication settings</a><a class="button secondary" href="/settings/debt/">Debt settings</a>{% endif %}</div>{% endblock %}
+{% block content %}
+<section class="hero-panel compact-hero"><div><p class="eyebrow">MESSAGE CENTRE</p><h2>Communications</h2><p>Manual messages, automatic-message rules and provider delivery evidence are separated so staff can tell exactly what KOFAD is doing.</p></div><span class="pill">{% if not sms_enabled %}SMS disabled{% elif sms_sandbox %}SMS sandbox{% else %}SMS live · {{ sms_provider }}{% endif %}</span></section>
+
+<div class="communication-status-grid">
+<article><span>MANUAL</span><strong>Staff drafts</strong><small>Choose an opted-in customer, write the message, then review before queueing.</small></article>
+<article><span>AUTO</span><strong>Customer events</strong><small>Sale: {{ communication_policy.get_sale_receipt_mode_display }} · Payment: {{ communication_policy.get_payment_confirmation_mode_display }} · Debt: {{ debt_policy.get_delivery_mode_display }}</small></article>
+<article><span>MGMT</span><strong>Management alerts</strong><small>{{ management_count }} active recipient{{ management_count|pluralize }} · Closing: {{ communication_policy.get_daily_closing_mode_display }} · Stock: {{ communication_policy.get_low_stock_mode_display }}</small></article>
+<article><span>PROVIDER</span><strong>{% if not sms_enabled %}Not connected{% elif sms_sandbox %}Sandbox only{% else %}Live provider{% endif %}</strong><small>{% if not sms_enabled %}Drafts remain safe in KOFAD until credentials are enabled.{% elif sms_sandbox %}Provider responses do not prove real customer delivery.{% else %}Queued messages may create billable provider submissions.{% endif %}</small></article>
+</div>
+
+<section class="communication-workspace">
+<div class="panel communication-composer">
+<div class="section-heading"><div><p class="eyebrow">MANUAL MESSAGE</p><h2>Prepare a customer message</h2><p class="muted">Only customers who have messaging consent appear here.</p></div></div>
+<form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="action" value="draft">
+<label for="recipient">Customer<select id="recipient" name="party" required><option value="">Choose customer</option>{% for p in parties %}<option value="{{ p.pk }}">{{ p.name }} · {{ p.phone }}</option>{% empty %}<option value="">No opted-in customers</option>{% endfor %}</select></label>
+<label for="channel">Channel<select id="channel" name="channel"><option value="sms">SMS</option><option value="whatsapp">WhatsApp draft only</option></select></label>
+<label for="body">Message<textarea id="body" name="body" maxlength="2000" required placeholder="Write the message the customer should receive"></textarea></label>
+<button class="button">Prepare reviewable draft</button>
+</form>
+<div class="notice subtle"><strong>Draft first.</strong> Preparing a message does not send it. SMS is sent only after it is queued, and live sending is impossible while deployment-level SMS remains disabled.</div>
+</div>
+
+<div class="panel communication-automation">
+<div class="section-heading"><div><p class="eyebrow">AUTOMATIC MESSAGES</p><h2>What happens without staff typing</h2></div>{% if perms.core.manage_company %}<a href="/settings/communications/">Change rules →</a>{% endif %}</div>
+<div class="auto-message-list">
+<div><span>Sale completed</span><strong>{{ communication_policy.get_sale_receipt_mode_display }}</strong><small>Opted-in customer · Sale receipt template</small></div>
+<div><span>Debt payment received</span><strong>{{ communication_policy.get_payment_confirmation_mode_display }}</strong><small>Opted-in customer · Payment confirmation</small></div>
+<div><span>Debt schedule</span><strong>{{ debt_policy.get_delivery_mode_display }}</strong><small>Opted-in customer · Debt Settings decide due/overdue timing and frequency</small></div>
+<div><span>Daily closing submitted</span><strong>{{ communication_policy.get_daily_closing_mode_display }}</strong><small>Boss / management numbers configured for closing</small></div>
+<div><span>Low-stock daily check</span><strong>{{ communication_policy.get_low_stock_mode_display }}</strong><small>Management stock recipients at {{ communication_policy.low_stock_time|time:"H:i" }}</small></div>
+</div>
+</div>
+</section>
+
+<section class="panel">
+<div class="section-heading"><div><p class="eyebrow">OUTBOX & DELIVERY EVIDENCE</p><h2>Message history</h2><p class="muted">Draft = prepared only. Queued = waiting for worker. Accepted = provider accepted submission. Delivered requires a verified callback.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Recipient</th><th>Source / message</th><th>Delivery</th><th>Created</th><th></th></tr></thead><tbody>
+{% for row in rows %}
+<tr>
+<td>{% if row.party %}<strong>{{ row.party.name }}</strong><small>Customer · {{ row.recipient }}</small>{% elif row.management_contact %}<strong>{{ row.management_contact.name }}</strong><small>Management · {{ row.recipient }}</small>{% else %}<strong>{{ row.recipient }}</strong>{% endif %}</td>
+<td><small>{% if row.source_key %}{{ row.source_key }}{% else %}Manual{% endif %}</small><span class="message-body-preview">{{ row.body }}</span><small>{{ row.segments }} segment{{ row.segments|pluralize }} · {{ row.encoding }}</small></td>
+<td><span class="pill">{{ row.status }}</span><small>{{ row.provider }}{% if row.sandbox %} · sandbox{% endif %}</small>{% if row.last_error %}<small class="danger">{{ row.last_error }}</small>{% endif %}</td>
+<td>{{ row.created_at|date:"d M Y, H:i" }}<small>by {{ row.created_by }}</small></td>
+<td>{% if perms.core.send_messages and row.channel == 'sms' %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}">{% if row.status == 'draft' %}<button class="button secondary" name="action" value="queue">Queue SMS</button>{% elif row.status == 'failed' or row.status == 'undelivered' or row.status == 'expired' %}<button class="button secondary" name="action" value="retry">Retry</button>{% elif row.status == 'unknown' %}<small>Verify with provider before resend.</small>{% endif %}</form>{% endif %}</td>
+</tr>
+{% empty %}<tr><td colspan="5"><div class="empty"><h3>No messages yet.</h3><p>Prepare a manual draft or enable an automatic message rule.</p></div></td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+{% endblock %}

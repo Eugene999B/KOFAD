@@ -68,6 +68,13 @@ def validate_current_context(message):
         document = Document.objects.get(pk=reference,branch=message.branch,party=message.party)
         if render_for_document(document,"debt") != message.body:
             raise ValidationError("The outstanding balance or template changed. Prepare the reminder again.")
+    if message.source_key and message.source_key.startswith("auto:debt:"):
+        if not message.party_id:
+            raise ValidationError("Automatic debt reminder lost its customer account.")
+        from core.automations import render_debt_account_message
+        current = render_debt_account_message(message.party)
+        if not current or current != message.body:
+            raise ValidationError("The customer debt or reminder policy changed. Prepare a fresh reminder.")
 
 
 def validate_config(provider):
@@ -80,42 +87,140 @@ def validate_config(provider):
 
 
 @transaction.atomic
-def create_draft(user,branch,party,body,channel="sms",source_key=None):
-    permit(user,branch,"operate_sales" if not user.has_perm("core.send_messages") else "send_messages")
-    lock_branch(branch)
-    if party.branch_id != branch.pk or not party.consent:
-        raise ValidationError("Choose an opted-in contact at this location.")
-    if channel not in ("sms","whatsapp"):
+def _create_draft_record(user, branch, body, channel="sms", source_key=None, party=None, management_contact=None):
+    if bool(party) == bool(management_contact):
+        raise ValidationError("Choose exactly one message recipient.")
+    if channel not in ("sms", "whatsapp"):
         raise ValidationError("Unknown channel.")
     body = body.strip()
-    encoding,segments = estimate(body)
-    recipient = normalize_phone(party.phone)
+    encoding, segments = estimate(body)
+    if party:
+        if party.branch_id != branch.pk or not party.consent:
+            raise ValidationError("Choose an opted-in contact at this location.")
+        recipient = normalize_phone(party.phone)
+    else:
+        if not management_contact.active or (
+            management_contact.branch_id and management_contact.branch_id != branch.pk
+        ):
+            raise ValidationError("This management contact is not active for the current location.")
+        recipient = normalize_phone(management_contact.phone)
+
     if source_key:
-        existing = Message.objects.filter(branch=branch,source_key=source_key).first()
+        existing = Message.objects.filter(branch=branch, source_key=source_key).first()
         if existing:
-            if existing.status == "draft" and source_key.startswith(("receipt:","debt:","payment:")):
-                existing.body,existing.encoding,existing.segments = body,encoding,segments
-                existing.save(update_fields=["body","encoding","segments"])
-            elif existing.body != body or existing.party_id != party.pk or existing.channel != channel:
+            same_recipient = (
+                existing.party_id == getattr(party, "pk", None)
+                and existing.management_contact_id == getattr(management_contact, "pk", None)
+            )
+            if not same_recipient or existing.channel != channel:
                 raise ValidationError("This draft key already belongs to another message.")
+            if existing.status == "draft":
+                existing.body, existing.encoding, existing.segments = body, encoding, segments
+                existing.recipient = recipient
+                existing.save(update_fields=["body", "encoding", "segments", "recipient"])
             return existing
-    message = Message.objects.create(branch=branch,party=party,created_by=user,body=body,channel=channel,
-        recipient=recipient,encoding=encoding,segments=segments,source_key=source_key)
-    audit(user,branch,"message.drafted",message.pk,{"channel":channel,"segments":segments})
+
+    message = Message.objects.create(
+        branch=branch, party=party, management_contact=management_contact, created_by=user,
+        body=body, channel=channel, recipient=recipient, encoding=encoding, segments=segments,
+        source_key=source_key,
+    )
+    audit(user, branch, "message.drafted", message.pk, {
+        "channel": channel, "segments": segments,
+        "recipient_type": "customer" if party else "management",
+    })
     return message
 
 
 @transaction.atomic
+def create_draft(user, branch, party, body, channel="sms", source_key=None):
+    permit(user, branch, "operate_sales" if not user.has_perm("core.send_messages") else "send_messages")
+    lock_branch(branch)
+    return _create_draft_record(user, branch, body, channel, source_key, party=party)
+
+
+@transaction.atomic
+def create_automatic_customer_draft(user, branch, party, body, source_key=None):
+    lock_branch(branch)
+    return _create_draft_record(user, branch, body, "sms", source_key, party=party)
+
+
+@transaction.atomic
+def create_internal_draft(user, branch, management_contact, body, source_key=None):
+    lock_branch(branch)
+    return _create_draft_record(
+        user, branch, body, "sms", source_key, management_contact=management_contact
+    )
+
+
+def _recipient_is_current(message):
+    if message.party_id:
+        return (
+            message.party.branch_id == message.branch_id
+            and message.party.consent
+            and normalize_phone(message.party.phone) == message.recipient
+        )
+    if message.management_contact_id:
+        contact = message.management_contact
+        return (
+            contact.active
+            and (not contact.branch_id or contact.branch_id == message.branch_id)
+            and normalize_phone(contact.phone) == message.recipient
+        )
+    return False
+
+
+def _automation_queue_actor(actor):
+    if actor and actor.is_active and actor.has_perm("core.send_messages"):
+        return actor
+    from django.contrib.auth.models import User
+    return User.objects.filter(is_active=True, is_superuser=True).order_by("pk").first()
+
+
+@transaction.atomic
+def queue_automatic(message, actor=None):
+    if message.status != "draft":
+        return message
+    if message.channel != "sms":
+        return message
+    if not settings.SMS_ENABLED:
+        return message
+    if not _recipient_is_current(message):
+        raise ValidationError("Automatic message recipient is no longer eligible.")
+    queued_by = _automation_queue_actor(actor)
+    if not queued_by:
+        raise ValidationError("No active system administrator is available to authorize automatic SMS.")
+    provider = message.provider or settings.SMS_PROVIDER
+    try:
+        validate_config(provider)
+    except ValidationError:
+        return message
+    message.provider = provider
+    message.sender = message.sender or settings.SMS_SENDER_ID
+    message.sandbox = settings.SMS_SANDBOX
+    message.status = "queued"
+    message.queued_by = queued_by
+    message.next_attempt_at = timezone.now()
+    message.last_error = ""
+    message.save(update_fields=[
+        "provider", "sender", "sandbox", "status", "queued_by", "next_attempt_at", "last_error"
+    ])
+    audit(actor, message.branch, "sms.automatic_queued", message.pk, {
+        "provider": provider, "sandbox": message.sandbox,
+    })
+    return message
+
+@transaction.atomic
 def queue_message(user,branch,pk,retry=False):
     permit(user,branch,"send_messages")
-    message = Message.objects.select_for_update().select_related("party").get(pk=pk,branch=branch)
+    message = Message.objects.select_for_update(of=("self",)).select_related("party", "management_contact").get(pk=pk,branch=branch)
     allowed = ("failed","undelivered","expired") if retry else ("draft",)
     if message.status not in allowed:
         raise ValidationError("Only drafts or definitively failed messages can be queued. Unknown outcomes require provider investigation.")
     if message.channel != "sms":
         raise ValidationError("WhatsApp delivery is not configured.")
-    if not message.party.consent or normalize_phone(message.party.phone) != message.recipient:
-        raise ValidationError("Consent or recipient details changed. Prepare a new draft.")
+    if not _recipient_is_current(message):
+        raise ValidationError("Consent, recipient details or management-recipient status changed. Prepare a new draft.")
     validate_current_context(message)
     provider = message.provider or settings.SMS_PROVIDER
     validate_config(provider)
@@ -145,15 +250,16 @@ def transition(current,incoming):
 def process_one():
     # Validate before claiming. A misconfigured worker leaves the queue intact.
     with transaction.atomic():
-        message = Message.objects.select_for_update(skip_locked=True).filter(status__in=["queued","retry_wait"],
-            next_attempt_at__lte=timezone.now()).order_by("created_at").first()
+        message = Message.objects.select_for_update(of=("self",), skip_locked=True).select_related("party", "management_contact").filter(
+            status__in=["queued","retry_wait"], next_attempt_at__lte=timezone.now()
+        ).order_by("created_at").first()
         if not message:
             return False
         validate_config(message.provider)
         try:
             permit(message.queued_by,message.branch,"send_messages")
             validate_current_context(message)
-            if not message.party.consent or normalize_phone(message.party.phone) != message.recipient:
+            if not _recipient_is_current(message):
                 raise ValidationError("Consent or recipient changed.")
         except Exception:
             message.status,message.last_error = "failed","Recipient consent or sender access no longer valid."

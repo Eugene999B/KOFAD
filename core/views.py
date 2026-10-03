@@ -15,7 +15,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import F, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -24,12 +24,14 @@ from django.views.decorators.debug import sensitive_post_parameters
 from . import services as s
 from .context import shell
 from .forms import (
-    CompanyForm, FinancePolicyForm, PartyForm, PaymentPolicyForm, ProductForm,
+    CommunicationSettingsForm, CompanyForm, DebtSettingsForm, FinancePolicyForm,
+    LocationSettingsForm, ManagementContactForm, PartyForm, PaymentPolicyForm, ProductForm,
     ReceiptPolicyForm, SalesPolicyForm,
 )
 from .models import (
-    Access, Audit, Branch, Closing, Company, Correction, Document, HeldSale, Line, LoginAttempt,
-    Message, Movement, Operation, Party, Payment, Product, QuarantineItem, Stock, SupplierReturn,
+    Access, Audit, Branch, Closing, CommunicationSettings, Company, Correction, DebtSettings,
+    Document, HeldSale, Line, LoginAttempt, ManagementContact, Message, MessageTemplate,
+    Movement, Operation, Party, Payment, Product, QuarantineItem, Stock, SupplierReturn,
 )
 
 
@@ -320,6 +322,26 @@ def document(request, pk):
         "outstanding": s.balance(doc) if doc.kind in ("sale", "purchase") else None})
 
 
+@login_required
+def document_pdf(request, pk, format):
+    if format not in {"a4", "thermal80", "thermal58"}:
+        raise Http404("Unknown receipt format.")
+    branch = branch_for(request)
+    doc = get_object_or_404(
+        Document.objects.select_related("party", "created_by", "branch", "original"),
+        pk=pk, branch=branch
+    )
+    permission = "operate_sales" if doc.kind in ("sale", "return") else (
+        "operate_inventory" if doc.kind in ("purchase", "supplier_return", "inventory_writeoff") else "operate_finance"
+    )
+    if not request.user.has_perm("core.view_reports"):
+        s.permit(request.user, branch, permission)
+    from .receipt_pdf import render_receipt_pdf
+    response = render_receipt_pdf(doc, format)
+    s.audit(request.user, branch, "receipt.pdf_opened", doc.reference, {"format": format})
+    return response
+
+
 @protected("operate_inventory|view_reports")
 def inventory(request, branch):
     if request.method == "POST":
@@ -442,8 +464,12 @@ def product_edit(request, branch, pk=None):
                          "opening_stock_base_units": opening_total})
             messages.success(request, "Product saved" + (f" with {opening_total} opening base units." if opening_total else "."))
             return redirect("inventory")
-    return render(request, "form.html", {"title": "Edit product" if pk else "New product", "form": form,
-        "description": "Leave a price blank to disable that selling mode. Quantities are always held in base units."})
+    return render(request, "product_form.html", {
+        "title": "Edit product" if pk else "New product",
+        "form": form,
+        "editing": bool(pk),
+        "description": "Choose whether this product is sold as a single unit or from packs/boxes. KOFAD keeps stock in the smallest sellable unit so pack remainders stay exact.",
+    })
 
 
 @protected("operate_sales|operate_finance|view_reports")
@@ -536,7 +562,7 @@ def debts(request, branch):
         rows = [row for row in rows if row["overdue"] == 0]
 
     selected = None
-    selected_id = request.GET.get("customer", "")
+    selected_id = request.GET.get("customer", "") or (request.POST.get("party", "") if request.method == "POST" else "")
     if selected_id.isdigit():
         selected = next((row for row in rows if row["party"].pk == int(selected_id)), None)
         if selected is None:
@@ -565,6 +591,7 @@ def debts(request, branch):
         "methods": s.active_payment_methods(),
         "key": request.POST.get("key") or str(uuid.uuid4()),
         "payment_doc": payment_doc,
+        "open_payment_dialog": request.method == "POST",
     })
 
 @login_required
@@ -877,6 +904,113 @@ def settings_view(request, branch):
 
 
 @protected("manage_company")
+def location_settings(request, branch):
+    form = LocationSettingsForm(request.POST or None, instance=branch)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            before = {"name": branch.name, "address": branch.address}
+            obj = form.save()
+            s.audit(request.user, branch, "settings.location.updated", obj.pk, {
+                "before": before,
+                "after": {"name": obj.name, "address": obj.address},
+            })
+        messages.success(request, "Location settings saved.")
+        return redirect("location_settings")
+    return render(request, "form.html", {
+        "title": "Location settings",
+        "form": form,
+        "description": "Set the store/location name and address that appear on receipts, reports and location-scoped records.",
+        "settings_section": True,
+    })
+
+
+@protected("manage_company")
+def debt_settings(request, branch):
+    item = DebtSettings.objects.first() or DebtSettings.objects.create()
+    form = DebtSettingsForm(request.POST or None, instance=item)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            before = {field: str(getattr(item, field)) for field in form.fields}
+            obj = form.save()
+            s.audit(request.user, branch, "settings.debt.updated", obj.pk, {
+                "before": before,
+                "after": {field: str(form.cleaned_data.get(field)) for field in form.fields},
+            })
+        messages.success(request, "Debt settings saved.")
+        return redirect("debt_settings")
+    return render(request, "debt_settings.html", {
+        "title": "Debt settings",
+        "form": form,
+        "item": item,
+        "sms_enabled": settings.SMS_ENABLED,
+        "sms_sandbox": settings.SMS_SANDBOX,
+    })
+
+
+@protected("manage_company")
+def communication_settings(request, branch):
+    item = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
+    form = CommunicationSettingsForm(request.POST or None, instance=item, prefix="policy")
+    contact_form = ManagementContactForm(request.POST or None, prefix="contact")
+    action = request.POST.get("action") if request.method == "POST" else ""
+
+    if request.method == "POST":
+        try:
+            if action == "save_policy" and form.is_valid():
+                with transaction.atomic():
+                    before = {field: str(getattr(item, field)) for field in form.fields}
+                    obj = form.save()
+                    s.audit(request.user, branch, "settings.communications.updated", obj.pk, {
+                        "before": before,
+                        "after": {field: str(form.cleaned_data.get(field)) for field in form.fields},
+                    })
+                messages.success(request, "Communication settings saved.")
+                return redirect("communication_settings")
+            if action == "add_contact" and contact_form.is_valid():
+                with transaction.atomic():
+                    contact = contact_form.save()
+                    s.audit(request.user, branch, "settings.management_contact.added", contact.pk, {
+                        "name": contact.name, "phone": contact.phone,
+                    })
+                messages.success(request, "Management notification contact added.")
+                return redirect("communication_settings")
+            if action == "delete_contact":
+                contact = get_object_or_404(ManagementContact, pk=request.POST.get("id"))
+                with transaction.atomic():
+                    if Message.objects.filter(management_contact=contact).exists():
+                        contact.active = False
+                        contact.save(update_fields=["active"])
+                        s.audit(request.user, branch, "settings.management_contact.deactivated", contact.pk)
+                        messages.success(request, "Contact deactivated because notification history exists.")
+                    else:
+                        evidence = {"name": contact.name, "phone": contact.phone}
+                        pk = contact.pk
+                        contact.delete()
+                        s.audit(request.user, branch, "settings.management_contact.deleted", pk, evidence)
+                        messages.success(request, "Management notification contact removed.")
+                return redirect("communication_settings")
+            if action and action not in {"save_policy", "add_contact", "delete_contact"}:
+                raise ValidationError("Unknown communication settings action.")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+
+    templates = {
+        row.code: row for row in MessageTemplate.objects.filter(code__in=["receipt", "payment", "debt"])
+    }
+    return render(request, "communication_settings.html", {
+        "title": "Communication settings",
+        "form": form,
+        "contact_form": contact_form,
+        "item": item,
+        "contacts": ManagementContact.objects.select_related("branch").all(),
+        "templates": templates,
+        "sms_enabled": settings.SMS_ENABLED,
+        "sms_sandbox": settings.SMS_SANDBOX,
+        "sms_provider": settings.SMS_PROVIDER,
+    })
+
+
+@protected("manage_company")
 def sales_policy_settings(request, branch):
     return _settings_form(
         request, branch, SalesPolicyForm, "Sales & credit policies",
@@ -940,10 +1074,22 @@ def communications(request, branch):
             return redirect("communications")
         except (ValidationError,ValueError) as exc:
             messages.error(request,problem(exc))
-    return render(request,"communications.html",{"title":"Communications","key":str(uuid.uuid4()),
+    communication_policy = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
+    debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
+    rows = Message.objects.filter(branch=branch).select_related(
+        "party", "management_contact", "created_by", "queued_by"
+    ).order_by("-created_at")[:100]
+    return render(request,"communications.html",{
+        "title":"Communications","key":str(uuid.uuid4()),
         "parties":Party.objects.filter(branch=branch,consent=True),
-        "rows":Message.objects.filter(branch=branch).select_related("party","created_by").order_by("-created_at")[:100],
-        "sms_enabled":settings.SMS_ENABLED,"sms_sandbox":settings.SMS_SANDBOX,"sms_provider":settings.SMS_PROVIDER})
+        "rows":rows,
+        "communication_policy":communication_policy,
+        "debt_policy":debt_policy,
+        "management_count":ManagementContact.objects.filter(active=True).filter(
+            Q(branch__isnull=True) | Q(branch=branch)
+        ).count(),
+        "sms_enabled":settings.SMS_ENABLED,"sms_sandbox":settings.SMS_SANDBOX,"sms_provider":settings.SMS_PROVIDER
+    })
 
 
 @protected("operate_finance")

@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'product_form.js' %}"></script>{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/inventory/">← Inventory</a></div>{% endblock %}
+{% block content %}
+<section class="hero-panel compact-hero"><div><p class="eyebrow">PRODUCT SETUP</p><h2>{{ title }}</h2><p>{{ description }}</p></div><span class="pill">Pack-aware stock</span></section>
+{% if not editing %}<div class="notice subtle"><strong>Opening-stock location:</strong> {{ current_branch.name }}{% if current_branch.address %} · {{ current_branch.address }}{% endif %}. Product identity is shared across KOFAD, but the opening quantity entered below is posted to this current location.</div>{% endif %}
+<form method="post" class="panel product-setup-form" id="product-setup-form">{% csrf_token %}
+{{ form.non_field_errors }}
+
+<section class="product-form-section">
+<div class="section-heading"><div><p class="eyebrow">1 · PRODUCT IDENTITY</p><h2>What are you stocking?</h2></div></div>
+<div class="two-column">
+<label>Product name{{ form.name }}{{ form.name.errors }}</label>
+<label>SKU / product code{{ form.sku }}{{ form.sku.errors }}</label>
+<label>Barcode <small>Optional</small>{{ form.barcode }}{{ form.barcode.errors }}</label>
+<label>Category{{ form.category }}{{ form.category.errors }}</label>
+</div>
+</section>
+
+<section class="product-form-section">
+<div class="section-heading"><div><p class="eyebrow">2 · STOCK STRUCTURE</p><h2>Single item or pack / box?</h2><p class="muted">Choose one structure. KOFAD hides fields that do not make sense for a single-unit product.</p></div></div>
+<label>Stock structure{{ form.pack_enabled }}<small>{{ form.pack_enabled.help_text }}</small>{{ form.pack_enabled.errors }}</label>
+<div class="two-column">
+<label>Smallest sellable unit{{ form.base_unit }}<small>Examples: piece, bottle, pair, roll, bag.</small>{{ form.base_unit.errors }}</label>
+<div class="single-unit-explainer" data-single-only><strong>Single-unit product</strong><p>Every stock quantity is already one complete sellable item, so there is no “loose unit” wording and no pack price to configure.</p></div>
+</div>
+<div class="pack-only-grid" data-pack-only>
+<label>Pack / box name{{ form.pack_name }}<small>Examples: carton, box, bale, bundle.</small>{{ form.pack_name.errors }}</label>
+<label>Units inside one pack / box{{ form.pack_size }}<small>A packed product must contain at least 2 base units.</small>{{ form.pack_size.errors }}</label>
+</div>
+{% if not editing %}
+<div class="opening-stock-grid">
+<label data-pack-only>Opening full packs / boxes{{ form.opening_packs }}<small>Whole unopened packs already on hand.</small>{{ form.opening_packs.errors }}</label>
+<label><span id="opening-units-label">Opening loose units</span>{{ form.opening_units }}<small id="opening-units-help">Loose pieces outside a full pack.</small>{{ form.opening_units.errors }}</label>
+</div>
+{% endif %}
+</section>
+
+<section class="product-form-section">
+<div class="section-heading"><div><p class="eyebrow">3 · COST & SELLING PRICES</p><h2>How should KOFAD price it?</h2><p class="muted">Leave a selling price blank to disable that mode.</p></div></div>
+<div class="pricing-grid">
+<label><span id="cost-label">Cost per unit</span>{{ form.cost }}{{ form.cost.errors }}</label>
+<label><span id="retail-unit-label">Retail price</span>{{ form.retail_unit }}{{ form.retail_unit.errors }}</label>
+<label><span id="wholesale-unit-label">Wholesale price</span>{{ form.wholesale_unit }}{{ form.wholesale_unit.errors }}</label>
+<label data-pack-only>Retail price · full <span data-pack-word>pack</span>{{ form.retail_pack }}{{ form.retail_pack.errors }}</label>
+<label data-pack-only>Wholesale price · full <span data-pack-word>pack</span>{{ form.wholesale_pack }}{{ form.wholesale_pack.errors }}</label>
+</div>
+</section>
+
+<section class="product-form-section">
+<div class="section-heading"><div><p class="eyebrow">4 · STOCK CONTROL</p><h2>Warnings & availability</h2></div></div>
+<div class="two-column">
+<label>Low-stock warning quantity{{ form.reorder_level }}<small>Stored in the smallest sellable unit.</small>{{ form.reorder_level.errors }}</label>
+<label class="switch-row">{{ form.active }}<span><strong>Product active</strong><small>Inactive products remain in history but cannot be newly sold or received.</small></span></label>
+</div>
+</section>
+<button class="button">Save product</button>
+</form>
+{% endblock %}

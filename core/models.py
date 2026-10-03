@@ -1,4 +1,5 @@
 import uuid
+from datetime import time
 from decimal import Decimal
 
 from django.conf import settings
@@ -35,6 +36,7 @@ class LoginAttempt(models.Model):
 class Company(models.Model):
     name = models.CharField(max_length=150, default="KOFAD IMPEX ENTERPRISE")
     phone = models.CharField(max_length=40, blank=True)
+    secondary_phone = models.CharField(max_length=40, blank=True)
     address = models.TextField(blank=True)
     currency = models.CharField(max_length=3, default="GHS")
 
@@ -84,6 +86,77 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class DebtSettings(models.Model):
+    DELIVERY = [("off", "Off"), ("draft", "Prepare drafts"), ("queue", "Queue SMS automatically")]
+    GRACE_UNITS = [("days", "Days"), ("weeks", "Weeks"), ("months", "Months (30 days)")]
+
+    delivery_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    reminder_time = models.TimeField(default=time(9, 0))
+    due_soon_enabled = models.BooleanField(default=True)
+    due_soon_days = models.CharField(max_length=80, default="7,3,1")
+    due_today_enabled = models.BooleanField(default=True)
+    overdue_enabled = models.BooleanField(default=True)
+    overdue_grace_value = models.PositiveIntegerField(default=0)
+    overdue_grace_unit = models.CharField(max_length=8, choices=GRACE_UNITS, default="days")
+    overdue_repeat_days = models.PositiveIntegerField(default=3, validators=[MinValueValidator(1)])
+    max_sms_7_days = models.PositiveIntegerField(default=3, validators=[MinValueValidator(1)])
+    max_sms_30_days = models.PositiveIntegerField(default=8, validators=[MinValueValidator(1)])
+    minimum_hours_between_sms = models.PositiveIntegerField(default=24, validators=[MinValueValidator(1)])
+    minimum_balance = models.DecimalField(max_digits=14, decimal_places=2, default=1, validators=[MinValueValidator(0)])
+    skip_weekends = models.BooleanField(default=False)
+    message_template = models.TextField(default=(
+        "{company}: Dear {customer}, your outstanding balance is {currency} {balance} "
+        "across {debt_count} receipt(s). {due_sentence} Please pay or contact us on {business_phone}. Thank you."
+    ))
+
+    def __str__(self):
+        return "Debt reminder settings"
+
+    @property
+    def overdue_grace_days(self):
+        multiplier = {"days": 1, "weeks": 7, "months": 30}[self.overdue_grace_unit]
+        return self.overdue_grace_value * multiplier
+
+
+class CommunicationSettings(models.Model):
+    DELIVERY = DebtSettings.DELIVERY
+
+    sale_receipt_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    payment_confirmation_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="draft")
+    low_stock_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    low_stock_time = models.TimeField(default=time(17, 0))
+    closing_template = models.TextField(default=(
+        "{company} closing {date} - Sales {currency} {sales_total}; cash expected {currency} {expected_cash}; "
+        "cash counted {currency} {counted_cash}; variance {currency} {cash_variance}; "
+        "debt collected {currency} {debt_collections}; expenses {currency} {expenses}. Submitted by {staff}."
+    ))
+    low_stock_template = models.TextField(default=(
+        "{company} stock alert - {low_count} product(s) are low and {out_count} out of stock at {location}. "
+        "Open Inventory for details."
+    ))
+
+    def __str__(self):
+        return "Communication settings"
+
+
+class ManagementContact(models.Model):
+    name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=20)
+    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.PROTECT)
+    receive_closing = models.BooleanField(default=True)
+    receive_low_stock = models.BooleanField(default=False)
+    receive_system_alerts = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+
+    def __str__(self):
+        return f"{self.name} · {self.phone}"
 
 
 class Product(models.Model):
@@ -295,7 +368,8 @@ class Audit(models.Model):
 
 class Message(models.Model):
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
-    party = models.ForeignKey(Party, on_delete=models.PROTECT)
+    party = models.ForeignKey(Party, null=True, blank=True, on_delete=models.PROTECT)
+    management_contact = models.ForeignKey(ManagementContact, null=True, blank=True, on_delete=models.PROTECT)
     channel = models.CharField(max_length=12, choices=[("sms", "SMS"), ("whatsapp", "WhatsApp")])
     body = models.TextField()
     status = models.CharField(max_length=16, default="draft")
@@ -316,7 +390,16 @@ class Message(models.Model):
     class Meta:
         ordering = ["-created_at"]
         permissions = [("send_messages", "Queue and retry customer SMS")]
-        constraints = [models.UniqueConstraint(fields=["branch", "source_key"], name="unique_message_source")]
+        constraints = [
+            models.UniqueConstraint(fields=["branch", "source_key"], name="unique_message_source"),
+            models.CheckConstraint(
+                condition=(
+                    Q(party__isnull=False, management_contact__isnull=True) |
+                    Q(party__isnull=True, management_contact__isnull=False)
+                ),
+                name="message_exactly_one_recipient",
+            ),
+        ]
 
 
 class SmsAttempt(models.Model):

@@ -50,16 +50,27 @@ document.addEventListener("DOMContentLoaded", () => {
     amount.readOnly = full;
     title.textContent = full ? "Pay the complete customer balance" : "Record a partial customer payment";
     submit.textContent = full ? "Receive " + money(outstanding) + " & issue receipt" : "Save partial payment & issue receipt";
-    box.classList.remove("hidden");
+    if (typeof box.showModal === "function") box.showModal();
+    else box.setAttribute("open", "");
+    document.body.classList.add("dialog-open");
     renderPreview();
-    box.scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest"});
-    if (!full) amount.focus();
+    if (!full) window.setTimeout(() => amount.focus(), 30);
   }
 
   document.querySelectorAll("[data-debt-payment-mode]").forEach(button => {
     button.addEventListener("click", () => open(button.dataset.debtPaymentMode));
   });
-  document.querySelector("[data-debt-payment-close]")?.addEventListener("click", () => box.classList.add("hidden"));
+  document.querySelectorAll("[data-debt-payment-close]").forEach(button => button.addEventListener("click", () => {
+    if (typeof box.close === "function") box.close(); else box.removeAttribute("open");
+  }));
+  box.addEventListener("close", () => document.body.classList.remove("dialog-open"));
+  box.addEventListener("cancel", () => document.body.classList.remove("dialog-open"));
+  box.addEventListener("click", event => {
+    const rect = box.getBoundingClientRect();
+    const outside = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+    if (outside && typeof box.close === "function") box.close();
+  });
   amount?.addEventListener("input", renderPreview);
   renderPreview();
+  if (box.dataset.openOnLoad === "true") open("partial");
 });

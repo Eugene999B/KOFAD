@@ -419,6 +419,12 @@ def post_trade(user, branch, payload, key, kind="sale"):
         "elevated_authority": elevated, "credit_override": str(credit_override),
         "override_reason": override_reason if overrides or credit_override else "",
     })
+    if kind == "sale":
+        from . import automations
+        transaction.on_commit(
+            lambda document_id=doc.pk, actor_id=user.pk:
+                automations.safe_prepare_sale_receipt(document_id, actor_id)
+        )
     return doc
 
 @transaction.atomic
@@ -445,6 +451,12 @@ def post_payment(user, branch, payload, key, supplier=False):
     request.document = doc
     request.save(update_fields=["document"])
     audit(user, branch, kind + ".posted", doc.reference, {"invoice": invoice.reference, "amount": str(amount)})
+    if not supplier:
+        from . import automations
+        transaction.on_commit(
+            lambda document_id=doc.pk, actor_id=user.pk:
+                automations.safe_prepare_payment_confirmation(document_id, actor_id)
+        )
     return doc
 
 
@@ -708,6 +720,11 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
         "cash_in": str(cash_in),
         "cash_out": str(cash_out),
     })
+    from . import automations
+    transaction.on_commit(
+        lambda closing_id=closing.pk, actor_id=user.pk:
+            automations.safe_prepare_closing(closing_id, actor_id)
+    )
     return closing
 
 
