@@ -264,6 +264,7 @@ def trade_screen(request, branch, kind):
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
         "held": HeldSale.objects.filter(branch=branch, user=request.user),
         "purchase": kind == "purchase",
+        "today": timezone.localdate(),
         "payment_methods": payment_methods,
         "payment_method_codes": [code for code, _ in payment_methods],
         "cash_enabled": any(code == "cash" for code, _ in payment_methods),
