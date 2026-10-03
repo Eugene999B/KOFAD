@@ -3,6 +3,7 @@
 {% block actions %}<div class="actions"><a class="button secondary" href="/inventory/">← Inventory</a></div>{% endblock %}
 {% block content %}
 <section class="hero-panel compact-hero"><div><p class="eyebrow">PRODUCT SETUP</p><h2>{{ title }}</h2><p>{{ description }}</p></div><span class="pill">Pack-aware stock</span></section>
+{% if not editing %}<div class="notice subtle"><strong>Opening-stock location:</strong> {{ current_branch.name }}{% if current_branch.address %} · {{ current_branch.address }}{% endif %}. Product identity is shared across KOFAD, but the opening quantity entered below is posted to this current location.</div>{% endif %}
 <form method="post" class="panel product-setup-form" id="product-setup-form">{% csrf_token %}
 {{ form.non_field_errors }}
 
