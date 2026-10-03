@@ -152,6 +152,7 @@ class DebtSettingsForm(forms.ModelForm):
             "minimum_balance": "Minimum balance for reminders",
             "message_template": "Default debt reminder message",
         }
+        widgets = {"reminder_time": forms.TimeInput(attrs={"type": "time"})}
         help_texts = {
             "delivery_mode": "Off does nothing. Draft prepares messages for review. Queue submits automatically only when live SMS is configured.",
             "reminder_time": "Africa/Accra local time.",
@@ -207,6 +208,11 @@ class CommunicationSettingsForm(forms.ModelForm):
             "low_stock_time": "Low-stock summary time",
             "closing_template": "Daily closing message",
             "low_stock_template": "Low-stock management message",
+        }
+        widgets = {
+            "low_stock_time": forms.TimeInput(attrs={"type": "time"}),
+            "closing_template": forms.Textarea(attrs={"rows": 5}),
+            "low_stock_template": forms.Textarea(attrs={"rows": 4}),
         }
         help_texts = {
             "sale_receipt_mode": "Customer must have messaging consent. Draft or queue the existing receipt template.",
