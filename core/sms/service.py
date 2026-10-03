@@ -68,6 +68,13 @@ def validate_current_context(message):
         document = Document.objects.get(pk=reference,branch=message.branch,party=message.party)
         if render_for_document(document,"debt") != message.body:
             raise ValidationError("The outstanding balance or template changed. Prepare the reminder again.")
+    if message.source_key and message.source_key.startswith("auto:debt:"):
+        if not message.party_id:
+            raise ValidationError("Automatic debt reminder lost its customer account.")
+        from core.automations import render_debt_account_message
+        current = render_debt_account_message(message.party)
+        if not current or current != message.body:
+            raise ValidationError("The customer debt or reminder policy changed. Prepare a fresh reminder.")
 
 
 def validate_config(provider):
