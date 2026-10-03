@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from . import debts as debt_service
 from .models import (
-    Branch, CommunicationSettings, Company, DebtSettings, Document, ManagementContact,
+    Audit, Branch, Closing, CommunicationSettings, Company, DebtSettings, Document, ManagementContact,
     Message, Party, Product, Stock,
 )
 from .sms.service import (
@@ -276,3 +276,49 @@ def run_scheduled_automations(now=None):
         "debt": run_debt_reminders(now),
         "low_stock": run_low_stock_summary(now),
     }
+
+
+def _record_automation_failure(branch, actor, event, reference, exc):
+    Audit.objects.create(
+        branch=branch,
+        actor=actor if actor and actor.is_active else None,
+        action="communication.automation_failed",
+        reference=str(reference)[:100],
+        detail={"event": event, "error": str(exc)[:240]},
+    )
+
+
+def safe_prepare_sale_receipt(document_id, actor_id=None):
+    document = Document.objects.select_related("branch", "party").filter(pk=document_id).first()
+    actor = User.objects.filter(pk=actor_id).first() if actor_id else None
+    if not document:
+        return None
+    try:
+        return prepare_sale_receipt(document, actor)
+    except Exception as exc:
+        _record_automation_failure(document.branch, actor, "sale_receipt", document.reference, exc)
+        return None
+
+
+def safe_prepare_payment_confirmation(document_id, actor_id=None):
+    document = Document.objects.select_related("branch", "party").filter(pk=document_id).first()
+    actor = User.objects.filter(pk=actor_id).first() if actor_id else None
+    if not document:
+        return None
+    try:
+        return prepare_payment_confirmation(document, actor)
+    except Exception as exc:
+        _record_automation_failure(document.branch, actor, "payment_confirmation", document.reference, exc)
+        return None
+
+
+def safe_prepare_closing(closing_id, actor_id=None):
+    closing = Closing.objects.select_related("branch", "submitted_by").filter(pk=closing_id).first()
+    actor = User.objects.filter(pk=actor_id).first() if actor_id else None
+    if not closing:
+        return []
+    try:
+        return prepare_closing_notifications(closing, actor)
+    except Exception as exc:
+        _record_automation_failure(closing.branch, actor, "daily_closing", closing.pk, exc)
+        return []
