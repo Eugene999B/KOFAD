@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">KOFAD IMPEX emblem</title>
+  <desc id="desc">A hand-crafted trade emblem with interlocking navy, teal and gold routes surrounding a package, with KOFAD IMPEX integrated into the mark.</desc>
+  <defs>
+    <linearGradient id="navy" x1="72" y1="80" x2="388" y2="368" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#173f63"/>
+      <stop offset="1" stop-color="#082d4b"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="84" y1="314" x2="410" y2="406" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16a6ad"/>
+      <stop offset="1" stop-color="#087b86"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="324" y1="66" x2="432" y2="402" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4be46"/>
+      <stop offset="1" stop-color="#df981d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Three trading routes: deliberately asymmetric so the mark feels drawn, not mechanically stamped. -->
+  <path d="M76 302C47 215 72 132 142 87C210 43 305 42 377 81C405 96 428 116 446 141"
+        fill="none" stroke="url(#navy)" stroke-width="42" stroke-linecap="round"/>
+  <path d="M81 322C105 410 194 463 290 447C350 437 399 404 431 355"
+        fill="none" stroke="url(#teal)" stroke-width="42" stroke-linecap="round"/>
+  <path d="M342 67C420 101 463 175 461 255C460 323 432 382 386 424"
+        fill="none" stroke="url(#gold)" stroke-width="42" stroke-linecap="round"/>
+
+  <!-- Small route cuts nod to the original woven/globe construction. -->
+  <path d="M102 218C150 186 203 167 260 161" fill="none" stroke="#ffffff" stroke-opacity=".26" stroke-width="8" stroke-linecap="round"/>
+  <path d="M358 118C390 151 411 191 419 235" fill="none" stroke="#ffffff" stroke-opacity=".24" stroke-width="8" stroke-linecap="round"/>
+  <path d="M125 365C169 397 221 411 274 407" fill="none" stroke="#ffffff" stroke-opacity=".22" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Package / import-export core. -->
+  <path d="M177 194L256 153L335 194L256 236Z" fill="url(#gold)"/>
+  <path d="M177 194L256 236V321L177 278Z" fill="url(#navy)"/>
+  <path d="M335 194L256 236V321L335 278Z" fill="url(#teal)"/>
+  <path d="M256 236V321" stroke="#ffffff" stroke-opacity=".52" stroke-width="4"/>
+  <path d="M177 194L256 236L335 194" fill="none" stroke="#ffffff" stroke-opacity=".38" stroke-width="4"/>
+
+  <!-- Integrated nameplate: part of the symbol rather than a detached caption. -->
+  <path d="M131 319C173 304 212 299 256 299C301 299 340 304 381 319L369 385C332 398 296 404 256 404C216 404 180 398 143 385Z"
+        fill="#ffffff"/>
+  <path d="M145 329C181 318 216 314 256 314C296 314 331 318 367 329L361 375C326 385 293 389 256 389C219 389 186 385 151 375Z"
+        fill="#0d3554"/>
+
+  <text x="256" y="354" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800"
+        letter-spacing="4" fill="#ffffff">KOFAD</text>
+  <text x="256" y="378" text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700"
+        letter-spacing="8" fill="#f0b33a">IMPEX</text>
+
+  <!-- Human finishing marks. -->
+  <circle cx="126" cy="122" r="6" fill="#16a6ad"/>
+  <circle cx="397" cy="363" r="5" fill="#f0b33a"/>
+</svg>
