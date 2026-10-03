@@ -11,7 +11,7 @@ from . import debts as debt_service
 from . import services as s
 from .models import (
     Closing, CommunicationSettings, Company, DebtSettings, Document, ManagementContact,
-    Message, Product, Stock,
+    Message, Party, Product, Stock,
 )
 from .sms.service import create_internal_draft, queue_automatic
 from .tests import Fixtures
