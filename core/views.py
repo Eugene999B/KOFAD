@@ -1290,6 +1290,8 @@ def communications(request, branch):
                     )
                     if len(prepared) == 1:
                         redirect_suffix = f"?wa={prepared[0].pk}"
+                    else:
+                        redirect_suffix = f"?wa_batch={key}"
             else:
                 raise ValidationError("Unknown message action.")
             return redirect("/communications/" + redirect_suffix)
@@ -1310,12 +1312,20 @@ def communications(request, branch):
             row.whatsapp_url = f"https://wa.me/{digits}?text={quote(row.body)}"
 
     whatsapp_launch = None
+    whatsapp_batch = []
     wa_id = request.GET.get("wa", "")
     if wa_id.isdigit():
         whatsapp_launch = next(
             (row for row in rows if row.pk == int(wa_id) and row.channel == "whatsapp"),
             None,
         )
+    wa_batch = request.GET.get("wa_batch", "").strip()
+    if wa_batch:
+        prefix = f"manual:{wa_batch}:"
+        whatsapp_batch = [
+            row for row in rows
+            if row.channel == "whatsapp" and (row.source_key or "").startswith(prefix)
+        ]
 
     parties = list(
         Party.objects.filter(branch=branch, kind="customer")
@@ -1329,6 +1339,7 @@ def communications(request, branch):
         "customer_count": len(parties),
         "rows": rows,
         "whatsapp_launch": whatsapp_launch,
+        "whatsapp_batch": whatsapp_batch,
         "communication_policy": communication_policy,
         "debt_policy": debt_policy,
         "sms_enabled": settings.SMS_ENABLED,
