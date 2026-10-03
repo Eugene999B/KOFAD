@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block actions %}<div class="actions">{% if perms.core.manage_company %}<a class="button secondary" href="{% url 'return_privileges' %}">Return privileges</a>{% endif %}<a class="button secondary" href="?{% if history %}{% else %}history=1{% endif %}">{% if history %}Show pending only{% else %}Include history{% endif %}</a></div>{% endblock %}
+{% block content %}
+<section class="hero-panel approval-hero">
+  <div><p class="eyebrow">CONTROL CENTRE</p><h2>One place for every decision that needs authority.</h2><p>Customer returns, supplier returns, financial corrections, payroll, accounting journals, inventory verification, damaged stock and daily closing are grouped here instead of being scattered across KOFAD.</p></div>
+  <div class="approval-hero-score"><span>Waiting</span><strong>{{ pending_count }}</strong><small>{% if can_approve %}Ready for your review{% else %}Requests you submitted{% endif %}</small></div>
+</section>
+
+<nav class="approval-tabs" aria-label="Approval categories">
+  <a href="{% url 'approval_center' %}{% if history %}?history=1{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>
+  {% for category in categories %}<a href="?category={{ category|urlencode }}{% if history %}&history=1{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}
+</nav>
+
+{% if groups %}
+<div class="approval-groups">
+{% for category, group in groups.items %}
+<section class="panel approval-section">
+  <div class="section-heading"><div><p class="eyebrow">{{ category|upper }}</p><h2>{{ group|length }} record{{ group|length|pluralize }}</h2></div><span class="pill">{{ category }}</span></div>
+  <div class="approval-card-grid">
+  {% for item in group %}
+    <article class="approval-card approval-risk-{{ item.severity }}">
+      <div class="approval-card-top">
+        <div><span class="approval-category">{{ item.category }}</span><h3>{{ item.title }}</h3><p>{{ item.detail }}</p></div>
+        <span class="pill">{{ item.status|title }}</span>
+      </div>
+      <div class="approval-facts">
+        {% if item.amount != None %}<div><small>Value</small><strong>{{ company.currency }} {{ item.amount|floatformat:2 }}</strong></div>{% endif %}
+        <div><small>Requested by</small><strong>{{ item.requested_by|default:"System" }}</strong></div>
+        <div><small>When</small><strong>{{ item.created_at|date:"d M, H:i" }}</strong></div>
+        <div><small>Risk</small><strong>{{ item.severity|title }}</strong></div>
+      </div>
+      <div class="approval-card-actions">
+        <a class="button secondary" href="{{ item.href }}">Open source</a>
+        {% if can_approve and item.status in "requested submitted prepared pending" %}
+        <form method="post" action="{% url 'approval_action' %}" class="approval-decision-form">{% csrf_token %}
+          <input type="hidden" name="type" value="{{ item.type }}"><input type="hidden" name="id" value="{{ item.id }}">
+          <label class="sr-only" for="note-{{ item.type }}-{{ item.id }}">Review note</label><input id="note-{{ item.type }}-{{ item.id }}" name="note" placeholder="Optional review note">
+          <button class="button" name="action" value="approve">Approve</button>
+          {% if item.can_reject %}<button class="button secondary danger" name="action" value="reject">Reject</button>{% endif %}
+        </form>
+        {% elif item.reviewed_by %}<small>Reviewed by {{ item.reviewed_by }}</small>{% else %}<small>Waiting for authorized review.</small>{% endif %}
+      </div>
+    </article>
+  {% endfor %}
+  </div>
+</section>
+{% endfor %}
+</div>
+{% else %}
+<section class="panel empty approval-empty"><strong>No approvals are waiting.</strong><p>{% if history %}No records match this view.{% else %}KOFAD has no pending controlled actions for your account right now.{% endif %}</p></section>
+{% endif %}
+{% endblock %}
