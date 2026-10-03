@@ -1,11 +1,10 @@
-import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -298,7 +297,7 @@ def payroll_rules(request, branch):
                     effective_to__isnull=True,
                 ).order_by("-effective_from").first()
                 if previous:
-                    previous.effective_to = effective - timezone.timedelta(days=1)
+                    previous.effective_to = effective - timedelta(days=1)
                     previous.save(update_fields=["effective_to"])
                 rule = PayrollRule.objects.create(
                     code="GH-PAYROLL", name=request.POST.get("name", "").strip()[:160] or f"Ghana payroll rules · {effective}",
