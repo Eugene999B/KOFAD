@@ -854,75 +854,151 @@ def finance(request, branch):
         "recent": Document.objects.filter(branch=branch, kind__in=["expense", "collection", "supplier_payment"])[:20]})
 
 
-@protected("approve_operations")
+@protected("operate_sales|approve_operations|manage_company")
 def returns(request, branch):
+    from . import returns as return_controls
+    from .models import CustomerReturnRequest
+
+    if not (
+        request.user.is_superuser or request.user.has_perm("core.manage_company")
+        or request.user.has_perm("core.operate_sales") or request.user.has_perm("core.approve_operations")
+    ):
+        raise PermissionDenied("Sales or return-control access is required.")
+
+    query = request.GET.get("q", "").strip()[:100]
+    sale_id = request.GET.get("sale", "").strip()
+    sales = Document.objects.filter(branch=branch, kind="sale").select_related("party")
+    if query:
+        sales = sales.filter(
+            Q(reference__icontains=query) | Q(party__name__icontains=query) | Q(party__phone__icontains=query)
+        )
+    else:
+        sales = sales.none()
+    sales = sales.order_by("-created_at")[:40]
+
+    selected = None
+    if sale_id:
+        selected = Document.objects.filter(pk=sale_id, branch=branch, kind="sale").select_related("party").first()
+    elif query and len(sales) == 1:
+        selected = sales[0]
+
     if request.method == "POST":
         try:
-            doc = s.post_return(request.user, branch, request.POST.dict(), request.POST.get("key"))
-            return redirect("document", pk=doc.pk)
-        except (ValidationError, ValueError) as exc:
+            selected = get_object_or_404(Document, pk=request.POST.get("sale"), branch=branch, kind="sale")
+            lines = []
+            for line in selected.lines.all():
+                if request.POST.get(f"selected_{line.pk}") == "on":
+                    lines.append({
+                        "line": str(line.pk),
+                        "quantity": request.POST.get(f"quantity_{line.pk}", ""),
+                        "disposition": request.POST.get(f"disposition_{line.pk}", "sellable"),
+                    })
+            item, direct = return_controls.create_customer_return(
+                request.user, branch, selected, lines,
+                request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
+            )
+            if direct and item.posted_id:
+                messages.success(request, f"Customer return {item.posted.reference} posted immediately under direct-return authority.")
+                return redirect("document", pk=item.posted_id)
+            messages.success(request, "Customer return sent to the Approval Center. Stock, debt and cash remain unchanged until approval.")
+            return redirect(f"/returns/?sale={selected.pk}")
+        except (ValidationError, PermissionDenied, ValueError) as exc:
             messages.error(request, problem(exc))
-    ref = request.GET.get("q", "")
-    lines = Line.objects.filter(document__branch=branch, document__kind="sale", document__reference=ref)
-    return render(request, "returns.html", {"title": "Returns", "lines": lines, "q": ref,
-        "key": request.POST.get("key") or str(uuid.uuid4()), "methods": s.active_payment_methods()})
+
+    line_rows = return_controls.sale_return_rows(selected) if selected else []
+    history = CustomerReturnRequest.objects.filter(branch=branch).select_related(
+        "sale", "sale__party", "requested_by", "reviewed_by", "posted"
+    ).prefetch_related("lines")
+    if selected:
+        history = history.filter(sale=selected)
+    return render(request, "returns.html", {
+        "title": "Customer Returns", "q": query, "sales": sales, "selected": selected,
+        "line_rows": line_rows, "methods": s.active_payment_methods(),
+        "direct_authority": return_controls.can_direct_return(request.user, branch, "customer"),
+        "history": history[:80],
+    })
 
 
-@protected("operate_inventory|approve_operations|operate_finance")
+@protected("operate_inventory|approve_operations|operate_finance|manage_company")
 def supplier_returns(request, branch):
     from . import inventory_exceptions as ix
+    from .returns import can_direct_return
+
     if request.method == "POST":
         try:
-            action = request.POST.get("action", "request")
-            if action == "request":
-                ix.request_supplier_return(
-                    request.user, branch, request.POST.get("line"), request.POST.get("quantity"),
-                    request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
-                )
-                messages.success(request, "Supplier return submitted for independent review.")
-            elif action in ("approve", "reject"):
-                ix.review_supplier_return(request.user, branch, request.POST.get("id"), action == "approve")
-                messages.success(request, "Supplier return review recorded.")
-            else:
-                raise ValidationError("Choose a valid supplier-return action.")
+            selected_ids = request.POST.getlist("selected")
+            if not selected_ids and request.POST.get("line"):
+                selected_ids = [request.POST.get("line")]
+            if not selected_ids:
+                raise ValidationError("Select at least one purchase item to return.")
+            completed = []
+            direct = can_direct_return(request.user, branch, "supplier")
+            with transaction.atomic():
+                for line_id in selected_ids:
+                    item = ix.request_supplier_return(
+                        request.user, branch, line_id, request.POST.get(f"quantity_{line_id}") or request.POST.get("quantity"),
+                        request.POST.get("reason", ""), request.POST.get("refund_method", "cash"),
+                        direct=direct,
+                    )
+                    completed.append(item)
+            messages.success(
+                request,
+                f"{len(completed)} supplier return item(s) {'posted immediately under direct authority' if direct else 'sent to the Approval Center'}."
+            )
             return redirect("supplier_returns")
-        except (ValidationError, ValueError) as exc:
+        except (ValidationError, PermissionDenied, ValueError) as exc:
             messages.error(request, problem(exc))
-    ref = request.GET.get("q", "").strip()[:100]
-    lines = Line.objects.filter(document__branch=branch, document__kind="purchase")
-    if ref:
-        lines = lines.filter(document__reference=ref)
+
+    query = request.GET.get("q", "").strip()[:100]
+    purchase_ids = Document.objects.filter(branch=branch, kind="purchase")
+    if query:
+        purchase_ids = purchase_ids.filter(
+            Q(reference__icontains=query) | Q(external_reference__icontains=query)
+            | Q(party__name__icontains=query) | Q(party__phone__icontains=query)
+        ).values_list("pk", flat=True)
+        lines = Line.objects.filter(document_id__in=purchase_ids).select_related("document", "document__party", "product")
     else:
-        lines = lines.none()
+        lines = Line.objects.none()
+    line_rows = []
+    for line in lines[:100]:
+        reserved = SupplierReturn.objects.filter(
+            source_line=line, status__in=["requested", "approved"]
+        ).aggregate(total=Sum("quantity"))["total"] or 0
+        line_rows.append({"line": line, "eligible": max(line.quantity - reserved, 0), "reserved": reserved})
     return render(request, "supplier_returns.html", {
-        "title": "Supplier returns",
-        "q": ref,
-        "lines": lines.select_related("document", "document__party", "product"),
+        "title": "Supplier Returns", "q": query, "line_rows": line_rows,
         "methods": s.active_payment_methods(),
+        "direct_authority": can_direct_return(request.user, branch, "supplier"),
         "rows": SupplierReturn.objects.filter(branch=branch).select_related(
-            "source_line__product", "source_line__document", "requested_by", "reviewed_by", "posted"
+            "source_line__product", "source_line__document", "source_line__document__party",
+            "requested_by", "reviewed_by", "posted"
         )[:100],
     })
 
 
-@protected("operate_inventory|approve_operations")
+@protected("operate_inventory|approve_operations|manage_company")
 def quarantine(request, branch):
     from . import inventory_exceptions as ix
     if request.method == "POST":
         try:
             action = request.POST.get("action", "request")
             if action == "request":
+                direct = request.user.is_superuser or request.user.has_perm("core.manage_company")
                 ix.request_quarantine(
                     request.user, branch, request.POST.get("product"), request.POST.get("quantity"),
-                    request.POST.get("reason", ""),
+                    request.POST.get("reason", ""), direct=direct,
                 )
-                messages.success(request, "Quarantine request submitted for independent review.")
+                messages.success(request, "Damaged stock moved to quarantine under owner authority." if direct else "Quarantine request submitted for approval.")
             elif action in ("approve", "reject"):
-                ix.review_quarantine(request.user, branch, request.POST.get("id"), action == "approve")
+                ix.review_quarantine(
+                    request.user, branch, request.POST.get("id"), action == "approve",
+                    direct=request.user.is_superuser or request.user.has_perm("core.manage_company"),
+                )
                 messages.success(request, "Quarantine review recorded.")
             elif action in ("release", "writeoff"):
                 ix.resolve_quarantine(
-                    request.user, branch, request.POST.get("id"), action, request.POST.get("note", "")
+                    request.user, branch, request.POST.get("id"), action, request.POST.get("note", ""),
+                    owner_direct=request.user.is_superuser or request.user.has_perm("core.manage_company"),
                 )
                 messages.success(request, "Quarantine resolution recorded.")
             else:
@@ -941,6 +1017,13 @@ def quarantine(request, branch):
 
 @protected("operate_inventory|approve_operations")
 def operations(request, branch):
+    # Production KOFAD is intentionally single-store: Stock Operations is retired.
+    # The legacy flow remains reachable only in DEBUG so the isolated historical
+    # browser-smoke fixture can exercise transfer invariants without exposing the
+    # workflow to real users.
+    if not settings.DEBUG:
+        messages.info(request, "Stock Operations has been retired for the current single-store KOFAD setup. Use Inventory Verification for discrepancies and Purchasing for stock receipts.")
+        return redirect("inventory")
     if request.method == "POST":
         try:
             if request.POST.get("action") == "request":
@@ -955,7 +1038,7 @@ def operations(request, branch):
                     if action == "receive" and not request.POST.get("received_quantity", "").strip():
                         raise ValidationError("Enter the number of sellable units actually received, including zero.")
                     s.advance_operation(request.user, op.pk, action, request.POST.get("received_quantity"), request.POST.get("note", ""))
-            messages.success(request, "Stock operation recorded.")
+            messages.success(request, "Stock operation recorded in isolated DEBUG verification.")
             return redirect("operations")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
@@ -968,7 +1051,7 @@ def operations(request, branch):
         "movements": Movement.objects.filter(branch=branch).select_related("product", "actor")[:100]})
 
 
-@protected("operate_finance")
+@protected("operate_finance|manage_company")
 def closings(request, branch):
     today = timezone.localdate()
     raw_day = request.POST.get("date") if request.method == "POST" else request.GET.get("date")
@@ -983,7 +1066,8 @@ def closings(request, branch):
                 s.verify_closing(request.user, get_object_or_404(Closing, pk=request.POST.get("id"), branch=branch))
                 messages.success(request, "Daily closing independently verified.")
             else:
-                s.submit_closing(
+                owner_direct = request.user.is_superuser or request.user.has_perm("core.manage_company")
+                closing = s.submit_closing(
                     request.user,
                     branch,
                     selected_day,
@@ -992,8 +1076,14 @@ def closings(request, branch):
                     request.POST.get("opening_cash", 0),
                     request.POST.get("cash_in", 0),
                     request.POST.get("cash_out", 0),
+                    owner_direct=owner_direct,
                 )
-                messages.success(request, "Daily closing submitted and the day is now locked.")
+                messages.success(
+                    request,
+                    "Daily closing submitted and finalized under owner authority."
+                    if owner_direct else
+                    "Daily closing submitted and sent to the Approval Center for verification."
+                )
             return redirect(f"/closings/?date={selected_day.isoformat()}")
         except (ValidationError, ValueError) as exc:
             messages.error(request, problem(exc))
@@ -1042,23 +1132,24 @@ def report_data(request, branch):
     }, FAMILIES
 
 
-@protected("view_reports")
+@protected("view_reports|manage_company")
 def reports(request, branch):
     from .accounting_views import EXPENSE_CATEGORIES
-    from .reporting import business_kpis
+    from .approval_views import _approval_items
+    from .business_intelligence import intelligence
     rows, columns, filters, families = report_data(request, branch)
     page = Paginator(rows, 100).get_page(request.GET.get("page"))
     page_query = request.GET.copy()
     page_query.pop("page", None)
     first, last = date.fromisoformat(filters["start"]), date.fromisoformat(filters["end"])
-    kpis = business_kpis(branch, first, last)
+    intel = intelligence(branch, first, last, pending_approvals=len(_approval_items(request.user, branch)))
     return render(request, "reports.html", {
-        "title": "Business intelligence",
+        "title": "Business Intelligence",
         "rows": [[row[key] for key, label in columns] for row in page],
         "page": page, "page_query": page_query.urlencode(),
         "headers": [label for key, label in columns], "filters": filters,
         "families": families.items(), "report_title": families[filters["family"]],
-        "query": request.GET.urlencode(), "kpis": kpis,
+        "query": request.GET.urlencode(), "intelligence": intel,
         "expense_categories": EXPENSE_CATEGORIES, "payment_methods": Payment.METHODS,
     })
 
@@ -1092,10 +1183,58 @@ def export_report(request, branch, format):
     )
 
 
-@protected("view_reports")
+@protected("view_reports|manage_company")
 def audit_log(request, branch):
-    return render(request, "audit.html", {"title": "Audit trail",
-        "rows": Audit.objects.filter(Q(branch=branch) | Q(branch__isnull=True, actor=request.user)).select_related("actor")[:300]})
+    query = request.GET.get("q", "").strip()[:100]
+    category = request.GET.get("category", "").strip()[:32]
+    severity = request.GET.get("severity", "").strip()[:12]
+    actor = request.GET.get("actor", "").strip()
+    start = request.GET.get("start", "")
+    end = request.GET.get("end", "")
+    rows = Audit.objects.filter(Q(branch=branch) | Q(branch__isnull=True, actor=request.user)).select_related("actor")
+    if query:
+        rows = rows.filter(Q(action__icontains=query) | Q(reference__icontains=query) | Q(entity_id__icontains=query))
+    if category:
+        rows = rows.filter(category=category)
+    if severity:
+        rows = rows.filter(severity=severity)
+    if actor.isdigit():
+        rows = rows.filter(actor_id=int(actor))
+    try:
+        if start:
+            rows = rows.filter(created_at__date__gte=date.fromisoformat(start))
+        if end:
+            rows = rows.filter(created_at__date__lte=date.fromisoformat(end))
+    except ValueError:
+        messages.error(request, "Choose valid audit dates.")
+    rows = list(rows[:500])
+    chain_ok = True
+    for row in rows:
+        if not row.event_hash:
+            row.integrity_ok = None
+            continue
+        digest_ok = s.audit_hash_for(row) == row.event_hash
+        predecessor_ok = (
+            not row.previous_hash
+            or Audit.objects.filter(branch=row.branch, event_hash=row.previous_hash).exists()
+        )
+        row.integrity_ok = digest_ok and predecessor_ok
+        if not row.integrity_ok:
+            chain_ok = False
+    categories = Audit.objects.filter(branch=branch).exclude(category="").values_list("category", flat=True).distinct()
+    actors = User.objects.filter(audit__branch=branch).distinct().order_by("username")
+    summary = {
+        "events": len(rows),
+        "high": sum(1 for row in rows if row.severity in {"high", "critical"}),
+        "approvals": sum(1 for row in rows if "approved" in row.action or "verified" in row.action),
+        "sealed": sum(1 for row in rows if row.event_hash),
+    }
+    return render(request, "audit.html", {
+        "title": "Audit Intelligence", "rows": rows, "summary": summary,
+        "categories": categories, "actors": actors, "selected_category": category,
+        "selected_severity": severity, "selected_actor": actor, "q": query,
+        "start": start, "end": end, "chain_ok": chain_ok,
+    })
 
 
 def _settings_form(request, branch, form_class, title, description, action):
@@ -1506,18 +1645,23 @@ def communication_status(request, branch):
     return JsonResponse({"messages": payload})
 
 
-@protected("operate_finance")
+@protected("operate_finance|manage_company")
 def corrections(request, branch):
     if request.method == "POST":
         try:
             if request.POST.get("action") == "request":
-                s.request_correction(request.user,branch,request.POST.get("original"),request.POST.get("reason",""),request.POST.get("refund_method","cash"))
+                item = s.request_correction(request.user,branch,request.POST.get("original"),request.POST.get("reason",""),request.POST.get("refund_method","cash"))
+                if request.user.is_superuser or request.user.has_perm("core.manage_company"):
+                    s.review_correction(request.user, branch, item.pk, True, owner_direct=True)
             else:
                 item = get_object_or_404(Correction,pk=request.POST.get("id"),original__branch=branch)
                 action = request.POST.get("action")
                 if action not in ("approve","reject"):
                     raise ValidationError("Invalid review action.")
-                s.review_correction(request.user,branch,item.pk,action=="approve")
+                s.review_correction(
+                    request.user, branch, item.pk, action=="approve",
+                    owner_direct=request.user.is_superuser or request.user.has_perm("core.manage_company"),
+                )
             messages.success(request,"Correction request recorded.")
             return redirect("corrections")
         except (ValidationError,ValueError) as exc:

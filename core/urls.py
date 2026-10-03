@@ -5,10 +5,14 @@ from . import count_views
 from . import admin_views
 from . import export_views
 from . import maintenance_views
-from . import accounting_views, creditor_views, payroll_views, workforce_views
+from . import accounting_views, approval_views, creditor_views, payroll_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
+    path("approvals/", approval_views.approval_center, name="approval_center"),
+    path("approvals/action/", approval_views.approval_action, name="approval_action"),
+    path("api/approvals/summary/", approval_views.approval_summary, name="approval_summary"),
+    path("settings/return-privileges/", approval_views.return_privileges, name="return_privileges"),
     path("forgot-password/", accounts.forgot_password, name="forgot_password"),
     path("forgot-password/code/", accounts.reset_password, name="reset_password"),
     path("stock-counts/", count_views.index, name="stock_counts"),

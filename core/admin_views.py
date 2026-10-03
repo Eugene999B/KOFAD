@@ -20,9 +20,9 @@ ROLE_PERMISSION_CODES = [
 
 PERMISSION_HELP = {
     "operate_sales": ("Sales", "Create sales, use the counter and work with customer-facing sales records."),
-    "operate_inventory": ("Inventory", "Receive purchases, request stock changes and work with stock operations."),
+    "operate_inventory": ("Inventory", "Receive purchases, manage inventory, Supplier Returns and Inventory Verification."),
     "operate_finance": ("Finance", "Record expenses, customer collections, supplier payments and daily closing."),
-    "approve_operations": ("Approvals", "Review controlled stock operations, returns, corrections and closing verification."),
+    "approve_operations": ("Approvals", "Review controlled returns, inventory verification, accounting, payroll, corrections and closing verification."),
     "view_reports": ("Reports", "View business reports, cost/profit information and audit evidence."),
     "manage_company": ("Administration", "Manage company settings, staff accounts, roles and system configuration."),
     "send_messages": ("Communications", "Queue and retry approved customer SMS messages."),
@@ -36,7 +36,7 @@ ROLE_DESCRIPTIONS = {
     "Owner": "Full business control, reporting, administration and approvals.",
     "Manager": "Daily operational control across sales, stock, finance, reports and approvals.",
     "Cashier": "Fast counter sales and quick customer creation.",
-    "Storekeeper": "Purchasing, inventory and stock-operation work.",
+    "Storekeeper": "Purchasing, inventory, Supplier Returns and Inventory Verification.",
     "Accountant": "Finance, receivables/payables and reporting.",
     "Auditor": "Read-only business reporting and audit visibility.",
 }

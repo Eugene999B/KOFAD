@@ -2,7 +2,7 @@ import calendar
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -262,11 +262,13 @@ def prepare_period(user, period):
 
 
 @transaction.atomic
-def approve_period(user, period):
+def approve_period(user, period, owner_direct=False):
+    if owner_direct and not (user.is_superuser or user.has_perm("core.manage_company")):
+        raise PermissionDenied("Owner / company administrator authority is required.")
     locked = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
     if locked.status != "prepared":
         raise ValidationError("Payroll must be prepared before approval.")
-    if locked.prepared_by_id == user.pk:
+    if locked.prepared_by_id == user.pk and not owner_direct:
         raise ValidationError("A different authorised user must approve payroll.")
     locked.status = "approved"
     locked.approved_by = user

@@ -52,7 +52,7 @@ def _period_summary(period):
     }
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payroll(request, branch):
     if request.method == "POST":
         permit(request.user, branch, "operate_finance")
@@ -89,7 +89,7 @@ def payroll(request, branch):
     })
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payroll_period(request, branch, pk):
     period = get_object_or_404(
         PayrollPeriod.objects.select_related("rule", "prepared_by", "approved_by", "locked_by"),
@@ -145,7 +145,7 @@ def payroll_entry_update(request, branch, pk, entry_id):
     return redirect("payroll_period", pk=period.pk)
 
 
-@protected("operate_finance")
+@protected("operate_finance|manage_company")
 @require_POST
 def payroll_action(request, branch, pk):
     period = get_object_or_404(PayrollPeriod, pk=pk, branch=branch)
@@ -159,10 +159,17 @@ def payroll_action(request, branch, pk):
         elif action == "prepare":
             period, issues = engine.prepare_period(request.user, period)
             audit(request.user, branch, "payroll.prepared", period.pk, {"issues": issues, "totals": {k: str(v) for k, v in engine.period_totals(period).items()}})
-            messages.success(request, "Payroll prepared for independent review.")
+            if request.user.is_superuser or request.user.has_perm("core.manage_company"):
+                period = engine.approve_period(request.user, period, owner_direct=True)
+                audit(request.user, branch, "payroll.approved", period.pk, {"approved_by": request.user.username, "owner_direct": True})
+                messages.success(request, "Payroll prepared and owner-approved. Locking for payment remains a separate control.")
+            else:
+                messages.success(request, "Payroll prepared and sent to the Approval Center.")
         elif action == "approve":
-            permit(request.user, branch, "approve_operations")
-            period = engine.approve_period(request.user, period)
+            owner_direct = request.user.is_superuser or request.user.has_perm("core.manage_company")
+            if not owner_direct:
+                permit(request.user, branch, "approve_operations")
+            period = engine.approve_period(request.user, period, owner_direct=owner_direct)
             audit(request.user, branch, "payroll.approved", period.pk, {"approved_by": request.user.username})
             messages.success(request, "Payroll approved by an independent reviewer.")
         elif action == "lock":
@@ -210,7 +217,7 @@ def payroll_payment(request, branch, pk, entry_id):
     return redirect("payroll_period", pk=period.pk)
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payroll_export(request, branch, pk, format):
     period = get_object_or_404(PayrollPeriod.objects.select_related("rule"), pk=pk, branch=branch)
     rows = []
@@ -251,7 +258,7 @@ def payroll_export(request, branch, pk, format):
     )
 
 
-@protected("operate_finance|view_reports")
+@protected("operate_finance|view_reports|manage_company")
 def payslip(request, branch, pk, entry_id, format="pdf"):
     period = get_object_or_404(PayrollPeriod, pk=pk, branch=branch)
     entry = get_object_or_404(PayrollEntry.objects.select_related("worker", "period__rule"), pk=entry_id, period=period)

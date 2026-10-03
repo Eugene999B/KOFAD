@@ -11,7 +11,7 @@ from django.utils import timezone
 from . import services as s
 from .context import shell
 from .exports import export
-from .models import Audit, Closing, Document, Movement, Operation, Party, Product, QuarantineItem, Stock, SupplierReturn
+from .models import Audit, Closing, CustomerReturnRequest, Document, Movement, Party, Product, QuarantineItem, Stock, SupplierReturn
 
 
 DATASETS = {
@@ -26,7 +26,7 @@ DATASETS = {
     "payments": ("Payments & collections", ("operate_finance", "view_reports")),
     "transactions": ("All transactions", ("view_reports",)),
     "movements": ("Stock movement ledger", ("operate_inventory", "view_reports")),
-    "operations": ("Stock operations & transfers", ("operate_inventory", "approve_operations", "view_reports")),
+    "customer_returns": ("Customer returns", ("operate_sales", "operate_finance", "view_reports")),
     "supplier_returns": ("Supplier returns", ("operate_inventory", "operate_finance", "view_reports")),
     "quarantine": ("Damaged-stock quarantine", ("operate_inventory", "approve_operations", "view_reports")),
     "closings": ("Daily closings", ("operate_finance", "view_reports")),
@@ -213,35 +213,33 @@ def _rows(request, dataset, branch, first, last):
             ("balance", "Balance"), ("reference", "Source"), ("reason", "Reason"), ("staff", "Staff"),
         ]
 
-    if dataset == "operations":
-        ops = Operation.objects.filter(
-            Q(branch=branch) | Q(destination=branch),
-            created_at__date__gte=first, created_at__date__lte=last,
-        ).select_related("product", "branch", "destination", "requested_by", "approved_by",
-                         "receipt", "receipt__resolved_by", "receipt__loss_document").order_by("-created_at")
+    if dataset == "customer_returns":
         rows = []
-        for row in ops:
-            receipt = getattr(row, "receipt", None)
+        for row in CustomerReturnRequest.objects.filter(
+            branch=branch, created_at__date__gte=first, created_at__date__lte=last
+        ).select_related("sale", "sale__party", "requested_by", "reviewed_by", "posted").prefetch_related(
+            "lines", "lines__source_line", "lines__source_line__product"
+        ).order_by("-created_at"):
+            value = sum((line.source_line.unit_price * line.quantity for line in row.lines.all()), Decimal("0"))
             rows.append({
                 "date": timezone.localtime(row.created_at).strftime("%Y-%m-%d %H:%M"),
-                "product": row.product.name,
-                "type": row.get_kind_display(),
-                "quantity": row.quantity,
-                "route": f"{row.branch.name} → {row.destination.name}" if row.destination else row.branch.name,
-                "status": row.status,
+                "sale": row.sale.reference,
+                "customer": row.sale.party.name if row.sale.party else "Walk-in customer",
+                "items": row.lines.count(),
+                "value": value,
+                "refund_method": row.get_refund_method_display(),
+                "status": row.get_status_display(),
+                "authority": "Direct" if row.direct else "Approval controlled",
                 "requested_by": row.requested_by.username,
-                "approved_by": row.approved_by.username if row.approved_by else "",
-                "received": receipt.quantity if receipt else "",
-                "missing": receipt.missing if receipt else "",
-                "resolution": receipt.resolution if receipt else "",
-                "loss_document": receipt.loss_document.reference if receipt and receipt.loss_document_id else "",
+                "reviewed_by": row.reviewed_by.username if row.reviewed_by else "",
+                "posted": row.posted.reference if row.posted else "",
                 "reason": row.reason,
             })
         return rows, [
-            ("date", "Date"), ("product", "Product"), ("type", "Operation"), ("quantity", "Quantity"),
-            ("route", "Route"), ("status", "Status"), ("requested_by", "Requested by"),
-            ("approved_by", "Approved by"), ("received", "Received"), ("missing", "Missing"),
-            ("resolution", "Resolution"), ("loss_document", "Loss document"), ("reason", "Reason"),
+            ("date", "Date"), ("sale", "Original sale"), ("customer", "Customer"),
+            ("items", "Item lines"), ("value", "Return value"), ("refund_method", "Refund channel"),
+            ("status", "Status"), ("authority", "Authority"), ("requested_by", "Requested by"),
+            ("reviewed_by", "Reviewed by"), ("posted", "Posted document"), ("reason", "Reason"),
         ]
 
     if dataset == "supplier_returns":
@@ -371,17 +369,40 @@ def _rows(request, dataset, branch, first, last):
         ]
 
     if dataset == "audit":
-        rows = [{
-            "date": timezone.localtime(row.created_at).strftime("%Y-%m-%d %H:%M:%S"),
-            "actor": row.actor.username if row.actor else "System", "event": row.action,
-            "reference": row.reference, "evidence": json.dumps(row.detail, sort_keys=True, default=str),
-        } for row in Audit.objects.filter(
+        rows = []
+        for row in Audit.objects.filter(
             Q(branch=branch) | Q(branch__isnull=True),
             created_at__date__gte=first, created_at__date__lte=last,
-        ).select_related("actor").order_by("-created_at")]
+        ).select_related("actor").order_by("-created_at"):
+            integrity = ""
+            if row.event_hash:
+                predecessor_ok = not row.previous_hash or Audit.objects.filter(
+                    branch=row.branch, event_hash=row.previous_hash
+                ).exists()
+                integrity = "Verified" if s.audit_hash_for(row) == row.event_hash and predecessor_ok else "Review required"
+            else:
+                integrity = "Legacy unsealed"
+            rows.append({
+                "date": timezone.localtime(row.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+                "event_id": str(row.event_id),
+                "actor": row.actor.username if row.actor else "System",
+                "category": row.category,
+                "severity": row.severity,
+                "event": row.action,
+                "reference": row.reference,
+                "entity_type": row.entity_type,
+                "entity_id": row.entity_id,
+                "integrity": integrity,
+                "event_hash": row.event_hash,
+                "previous_hash": row.previous_hash,
+                "evidence": json.dumps(row.detail, sort_keys=True, default=str),
+            })
         return rows, [
-            ("date", "Timestamp"), ("actor", "Actor"), ("event", "Event"),
-            ("reference", "Reference"), ("evidence", "Evidence"),
+            ("date", "Timestamp"), ("event_id", "Event ID"), ("actor", "Actor"),
+            ("category", "Category"), ("severity", "Severity"), ("event", "Event"),
+            ("reference", "Reference"), ("entity_type", "Entity type"), ("entity_id", "Entity ID"),
+            ("integrity", "Integrity"), ("event_hash", "Event hash"), ("previous_hash", "Previous hash"),
+            ("evidence", "Structured evidence"),
         ]
 
     if dataset == "workers":

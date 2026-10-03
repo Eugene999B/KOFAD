@@ -1,17 +1,16 @@
-from collections import defaultdict
-from datetime import date, timedelta
-from decimal import Decimal
+from datetime import date
 
-from django.core.exceptions import ValidationError
-from django.db.models import Sum
-from django.shortcuts import render
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from . import accounting_engine as engine
+from . import services as s
 from .context import shell
 from .exports import export
-from .models import Document, Line, Payment, PayrollEntry, PayrollPayment, Stock
-from .services import audit, balance
-from .views import protected
+from .models import ManualJournal, Payment
+from .views import problem, protected
 
 
 EXPENSE_CATEGORIES = [
@@ -28,8 +27,6 @@ EXPENSE_CATEGORIES = [
     ("professional", "Professional services"),
     ("other", "Other"),
 ]
-CATEGORY_LABELS = dict(EXPENSE_CATEGORIES)
-ZERO = Decimal("0")
 
 
 def _range(request):
@@ -45,215 +42,151 @@ def _range(request):
     return first, last, start, end
 
 
-def _sum(queryset, field="total"):
-    return queryset.aggregate(value=Sum(field))["value"] or ZERO
-
-
-def accounting_snapshot(branch, first, last, category="", method=""):
-    docs = Document.objects.filter(branch=branch, created_at__date__range=(first, last))
-    sales = _sum(docs.filter(kind="sale"))
-    returns = _sum(docs.filter(kind="return"))
-    net_sales = sales - returns
-
-    cogs = ZERO
-    sales_lines = Line.objects.filter(
-        document__branch=branch, document__created_at__date__range=(first, last),
-        document__kind__in=["sale", "return"],
-    ).select_related("document")
-    for line in sales_lines:
-        amount = line.unit_cost * line.quantity * line.factor
-        cogs += -amount if line.document.kind == "return" else amount
-    gross_profit = net_sales - cogs
-
-    expense_docs = docs.filter(kind="expense")
-    if category:
-        expense_docs = expense_docs.filter(expense_category=category)
-    expenses = _sum(expense_docs)
-    reversals = docs.filter(kind="reversal", original__kind="expense")
-    if category:
-        reversals = reversals.filter(original__expense_category=category)
-    expenses -= _sum(reversals)
-    payable_expense_categories = {
-        "transport", "fuel", "utilities", "rent", "maintenance",
-        "professional", "tax", "staff", "other",
-    }
-    creditor_expenses = Document.objects.filter(
-        branch=branch, kind="creditor_charge",
-        document_date__range=(first, last),
-        payable_category__in=payable_expense_categories,
-    ).exclude(correction__status="approved")
-    if category:
-        creditor_category = "staff" if category == "salary" else category
-        creditor_expenses = creditor_expenses.filter(payable_category=creditor_category)
-    expenses += _sum(creditor_expenses)
-    inventory_losses = _sum(docs.filter(kind="inventory_writeoff"))
-
-    payroll_entries = PayrollEntry.objects.filter(
-        period__branch=branch,
-        period__end_date__range=(first, last),
-        period__status__in=["locked", "reconciled"],
-    )
-    payroll = payroll_entries.aggregate(gross=Sum("gross_pay"), employer=Sum("employer_pension"))
-    payroll_gross = payroll["gross"] or ZERO
-    employer_pension = payroll["employer"] or ZERO
-    payroll_cost = payroll_gross + employer_pension
-
-    operating_result = gross_profit - expenses - inventory_losses - payroll_cost
-    gross_margin = (gross_profit / net_sales * 100) if net_sales else ZERO
-    operating_margin = (operating_result / net_sales * 100) if net_sales else ZERO
-
-    current_receivables = ZERO
-    for doc in Document.objects.filter(branch=branch, kind="sale", party__isnull=False):
-        current_receivables += max(ZERO, balance(doc))
-    current_payables = ZERO
-    for doc in Document.objects.filter(branch=branch, kind__in=["purchase", "creditor_charge"], party__isnull=False):
-        current_payables += max(ZERO, balance(doc))
-    stock_value = sum((row.quantity * row.product.cost for row in Stock.objects.filter(branch=branch).select_related("product")), ZERO)
-
-    payment_rows = Payment.objects.filter(
-        document__branch=branch, document__created_at__date__range=(first, last)
-    )
-    if method:
-        payment_rows = payment_rows.filter(method=method)
-    channels = defaultdict(lambda: {"in": ZERO, "out": ZERO, "net": ZERO})
-    for payment in payment_rows:
-        bucket = channels[payment.method]
-        if payment.direction > 0:
-            bucket["in"] += payment.amount
-        else:
-            bucket["out"] += payment.amount
-        bucket["net"] += payment.amount * payment.direction
-    salary_payments = PayrollPayment.objects.filter(
-        entry__period__branch=branch, created_at__date__range=(first, last)
-    )
-    if method:
-        salary_payments = salary_payments.filter(method=method)
-    for payment in salary_payments:
-        bucket = channels[payment.method]
-        bucket["out"] += payment.amount
-        bucket["net"] -= payment.amount
-
-    expense_breakdown = defaultdict(lambda: ZERO)
-    base_expenses = docs.filter(kind="expense")
-    for row in base_expenses:
-        expense_breakdown[row.expense_category or "other"] += row.total
-    for row in docs.filter(kind="reversal", original__kind="expense").select_related("original"):
-        expense_breakdown[row.original.expense_category or "other"] -= row.total
-    for row in Document.objects.filter(
-        branch=branch, kind="creditor_charge",
-        document_date__range=(first, last),
-        payable_category__in=payable_expense_categories,
-    ).exclude(correction__status="approved"):
-        expense_breakdown[row.payable_category or "other"] += row.total
-    expense_rows = [
-        {"code": code, "category": CATEGORY_LABELS.get(code, code.replace("_", " ").title()), "amount": amount}
-        for code, amount in sorted(expense_breakdown.items(), key=lambda item: item[1], reverse=True)
-    ]
-
-    trend = []
-    cursor = first.replace(day=1)
-    while cursor <= last:
-        next_month = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
-        month_last = min(last, next_month - timedelta(days=1))
-        month_first = max(first, cursor)
-        month_docs = Document.objects.filter(branch=branch, created_at__date__range=(month_first, month_last))
-        month_sales = _sum(month_docs.filter(kind="sale")) - _sum(month_docs.filter(kind="return"))
-        month_expense = _sum(month_docs.filter(kind="expense")) - _sum(month_docs.filter(kind="reversal", original__kind="expense"))
-        month_expense += _sum(Document.objects.filter(
-            branch=branch, kind="creditor_charge",
-            document_date__range=(month_first, month_last),
-            payable_category__in=payable_expense_categories,
-        ).exclude(correction__status="approved"))
-        month_payroll = PayrollEntry.objects.filter(
-            period__branch=branch, period__end_date__range=(month_first, month_last),
-            period__status__in=["locked", "reconciled"],
-        ).aggregate(g=Sum("gross_pay"), e=Sum("employer_pension"))
-        month_payroll_cost = (month_payroll["g"] or ZERO) + (month_payroll["e"] or ZERO)
-        trend.append({
-            "month": cursor.strftime("%b %Y"), "sales": month_sales,
-            "expenses": month_expense, "payroll": month_payroll_cost,
+def _journal_lines(request):
+    rows = []
+    for index in range(1, 9):
+        code = request.POST.get(f"account_{index}", "").strip()
+        debit = request.POST.get(f"debit_{index}", "").strip()
+        credit = request.POST.get(f"credit_{index}", "").strip()
+        description = request.POST.get(f"description_{index}", "").strip()
+        if not code and not debit and not credit and not description:
+            continue
+        rows.append({
+            "account_code": code, "debit": debit or "0", "credit": credit or "0",
+            "description": description,
         })
-        cursor = next_month
-
-    return {
-        "net_sales": net_sales, "cogs": cogs, "gross_profit": gross_profit,
-        "gross_margin": gross_margin.quantize(Decimal("0.01")),
-        "expenses": expenses, "inventory_losses": inventory_losses,
-        "payroll_gross": payroll_gross, "employer_pension": employer_pension,
-        "payroll_cost": payroll_cost, "operating_result": operating_result,
-        "operating_margin": operating_margin.quantize(Decimal("0.01")),
-        "receivables": current_receivables, "payables": current_payables,
-        "stock_value": stock_value, "channels": dict(channels),
-        "expense_rows": expense_rows, "trend": trend,
-    }
+    return rows
 
 
-@protected("view_reports|operate_finance")
+@protected("view_reports|operate_finance|manage_company")
 def accounting(request, branch):
     first, last, start, end = _range(request)
-    category = request.GET.get("category", "").strip()
-    method = request.GET.get("method", "").strip()
-    data = accounting_snapshot(branch, first, last, category, method)
-    prior_days = (last - first).days + 1
-    prior_last = first - timedelta(days=1)
-    prior_first = prior_last - timedelta(days=prior_days - 1)
-    prior = accounting_snapshot(branch, prior_first, prior_last, category, method)
-    comparisons = {}
-    for key in ["net_sales", "gross_profit", "expenses", "payroll_cost", "operating_result"]:
-        old, new = prior[key], data[key]
-        comparisons[key] = None if old == 0 else ((new - old) / abs(old) * 100).quantize(Decimal("0.1"))
-    max_trend = max(
-        [abs(row["sales"]) for row in data["trend"]] +
-        [abs(row["expenses"] + row["payroll"]) for row in data["trend"]] + [Decimal("1")]
-    )
-    for row in data["trend"]:
-        row["sales_width"] = int(abs(row["sales"]) / max_trend * 100)
-        row["cost_width"] = int(abs(row["expenses"] + row["payroll"]) / max_trend * 100)
+    view = request.GET.get("view", "overview")
+    if view not in {"overview", "trial", "ledger", "pnl", "balance", "cashflow", "journals"}:
+        view = "overview"
+
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action")
+            if action == "journal":
+                journal = engine.create_manual_journal(
+                    request.user, branch, request.POST.get("journal_date"),
+                    request.POST.get("memo"), _journal_lines(request),
+                )
+                if journal.status == "posted":
+                    messages.success(request, f"Journal {journal.reference} posted under owner authority.")
+                else:
+                    messages.success(request, f"Journal {journal.reference} sent to the Approval Center.")
+                return redirect("/accounting/?view=journals")
+            raise ValidationError("Choose a valid accounting action.")
+        except (ValidationError, PermissionDenied, ValueError) as exc:
+            messages.error(request, problem(exc))
+
+    report = engine.statements(branch, first, last)
+    ledger_rows = engine.ledger(branch, first, last)
+    q = request.GET.get("q", "").strip()[:100]
+    account = request.GET.get("account", "").strip()[:20]
+    source = request.GET.get("source", "").strip()[:80]
+    if q:
+        lowered = q.casefold()
+        ledger_rows = [
+            row for row in ledger_rows
+            if lowered in " ".join([
+                str(row["reference"]), str(row["description"]), str(row["account"]),
+                str(row["account_code"]), str(row["source"]),
+            ]).casefold()
+        ]
+    if account:
+        ledger_rows = [row for row in ledger_rows if row["account_code"] == account]
+    if source:
+        ledger_rows = [row for row in ledger_rows if row["source"] == source]
+
+    pnl_rows = []
+    balance_rows = report["balance_sheet"]
+    for row in report["trial_balance"]:
+        typ = row["type"]
+        signed = row["debit"] - row["credit"] if typ in {"asset", "expense", "contra_revenue"} else row["credit"] - row["debit"]
+        if typ in {"revenue", "contra_revenue", "expense"}:
+            pnl_rows.append({**row, "statement_balance": signed})
+
+    journals = ManualJournal.objects.filter(branch=branch).select_related(
+        "requested_by", "reviewed_by"
+    ).prefetch_related("lines")[:100]
+    sources = sorted({row["source"] for row in engine.ledger(branch, first, last)})
     return render(request, "accounting.html", {
-        "title": "Accounting intelligence", "data": data, "prior": prior,
-        "comparisons": comparisons, "start": start, "end": end,
-        "category": category, "method": method, "categories": EXPENSE_CATEGORIES,
-        "methods": Payment.METHODS, "prior_start": prior_first, "prior_end": prior_last,
+        "title": "Accounting Intelligence",
+        "start": start, "end": end, "first": first, "last": last,
+        "view": view, "report": report, "ledger_rows": ledger_rows[:2000],
+        "pnl_rows": pnl_rows, "balance_rows": balance_rows,
+        "accounts": sorted(engine.ACCOUNTS.items()),
+        "selected_account": account, "selected_source": source, "sources": sources, "q": q,
+        "journals": journals, "today": timezone.localdate(),
+        "can_journal": request.user.has_perm("core.operate_finance") or request.user.has_perm("core.manage_company") or request.user.is_superuser,
+        "owner_direct": request.user.has_perm("core.manage_company") or request.user.is_superuser,
     })
 
 
-@protected("view_reports|operate_finance")
+@protected("view_reports|operate_finance|manage_company")
 def accounting_export(request, branch, format):
     first, last, start, end = _range(request)
-    category = request.GET.get("category", "").strip()
-    method = request.GET.get("method", "").strip()
-    data = accounting_snapshot(branch, first, last, category, method)
-    rows = [
-        {"line": "Net sales", "amount": data["net_sales"], "type": "Revenue"},
-        {"line": "Cost of goods sold", "amount": data["cogs"], "type": "Direct cost"},
-        {"line": "Gross profit", "amount": data["gross_profit"], "type": "Margin"},
-        {"line": "Operating expenses", "amount": data["expenses"], "type": "Operating cost"},
-        {"line": "Inventory losses", "amount": data["inventory_losses"], "type": "Operating cost"},
-        {"line": "Payroll gross", "amount": data["payroll_gross"], "type": "People cost"},
-        {"line": "Employer pension", "amount": data["employer_pension"], "type": "People cost"},
-        {"line": "Operating result", "amount": data["operating_result"], "type": "Management result"},
-        {"line": "Current receivables", "amount": data["receivables"], "type": "Balance snapshot"},
-        {"line": "Current payables", "amount": data["payables"], "type": "Balance snapshot"},
-        {"line": "Current stock value", "amount": data["stock_value"], "type": "Balance snapshot"},
-    ]
-    audit(request.user, branch, "accounting.exported", format, {
-        "start": start, "end": end, "category": category, "method": method,
-    })
+    view = request.GET.get("view", "trial")
+    report = engine.statements(branch, first, last)
+
+    if view == "ledger":
+        rows = engine.ledger(branch, first, last)
+        columns = [
+            ("date", "Date"), ("reference", "Reference"), ("source", "Source"),
+            ("description", "Description"), ("account_code", "Account code"),
+            ("account", "Account"), ("debit", "Debit"), ("credit", "Credit"),
+        ]
+        title, sheet = "General ledger", "General Ledger"
+    elif view == "pnl":
+        rows = []
+        for row in report["trial_balance"]:
+            if row["type"] in {"revenue", "contra_revenue", "expense"}:
+                normal = row["credit"] - row["debit"] if row["type"] == "revenue" else row["debit"] - row["credit"]
+                rows.append({"code": row["code"], "account": row["name"], "type": row["type"], "amount": normal})
+        columns = [("code", "Account"), ("account", "Name"), ("type", "Class"), ("amount", "Amount")]
+        title, sheet = "Profit and loss", "Profit & Loss"
+    elif view == "balance":
+        rows = [
+            {"code": row["code"], "account": row["name"], "type": row["type"], "amount": row["statement_balance"]}
+            for row in report["balance_sheet"]
+        ]
+        rows.append({"code": "", "account": "Accumulated operating result through reporting date", "type": "equity", "amount": report["accumulated_result"]})
+        columns = [("code", "Account"), ("account", "Name"), ("type", "Class"), ("amount", "Amount")]
+        title, sheet = "Statement of financial position", "Balance Sheet"
+    elif view == "cashflow":
+        rows = [
+            {"section": "Operating activities", "amount": report["cash_flow"]["operating"]},
+            {"section": "Investing activities", "amount": report["cash_flow"]["investing"]},
+            {"section": "Financing activities", "amount": report["cash_flow"]["financing"]},
+            {"section": "Net change in cash & equivalents", "amount": report["cash_flow"]["net_change"]},
+        ]
+        columns = [("section", "Cash-flow section"), ("amount", "Amount")]
+        title, sheet = "Cash-flow statement", "Cash Flow"
+    else:
+        rows = report["trial_balance"]
+        columns = [
+            ("code", "Account code"), ("name", "Account"), ("type", "Class"),
+            ("debit", "Debits"), ("credit", "Credits"), ("balance", "Debit balance"),
+        ]
+        title, sheet = "Trial balance", "Trial Balance"
+
+    s.audit(request.user, branch, "accounting.exported", format, {
+        "view": view, "start": start, "end": end,
+    }, category="accounting", entity_type="accounting_export")
     return export(
-        rows, format, f"Management accounting · {start} to {end}", shell(request)["company"],
-        [("line", "Account / KPI"), ("type", "Classification"), ("amount", "Amount")],
-        filename=f"kofad-management-accounting-{start}-{end}", sheet_name="Management accounts",
-        metadata={
-            "Location": branch.name, "From": first, "To": last,
-            "Expense category": CATEGORY_LABELS.get(category, "All") if category else "All",
-            "Payment channel": dict(Payment.METHODS).get(method, "All") if method else "All",
-        },
+        rows, format, f"{title} · {start} to {end}", shell(request)["company"], columns,
+        filename=f"kofad-{view}-{start}-{end}", sheet_name=sheet[:31],
+        metadata={"Location": branch.name, "From": first, "To": last, "Accounting view": title},
         summary={
-            "Net sales": data["net_sales"], "Gross profit": data["gross_profit"],
-            "Operating result": data["operating_result"], "Gross margin %": data["gross_margin"],
+            "Revenue": report["revenue"], "Expenses": report["expenses"], "Profit / (loss)": report["profit"],
+            "Assets": report["assets"], "Liabilities": report["liabilities"], "Equity": report["equity"],
         },
         notes=[
-            "Management accounting is built from KOFAD operational records and payroll. It is not a statutory general ledger or audited financial statement.",
-            "Receivables, payables and stock values are current snapshots; period filters apply to trading, expenses, losses and payroll.",
+            "KOFAD derives this double-entry management ledger from controlled operational source records and approved manual journals.",
+            "The statements are IFRS-informed management information. Statutory reporting still requires the entity's accounting policies, period-end adjustments, disclosures and professional review.",
+            f"Balance equation check: {report['balance_check']}. A non-zero value requires accounting review.",
         ],
     )

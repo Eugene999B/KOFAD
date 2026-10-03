@@ -81,8 +81,72 @@ def permit(user, branch, permission):
         raise PermissionDenied("This location is outside your access.")
 
 
-def audit(user, branch, action, reference, detail=None):
-    Audit.objects.create(actor=user, branch=branch, action=action, reference=str(reference), detail=detail or {})
+def _audit_category(action):
+    prefix = str(action or "").split(".", 1)[0]
+    return {
+        "sale": "sales", "return": "returns", "customer_return": "returns", "supplier_return": "returns",
+        "purchase": "purchasing", "creditor": "finance", "expense": "finance", "collection": "finance",
+        "supplier_payment": "finance", "payroll": "payroll", "closing": "finance", "correction": "controls",
+        "stock": "inventory", "inventory": "inventory", "quarantine": "inventory", "count": "inventory",
+        "staff": "administration", "role": "administration", "auth": "security", "journal": "accounting",
+    }.get(prefix, "system")
+
+
+def _audit_digest(event_id, branch_id, actor_id, action, reference, category, severity, entity_type, entity_id, detail, previous_hash):
+    canonical = json.dumps({
+        "event_id": str(event_id),
+        "branch": branch_id,
+        "actor": actor_id,
+        "action": str(action),
+        "reference": str(reference),
+        "category": str(category),
+        "severity": str(severity),
+        "entity_type": str(entity_type or ""),
+        "entity_id": str(entity_id or reference or ""),
+        "detail": detail or {},
+        "previous_hash": str(previous_hash or ""),
+    }, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def audit_hash_for(row):
+    return _audit_digest(
+        row.event_id, row.branch_id, row.actor_id, row.action, row.reference,
+        row.category, row.severity, row.entity_type, row.entity_id, row.detail, row.previous_hash,
+    )
+
+
+def audit(user, branch, action, reference, detail=None, *, category=None, severity="info", entity_type="", entity_id=""):
+    """Append a serialized, hash-linked and database-immutable business event."""
+    detail = detail or {}
+    category = str(category or _audit_category(action))[:32]
+    severity = str(severity or "info")[:12]
+    entity_type = str(entity_type or "")[:60]
+    entity_id = str(entity_id or reference or "")[:100]
+    with transaction.atomic():
+        if branch is not None:
+            Branch.objects.select_for_update().get(pk=branch.pk)
+        previous = Audit.objects.filter(branch=branch).exclude(event_hash="").order_by("-created_at", "-pk").first()
+        previous_hash = previous.event_hash if previous else ""
+        event_id = uuid.uuid4()
+        event_hash = _audit_digest(
+            event_id, getattr(branch, "pk", None), getattr(user, "pk", None),
+            action, reference, category, severity, entity_type, entity_id, detail, previous_hash,
+        )
+        return Audit.objects.create(
+            event_id=event_id,
+            actor=user,
+            branch=branch,
+            action=str(action)[:80],
+            reference=str(reference)[:100],
+            category=category,
+            severity=severity,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            detail=detail,
+            previous_hash=previous_hash,
+            event_hash=event_hash,
+        )
 
 
 def lock_branch(branch):
@@ -707,8 +771,12 @@ def _closing_json(value):
 
 
 @transaction.atomic
-def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, cash_out=0):
-    permit(user, branch, "operate_finance")
+def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, cash_out=0, owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
+        permit(user, branch, "operate_finance")
     branch = lock_branch(branch)
     if day > timezone.localdate():
         raise ValidationError("Cannot close a future day.")
@@ -750,6 +818,7 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
         summary=_closing_json(summary),
         note=str(note or "").strip()[:2000],
         submitted_by=user,
+        verified_by=user if owner_direct else None,
     )
     audit(user, branch, "closing.submitted", closing.pk, {
         "date": str(day),
@@ -759,7 +828,8 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
         "opening_cash": str(opening_cash),
         "cash_in": str(cash_in),
         "cash_out": str(cash_out),
-    })
+        "owner_direct": bool(owner_direct),
+    }, category="finance", severity="high" if owner_direct else "notice", entity_type="closing", entity_id=str(closing.pk))
     from . import automations
     transaction.on_commit(
         lambda closing_id=closing.pk, actor_id=user.pk:
@@ -769,11 +839,17 @@ def submit_closing(user, branch, day, counted, note, opening_cash=0, cash_in=0, 
 
 
 @transaction.atomic
-def verify_closing(user, closing):
-    permit(user, closing.branch, "approve_operations")
+def verify_closing(user, closing, owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
+        permit(user, closing.branch, "approve_operations")
     closing = Closing.objects.select_for_update().get(pk=closing.pk)
-    if closing.submitted_by_id == user.pk or closing.verified_by_id:
-        raise ValidationError("A different authorized colleague must verify an unverified closing.")
+    if closing.verified_by_id:
+        raise ValidationError("This closing has already been verified.")
+    if closing.submitted_by_id == user.pk:
+        raise ValidationError("A submitted closing must be independently verified. Owner-direct closings are finalized at submission instead.")
     closing.verified_by = user
     closing.save(update_fields=["verified_by"])
     audit(user, closing.branch, "closing.verified", closing.pk)
@@ -805,13 +881,17 @@ def request_correction(user, branch, original_id, reason, refund_method="cash"):
 
 
 @transaction.atomic
-def review_correction(user, branch, correction_id, approve):
-    permit(user, branch, "approve_operations")
+def review_correction(user, branch, correction_id, approve, owner_direct=False):
+    if owner_direct:
+        if not (user.is_superuser or user.has_perm("core.manage_company")):
+            raise PermissionDenied("Owner / company administrator authority is required.")
+    else:
+        permit(user, branch, "approve_operations")
     branch = lock_branch(branch)
     item = Correction.objects.select_for_update(of=("self",)).select_related("original").get(pk=correction_id, original__branch=branch)
     if item.status != "requested":
         raise ValidationError("This request has already been reviewed.")
-    if item.requested_by_id == user.pk:
+    if item.requested_by_id == user.pk and not owner_direct:
         raise ValidationError("A different authorized colleague must review the correction.")
     original = item.original
     if approve:

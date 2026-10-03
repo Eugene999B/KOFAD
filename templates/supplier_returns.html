@@ -1,43 +1,30 @@
 {% extends "base.html" %}
-{% block actions %}<a class="button secondary" href="/exports/?dataset=supplier_returns">⇩ Download supplier returns</a>{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'approval_center' %}">Approval Center</a><a class="button secondary" href="/exports/?dataset=supplier_returns">Download</a>{% if perms.core.manage_company %}<a class="button secondary" href="{% url 'return_privileges' %}">Return privileges</a>{% endif %}</div>{% endblock %}
 {% block content %}
-<section class="hero-panel"><div><p class="eyebrow">PURCHASE CONTROL</p><h2>Return stock to suppliers without rewriting purchases.</h2><p>Every request is tied to an original purchase line, reserves only the eligible quantity, and needs independent finance-authorized approval before stock or supplier debt changes.</p></div><span class="pill">Independent review</span></section>
+<section class="hero-panel supplier-return-hero"><div><p class="eyebrow">SUPPLIER RETURNS</p><h2>Return goods to suppliers without corrupting purchasing history.</h2><p>Search by purchase reference, supplier invoice/reference, supplier name or phone. Select several purchase lines at once; KOFAD reduces supplier debt first and records any supplier refund only after the controlled return posts.</p></div><span class="pill">{% if direct_authority %}Direct authority{% else %}Approval controlled{% endif %}</span></section>
 
-<section class="panel">
-<div class="section-heading"><div><h2>Find the original purchase</h2><p class="muted">Enter the exact purchase reference printed on the purchase record.</p></div></div>
-<form method="get" class="inline-form"><label for="purchase-ref">Purchase reference</label><input id="purchase-ref" name="q" value="{{ q }}" placeholder="PUR-..." required><button class="button">Find purchase</button></form>
-{% if q %}
-<div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Product</th><th>Purchased</th><th>Purchase price</th><th>Request return</th></tr></thead><tbody>
-{% for line in lines %}
-<tr><td>{{ line.document.party|default:"Supplier" }}<small>{{ line.document.reference }}</small></td><td>{{ line.product.name }}<small>{{ line.mode|title }} · {{ line.factor }} base units each</small></td><td>{{ line.quantity }}</td><td>{{ line.unit_price }}</td><td>
-{% if perms.core.operate_inventory %}
-<form method="post" class="stack-form">{% csrf_token %}<input type="hidden" name="action" value="request"><input type="hidden" name="line" value="{{ line.pk }}">
-<label for="qty-{{ line.pk }}">Quantity</label><input id="qty-{{ line.pk }}" type="number" name="quantity" min="1" max="{{ line.quantity }}" step="1" required>
-<label for="method-{{ line.pk }}">Supplier refund channel</label><select id="method-{{ line.pk }}" name="refund_method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
-<label for="reason-{{ line.pk }}">Reason</label><textarea id="reason-{{ line.pk }}" name="reason" minlength="10" maxlength="2000" required placeholder="Why are these goods being returned?"></textarea>
-<button class="button">Submit for approval</button></form>
-{% else %}<span class="muted">Inventory permission required.</span>{% endif %}
-</td></tr>
-{% empty %}<tr><td colspan="5" class="empty">No purchase lines match this reference at the current store.</td></tr>{% endfor %}
-</tbody></table></div>
-{% endif %}
+<section class="panel"><div class="section-heading"><div><h2>1. Find purchase items</h2><p class="muted">The original purchase remains immutable; the supplier return becomes its own linked accounting and stock record.</p></div></div>
+<form method="get" class="searchbar"><input name="q" value="{{ q }}" placeholder="Purchase ref, supplier invoice, supplier name or phone" required><button class="button">Search purchases</button></form>
 </section>
 
-<section class="panel"><div class="section-heading"><div><h2>Supplier return queue</h2><p class="muted">Approval reduces sellable stock, reduces unpaid supplier debt first, then records any supplier refund through the selected payment channel.</p></div></div>
-<div class="table-wrap"><table><thead><tr><th>When</th><th>Purchase</th><th>Product</th><th>Qty</th><th>Requested by</th><th>Status</th><th>Review</th></tr></thead><tbody>
-{% for row in rows %}<tr>
-<td>{{ row.created_at|date:"d M Y, H:i" }}</td>
-<td>{{ row.source_line.document.reference }}<small>{{ row.source_line.document.party }}</small></td>
-<td>{{ row.source_line.product.name }}<small>{{ row.reason }}</small></td>
-<td>{{ row.quantity }}</td><td>{{ row.requested_by }}</td>
-<td><span class="pill">{{ row.get_status_display }}</span>{% if row.posted %}<small><a href="{% url 'document' row.posted.pk %}">{{ row.posted.reference }}</a></small>{% endif %}{% if row.reviewed_by %}<small>Reviewed by {{ row.reviewed_by }}</small>{% endif %}</td>
-<td>
-{% if row.status == "requested" and perms.core.approve_operations and perms.core.operate_finance %}
-{% if row.requested_by_id != request.user.pk %}
-<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button" name="action" value="approve">Approve & post</button><button class="text-button danger" name="action" value="reject">Reject</button></form>
-{% else %}<small>Awaiting a different authorized colleague.</small>{% endif %}
-{% else %}<small>No action required.</small>{% endif %}
-</td></tr>
-{% empty %}<tr><td colspan="7" class="empty">No supplier return requests yet.</td></tr>{% endfor %}
+{% if q %}
+<form method="post" class="panel">{% csrf_token %}
+<div class="section-heading"><div><h2>2. Select items to return</h2><p class="muted">Eligible quantity excludes quantities already returned or reserved in pending requests.</p></div></div>
+<div class="supplier-return-lines">
+{% for row in line_rows %}<article class="return-line {% if row.eligible == 0 %}disabled{% endif %}">
+<label class="return-line-select"><input type="checkbox" name="selected" value="{{ row.line.pk }}" {% if row.eligible == 0 %}disabled{% endif %}><span><strong>{{ row.line.product.name }}</strong><small>{{ row.line.document.party.name }} · {{ row.line.document.reference }}{% if row.line.document.external_reference %} · Supplier ref {{ row.line.document.external_reference }}{% endif %}</small></span></label>
+<div class="return-line-controls"><label>Purchased<input value="{{ row.line.quantity }}" disabled></label><label>Reserved/returned<input value="{{ row.reserved }}" disabled></label><label>Eligible<input value="{{ row.eligible }}" disabled></label><label>Return qty<input type="number" name="quantity_{{ row.line.pk }}" min="1" max="{{ row.eligible }}" value="{% if row.eligible %}1{% endif %}" {% if row.eligible == 0 %}disabled{% endif %}></label></div>
+</article>{% empty %}<div class="empty">No purchase lines match this search.</div>{% endfor %}
+</div>
+{% if line_rows %}<div class="form-grid"><label>Reason<textarea name="reason" minlength="10" maxlength="2000" required placeholder="Incorrect part, damaged delivery, excess supply, warranty return…"></textarea></label><label>Supplier refund channel<select name="refund_method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><small>Only used for value the supplier owes KOFAD after reducing unpaid supplier debt.</small></label></div>
+<div class="notice {% if direct_authority %}success{% endif %}">{% if direct_authority %}Your account can post Supplier Returns directly.{% else %}No stock or supplier-account balance changes until approval.{% endif %}</div>
+<button class="button">{% if direct_authority %}Post selected supplier returns{% else %}Send selected returns for approval{% endif %}</button>{% endif %}
+</form>
+{% endif %}
+
+<section class="panel"><div class="section-heading"><div><h2>Supplier return register</h2><p class="muted">Every request preserves who requested it, who reviewed it and the final posted document.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>When</th><th>Supplier / purchase</th><th>Product</th><th>Qty</th><th>Reason</th><th>Authority</th><th>Status</th></tr></thead><tbody>
+{% for row in rows %}<tr><td>{{ row.created_at|date:"d M Y, H:i" }}</td><td><strong>{{ row.source_line.document.party.name }}</strong><small>{{ row.source_line.document.reference }}</small></td><td>{{ row.source_line.product.name }}</td><td>{{ row.quantity }}</td><td>{{ row.reason }}</td><td>{{ row.requested_by }}{% if row.reviewed_by %}<small>Reviewed by {{ row.reviewed_by }}</small>{% endif %}</td><td><span class="pill">{{ row.get_status_display }}</span>{% if row.posted %}<small><a href="{% url 'document' row.posted.pk %}">{{ row.posted.reference }}</a></small>{% elif row.status == "requested" %}<small><a href="{% url 'approval_center' %}">Approval Center</a></small>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="empty">No supplier returns yet.</td></tr>{% endfor %}
 </tbody></table></div></section>
 {% endblock %}

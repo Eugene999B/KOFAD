@@ -174,7 +174,7 @@ class BusinessTests(Fixtures, TestCase):
     def test_all_pages_render(self):
         self.authenticate_client()
         for path in ["/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
-                     "/finance/","/creditors/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
+                     "/finance/","/creditors/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
                      "/administration/","/administration/users/","/administration/roles/","/exports/","/communications/",
                      "/products/new/","/parties/new/"]:
             with self.subTest(path=path):
@@ -664,6 +664,151 @@ class CreditorsTests(Fixtures, TestCase):
         )
         self.assertEqual(printable.status_code, 200)
         self.assertTrue(printable.content.startswith(b"%PDF"))
+
+
+
+
+class ControlCentreIntelligenceTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+
+    def staff_with(self, username, codename):
+        user = User.objects.create_user(username, password="control-test-password-long-enough")
+        user.user_permissions.add(Permission.objects.get(codename=codename))
+        user.access.branches.add(self.branch)
+        return user
+
+    def test_customer_return_waits_for_approval_without_direct_privilege(self):
+        from . import returns as return_controls
+        from .models import CustomerReturnRequest
+        sale = self.sale(2)
+        source = sale.lines.get()
+        cashier = self.staff_with("return-cashier", "operate_sales")
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        item, direct = return_controls.create_customer_return(
+            cashier, self.branch, sale,
+            [{"line": str(source.pk), "quantity": "1", "disposition": "sellable"}],
+            "Customer brought back one item", "cash",
+        )
+        self.assertFalse(direct)
+        self.assertEqual(item.status, "requested")
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before)
+        self.assertFalse(Document.objects.filter(kind="return", original=sale).exists())
+        return_controls.execute_customer_return(self.reviewer, self.branch, item.pk)
+        item = CustomerReturnRequest.objects.get(pk=item.pk)
+        self.assertEqual(item.status, "approved")
+        self.assertIsNotNone(item.posted_id)
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before + 1)
+
+    def test_return_privilege_posts_directly_and_quarantine_never_becomes_sellable(self):
+        from . import returns as return_controls
+        from .models import QuarantineItem, ReturnPrivilege
+        sale = self.sale()
+        source = sale.lines.get()
+        cashier = self.staff_with("direct-return-user", "operate_sales")
+        ReturnPrivilege.objects.create(
+            branch=self.branch, user=cashier, customer_returns=True, granted_by=self.user
+        )
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        item, direct = return_controls.create_customer_return(
+            cashier, self.branch, sale,
+            [{"line": str(source.pk), "quantity": "1", "disposition": "quarantine"}],
+            "Item returned damaged and unsafe to resell", "cash",
+        )
+        self.assertTrue(direct)
+        item.refresh_from_db()
+        self.assertEqual(item.status, "approved")
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before)
+        held = QuarantineItem.objects.get(reason__contains=item.posted.reference)
+        self.assertEqual(held.status, "held")
+        self.assertEqual(held.quantity, 1)
+
+    def test_supplier_return_privilege_posts_without_separate_approval(self):
+        from . import inventory_exceptions
+        from .models import ReturnPrivilege, SupplierReturn
+        purchase = s.post_trade(
+            self.user, self.branch,
+            {
+                "party": self.supplier.pk,
+                "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 2, "price": "20"}],
+                "payments": [{"method": "cash", "amount": "40"}],
+                "document_date": timezone.localdate().isoformat(),
+                "external_reference": "DIRECT-SR-1",
+            },
+            uuid.uuid4(), "purchase",
+        )
+        keeper = self.staff_with("direct-supplier-return", "operate_inventory")
+        ReturnPrivilege.objects.create(
+            branch=self.branch, user=keeper, supplier_returns=True, granted_by=self.user
+        )
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        item = inventory_exceptions.request_supplier_return(
+            keeper, self.branch, purchase.lines.get().pk, 1,
+            "Supplier accepted one incorrect item back", "cash", direct=True,
+        )
+        item = SupplierReturn.objects.get(pk=item.pk)
+        self.assertEqual(item.status, "approved")
+        self.assertIsNotNone(item.posted_id)
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before - 1)
+
+    def test_double_entry_trial_balance_and_manual_journal_control(self):
+        from . import accounting_engine
+        self.sale()
+        today = timezone.localdate()
+        tb = accounting_engine.trial_balance(self.branch, today, today)
+        self.assertEqual(
+            sum((row["debit"] for row in tb), Decimal("0")),
+            sum((row["credit"] for row in tb), Decimal("0")),
+        )
+        statements = accounting_engine.statements(self.branch, today, today)
+        self.assertEqual(statements["balance_check"], Decimal("0.00"))
+        with self.assertRaises(ValidationError):
+            accounting_engine.create_manual_journal(
+                self.user, self.branch, today.isoformat(), "Unbalanced test journal",
+                [{"account_code": "1000", "debit": "10", "credit": "0"},
+                 {"account_code": "3000", "debit": "0", "credit": "9"}],
+            )
+        journal = accounting_engine.create_manual_journal(
+            self.user, self.branch, today.isoformat(), "Owner capital introduced",
+            [{"account_code": "1000", "debit": "100", "credit": "0", "description": "Cash introduced"},
+             {"account_code": "3000", "debit": "0", "credit": "100", "description": "Owner capital"}],
+        )
+        self.assertEqual(journal.status, "posted")
+
+    def test_audit_events_are_hash_linked(self):
+        from .models import Audit
+        first = s.audit(self.user, self.branch, "test.first", "A", {"value": 1})
+        second = s.audit(self.user, self.branch, "test.second", "B", {"value": 2})
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(len(first.event_hash), 64)
+        self.assertEqual(second.previous_hash, first.event_hash)
+        self.assertNotEqual(first.event_hash, second.event_hash)
+        self.assertEqual(Audit.objects.filter(branch=self.branch, event_hash="").count(), 0)
+
+    def test_approval_center_return_privileges_intelligence_and_accounting_pages(self):
+        self.sale()
+        self.authenticate_client()
+        self.assertEqual(self.client.get("/approvals/").status_code, 200)
+        self.assertEqual(self.client.get("/api/approvals/summary/").status_code, 200)
+        self.assertEqual(self.client.get("/settings/return-privileges/").status_code, 200)
+        intelligence = self.client.get("/reports/?family=sales")
+        self.assertEqual(intelligence.status_code, 200)
+        self.assertContains(intelligence, "BUSINESS INTELLIGENCE COMMAND CENTRE")
+        accounting = self.client.get("/accounting/?view=trial")
+        self.assertEqual(accounting.status_code, 200)
+        self.assertContains(accounting, "Trial balance")
+        audit = self.client.get("/audit/")
+        self.assertEqual(audit.status_code, 200)
+        self.assertContains(audit, "AUDIT INTELLIGENCE")
+
+    def test_stock_operations_are_retired_in_production(self):
+        from django.test import override_settings
+        self.authenticate_client()
+        with override_settings(DEBUG=False):
+            response = self.client.get("/operations/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/inventory/")
 
 
 

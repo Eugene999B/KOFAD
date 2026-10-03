@@ -157,7 +157,7 @@ class InventoryExceptionTests(Fixtures, TestCase):
             "One incorrect unit prepared for supplier return", "cash",
         )
         self.authenticate_client()
-        for dataset in ("operations", "supplier_returns", "quarantine", "closings", "losses"):
+        for dataset in ("customer_returns", "supplier_returns", "quarantine", "closings", "losses"):
             with self.subTest(dataset=dataset):
                 response = self.client.get(f"/exports/download/csv/?dataset={dataset}")
                 self.assertEqual(response.status_code, 200)
