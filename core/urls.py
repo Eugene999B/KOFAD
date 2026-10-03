@@ -5,7 +5,7 @@ from . import count_views
 from . import admin_views
 from . import export_views
 from . import maintenance_views
-from .sms.views import callback
+from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
     path("forgot-password/", accounts.forgot_password, name="forgot_password"),
@@ -13,6 +13,7 @@ urlpatterns = [
     path("stock-counts/", count_views.index, name="stock_counts"),
     path("stock-counts/<uuid:pk>/", count_views.detail, name="stock_count"),
     path("sms/callback/<uuid:attempt_id>/", callback, name="sms_callback"),
+    path("sms/delivery/", v_sms_delivery_callback, name="sms_delivery_callback"),
     path("message-templates/", v.message_templates, name="message_templates"),
     path("account/password/", v.password_change, name="password_change"),
     path("search/", v.search, name="search"),
