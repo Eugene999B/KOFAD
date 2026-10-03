@@ -1379,3 +1379,6 @@ html[data-theme="dark"] .payment-method-option strong{color:inherit!important}
   .welcome-icon{display:none}
   .premium-login-card .login-card-top h2{font-size:23px}
 }
+
+.login-field-hint{margin:-3px 0 5px;font-size:10px;color:var(--muted);line-height:1.35}
+html[data-theme="dark"] .login-field-hint{color:#c7c7cc}
