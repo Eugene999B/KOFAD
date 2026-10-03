@@ -90,7 +90,8 @@ def save_count(user, branch, count_id, values, note="", submit=False):
 
 @transaction.atomic
 def review_count(user, branch, count_id, action, note=""):
-    s.permit(user, branch, "operate_inventory" if action == "cancel" else "approve_operations")
+    if not (user.is_superuser or user.has_perm("core.manage_company")):
+        s.permit(user, branch, "operate_inventory" if action == "cancel" else "approve_operations")
     s.lock_branch(branch)
     count = StockCount.objects.select_for_update().get(pk=count_id, branch=branch)
     if action == "cancel":
