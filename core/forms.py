@@ -106,6 +106,14 @@ class CompanyForm(forms.ModelForm):
             "address": "Public business address. Each store/location can also have its own address.",
         }
 
+    def clean_phone(self):
+        value = self.cleaned_data["phone"].strip()
+        return normalize_ghana_phone(value) if value else ""
+
+    def clean_secondary_phone(self):
+        value = self.cleaned_data["secondary_phone"].strip()
+        return normalize_ghana_phone(value) if value else ""
+
 
 class LocationSettingsForm(forms.ModelForm):
     class Meta:
