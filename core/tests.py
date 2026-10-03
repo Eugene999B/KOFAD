@@ -600,6 +600,13 @@ class CreditorsTests(Fixtures, TestCase):
         with self.assertRaises(ValidationError):
             s.request_correction(self.user, self.branch, paid_bill.pk, "Need to reverse this paid creditor bill")
 
+    def test_creditor_search_finds_supplier_invoice_reference(self):
+        from . import creditors as creditor_service
+        self.credit_purchase(amount="75", external_reference="LOOKUP-AP-75")
+        rows = creditor_service.creditor_accounts(self.branch, "lookup-ap-75")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["party"], self.supplier)
+
     def test_creditor_page_supplier_search_print_and_exports(self):
         self.credit_purchase(amount="75", external_reference="SEARCH-75")
         self.authenticate_client()
