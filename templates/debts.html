@@ -104,23 +104,25 @@
     </section>
 
     {% if perms.core.operate_finance %}
-    <section class="debt-payment-box hidden" id="debt-payment-box" data-outstanding="{{ selected.outstanding }}">
-      <div class="section-heading"><div><p class="eyebrow">RECEIVE PAYMENT</p><h3 id="debt-payment-title">Record customer payment</h3><p class="muted">Preview shows how this payment will settle the oldest due receipts first.</p></div><button type="button" class="icon-button" data-debt-payment-close aria-label="Close payment form">×</button></div>
-      <form method="post" id="debt-payment-form">{% csrf_token %}
-        <input type="hidden" name="key" value="{{ key }}">
-        <input type="hidden" name="party" value="{{ selected.party.pk }}">
-        <input type="hidden" name="pay_full" id="debt-pay-full" value="">
-        <label for="debt-amount">Amount received</label>
-        <input id="debt-amount" name="amount" type="number" min=".01" max="{{ selected.outstanding }}" step=".01" required>
-        <div class="two-column compact">
-          <label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
-          <label>Provider / bank reference<input name="reference" maxlength="100" placeholder="Optional for cash"></label>
-        </div>
-        <label>Collection note<input name="note" maxlength="500" placeholder="Optional note for this payment"></label>
-        <div class="debt-allocation-preview"><strong>Allocation preview</strong><div id="debt-allocation-lines"></div></div>
-        <button class="button wide" id="debt-payment-submit">Save payment & issue receipt</button>
-      </form>
-    </section>
+    <dialog class="debt-payment-dialog" id="debt-payment-box" data-outstanding="{{ selected.outstanding }}">
+      <div class="mobile-sheet-handle" aria-hidden="true"></div>
+      <div class="debt-payment-dialog-inner">
+        <div class="section-heading debt-dialog-heading"><div><p class="eyebrow">RECEIVE PAYMENT</p><h3 id="debt-payment-title">Record customer payment</h3><p class="muted">{{ selected.party.name }} · outstanding {{ company.currency }} {{ selected.outstanding|floatformat:2 }}</p></div><button type="button" class="icon-button" data-debt-payment-close aria-label="Close payment form">×</button></div>
+        <form method="post" id="debt-payment-form">{% csrf_token %}
+          <input type="hidden" name="key" value="{{ key }}">
+          <input type="hidden" name="party" value="{{ selected.party.pk }}">
+          <input type="hidden" name="pay_full" id="debt-pay-full" value="">
+          <div class="debt-payment-core">
+            <label for="debt-amount">Amount received<input id="debt-amount" name="amount" type="number" min=".01" max="{{ selected.outstanding }}" step=".01" required inputmode="decimal"></label>
+            <label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+            <label>Provider / bank reference<input name="reference" maxlength="100" placeholder="Optional for cash"></label>
+            <label>Collection note<input name="note" maxlength="500" placeholder="Optional note"></label>
+          </div>
+          <div class="debt-allocation-preview"><div class="section-heading compact-heading"><div><strong>Allocation preview</strong><small>Oldest due receipt is settled first.</small></div></div><div id="debt-allocation-lines"></div></div>
+          <div class="debt-dialog-actions"><button type="button" class="button secondary" data-debt-payment-close>Cancel</button><button class="button" id="debt-payment-submit">Save payment & issue receipt</button></div>
+        </form>
+      </div>
+    </dialog>
     {% endif %}
 
     <section class="debt-section">
