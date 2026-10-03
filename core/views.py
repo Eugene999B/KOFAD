@@ -854,7 +854,7 @@ def finance(request, branch):
         "recent": Document.objects.filter(branch=branch, kind__in=["expense", "collection", "supplier_payment"])[:20]})
 
 
-@protected("approve_operations")
+@protected("operate_sales|approve_operations|manage_company")
 def returns(request, branch):
     from . import returns as return_controls
     from .models import CustomerReturnRequest
