@@ -1,8 +1,11 @@
 import copy
 import json
+from datetime import timedelta
 
 from django.contrib.auth.models import Permission, User
+from django.contrib.sessions.models import Session
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from . import maintenance
 from .models import Audit, Branch, Company, Party, Product, Stock
@@ -73,6 +76,11 @@ class MaintenanceServiceTests(TransactionTestCase):
         bundle = maintenance.create_backup(self.user)
         original_product_count = Product.objects.count()
         original_party_count = Party.objects.count()
+        Session.objects.create(
+            session_key="stale-session-before-restore",
+            session_data="e30:1test:invalid",
+            expire_date=timezone.now() + timedelta(days=1),
+        )
 
         Product.objects.create(
             name="Temporary product",
@@ -95,6 +103,7 @@ class MaintenanceServiceTests(TransactionTestCase):
         self.assertFalse(Product.objects.filter(sku="TEMP-DELETE").exists())
         self.assertEqual(Party.objects.count(), original_party_count)
         self.assertEqual(Company.objects.get().name, "KOFAD IMPEX ENTERPRISE")
+        self.assertFalse(Session.objects.exists())
         restored = User.objects.get(username="owner")
         self.assertTrue(restored.check_password("test-password-long-enough"))
         self.assertTrue(Audit.objects.filter(action="system.restore.completed").exists())

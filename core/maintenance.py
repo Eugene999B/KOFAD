@@ -196,7 +196,7 @@ def _table_names_for_restore():
     existing = set(connection.introspection.table_names())
     names = {
         name for name in existing
-        if name in {"django_content_type", "django_admin_log"} or name.startswith("auth_") or name.startswith("core_")
+        if name in {"django_content_type", "django_admin_log", "django_session"} or name.startswith("auth_") or name.startswith("core_")
     }
     return sorted(names)
 
