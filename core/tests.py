@@ -1,6 +1,7 @@
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
@@ -393,7 +394,7 @@ class CreditorsTests(Fixtures, TestCase):
         self.setup_data()
 
     def credit_purchase(self, amount="60", due_date=None, external_reference="SUP-INV-001"):
-        due_date = due_date or (timezone.localdate() + timezone.timedelta(days=14)).isoformat()
+        due_date = due_date or (timezone.localdate() + timedelta(days=14)).isoformat()
         return s.post_trade(
             self.user,
             self.branch,
@@ -431,7 +432,7 @@ class CreditorsTests(Fixtures, TestCase):
             {
                 "party": str(self.supplier.pk), "amount": "850.00",
                 "document_date": timezone.localdate().isoformat(),
-                "due_date": (timezone.localdate() + timezone.timedelta(days=7)).isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=7)).isoformat(),
                 "external_reference": "RENT-OCT-2026", "category": "rent",
                 "note": "October warehouse rent payable",
             },
@@ -442,6 +443,24 @@ class CreditorsTests(Fixtures, TestCase):
         self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before)
         self.assertEqual(s.party_debt(self.supplier), Decimal("850"))
 
+    def test_direct_bill_can_create_new_creditor_inline(self):
+        from . import creditors as creditor_service
+        bill = creditor_service.post_creditor_bill(
+            self.user, self.branch,
+            {
+                "supplier_name": "New Service Vendor", "supplier_phone": "0249876543",
+                "supplier_email": "vendor@example.test", "amount": "300",
+                "document_date": timezone.localdate().isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=10)).isoformat(),
+                "external_reference": "NSV-001", "category": "professional",
+                "note": "Professional service payable",
+            },
+            uuid.uuid4(),
+        )
+        self.assertEqual(bill.party.kind, "supplier")
+        self.assertEqual(bill.party.name, "New Service Vendor")
+        self.assertEqual(s.party_debt(bill.party), Decimal("300"))
+
     def test_duplicate_supplier_reference_is_blocked_across_purchase_and_direct_bill(self):
         from . import creditors as creditor_service
         self.credit_purchase(external_reference="VENDOR-77")
@@ -451,7 +470,7 @@ class CreditorsTests(Fixtures, TestCase):
                 {
                     "party": str(self.supplier.pk), "amount": "120",
                     "document_date": timezone.localdate().isoformat(),
-                    "due_date": (timezone.localdate() + timezone.timedelta(days=5)).isoformat(),
+                    "due_date": (timezone.localdate() + timedelta(days=5)).isoformat(),
                     "external_reference": "vendor-77", "category": "professional",
                     "note": "Duplicate supplier bill reference",
                 },
@@ -464,8 +483,8 @@ class CreditorsTests(Fixtures, TestCase):
             self.user, self.branch,
             {
                 "party": str(self.supplier.pk), "amount": "40",
-                "document_date": (timezone.localdate() - timezone.timedelta(days=30)).isoformat(),
-                "due_date": (timezone.localdate() - timezone.timedelta(days=10)).isoformat(),
+                "document_date": (timezone.localdate() - timedelta(days=30)).isoformat(),
+                "due_date": (timezone.localdate() - timedelta(days=10)).isoformat(),
                 "external_reference": "OLD-40", "category": "utilities",
                 "note": "Old utility creditor bill",
             },
@@ -473,7 +492,7 @@ class CreditorsTests(Fixtures, TestCase):
         )
         purchase = self.credit_purchase(
             amount="60",
-            due_date=(timezone.localdate() + timezone.timedelta(days=10)).isoformat(),
+            due_date=(timezone.localdate() + timedelta(days=10)).isoformat(),
             external_reference="NEW-60",
         )
         payment = creditor_service.post_supplier_account_payment(
@@ -504,7 +523,7 @@ class CreditorsTests(Fixtures, TestCase):
             {
                 "party": str(self.supplier.pk), "amount": "35",
                 "document_date": timezone.localdate().isoformat(),
-                "due_date": (timezone.localdate() + timezone.timedelta(days=5)).isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=5)).isoformat(),
                 "external_reference": "TWO-35", "category": "maintenance",
                 "note": "Workshop repair payable",
             },
@@ -527,7 +546,7 @@ class CreditorsTests(Fixtures, TestCase):
             {
                 "party": str(self.supplier.pk), "amount": "90",
                 "document_date": timezone.localdate().isoformat(),
-                "due_date": (timezone.localdate() + timezone.timedelta(days=2)).isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=2)).isoformat(),
                 "external_reference": "ERR-90", "category": "other",
                 "note": "Creditor bill entered incorrectly",
             },
@@ -544,7 +563,7 @@ class CreditorsTests(Fixtures, TestCase):
             {
                 "party": str(self.supplier.pk), "amount": "50",
                 "document_date": timezone.localdate().isoformat(),
-                "due_date": (timezone.localdate() + timezone.timedelta(days=2)).isoformat(),
+                "due_date": (timezone.localdate() + timedelta(days=2)).isoformat(),
                 "external_reference": "PAID-50", "category": "other",
                 "note": "Partially settled creditor bill",
             },
