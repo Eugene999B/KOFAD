@@ -879,6 +879,113 @@ def settings_view(request, branch):
 
 
 @protected("manage_company")
+def location_settings(request, branch):
+    form = LocationSettingsForm(request.POST or None, instance=branch)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            before = {"name": branch.name, "address": branch.address}
+            obj = form.save()
+            s.audit(request.user, branch, "settings.location.updated", obj.pk, {
+                "before": before,
+                "after": {"name": obj.name, "address": obj.address},
+            })
+        messages.success(request, "Location settings saved.")
+        return redirect("location_settings")
+    return render(request, "form.html", {
+        "title": "Location settings",
+        "form": form,
+        "description": "Set the store/location name and address that appear on receipts, reports and location-scoped records.",
+        "settings_section": True,
+    })
+
+
+@protected("manage_company")
+def debt_settings(request, branch):
+    item = DebtSettings.objects.first() or DebtSettings.objects.create()
+    form = DebtSettingsForm(request.POST or None, instance=item)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            before = {field: str(getattr(item, field)) for field in form.fields}
+            obj = form.save()
+            s.audit(request.user, branch, "settings.debt.updated", obj.pk, {
+                "before": before,
+                "after": {field: str(form.cleaned_data.get(field)) for field in form.fields},
+            })
+        messages.success(request, "Debt settings saved.")
+        return redirect("debt_settings")
+    return render(request, "debt_settings.html", {
+        "title": "Debt settings",
+        "form": form,
+        "item": item,
+        "sms_enabled": settings.SMS_ENABLED,
+        "sms_sandbox": settings.SMS_SANDBOX,
+    })
+
+
+@protected("manage_company")
+def communication_settings(request, branch):
+    item = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
+    form = CommunicationSettingsForm(request.POST or None, instance=item, prefix="policy")
+    contact_form = ManagementContactForm(request.POST or None, prefix="contact")
+    action = request.POST.get("action") if request.method == "POST" else ""
+
+    if request.method == "POST":
+        try:
+            if action == "save_policy" and form.is_valid():
+                with transaction.atomic():
+                    before = {field: str(getattr(item, field)) for field in form.fields}
+                    obj = form.save()
+                    s.audit(request.user, branch, "settings.communications.updated", obj.pk, {
+                        "before": before,
+                        "after": {field: str(form.cleaned_data.get(field)) for field in form.fields},
+                    })
+                messages.success(request, "Communication settings saved.")
+                return redirect("communication_settings")
+            if action == "add_contact" and contact_form.is_valid():
+                with transaction.atomic():
+                    contact = contact_form.save()
+                    s.audit(request.user, branch, "settings.management_contact.added", contact.pk, {
+                        "name": contact.name, "phone": contact.phone,
+                    })
+                messages.success(request, "Management notification contact added.")
+                return redirect("communication_settings")
+            if action == "delete_contact":
+                contact = get_object_or_404(ManagementContact, pk=request.POST.get("id"))
+                with transaction.atomic():
+                    if Message.objects.filter(management_contact=contact).exists():
+                        contact.active = False
+                        contact.save(update_fields=["active"])
+                        s.audit(request.user, branch, "settings.management_contact.deactivated", contact.pk)
+                        messages.success(request, "Contact deactivated because notification history exists.")
+                    else:
+                        evidence = {"name": contact.name, "phone": contact.phone}
+                        pk = contact.pk
+                        contact.delete()
+                        s.audit(request.user, branch, "settings.management_contact.deleted", pk, evidence)
+                        messages.success(request, "Management notification contact removed.")
+                return redirect("communication_settings")
+            if action and action not in {"save_policy", "add_contact", "delete_contact"}:
+                raise ValidationError("Unknown communication settings action.")
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, problem(exc))
+
+    templates = {
+        row.code: row for row in MessageTemplate.objects.filter(code__in=["receipt", "payment", "debt"])
+    }
+    return render(request, "communication_settings.html", {
+        "title": "Communication settings",
+        "form": form,
+        "contact_form": contact_form,
+        "item": item,
+        "contacts": ManagementContact.objects.select_related("branch").all(),
+        "templates": templates,
+        "sms_enabled": settings.SMS_ENABLED,
+        "sms_sandbox": settings.SMS_SANDBOX,
+        "sms_provider": settings.SMS_PROVIDER,
+    })
+
+
+@protected("manage_company")
 def sales_policy_settings(request, branch):
     return _settings_form(
         request, branch, SalesPolicyForm, "Sales & credit policies",
