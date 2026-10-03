@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import PayrollEntry, PayrollPayment, PayrollPeriod, PayrollRule, Worker
+from .models import Closing, PayrollEntry, PayrollPayment, PayrollPeriod, PayrollRule, Worker
 
 
 ZERO = Decimal("0")
@@ -292,6 +292,8 @@ def record_payment(user, entry, amount, method, reference="", note=""):
     row = PayrollEntry.objects.select_for_update().select_related("period").get(pk=entry.pk)
     if row.period.status not in ["locked", "reconciled"]:
         raise ValidationError("Payroll must be locked before salary payments are posted.")
+    if Closing.objects.filter(branch=row.period.branch, date=timezone.localdate()).exists():
+        raise ValidationError("Today is already closed. Salary payments cannot be posted after daily closing.")
     amount = q(amount)
     if amount <= 0 or amount > row.balance:
         raise ValidationError("Salary payment must be positive and cannot exceed the outstanding net pay.")
@@ -302,6 +304,20 @@ def record_payment(user, entry, amount, method, reference="", note=""):
     row.paid_amount = q(row.paid_amount + amount)
     row.save(update_fields=["paid_amount", "updated_at"])
     return payment
+
+
+@transaction.atomic
+def return_to_draft(period):
+    locked = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
+    if locked.status not in ["prepared", "approved"]:
+        raise ValidationError("Only prepared or approved payroll can be returned to draft.")
+    locked.status = "draft"
+    locked.prepared_by = None
+    locked.prepared_at = None
+    locked.approved_by = None
+    locked.approved_at = None
+    locked.save(update_fields=["status", "prepared_by", "prepared_at", "approved_by", "approved_at"])
+    return locked
 
 
 @transaction.atomic
