@@ -219,8 +219,8 @@ def balance(invoice):
 
 
 def party_debt(party):
-    kind = "sale" if party.kind == "customer" else "purchase"
-    return sum((balance(d) for d in Document.objects.filter(party=party, kind=kind)), ZERO)
+    kinds = ["sale"] if party.kind == "customer" else ["purchase", "creditor_charge"]
+    return sum((balance(d) for d in Document.objects.filter(party=party, kind__in=kinds)), ZERO)
 
 
 def payments(document, rows, direction, enforce_enabled=True):
