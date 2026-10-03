@@ -83,7 +83,8 @@ def accounting_snapshot(branch, first, last, category="", method=""):
         payable_category__in=payable_expense_categories,
     ).exclude(correction__status="approved")
     if category:
-        creditor_expenses = creditor_expenses.filter(payable_category=category)
+        creditor_category = "staff" if category == "salary" else category
+        creditor_expenses = creditor_expenses.filter(payable_category=creditor_category)
     expenses += _sum(creditor_expenses)
     inventory_losses = _sum(docs.filter(kind="inventory_writeoff"))
 
@@ -158,6 +159,11 @@ def accounting_snapshot(branch, first, last, category="", method=""):
         month_docs = Document.objects.filter(branch=branch, created_at__date__range=(month_first, month_last))
         month_sales = _sum(month_docs.filter(kind="sale")) - _sum(month_docs.filter(kind="return"))
         month_expense = _sum(month_docs.filter(kind="expense")) - _sum(month_docs.filter(kind="reversal", original__kind="expense"))
+        month_expense += _sum(Document.objects.filter(
+            branch=branch, kind="creditor_charge",
+            document_date__range=(month_first, month_last),
+            payable_category__in=payable_expense_categories,
+        ).exclude(correction__status="approved"))
         month_payroll = PayrollEntry.objects.filter(
             period__branch=branch, period__end_date__range=(month_first, month_last),
             period__status__in=["locked", "reconciled"],
