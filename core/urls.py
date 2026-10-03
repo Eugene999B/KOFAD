@@ -5,6 +5,7 @@ from . import count_views
 from . import admin_views
 from . import export_views
 from . import maintenance_views
+from . import accounting_views, payroll_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("account/", accounts.account, name="account"),
@@ -35,7 +36,26 @@ urlpatterns = [
     path("parties/<int:pk>/statement/export/<str:format>/", export_views.statement_download, name="statement_export"),
     path("corrections/", v.corrections, name="corrections"),
     path("debts/", v.debts, name="debts"),
-    path("finance/", v.finance, name="finance"), path("returns/", v.returns, name="returns"),
+    path("finance/", v.finance, name="finance"),
+    path("accounting/", accounting_views.accounting, name="accounting"),
+    path("accounting/export/<str:format>/", accounting_views.accounting_export, name="accounting_export"),
+    path("workers/", workforce_views.workers, name="workers"),
+    path("workers/new/", workforce_views.worker_edit, name="worker_new"),
+    path("workers/<int:pk>/edit/", workforce_views.worker_edit, name="worker_edit"),
+    path("workers/<int:pk>/", workforce_views.worker_profile, name="worker_profile"),
+    path("workers/<int:pk>/documents/", workforce_views.worker_document_upload, name="worker_document_upload"),
+    path("workers/<int:pk>/documents/<int:document_id>/", workforce_views.worker_document_download, name="worker_document_download"),
+    path("workers/<int:pk>/id-card.pdf", workforce_views.worker_id_card, name="worker_id_card"),
+    path("workers/export/<str:format>/", workforce_views.workers_export, name="workers_export"),
+    path("payroll/", payroll_views.payroll, name="payroll"),
+    path("payroll/rules/", payroll_views.payroll_rules, name="payroll_rules"),
+    path("payroll/<int:pk>/", payroll_views.payroll_period, name="payroll_period"),
+    path("payroll/<int:pk>/action/", payroll_views.payroll_action, name="payroll_action"),
+    path("payroll/<int:pk>/entries/<int:entry_id>/", payroll_views.payroll_entry_update, name="payroll_entry_update"),
+    path("payroll/<int:pk>/entries/<int:entry_id>/payment/", payroll_views.payroll_payment, name="payroll_payment"),
+    path("payroll/<int:pk>/export/<str:format>/", payroll_views.payroll_export, name="payroll_export"),
+    path("payroll/<int:pk>/payslip/<int:entry_id>/<str:format>/", payroll_views.payslip, name="payslip"),
+    path("returns/", v.returns, name="returns"),
     path("supplier-returns/", v.supplier_returns, name="supplier_returns"),
     path("quarantine/", v.quarantine, name="quarantine"),
     path("operations/", v.operations, name="operations"), path("closings/", v.closings, name="closings"),
