@@ -228,17 +228,17 @@ class BusinessTests(Fixtures, TestCase):
 
     def test_owner_provision_command_creates_equal_full_admin_without_storing_password_in_code(self):
         with patch.dict(os.environ, {
-            "KOFAD_OWNER_ADMIN_NAME": "Ernest Koffie Amoah",
-            "KOFAD_OWNER_ADMIN_PHONE": "0244711580",
-            "KOFAD_OWNER_ADMIN_INITIAL_PASSWORD": "0244711580",
+            "KOFAD_OWNER_ADMIN_NAME": "Test Owner",
+            "KOFAD_OWNER_ADMIN_PHONE": "0249998877",
+            "KOFAD_OWNER_ADMIN_INITIAL_PASSWORD": "0249998877",
         }, clear=False):
             call_command("provision_owner_admin", confirm_owner_admin=True)
-        owner = User.objects.get(username="0244711580")
-        self.assertEqual(owner.get_full_name(), "Ernest Koffie Amoah")
+        owner = User.objects.get(username="0249998877")
+        self.assertEqual(owner.get_full_name(), "Test Owner")
         self.assertTrue(owner.is_superuser)
         self.assertTrue(owner.is_staff)
-        self.assertTrue(owner.check_password("0244711580"))
-        self.assertEqual(owner.access.recovery_phone, "+233244711580")
+        self.assertTrue(owner.check_password("0249998877"))
+        self.assertEqual(owner.access.recovery_phone, "+233249998877")
         self.assertTrue(owner.access.must_change_password)
         self.assertEqual(
             set(owner.access.branches.values_list("pk", flat=True)),
