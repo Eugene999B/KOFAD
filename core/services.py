@@ -81,8 +81,57 @@ def permit(user, branch, permission):
         raise PermissionDenied("This location is outside your access.")
 
 
-def audit(user, branch, action, reference, detail=None):
-    Audit.objects.create(actor=user, branch=branch, action=action, reference=str(reference), detail=detail or {})
+def _audit_category(action):
+    prefix = str(action or "").split(".", 1)[0]
+    return {
+        "sale": "sales", "return": "returns", "customer_return": "returns", "supplier_return": "returns",
+        "purchase": "purchasing", "creditor": "finance", "expense": "finance", "collection": "finance",
+        "supplier_payment": "finance", "payroll": "payroll", "closing": "finance", "correction": "controls",
+        "stock": "inventory", "inventory": "inventory", "quarantine": "inventory", "count": "inventory",
+        "staff": "administration", "role": "administration", "auth": "security", "journal": "accounting",
+    }.get(prefix, "system")
+
+
+def audit(user, branch, action, reference, detail=None, *, category=None, severity="info", entity_type="", entity_id=""):
+    """Append a structured, tamper-evident business event.
+
+    Existing callers can continue using the original five arguments. New control
+    workflows can add category/severity/entity context without changing the ledger.
+    """
+    detail = detail or {}
+    category = str(category or _audit_category(action))[:32]
+    severity = str(severity or "info")[:12]
+    event_id = uuid.uuid4()
+    previous = Audit.objects.filter(branch=branch).exclude(event_hash="").order_by("-created_at", "-pk").first()
+    previous_hash = previous.event_hash if previous else ""
+    canonical = json.dumps({
+        "event_id": str(event_id),
+        "branch": getattr(branch, "pk", None),
+        "actor": getattr(user, "pk", None),
+        "action": str(action),
+        "reference": str(reference),
+        "category": category,
+        "severity": severity,
+        "entity_type": str(entity_type or ""),
+        "entity_id": str(entity_id or reference or ""),
+        "detail": detail,
+        "previous_hash": previous_hash,
+    }, sort_keys=True, separators=(",", ":"), default=str)
+    event_hash = hashlib.sha256(canonical.encode()).hexdigest()
+    return Audit.objects.create(
+        event_id=event_id,
+        actor=user,
+        branch=branch,
+        action=str(action)[:80],
+        reference=str(reference)[:100],
+        category=category,
+        severity=severity,
+        entity_type=str(entity_type or "")[:60],
+        entity_id=str(entity_id or reference or "")[:100],
+        detail=detail,
+        previous_hash=previous_hash,
+        event_hash=event_hash,
+    )
 
 
 def lock_branch(branch):
