@@ -246,8 +246,47 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertIn("500.00", message.body)
         self.assertIn("variance GHS -2.00", message.body)
 
+    @override_settings(
+        SMS_ENABLED=True,
+        SMS_PROVIDER="arkesel",
+        SMS_SANDBOX=False,
+        SMS_PUBLIC_ORIGIN="https://kofad.example.test",
+        ARKESEL_API_KEY="ci-test-key",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_daily_closing_sends_immediately_to_all_configured_management_numbers(self, submit_many):
+        submit_many.side_effect = lambda recipients, body, sender, callback_url, sandbox: [
+            Submission("accepted", provider_id=f"close-{index}", http_status=200, recipient=recipient)
+            for index, recipient in enumerate(recipients, 1)
+        ]
+        ManagementContact.objects.create(
+            name="Owner One", phone="+233244444444", receive_closing=True
+        )
+        ManagementContact.objects.create(
+            name="Owner Two", phone="+233255555555", receive_closing=True
+        )
+        CommunicationSettings.objects.update_or_create(
+            pk=1, defaults={"daily_closing_mode": "send"}
+        )
+        closing = Closing.objects.create(
+            branch=self.branch,
+            date=timezone.localdate(),
+            expected={"cash": "100.00", "momo": "0.00", "bank": "0.00", "card": "0.00"},
+            counted={"cash": "100.00", "momo": "0.00", "bank": "0.00", "card": "0.00"},
+            summary={"sales_total": "900.00", "debt_collections": "0.00", "expenses_total": "20.00"},
+            submitted_by=self.user,
+        )
+        sent = automations.prepare_closing_notifications(closing, self.user)
+        self.assertEqual(len(sent), 2)
+        self.assertTrue(all(message.status == "accepted" for message in sent))
+        submit_many.assert_called_once()
+        self.assertEqual(set(submit_many.call_args.args[0]), {
+            "+233244444444", "+233255555555"
+        })
+
     @override_settings(SMS_ENABLED=False)
-    def test_automatic_queue_mode_stays_draft_when_live_sms_is_unavailable(self):
+    def test_automatic_send_mode_stays_draft_when_live_sms_is_unavailable(self):
         contact = ManagementContact.objects.create(
             name="Owner alerts",
             phone="+233245555555",
