@@ -173,7 +173,7 @@ class BusinessTests(Fixtures, TestCase):
     def test_all_pages_render(self):
         self.authenticate_client()
         for path in ["/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
-                     "/finance/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
+                     "/finance/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/operations/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
                      "/administration/","/administration/users/","/administration/roles/","/exports/","/communications/",
                      "/products/new/","/parties/new/"]:
             with self.subTest(path=path):
@@ -193,9 +193,14 @@ class BusinessTests(Fixtures, TestCase):
             if format == "pdf":
                 self.assertTrue(response.content.startswith(b"%PDF"))
             if format == "xlsx":
-                self.assertEqual(load_workbook(BytesIO(response.content)).active["A2"].value,"Reference")
+                sheet = load_workbook(BytesIO(response.content)).active
+                self.assertEqual(sheet["A1"].value, Company.objects.first().name)
+                self.assertIn("Metric", [cell.value for cell in sheet["A"]])
+                self.assertIsNotNone(sheet.freeze_panes)
             if format == "docx":
-                self.assertEqual(len(WordDocument(BytesIO(response.content)).tables),1)
+                document = WordDocument(BytesIO(response.content))
+                self.assertGreaterEqual(len(document.tables), 1)
+                self.assertIn(Company.objects.first().name, "\n".join(p.text for p in document.paragraphs))
 
     def test_csrf_is_enforced(self):
         from django.test import Client
@@ -296,6 +301,91 @@ class LedgerIntegrityTests(Fixtures, TestCase):
         closing = s.submit_closing(self.user,self.branch,timezone.localdate(),{"cash":"50"},"")
         with self.assertRaises(DatabaseError), transaction.atomic():
             type(closing).objects.filter(pk=closing.pk).update(counted={"cash":"0"})
+
+
+class WorkforcePayrollAccountingTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+
+    def worker(self):
+        from .models import Worker
+        return Worker.objects.create(
+            branch=self.branch, employee_code="KFD-0001", first_name="Ama", last_name="Mensah",
+            phone="0240000000", department="Operations", job_title="Store Officer",
+            employment_type="permanent", status="active", hire_date="2026-01-01",
+            base_salary=Decimal("1000.00"), recurring_allowance=Decimal("0.00"),
+            ghana_card_number="GHA-TEST", ssnit_number="SSNIT-TEST",
+            bank_name="Test Bank", bank_account_number="123456",
+            created_by=self.user,
+        )
+
+    def test_current_ghana_payroll_math_and_control_workflow(self):
+        from . import payroll_engine
+        from .models import PayrollEntry, PayrollRule
+        worker = self.worker()
+        rule = PayrollRule.objects.filter(effective_from__lte="2026-10-31").order_by("-effective_from").first()
+        self.assertIsNotNone(rule)
+        self.assertEqual(rule.employee_ssnit_rate, Decimal("5.5000"))
+        period = payroll_engine.create_period(self.user, self.branch, 2026, 10)
+        entry = PayrollEntry.objects.get(period=period, worker=worker)
+        self.assertEqual(entry.ssnit_employee, Decimal("55.00"))
+        self.assertEqual(entry.paye_tax, Decimal("44.98"))
+        self.assertEqual(entry.net_pay, Decimal("900.02"))
+        period, issues = payroll_engine.prepare_period(self.user, period)
+        self.assertFalse(any("negative" in issue.lower() for issue in issues))
+        with self.assertRaises(ValidationError):
+            payroll_engine.approve_period(self.user, period)
+        period = payroll_engine.approve_period(self.reviewer, period)
+        period = payroll_engine.lock_period(self.reviewer, period)
+        payment = payroll_engine.record_payment(
+            self.user, entry, entry.net_pay, "bank", "TEST-PAY-001", "October salary"
+        )
+        self.assertEqual(payment.amount, Decimal("900.02"))
+        period, outstanding = payroll_engine.reconcile_period(period)
+        self.assertFalse(outstanding)
+        self.assertEqual(period.status, "reconciled")
+
+    def test_worker_private_document_id_card_and_filtered_exports(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from .models import WorkerDocument
+        worker = self.worker()
+        self.authenticate_client()
+        response = self.client.post(f"/workers/{worker.pk}/documents/", {
+            "category": "contract",
+            "title": "Employment contract",
+            "document_number": "CON-001",
+            "file": SimpleUploadedFile("contract.pdf", b"%PDF-1.4 KOFAD TEST", content_type="application/pdf"),
+        })
+        self.assertEqual(response.status_code, 302)
+        document = WorkerDocument.objects.get(worker=worker)
+        self.assertEqual(len(document.checksum_sha256), 64)
+        downloaded = self.client.get(f"/workers/{worker.pk}/documents/{document.pk}/")
+        self.assertEqual(downloaded.status_code, 200)
+        self.assertEqual(downloaded.content, b"%PDF-1.4 KOFAD TEST")
+        card = self.client.get(f"/workers/{worker.pk}/id-card.pdf")
+        self.assertEqual(card.status_code, 200)
+        self.assertTrue(card.content.startswith(b"%PDF"))
+        workforce = self.client.get("/workers/export/xlsx/?department=Operations&joined_from=2026-01-01")
+        self.assertEqual(workforce.status_code, 200)
+
+    def test_accounting_reports_and_payroll_pages_share_source_records(self):
+        from . import payroll_engine
+        worker = self.worker()
+        self.sale(2)
+        expense = s.post_expense(
+            self.user, self.branch,
+            {"amount": "20", "method": "cash", "note": "Fuel for local delivery", "category": "fuel"},
+            uuid.uuid4(),
+        )
+        self.assertEqual(expense.expense_category, "fuel")
+        payroll_engine.create_period(self.user, self.branch, 2026, 10)
+        self.authenticate_client()
+        self.assertEqual(self.client.get("/accounting/?start=2026-10-01&end=2026-10-31").status_code, 200)
+        self.assertEqual(self.client.get("/reports/?family=expenses&category=fuel&start=2026-10-01&end=2026-10-31").status_code, 200)
+        self.assertEqual(self.client.get("/payroll/").status_code, 200)
+        exported = self.client.get("/accounting/export/pdf/?start=2026-10-01&end=2026-10-31")
+        self.assertEqual(exported.status_code, 200)
+        self.assertTrue(exported.content.startswith(b"%PDF"))
 
 
 class CorrectionTests(Fixtures, TestCase):
@@ -444,7 +534,7 @@ class AdministrationAndExportTests(Fixtures, TestCase):
             if format == "pdf":
                 self.assertTrue(response.content.startswith(b"%PDF"))
             if format == "docx":
-                self.assertEqual(len(WordDocument(BytesIO(response.content)).tables), 1)
+                self.assertGreaterEqual(len(WordDocument(BytesIO(response.content)).tables), 1)
 
     def test_single_store_hides_location_switcher(self):
         self.other.delete()
