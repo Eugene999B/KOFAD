@@ -525,6 +525,7 @@
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
     if (customerConsent) customerConsent.checked = Boolean(customer.consent);
+    walkInCustomerButton?.classList.remove("active");
     changed();
     persist();
     if (cart.length && !paymentDialog?.open) requestAnimationFrame(openPayment);
@@ -541,6 +542,7 @@
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
     if (customerConsent) customerConsent.checked = false;
+    walkInCustomerButton?.classList.remove("active");
     if (customerSearch) customerSearch.value = "";
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
@@ -555,6 +557,7 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerConsent) customerConsent.checked = false;
+    walkInCustomerButton?.classList.remove("active");
     customerName?.focus();
     persist();
   }
@@ -599,7 +602,7 @@
   walkInCustomerButton?.addEventListener("click", () => {
     clearCustomer();
     walkInCustomerButton.classList.add("active");
-    customerSearch?.focus();
+    document.querySelector(".quick-pay")?.focus();
   });
 
   function setFullPayment(method) {
@@ -670,7 +673,7 @@
       else paymentDialog.setAttribute("open", "");
     }
     requestAnimationFrame(() => {
-      if (!purchase && !selectedCustomer && !newCustomerMode) customerSearch?.focus();
+      if (!purchase && !selectedCustomer && !newCustomerMode) walkInCustomerButton?.focus();
       else document.querySelector(".quick-pay")?.focus();
     });
   }
