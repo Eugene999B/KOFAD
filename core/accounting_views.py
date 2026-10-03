@@ -102,14 +102,12 @@ def accounting(request, branch):
         ledger_rows = [row for row in ledger_rows if row["source"] == source]
 
     pnl_rows = []
-    balance_rows = []
+    balance_rows = report["balance_sheet"]
     for row in report["trial_balance"]:
         typ = row["type"]
         signed = row["debit"] - row["credit"] if typ in {"asset", "expense", "contra_revenue"} else row["credit"] - row["debit"]
         if typ in {"revenue", "contra_revenue", "expense"}:
             pnl_rows.append({**row, "statement_balance": signed})
-        if typ in {"asset", "contra_asset", "liability", "equity"}:
-            balance_rows.append({**row, "statement_balance": signed})
 
     journals = ManualJournal.objects.filter(branch=branch).select_related(
         "requested_by", "reviewed_by"
@@ -151,15 +149,11 @@ def accounting_export(request, branch, format):
         columns = [("code", "Account"), ("account", "Name"), ("type", "Class"), ("amount", "Amount")]
         title, sheet = "Profit and loss", "Profit & Loss"
     elif view == "balance":
-        rows = []
-        for row in report["trial_balance"]:
-            if row["type"] in {"asset", "contra_asset", "liability", "equity"}:
-                if row["type"] in {"asset"}:
-                    value = row["debit"] - row["credit"]
-                else:
-                    value = row["credit"] - row["debit"]
-                rows.append({"code": row["code"], "account": row["name"], "type": row["type"], "amount": value})
-        rows.append({"code": "", "account": "Current-period profit / (loss)", "type": "equity", "amount": report["profit"]})
+        rows = [
+            {"code": row["code"], "account": row["name"], "type": row["type"], "amount": row["statement_balance"]}
+            for row in report["balance_sheet"]
+        ]
+        rows.append({"code": "", "account": "Accumulated operating result through reporting date", "type": "equity", "amount": report["accumulated_result"]})
         columns = [("code", "Account"), ("account", "Name"), ("type", "Class"), ("amount", "Amount")]
         title, sheet = "Statement of financial position", "Balance Sheet"
     elif view == "cashflow":
