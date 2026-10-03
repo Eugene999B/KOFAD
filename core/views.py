@@ -1011,7 +1011,7 @@ def report_data(request, branch):
     from .reporting import FAMILIES, branch_comparison, build_report
     start = request.GET.get("start", timezone.localdate().replace(day=1).isoformat())
     end = request.GET.get("end", timezone.localdate().isoformat())
-    family = request.GET.get("family", "executive")
+    family = request.GET.get("family", "register")
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:40]
     method = request.GET.get("method", "").strip()[:12]
