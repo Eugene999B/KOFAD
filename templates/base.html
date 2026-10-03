@@ -1,11 +1,11 @@
 {% load static %}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ title|default:"Business workspace" }} · KOFAD</title><link rel="icon" href="{% static 'brand/kofad-emblem.png' %}" type="image/png">
+<title>{{ title|default:"Business workspace" }} · KOFAD</title><link rel="icon" href="{% static 'brand/kofad-emblem.svg' %}" type="image/svg+xml"><link rel="icon" href="{% static 'brand/kofad-emblem.png' %}" type="image/png">
 <script src="{% static 'theme.js' %}"></script><link rel="stylesheet" href="{% static 'app.css' %}"><script defer src="{% static 'app.js' %}"></script>{% block head %}{% endblock %}</head>
 <body><a class="skip" href="#main">Skip to content</a>
 <div class="login-welcome-overlay" id="login-welcome-overlay" aria-hidden="true" data-user-name="{{ request.user.get_full_name|default:request.user.username }}" data-branch-name="{{ current_branch.name|default:'KOFAD' }}">
   <div class="welcome-orbit" aria-hidden="true"></div>
-  <div class="welcome-logo"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+  <div class="welcome-logo"><img src="{% static 'brand/kofad-emblem.svg' %}" alt=""></div>
   <p>WELCOME BACK</p>
   <h2><span id="welcome-person">{{ request.user.get_full_name|default:request.user.username }}</span></h2>
   <small>{{ current_branch.name|default:"KOFAD" }} · Ready for business</small>
