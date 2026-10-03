@@ -837,7 +837,7 @@ def finance(request, branch):
             messages.error(request, problem(exc))
     invoices = Document.objects.filter(branch=branch, kind__in=["sale", "purchase"], party__isnull=False)
     outstanding = [{"doc": d, "balance": s.balance(d)} for d in invoices]
-    return render(request, "finance.html", {"title": "Finance", "key": request.POST.get("key") or str(uuid.uuid4()),
+    return render(request, "finance.html", {"title": "Expenses", "key": request.POST.get("key") or str(uuid.uuid4()),
         "outstanding": [r for r in outstanding if r["balance"] > 0], "methods": s.active_payment_methods(),
         "recent": Document.objects.filter(branch=branch, kind__in=["expense", "collection", "supplier_payment"])[:20]})
 
