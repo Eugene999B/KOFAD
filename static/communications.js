@@ -135,8 +135,6 @@
   const SMS_STATUS_LABELS = {
     draft: "Ready to send",
     sending: "Sending…",
-    queued: "Sending…",
-    retry_wait: "Failed · retry",
     accepted: "Sent",
     delivered: "Delivered",
     undelivered: "Not delivered",
