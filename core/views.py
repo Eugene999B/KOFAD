@@ -1214,9 +1214,10 @@ def communications(request, branch):
                 selected = []
                 manual_phone = ""
                 if target == "one":
-                    selected = [get_object_or_404(
-                        customers, pk=request.POST.get("party")
-                    )]
+                    party_id = request.POST.get("party", "").strip()
+                    if not party_id:
+                        raise ValidationError("Choose a customer.")
+                    selected = [get_object_or_404(customers, pk=party_id)]
                 elif target == "selected":
                     ids = []
                     for value in request.POST.getlist("customer_ids"):
