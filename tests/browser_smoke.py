@@ -2,6 +2,8 @@
 import os
 import sys
 import time
+import uuid
+from datetime import timedelta
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -13,11 +15,28 @@ import django
 django.setup()
 from django.conf import settings
 from django.contrib.auth.models import User
-from core.models import Branch
+from django.utils import timezone
+from core import services as core_services
+from core.models import Branch, Document, Party, Product
 if not settings.DEBUG:
     raise RuntimeError("Browser fixtures are forbidden outside DEBUG environments.")
 warehouse, _ = Branch.objects.get_or_create(code="browser-wh", defaults={"name": "Browser warehouse"})
-User.objects.get(username="demo").access.branches.add(warehouse)
+demo_user = User.objects.get(username="demo")
+demo_user.access.branches.add(warehouse)
+main_branch = Branch.objects.get(code="main")
+demo_customer = Party.objects.get(branch=main_branch, kind="customer", name="Sample Trading Store")
+demo_product = Product.objects.get(sku="KFD-001")
+browser_debt = core_services.post_trade(
+    demo_user,
+    main_branch,
+    {
+        "party": demo_customer.pk,
+        "items": [{"product": demo_product.pk, "mode": "retail_unit", "quantity": 1}],
+        "payments": [],
+        "due_date": (timezone.localdate() + timedelta(days=7)).isoformat(),
+    },
+    uuid.uuid5(uuid.NAMESPACE_URL, "kofad-browser-debt-fixture"),
+)
 
 out = Path("test-results")
 out.mkdir(exist_ok=True)
@@ -96,13 +115,44 @@ with sync_playwright() as p:
     page.get_by_role("button",name="Complete sale",exact=False).click()
     page.wait_for_url("**/documents/**/")
     assert page.url.endswith(lost_response[0]["url"])
+    assert page.get_by_role("link", name="A4 PDF / print", exact=True).is_visible()
+    assert page.get_by_role("link", name="Thermal 80mm PDF", exact=True).is_visible()
+    assert page.get_by_role("link", name="Thermal 58mm PDF", exact=True).is_visible()
     page.screenshot(path=str(out / "receipt-desktop.png"), full_page=True)
+
+    page.goto("http://127.0.0.1:8000/debts/?customer=" + str(demo_customer.pk))
+    page.get_by_role("button", name="Record partial payment", exact=True).click()
+    debt_dialog = page.locator("#debt-payment-box")
+    debt_dialog.wait_for(state="visible")
+    box = debt_dialog.bounding_box()
+    assert box["y"] >= 0 and box["y"] + box["height"] <= page.viewport_size["height"] + 2
+    assert page.locator("body").evaluate("el => getComputedStyle(el).overflow") == "hidden"
+    page.screenshot(path=str(out / "debt-payment-dialog-desktop.png"), full_page=True)
+    debt_dialog.get_by_role("button", name="Cancel", exact=True).click()
+
+    page.goto("http://127.0.0.1:8000/products/new/")
+    page.locator("#id_pack_enabled").select_option("no")
+    assert page.get_by_text("Single-unit product", exact=True).is_visible()
+    assert not page.locator("[data-pack-only]").first.is_visible()
+    assert page.locator("#retail-unit-label").inner_text() == "Retail price"
+    page.screenshot(path=str(out / "product-single-unit-desktop.png"), full_page=True)
+
     page.goto("http://127.0.0.1:8000/sales/new/")
     page.screenshot(path=str(out / "pos-desktop.png"), full_page=True)
     for path in ["/","/inventory/","/finance/","/operations/","/reports/","/communications/"]:
         page.goto("http://127.0.0.1:8000"+path)
         assert page.locator("h1").count() > 0
     page.set_viewport_size({"width":390,"height":844})
+    page.goto("http://127.0.0.1:8000/debts/?customer=" + str(demo_customer.pk))
+    page.get_by_role("button", name="Record partial payment", exact=True).click()
+    mobile_dialog = page.locator("#debt-payment-box")
+    mobile_dialog.wait_for(state="visible")
+    mobile_box = mobile_dialog.bounding_box()
+    assert abs((mobile_box["y"] + mobile_box["height"]) - 844) < 5
+    assert mobile_box["height"] <= 844 * .9
+    page.screenshot(path=str(out / "debt-payment-sheet-mobile.png"), full_page=True)
+    mobile_dialog.get_by_role("button", name="Cancel", exact=True).click()
+
     for name,path in [("dashboard","/"),("pos","/sales/new/"),("inventory","/inventory/")]:
         page.goto("http://127.0.0.1:8000"+path)
         page.screenshot(path=str(out / (name+"-mobile.png")), full_page=True)
@@ -221,4 +271,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Direct admin login, optional password change, recovery phone, cart-preserving search, lost-response checkout recovery, physical counts, transfer discrepancies, and desktop/mobile checks passed.")
+print("Direct admin login, exact receipt formats, fixed debt-payment dialog/sheet, single-unit product UX, search checkout, lost-response recovery, stock counts, transfers, and desktop/mobile checks passed.")
