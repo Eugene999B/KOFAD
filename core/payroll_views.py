@@ -160,14 +160,16 @@ def payroll_action(request, branch, pk):
             period, issues = engine.prepare_period(request.user, period)
             audit(request.user, branch, "payroll.prepared", period.pk, {"issues": issues, "totals": {k: str(v) for k, v in engine.period_totals(period).items()}})
             if request.user.is_superuser or request.user.has_perm("core.manage_company"):
-                period = engine.approve_period(request.user, period)
+                period = engine.approve_period(request.user, period, owner_direct=True)
                 audit(request.user, branch, "payroll.approved", period.pk, {"approved_by": request.user.username, "owner_direct": True})
                 messages.success(request, "Payroll prepared and owner-approved. Locking for payment remains a separate control.")
             else:
                 messages.success(request, "Payroll prepared and sent to the Approval Center.")
         elif action == "approve":
-            permit(request.user, branch, "approve_operations")
-            period = engine.approve_period(request.user, period)
+            owner_direct = request.user.is_superuser or request.user.has_perm("core.manage_company")
+            if not owner_direct:
+                permit(request.user, branch, "approve_operations")
+            period = engine.approve_period(request.user, period, owner_direct=owner_direct)
             audit(request.user, branch, "payroll.approved", period.pk, {"approved_by": request.user.username})
             messages.success(request, "Payroll approved by an independent reviewer.")
         elif action == "lock":
