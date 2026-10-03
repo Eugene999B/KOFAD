@@ -36,6 +36,9 @@ PRESERVED_RESET_MODELS = {
     "core.branch",
     "core.access",
     "core.company",
+    "core.debtsettings",
+    "core.communicationsettings",
+    "core.managementcontact",
     "core.messagetemplate",
 }
 
