@@ -154,7 +154,7 @@ class DebtSettingsForm(forms.ModelForm):
         }
         widgets = {"reminder_time": forms.TimeInput(attrs={"type": "time"})}
         help_texts = {
-            "delivery_mode": "Off does nothing. Draft prepares messages for review. Queue submits automatically only when live SMS is configured.",
+            "delivery_mode": "Off does nothing. Draft prepares messages for review. Send SMS immediately submits straight to Arkesel when live SMS is configured.",
             "reminder_time": "Africa/Accra local time.",
             "due_soon_days": "Comma-separated days before due date, for example 7,3,1.",
             "overdue_grace_value": "Zero means a debt becomes overdue immediately after its due date.",
