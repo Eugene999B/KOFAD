@@ -255,7 +255,39 @@ def render_receipt_pdf(document, format_name="a4"):
     story.append(line_table)
     story.append(Spacer(1, 4 * mm))
 
-    outstanding = balance(document) if document.kind in ("sale", "purchase") else None
+    if document.kind == "supplier_payment" and document.allocations.exists():
+        story.append(Paragraph("<b>APPLIED TO</b>", small))
+        story.append(Spacer(1, 1.5 * mm))
+        allocation_rows = [[
+            Paragraph("<b>BILL</b>", small),
+            Paragraph("<b>SUPPLIER REF.</b>", small),
+            Paragraph("<b>AMOUNT</b>", right_style),
+        ]]
+        for allocation in document.allocations.select_related("invoice").all():
+            invoice = allocation.invoice
+            allocation_rows.append([
+                Paragraph(_text(invoice.reference), small),
+                Paragraph(_text(invoice.external_reference or "—"), small),
+                Paragraph(_money(company, allocation.amount), right_style),
+            ])
+        allocation_table = Table(
+            allocation_rows,
+            colWidths=[page_width * .38, page_width * .34, page_width * .28],
+            repeatRows=1,
+        )
+        allocation_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), SOFT),
+            ("LINEBELOW", (0, 0), (-1, -1), .25, LINE),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2 if thermal else 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2 if thermal else 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(allocation_table)
+        story.append(Spacer(1, 4 * mm))
+
+    outstanding = balance(document) if document.kind in ("sale", "purchase", "creditor_charge") else None
     totals = []
     if document.kind == "inventory_writeoff":
         totals.append(["Inventory loss value", _money(company, document.total)])
