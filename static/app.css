@@ -385,3 +385,76 @@ html[data-theme="dark"] .debt-payment-dialog{background:#101d2a;border-color:var
   .compact-payment-grid{grid-template-columns:1fr 1fr}
   .transaction-message-card{padding:15px;margin-bottom:12px}.transaction-message-head{gap:10px}.transaction-message-preview{font-size:10px}
 }
+
+
+/* 2026-10-03: one-screen fast counter checkout */
+#pos .sale-command-bar,#pos .premium-steps{display:none}
+#pos .premium-pos-layout{height:calc(100dvh - 185px);min-height:540px;align-items:stretch;gap:18px}
+#pos .sale-search-column{min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#pos .sale-search-shell{flex:0 0 auto}
+#pos .catalog-status{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#pos .catalog-status.hidden{display:none}
+#pos .search-results-grid{flex:1;min-height:0;overflow:auto;align-content:start;padding-right:4px;overscroll-behavior:contain}
+#pos .premium-cart{height:100%;max-height:none;min-height:0;overflow:hidden;padding:18px;display:flex;flex-direction:column}
+#pos .premium-cart>.section-heading{flex:0 0 auto;margin-bottom:6px}
+#pos .premium-cart>#cart{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;padding-right:5px;overscroll-behavior:contain}
+#pos .cart-total{flex:0 0 auto;margin-top:8px;padding:13px 12px}
+#pos .premium-cart>#checkout{flex:0 0 auto;min-height:auto}
+#pos .sale-checkout-bar{margin-top:8px;padding:10px 12px}
+#pos .sale-checkout-total strong{font-size:18px}
+#pos .sale-payment-open{min-height:44px}
+#pos .held-sales-strip{position:relative;flex:0 0 auto;margin:7px 0 0;width:max-content;max-width:100%;z-index:15}
+#pos .held-sales-strip>summary{cursor:pointer;font-size:10px;font-weight:750;color:var(--teal);list-style:none;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--white)}
+#pos .held-sales-strip>summary::-webkit-details-marker{display:none}
+#pos .held-sales-menu{position:absolute;left:0;top:calc(100% + 5px);width:min(320px,80vw);max-height:220px;overflow:auto;padding:8px;border:1px solid var(--line);border-radius:11px;background:var(--white);box-shadow:0 18px 44px #07182730;display:grid;gap:4px}
+#pos .held-sales-menu .held-item{display:block;width:100%;text-align:left;padding:8px 9px;border-radius:7px}
+#pos .sale-payment-dialog{width:min(760px,calc(100vw - 30px));max-height:92dvh;overflow:auto;border-radius:20px}
+#pos .payment-dialog-heading{padding:16px 18px 11px}
+#pos .payment-dialog-heading h2{font-size:20px}
+#pos .payment-dialog-total{margin:11px 16px 0;padding:11px 13px}
+#pos .payment-dialog-total strong{font-size:21px}
+#pos .payment-dialog-customer,#pos .payment-dialog-stage{margin:9px 16px;padding:11px 12px}
+#pos .payment-dialog-customer .stage-heading,#pos .payment-dialog-stage .stage-heading{margin-bottom:8px}
+#pos .quick-customer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+#pos .quick-customer-actions .button,#pos .quick-customer-actions .text-button{margin:0;min-height:34px;padding:6px 10px;font-size:10px}
+#pos .payment-dialog-customer>#customer-search{min-height:40px;padding:9px 11px}
+#pos .customer-results{max-height:140px;overflow:auto}
+#pos .selected-customer{margin:7px 0;padding:8px 10px}
+#pos .new-customer-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#pos .new-customer-grid label{margin-top:4px}
+#pos .new-customer-grid input{min-height:40px}
+#pos .checkout-consent{margin:8px 0 0;padding:8px 9px}
+#pos .checkout-consent small{line-height:1.25}
+#pos .payment-dialog-stage>label[for="payment-plan"]{margin-top:4px}
+#pos #payment-plan{min-height:40px}
+#pos .quick-payment-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:6px}
+#pos .quick-payment-methods .button{margin:0;min-height:42px;padding:8px 9px}
+#pos .quick-payment-methods .quick-pay.active{background:var(--teal);border-color:var(--teal);color:#fff}
+#pos .payment-split-fields{margin-top:8px}
+#pos .compact-payment-grid{gap:7px}
+#pos .compact-payment-grid input{min-height:39px}
+#pos .payment-dialog-final{margin:8px 16px 14px;padding:9px 0 0;border-top:1px solid var(--line)}
+#pos .payment-dialog-final .stage-heading{display:none}
+#pos .payment-dialog-final .button{margin-top:6px;min-height:44px}
+#pos #override-reason{margin:6px 16px;width:calc(100% - 32px);min-height:62px}
+#pos dialog::backdrop{background:#061521a8;backdrop-filter:blur(2px)}
+
+@media(max-width:900px){
+  #pos .premium-pos-layout{height:auto;min-height:0}
+  #pos .sale-search-column{overflow:visible}
+  #pos .search-results-grid{max-height:none;overflow:visible}
+  #pos .premium-cart{height:auto;max-height:none;overflow:visible}
+  #pos .premium-cart>#cart{max-height:240px}
+}
+@media(max-width:680px){
+  #pos .sale-command-bar,#pos .premium-steps{display:none}
+  #pos .premium-pos-layout{gap:14px}
+  #pos .premium-cart{padding:14px;margin-bottom:0}
+  #pos .sale-payment-dialog{width:100%;max-width:none;max-height:92dvh;margin:auto 0 0;border-radius:18px 18px 0 0}
+  #pos .payment-dialog-customer,#pos .payment-dialog-stage{margin:8px 13px;padding:10px}
+  #pos .payment-dialog-total{margin:10px 13px 0}
+  #pos .new-customer-grid{grid-template-columns:1fr}
+  #pos .quick-payment-methods{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #pos .payment-dialog-final{margin:8px 13px 12px}
+  #pos .sale-checkout-bar{position:static;bottom:auto;box-shadow:none}
+}
