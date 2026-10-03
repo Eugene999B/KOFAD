@@ -1021,21 +1021,23 @@
     productQuery?.focus();
   }
 
-  receiptSmsButton?.addEventListener("click", async () => {
-    if (!lastCompletedSale?.document_id) return;
+  async function sendReceiptSmsNow() {
+    if (!lastCompletedSale?.document_id || !receiptSmsButton) return;
     setSuccessStatus("");
     receiptSmsButton.disabled = true;
-    receiptSmsButton.textContent = "Sending…";
+    receiptSmsButton.textContent = "Sending SMS…";
     try {
       const result = await api("/api/documents/" + lastCompletedSale.document_id + "/send-sms/", {});
       receiptSmsButton.textContent = result.status === "delivered" ? "Delivered ✓" : "SMS sent ✓";
       setSuccessStatus(result.message || (result.status === "delivered" ? "Receipt SMS delivered." : "Receipt SMS sent."));
     } catch (error) {
       receiptSmsButton.disabled = false;
-      receiptSmsButton.textContent = "Send SMS";
+      receiptSmsButton.textContent = "Retry SMS";
       setSuccessStatus(error.message, "error");
     }
-  });
+  }
+
+  receiptSmsButton?.addEventListener("click", sendReceiptSmsNow);
   document.querySelector("#new-sale-after-success")?.addEventListener("click", resetForNextSale);
   successDialog?.addEventListener("cancel", event => {
     event.preventDefault();
@@ -1061,7 +1063,15 @@
         location.href = result.url;
         return;
       }
+      const autoSendReceipt = Boolean(pendingBody?.customer_consent);
       showSaleSuccess(result);
+      if (autoSendReceipt) {
+        if (result.can_send_sms) {
+          void sendReceiptSmsNow();
+        } else {
+          setSuccessStatus(result.sms_reason || "Receipt SMS could not be sent.", "error");
+        }
+      }
     } catch (error) {
       if (error.rejected || !pendingBody) {
         pendingBody = null;
