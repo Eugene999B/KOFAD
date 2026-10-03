@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
+  <title id="title">KOFAD IMPEX Enterprise horizontal logo</title>
+  <desc id="desc">Horizontal KOFAD IMPEX lockup for software navigation and signage.</desc>
+  <g transform="translate(32 32) scale(.7)">
+    <rect x="6" y="6" width="408" height="408" rx="70" fill="none" stroke="#171717" stroke-width="12"/>
+    <path d="M105 86V334" fill="none" stroke="#171717" stroke-width="42"/>
+    <path d="M130 210L270 86" fill="none" stroke="#B66B45" stroke-width="38"/>
+    <path d="M130 210L286 334" fill="none" stroke="#171717" stroke-width="38"/>
+    <path d="M314 92V328" fill="none" stroke="#B66B45" stroke-width="30"/>
+  </g>
+  <text x="392" y="168" font-family="Georgia, 'Times New Roman', serif" font-size="108" font-weight="700" letter-spacing="6" fill="#171717">KOFAD</text>
+  <text x="398" y="224" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="11" fill="#B66B45">IMPEX</text>
+  <text x="398" y="272" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" letter-spacing="8" fill="#726B64">ENTERPRISE</text>
+</svg>
