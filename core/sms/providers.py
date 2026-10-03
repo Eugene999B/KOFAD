@@ -1,23 +1,12 @@
 """SMS provider adapters with direct submission and delivery-report lookup."""
 import json
 import re
-import socket
 from dataclasses import dataclass
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, HTTPRedirectHandler, build_opener
 
+import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.module_loading import import_string
-
-
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-# Never forward provider credentials to a redirected host.
-urlopen = build_opener(NoRedirect).open
 
 
 @dataclass(frozen=True)
@@ -93,6 +82,14 @@ class Arkesel:
         if not re.fullmatch(r"[A-Za-z0-9 ]{1,11}", settings.SMS_SENDER_ID):
             raise ValidationError("Configure an approved sender ID of 1–11 letters, digits or spaces.")
 
+    def _headers(self):
+        return {
+            "api-key": settings.ARKESEL_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "KOFAD-IMPEX/1.0",
+        }
+
     def submit_many(self, recipients, body, sender, callback_url, sandbox):
         self.validate()
         recipients = list(dict.fromkeys(str(value).strip() for value in recipients if str(value).strip()))
@@ -107,41 +104,51 @@ class Arkesel:
             payload["sandbox"] = True
         if callback_url:
             payload["callback_url"] = callback_url
-        request = Request(
-            self.endpoint,
-            data=json.dumps(payload).encode(),
-            method="POST",
-            headers={
-                "api-key": settings.ARKESEL_API_KEY,
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        )
+
         try:
-            with urlopen(request, timeout=settings.SMS_TIMEOUT_SECONDS) as response:
-                http_status = response.status
-                raw = response.read(65537)
-        except HTTPError as exc:
-            raw = exc.read(65537)
-            data = _read_json_bytes(raw)
-            detail = _provider_error(data, f"Arkesel rejected the request (HTTP {exc.code}).")
-            code = "rate_limited" if exc.code == 429 else (
-                "provider_rejected" if exc.code in (400, 401, 403, 404, 405, 413, 415, 422)
-                else "uncertain_http_response"
+            response = requests.post(
+                self.endpoint,
+                headers=self._headers(),
+                json=payload,
+                timeout=settings.SMS_TIMEOUT_SECONDS,
+                allow_redirects=False,
             )
-            status = "failed" if code == "provider_rejected" else ("retry_wait" if code == "rate_limited" else "unknown")
-            return [
-                Submission(status, http_status=exc.code, error_code=code, error_detail=detail, recipient=value)
-                for value in recipients
-            ]
-        except (URLError, TimeoutError, socket.timeout, OSError) as exc:
+        except requests.RequestException as exc:
             detail = _clean_detail(f"Arkesel network result is unknown: {exc}")
             return [
                 Submission("unknown", error_code="uncertain_network_result", error_detail=detail, recipient=value)
                 for value in recipients
             ]
 
-        data = _read_json_bytes(raw)
+        http_status = response.status_code
+        if 300 <= http_status < 400:
+            detail = "Arkesel returned an unexpected redirect. The SMS was not submitted."
+            return [
+                Submission("failed", http_status=http_status, error_code="provider_redirect",
+                           error_detail=detail, recipient=value)
+                for value in recipients
+            ]
+
+        try:
+            data = response.json()
+        except (ValueError, requests.JSONDecodeError):
+            data = None
+
+        if http_status < 200 or http_status >= 300:
+            fallback = f"Arkesel rejected the request (HTTP {http_status})."
+            if response.text and "browser" in response.text.lower() and "blocked" in response.text.lower():
+                fallback = "Arkesel blocked the API request at its security edge. The message was not sent."
+            detail = _provider_error(data, fallback)
+            code = "rate_limited" if http_status == 429 else (
+                "provider_rejected" if http_status in (400, 401, 403, 404, 405, 413, 415, 422)
+                else "uncertain_http_response"
+            )
+            status = "failed" if code == "provider_rejected" else ("retry_wait" if code == "rate_limited" else "unknown")
+            return [
+                Submission(status, http_status=http_status, error_code=code, error_detail=detail, recipient=value)
+                for value in recipients
+            ]
+
         if not isinstance(data, dict):
             return [
                 Submission("unknown", http_status=http_status, error_code="unrecognized_response",
@@ -208,27 +215,29 @@ class Arkesel:
         ids = list(dict.fromkeys(str(value).strip() for value in provider_ids if str(value).strip()))
         if not ids:
             return {}
-        request = Request(
-            self.reports_endpoint,
-            data=json.dumps({"msg_ids": ids}).encode(),
-            method="POST",
-            headers={
-                "api-key": settings.ARKESEL_API_KEY,
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        )
         try:
-            with urlopen(request, timeout=settings.SMS_TIMEOUT_SECONDS) as response:
-                raw = response.read(65537)
-                http_status = response.status
-        except HTTPError as exc:
-            detail = _provider_error(_read_json_bytes(exc.read(65537)), f"Delivery report request failed (HTTP {exc.code}).")
-            raise ValidationError(detail)
-        except (URLError, TimeoutError, socket.timeout, OSError) as exc:
+            response = requests.post(
+                self.reports_endpoint,
+                headers=self._headers(),
+                json={"msg_ids": ids},
+                timeout=settings.SMS_TIMEOUT_SECONDS,
+                allow_redirects=False,
+            )
+        except requests.RequestException as exc:
             raise ValidationError(_clean_detail(f"Delivery report network error: {exc}"))
-        data = _read_json_bytes(raw)
-        if http_status < 200 or http_status >= 300 or not isinstance(data, dict):
+        if response.status_code < 200 or response.status_code >= 300:
+            try:
+                data = response.json()
+            except (ValueError, requests.JSONDecodeError):
+                data = None
+            raise ValidationError(_provider_error(
+                data, f"Delivery report request failed (HTTP {response.status_code})."
+            ))
+        try:
+            data = response.json()
+        except (ValueError, requests.JSONDecodeError):
+            raise ValidationError("Arkesel returned an invalid delivery-report response.")
+        if not isinstance(data, dict):
             raise ValidationError("Arkesel returned an invalid delivery-report response.")
         if str(data.get("status", "")).lower() not in ("success", "successful"):
             raise ValidationError(_provider_error(data, "Arkesel delivery-report lookup failed."))
