@@ -19,6 +19,7 @@ FAMILIES = {
     "trend": "Sales, cost & operating trend",
     "sales": "Sales and gross profit",
     "customers": "Customer performance",
+    "creditors": "Creditors & payable aging",
     "expenses": "Expense analysis",
     "payments": "Payments & cash channels",
     "inventory": "Inventory valuation",
@@ -208,6 +209,31 @@ def build_report(branch, first, last, family="register", query="", category="", 
             ("customer", "Customer"), ("phone", "Phone"), ("sales", "Sales"),
             ("returns", "Returns"), ("net_sales", "Net sales"), ("transactions", "Sales count"),
             ("average", "Average sale"), ("outstanding", "Current outstanding"),
+        ]
+
+    if family == "creditors":
+        from . import creditors as creditor_service
+        overview = creditor_service.creditors_overview(branch, query, include_settled=True)
+        rows = [{
+            "creditor": row["party"].name,
+            "phone": row["party"].phone,
+            "outstanding": row["outstanding"],
+            "overdue": row["overdue"],
+            "due_7": row["due_7_days"],
+            "open_bills": row["bill_count"],
+            "next_due": row["next_due"] or "",
+            "max_days": row["maximum_days_overdue"],
+            "purchases": row["total_purchases"],
+            "direct": row["total_direct"],
+            "payments": row["total_paid"],
+        } for row in overview["rows"] if row["total_billed"] > 0]
+        return rows, [
+            ("creditor", "Creditor / supplier"), ("phone", "Phone"),
+            ("outstanding", "Outstanding"), ("overdue", "Overdue"),
+            ("due_7", "Due next 7 days"), ("open_bills", "Open bills"),
+            ("next_due", "Next due date"), ("max_days", "Max days overdue"),
+            ("purchases", "Purchase value"), ("direct", "Direct bills"),
+            ("payments", "Supplier payments"),
         ]
 
     if family == "expenses":
