@@ -28,6 +28,7 @@ from .forms import (
     LocationSettingsForm, ManagementContactForm, PartyForm, PaymentPolicyForm, ProductForm,
     ReceiptPolicyForm, SalesPolicyForm,
 )
+from .identity import normalize_ghana_phone, phone_variants
 from .models import (
     Access, Audit, Branch, Closing, CommunicationSettings, Company, Correction, DebtSettings,
     Document, HeldSale, Line, LoginAttempt, ManagementContact, Message, MessageTemplate,
@@ -71,15 +72,41 @@ def health(request):
         return JsonResponse({"status": "unavailable"}, status=503)
 
 
+def resolve_login_identifier(identifier):
+    """Resolve a login name to one user without weakening per-account lockout."""
+    username_matches = list(
+        User.objects.filter(username__iexact=identifier).values_list("username", flat=True)[:2]
+    )
+    if len(username_matches) == 1:
+        return username_matches[0], "user:" + username_matches[0].casefold()
+
+    try:
+        canonical_phone = normalize_ghana_phone(identifier)
+        variants = phone_variants(canonical_phone)
+    except ValidationError:
+        return identifier, "identifier:" + identifier.casefold()
+
+    phone_matches = list(
+        Access.objects.filter(recovery_phone__in=variants)
+        .values_list("user__username", flat=True)
+        .distinct()[:2]
+    )
+    if len(phone_matches) == 1:
+        return phone_matches[0], "user:" + phone_matches[0].casefold()
+    return identifier, "phone:" + canonical_phone
+
+
 @sensitive_post_parameters("password")
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
     error = ""
     if request.method == "POST":
-        username = request.POST.get("username", "").strip()[:150]
-        # Per-account lock avoids trusting spoofable forwarded IP headers.
-        key = hashlib.sha256(username.casefold().encode()).hexdigest()
+        identifier = request.POST.get("username", "").strip()[:150]
+        canonical, lock_identity = resolve_login_identifier(identifier)
+        # Per-account lock avoids trusting spoofable forwarded IP headers and
+        # keeps alternate phone formats on the same lockout bucket.
+        key = hashlib.sha256(lock_identity.encode()).hexdigest()
         with transaction.atomic():
             LoginAttempt.objects.get_or_create(key=key)
             attempt = LoginAttempt.objects.select_for_update().get(key=key)
@@ -89,24 +116,24 @@ def login_view(request):
                 if attempt.blocked_until:
                     attempt.failures = 0
                     attempt.blocked_until = None
-                matches = list(User.objects.filter(username__iexact=username).values_list("username", flat=True)[:2])
-                canonical = matches[0] if len(matches) == 1 else username
                 user = authenticate(request, username=canonical, password=request.POST.get("password", ""))
                 if user is not None:
                     access, _ = Access.objects.get_or_create(user=user)
-                if user is not None:
                     login(request, user)
                     request.session["access_version"] = access.session_version
                     request.session.pop("enroll_secret", None)
                     attempt.failures = 0
                     attempt.save()
                     s.audit(user, None, "session.login", user.pk)
+                    if access.must_change_password:
+                        messages.info(request, "Change the temporary password before continuing.")
+                        return redirect("password_change")
                     return redirect("dashboard")
                 attempt.failures += 1
                 if attempt.failures >= 5:
                     attempt.blocked_until = timezone.now() + timedelta(minutes=15)
                 attempt.save()
-                error = "The username or password is incorrect."
+                error = "The username, phone number or password is incorrect."
     return render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
 
 
