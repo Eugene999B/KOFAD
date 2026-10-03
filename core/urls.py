@@ -62,4 +62,5 @@ urlpatterns = [
     path("exports/", export_views.export_center, name="export_center"),
     path("exports/download/<str:format>/", export_views.download, name="export_download"),
     path("communications/", v.communications, name="communications"),
+    path("api/communications/status/", v.communication_status, name="communication_status"),
 ]
