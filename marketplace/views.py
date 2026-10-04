@@ -544,6 +544,27 @@ def customer_order(request, customer, pk):
 
 
 @market_customer_required
+@require_POST
+def customer_order_cancel(request, customer, pk):
+    with transaction.atomic():
+        order = get_object_or_404(OnlineOrder.objects.select_for_update(), pk=pk, customer=customer)
+        if order.status != "awaiting_payment" or order.payment_status == "paid":
+            messages.error(request, "This order can no longer be cancelled from your account.")
+            return redirect("market_order", pk=order.pk)
+        order.status = "cancelled"
+        order.payment_status = "unpaid"
+        order.save(update_fields=["status", "payment_status", "updated_at"])
+        order.reservations.update(active=False)
+        from .models import OrderEvent
+        OrderEvent.objects.create(
+            order=order, status="cancelled", title="Order cancelled",
+            note="Cancelled by the customer before payment.",
+        )
+    messages.success(request, "The unpaid order was cancelled and its stock hold was released.")
+    return redirect("market_order", pk=order.pk)
+
+
+@market_customer_required
 def customer_messages(request, customer, conversation_id=None):
     conversation = None
     order_hint = None
