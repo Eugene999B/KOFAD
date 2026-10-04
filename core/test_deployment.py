@@ -17,12 +17,12 @@ class InitialAccessTests(TestCase):
     def test_initial_credentials_go_directly_to_dashboard(self):
         response = self.client.post("/login/", {"username": "ADMIN", "password": "ADMIN"}, follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.request["PATH_INFO"], "/")
+        self.assertEqual(response.request["PATH_INFO"], "/workspace/")
         self.assertNotContains(response, "Private setup key")
 
     def test_username_case_and_outer_spaces_do_not_prevent_login(self):
         response = self.client.post("/login/", {"username": " admin ", "password": "ADMIN"}, follow=True)
-        self.assertEqual(response.request["PATH_INFO"], "/")
+        self.assertEqual(response.request["PATH_INFO"], "/workspace/")
 
     def test_wrong_password_still_rejected(self):
         self.client.post("/login/", {"username": "admin", "password": "wrong"})
@@ -33,7 +33,7 @@ class InitialAccessTests(TestCase):
         self.user.set_password("new-private-credential-example")
         self.user.save()
         response = self.client.post("/login/", {"username": "admin", "password": "new-private-credential-example"})
-        self.assertEqual(response.url, "/")
+        self.assertEqual(response.url, "/workspace/")
 
     @patch("core.management.commands.initialize_deployment.call_command")
     @patch.dict(os.environ, {"KOFAD_INITIAL_ADMIN_PASSWORD": "ADMIN"})
