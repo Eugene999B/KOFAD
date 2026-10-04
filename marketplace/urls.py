@@ -31,6 +31,7 @@ urlpatterns = [
     path("market/support/attachments/<int:pk>/", views.support_attachment, name="market_support_attachment"),
     path("market/payment/return/", views.payment_return, name="market_payment_return"),
     path("market/payments/paystack/webhook/", views.paystack_webhook, name="paystack_webhook"),
+    path("market-catalog/", views.market_catalog_admin, name="market_catalog_admin"),
     path("market-settings/", views.market_settings, name="market_settings"),
     path("online-orders/", views.staff_orders, name="staff_online_orders"),
     path("online-orders/<uuid:pk>/", views.staff_order, name="staff_online_order"),
