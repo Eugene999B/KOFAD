@@ -5,8 +5,9 @@ from django.utils import timezone
 
 from . import services as s
 from .models import (
-    Audit, Branch, Closing, Company, Document, HeldSale, Message, Party,
-    Product, QuarantineItem, Stock, SupplierReturn,
+    Audit, Branch, Closing, Company, CustomerReturnRequest, Document, HeldSale,
+    ManagementContact, ManualJournal, Message, Party, PayrollPeriod, Product,
+    QuarantineItem, ReturnPrivilege, Stock, SupplierReturn, Worker, WorkerDocument,
 )
 
 
@@ -22,6 +23,7 @@ class ShowcaseDataTests(TransactionTestCase):
 
     def test_showcase_loader_populates_major_business_areas_and_is_idempotent(self):
         call_command("load_showcase_data", confirm_live_showcase=True)
+        call_command("complete_showcase_data", confirm_live_showcase=True)
 
         self.assertGreaterEqual(Product.objects.filter(sku__startswith="SHOW-").count(), 50)
         self.assertEqual(Party.objects.filter(kind="customer", name__startswith="Showcase").count(), 60)
@@ -36,6 +38,20 @@ class ShowcaseDataTests(TransactionTestCase):
         self.assertEqual(Message.objects.filter(source_key__startswith="showcase-message-").count(), 24)
         self.assertGreaterEqual(QuarantineItem.objects.filter(branch=self.branch).count(), 7)
         self.assertGreaterEqual(SupplierReturn.objects.filter(branch=self.branch).count(), 5)
+        self.assertEqual(Worker.objects.filter(branch=self.branch, employee_code__startswith="SHOW-WRK-").count(), 12)
+        self.assertEqual(
+            WorkerDocument.objects.filter(worker__employee_code__startswith="SHOW-WRK-").count(), 12
+        )
+        self.assertGreaterEqual(PayrollPeriod.objects.filter(branch=self.branch).count(), 2)
+        self.assertGreaterEqual(
+            Document.objects.filter(branch=self.branch, kind="creditor_charge", external_reference__startswith="SHOW-DIRECT-").count(),
+            3,
+        )
+        self.assertGreaterEqual(CustomerReturnRequest.objects.filter(branch=self.branch).count(), 2)
+        self.assertGreaterEqual(ManualJournal.objects.filter(branch=self.branch).count(), 2)
+        self.assertTrue(ReturnPrivilege.objects.filter(branch=self.branch, customer_returns=True, supplier_returns=True).exists())
+        self.assertEqual(ManagementContact.objects.filter(name__startswith="Showcase ·").count(), 3)
+        self.assertTrue(Audit.objects.filter(action="showcase.extension.completed").exists())
         self.assertEqual(
             Stock.objects.filter(branch=self.branch, product__sku__startswith="SHOW-").count(),
             Product.objects.filter(sku__startswith="SHOW-").count(),
@@ -53,12 +69,21 @@ class ShowcaseDataTests(TransactionTestCase):
             "documents": Document.objects.count(),
             "parties": Party.objects.count(),
             "closings": Closing.objects.count(),
+            "workers": Worker.objects.count(),
+            "payroll_periods": PayrollPeriod.objects.count(),
+            "return_requests": CustomerReturnRequest.objects.count(),
+            "journals": ManualJournal.objects.count(),
         }
         call_command("load_showcase_data", confirm_live_showcase=True)
+        call_command("complete_showcase_data", confirm_live_showcase=True)
         after = {
             "products": Product.objects.count(),
             "documents": Document.objects.count(),
             "parties": Party.objects.count(),
             "closings": Closing.objects.count(),
+            "workers": Worker.objects.count(),
+            "payroll_periods": PayrollPeriod.objects.count(),
+            "return_requests": CustomerReturnRequest.objects.count(),
+            "journals": ManualJournal.objects.count(),
         }
         self.assertEqual(before, after)
