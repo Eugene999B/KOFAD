@@ -508,12 +508,12 @@ def initialize_paystack(order, callback_url):
         attempt.save(update_fields=["status", "provider_message"])
         order.payment_status = "failed"
         order.save(update_fields=["payment_status", "updated_at"])
-        raise ValidationError(attempt.provider_message)
+        raise ValidationError("We could not start the payment. Please try again.")
     payload_data = data.get("data") or {}
     authorization_url = str(payload_data.get("authorization_url", ""))
     parsed = urlsplit(authorization_url)
     if parsed.scheme != "https" or parsed.hostname != "checkout.paystack.com":
-        raise ValidationError("Paystack returned an unsafe checkout address.")
+        raise ValidationError("We could not open the secure payment page. Please try again.")
     attempt.status = "pending"
     attempt.access_code = str(payload_data.get("access_code", ""))[:120]
     attempt.authorization_url = authorization_url
@@ -539,7 +539,7 @@ def verify_paystack(reference):
     except (requests.RequestException, ValueError) as exc:
         raise ValidationError("We could not verify the payment yet. Please refresh shortly.") from exc
     if not 200 <= response.status_code < 300 or not data.get("status"):
-        raise ValidationError("Paystack could not verify this payment.")
+        raise ValidationError("We could not verify the payment yet. Please try again shortly.")
     return data.get("data") or {}
 
 
