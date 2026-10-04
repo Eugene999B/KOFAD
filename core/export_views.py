@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Count, Q, Sum
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
@@ -141,11 +141,10 @@ def _rows(request, dataset, branch, first, last):
     if dataset == "market_customers":
         from marketplace.models import CustomerAccount
         rows = []
-        for customer in CustomerAccount.objects.annotate(
-            order_count=Count("orders"),
-            spend_total=Sum("orders__total", filter=Q(orders__payment_status="paid")),
-            conversation_count=Count("conversations", distinct=True),
-        ).order_by("-created_at"):
+        for customer in CustomerAccount.objects.order_by("-created_at"):
+            paid_spend = customer.orders.filter(
+                payment_status="paid"
+            ).aggregate(total=Sum("total"))["total"] or Decimal("0")
             rows.append({
                 "name": customer.full_name,
                 "phone": customer.phone,
@@ -153,9 +152,9 @@ def _rows(request, dataset, branch, first, last):
                 "verified": customer.verified_at,
                 "created": customer.created_at,
                 "last_login": customer.last_login_at,
-                "orders": customer.order_count,
-                "paid_spend": customer.spend_total or Decimal("0"),
-                "support_threads": customer.conversation_count,
+                "orders": customer.orders.count(),
+                "paid_spend": paid_spend,
+                "support_threads": customer.conversations.count(),
                 "addresses": customer.addresses.count(),
                 "status": "Active" if customer.active else "Disabled",
             })
