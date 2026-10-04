@@ -660,9 +660,27 @@ def paystack_webhook(request):
 
 @market_customer_required
 def customer_orders(request, customer):
-    rows = customer.orders.prefetch_related("lines").all()
+    status = request.GET.get("status", "").strip()
+    query = request.GET.get("q", "").strip()[:80]
+    rows = customer.orders.prefetch_related("lines", "events")
+    if status in dict(OnlineOrder.STATUSES):
+        rows = rows.filter(status=status)
+    if query:
+        rows = rows.filter(
+            Q(public_reference__icontains=query)
+            | Q(lines__description__icontains=query)
+            | Q(lines__sku__icontains=query)
+        ).distinct()
+    counts = {
+        "all": customer.orders.count(),
+        "active": customer.orders.exclude(
+            status__in=["delivered", "picked_up", "cancelled", "refunded"]
+        ).count(),
+        "complete": customer.orders.filter(status__in=["delivered", "picked_up"]).count(),
+    }
     return render(request, "marketplace/orders.html", _market_context(
-        request, title="My orders", orders=rows,
+        request, title="My orders", orders=rows, selected_status=status,
+        q=query, counts=counts,
     ))
 
 
@@ -704,39 +722,92 @@ def customer_messages(request, customer, conversation_id=None):
     conversation = None
     order_hint = None
     if conversation_id:
-        conversation = get_object_or_404(Conversation, pk=conversation_id, customer=customer)
+        conversation = get_object_or_404(
+            Conversation.objects.prefetch_related("messages__attachments"),
+            pk=conversation_id, customer=customer,
+        )
     else:
         raw_order = request.GET.get("order", "")
         if raw_order:
             order_hint = OnlineOrder.objects.filter(pk=raw_order, customer=customer).first()
-    if request.method == "POST":
-        body = request.POST.get("message", "").strip()[:2000]
-        if not body:
-            messages.error(request, "Write a message first.")
-        else:
-            if not conversation:
-                order = None
-                order_id = request.POST.get("order")
-                if order_id:
-                    order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
-                conversation = Conversation.objects.create(
-                    customer=customer, public_name=customer.full_name,
-                    public_phone=customer.phone, order=order,
-                    subject=request.POST.get("subject", "Customer message")[:180],
-                )
-            ConversationMessage.objects.create(
-                conversation=conversation, sender_type="customer", body=body,
-                read_by_customer=True,
+
+    form = ConversationMessageForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        if not conversation:
+            order = None
+            order_id = request.POST.get("order")
+            if order_id:
+                order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
+            subject = request.POST.get("subject", "").strip()[:180] or (
+                f"Order support · {order.public_reference}" if order else "Customer support"
             )
-            Conversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now(), status="open")
+            conversation = Conversation.objects.create(
+                customer=customer, public_name=customer.full_name,
+                public_phone=customer.phone, order=order, subject=subject,
+            )
+        try:
+            _save_conversation_message(
+                conversation, "customer",
+                body=form.cleaned_data.get("message", ""),
+                attachment=form.cleaned_data.get("attachment"),
+            )
+        except ValidationError as exc:
+            form.add_error("attachment", problem(exc))
+        else:
             return redirect("market_message_thread", conversation_id=conversation.pk)
-    conversations = customer.conversations.prefetch_related("messages").all()
+
+    conversations = customer.conversations.select_related("order", "assigned_to").prefetch_related(
+        "messages__attachments"
+    ).all()
     if conversation:
         conversation.messages.filter(sender_type="staff").update(read_by_customer=True)
     return render(request, "marketplace/messages.html", _market_context(
-        request, title="Messages", conversations=conversations, conversation=conversation,
-        order_hint=order_hint,
+        request, title="Support", conversations=conversations, conversation=conversation,
+        order_hint=order_hint, support_form=form,
     ))
+
+
+def conversation_updates(request, conversation_id):
+    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    side = _conversation_access(request, conversation)
+    if not side:
+        return JsonResponse({"detail": "Not found."}, status=404)
+    try:
+        after = max(0, int(request.GET.get("after", "0")))
+    except ValueError:
+        after = 0
+    rows = conversation.messages.filter(pk__gt=after).prefetch_related("attachments")[:100]
+    if side == "customer":
+        conversation.messages.filter(pk__gt=after, sender_type="staff").update(read_by_customer=True)
+    else:
+        conversation.messages.filter(pk__gt=after).exclude(sender_type="staff").update(read_by_staff=True)
+    response = JsonResponse({
+        "conversation": conversation.pk,
+        "status": conversation.status,
+        "messages": [_message_json(message) for message in rows],
+    })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def support_attachment(request, pk):
+    attachment = get_object_or_404(
+        ConversationAttachment.objects.select_related("message__conversation"),
+        pk=pk,
+    )
+    if not _conversation_access(request, attachment.message.conversation):
+        raise Http404
+    disposition = "inline" if (
+        request.GET.get("inline") == "1" and attachment.is_image
+    ) else "attachment"
+    filename = "".join(
+        ch for ch in attachment.original_name if ch.isalnum() or ch in " ._()-"
+    ).strip() or "kofad-support-file"
+    response = HttpResponse(bytes(attachment.data), content_type=attachment.mime_type)
+    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @protected("manage_company")
@@ -826,33 +897,62 @@ def staff_order(request, branch, pk):
 
 @protected("operate_sales|manage_company")
 def staff_inbox(request, branch, conversation_id=None):
-    conversations = Conversation.objects.select_related("customer", "order", "assigned_to").prefetch_related("messages")
+    status = request.GET.get("status", "open")
+    conversations = Conversation.objects.select_related(
+        "customer", "order", "assigned_to"
+    ).prefetch_related("messages__attachments")
+    if status in {"open", "closed"}:
+        conversations = conversations.filter(status=status)
     conversation = None
+    support_form = ConversationMessageForm(request.POST or None, request.FILES or None)
     if conversation_id:
-        conversation = get_object_or_404(conversations, pk=conversation_id)
+        conversation = get_object_or_404(conversations.model.objects.select_related(
+            "customer", "order", "assigned_to"
+        ).prefetch_related("messages__attachments"), pk=conversation_id)
         conversation.messages.exclude(sender_type="staff").update(read_by_staff=True)
         if request.method == "POST":
-            body = request.POST.get("message", "").strip()[:2000]
             action = request.POST.get("action", "reply")
             if action == "close":
                 conversation.status = "closed"
-                conversation.save(update_fields=["status", "updated_at"])
-            elif body:
-                ConversationMessage.objects.create(
-                    conversation=conversation, sender_type="staff", staff=request.user,
-                    body=body, read_by_staff=True,
-                )
                 conversation.assigned_to = request.user
+                conversation.save(update_fields=["status", "assigned_to", "updated_at"])
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+            if action == "reopen":
                 conversation.status = "open"
-                conversation.save(update_fields=["assigned_to", "status", "updated_at"])
-                if conversation.public_phone:
-                    services.send_transactional_sms(
-                        conversation.public_phone,
-                        "KOFAD: A staff member replied to your message. Sign in to KOFAD Market to read it.",
+                conversation.assigned_to = request.user
+                conversation.save(update_fields=["status", "assigned_to", "updated_at"])
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+            if support_form.is_valid():
+                try:
+                    _save_conversation_message(
+                        conversation, "staff",
+                        body=support_form.cleaned_data.get("message", ""),
+                        attachment=support_form.cleaned_data.get("attachment"),
+                        staff=request.user,
                     )
-            return redirect("staff_market_thread", conversation_id=conversation.pk)
+                except ValidationError as exc:
+                    support_form.add_error("attachment", problem(exc))
+                else:
+                    conversation.assigned_to = request.user
+                    conversation.status = "open"
+                    conversation.save(update_fields=["assigned_to", "status", "updated_at"])
+                    if conversation.public_phone:
+                        services.send_transactional_sms(
+                            conversation.public_phone,
+                            "KOFAD: A staff member replied to your support conversation. "
+                            "Sign in to KOFAD Market to view the reply.",
+                        )
+                    return redirect("staff_market_thread", conversation_id=conversation.pk)
     return render(request, "marketplace/staff_inbox.html", {
-        "title": "Customer Inbox", "conversations": conversations[:150],
+        "title": "Customer Inbox",
+        "conversations": conversations[:180],
         "conversation": conversation,
-        "unread": ConversationMessage.objects.filter(read_by_staff=False).exclude(sender_type="staff").count(),
+        "support_form": support_form,
+        "selected_status": status,
+        "unread": ConversationMessage.objects.filter(
+            read_by_staff=False
+        ).exclude(sender_type="staff").count(),
+        "open_count": Conversation.objects.filter(status="open").count(),
+        "closed_count": Conversation.objects.filter(status="closed").count(),
     })
+
