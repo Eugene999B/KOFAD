@@ -16,8 +16,8 @@ from core.models import Product
 from core.views import problem, protected
 
 from .forms import (
-    CheckoutForm, CustomerLoginForm, CustomerRegistrationForm,
-    PublicMessageForm, StaffOrderUpdateForm,
+    CheckoutForm, CustomerLoginForm, CustomerPasswordResetForm, CustomerRegistrationForm,
+    DeliveryZoneForm, PublicMessageForm, StaffOrderUpdateForm,
 )
 from .models import (
     Conversation, ConversationMessage, CustomerAccount, DeliveryZone, MarketListing,
@@ -138,7 +138,11 @@ def product_detail(request, pk):
 
 
 def product_image(request, pk, size="large"):
-    listing = get_object_or_404(MarketListing, pk=pk, enabled=True)
+    listing = get_object_or_404(MarketListing, pk=pk)
+    if not listing.enabled and not (
+        request.user.is_authenticated and request.user.has_perm("core.change_product")
+    ):
+        raise Http404
     data = listing.image_thumb if size == "thumb" else listing.image_data
     if not data:
         raise Http404
@@ -225,6 +229,9 @@ def account_finish(request):
 def customer_login(request):
     if services.customer_from_session(request):
         return redirect("market")
+    requested_next = request.GET.get("next", "")
+    if requested_next.startswith("/") and not requested_next.startswith("//"):
+        request.session["market_after_login"] = requested_next
     form = CustomerLoginForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         customer = CustomerAccount.objects.filter(phone=form.cleaned_data["phone"], active=True).first()
@@ -327,6 +334,9 @@ def checkout(request, customer):
             "latitude": default_address.latitude,
             "longitude": default_address.longitude,
         })
+    has_delivery = DeliveryZone.objects.filter(active=True).exists()
+    if not has_delivery:
+        initial["fulfilment"] = "pickup"
     form = CheckoutForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
