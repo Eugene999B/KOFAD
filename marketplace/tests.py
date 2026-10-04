@@ -390,6 +390,9 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
 
     def test_customer_checkout_and_paid_order_hide_payment_provider(self):
         self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
         checkout = self.client.get("/market/checkout/")
         self.assertEqual(checkout.status_code, 200)
         self.assertNotContains(checkout, "Paystack")
