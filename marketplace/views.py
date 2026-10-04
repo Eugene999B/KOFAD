@@ -226,6 +226,74 @@ def account_finish(request):
     ))
 
 
+def customer_password_reset_start(request):
+    if services.customer_from_session(request):
+        return redirect("market")
+    phone = request.POST.get("phone", "").strip()
+    if request.method == "POST":
+        try:
+            canonical = normalize_ghana_phone(phone)
+            if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
+                # Do not disclose whether a number owns an account.
+                messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
+                return redirect("market_login")
+            services.send_otp(canonical, "reset")
+            request.session["market_reset_phone"] = canonical
+            messages.success(request, "Verification code sent by SMS.")
+            return redirect("market_password_reset_verify")
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+    return render(request, "marketplace/password_reset_start.html", _market_context(
+        request, title="Reset customer password", phone=phone,
+    ))
+
+
+def customer_password_reset_verify(request):
+    phone = request.session.get("market_reset_phone")
+    if not phone:
+        return redirect("market_password_reset")
+    if request.method == "POST":
+        if request.POST.get("action") == "resend":
+            try:
+                services.send_otp(phone, "reset")
+                messages.success(request, "A new verification code was sent.")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+            return redirect("market_password_reset_verify")
+        try:
+            services.verify_otp(phone, request.POST.get("code"), "reset")
+            request.session["market_reset_verified_phone"] = phone
+            return redirect("market_password_reset_finish")
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+    return render(request, "marketplace/password_reset_verify.html", _market_context(
+        request, title="Verify password reset", phone=phone,
+    ))
+
+
+def customer_password_reset_finish(request):
+    phone = request.session.get("market_reset_verified_phone")
+    if not phone:
+        return redirect("market_password_reset")
+    customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+    if not customer:
+        request.session.pop("market_reset_phone", None)
+        request.session.pop("market_reset_verified_phone", None)
+        return redirect("market_login")
+    form = CustomerPasswordResetForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        customer.set_password(form.cleaned_data["password"])
+        customer.save(update_fields=["password_hash"])
+        request.session.pop("market_reset_phone", None)
+        request.session.pop("market_reset_verified_phone", None)
+        services.set_customer_session(request, customer)
+        messages.success(request, "Your KOFAD Market password has been changed.")
+        return redirect("market")
+    return render(request, "marketplace/password_reset_finish.html", _market_context(
+        request, title="Choose a new password", phone=phone, form=form,
+    ))
+
+
 def customer_login(request):
     if services.customer_from_session(request):
         return redirect("market")
