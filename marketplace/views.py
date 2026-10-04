@@ -197,7 +197,7 @@ def market(request):
             rows = rows.filter(
                 Q(title__icontains=term) | Q(description__icontains=term) | Q(tags__icontains=term)
                 | Q(product__name__icontains=term) | Q(product__sku__icontains=term)
-                | Q(product__category__icontains=term) | Q(highlights__icontains=term)
+                | Q(product__category__icontains=term)
             )
     if category:
         rows = rows.filter(product__category=category)
