@@ -15,6 +15,6 @@
 <div class="product-card-actions commerce-card-actions">
 <a href="/market/products/{{ listing.pk }}/">View product</a>
 {% if market_customer and listing.available_sell_qty > 0 %}<form method="post" action="/market/cart/add/{{ listing.pk }}/">{% csrf_token %}<input type="hidden" name="quantity" value="1"><input type="hidden" name="next" value="/market/"><button>Add to cart</button></form>
-{% elif not market_customer and listing.available_sell_qty > 0 %}<a class="card-order-link" href="/market/access/?next=/market/products/{{ listing.pk }}/">Order now</a>{% endif %}
+{% elif not market_customer and listing.available_sell_qty > 0 %}<a class="card-order-link" href="/market/access/?next=/market/products/{{ listing.pk }}/">Add to cart</a>{% endif %}
 </div>
 </div></article>
