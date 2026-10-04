@@ -27,7 +27,8 @@ from .forms import (
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
     DeliveryTrackingUpdate, DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
-    MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OtpThrottle, RecentView, WishlistItem,
+    MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
+    RecentView, WishlistItem,
 )
 from . import services
 
@@ -1073,6 +1074,206 @@ def market_return_attachment(request, pk):
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+
+@protected("change_product|manage_company")
+def market_gallery_admin(request, branch, pk):
+    listing = get_object_or_404(
+        MarketListing.objects.select_related("product").prefetch_related("gallery_images"),
+        pk=pk,
+    )
+    form = MarketGalleryForm(request.POST or None, request.FILES or None)
+    if request.method == "POST":
+        action = request.POST.get("action", "upload")
+        if action == "delete":
+            image = get_object_or_404(MarketListingImage, pk=request.POST.get("image"), listing=listing)
+            image.delete()
+            messages.success(request, "Gallery photo removed.")
+            return redirect("market_gallery_admin", pk=listing.pk)
+        if action == "primary":
+            image = get_object_or_404(MarketListingImage, pk=request.POST.get("image"), listing=listing)
+            if image.image_data:
+                listing.image_data = image.image_data
+                listing.image_thumb = image.image_thumb
+                listing.image_mime = image.image_mime
+                listing.image_name = image.image_name
+                listing.image_url = ""
+                listing.image_credit = ""
+            else:
+                listing.image_data = None
+                listing.image_thumb = None
+                listing.image_url = image.image_url
+                listing.image_credit = image.image_credit
+            listing.image_updated_at = timezone.now()
+            listing.save()
+            messages.success(request, "Primary Market photo updated.")
+            return redirect("market_gallery_admin", pk=listing.pk)
+        if form.is_valid():
+            current_count = listing.gallery_images.count()
+            uploads = form.cleaned_data.get("images") or []
+            if current_count + len(uploads) > 16:
+                form.add_error("images", "A product can keep up to 16 gallery photos.")
+            else:
+                try:
+                    for index, upload in enumerate(uploads, start=1):
+                        services.save_gallery_image(
+                            listing,
+                            upload,
+                            alt_text=form.cleaned_data.get("alt_text") or listing.display_name,
+                            sort_order=(current_count + index) * 10,
+                        )
+                except ValidationError as exc:
+                    form.add_error("images", problem(exc))
+                else:
+                    messages.success(request, f"Added {len(uploads)} product gallery photo(s).")
+                    return redirect("market_gallery_admin", pk=listing.pk)
+    return render(request, "marketplace/gallery_admin.html", {
+        "title": f"Product gallery · {listing.display_name}",
+        "listing": listing,
+        "form": form,
+        "gallery": listing.gallery_images.all(),
+    })
+
+
+@protected("operate_sales|manage_company")
+def market_return_queue(request, branch):
+    status = request.GET.get("status", "requested")
+    rows = MarketReturnRequest.objects.filter(order__branch=branch).select_related(
+        "customer", "order", "reviewed_by", "core_return_request"
+    ).prefetch_related("lines__order_line", "attachments")
+    if status in dict(MarketReturnRequest.STATUSES):
+        rows = rows.filter(status=status)
+    counts = {
+        code: MarketReturnRequest.objects.filter(order__branch=branch, status=code).count()
+        for code, _ in MarketReturnRequest.STATUSES
+    }
+    return render(request, "marketplace/staff_returns.html", {
+        "title": "Online Returns",
+        "return_requests": rows[:160],
+        "selected_status": status,
+        "status_choices": MarketReturnRequest.STATUSES,
+        "counts": counts,
+    })
+
+
+@protected("operate_sales|manage_company")
+def market_return_staff_detail(request, branch, pk):
+    item = get_object_or_404(
+        MarketReturnRequest.objects.filter(order__branch=branch).select_related(
+            "customer", "order", "order__sale_document", "reviewed_by", "core_return_request"
+        ).prefetch_related("lines__order_line", "attachments"),
+        pk=pk,
+    )
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        note = request.POST.get("note", "")
+        try:
+            services.review_market_return_request(request.user, item, action, note)
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+        else:
+            messages.success(request, "Online return workflow updated.")
+            return redirect("staff_market_return", pk=item.pk)
+    return render(request, "marketplace/staff_return_detail.html", {
+        "title": "Online return",
+        "item": item,
+    })
+
+
+@protected("view_reports|manage_company")
+def market_analytics(request, branch):
+    days_raw = request.GET.get("days", "30")
+    try:
+        days = min(max(int(days_raw), 7), 365)
+    except ValueError:
+        days = 30
+    since = timezone.now() - timedelta(days=days)
+    orders = OnlineOrder.objects.filter(branch=branch, created_at__gte=since)
+    paid = orders.filter(payment_status="paid")
+    revenue = paid.aggregate(value=Sum("total"))["value"] or Decimal("0")
+    paid_count = paid.count()
+    average_order = revenue / paid_count if paid_count else Decimal("0")
+    customer_counts = paid.values("customer_id").annotate(total=Count("pk"))
+    repeat_customers = sum(1 for row in customer_counts if row["total"] >= 2)
+    total_customers = customer_counts.count()
+    completed_delivery = list(
+        paid.filter(
+            fulfilment="delivery", completed_at__isnull=False, dispatched_at__isnull=False
+        ).values_list("dispatched_at", "completed_at")
+    )
+    delivery_minutes = [
+        (completed - dispatched).total_seconds() / 60
+        for dispatched, completed in completed_delivery
+        if completed and dispatched and completed >= dispatched
+    ]
+    avg_delivery_minutes = (
+        sum(delivery_minutes) / len(delivery_minutes) if delivery_minutes else None
+    )
+    top_products = list(
+        OnlineOrderLine.objects.filter(
+            order__branch=branch,
+            order__payment_status="paid",
+            order__created_at__gte=since,
+        ).values("description", "sku").annotate(
+            units=Sum("quantity"), revenue=Sum("total")
+        ).order_by("-revenue")[:10]
+    )
+    payment_channels = list(
+        paid.exclude(payment_channel="").values("payment_channel").annotate(
+            orders=Count("pk"), revenue=Sum("total")
+        ).order_by("-revenue")
+    )
+    status_rows = [
+        {
+            "code": code,
+            "label": label,
+            "count": orders.filter(status=code).count(),
+        }
+        for code, label in OnlineOrder.STATUSES
+        if orders.filter(status=code).exists()
+    ]
+    return_requests = MarketReturnRequest.objects.filter(
+        order__branch=branch, created_at__gte=since
+    )
+    context = {
+        "title": "Market Intelligence",
+        "days": days,
+        "metrics": {
+            "orders": orders.count(),
+            "paid_orders": paid_count,
+            "revenue": revenue,
+            "average_order": average_order,
+            "active_orders": orders.exclude(
+                status__in=["delivered", "picked_up", "cancelled", "refunded"]
+            ).count(),
+            "abandoned": orders.filter(
+                status="awaiting_payment",
+                created_at__lt=timezone.now() - timedelta(minutes=30),
+            ).count(),
+            "customers": total_customers,
+            "repeat_customers": repeat_customers,
+            "repeat_rate": round((repeat_customers / total_customers * 100), 1) if total_customers else 0,
+            "open_support": Conversation.objects.filter(status="open").count(),
+            "unread_support": ConversationMessage.objects.filter(
+                read_by_staff=False
+            ).exclude(sender_type="staff").count(),
+            "returns": return_requests.count(),
+            "return_pending": return_requests.filter(status__in=["requested", "approved", "processing"]).count(),
+            "avg_delivery_minutes": avg_delivery_minutes,
+        },
+        "top_products": top_products,
+        "payment_channels": payment_channels,
+        "status_rows": status_rows,
+        "recent_orders": orders.select_related("customer", "delivery_zone").order_by("-created_at")[:12],
+        "catalog": {
+            "published": MarketListing.objects.filter(enabled=True).count(),
+            "featured": MarketListing.objects.filter(enabled=True, featured=True).count(),
+            "wishlist_saves": WishlistItem.objects.count(),
+            "product_views": RecentView.objects.aggregate(value=Sum("view_count"))["value"] or 0,
+        },
+    }
+    return render(request, "marketplace/analytics.html", context)
 
 
 @protected("change_product|manage_company")
