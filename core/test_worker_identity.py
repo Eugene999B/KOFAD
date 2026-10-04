@@ -28,6 +28,7 @@ class WorkerIdentityExperienceTests(TestCase):
             last_name="Mensah",
             phone="0240000000",
             email="ama@example.test",
+            residential_address="Private Residence, Kumasi",
             department="Operations",
             job_title="Operations Officer",
             employment_type="permanent",
@@ -46,6 +47,9 @@ class WorkerIdentityExperienceTests(TestCase):
             created_by=self.user,
         )
         self.client.force_login(self.user)
+        session = self.client.session
+        session["access_version"] = self.user.access.session_version
+        session.save()
 
     def _photo(self):
         image = Image.new("RGB", (1800, 1200), (32, 86, 118))
