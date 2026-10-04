@@ -169,7 +169,7 @@ class BusinessTests(Fixtures, TestCase):
         self.assertEqual(self.client.get("/workspace/").status_code,200)
         self.user.is_active = False
         self.user.save()
-        self.assertEqual(self.client.get("/").status_code,302)
+        self.assertEqual(self.client.get("/workspace/").status_code,302)
 
     def test_all_pages_render(self):
         self.authenticate_client()
