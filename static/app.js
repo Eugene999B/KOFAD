@@ -134,6 +134,29 @@ document.addEventListener("DOMContentLoaded", () => {
   }));
   const toggle = document.querySelector("#menu-toggle"), sidebar = document.querySelector(".sidebar");
   const backdrop = document.querySelector(".nav-backdrop"), body = document.querySelector(".body"), dock = document.querySelector(".mobile-dock");
+
+  // Preserve the desktop navigation position between page loads so choosing a
+  // lower item (Workers, Administration, Settings, etc.) never jumps the menu
+  // back to the top.
+  const sidebarScrollKey = "kofad-sidebar-scroll-v1";
+  if (sidebar) {
+    let savedSidebarScroll = 0;
+    try { savedSidebarScroll = Number(sessionStorage.getItem(sidebarScrollKey) || 0); } catch (_) {}
+    requestAnimationFrame(() => { sidebar.scrollTop = Math.max(0, savedSidebarScroll); });
+    const rememberSidebarScroll = () => {
+      try { sessionStorage.setItem(sidebarScrollKey, String(Math.round(sidebar.scrollTop))); } catch (_) {}
+    };
+    let sidebarScrollFrame = null;
+    sidebar.addEventListener("scroll", () => {
+      if (sidebarScrollFrame) return;
+      sidebarScrollFrame = requestAnimationFrame(() => {
+        sidebarScrollFrame = null;
+        rememberSidebarScroll();
+      });
+    }, {passive:true});
+    sidebar.querySelectorAll("a").forEach(link => link.addEventListener("click", rememberSidebarScroll));
+    window.addEventListener("pagehide", rememberSidebarScroll);
+  }
   const mobile = matchMedia("(max-width:950px)");
   function menu(open, restore = true) {
     document.body.classList.toggle("nav-open", open);
