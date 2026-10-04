@@ -28,6 +28,7 @@
 <a href="/market/account/wishlist/" class="wishlist-nav-link">Saved{% if market_wishlist_count %}<b>{{ market_wishlist_count }}</b>{% endif %}</a>
 <a href="/market/messages/" class="support-nav-link">Support{% if market_unread_count %}<b>{{ market_unread_count }}</b>{% endif %}</a>
 <a href="/market/cart/" class="market-cart-link">Cart <b>{{ market_cart_count }}</b></a>
+<form method="post" action="/market/account/logout/" class="market-top-signout">{% csrf_token %}<button type="submit">Sign out</button></form>
 {% else %}
 <a href="/market/access/" class="commerce-account-entry">Sign in / Create account</a>
 <a href="/market/cart/" class="market-cart-link">Cart <b>{{ market_cart_count }}</b></a>
