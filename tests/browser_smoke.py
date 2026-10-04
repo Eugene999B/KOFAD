@@ -20,7 +20,7 @@ from django.utils import timezone
 from core import services as core_services
 from core.models import Branch, Document, Party, Product, Stock
 from marketplace import services as market_services
-from marketplace.models import CustomerAccount, MarketListing, MarketPaymentAttempt
+from marketplace.models import Conversation, CustomerAccount, MarketListing, MarketPaymentAttempt
 if not settings.DEBUG:
     raise RuntimeError("Browser fixtures are forbidden outside DEBUG environments.")
 warehouse, _ = Branch.objects.get_or_create(code="browser-wh", defaults={"name": "Browser warehouse"})
@@ -108,6 +108,18 @@ browser_customer_session = SessionStore()
 browser_customer_session["market_customer_id"] = browser_market_customer.pk
 browser_customer_session["market_cart"] = {str(browser_listing.pk): 1}
 browser_customer_session.create()
+
+browser_support = Conversation.objects.create(
+    customer=browser_market_customer,
+    public_name=browser_market_customer.full_name,
+    public_phone=browser_market_customer.phone,
+    subject="Browser live support",
+)
+browser_support.messages.create(
+    sender_type="customer",
+    body="I need help with my order.",
+    read_by_customer=True,
+)
 
 out = Path("test-results")
 out.mkdir(exist_ok=True)
@@ -287,6 +299,24 @@ with sync_playwright() as p:
     admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
+
+    admin_page.goto(f"http://127.0.0.1:8000/online-inbox/{browser_support.pk}/?status=waiting")
+    assert "support-workspace-page" in (admin_page.get_attribute("body", "class") or "")
+    assert admin_page.get_by_role("button", name="Accept chat", exact=True).count() >= 1
+    desk = admin_page.locator(".support-desk-v3")
+    desk_box = desk.bounding_box()
+    assert desk_box["y"] >= 0 and desk_box["y"] + desk_box["height"] <= 1000 + 2
+    admin_page.screenshot(path=str(out / "customer-inbox-desktop.png"), full_page=True)
+    admin_page.get_by_role("button", name="Accept chat", exact=True).first.click()
+    admin_page.wait_for_load_state("networkidle")
+    assert admin_page.get_by_text("You are connected", exact=False).count() >= 1
+    admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.screenshot(path=str(out / "customer-inbox-mobile.png"), full_page=True)
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Customer inbox overflows"
+    mobile_desk = admin_page.locator(".support-desk-v3").bounding_box()
+    assert mobile_desk["y"] >= 0 and mobile_desk["y"] + mobile_desk["height"] <= 844 + 2
+    admin_page.set_viewport_size({"width":1280,"height":900})
+
     admin_page.goto("http://127.0.0.1:8000/administration/")
     admin_sidebar = admin_page.locator(".sidebar")
     max_sidebar_scroll = admin_sidebar.evaluate("el => { el.scrollTop = el.scrollHeight; return el.scrollTop; }")
@@ -380,8 +410,39 @@ with sync_playwright() as p:
     }])
     market_page.goto("http://127.0.0.1:8000/")
     assert market_page.locator(".commerce-global-search").count() == 0
-    assert market_page.locator(".market-contact-link").count() == 1
-    assert market_page.locator(".market-staff-link").count() == 1
+    assert market_page.locator(".commerce-category-section").count() == 0
+    assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
+    assert market_page.locator(".home-hero-v7").count() == 1
+    assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
+    assert market_page.locator(".public-mobile-actions").is_visible()
+    assert market_page.locator(".market-cart-link").count() == 0
+    market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
+
+    # Enter Market from the public site, then move within Market. Back inside the
+    # same authenticated zone must navigate normally without a logout prompt.
+    market_page.get_by_role("link", name="Market", exact=True).first.click()
+    market_page.wait_for_url("http://127.0.0.1:8000/market/")
+    market_page.set_viewport_size({"width":1440,"height":1000})
+    market_page.locator(".shop-shell-account").click()
+    market_page.wait_for_url("http://127.0.0.1:8000/market/account/")
+    market_page.locator(".shop-shell-orders").click()
+    market_page.wait_for_url("http://127.0.0.1:8000/market/orders/")
+    market_page.go_back()
+    market_page.wait_for_url("http://127.0.0.1:8000/market/account/")
+    assert market_page.locator("[data-session-leave-dialog]:visible").count() == 0
+
+    # Continue back to the Market landing page without a prompt; only the next
+    # Back, which would actually leave Market for the public homepage, prompts.
+    market_page.go_back()
+    market_page.wait_for_url("http://127.0.0.1:8000/market/")
+    assert market_page.locator("[data-session-leave-dialog]:visible").count() == 0
+    market_page.go_back(wait_until="domcontentloaded")
+    market_page.locator("[data-session-leave-dialog]").wait_for(state="visible")
+    assert market_page.get_by_role("heading", name="Leave and sign out?", exact=True).is_visible()
+    market_page.get_by_role("button", name="Stay signed in", exact=True).click()
+    assert "/market/" in market_page.url
+
+    market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/account/")
     assert market_page.get_by_role("heading", name="Hi, Mobile Market Customer.", exact=True).is_visible()
     assert market_page.locator(".market-mobile-dock").is_visible()
@@ -421,4 +482,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Staff and customer mobile layouts, delivery map checkout, homepage navigation, account mode, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
+print("Homepage hero/featured preview, true Market exit confirmation, full-screen assigned Customer Inbox, staff/customer mobile layouts, delivery map checkout, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
