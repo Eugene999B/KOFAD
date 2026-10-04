@@ -2044,3 +2044,337 @@ html[data-theme="dark"] .market-photo-preview{background:#0a2133;border-color:#3
 @media(max-width:680px){.market-photo-setup{grid-template-columns:1fr}.market-photo-preview{width:140px}}
 
 .nav-market-count{margin-left:auto;display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#138c94;color:#fff;font-size:9px;font-weight:850}.nav-market-count.inbox{background:#e9ac32;color:#102b46}
+
+
+/* ==========================================================================
+   KOPEX unified light theme · October 2026
+   Retire the graphite/copper skin from light mode. The public Market and
+   private workspace now share the same navy / teal / restrained-gold identity.
+   ========================================================================== */
+html[data-theme="light"]{
+  --paper:#F3F6FA;
+  --white:#FFFFFF;
+  --ink:#172F47;
+  --muted:#607589;
+  --line:#D8E4EC;
+  --green:#123650;
+  --gold:#E9AC32;
+  --soft:#EAF3F6;
+  --teal:#138C94;
+  --kofad-accent:#138C94;
+  --kofad-accent-soft:#E4F3F4;
+  --kofad-sidebar:#0E2942;
+  --kofad-sidebar-soft:#E8F3F5;
+  --kofad-shadow:0 1px 2px rgba(16,43,70,.03),0 12px 34px rgba(16,43,70,.06);
+  --kofad-shadow-hover:0 3px 8px rgba(16,43,70,.05),0 18px 42px rgba(16,43,70,.09);
+  color-scheme:light;
+}
+html[data-theme="light"] body,
+html[data-theme="light"] .body{background:#F3F6FA;color:#172F47}
+
+/* Top bar, controls and form language */
+html[data-theme="light"] .topbar{
+  background:rgba(255,255,255,.94);
+  border-color:#D8E4EC;
+}
+html[data-theme="light"] .branch-form select{background:#fff;border-color:#D4E1E9}
+html[data-theme="light"] .theme-toggle:hover,
+html[data-theme="light"] .top-user-card:hover{background:#EDF5F7;border-color:#D6E5EA}
+html[data-theme="light"] .top-user-card small{color:#718697}
+html[data-theme="light"] .user-avatar{background:#E3F3F4;color:#0E767D}
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea{
+  background:#fff;
+  border-color:#D2E0E8;
+  color:#172F47;
+  box-shadow:0 1px 0 rgba(16,43,70,.015);
+}
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder{color:#8A9CAA}
+html[data-theme="light"] input:hover,
+html[data-theme="light"] select:hover,
+html[data-theme="light"] textarea:hover{border-color:#B9CFDA}
+html[data-theme="light"] input:focus,
+html[data-theme="light"] select:focus,
+html[data-theme="light"] textarea:focus{
+  border-color:#138C94;
+  box-shadow:0 0 0 4px rgba(19,140,148,.13);
+}
+html[data-theme="light"] button:focus-visible,
+html[data-theme="light"] a:focus-visible{
+  box-shadow:0 0 0 4px rgba(19,140,148,.16);
+}
+html[data-theme="light"] .button{
+  background:#123650;
+  border-color:#123650;
+  color:#fff;
+}
+html[data-theme="light"] .button:hover{
+  background:#194861;
+  border-color:#194861;
+  box-shadow:0 8px 20px rgba(16,43,70,.12);
+}
+html[data-theme="light"] .button.secondary{
+  background:#fff;
+  color:#173A54;
+  border-color:#CADBE5;
+}
+html[data-theme="light"] .button.secondary:hover{background:#EDF5F7;border-color:#B8CFDA}
+
+/* All primary workspace hero surfaces use KOPEX navy/teal. */
+html[data-theme="light"] .overview-intro,
+html[data-theme="light"] .hero-panel,
+html[data-theme="light"] .debt-hero,
+html[data-theme="light"] .comms-hero{
+  border-color:#234C64;
+  background:
+    radial-gradient(circle at 88% 18%,rgba(19,140,148,.25),transparent 33%),
+    linear-gradient(145deg,#0B253C,#123C58 64%,#14536A)!important;
+  color:#F7FBFD;
+  box-shadow:0 16px 42px rgba(16,43,70,.13);
+}
+html[data-theme="light"] .overview-intro .eyebrow,
+html[data-theme="light"] .hero-panel .eyebrow,
+html[data-theme="light"] .debt-hero .eyebrow,
+html[data-theme="light"] .comms-hero .eyebrow{color:#E9AC32}
+html[data-theme="light"] .overview-intro h2,
+html[data-theme="light"] .hero-panel h2,
+html[data-theme="light"] .debt-hero h2,
+html[data-theme="light"] .comms-hero h2{color:#fff}
+html[data-theme="light"] .overview-intro p:last-child,
+html[data-theme="light"] .hero-panel p:last-child,
+html[data-theme="light"] .debt-hero p,
+html[data-theme="light"] .comms-hero p{color:#C8DBE5}
+html[data-theme="light"] .overview-intro .pill,
+html[data-theme="light"] .hero-panel>.pill{
+  background:rgba(255,255,255,.08);
+  color:#D8EFF0;
+  border-color:rgba(255,255,255,.15);
+}
+html[data-theme="light"] .debt-hero:after{
+  background:rgba(82,184,190,.08);
+  border-color:rgba(255,255,255,.12);
+}
+html[data-theme="light"] .debt-hero-actions span{color:#8FD4D7}
+html[data-theme="light"] .debt-hero-actions strong{color:#fff}
+html[data-theme="light"] .debt-hero-actions small,
+html[data-theme="light"] .debt-trust{color:#D2E2E9}
+
+/* Cards, actions and data surfaces */
+html[data-theme="light"] .panel,
+html[data-theme="light"] .metrics article,
+html[data-theme="light"] .quick-action,
+html[data-theme="light"] .settings-card,
+html[data-theme="light"] .admin-metrics article,
+html[data-theme="light"] .role-card,
+html[data-theme="light"] .metric-card,
+html[data-theme="light"] .debt-account-pane,
+html[data-theme="light"] .debt-detail-pane{
+  background:#fff;
+  border-color:#D8E4EC;
+  box-shadow:var(--kofad-shadow);
+}
+html[data-theme="light"] .panel:hover,
+html[data-theme="light"] .quick-action:hover,
+html[data-theme="light"] .settings-card:hover{border-color:#C2D7E1}
+html[data-theme="light"] .metrics p{color:#667C8E}
+html[data-theme="light"] .metrics strong{color:#172F47}
+html[data-theme="light"] .metrics strong small,
+html[data-theme="light"] .metrics a,
+html[data-theme="light"] .metrics article>span,
+html[data-theme="light"] .quick-action small{color:#718697}
+html[data-theme="light"] .quick-action:hover{background:#F9FCFD}
+html[data-theme="light"] .quick-action>span,
+html[data-theme="light"] .product-symbol,
+html[data-theme="light"] .settings-icon,
+html[data-theme="light"] .metric-icon,
+html[data-theme="light"] .export-catalog article>span{
+  background:#E4F3F4;
+  color:#138C94;
+}
+html[data-theme="light"] .product-card button{background:#EEF6F7;border-color:#D4E6E8;color:#0F6F75}
+html[data-theme="light"] .settings-card strong{color:#0F747A}
+html[data-theme="light"] th{background:#F6F9FB;color:#667D90}
+html[data-theme="light"] td{border-bottom-color:#E5EDF2}
+html[data-theme="light"] tbody tr:hover{background:#F8FBFC}
+html[data-theme="light"] .reference{color:#526A7C}
+
+/* Checkout and business-operation controls */
+html[data-theme="light"] .chalin-customer-card,
+html[data-theme="light"] .chalin-payment-card{background:#F8FBFC}
+html[data-theme="light"] .payment-method-option{
+  background:#fff;color:#334E62;border-color:#D3E1E8
+}
+html[data-theme="light"] .payment-method-option:hover{border-color:#9FC7CD;background:#F1F9F9}
+html[data-theme="light"] .payment-method-option.active{background:#138C94;color:#fff;border-color:#138C94}
+html[data-theme="light"] .chalin-total-panel{background:#EEF5F7}
+html[data-theme="light"] .checkout-progress{background:#DCE8EE}
+html[data-theme="light"] .checkout-progress span{background:#138C94}
+html[data-theme="light"] .chalin-submit-hint{color:#6C8192}
+html[data-theme="light"] .sale-success-dialog,
+html[data-theme="light"] .held-sales-dialog{border-color:#D8E4EC;box-shadow:0 30px 90px rgba(16,43,70,.18)}
+html[data-theme="light"] .sale-success-mark{background:#E2F4EF;color:#16715F}
+html[data-theme="light"] .success-mini-receipt{background:#F8FBFC;border-color:#DCE7ED}
+html[data-theme="light"] .debt-filter-row a.active,
+html[data-theme="light"] .inventory-filters a.active{background:#138C94;color:#fff;border-color:#138C94}
+
+/* Communications */
+html[data-theme="light"] .comms-channel-switch,
+html[data-theme="light"] .comms-target-switch,
+html[data-theme="light"] .comms-history-filter{background:#EEF5F7;border-color:#D7E4EB}
+html[data-theme="light"] .comms-channel-switch button,
+html[data-theme="light"] .comms-target-switch button,
+html[data-theme="light"] .comms-history-filter button{color:#5E7486}
+html[data-theme="light"] .comms-channel-switch button.active,
+html[data-theme="light"] .comms-target-switch button.active,
+html[data-theme="light"] .comms-history-filter button.active{
+  background:#138C94;color:#fff;box-shadow:0 3px 9px rgba(19,140,148,.14)
+}
+html[data-theme="light"] .comms-target-pane,
+html[data-theme="light"] .comms-help-panel{background:#F8FBFC}
+html[data-theme="light"] .comms-customer-row{border-color:#E4EDF2}
+html[data-theme="light"] .comms-customer-row:hover{background:#F1F8F9}
+html[data-theme="light"] .comms-template-row button:hover{background:#EDF7F7;border-color:#C5DDDF}
+html[data-theme="light"] .comms-help-icon{background:#123650;color:#fff}
+html[data-theme="light"] .comms-send-bar{border-color:#D7E4EB;box-shadow:0 10px 30px rgba(16,43,70,.07)}
+
+/* Staff login remains a KOPEX gateway in light mode too. */
+html[data-theme="light"] .login-page{background:#F3F6FA}
+html[data-theme="light"] .login-header .brand{color:#172F47}
+html[data-theme="light"] .login-card>.muted{color:#657C8E}
+html[data-theme="light"] .login-card input{border-color:#D3E1E8}
+html[data-theme="light"] .login-submit{background:#123650;border-color:#123650}
+html[data-theme="light"] .login-story{
+  background:
+    radial-gradient(circle at 80% 18%,rgba(19,140,148,.24),transparent 31%),
+    linear-gradient(145deg,#0B253C,#123C58)!important;
+  box-shadow:0 24px 70px rgba(16,43,70,.15);
+}
+html[data-theme="light"] .login-story .eyebrow{color:#E9AC32}
+html[data-theme="light"] .login-story h1 span{color:#5BC0C5}
+html[data-theme="light"] .story-copy{color:#C7D7E1}
+html[data-theme="light"] .trade-node{background:#10344D;border-color:#28536B}
+html[data-theme="light"] .trade-node small{color:#A9C1CE}
+html[data-theme="light"] .node-icon{background:#17445E;color:#66C6CA}
+html[data-theme="light"] .story-footer{border-color:#31566D;color:#A9C1CE}
+html[data-theme="light"] .login-welcome-overlay{
+  background:radial-gradient(circle at 50% 40%,rgba(19,140,148,.18),transparent 28%),#081F33!important
+}
+html[data-theme="light"] .login-welcome-overlay p{color:#E9AC32}
+html[data-theme="light"] .login-welcome-overlay small{color:#AFC4CF}
+html[data-theme="light"] .welcome-orbit{
+  border-color:rgba(19,140,148,.28);
+  box-shadow:0 0 0 58px rgba(19,140,148,.06),0 0 0 118px rgba(233,172,50,.025)
+}
+
+/* Workforce, payroll, accounting and intelligence */
+html[data-theme="light"] .profile-hero{
+  background:linear-gradient(135deg,#0A2237 0%,#123C58 100%)!important;
+  border-left:4px solid #E9AC32!important
+}
+html[data-theme="light"] .profile-hero:after{border-color:rgba(19,140,148,.35)}
+html[data-theme="light"] .worker-avatar{background:#163A53;border-color:#E9AC32}
+html[data-theme="light"] .worker-avatar span{color:#E9AC32}
+html[data-theme="light"] .people-hero,
+html[data-theme="light"] .payroll-hero,
+html[data-theme="light"] .accounting-hero,
+html[data-theme="light"] .intelligence-hero,
+html[data-theme="light"] .creditor-hero{border-left-color:#138C94!important}
+html[data-theme="light"] .payroll-status{background:linear-gradient(135deg,rgba(19,140,148,.08),rgba(16,43,70,.02))}
+html[data-theme="light"] .workflow-actions{border-left-color:#138C94}
+html[data-theme="light"] .detail-row summary{color:#0F747A}
+html[data-theme="light"] .pnl .subtotal{background:rgba(19,140,148,.07);border-top-color:rgba(19,140,148,.18)}
+html[data-theme="light"] .pnl .total{background:#123650;color:#fff}
+html[data-theme="light"] .cost-bar{background:#E9AC32}
+
+/* Creditors */
+html[data-theme="light"] .creditor-account-card:hover,
+html[data-theme="light"] .creditor-account-card.active{
+  border-color:rgba(19,140,148,.48);
+  background:rgba(19,140,148,.055)
+}
+html[data-theme="light"] .creditor-payment-box{
+  border-color:rgba(19,140,148,.22);
+  background:rgba(19,140,148,.045)
+}
+
+/* Approvals, returns, verification and management intelligence */
+html[data-theme="light"] .approval-attention{
+  background:#0A2B43;
+  color:#fff;
+  border-color:rgba(233,172,50,.68);
+  box-shadow:0 18px 50px rgba(16,43,70,.24);
+}
+html[data-theme="light"] .approval-attention-icon{background:#E9AC32;color:#102B46}
+html[data-theme="light"] .approval-attention-copy small{color:#BDD0DB}
+html[data-theme="light"] .approval-attention.has-approvals{animation:kofadApprovalPulseLightBlue 1.8s ease-in-out infinite}
+@keyframes kofadApprovalPulseLightBlue{
+  0%,100%{box-shadow:0 18px 45px rgba(16,43,70,.22),0 0 0 0 rgba(233,172,50,.24)}
+  50%{box-shadow:0 20px 55px rgba(16,43,70,.28),0 0 0 12px rgba(233,172,50,0)}
+}
+html[data-theme="light"] .approval-hero:after,
+html[data-theme="light"] .returns-hero:after,
+html[data-theme="light"] .supplier-return-hero:after,
+html[data-theme="light"] .intelligence-command:after{border-color:rgba(19,140,148,.11)}
+html[data-theme="light"] .approval-hero-score,
+html[data-theme="light"] .health-score,
+html[data-theme="light"] .verification-exposure,
+html[data-theme="light"] .accounting-balance-status,
+html[data-theme="light"] .audit-integrity{
+  border-color:rgba(19,140,148,.24);
+  background:rgba(19,140,148,.06)
+}
+html[data-theme="light"] .approval-tabs a.active,
+html[data-theme="light"] .accounting-tabs a.active{
+  border-color:rgba(19,140,148,.55);
+  background:rgba(19,140,148,.10);
+  color:#0F6F75
+}
+html[data-theme="light"] .approval-category{color:#0F747A}
+html[data-theme="light"] .privilege-toggle input{accent-color:#138C94}
+html[data-theme="light"] .return-sale-card:hover,
+html[data-theme="light"] .return-sale-card.active{
+  border-color:rgba(19,140,148,.50);
+  background:rgba(19,140,148,.055)
+}
+html[data-theme="light"] .return-line-select input{accent-color:#138C94}
+html[data-theme="light"] .return-decision{border-top-color:rgba(19,140,148,.55)}
+html[data-theme="light"] .verification-guide article>strong{
+  background:rgba(19,140,148,.11);
+  color:#0F747A
+}
+html[data-theme="light"] .verification-review{
+  border-color:rgba(19,140,148,.25);
+  background:rgba(19,140,148,.045)
+}
+html[data-theme="light"] .executive-brief{border-left-color:#138C94}
+
+/* Finish the light palette with cool neutral details. */
+html[data-theme="light"] .page-footer{color:#718697}
+html[data-theme="light"] ::selection{background:#D9EFF0;color:#102B46}
+html[data-theme="light"] *{scrollbar-color:#AFC5D1 transparent}
+
+
+/* Residual warm neutrals from the retired light skin. */
+html[data-theme="light"] .eyebrow{color:#647E90}
+html[data-theme="light"] .text-link,
+html[data-theme="light"] .text-button,
+html[data-theme="light"] .section-heading>a{color:#0F747A}
+html[data-theme="light"] .text-link:hover,
+html[data-theme="light"] .text-button:hover,
+html[data-theme="light"] .section-heading>a:hover{color:#0A5D63}
+html[data-theme="light"] .search-result-symbol,
+html[data-theme="light"] .catalog-empty-icon{background:#E4F3F4;color:#138C94}
+html[data-theme="light"] .transaction-message-preview,
+html[data-theme="light"] .debt-balance-card,
+html[data-theme="light"] .command-rail{background:#F8FBFC;border-color:#DCE7ED}
+html[data-theme="light"] .customer-result:hover,
+html[data-theme="light"] .debt-account-card:hover{background:#F1F8F9}
+html[data-theme="light"] .comms-one-customer-row em{color:#0F747A}
+html[data-theme="light"] .debt-search-form,
+html[data-theme="light"] .inventory-search{background:#fff;border-color:#D7E4EB}
+html[data-theme="light"] .selected-customer{background:#EEF6F7;border-color:#D1E4E6}
+html[data-theme="light"] .selected-customer strong{color:#173A54}
+html[data-theme="light"] .permission-box{background:#F8FBFC;border-color:#DCE7ED}
+html[data-theme="light"] .switch-row{border-color:#DCE7ED}
