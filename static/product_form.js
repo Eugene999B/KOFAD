@@ -13,6 +13,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const costLabel = document.querySelector("#cost-label");
   const openingLabel = document.querySelector("#opening-units-label");
   const openingHelp = document.querySelector("#opening-units-help");
+  const marketEnabled = document.querySelector("#id_enabled");
+  const marketDetails = document.querySelector("[data-market-details]");
+  const marketOfflineHint = document.querySelector("[data-market-offline-hint]");
+  const marketImage = document.querySelector("#id_image");
+  const marketRemoveImage = document.querySelector("#id_remove_image");
+  const marketPreviewLink = document.querySelector("[data-market-preview-link]");
+
+  function syncMarket() {
+    const published = Boolean(marketEnabled?.checked);
+    if (marketDetails) marketDetails.hidden = !published;
+    if (marketOfflineHint) marketOfflineHint.hidden = published;
+    if (marketPreviewLink) marketPreviewLink.hidden = !published;
+    marketEnabled?.setAttribute("aria-expanded", published ? "true" : "false");
+    if (!published) {
+      if (marketImage?.files?.length) marketImage.value = "";
+      if (marketRemoveImage) marketRemoveImage.checked = false;
+    }
+  }
 
   function sync() {
     const packed = structure?.value === "yes";
@@ -34,8 +52,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   structure?.addEventListener("change", sync);
   packName?.addEventListener("input", sync);
+  marketEnabled?.addEventListener("change", syncMarket);
   document.querySelector("#id_base_unit")?.addEventListener("input", () => {
     if (structure?.value === "no" && packName) packName.value = document.querySelector("#id_base_unit").value || "unit";
   });
   sync();
+  syncMarket();
 });

@@ -627,8 +627,8 @@ def product_edit(request, branch, pk=None):
     form = ProductForm(request.POST or None, instance=obj)
     market_posted = request.method != "POST" or request.POST.get("market_form_present") == "1"
     market_form = MarketListingForm(
-        request.POST if market_posted else None,
-        request.FILES if market_posted else None,
+        request.POST if request.method == "POST" and market_posted else None,
+        request.FILES if request.method == "POST" and market_posted else None,
         instance=listing,
         product=obj,
     )
@@ -664,7 +664,7 @@ def product_edit(request, branch, pk=None):
                                 market.image_url = ""
                                 market.image_credit = ""
                             upload = market_form.cleaned_data.get("image")
-                            if upload:
+                            if upload and market.enabled:
                                 save_listing_image(market, upload)
                             market.save()
 

@@ -1127,6 +1127,12 @@ def market_gallery_admin(request, branch, pk):
         MarketListing.objects.select_related("product").prefetch_related("gallery_images"),
         pk=pk,
     )
+    if not listing.enabled:
+        messages.info(
+            request,
+            "Publish this product to KOFAD Market before adding customer gallery photos.",
+        )
+        return redirect("product_edit", pk=listing.product_id)
     form = MarketGalleryForm(request.POST or None, request.FILES or None)
     if request.method == "POST":
         action = request.POST.get("action", "upload")

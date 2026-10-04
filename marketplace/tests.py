@@ -702,3 +702,42 @@ class MarketV3LiveSupportTests(MarketFixtures):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["other_typing"])
+
+
+class ProductMarketVisibilityTests(MarketFixtures):
+    def staff_session(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+
+    def test_unpublished_product_renders_market_configuration_collapsed(self):
+        self.staff_session()
+        self.listing.enabled = False
+        self.listing.save(update_fields=["enabled"])
+        response = self.client.get(f"/products/{self.product.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-market-details hidden')
+        self.assertContains(response, 'data-market-offline-hint')
+        self.assertContains(response, 'data-market-preview-link hidden')
+
+    def test_published_product_renders_market_configuration_open(self):
+        self.staff_session()
+        response = self.client.get(f"/products/{self.product.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-market-details')
+        self.assertNotContains(response, 'data-market-details hidden')
+        self.assertNotContains(response, 'data-market-preview-link hidden')
+
+    def test_unpublished_product_cannot_open_gallery_uploader(self):
+        self.staff_session()
+        self.listing.enabled = False
+        self.listing.save(update_fields=["enabled"])
+        response = self.client.get(f"/market-catalog/{self.listing.pk}/gallery/")
+        self.assertRedirects(
+            response,
+            f"/products/{self.product.pk}/",
+            fetch_redirect_response=False,
+        )
