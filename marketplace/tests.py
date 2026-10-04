@@ -262,6 +262,9 @@ class MarketPaymentTests(MarketFixtures):
         })
         result.refresh_from_db()
         self.assertEqual(result.payment_status, "paid")
+        self.assertTrue(result.confirmed_reference.startswith("KFD-"))
+        self.assertNotEqual(result.confirmed_reference, result.public_reference)
+        self.assertEqual(result.customer_reference, result.confirmed_reference)
         self.assertEqual(result.ledger_status, "posted")
         self.assertIsNotNone(result.sale_document_id)
         document = Document.objects.get(pk=result.sale_document_id)
@@ -380,9 +383,71 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         order = self.order()
         response = self.client.get("/market/account/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "My KOFAD")
-        self.assertContains(response, order.public_reference)
+        self.assertContains(response, "Your orders")
+        self.assertContains(response, "Awaiting payment")
         self.assertContains(response, "Active orders")
+        self.assertContains(response, "market-mobile-dock")
+
+    def test_customer_checkout_and_paid_order_hide_payment_provider(self):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
+        checkout = self.client.get("/market/checkout/")
+        self.assertEqual(checkout.status_code, 200)
+        self.assertNotContains(checkout, "Paystack")
+        self.assertContains(checkout, "Make payment")
+
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(
+            order=order, reference="KFD-PRIVATE-PAYMENT", amount=order.total,
+            currency="GHS", status="pending",
+        )
+        order = services.finalize_payment(attempt.reference, {
+            "status": "success",
+            "amount": int(order.total * 100),
+            "currency": "GHS",
+            "channel": "mobile_money",
+        })
+        response = self.client.get(f"/market/orders/{order.pk}/")
+        self.assertContains(response, order.confirmed_reference)
+        self.assertNotContains(response, "Paystack")
+        self.assertNotContains(response, attempt.reference)
+        self.assertNotContains(response, "mobile_money")
+
+    @patch("marketplace.views.services.initialize_paystack")
+    def test_checkout_make_payment_goes_directly_to_secure_payment(self, initialize_payment):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
+        initialize_payment.return_value = Mock(
+            authorization_url="https://checkout.paystack.com/test-checkout"
+        )
+        response = self.client.post("/market/checkout/", {
+            "fulfilment": "pickup",
+            "recipient_name": self.customer.full_name,
+            "phone": self.customer.phone,
+            "email": self.customer.email,
+            "delivery_zone": "",
+            "region": "",
+            "town": "",
+            "address_line": "",
+            "landmark": "",
+            "ghana_post_gps": "",
+            "latitude": "",
+            "longitude": "",
+            "customer_note": "",
+        })
+        self.assertRedirects(
+            response,
+            "https://checkout.paystack.com/test-checkout",
+            fetch_redirect_response=False,
+        )
+        order = OnlineOrder.objects.latest("created_at")
+        initialize_payment.assert_called_once()
+        self.assertEqual(initialize_payment.call_args.args[0].pk, order.pk)
+        self.assertEqual(self.client.session["market_cart"], {})
 
     def test_market_search_uses_customer_facing_tags(self):
         self.listing.tags = "hydraulic excavator service filter maintenance"

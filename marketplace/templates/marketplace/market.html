@@ -1,10 +1,10 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="commerce-catalog-hero"><div><p class="market-eyebrow">KOFAD MARKET</p><h1>A serious catalog for<br><span>everyday business and home needs.</span></h1><p>{{ total_catalog }} published product{{ total_catalog|pluralize }} connected to controlled KOFAD inventory.</p></div>{% if market_customer %}<a class="catalog-customer-chip" href="/market/account/"><span>{{ market_customer.full_name|first|upper }}</span><div><small>SHOPPING AS</small><strong>{{ market_customer.full_name }}</strong><em>Open My KOFAD →</em></div></a>{% else %}<a class="catalog-customer-chip" href="/market/access/"><span>+</span><div><small>CUSTOMER ACCOUNT</small><strong>Sign in or create one</strong><em>Orders, delivery & support →</em></div></a>{% endif %}</section>
+<section class="commerce-catalog-hero"><div><p class="market-eyebrow">KOFAD MARKET</p><h1>Shop KOFAD</h1></div>{% if not market_customer %}<a class="catalog-customer-chip" href="/market/access/"><span>+</span><div><strong>Sign in or create account</strong></div></a>{% endif %}</section>
 <section class="commerce-catalog-wrap">
 <aside class="commerce-filter-rail">
 <div class="filter-rail-head"><strong>Browse catalog</strong><span>{{ listings|length }} shown</span></div>
 <nav><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}"><span>All products</span><b>→</b></a>{% for category in categories %}<a href="/market/?category={{ category|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_category == category %}active{% endif %}"><span>{{ category }}</span><b>→</b></a>{% endfor %}</nav>
-<div class="filter-support-box"><span>✦</span><strong>Need product help?</strong><p>Ask KOFAD before you place the order.</p><a href="{% if market_customer %}/market/messages/{% else %}/#contact{% endif %}">Talk to support →</a></div>
+
 </aside>
 <div class="commerce-catalog-main">
 <div class="commerce-catalog-toolbar">

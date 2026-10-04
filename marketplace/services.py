@@ -328,6 +328,14 @@ def _reference():
     return "KFD-ORD-" + secrets.token_hex(6).upper()
 
 
+def _confirmed_reference():
+    for _ in range(8):
+        reference = f"KFD-{timezone.localdate():%Y%m%d}-{secrets.token_hex(4).upper()}"
+        if not OnlineOrder.objects.filter(confirmed_reference=reference).exists():
+            return reference
+    raise RuntimeError("Could not allocate a unique KOFAD order ID.")
+
+
 def cart_rows(cart):
     clean = {}
     for key, value in (cart or {}).items():
@@ -500,12 +508,12 @@ def initialize_paystack(order, callback_url):
         attempt.save(update_fields=["status", "provider_message"])
         order.payment_status = "failed"
         order.save(update_fields=["payment_status", "updated_at"])
-        raise ValidationError(attempt.provider_message)
+        raise ValidationError("We could not start the payment. Please try again.")
     payload_data = data.get("data") or {}
     authorization_url = str(payload_data.get("authorization_url", ""))
     parsed = urlsplit(authorization_url)
     if parsed.scheme != "https" or parsed.hostname != "checkout.paystack.com":
-        raise ValidationError("Paystack returned an unsafe checkout address.")
+        raise ValidationError("We could not open the secure payment page. Please try again.")
     attempt.status = "pending"
     attempt.access_code = str(payload_data.get("access_code", ""))[:120]
     attempt.authorization_url = authorization_url
@@ -531,7 +539,7 @@ def verify_paystack(reference):
     except (requests.RequestException, ValueError) as exc:
         raise ValidationError("We could not verify the payment yet. Please refresh shortly.") from exc
     if not 200 <= response.status_code < 300 or not data.get("status"):
-        raise ValidationError("Paystack could not verify this payment.")
+        raise ValidationError("We could not verify the payment yet. Please try again shortly.")
     return data.get("data") or {}
 
 
@@ -673,12 +681,14 @@ def finalize_payment(reference, provider_data):
     now = timezone.now()
     order.status = "paid"
     order.payment_status = "paid"
+    if not order.confirmed_reference:
+        order.confirmed_reference = _confirmed_reference()
     order.payment_reference = reference
     order.payment_channel = channel
     order.paid_at = now
     order.ledger_status = "pending"
     order.save(update_fields=[
-        "status", "payment_status", "payment_reference", "payment_channel",
+        "status", "payment_status", "confirmed_reference", "payment_reference", "payment_channel",
         "paid_at", "ledger_status", "updated_at",
     ])
     attempt.status = "success"
@@ -687,7 +697,7 @@ def finalize_payment(reference, provider_data):
     order.reservations.update(expires_at=now + timedelta(hours=24), active=True)
     OrderEvent.objects.create(
         order=order, status="paid", title="Payment confirmed",
-        note="Payment was independently verified by KOFAD with Paystack.",
+        note="Payment verified successfully. Your order is confirmed for fulfilment.",
     )
 
     branch_closed = Closing.objects.filter(branch=order.branch, date=timezone.localdate()).exists()
@@ -712,7 +722,7 @@ def finalize_payment(reference, provider_data):
 
     send_transactional_sms(
         order.phone,
-        f"KOFAD: Payment confirmed for {order.public_reference}. We are preparing your order. "
+        f"KOFAD: Payment confirmed for {order.customer_reference}. We are preparing your order. "
         "Track it in your KOFAD Market account.",
     )
     return order
@@ -909,7 +919,7 @@ def initiate_paystack_refund(item):
     OrderEvent.objects.create(
         order=item.order,
         status="refund_started",
-        title="Refund submitted to Paystack",
+        title="Refund submitted",
         note=f"GHS {amount:.2f} was submitted to the original payment channel.",
         customer_visible=True,
     )
@@ -948,7 +958,7 @@ def refresh_paystack_refund(item):
         send_transactional_sms(
             item.order.phone,
             f"KOFAD: Your GHS {item.refund_amount:.2f} refund for "
-            f"{item.order.public_reference} has been processed by Paystack.",
+            f"{item.order.customer_reference} has been processed.",
         )
     return item
 
@@ -1071,7 +1081,7 @@ def create_market_return_request(customer, order, line_payload, reason, resoluti
     )
     send_transactional_sms(
         order.phone,
-        f"KOFAD: Return request received for {order.public_reference}. "
+        f"KOFAD: Return request received for {order.customer_reference}. "
         "You can follow its status in My KOFAD.",
     )
     return item
@@ -1101,7 +1111,7 @@ def review_market_return_request(user, item, action, note=""):
         )
         send_transactional_sms(
             item.order.phone,
-            f"KOFAD: Your return request for {item.order.public_reference} was approved.",
+            f"KOFAD: Your return request for {item.order.customer_reference} was approved.",
         )
         return item
 
@@ -1119,7 +1129,7 @@ def review_market_return_request(user, item, action, note=""):
         )
         send_transactional_sms(
             item.order.phone,
-            f"KOFAD: Your return request for {item.order.public_reference} was reviewed. "
+            f"KOFAD: Your return request for {item.order.customer_reference} was reviewed. "
             "Open My KOFAD for the decision.",
         )
         return item
@@ -1170,7 +1180,7 @@ def review_market_return_request(user, item, action, note=""):
     if not direct and getattr(core_item, "status", "") != "approved":
         item.provider_refund_status = "awaiting_kofad_approval"
         item.provider_refund_message = (
-            "The physical return is waiting for KOFAD approval before Paystack is refunded."
+            "The physical return is waiting for KOFAD approval before the payment refund begins."
         )
     item.save(update_fields=[
         "core_return_request", "status", "staff_note", "reviewed_by",

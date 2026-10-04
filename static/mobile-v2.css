@@ -1,0 +1,46 @@
+/* KOFAD staff mobile v2 — consistent compact workspace */
+@media(max-width:900px){
+  .workspace{grid-template-columns:1fr}
+  .sidebar{position:fixed!important;inset:0 auto 0 0;width:min(86vw,330px)!important;height:100dvh!important;z-index:120;transform:translateX(-105%);transition:transform .2s ease;box-shadow:20px 0 50px #06182733;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+  body.nav-open .sidebar{transform:translateX(0)}
+  .nav-backdrop{position:fixed;inset:0;z-index:110;border:0;background:#06182780;backdrop-filter:blur(2px)}
+  .nav-close{display:grid!important;position:absolute;right:12px;top:12px;width:38px;height:38px;place-items:center;border:0;border-radius:10px;background:#ffffff14;color:#fff;font-size:24px}
+  .body{min-width:0;width:100%}
+  .mobile-menu{display:inline-grid!important;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:11px;background:var(--white);font-size:20px}
+  .topbar{height:64px;padding:0 14px;gap:10px;position:sticky;top:0;z-index:50}
+  .branch-form{min-width:0;flex:1}.branch-form select{max-width:150px;min-width:0}.branch-form button{padding:6px}
+  .single-location{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .top-right{gap:5px}.top-right>form{display:none}.top-user-card{padding:4px!important}.top-user-card>span:last-child{display:none!important}.mode-toggle{width:42px;height:42px;padding:0!important}.mode-toggle [data-theme-label]{display:none}
+  main{padding:20px 14px 98px!important;max-width:100%!important;overflow-x:hidden}
+  .page-heading{align-items:flex-start!important;gap:12px;margin-bottom:18px!important}.page-heading h1{font-size:24px!important;line-height:1.15}.page-heading .eyebrow{font-size:9px}.page-heading>.actions{max-width:54%;justify-content:flex-end;flex-wrap:wrap}.page-heading>.actions .button{min-height:39px;padding:8px 11px;font-size:10px}
+  .overview-intro,.hero-panel{padding:18px!important;border-radius:16px!important}.overview-intro h2,.hero-panel h2{font-size:21px!important}.overview-intro p:last-child,.hero-panel p{font-size:11px!important;line-height:1.55}
+  .metrics,.online-kpis,.intelligence-kpis{grid-template-columns:1fr 1fr!important;gap:8px!important}.metrics article,.online-kpis article{padding:15px!important}.metrics strong,.online-kpis strong{font-size:21px!important}
+  .dashboard-grid,.two-column,.form-grid,.profile-grid,.accounting-layout,.creditor-layout,.communication-workspace,.market-settings-layout,.online-order-detail-grid,.chalin-sale-layout{grid-template-columns:1fr!important}
+  .panel{padding:16px!important;border-radius:15px!important;margin-bottom:14px!important}
+  .section-heading{align-items:flex-start;gap:10px}.section-heading h2{font-size:17px!important}.section-heading>.actions{flex-wrap:wrap;justify-content:flex-end}
+  .quick-actions{grid-template-columns:1fr 1fr!important;gap:8px!important}.quick-action{padding:12px!important}.quick-action small{display:none}
+  .setup-steps,.product-grid,.automation-catalog,.management-contact-grid,.template-preview-grid,.pricing-grid,.pack-only-grid,.opening-stock-grid{grid-template-columns:1fr!important}
+  .searchbar{display:grid!important;grid-template-columns:1fr auto;gap:8px}.searchbar label{grid-column:1/-1}.searchbar .button,.searchbar button{min-width:0}
+  .form-actions{position:sticky;bottom:72px;z-index:8;margin:18px -4px 0;padding:10px 4px;background:linear-gradient(transparent,var(--paper) 24%);gap:8px;flex-wrap:wrap}.form-actions .button{flex:1;min-width:130px}
+  .table-wrap{width:100%;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px}.table-wrap table{min-width:680px}.table-wrap th,.table-wrap td{padding:12px 10px}
+  .actions{gap:6px;flex-wrap:wrap}.button{white-space:normal;text-align:center}
+  dialog{max-width:calc(100vw - 16px)!important}
+  .receipt,.document-receipt{max-width:100%!important;overflow:hidden}.receipt-header,.receipt-meta{gap:12px;flex-direction:column}.receipt-header>div{text-align:left}
+  .mobile-dock{display:grid!important;position:fixed;left:0;right:0;bottom:0;z-index:100;grid-template-columns:repeat(4,1fr);gap:3px;padding:7px 7px calc(7px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);border-top:1px solid var(--line);backdrop-filter:blur(18px);box-shadow:0 -10px 28px #102b4612}.mobile-dock a{display:flex!important;min-width:0;min-height:48px;align-items:center;justify-content:center;flex-direction:column;gap:2px;border-radius:11px;font-size:8px;color:var(--muted)}.mobile-dock a svg,.mobile-dock a>span{width:20px;height:20px}.mobile-dock a.active{background:var(--soft);color:var(--teal)}
+  .approval-attention{bottom:82px!important;right:12px!important}
+  .page-footer{display:none}
+}
+@media(max-width:560px){
+  .page-heading{display:block!important}.page-heading>.actions{max-width:none;margin-top:10px;justify-content:flex-start}.page-heading>.actions .button{flex:1}
+  .metrics,.online-kpis,.intelligence-kpis{grid-template-columns:1fr 1fr!important}
+  .quick-actions{grid-template-columns:1fr!important}
+  .panel{padding:14px!important}
+  .table-wrap table{min-width:620px}
+  .inline-form{flex-wrap:wrap}.inline-form>*{flex:1}
+  .receipt-summary{grid-template-columns:1fr!important}
+}
+@media(max-width:380px){
+  main{padding-left:10px!important;padding-right:10px!important}.topbar{padding:0 9px}.metrics article{padding:12px!important}.page-heading h1{font-size:22px!important}.mobile-dock{padding-left:3px;padding-right:3px}.mobile-dock a{font-size:7px}
+}
+html[data-theme="dark"] .mobile-menu{background:#0d263a;border-color:#31566c;color:#eaf2f7}
+html[data-theme="dark"] .mobile-dock{background:rgba(7,26,42,.97);border-color:#244a60}

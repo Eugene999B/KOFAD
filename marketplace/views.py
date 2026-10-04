@@ -624,8 +624,15 @@ def checkout(request, customer):
                 )
             request.session["market_cart"] = {}
             request.session.modified = True
-            messages.success(request, f"Order {order.public_reference} created. Complete payment to send it to fulfilment.")
-            return redirect("market_order", pk=order.pk)
+            try:
+                attempt = services.initialize_paystack(
+                    order,
+                    request.build_absolute_uri("/market/payment/return/"),
+                )
+                return redirect(attempt.authorization_url)
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+                return redirect("market_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
     subtotal = sum((row["total"] for row in rows), 0)
