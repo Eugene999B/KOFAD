@@ -255,14 +255,14 @@ def product_detail(request, pk):
     customer = services.customer_from_session(request)
     in_wishlist = False
     if customer:
-        RecentView.objects.update_or_create(
+        recent, created = RecentView.objects.get_or_create(
             customer=customer,
             listing=listing,
             defaults={"view_count": 1},
         )
-        recent = RecentView.objects.get(customer=customer, listing=listing)
-        if recent.view_count > 1:
-            RecentView.objects.filter(pk=recent.pk).update(view_count=recent.view_count + 1)
+        if not created:
+            recent.view_count += 1
+            recent.save(update_fields=["view_count", "last_viewed_at"])
         in_wishlist = WishlistItem.objects.filter(customer=customer, listing=listing).exists()
     related = list(
         MarketListing.objects.filter(
