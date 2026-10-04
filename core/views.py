@@ -664,7 +664,7 @@ def product_edit(request, branch, pk=None):
                                 market.image_url = ""
                                 market.image_credit = ""
                             upload = market_form.cleaned_data.get("image")
-                            if upload:
+                            if upload and market.enabled:
                                 save_listing_image(market, upload)
                             market.save()
 
