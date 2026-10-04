@@ -66,10 +66,14 @@
 <label class="switch-row">{{ market_form.featured }}<span><strong>Feature this product</strong><small>Featured items receive stronger placement on the public Market.</small></span>{{ market_form.featured.errors }}</label>
 <label>Display order <small>Lower numbers appear before higher numbers.</small>{{ market_form.sort_order }}{{ market_form.sort_order.errors }}</label>
 </div>
-<label>Customer-facing description{{ market_form.description }}{{ market_form.description.errors }}</label>
+<label>Customer-facing description <small>Write for the customer: what the product is, who it is useful for and why they may choose it.</small>{{ market_form.description }}{{ market_form.description.errors }}</label>
+<div class="two-column">
+<label>Search tags <small>{{ market_form.tags.help_text }}</small>{{ market_form.tags }}{{ market_form.tags.errors }}</label>
+<label>Product highlights <small>{{ market_form.highlights_text.help_text }}</small>{{ market_form.highlights_text }}{{ market_form.highlights_text.errors }}</label>
+</div>
 <div class="market-photo-setup">
-<div class="market-photo-preview">{% if market_form.instance.image_thumb %}<img src="/market/products/{{ market_form.instance.pk }}/image/thumb/" alt="Current market product photo">{% else %}<span>PRODUCT PHOTO</span>{% endif %}</div>
-<div><label>Market product photo <small>{{ market_form.image.help_text }}</small>{{ market_form.image }}{{ market_form.image.errors }}</label>{% if market_form.instance.image_thumb %}<label class="check-row">{{ market_form.remove_image }} Remove current photo</label>{% endif %}<p class="hint">KOFAD corrects phone rotation, converts the picture to WebP, creates a full image and thumbnail, and stores the compressed result safely in the database.</p></div>
+<div class="market-photo-preview">{% if market_form.instance.image_thumb %}<img src="/market/products/{{ market_form.instance.pk }}/image/thumb/" alt="Current market product photo">{% elif market_form.instance.image_url %}<img src="{{ market_form.instance.image_url }}" alt="Current curated market product photo" referrerpolicy="no-referrer">{% else %}<span>PRODUCT PHOTO</span>{% endif %}</div>
+<div><label>Market product photo <small>{{ market_form.image.help_text }}</small>{{ market_form.image }}{{ market_form.image.errors }}</label>{% if market_form.instance.image_thumb or market_form.instance.image_url %}<label class="check-row">{{ market_form.remove_image }} Remove current photo</label>{% endif %}{% if market_form.instance.image_credit %}<p class="hint"><strong>Current curated image:</strong> {{ market_form.instance.image_credit }}. Uploading your own business photo will replace it.</p>{% endif %}<p class="hint">KOFAD corrects phone rotation, converts the picture to WebP, creates a full image and thumbnail, and stores the compressed result safely in the database.</p></div>
 </div>
 </section>
 <button class="button">Save product</button>
