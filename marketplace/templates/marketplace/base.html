@@ -14,14 +14,17 @@
 <script defer src="{% static 'marketplace/market.js' %}"></script>
 <script defer src="{% static 'marketplace/market-v2.js' %}"></script>
 <script defer src="{% static 'marketplace/market-v3.js' %}"></script>
+{% block head %}{% endblock %}
 </head>
 <body class="market-body market-v2{% if market_customer %} customer-session{% endif %}">
 <a class="market-skip" href="#main">Skip to content</a>
 <header class="market-header commerce-header">
 <a class="market-brand" href="/" aria-label="KOPEX IMPEX home"><span class="market-brand-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span><span><strong>KOPEX</strong><small>IMPEX · KOFAD MARKET</small></span></a>
-<form class="commerce-global-search" action="/market/" method="get" role="search"><span aria-hidden="true">⌕</span><input name="q" value="{{ q|default:'' }}" type="search" placeholder="Search products, categories or SKU" aria-label="Search KOFAD Market"><button>Search</button></form>
 <nav class="market-nav commerce-nav" aria-label="Customer navigation">
 <a href="/market/" class="{% if request.path == '/market/' %}active{% endif %}">Shop</a>
+<a href="/#contact" class="market-contact-link">Contact</a>
+<a href="/market/messages/" class="market-message-link">Message</a>
+<a href="/login/" class="market-staff-link">Staff login</a>
 {% if market_customer %}
 <a href="/market/account/" class="{% if request.path == '/market/account/' %}active{% endif %}">Account</a>
 <a href="/market/orders/">Orders</a>
