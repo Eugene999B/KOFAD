@@ -371,8 +371,41 @@ with sync_playwright() as p:
     assert admin_page.locator("tbody tr").count() == 2
     admin_page.screenshot(path=str(out / "branch-comparison-mobile.png"),full_page=True)
     assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Branch report overflows"
+    market_page = browser.new_page(viewport={"width":390,"height":844})
+    market_page.context.add_cookies([{
+        "name": settings.SESSION_COOKIE_NAME,
+        "value": browser_customer_session.session_key,
+        "url": "http://127.0.0.1:8000",
+    }])
+    market_page.goto("http://127.0.0.1:8000/market/account/")
+    assert market_page.get_by_role("heading", name="Hi, Mobile Market Customer.", exact=True).is_visible()
+    assert market_page.locator(".market-mobile-dock").is_visible()
+    assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=True).count() >= 1
+    assert market_page.get_by_text("Paystack", exact=False).count() == 0
+    market_page.screenshot(path=str(out / "market-account-mobile.png"), full_page=True)
+    for width in (320, 390, 768):
+        market_page.set_viewport_size({"width":width,"height":900})
+        for market_path in (
+            "/market/",
+            "/market/account/",
+            "/market/orders/",
+            f"/market/orders/{browser_market_order.pk}/",
+            "/market/cart/",
+            "/market/account/wishlist/",
+            "/market/messages/",
+        ):
+            market_page.goto("http://127.0.0.1:8000" + market_path)
+            assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width) + market_path
+    market_page.set_viewport_size({"width":390,"height":844})
+    market_page.goto(f"http://127.0.0.1:8000/market/orders/{browser_market_order.pk}/")
+    assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=False).count() >= 1
+    assert market_page.get_by_text(browser_payment_reference, exact=False).count() == 0
+    assert market_page.get_by_text("Paystack", exact=False).count() == 0
+    market_page.screenshot(path=str(out / "market-order-mobile.png"), full_page=True)
+    market_page.close()
+
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Direct admin login, natural-scroll CHALIN03-style sales checkout, immediate receipt actions, lost-response recovery, debt payment, stock counts, transfers, and desktop/mobile checks passed.")
+print("Staff and customer mobile layouts, account mode, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
