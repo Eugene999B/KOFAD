@@ -106,6 +106,7 @@ browser_market_order = market_services.finalize_payment(
 )
 browser_customer_session = SessionStore()
 browser_customer_session["market_customer_id"] = browser_market_customer.pk
+browser_customer_session["market_cart"] = {str(browser_listing.pk): 1}
 browser_customer_session.create()
 
 out = Path("test-results")
@@ -377,6 +378,10 @@ with sync_playwright() as p:
         "value": browser_customer_session.session_key,
         "url": "http://127.0.0.1:8000",
     }])
+    market_page.goto("http://127.0.0.1:8000/")
+    assert market_page.locator(".commerce-global-search").count() == 0
+    assert market_page.locator(".market-contact-link").count() == 1
+    assert market_page.locator(".market-staff-link").count() == 1
     market_page.goto("http://127.0.0.1:8000/market/account/")
     assert market_page.get_by_role("heading", name="Hi, Mobile Market Customer.", exact=True).is_visible()
     assert market_page.locator(".market-mobile-dock").is_visible()
@@ -391,12 +396,17 @@ with sync_playwright() as p:
             "/market/orders/",
             f"/market/orders/{browser_market_order.pk}/",
             "/market/cart/",
+            "/market/checkout/",
             "/market/account/wishlist/",
             "/market/messages/",
         ):
             market_page.goto("http://127.0.0.1:8000" + market_path)
             assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width) + market_path
     market_page.set_viewport_size({"width":390,"height":844})
+    market_page.goto("http://127.0.0.1:8000/market/checkout/")
+    assert market_page.locator("[data-location-map]").count() == 1
+    assert market_page.get_by_role("button", name="Use my current location", exact=True).is_visible()
+    market_page.screenshot(path=str(out / "market-checkout-map-mobile.png"), full_page=True)
     market_page.goto(f"http://127.0.0.1:8000/market/orders/{browser_market_order.pk}/")
     assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=False).count() >= 1
     assert market_page.get_by_text(browser_payment_reference, exact=False).count() == 0
@@ -408,4 +418,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Staff and customer mobile layouts, account mode, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
+print("Staff and customer mobile layouts, delivery map checkout, homepage navigation, account mode, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
