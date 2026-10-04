@@ -396,7 +396,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         checkout = self.client.get("/market/checkout/")
         self.assertEqual(checkout.status_code, 200)
         self.assertNotContains(checkout, "Paystack")
-        self.assertContains(checkout, "Continue to payment")
+        self.assertContains(checkout, "Make payment")
 
         order = self.order()
         attempt = MarketPaymentAttempt.objects.create(
@@ -414,6 +414,40 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertNotContains(response, "Paystack")
         self.assertNotContains(response, attempt.reference)
         self.assertNotContains(response, "mobile_money")
+
+    @patch("marketplace.views.services.initialize_paystack")
+    def test_checkout_make_payment_goes_directly_to_secure_payment(self, initialize_payment):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
+        initialize_payment.return_value = Mock(
+            authorization_url="https://checkout.paystack.com/test-checkout"
+        )
+        response = self.client.post("/market/checkout/", {
+            "fulfilment": "pickup",
+            "recipient_name": self.customer.full_name,
+            "phone": self.customer.phone,
+            "email": self.customer.email,
+            "delivery_zone": "",
+            "region": "",
+            "town": "",
+            "address_line": "",
+            "landmark": "",
+            "ghana_post_gps": "",
+            "latitude": "",
+            "longitude": "",
+            "customer_note": "",
+        })
+        self.assertRedirects(
+            response,
+            "https://checkout.paystack.com/test-checkout",
+            fetch_redirect_response=False,
+        )
+        order = OnlineOrder.objects.latest("created_at")
+        initialize_payment.assert_called_once()
+        self.assertEqual(initialize_payment.call_args.args[0].pk, order.pk)
+        self.assertEqual(self.client.session["market_cart"], {})
 
     def test_market_search_uses_customer_facing_tags(self):
         self.listing.tags = "hydraulic excavator service filter maintenance"
