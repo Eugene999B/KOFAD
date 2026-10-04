@@ -216,6 +216,14 @@ with sync_playwright() as p:
     admin_page.wait_for_url("http://127.0.0.1:8000/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/administration/")
+    admin_sidebar = admin_page.locator(".sidebar")
+    max_sidebar_scroll = admin_sidebar.evaluate("el => { el.scrollTop = el.scrollHeight; return el.scrollTop; }")
+    assert max_sidebar_scroll > 50
+    admin_page.get_by_role("link",name="Workers",exact=True).click()
+    admin_page.wait_for_url("http://127.0.0.1:8000/workers/")
+    admin_page.wait_for_timeout(100)
+    assert admin_page.locator(".sidebar").evaluate("el => el.scrollTop") > 50
     admin_page.goto("http://127.0.0.1:8000/account/")
     admin_page.get_by_label("Recovery phone number",exact=False).fill("0241234567")
     admin_page.get_by_label("Current password",exact=False).fill("admin")
