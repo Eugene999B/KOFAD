@@ -21,6 +21,7 @@ urlpatterns = [
     path("market/account/wishlist/", views.customer_wishlist, name="market_wishlist"),
     path("market/account/returns/", views.customer_returns, name="market_returns"),
     path("market/account/logout/", views.customer_logout, name="market_logout"),
+    path("market/session/state/", views.market_session_state, name="market_session_state"),
     path("market/cart/", views.cart, name="market_cart"),
     path("market/cart/add/<int:pk>/", views.cart_add, name="market_cart_add"),
     path("market/cart/update/", views.cart_update, name="market_cart_update"),
