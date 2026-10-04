@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import io
 import json
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -577,7 +578,7 @@ class MarketV3CommerceTests(MarketFixtures):
 
     def test_delivery_tracking_keeps_driver_eta_and_customer_visible_evidence(self):
         order = self.order(fulfilment="delivery")
-        eta = timezone.now() + timezone.timedelta(hours=2)
+        eta = timezone.now() + timedelta(hours=2)
         update = services.save_delivery_tracking(self.staff, order, {
             "delivery_agent_name": "Kojo Driver",
             "delivery_agent_phone": "+233241111111",
