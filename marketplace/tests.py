@@ -321,18 +321,18 @@ class MarketFulfilmentTests(MarketFixtures):
 
 
 class MarketInboxTests(MarketFixtures):
-    def test_public_enquiry_enters_staff_inbox(self):
+    def test_public_home_no_longer_creates_visitor_enquiries(self):
+        before = Conversation.objects.count()
         response = self.client.post("/", {
             "name": "Visitor",
             "phone": "0245556677",
             "subject": "Delivery question",
             "message": "Can you deliver this product to my area?",
         })
-        self.assertEqual(response.status_code, 302)
-        from .models import Conversation
-        item = Conversation.objects.get(public_phone="+233245556677")
-        self.assertEqual(item.messages.get().sender_type, "visitor")
-        self.assertFalse(item.messages.get().read_by_staff)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Conversation.objects.count(), before)
+        self.assertNotContains(response, "Send enquiry")
+        self.assertContains(response, "CONTACT US")
 
 
 
