@@ -399,10 +399,9 @@ class DeliveryPolicyForm(forms.ModelForm):
 class DeliveryZoneForm(forms.ModelForm):
     class Meta:
         model = DeliveryZone
-        fields = ["name", "fee", "eta_text", "sort_order", "active"]
+        fields = ["name", "eta_text", "sort_order", "active"]
         labels = {
             "name": "Delivery area / zone",
-            "fee": "Delivery fee (GHS)",
             "eta_text": "Expected delivery time",
             "sort_order": "Display order",
             "active": "Available to customers",
