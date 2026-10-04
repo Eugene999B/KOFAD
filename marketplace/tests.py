@@ -262,6 +262,9 @@ class MarketPaymentTests(MarketFixtures):
         })
         result.refresh_from_db()
         self.assertEqual(result.payment_status, "paid")
+        self.assertTrue(result.confirmed_reference.startswith("KFD-"))
+        self.assertNotEqual(result.confirmed_reference, result.public_reference)
+        self.assertEqual(result.customer_reference, result.confirmed_reference)
         self.assertEqual(result.ledger_status, "posted")
         self.assertIsNotNone(result.sale_document_id)
         document = Document.objects.get(pk=result.sale_document_id)
@@ -380,9 +383,34 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         order = self.order()
         response = self.client.get("/market/account/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "My KOFAD")
-        self.assertContains(response, order.public_reference)
+        self.assertContains(response, "Your orders")
+        self.assertContains(response, "Awaiting payment")
         self.assertContains(response, "Active orders")
+        self.assertContains(response, "market-mobile-dock")
+
+    def test_customer_checkout_and_paid_order_hide_payment_provider(self):
+        self.customer_session()
+        checkout = self.client.get("/market/checkout/")
+        self.assertEqual(checkout.status_code, 200)
+        self.assertNotContains(checkout, "Paystack")
+        self.assertContains(checkout, "Continue to payment")
+
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(
+            order=order, reference="KFD-PRIVATE-PAYMENT", amount=order.total,
+            currency="GHS", status="pending",
+        )
+        order = services.finalize_payment(attempt.reference, {
+            "status": "success",
+            "amount": int(order.total * 100),
+            "currency": "GHS",
+            "channel": "mobile_money",
+        })
+        response = self.client.get(f"/market/orders/{order.pk}/")
+        self.assertContains(response, order.confirmed_reference)
+        self.assertNotContains(response, "Paystack")
+        self.assertNotContains(response, attempt.reference)
+        self.assertNotContains(response, "mobile_money")
 
     def test_market_search_uses_customer_facing_tags(self):
         self.listing.tags = "hydraulic excavator service filter maintenance"
