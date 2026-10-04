@@ -1,42 +1,17 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="storefront-head">
-<div class="storefront-head-copy">
-<p class="market-eyebrow">KOPEX IMPEX MARKET</p>
-<h1>Products</h1>
-<p>Browse available products, compare prices and order directly from your KOFAD account.</p>
-<div class="storefront-head-meta"><span><b>{{ total_catalog }}</b> products</span>{% if visible_price_low %}<span>From <b>GHS {{ visible_price_low|floatformat:2 }}</b></span>{% endif %}</div>
-</div>
-{% if market_customer %}
-<a class="storefront-account-panel signed-in" href="/market/account/"><span class="storefront-account-avatar">{{ market_customer.full_name|first|upper }}</span><div><small>YOUR ACCOUNT</small><strong>{{ market_customer.full_name|default:market_customer.phone }}</strong><em>Orders, saved items & support →</em></div></a>
-{% else %}
-<div class="storefront-account-panel signed-out"><span class="storefront-account-avatar">●</span><div><small>YOUR KOFAD ACCOUNT</small><strong>Sign in to order and track purchases</strong><div class="storefront-account-actions"><a href="/market/access/">Sign in</a><a href="/market/access/">Create account</a></div></div></div>
-{% endif %}
-</section>
+<section class="shop-catalog">
+{% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="/market/?category={{ category|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 
-{% if categories %}<nav class="storefront-mobile-categories" aria-label="Product categories"><a href="/market/" class="{% if not selected_category %}active{% endif %}">All products</a>{% for category in categories %}<a href="/market/?category={{ category|urlencode }}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
-
-<section class="commerce-catalog-wrap storefront-catalog-wrap">
-<aside class="commerce-filter-rail storefront-filter-rail">
-<div class="filter-rail-head"><strong>Categories</strong><span>{{ listings|length }} shown</span></div>
-<nav><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}"><span>All products</span><b>→</b></a>{% for category in categories %}<a href="/market/?category={{ category|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_category == category %}active{% endif %}"><span>{{ category }}</span><b>→</b></a>{% endfor %}</nav>
-{% if market_customer %}<a class="storefront-side-account" href="/market/account/"><span>{{ market_customer.full_name|first|upper }}</span><div><small>ACCOUNT</small><strong>Open my account</strong></div><b>→</b></a>{% else %}<a class="storefront-side-account" href="/market/access/"><span>+</span><div><small>ACCOUNT</small><strong>Sign in / Create account</strong></div><b>→</b></a>{% endif %}
-</aside>
-
-<div class="commerce-catalog-main storefront-catalog-main">
-<div class="storefront-toolbar">
-<form method="get" class="commerce-catalog-search storefront-search" data-market-search>
-<span>⌕</span><input type="search" name="q" value="{{ q }}" placeholder="Search products or SKU" autocomplete="off" data-market-search-input>{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}<button>Search</button><div class="market-search-suggestions" data-market-suggestions hidden></div>
+<header class="shop-catalog-head">
+<div><p>KOFAD MARKET</p><h1>{% if selected_category %}{{ selected_category }}{% elif q %}Search results{% else %}All products{% endif %}</h1><span>{{ listings|length }} item{{ listings|length|pluralize }}{% if q %} for “{{ q }}”{% endif %}</span></div>
+<form method="get" class="shop-catalog-filters">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+<label class="shop-sort"><span>Sort</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Featured</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low to high</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high to low</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Product name</option></select></label>
+<label class="shop-filter-check"><input type="checkbox" name="stock" value="available" {% if in_stock %}checked{% endif %} onchange="this.form.submit()"><span>In stock</span></label>
+<label class="shop-filter-check"><input type="checkbox" name="featured" value="1" {% if featured_only %}checked{% endif %} onchange="this.form.submit()"><span>Featured</span></label>
 </form>
-<form method="get" class="catalog-refine-form storefront-refine">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
-<label><span>Sort</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Featured</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Name</option></select></label>
-<label class="stock-filter"><input type="checkbox" name="stock" value="available" {% if in_stock %}checked{% endif %} onchange="this.form.submit()"><span>In stock</span></label>
-<label class="stock-filter"><input type="checkbox" name="featured" value="1" {% if featured_only %}checked{% endif %} onchange="this.form.submit()"><span>Featured</span></label>
-<button class="catalog-apply-filter">Apply</button>
-</form>
-</div>
+</header>
 
-<div class="catalog-context-row storefront-context"><div><strong>{% if selected_category %}{{ selected_category }}{% elif q %}Search results{% else %}All products{% endif %}</strong><span>{{ listings|length }} item{{ listings|length|pluralize }}{% if q %} matching “{{ q }}”{% endif %}</span></div>{% if q or selected_category or in_stock or featured_only or price_min or price_max %}<a href="/market/">Clear filters ×</a>{% endif %}</div>
+{% if q or selected_category or in_stock or featured_only or price_min or price_max %}<div class="shop-active-filter"><span>Showing a filtered view</span><a href="/market/">Clear all ×</a></div>{% endif %}
 
-{% if listings %}<div class="market-grid commerce-product-grid storefront-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>{% else %}<div class="market-empty commerce-empty storefront-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
-</div>
+{% if listings %}<div class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>{% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
 </section>{% endblock %}
