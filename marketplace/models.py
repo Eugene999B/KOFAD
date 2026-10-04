@@ -313,6 +313,7 @@ class MarketReturnRequest(models.Model):
         ("approved", "Approved"),
         ("rejected", "Rejected"),
         ("processing", "Processing"),
+        ("refund_attention", "Refund needs attention"),
         ("completed", "Completed"),
     ]
     RESOLUTIONS = [("refund", "Refund to original payment method")]
@@ -325,6 +326,12 @@ class MarketReturnRequest(models.Model):
     customer_note = models.TextField(blank=True)
     staff_note = models.TextField(blank=True)
     core_return_request = models.ForeignKey("core.CustomerReturnRequest", null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    refund_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    provider_refund_id = models.CharField(max_length=80, blank=True, default="")
+    provider_refund_status = models.CharField(max_length=32, blank=True, default="")
+    provider_refund_message = models.CharField(max_length=240, blank=True, default="")
+    refund_initiated_at = models.DateTimeField(null=True, blank=True)
+    refund_processed_at = models.DateTimeField(null=True, blank=True)
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
