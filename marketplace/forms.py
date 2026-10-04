@@ -5,7 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
 from core.identity import normalize_ghana_phone
-from .models import DeliveryZone, MarketListing
+from .models import CustomerAccount, DeliveryZone, MarketListing
 
 
 class MarketListingForm(forms.ModelForm):
@@ -56,11 +56,49 @@ class MarketListingForm(forms.ModelForm):
             source = data.get("price_source")
             if not source or getattr(self.product, source, None) is None:
                 self.add_error("price_source", "Choose a selling price that is enabled on this product.")
-            has_existing = bool(getattr(self.instance, "image_data", None))
+            has_existing = bool(
+                getattr(self.instance, "image_data", None) or getattr(self.instance, "image_url", "")
+            )
             if not self.files.get("image") and not has_existing:
                 self.add_error("image", "Add a product photo before publishing this item to Market.")
             if data.get("remove_image") and not self.files.get("image"):
                 self.add_error("remove_image", "A published product must keep a photo. Upload a replacement or unpublish it first.")
+        return data
+
+
+class CustomerAccessForm(forms.Form):
+    phone = forms.CharField(max_length=30, label="Mobile number")
+
+    def clean_phone(self):
+        return normalize_ghana_phone(self.cleaned_data["phone"])
+
+
+class CustomerProfileForm(forms.ModelForm):
+    class Meta:
+        model = CustomerAccount
+        fields = ["full_name", "email"]
+        labels = {"full_name": "Full name", "email": "Email address"}
+
+
+class ConversationMessageForm(forms.Form):
+    message = forms.CharField(
+        required=False,
+        max_length=2000,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Write a message to KOFAD…"}),
+    )
+    attachment = forms.FileField(
+        required=False,
+        label="Attach a file",
+        widget=forms.ClearableFileInput(attrs={
+            "accept": "image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt",
+        }),
+        help_text="Images, PDF, Word, Excel or text files up to 10 MB.",
+    )
+
+    def clean(self):
+        data = super().clean()
+        if not (data.get("message") or data.get("attachment")):
+            raise forms.ValidationError("Write a message or attach a file.")
         return data
 
 
