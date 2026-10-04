@@ -315,7 +315,7 @@ class MarketReturnRequest(models.Model):
         ("processing", "Processing"),
         ("completed", "Completed"),
     ]
-    RESOLUTIONS = [("refund", "Refund"), ("exchange", "Exchange")]
+    RESOLUTIONS = [("refund", "Refund to original payment method")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(OnlineOrder, related_name="return_requests", on_delete=models.PROTECT)
     customer = models.ForeignKey(CustomerAccount, related_name="return_requests", on_delete=models.PROTECT)
