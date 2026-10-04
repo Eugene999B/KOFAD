@@ -7,6 +7,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -364,6 +365,35 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         session["access_version"] = self.staff.access.session_version
         session["branch"] = self.branch.pk
         session.save()
+
+    def test_market_login_sets_two_hour_session_window_and_top_signout(self):
+        before = timezone.now().timestamp()
+        response = self.client.post("/market/account/login/", {
+            "phone": self.customer.phone,
+            "password": "Very-strong-customer-password-42!",
+        })
+        self.assertEqual(response.status_code, 302)
+        expires_at = float(self.client.session["market_session_expires_at"])
+        self.assertGreaterEqual(expires_at, before + settings.MARKET_SESSION_SECONDS - 2)
+        self.assertLessEqual(expires_at, timezone.now().timestamp() + settings.MARKET_SESSION_SECONDS + 2)
+        self.assertEqual(settings.MARKET_SESSION_SECONDS, 2 * 60 * 60)
+        page = self.client.get("/market/account/")
+        self.assertContains(page, "market-top-signout")
+        self.assertContains(page, "Sign out")
+        self.assertContains(page, 'action="/market/account/logout/"')
+
+    def test_expired_market_session_does_not_expire_staff_identity(self):
+        self.staff_session()
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session["market_session_expires_at"] = timezone.now().timestamp() - 1
+        session["staff_session_expires_at"] = timezone.now().timestamp() + (12 * 60 * 60)
+        session.save()
+        response = self.client.get("/market/account/")
+        self.assertRedirects(response, "/market/access/", fetch_redirect_response=False)
+        self.assertNotIn("market_customer_id", self.client.session)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.get("/workspace/").status_code, 200)
 
     def test_unified_access_routes_existing_number_to_password_sign_in(self):
         response = self.client.post("/market/access/", {"phone": "0241234567"})
