@@ -1804,3 +1804,230 @@ html[data-theme="dark"] .premium-empty-state strong{color:#EEF5F8}
   .credential-verify-card{padding:22px 18px}.verify-grid{grid-template-columns:1fr}
   .verify-serial{align-items:flex-start;flex-direction:column}
 }
+
+
+/* ==========================================================================
+   KOPEX unified dark theme · October 2026
+   Remove the retired graphite/brown surface palette from dark mode. Keep the
+   heritage navy/teal system dominant, with gold reserved for brand highlights.
+   ========================================================================== */
+html[data-theme="dark"]{
+  --paper:#071A2A;
+  --white:#0D263A;
+  --ink:#F2F7FA;
+  --muted:#A4BAC8;
+  --line:#244A60;
+  --green:#EAF4F7;
+  --gold:#E9AC32;
+  --soft:#12364D;
+  --teal:#52B8BE;
+  --kofad-accent:#52B8BE;
+  --kofad-accent-soft:#123B50;
+  --kofad-sidebar:#061624;
+  --kofad-sidebar-soft:#0E3149;
+  --kofad-shadow:0 1px 2px rgba(0,9,18,.18),0 14px 38px rgba(0,9,18,.22);
+  --kofad-shadow-hover:0 2px 4px rgba(0,9,18,.22),0 18px 46px rgba(0,9,18,.28);
+  color-scheme:dark;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .body,
+html[data-theme="dark"] .login-page{background:#071A2A!important;color:#F2F7FA}
+html[data-theme="dark"] a,
+html[data-theme="dark"] .text-link,
+html[data-theme="dark"] .text-button{color:#70CDD0}
+html[data-theme="dark"] a:hover,
+html[data-theme="dark"] .text-link:hover,
+html[data-theme="dark"] .text-button:hover{color:#A0E2E4}
+
+/* Navigation */
+html[data-theme="dark"] .sidebar{background:#061624;scrollbar-color:#3E657B transparent}
+html[data-theme="dark"] .sidebar nav a{color:#C4D4DE}
+html[data-theme="dark"] .sidebar nav a:hover{background:#0D3049;color:#fff}
+html[data-theme="dark"] .sidebar nav a.active{
+  background:#123B57;
+  color:#fff;
+  box-shadow:inset 3px 0 #E9AC32;
+}
+html[data-theme="dark"] .sidebar nav a.active .nav-icon{color:#68CDD1}
+html[data-theme="dark"] .sidebar kbd{border-color:#3E6076;color:#9FB6C5}
+html[data-theme="dark"] .topbar{background:rgba(7,26,42,.90);border-color:#244A60}
+html[data-theme="dark"] .top-user-card:hover,
+html[data-theme="dark"] .theme-toggle:hover{background:#0F3047}
+html[data-theme="dark"] .user-avatar{background:#12384E;color:#77D0D3}
+html[data-theme="dark"] .mode-toggle{
+  background:#0B2235;
+  border-color:#2A4E63;
+  color:#F2F7FA;
+}
+html[data-theme="dark"] .mode-toggle:hover{background:#12364D;border-color:#3B657B}
+
+/* Dashboard and hero surfaces */
+html[data-theme="dark"] .overview-intro,
+html[data-theme="dark"] .hero-panel,
+html[data-theme="dark"] .debt-hero,
+html[data-theme="dark"] .comms-hero{
+  border-color:#2A5268;
+  background:
+    radial-gradient(circle at 88% 18%,rgba(19,140,148,.24),transparent 34%),
+    linear-gradient(145deg,#081F33,#0D3049 64%,#123C58)!important;
+  color:#F5FAFC;
+  box-shadow:0 16px 42px rgba(0,8,17,.28);
+}
+html[data-theme="dark"] .overview-intro .eyebrow,
+html[data-theme="dark"] .hero-panel .eyebrow,
+html[data-theme="dark"] .debt-hero .eyebrow,
+html[data-theme="dark"] .comms-hero .eyebrow{color:#E9AC32}
+html[data-theme="dark"] .overview-intro p:last-child,
+html[data-theme="dark"] .hero-panel p:last-child,
+html[data-theme="dark"] .debt-hero p,
+html[data-theme="dark"] .comms-hero p{color:#C1D4DF}
+html[data-theme="dark"] .overview-intro .pill,
+html[data-theme="dark"] .hero-panel>.pill{background:#113A52;color:#C9EEF0;border-color:#315A70}
+
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .metrics article,
+html[data-theme="dark"] .quick-action,
+html[data-theme="dark"] .settings-card,
+html[data-theme="dark"] .admin-metrics article,
+html[data-theme="dark"] .role-card,
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .debt-account-pane,
+html[data-theme="dark"] .debt-detail-pane,
+html[data-theme="dark"] .inventory-hero,
+html[data-theme="dark"] .sale-command-bar,
+html[data-theme="dark"] .transaction-message-card,
+html[data-theme="dark"] .debt-balance-card,
+html[data-theme="dark"] .inventory-toolbar-panel,
+html[data-theme="dark"] .search-result-card,
+html[data-theme="dark"] .kofad-dialog,
+html[data-theme="dark"] .debt-payment-dialog-inner,
+html[data-theme="dark"] .customer-results,
+html[data-theme="dark"] .counter-customer-results,
+html[data-theme="dark"] .check-card,
+html[data-theme="dark"] .permission-row,
+html[data-theme="dark"] .switch-row,
+html[data-theme="dark"] .chalin-cart-panel,
+html[data-theme="dark"] .chalin-checkout-panel,
+html[data-theme="dark"] .communication-status-grid article,
+html[data-theme="dark"] .automation-catalog article{
+  background:#0D263A;
+  border-color:#244A60;
+  color:#F2F7FA;
+}
+html[data-theme="dark"] .panel:hover,
+html[data-theme="dark"] .quick-action:hover,
+html[data-theme="dark"] .settings-card:hover,
+html[data-theme="dark"] .search-result-card:hover{border-color:#35637B}
+html[data-theme="dark"] .metrics p,
+html[data-theme="dark"] .metrics article>span,
+html[data-theme="dark"] .metrics a{color:#9FB6C5}
+html[data-theme="dark"] .quick-action>span,
+html[data-theme="dark"] .product-symbol,
+html[data-theme="dark"] .settings-icon,
+html[data-theme="dark"] .metric-icon,
+html[data-theme="dark"] .search-result-symbol{
+  background:#123B50;
+  color:#68CDD1;
+}
+html[data-theme="dark"] .quick-action:hover{background:#103047}
+html[data-theme="dark"] .pill{background:#123247;color:#C5D7E1}
+html[data-theme="dark"] .pill.amber{background:#2B321F;color:#F2C867}
+html[data-theme="dark"] .pill.success{background:#123C3A;color:#80D9C7}
+
+/* Forms, tables and nested cards */
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .branch-form select,
+html[data-theme="dark"] .login-card input,
+html[data-theme="dark"] .login-input-shell{
+  background:#091F31;
+  border-color:#2A4F64;
+  color:#fff!important;
+}
+html[data-theme="dark"] input:hover,
+html[data-theme="dark"] select:hover,
+html[data-theme="dark"] textarea:hover{border-color:#3C687E}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder{color:#7893A5!important}
+html[data-theme="dark"] th{background:#0A2133;color:#9EB5C4;border-color:#244A60}
+html[data-theme="dark"] td{border-color:#203F52}
+html[data-theme="dark"] tbody tr:hover{background:#0F2D42}
+html[data-theme="dark"] .chalin-customer-card,
+html[data-theme="dark"] .chalin-payment-card,
+html[data-theme="dark"] .chalin-total-panel,
+html[data-theme="dark"] .success-mini-receipt,
+html[data-theme="dark"] .transaction-message-preview,
+html[data-theme="dark"] .selected-customer,
+html[data-theme="dark"] .command-rail,
+html[data-theme="dark"] .permission-box,
+html[data-theme="dark"] .debt-search-form,
+html[data-theme="dark"] .inventory-search,
+html[data-theme="dark"] .comms-channel-switch,
+html[data-theme="dark"] .comms-target-switch,
+html[data-theme="dark"] .comms-history-filter,
+html[data-theme="dark"] .comms-target-pane,
+html[data-theme="dark"] .comms-help-panel,
+html[data-theme="dark"] .login-assurance>div{
+  background:#0A2133;
+  border-color:#294E63;
+}
+html[data-theme="dark"] .customer-result:hover,
+html[data-theme="dark"] .debt-account-card:hover,
+html[data-theme="dark"] .comms-customer-row:hover{background:#103047}
+html[data-theme="dark"] .comms-customer-list,
+html[data-theme="dark"] .comms-template-row button,
+html[data-theme="dark"] .comms-send-bar{background:#0D263A;border-color:#294E63}
+html[data-theme="dark"] .comms-customer-row{border-color:#244A60}
+
+/* Buttons stay crisp; secondary actions remain blue rather than graphite/brown. */
+html[data-theme="dark"] .button{background:#EDF5F8;color:#071A2A;border-color:#EDF5F8}
+html[data-theme="dark"] .button:hover{background:#fff;border-color:#fff}
+html[data-theme="dark"] .button.secondary{
+  background:#0F3047;
+  color:#DDEBF1;
+  border-color:#31576D;
+}
+html[data-theme="dark"] .button.secondary:hover{background:#153D56;border-color:#416D83}
+html[data-theme="dark"] .payment-method-option{background:#091F31;border-color:#2A4F64;color:#D6E4EB}
+html[data-theme="dark"] .payment-method-option:hover{background:#103047;border-color:#46748A}
+html[data-theme="dark"] .payment-method-option.active{background:#52B8BE;color:#061624;border-color:#52B8BE}
+html[data-theme="dark"] .debt-filter-row a,
+html[data-theme="dark"] .inventory-filters a{background:#0D263A;border-color:#31576D;color:#A9BFCC}
+html[data-theme="dark"] .debt-filter-row a.active,
+html[data-theme="dark"] .inventory-filters a.active{background:#52B8BE;color:#061624;border-color:#52B8BE}
+
+/* Login gateway */
+html[data-theme="dark"] .premium-login-card{
+  background:#0D263A;
+  border-color:#2A4F64;
+  box-shadow:0 26px 72px rgba(0,8,17,.32);
+}
+html[data-theme="dark"] .login-access-chip{border-color:#2B5267}
+html[data-theme="dark"] .welcome-icon{background:#0A2133;border-color:#31576D;color:#68CDD1}
+html[data-theme="dark"] .login-header .brand{color:#F2F7FA}
+html[data-theme="dark"] .login-header-meta{color:#A7BBC8!important}
+html[data-theme="dark"] .login-security{color:#A7BBC8!important}
+
+/* Approval control remains noticeable without introducing a brown surface. */
+html[data-theme="dark"] .approval-attention{
+  background:#0A2336;
+  color:#fff;
+  border-color:rgba(233,172,50,.68);
+  box-shadow:0 18px 50px rgba(0,8,17,.42);
+}
+html[data-theme="dark"] .approval-attention-icon{background:#E9AC32;color:#102B46}
+html[data-theme="dark"] .approval-attention-copy small{color:#B8CBD6}
+html[data-theme="dark"] .approval-attention.has-approvals{animation:kofadApprovalPulseBlue 1.8s ease-in-out infinite}
+@keyframes kofadApprovalPulseBlue{
+  0%,100%{box-shadow:0 18px 45px rgba(0,8,17,.38),0 0 0 0 rgba(233,172,50,.22)}
+  50%{box-shadow:0 20px 55px rgba(0,8,17,.46),0 0 0 12px rgba(233,172,50,0)}
+}
+
+/* Brand/data accents */
+html[data-theme="dark"] .trend svg rect{fill:#52B8BE}
+html[data-theme="dark"] .checkout-progress span{background:#52B8BE}
+html[data-theme="dark"] .sale-success-mark{background:#123C3A;color:#80D9C7}
+html[data-theme="dark"] .mobile-dock{background:rgba(6,22,36,.92);border-color:#244A60}
+html[data-theme="dark"] .mobile-dock a{color:#A8BFCC}
+html[data-theme="dark"] .mobile-dock a.active{background:#123B50;color:#7DD5D8}
