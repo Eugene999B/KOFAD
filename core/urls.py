@@ -24,7 +24,7 @@ urlpatterns = [
     path("account/password/", v.password_change, name="password_change"),
     path("search/", v.search, name="search"),
     path("health/", v.health, name="health"), path("login/", v.login_view, name="login"),
-    path("logout/", v.logout_view, name="logout"), path("mfa/", v.mfa, name="mfa"),
+    path("logout/", v.logout_view, name="logout"), path("session/state/", v.staff_session_state, name="staff_session_state"), path("mfa/", v.mfa, name="mfa"),
     path("branch/", v.switch_branch, name="switch_branch"), path("workspace/", v.dashboard, name="dashboard"),
     path("sales/new/", v.pos, name="pos"), path("purchasing/", v.purchasing, name="purchasing"),
     path("api/trades/", v.complete_trade),

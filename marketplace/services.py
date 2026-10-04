@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import requests
 from PIL import Image, ImageOps, UnidentifiedImageError
 from django.conf import settings
+from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
@@ -555,6 +556,15 @@ def customer_from_session(request):
 
 
 def set_customer_session(request, customer):
+    preserved = {
+        key: request.session.get(key)
+        for key in ("market_cart", "market_after_login")
+        if request.session.get(key) is not None
+    }
+    if request.user.is_authenticated:
+        auth_logout(request)
+        for key, value in preserved.items():
+            request.session[key] = value
     request.session.cycle_key()
     request.session["market_customer_id"] = customer.pk
     request.session["market_session_expires_at"] = (
