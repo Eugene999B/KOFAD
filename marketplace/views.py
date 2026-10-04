@@ -548,6 +548,50 @@ def customer_messages(request, customer, conversation_id=None):
     ))
 
 
+@protected("manage_company")
+def market_settings(request, branch):
+    selected = None
+    zone_id = request.GET.get("zone", "")
+    if zone_id.isdigit():
+        selected = DeliveryZone.objects.filter(pk=int(zone_id)).first()
+    form = DeliveryZoneForm(request.POST or None, instance=selected)
+
+    if request.method == "POST":
+        action = request.POST.get("action", "save")
+        if action == "toggle":
+            zone = get_object_or_404(DeliveryZone, pk=request.POST.get("zone"))
+            zone.active = not zone.active
+            zone.save(update_fields=["active"])
+            from core import services as core_services
+            core_services.audit(
+                request.user, branch, "market.delivery_zone_toggled", zone.pk,
+                {"zone": zone.name, "active": zone.active},
+            )
+            messages.success(request, f"{zone.name} is now {'available' if zone.active else 'hidden'} at checkout.")
+            return redirect("market_settings")
+        if form.is_valid():
+            zone = form.save()
+            from core import services as core_services
+            core_services.audit(
+                request.user, branch, "market.delivery_zone_saved", zone.pk,
+                {"zone": zone.name, "fee": str(zone.fee), "active": zone.active},
+            )
+            messages.success(request, "Delivery area saved.")
+            return redirect("market_settings")
+
+    return render(request, "marketplace/settings.html", {
+        "title": "Market & Delivery",
+        "form": form,
+        "selected_zone": selected,
+        "zones": DeliveryZone.objects.all(),
+        "paystack_ready": bool(settings.PAYSTACK_SECRET_KEY),
+        "otp_ready": bool(settings.CUSTOMER_OTP_ENABLED and settings.ARKESEL_API_KEY),
+        "sms_ready": bool(settings.SMS_ENABLED and settings.ARKESEL_API_KEY),
+        "webhook_url": request.build_absolute_uri("/market/payments/paystack/webhook/"),
+        "market_url": request.build_absolute_uri("/market/"),
+    })
+
+
 @protected("operate_sales|manage_company")
 def staff_orders(request, branch):
     status = request.GET.get("status", "").strip()
