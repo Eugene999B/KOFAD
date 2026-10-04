@@ -25,6 +25,7 @@ urlpatterns = [
     path("market/messages/<int:conversation_id>/", views.customer_messages, name="market_message_thread"),
     path("market/payment/return/", views.payment_return, name="market_payment_return"),
     path("market/payments/paystack/webhook/", views.paystack_webhook, name="paystack_webhook"),
+    path("market-settings/", views.market_settings, name="market_settings"),
     path("online-orders/", views.staff_orders, name="staff_online_orders"),
     path("online-orders/<uuid:pk>/", views.staff_order, name="staff_online_order"),
     path("online-inbox/", views.staff_inbox, name="staff_market_inbox"),
