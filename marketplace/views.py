@@ -94,11 +94,52 @@ def _conversation_access(request, conversation):
     return ""
 
 
+def _staff_label(user):
+    if not user:
+        return ""
+    return (user.get_full_name() or user.username or "KOFAD support").strip()
+
+
+def _close_support_conversation(conversation, reason="closed"):
+    with transaction.atomic():
+        ConversationMessage.objects.filter(conversation=conversation).delete()
+        conversation.status = "closed"
+        conversation.closed_at = timezone.now()
+        conversation.closed_reason = reason
+        conversation.customer_typing_at = None
+        conversation.staff_typing_at = None
+        conversation.save(update_fields=[
+            "status", "closed_at", "closed_reason",
+            "customer_typing_at", "staff_typing_at", "updated_at",
+        ])
+
+
+def _auto_close_stale_support():
+    cutoff = timezone.now() - timedelta(hours=24)
+    closed_ids = []
+    conversations = Conversation.objects.filter(
+        status="open", assigned_to__isnull=False,
+    ).prefetch_related("messages")
+    for conversation in conversations:
+        rows = list(conversation.messages.all())
+        if not rows:
+            continue
+        last = rows[-1]
+        if last.sender_type == "staff" and last.created_at <= cutoff:
+            _close_support_conversation(conversation, "customer_inactive")
+            closed_ids.append(conversation.pk)
+    return closed_ids
+
+
 def _message_json(message):
     return {
         "id": message.pk,
         "sender": message.sender_type,
-        "sender_label": message.get_sender_type_display(),
+        "sender_label": (
+            _staff_label(message.staff)
+            if message.sender_type == "staff"
+            else message.get_sender_type_display()
+        ),
         "body": message.body,
         "created": timezone.localtime(message.created_at).strftime("%d %b · %H:%M"),
         "attachments": [{
@@ -838,11 +879,12 @@ def customer_order_cancel(request, customer, pk):
 
 @market_customer_required
 def customer_messages(request, customer, conversation_id=None):
+    _auto_close_stale_support()
     conversation = None
     order_hint = None
     if conversation_id:
         conversation = get_object_or_404(
-            Conversation.objects.prefetch_related("messages__attachments"),
+            Conversation.objects.select_related("assigned_to", "order").prefetch_related("messages__attachments"),
             pk=conversation_id, customer=customer,
         )
     else:
@@ -851,29 +893,39 @@ def customer_messages(request, customer, conversation_id=None):
             order_hint = OnlineOrder.objects.filter(pk=raw_order, customer=customer).first()
 
     form = ConversationMessageForm(request.POST or None, request.FILES or None)
-    if request.method == "POST" and form.is_valid():
-        if not conversation:
-            order = None
-            order_id = request.POST.get("order")
-            if order_id:
-                order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
-            subject = request.POST.get("subject", "").strip()[:180] or (
-                f"Order support · {order.public_reference}" if order else "Customer support"
-            )
-            conversation = Conversation.objects.create(
-                customer=customer, public_name=customer.full_name,
-                public_phone=customer.phone, order=order, subject=subject,
-            )
-        try:
-            _save_conversation_message(
-                conversation, "customer",
-                body=form.cleaned_data.get("message", ""),
-                attachment=form.cleaned_data.get("attachment"),
-            )
-        except ValidationError as exc:
-            form.add_error("attachment", problem(exc))
-        else:
+    if request.method == "POST":
+        action = request.POST.get("action", "reply")
+        if conversation and action == "close":
+            if conversation.status == "open":
+                _close_support_conversation(conversation, "customer_closed")
+                messages.success(request, "Chat ended. Its message history has been cleared.")
             return redirect("market_message_thread", conversation_id=conversation.pk)
+        if conversation and conversation.status == "closed":
+            messages.info(request, "That chat has ended. Start a new conversation if you still need help.")
+            return redirect("market_messages")
+        if form.is_valid():
+            if not conversation:
+                order = None
+                order_id = request.POST.get("order")
+                if order_id:
+                    order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
+                subject = request.POST.get("subject", "").strip()[:180] or (
+                    f"Order support · {order.public_reference}" if order else "Customer support"
+                )
+                conversation = Conversation.objects.create(
+                    customer=customer, public_name=customer.full_name,
+                    public_phone=customer.phone, order=order, subject=subject,
+                )
+            try:
+                _save_conversation_message(
+                    conversation, "customer",
+                    body=form.cleaned_data.get("message", ""),
+                    attachment=form.cleaned_data.get("attachment"),
+                )
+            except ValidationError as exc:
+                form.add_error("attachment", problem(exc))
+            else:
+                return redirect("market_message_thread", conversation_id=conversation.pk)
 
     conversations = customer.conversations.select_related("order", "assigned_to").prefetch_related(
         "messages__attachments"
@@ -885,9 +937,11 @@ def customer_messages(request, customer, conversation_id=None):
         order_hint=order_hint, support_form=form,
     ))
 
-
 def conversation_updates(request, conversation_id):
-    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    _auto_close_stale_support()
+    conversation = get_object_or_404(
+        Conversation.objects.select_related("assigned_to"), pk=conversation_id
+    )
     side = _conversation_access(request, conversation)
     if not side:
         return JsonResponse({"detail": "Not found."}, status=404)
@@ -895,7 +949,7 @@ def conversation_updates(request, conversation_id):
         after = max(0, int(request.GET.get("after", "0")))
     except ValueError:
         after = 0
-    rows = conversation.messages.filter(pk__gt=after).prefetch_related("attachments")[:100]
+    rows = conversation.messages.filter(pk__gt=after).select_related("staff").prefetch_related("attachments")[:100]
     if side == "customer":
         conversation.messages.filter(pk__gt=after, sender_type="staff").update(read_by_customer=True)
     else:
@@ -906,11 +960,20 @@ def conversation_updates(request, conversation_id):
         if side == "customer"
         else conversation.customer_typing_at and conversation.customer_typing_at >= typing_cutoff
     )
+    agent = _staff_label(conversation.assigned_to)
     response = JsonResponse({
         "conversation": conversation.pk,
         "status": conversation.status,
+        "closed_reason": conversation.closed_reason,
         "messages": [_message_json(message) for message in rows],
         "other_typing": bool(other_typing),
+        "agent": agent,
+        "agent_connected": bool(conversation.assigned_to_id and conversation.status == "open"),
+        "assigned_to_me": bool(
+            side == "staff"
+            and conversation.assigned_to_id
+            and conversation.assigned_to_id == request.user.pk
+        ),
     })
     response["Cache-Control"] = "no-store"
     return response
@@ -1559,31 +1622,88 @@ def staff_order(request, branch, pk):
 
 @protected("operate_sales|manage_company")
 def staff_inbox(request, branch, conversation_id=None):
+    _auto_close_stale_support()
     status = request.GET.get("status", "open")
-    conversations = Conversation.objects.select_related(
+    base = Conversation.objects.select_related(
         "customer", "order", "assigned_to"
     ).prefetch_related("messages__attachments")
-    if status in {"open", "closed"}:
-        conversations = conversations.filter(status=status)
+    if status == "waiting":
+        conversations = base.filter(status="open", assigned_to__isnull=True)
+    elif status == "mine":
+        conversations = base.filter(status="open", assigned_to=request.user)
+    elif status == "closed":
+        conversations = base.filter(status="closed")
+    elif status == "all":
+        conversations = base
+    else:
+        status = "open"
+        conversations = base.filter(status="open")
+
     conversation = None
     support_form = ConversationMessageForm(request.POST or None, request.FILES or None)
     if conversation_id:
-        conversation = get_object_or_404(conversations.model.objects.select_related(
-            "customer", "order", "assigned_to"
-        ).prefetch_related("messages__attachments"), pk=conversation_id)
+        conversation = get_object_or_404(
+            Conversation.objects.select_related(
+                "customer", "order", "assigned_to"
+            ).prefetch_related("messages__attachments"),
+            pk=conversation_id,
+        )
         conversation.messages.exclude(sender_type="staff").update(read_by_staff=True)
+
         if request.method == "POST":
             action = request.POST.get("action", "reply")
+            can_manage = request.user.is_superuser or request.user.has_perm("core.manage_company")
+
+            if action == "accept":
+                if conversation.status != "open":
+                    messages.error(request, "This chat has already ended.")
+                elif conversation.assigned_to_id and conversation.assigned_to_id != request.user.pk:
+                    messages.error(request, f"{_staff_label(conversation.assigned_to)} is already handling this chat.")
+                else:
+                    conversation.assigned_to = request.user
+                    conversation.accepted_at = timezone.now()
+                    conversation.closed_at = None
+                    conversation.closed_reason = ""
+                    conversation.save(update_fields=[
+                        "assigned_to", "accepted_at", "closed_at", "closed_reason", "updated_at",
+                    ])
+                    messages.success(request, "Chat accepted. The customer can now see that you are connected.")
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+
+            if action == "leave":
+                if conversation.assigned_to_id == request.user.pk:
+                    conversation.assigned_to = None
+                    conversation.accepted_at = None
+                    conversation.staff_typing_at = None
+                    conversation.save(update_fields=[
+                        "assigned_to", "accepted_at", "staff_typing_at", "updated_at",
+                    ])
+                    messages.success(request, "You left the chat. It is back in the waiting queue.")
+                return redirect("staff_market_inbox")
+
+            if action == "takeover" and can_manage:
+                conversation.assigned_to = request.user
+                conversation.accepted_at = timezone.now()
+                conversation.save(update_fields=["assigned_to", "accepted_at", "updated_at"])
+                messages.success(request, "You are now handling this chat.")
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+
             if action == "close":
-                conversation.status = "closed"
-                conversation.assigned_to = request.user
-                conversation.save(update_fields=["status", "assigned_to", "updated_at"])
+                if conversation.assigned_to_id == request.user.pk or can_manage:
+                    _close_support_conversation(conversation, "staff_closed")
+                    messages.success(request, "Chat closed. Its messages and attachments were cleared.")
+                else:
+                    messages.error(request, "Accept this chat before closing it.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
-            if action == "reopen":
-                conversation.status = "open"
-                conversation.assigned_to = request.user
-                conversation.save(update_fields=["status", "assigned_to", "updated_at"])
+
+            if conversation.status == "closed":
+                messages.error(request, "This chat has ended. Closed chats cannot be reopened.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
+
+            if conversation.assigned_to_id != request.user.pk:
+                messages.error(request, "Accept this chat before replying.")
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+
             if support_form.is_valid():
                 try:
                     _save_conversation_message(
@@ -1595,16 +1715,14 @@ def staff_inbox(request, branch, conversation_id=None):
                 except ValidationError as exc:
                     support_form.add_error("attachment", problem(exc))
                 else:
-                    conversation.assigned_to = request.user
-                    conversation.status = "open"
-                    conversation.save(update_fields=["assigned_to", "status", "updated_at"])
                     if conversation.public_phone:
                         services.send_transactional_sms(
                             conversation.public_phone,
-                            "KOFAD: A staff member replied to your support conversation. "
-                            "Sign in to KOFAD Market to view the reply.",
+                            f"KOFAD: {_staff_label(request.user)} replied to your support chat. "
+                            "Sign in to KOFAD Market to continue.",
                         )
                     return redirect("staff_market_thread", conversation_id=conversation.pk)
+
     return render(request, "marketplace/staff_inbox.html", {
         "title": "Customer Inbox",
         "conversations": conversations[:180],
@@ -1615,6 +1733,8 @@ def staff_inbox(request, branch, conversation_id=None):
             read_by_staff=False
         ).exclude(sender_type="staff").count(),
         "open_count": Conversation.objects.filter(status="open").count(),
+        "waiting_count": Conversation.objects.filter(status="open", assigned_to__isnull=True).count(),
+        "mine_count": Conversation.objects.filter(status="open", assigned_to=request.user).count(),
         "closed_count": Conversation.objects.filter(status="closed").count(),
     })
 
