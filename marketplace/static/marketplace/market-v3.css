@@ -68,6 +68,7 @@ html[data-theme="dark"] .customer-refund-provider,html[data-theme="dark"] .staff
 .simple-access-card label{font-size:8px;font-weight:800;color:#38566a}
 .simple-access-card input{margin-top:6px}
 .simple-access-back{display:block;text-align:center;margin-top:15px;color:#0f747a;font-size:8px;font-weight:800}
+.simple-access-links{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:15px;font-size:8px;font-weight:800}.simple-access-links a{color:#0f747a}.simple-access-card .resend-form{margin-top:10px;text-align:center}.simple-access-card .resend-form button{border:0;background:transparent;color:#0f747a;font-size:8px;font-weight:800;cursor:pointer}.simple-access-card form>label{display:block;margin-top:13px}.simple-access-card form>label:first-of-type{margin-top:0}
 
 .commerce-home-hero-simple{grid-template-columns:1fr;min-height:auto;padding-top:66px;padding-bottom:66px}
 .commerce-home-hero-simple .commerce-home-copy{max-width:780px}
