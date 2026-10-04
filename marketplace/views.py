@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from functools import wraps
 
 from django.conf import settings
@@ -21,7 +22,7 @@ from .forms import (
 )
 from .models import (
     Conversation, ConversationMessage, CustomerAccount, DeliveryZone, MarketListing,
-    MarketPaymentAttempt, OnlineOrder,
+    MarketPaymentAttempt, OnlineOrder, OtpThrottle,
 )
 from . import services
 
@@ -302,8 +303,27 @@ def customer_login(request):
         request.session["market_after_login"] = requested_next
     form = CustomerLoginForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        customer = CustomerAccount.objects.filter(phone=form.cleaned_data["phone"], active=True).first()
-        if customer and customer.check_password(form.cleaned_data["password"]):
+        phone = form.cleaned_data["phone"]
+        now = timezone.now()
+        with transaction.atomic():
+            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=phone, purpose="login")
+            if throttle.blocked_until and throttle.blocked_until > now:
+                messages.error(request, "Too many sign-in attempts. Try again in a few minutes.")
+                return render(request, "marketplace/login.html", _market_context(
+                    request, title="Customer sign in", form=form,
+                ))
+            customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            valid = bool(customer and customer.check_password(form.cleaned_data["password"]))
+            if valid:
+                throttle.attempts = 0
+                throttle.blocked_until = None
+                throttle.save(update_fields=["attempts", "blocked_until"])
+            else:
+                throttle.attempts += 1
+                if throttle.attempts >= 5:
+                    throttle.blocked_until = now + timedelta(minutes=15)
+                throttle.save(update_fields=["attempts", "blocked_until"])
+        if valid:
             services.set_customer_session(request, customer)
             after = request.session.pop("market_after_login", None)
             return redirect(after or "market")
