@@ -1213,11 +1213,18 @@ def market_return_staff_detail(request, branch, pk):
         action = request.POST.get("action", "")
         note = request.POST.get("note", "")
         try:
-            services.review_market_return_request(request.user, item, action, note)
+            updated = services.review_market_return_request(request.user, item, action, note)
         except ValidationError as exc:
             messages.error(request, problem(exc))
         else:
-            messages.success(request, "Online return workflow updated.")
+            if updated.status == "refund_attention":
+                messages.warning(
+                    request,
+                    updated.provider_refund_message
+                    or "The KOFAD return is posted, but the payment refund needs attention.",
+                )
+            else:
+                messages.success(request, "Online return workflow updated.")
             return redirect("staff_market_return", pk=item.pk)
     return render(request, "marketplace/staff_return_detail.html", {
         "title": "Online return",
@@ -1303,7 +1310,9 @@ def market_analytics(request, branch):
                 read_by_staff=False
             ).exclude(sender_type="staff").count(),
             "returns": return_requests.count(),
-            "return_pending": return_requests.filter(status__in=["requested", "approved", "processing"]).count(),
+            "return_pending": return_requests.filter(
+                status__in=["requested", "approved", "processing", "refund_attention"]
+            ).count(),
             "avg_delivery_minutes": avg_delivery_minutes,
         },
         "top_products": top_products,
