@@ -226,7 +226,6 @@ class DeliveryTrackingForm(forms.Form):
 
 class CustomerRegistrationForm(forms.Form):
     full_name = forms.CharField(max_length=140, label="Full name")
-    email = forms.EmailField(required=False, label="Email address")
     password = forms.CharField(widget=forms.PasswordInput, label="Create password")
     password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm password")
 
