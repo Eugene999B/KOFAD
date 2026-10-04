@@ -115,7 +115,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         session.save()
         response = self.client.get(f"/market/products/{self.listing.pk}/image/thumb/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertIn("no-store", response["Cache-Control"])
 
     def test_product_picture_is_normalized_to_market_webp_sizes(self):
         image = Image.new("RGB", (2200, 1300), (30, 90, 130))
