@@ -5,6 +5,28 @@ import django.db.models.deletion
 import uuid
 
 
+def link_existing_online_sale_lines(apps, schema_editor):
+    OnlineOrderLine = apps.get_model("marketplace", "OnlineOrderLine")
+    Line = apps.get_model("core", "Line")
+    used = set()
+    rows = OnlineOrderLine.objects.filter(
+        order__sale_document__isnull=False,
+        sale_line__isnull=True,
+    ).select_related("order")
+    for row in rows.iterator():
+        candidates = Line.objects.filter(
+            document_id=row.order.sale_document_id,
+            product_id=row.product_id,
+            mode=row.mode,
+            quantity=row.quantity,
+        ).order_by("pk")
+        match = next((line for line in candidates if line.pk not in used), None)
+        if match:
+            row.sale_line_id = match.pk
+            row.save(update_fields=["sale_line"])
+            used.add(match.pk)
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("core", "0022_worker_identity_credentials"),
@@ -31,6 +53,7 @@ class Migration(migrations.Migration):
                 related_name="online_order_lines", to="core.line",
             ),
         ),
+        migrations.RunPython(link_existing_online_sale_lines, migrations.RunPython.noop),
         migrations.CreateModel(
             name="MarketListingImage",
             fields=[
