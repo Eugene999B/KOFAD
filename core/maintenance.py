@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import logging
 from collections import Counter
 from datetime import timezone as dt_timezone
 from itertools import chain
@@ -11,36 +12,50 @@ from django.conf import settings
 from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.sessions.models import Session
 from django.core import serializers
 from django.core.management.color import no_style
 from django.db import connection, transaction
 from django.db.migrations.recorder import MigrationRecorder
 from django.utils import timezone
 
-from .models import Audit, Branch, Company
+from .models import Access, Audit, Branch, Company
 
 
 BACKUP_FORMAT = "kofad-full-system-backup"
 BACKUP_VERSION = 1
-MAX_BACKUP_BYTES = 50 * 1024 * 1024
+MAX_BACKUP_BYTES = 100 * 1024 * 1024
 RECENT_BACKUP_SECONDS = 30 * 60
 RESTORE_CONFIRMATION = "RESTORE KOFAD FULL BACKUP"
 RESET_CONFIRMATION = "RESET KOFAD BUSINESS DATA"
 
 EXCLUDED_BACKUP_MODELS = {
+    # Ephemeral security material is deliberately not resurrected by restore.
     "core.loginattempt",
     "core.passwordrecovery",
+    "marketplace.otpthrottle",
 }
 
-PRESERVED_RESET_MODELS = {
-    "core.branch",
-    "core.access",
-    "core.company",
-    "core.debtsettings",
-    "core.communicationsettings",
-    "core.managementcontact",
-    "core.messagetemplate",
+BACKUP_APP_LABELS = ("core", "marketplace")
+
+FRESH_START_ROLES = {
+    "Owner": [
+        "operate_sales", "operate_inventory", "operate_finance", "approve_operations",
+        "view_reports", "manage_company", "send_messages",
+        "add_product", "change_product", "add_party", "change_party",
+    ],
+    "Manager": [
+        "send_messages", "operate_sales", "operate_inventory", "operate_finance",
+        "approve_operations", "view_reports",
+        "add_product", "change_product", "add_party", "change_party",
+    ],
+    "Cashier": ["operate_sales", "add_party"],
+    "Storekeeper": ["operate_inventory"],
+    "Accountant": ["operate_finance", "view_reports", "change_party", "add_party"],
+    "Auditor": ["view_reports"],
 }
+
+logger = logging.getLogger(__name__)
 
 
 class BackupError(ValueError):
@@ -53,10 +68,11 @@ def _managed(model):
 
 def backup_models():
     ordered = [ContentType, Permission, Group, User, LogEntry]
-    ordered.extend(
-        model for model in apps.get_app_config("core").get_models()
-        if _managed(model) and model._meta.label_lower not in EXCLUDED_BACKUP_MODELS
-    )
+    for app_label in BACKUP_APP_LABELS:
+        ordered.extend(
+            model for model in apps.get_app_config(app_label).get_models()
+            if _managed(model) and model._meta.label_lower not in EXCLUDED_BACKUP_MODELS
+        )
     seen = set()
     result = []
     for model in ordered:
@@ -74,7 +90,7 @@ def current_migrations():
     return [
         [app, name]
         for app, name in MigrationRecorder.Migration.objects.order_by("app", "name").values_list("app", "name")
-        if app in {"contenttypes", "auth", "admin", "core"}
+        if app in {"contenttypes", "auth", "admin", "core", "marketplace"}
     ]
 
 
@@ -196,7 +212,12 @@ def _table_names_for_restore():
     existing = set(connection.introspection.table_names())
     names = {
         name for name in existing
-        if name in {"django_content_type", "django_admin_log"} or name.startswith("auth_") or name.startswith("core_")
+        if (
+            name in {"django_content_type", "django_admin_log", "django_session"}
+            or name.startswith("auth_")
+            or name.startswith("core_")
+            or name.startswith("marketplace_")
+        )
     }
     return sorted(names)
 
@@ -259,45 +280,101 @@ def restore_backup(bundle, actor_username=""):
 
 
 def reset_models():
-    return [
-        model for model in apps.get_app_config("core").get_models()
-        if _managed(model) and model._meta.label_lower not in PRESERVED_RESET_MODELS
-    ]
+    result = []
+    for app_label in BACKUP_APP_LABELS:
+        result.extend(
+            model for model in apps.get_app_config(app_label).get_models()
+            if _managed(model)
+        )
+    return result
+
+
+def _fresh_start_tables():
+    existing = set(connection.introspection.table_names())
+    return sorted({
+        name for name in existing
+        if name.startswith("core_") or name.startswith("marketplace_")
+        or name in {"django_admin_log", "django_session"}
+    })
+
+
+def _rebuild_standard_roles():
+    Group.objects.all().delete()
+    for name, codes in FRESH_START_ROLES.items():
+        group = Group.objects.create(name=name)
+        group.permissions.set(
+            Permission.objects.filter(
+                content_type__app_label="core",
+                codename__in=codes,
+            )
+        )
 
 
 @transaction.atomic
 def reset_business_data(actor):
     if not actor or not actor.is_active or not actor.is_superuser:
         raise BackupError("Only an active system administrator can reset business data.")
+
     with connection.cursor() as cursor:
-        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ["kofad_business_reset_v1"])
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ["kofad_business_reset_v2"])
+
+    actor_pk = actor.pk
+    actor_username = actor.username
+    access = Access.objects.filter(user=actor).first()
+    access_security = {
+        "recovery_phone": access.recovery_phone if access else "",
+        "totp_secret": access.totp_secret if access else "",
+        "must_change_password": access.must_change_password if access else False,
+        "force_password_change": access.force_password_change if access else False,
+    }
 
     models = reset_models()
-    tables = sorted({
-        model._meta.db_table for model in models
-        if model._meta.db_table in set(connection.introspection.table_names())
-    })
-    _truncate_tables(tables)
+    _truncate_tables(_fresh_start_tables())
 
-    branch = Branch.objects.filter(active=True).first()
-    if not branch:
-        raise BackupError("Reset cannot continue because no active business location exists.")
-    Audit.objects.create(
-        branch=branch,
-        actor=actor,
-        action="system.business_data_reset",
-        reference="RESET",
-        detail={
-            "preserved": ["administrator accounts", "roles and permissions", "company settings",
-                          "business locations", "message templates"],
-            "cleared_model_count": len(models),
-            "completed_at": timezone.now().isoformat(),
-        },
+    # Staff/demo identities are business data. Keep only the system administrator
+    # who deliberately initiated the fresh start.
+    User.objects.exclude(pk=actor_pk).delete()
+    actor = User.objects.get(pk=actor_pk)
+    actor.groups.clear()
+    actor.user_permissions.clear()
+    actor.is_active = True
+    actor.is_staff = True
+    actor.is_superuser = True
+    actor.save(update_fields=["is_active", "is_staff", "is_superuser"])
+
+    _rebuild_standard_roles()
+
+    # Recreate only the minimum clean shell KOFAD needs to boot.
+    company = Company.objects.create()
+    branch = Branch.objects.create(name="Main branch", code="main", address="", active=True)
+    access = Access.objects.create(
+        user=actor,
+        recovery_phone=access_security["recovery_phone"],
+        session_version=1,
+        must_change_password=access_security["must_change_password"],
+        force_password_change=access_security["force_password_change"],
+        totp_secret=access_security["totp_secret"],
+        totp_last_step=-1,
+    )
+    access.branches.add(branch)
+
+    # TRUNCATE already clears sessions, but keep this explicit for non-PostgreSQL
+    # test doubles and future storage changes.
+    Session.objects.all().delete()
+
+    logger.warning(
+        "KOFAD fresh-start reset completed by administrator=%s; all core and marketplace data cleared",
+        actor_username,
     )
     return {
         "cleared_model_count": len(models),
-        "preserved": ["administrator accounts", "roles and permissions", "company settings",
-                      "business locations", "message templates"],
+        "preserved": [
+            "the administrator account used to perform the reset",
+            "Django permission definitions",
+            "fresh standard role templates",
+        ],
+        "company_id": company.pk,
+        "branch_id": branch.pk,
     }
 
 
@@ -316,12 +393,12 @@ def mark_backup_downloaded(session):
 
 
 def maintenance_stats():
-    core = apps.get_app_config("core")
     counts = {}
-    for model in core.get_models():
-        if _managed(model):
-            try:
-                counts[model._meta.label_lower] = model._default_manager.count()
-            except Exception:
-                counts[model._meta.label_lower] = None
+    for app_label in BACKUP_APP_LABELS:
+        for model in apps.get_app_config(app_label).get_models():
+            if _managed(model):
+                try:
+                    counts[model._meta.label_lower] = model._default_manager.count()
+                except Exception:
+                    counts[model._meta.label_lower] = None
     return counts
