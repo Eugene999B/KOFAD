@@ -79,6 +79,27 @@ class MarketListing(models.Model):
         return self.display_name
 
 
+class MarketListingImage(models.Model):
+    listing = models.ForeignKey(MarketListing, related_name="gallery_images", on_delete=models.CASCADE)
+    image_data = models.BinaryField(null=True, blank=True, editable=False)
+    image_thumb = models.BinaryField(null=True, blank=True, editable=False)
+    image_mime = models.CharField(max_length=40, blank=True, default="image/webp")
+    image_name = models.CharField(max_length=180, blank=True)
+    image_url = models.URLField(blank=True, default="")
+    image_credit = models.CharField(max_length=180, blank=True, default="")
+    alt_text = models.CharField(max_length=180, blank=True, default="")
+    caption = models.CharField(max_length=220, blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "pk"]
+
+    @property
+    def has_image(self):
+        return bool(self.image_data or self.image_url)
+
+
 class DeliveryZone(models.Model):
     name = models.CharField(max_length=120)
     fee = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
@@ -163,6 +184,8 @@ class OnlineOrder(models.Model):
     payment_channel = models.CharField(max_length=40, blank=True)
     delivery_agent_name = models.CharField(max_length=140, blank=True)
     delivery_agent_phone = models.CharField(max_length=20, blank=True)
+    estimated_delivery_at = models.DateTimeField(null=True, blank=True)
+    dispatched_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     paid_at = models.DateTimeField(null=True, blank=True)
@@ -183,6 +206,7 @@ class OnlineOrderLine(models.Model):
     order = models.ForeignKey(OnlineOrder, related_name="lines", on_delete=models.PROTECT)
     product = models.ForeignKey("core.Product", on_delete=models.PROTECT)
     listing = models.ForeignKey(MarketListing, null=True, blank=True, on_delete=models.SET_NULL)
+    sale_line = models.ForeignKey("core.Line", null=True, blank=True, related_name="online_order_lines", on_delete=models.PROTECT)
     description = models.CharField(max_length=180)
     sku = models.CharField(max_length=40)
     mode = models.CharField(max_length=40)
@@ -248,6 +272,107 @@ class OrderEvent(models.Model):
         ordering = ["created_at", "pk"]
 
 
+class DeliveryTrackingUpdate(models.Model):
+    order = models.ForeignKey(OnlineOrder, related_name="delivery_updates", on_delete=models.CASCADE)
+    status = models.CharField(max_length=40, blank=True, default="")
+    note = models.CharField(max_length=320, blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.SET_NULL)
+    customer_visible = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+
+class WishlistItem(models.Model):
+    customer = models.ForeignKey(CustomerAccount, related_name="wishlist_items", on_delete=models.CASCADE)
+    listing = models.ForeignKey(MarketListing, related_name="wishlist_items", on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["customer", "listing"], name="unique_market_wishlist_item")]
+
+
+class RecentView(models.Model):
+    customer = models.ForeignKey(CustomerAccount, related_name="recent_views", on_delete=models.CASCADE)
+    listing = models.ForeignKey(MarketListing, related_name="recent_views", on_delete=models.CASCADE)
+    view_count = models.PositiveIntegerField(default=1)
+    last_viewed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_viewed_at"]
+        constraints = [models.UniqueConstraint(fields=["customer", "listing"], name="unique_market_recent_view")]
+
+
+class MarketReturnRequest(models.Model):
+    STATUSES = [
+        ("requested", "Requested"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("processing", "Processing"),
+        ("refund_attention", "Refund needs attention"),
+        ("completed", "Completed"),
+    ]
+    RESOLUTIONS = [("refund", "Refund to original payment method")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(OnlineOrder, related_name="return_requests", on_delete=models.PROTECT)
+    customer = models.ForeignKey(CustomerAccount, related_name="return_requests", on_delete=models.PROTECT)
+    status = models.CharField(max_length=16, choices=STATUSES, default="requested")
+    resolution = models.CharField(max_length=12, choices=RESOLUTIONS, default="refund")
+    reason = models.TextField()
+    customer_note = models.TextField(blank=True)
+    staff_note = models.TextField(blank=True)
+    core_return_request = models.ForeignKey("core.CustomerReturnRequest", null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    refund_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    provider_refund_id = models.CharField(max_length=80, blank=True, default="")
+    provider_refund_status = models.CharField(max_length=32, blank=True, default="")
+    provider_refund_message = models.CharField(max_length=240, blank=True, default="")
+    refund_initiated_at = models.DateTimeField(null=True, blank=True)
+    refund_processed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class MarketReturnRequestLine(models.Model):
+    request = models.ForeignKey(MarketReturnRequest, related_name="lines", on_delete=models.CASCADE)
+    order_line = models.ForeignKey(OnlineOrderLine, related_name="market_return_lines", on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    condition = models.CharField(
+        max_length=16,
+        choices=[("sellable", "Unused / sellable"), ("damaged", "Damaged / faulty")],
+        default="sellable",
+    )
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.UniqueConstraint(fields=["request", "order_line"], name="unique_market_return_order_line")]
+
+
+class MarketReturnAttachment(models.Model):
+    request = models.ForeignKey(MarketReturnRequest, related_name="attachments", on_delete=models.CASCADE)
+    original_name = models.CharField(max_length=220)
+    mime_type = models.CharField(max_length=100)
+    size = models.PositiveIntegerField(default=0)
+    sha256 = models.CharField(max_length=64)
+    data = models.BinaryField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+
+    @property
+    def is_image(self):
+        return self.mime_type.startswith("image/")
+
+
 class Conversation(models.Model):
     customer = models.ForeignKey(CustomerAccount, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
     order = models.ForeignKey(OnlineOrder, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
@@ -256,6 +381,8 @@ class Conversation(models.Model):
     subject = models.CharField(max_length=180, default="Customer enquiry")
     status = models.CharField(max_length=12, choices=[("open", "Open"), ("closed", "Closed")], default="open")
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="market_conversations", on_delete=models.SET_NULL)
+    customer_typing_at = models.DateTimeField(null=True, blank=True)
+    staff_typing_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,12 +1,13 @@
 import json
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,11 +21,14 @@ from core.views import problem, protected
 from .forms import (
     CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
     CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
-    DeliveryZoneForm, PublicMessageForm, StaffOrderUpdateForm,
+    DeliveryTrackingForm, DeliveryZoneForm, MarketGalleryForm, MarketReturnRequestForm,
+    PublicMessageForm, StaffOrderUpdateForm,
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketPaymentAttempt, OnlineOrder, OtpThrottle,
+    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
+    MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
+    RecentView, WishlistItem,
 )
 from . import services
 
@@ -43,6 +47,7 @@ def _market_context(request, **extra):
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
+        "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "company": getattr(request, "company", None),
         **extra,
     }
@@ -176,56 +181,100 @@ def market(request):
     category = request.GET.get("category", "").strip()[:80]
     sort = request.GET.get("sort", "featured")
     in_stock = request.GET.get("stock") == "available"
+    featured_only = request.GET.get("featured") == "1"
+    price_min_raw = request.GET.get("min_price", "").strip()
+    price_max_raw = request.GET.get("max_price", "").strip()
+    try:
+        price_min = Decimal(price_min_raw) if price_min_raw else None
+        price_max = Decimal(price_max_raw) if price_max_raw else None
+    except InvalidOperation:
+        price_min = price_max = None
+
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product")
     if query:
-        rows = rows.filter(
-            Q(title__icontains=query) | Q(description__icontains=query) | Q(tags__icontains=query)
-            | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
-            | Q(product__category__icontains=query)
-        )
+        terms = [term for term in query.replace(",", " ").split() if term][:8]
+        for term in terms:
+            rows = rows.filter(
+                Q(title__icontains=term) | Q(description__icontains=term) | Q(tags__icontains=term)
+                | Q(product__name__icontains=term) | Q(product__sku__icontains=term)
+                | Q(product__category__icontains=term)
+            )
     if category:
         rows = rows.filter(product__category=category)
+    if featured_only:
+        rows = rows.filter(featured=True)
+
     branch = None
     try:
         branch = services.market_branch()
     except ValidationError:
         pass
-    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:180]), branch)
+    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:220]), branch)
     if in_stock:
         listings = [listing for listing in listings if listing.available_sell_qty > 0]
+    if price_min is not None:
+        listings = [listing for listing in listings if listing.market_price_value >= price_min]
+    if price_max is not None:
+        listings = [listing for listing in listings if listing.market_price_value <= price_max]
     if sort == "price_low":
         listings.sort(key=lambda listing: (listing.market_price_value, listing.display_name.lower()))
     elif sort == "price_high":
         listings.sort(key=lambda listing: (-listing.market_price_value, listing.display_name.lower()))
     elif sort == "name":
         listings.sort(key=lambda listing: listing.display_name.lower())
+
+    customer = services.customer_from_session(request)
+    wishlist_ids = set(
+        WishlistItem.objects.filter(customer=customer).values_list("listing_id", flat=True)
+    ) if customer else set()
+    for listing in listings:
+        listing.in_wishlist = listing.pk in wishlist_ids
+
     categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
     )
+    prices = [listing.market_price_value for listing in listings]
     return render(request, "marketplace/market.html", _market_context(
         request, title="KOFAD Market", listings=listings, q=query,
         selected_category=category, categories=categories,
-        selected_sort=sort, in_stock=in_stock,
+        selected_sort=sort, in_stock=in_stock, featured_only=featured_only,
+        price_min=price_min_raw, price_max=price_max_raw,
+        visible_price_low=min(prices) if prices else None,
+        visible_price_high=max(prices) if prices else None,
         total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
     ))
 
 
 def product_detail(request, pk):
     listing = get_object_or_404(
-        MarketListing.objects.select_related("product"),
+        MarketListing.objects.select_related("product").prefetch_related("gallery_images"),
         pk=pk, enabled=True, product__active=True,
     )
     branch = services.market_branch()
     _decorate_listings([listing], branch)
+    customer = services.customer_from_session(request)
+    in_wishlist = False
+    if customer:
+        recent, created = RecentView.objects.get_or_create(
+            customer=customer,
+            listing=listing,
+            defaults={"view_count": 1},
+        )
+        if not created:
+            recent.view_count += 1
+            recent.save(update_fields=["view_count", "last_viewed_at"])
+        in_wishlist = WishlistItem.objects.filter(customer=customer, listing=listing).exists()
     related = list(
         MarketListing.objects.filter(
             enabled=True, product__active=True, product__category=listing.product.category
         ).exclude(pk=listing.pk).select_related("product").order_by("-featured", "sort_order")[:4]
     )
     _decorate_listings(related, branch)
+    gallery = list(listing.gallery_images.all())
     return render(request, "marketplace/product.html", _market_context(
         request, title=listing.display_name, listing=listing, related=related,
+        gallery=gallery, in_wishlist=in_wishlist,
     ))
 
 
@@ -288,6 +337,8 @@ def customer_account(request, customer):
             status__in=["delivered", "picked_up", "cancelled", "refunded"]
         ).count(),
         "support_threads": customer.conversations.count(),
+        "wishlist": customer.wishlist_items.count(),
+        "returns": customer.return_requests.count(),
     }
     recent_lines = []
     for order in orders[:8]:
@@ -310,6 +361,9 @@ def customer_account(request, customer):
         recent_lines=recent_lines,
         addresses=customer.addresses.all()[:4],
         conversations=customer.conversations.all()[:5],
+        wishlist=customer.wishlist_items.select_related("listing__product")[:6],
+        recent_views=customer.recent_views.select_related("listing__product")[:6],
+        return_requests=customer.return_requests.select_related("order")[:5],
     ))
 
 
@@ -660,14 +714,21 @@ def paystack_webhook(request):
         event = json.loads(request.body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return HttpResponse(status=400)
-    if event.get("event") == "charge.success":
-        reference = str((event.get("data") or {}).get("reference", ""))
+    event_name = str(event.get("event", ""))
+    data = event.get("data") or {}
+    if event_name == "charge.success":
+        reference = str(data.get("reference", ""))
         if reference:
             try:
                 verified = services.verify_paystack(reference)
                 services.finalize_payment(reference, verified)
             except ValidationError:
                 return HttpResponse(status=200)
+    elif event_name in {
+        "refund.pending", "refund.processing", "refund.processed",
+        "refund.failed", "refund.needs-attention",
+    }:
+        services.apply_paystack_refund_webhook(event_name, data)
     return HttpResponse(status=200)
 
 
@@ -700,12 +761,24 @@ def customer_orders(request, customer):
 @market_customer_required
 def customer_order(request, customer, pk):
     order = get_object_or_404(
-        OnlineOrder.objects.prefetch_related("lines", "events"),
+        OnlineOrder.objects.prefetch_related(
+            "lines", "events", "delivery_updates", "return_requests__lines"
+        ),
         pk=pk, customer=customer,
     )
+    returnable = []
+    if order.payment_status == "paid" and order.status in {"delivered", "picked_up"}:
+        for line in order.lines.all():
+            eligible = services.eligible_market_return_quantity(line)
+            if eligible:
+                returnable.append((line, eligible))
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
+        can_request_return=bool(returnable),
+        returnable=returnable,
+        delivery_updates=order.delivery_updates.filter(customer_visible=True),
+        return_requests=order.return_requests.all(),
     ))
 
 
@@ -794,11 +867,36 @@ def conversation_updates(request, conversation_id):
         conversation.messages.filter(pk__gt=after, sender_type="staff").update(read_by_customer=True)
     else:
         conversation.messages.filter(pk__gt=after).exclude(sender_type="staff").update(read_by_staff=True)
+    typing_cutoff = timezone.now() - timedelta(seconds=5)
+    other_typing = (
+        conversation.staff_typing_at and conversation.staff_typing_at >= typing_cutoff
+        if side == "customer"
+        else conversation.customer_typing_at and conversation.customer_typing_at >= typing_cutoff
+    )
     response = JsonResponse({
         "conversation": conversation.pk,
         "status": conversation.status,
         "messages": [_message_json(message) for message in rows],
+        "other_typing": bool(other_typing),
     })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_POST
+def conversation_typing(request, conversation_id):
+    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    side = _conversation_access(request, conversation)
+    if not side:
+        return JsonResponse({"detail": "Not found."}, status=404)
+    now = timezone.now()
+    if side == "customer":
+        conversation.customer_typing_at = now
+        conversation.save(update_fields=["customer_typing_at", "updated_at"])
+    else:
+        conversation.staff_typing_at = now
+        conversation.save(update_fields=["staff_typing_at", "updated_at"])
+    response = JsonResponse({"ok": True})
     response["Cache-Control"] = "no-store"
     return response
 
@@ -821,6 +919,414 @@ def support_attachment(request, pk):
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+
+def market_search_suggestions(request):
+    query = request.GET.get("q", "").strip()[:80]
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+    rows = MarketListing.objects.filter(
+        enabled=True, product__active=True
+    ).filter(
+        Q(title__icontains=query) | Q(tags__icontains=query)
+        | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
+        | Q(product__category__icontains=query)
+    ).select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
+    results = [{
+        "id": row.pk,
+        "name": row.display_name,
+        "category": row.product.category or "KOFAD Market",
+        "sku": row.product.sku,
+        "price": str(row.market_price),
+        "url": f"/market/products/{row.pk}/",
+        "image": (
+            f"/market/products/{row.pk}/image/thumb/"
+            if row.image_thumb else row.image_url
+        ),
+    } for row in rows]
+    response = JsonResponse({"results": results})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def gallery_image(request, pk, size="large"):
+    image = get_object_or_404(MarketListingImage.objects.select_related("listing"), pk=pk)
+    if not image.listing.enabled and not (
+        request.user.is_authenticated and request.user.has_perm("core.change_product")
+    ):
+        raise Http404
+    data = image.image_thumb if size == "thumb" else image.image_data
+    if not data:
+        raise Http404
+    response = HttpResponse(bytes(data), content_type=image.image_mime or "image/webp")
+    response["Content-Disposition"] = "inline"
+    response["Cache-Control"] = "public, max-age=86400" if image.listing.enabled else "private, no-store"
+    return response
+
+
+@market_customer_required
+@require_POST
+def wishlist_toggle(request, customer, pk):
+    listing = get_object_or_404(MarketListing, pk=pk, enabled=True, product__active=True)
+    item = WishlistItem.objects.filter(customer=customer, listing=listing).first()
+    if item:
+        item.delete()
+        saved = False
+        messages.success(request, "Removed from your wishlist.")
+    else:
+        WishlistItem.objects.create(customer=customer, listing=listing)
+        saved = True
+        messages.success(request, "Saved to your wishlist.")
+    if request.headers.get("Accept") == "application/json":
+        return JsonResponse({"saved": saved, "count": customer.wishlist_items.count()})
+    target = request.POST.get("next", "")
+    return redirect(target if target.startswith("/") and not target.startswith("//") else "market_product", pk=listing.pk)
+
+
+@market_customer_required
+def customer_wishlist(request, customer):
+    rows = list(
+        customer.wishlist_items.select_related("listing__product").filter(
+            listing__enabled=True, listing__product__active=True
+        )
+    )
+    branch = None
+    try:
+        branch = services.market_branch()
+    except ValidationError:
+        pass
+    listings = [row.listing for row in rows]
+    _decorate_listings(listings, branch)
+    return render(request, "marketplace/wishlist.html", _market_context(
+        request, title="Wishlist", listings=listings,
+    ))
+
+
+@market_customer_required
+@require_POST
+def reorder_order(request, customer, pk):
+    order = get_object_or_404(
+        OnlineOrder.objects.prefetch_related("lines__listing"),
+        pk=pk, customer=customer,
+    )
+    cart = request.session.get("market_cart", {})
+    added = 0
+    skipped = 0
+    for line in order.lines.all():
+        listing = line.listing
+        if not listing or not listing.enabled or not listing.product.active:
+            skipped += 1
+            continue
+        key = str(listing.pk)
+        current = int(cart.get(key, 0) or 0)
+        cart[key] = min(current + line.quantity, 999)
+        added += 1
+    request.session["market_cart"] = cart
+    request.session.modified = True
+    if added:
+        messages.success(request, f"Added {added} previous item line(s) to your cart.")
+    if skipped:
+        messages.info(request, f"{skipped} previous item line(s) are no longer available online.")
+    return redirect("market_cart")
+
+
+@market_customer_required
+def customer_returns(request, customer):
+    rows = customer.return_requests.select_related("order", "reviewed_by").prefetch_related(
+        "lines__order_line", "attachments"
+    )
+    return render(request, "marketplace/returns.html", _market_context(
+        request, title="My returns", return_requests=rows,
+    ))
+
+
+@market_customer_required
+def customer_return_request(request, customer, pk):
+    order = get_object_or_404(
+        OnlineOrder.objects.prefetch_related("lines", "return_requests__lines"),
+        pk=pk, customer=customer,
+    )
+    if order.payment_status != "paid" or order.status not in {"delivered", "picked_up"}:
+        messages.error(request, "A return request can be started only after a paid order has been handed over.")
+        return redirect("market_order", pk=order.pk)
+
+    return_rows = []
+    for line in order.lines.all():
+        eligible = services.eligible_market_return_quantity(line)
+        return_rows.append({"line": line, "eligible": eligible})
+
+    form = MarketReturnRequestForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        payload = [{
+            "line": row["line"].pk,
+            "quantity": request.POST.get(f"qty_{row['line'].pk}", "0"),
+            "condition": request.POST.get(f"condition_{row['line'].pk}", "sellable"),
+        } for row in return_rows]
+        try:
+            item = services.create_market_return_request(
+                customer,
+                order,
+                payload,
+                form.cleaned_data["reason"],
+                form.cleaned_data["resolution"],
+                form.cleaned_data.get("evidence"),
+            )
+        except ValidationError as exc:
+            form.add_error(None, problem(exc))
+        else:
+            messages.success(request, "Your return request was submitted to KOFAD.")
+            return redirect("market_return_detail", pk=item.pk)
+    return render(request, "marketplace/return_request.html", _market_context(
+        request, title="Request a return", order=order, rows=return_rows, form=form,
+    ))
+
+
+@market_customer_required
+def customer_return_detail(request, customer, pk):
+    item = get_object_or_404(
+        MarketReturnRequest.objects.select_related("order", "reviewed_by").prefetch_related(
+            "lines__order_line", "attachments"
+        ),
+        pk=pk, customer=customer,
+    )
+    return render(request, "marketplace/return_detail.html", _market_context(
+        request, title="Return request", item=item,
+    ))
+
+
+def market_return_attachment(request, pk):
+    attachment = get_object_or_404(
+        MarketReturnAttachment.objects.select_related("request__customer"),
+        pk=pk,
+    )
+    customer = services.customer_from_session(request)
+    staff_allowed = request.user.is_authenticated and (
+        request.user.is_superuser
+        or request.user.has_perm("core.operate_sales")
+        or request.user.has_perm("core.approve_operations")
+        or request.user.has_perm("core.manage_company")
+    )
+    if not staff_allowed and (not customer or attachment.request.customer_id != customer.pk):
+        raise Http404
+    inline = request.GET.get("inline") == "1" and attachment.is_image
+    filename = "".join(
+        ch for ch in attachment.original_name if ch.isalnum() or ch in " ._()-"
+    ).strip() or "kofad-return-evidence"
+    response = HttpResponse(bytes(attachment.data), content_type=attachment.mime_type)
+    response["Content-Disposition"] = f'{"inline" if inline else "attachment"}; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+
+@protected("change_product|manage_company")
+def market_gallery_admin(request, branch, pk):
+    listing = get_object_or_404(
+        MarketListing.objects.select_related("product").prefetch_related("gallery_images"),
+        pk=pk,
+    )
+    form = MarketGalleryForm(request.POST or None, request.FILES or None)
+    if request.method == "POST":
+        action = request.POST.get("action", "upload")
+        if action == "delete":
+            image = get_object_or_404(MarketListingImage, pk=request.POST.get("image"), listing=listing)
+            image.delete()
+            messages.success(request, "Gallery photo removed.")
+            return redirect("market_gallery_admin", pk=listing.pk)
+        if action == "primary":
+            image = get_object_or_404(MarketListingImage, pk=request.POST.get("image"), listing=listing)
+            if image.image_data:
+                listing.image_data = image.image_data
+                listing.image_thumb = image.image_thumb
+                listing.image_mime = image.image_mime
+                listing.image_name = image.image_name
+                listing.image_url = ""
+                listing.image_credit = ""
+            else:
+                listing.image_data = None
+                listing.image_thumb = None
+                listing.image_url = image.image_url
+                listing.image_credit = image.image_credit
+            listing.image_updated_at = timezone.now()
+            listing.save()
+            messages.success(request, "Primary Market photo updated.")
+            return redirect("market_gallery_admin", pk=listing.pk)
+        if form.is_valid():
+            current_count = listing.gallery_images.count()
+            uploads = form.cleaned_data.get("images") or []
+            if current_count + len(uploads) > 16:
+                form.add_error("images", "A product can keep up to 16 gallery photos.")
+            else:
+                try:
+                    for index, upload in enumerate(uploads, start=1):
+                        services.save_gallery_image(
+                            listing,
+                            upload,
+                            alt_text=form.cleaned_data.get("alt_text") or listing.display_name,
+                            sort_order=(current_count + index) * 10,
+                        )
+                except ValidationError as exc:
+                    form.add_error("images", problem(exc))
+                else:
+                    messages.success(request, f"Added {len(uploads)} product gallery photo(s).")
+                    return redirect("market_gallery_admin", pk=listing.pk)
+    return render(request, "marketplace/gallery_admin.html", {
+        "title": f"Product gallery · {listing.display_name}",
+        "listing": listing,
+        "form": form,
+        "gallery": listing.gallery_images.all(),
+    })
+
+
+@protected("operate_sales|manage_company")
+def market_return_queue(request, branch):
+    status = request.GET.get("status", "requested")
+    rows = MarketReturnRequest.objects.filter(order__branch=branch).select_related(
+        "customer", "order", "reviewed_by", "core_return_request"
+    ).prefetch_related("lines__order_line", "attachments")
+    if status in dict(MarketReturnRequest.STATUSES):
+        rows = rows.filter(status=status)
+    counts = {
+        code: MarketReturnRequest.objects.filter(order__branch=branch, status=code).count()
+        for code, _ in MarketReturnRequest.STATUSES
+    }
+    return render(request, "marketplace/staff_returns.html", {
+        "title": "Online Returns",
+        "return_requests": rows[:160],
+        "selected_status": status,
+        "status_choices": MarketReturnRequest.STATUSES,
+        "counts": counts,
+    })
+
+
+@protected("operate_sales|manage_company")
+def market_return_staff_detail(request, branch, pk):
+    item = get_object_or_404(
+        MarketReturnRequest.objects.filter(order__branch=branch).select_related(
+            "customer", "order", "order__sale_document", "reviewed_by", "core_return_request"
+        ).prefetch_related("lines__order_line", "attachments"),
+        pk=pk,
+    )
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        note = request.POST.get("note", "")
+        try:
+            updated = services.review_market_return_request(request.user, item, action, note)
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+        else:
+            if updated.status == "refund_attention":
+                messages.warning(
+                    request,
+                    updated.provider_refund_message
+                    or "The KOFAD return is posted, but the payment refund needs attention.",
+                )
+            else:
+                messages.success(request, "Online return workflow updated.")
+            return redirect("staff_market_return", pk=item.pk)
+    return render(request, "marketplace/staff_return_detail.html", {
+        "title": "Online return",
+        "item": item,
+    })
+
+
+@protected("view_reports|manage_company")
+def market_analytics(request, branch):
+    days_raw = request.GET.get("days", "30")
+    try:
+        days = min(max(int(days_raw), 7), 365)
+    except ValueError:
+        days = 30
+    since = timezone.now() - timedelta(days=days)
+    orders = OnlineOrder.objects.filter(branch=branch, created_at__gte=since)
+    paid = orders.filter(payment_status="paid")
+    revenue = paid.aggregate(value=Sum("total"))["value"] or Decimal("0")
+    paid_count = paid.count()
+    average_order = revenue / paid_count if paid_count else Decimal("0")
+    customer_counts = paid.values("customer_id").annotate(total=Count("pk"))
+    repeat_customers = sum(1 for row in customer_counts if row["total"] >= 2)
+    total_customers = customer_counts.count()
+    completed_delivery = list(
+        paid.filter(
+            fulfilment="delivery", completed_at__isnull=False, dispatched_at__isnull=False
+        ).values_list("dispatched_at", "completed_at")
+    )
+    delivery_minutes = [
+        (completed - dispatched).total_seconds() / 60
+        for dispatched, completed in completed_delivery
+        if completed and dispatched and completed >= dispatched
+    ]
+    avg_delivery_minutes = (
+        sum(delivery_minutes) / len(delivery_minutes) if delivery_minutes else None
+    )
+    top_products = list(
+        OnlineOrderLine.objects.filter(
+            order__branch=branch,
+            order__payment_status="paid",
+            order__created_at__gte=since,
+        ).values("description", "sku").annotate(
+            units=Sum("quantity"), revenue=Sum("total")
+        ).order_by("-revenue")[:10]
+    )
+    payment_channels = list(
+        paid.exclude(payment_channel="").values("payment_channel").annotate(
+            orders=Count("pk"), revenue=Sum("total")
+        ).order_by("-revenue")
+    )
+    status_rows = [
+        {
+            "code": code,
+            "label": label,
+            "count": orders.filter(status=code).count(),
+        }
+        for code, label in OnlineOrder.STATUSES
+        if orders.filter(status=code).exists()
+    ]
+    return_requests = MarketReturnRequest.objects.filter(
+        order__branch=branch, created_at__gte=since
+    )
+    context = {
+        "title": "Market Intelligence",
+        "days": days,
+        "metrics": {
+            "orders": orders.count(),
+            "paid_orders": paid_count,
+            "revenue": revenue,
+            "average_order": average_order,
+            "active_orders": orders.exclude(
+                status__in=["delivered", "picked_up", "cancelled", "refunded"]
+            ).count(),
+            "abandoned": orders.filter(
+                status="awaiting_payment",
+                created_at__lt=timezone.now() - timedelta(minutes=30),
+            ).count(),
+            "customers": total_customers,
+            "repeat_customers": repeat_customers,
+            "repeat_rate": round((repeat_customers / total_customers * 100), 1) if total_customers else 0,
+            "open_support": Conversation.objects.filter(status="open").count(),
+            "unread_support": ConversationMessage.objects.filter(
+                read_by_staff=False
+            ).exclude(sender_type="staff").count(),
+            "returns": return_requests.count(),
+            "return_pending": return_requests.filter(
+                status__in=["requested", "approved", "processing", "refund_attention"]
+            ).count(),
+            "avg_delivery_minutes": avg_delivery_minutes,
+        },
+        "top_products": top_products,
+        "payment_channels": payment_channels,
+        "status_rows": status_rows,
+        "recent_orders": orders.select_related("customer", "delivery_zone").order_by("-created_at")[:12],
+        "catalog": {
+            "published": MarketListing.objects.filter(enabled=True).count(),
+            "featured": MarketListing.objects.filter(enabled=True, featured=True).count(),
+            "wishlist_saves": WishlistItem.objects.count(),
+            "product_views": RecentView.objects.aggregate(value=Sum("view_count"))["value"] or 0,
+        },
+    }
+    return render(request, "marketplace/analytics.html", context)
 
 
 @protected("change_product|manage_company")
@@ -953,20 +1459,40 @@ def staff_order(request, branch, pk):
     order = get_object_or_404(
         OnlineOrder.objects.filter(branch=branch).select_related(
             "customer", "delivery_zone", "party", "sale_document"
-        ).prefetch_related("lines", "events", "payment_attempts"),
+        ).prefetch_related(
+            "lines", "events", "payment_attempts", "delivery_updates", "return_requests"
+        ),
         pk=pk,
     )
-    form = StaffOrderUpdateForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
+    form_type = request.POST.get("form_type", "workflow") if request.method == "POST" else "workflow"
+    form = StaffOrderUpdateForm(request.POST if form_type == "workflow" else None)
+    tracking_form = DeliveryTrackingForm(
+        request.POST if form_type == "tracking" else None,
+        initial={
+            "delivery_agent_name": order.delivery_agent_name,
+            "delivery_agent_phone": order.delivery_agent_phone,
+            "estimated_delivery_at": order.estimated_delivery_at,
+            "customer_visible": True,
+        },
+    )
+    if request.method == "POST":
         try:
-            services.advance_order(request.user, order, form.cleaned_data["action"], form.cleaned_data)
-            messages.success(request, "Order workflow updated.")
-            return redirect("staff_online_order", pk=order.pk)
+            if form_type == "tracking" and tracking_form.is_valid():
+                services.save_delivery_tracking(request.user, order, tracking_form.cleaned_data)
+                messages.success(request, "Delivery assignment / tracking updated.")
+                return redirect("staff_online_order", pk=order.pk)
+            if form_type == "workflow" and form.is_valid():
+                services.advance_order(request.user, order, form.cleaned_data["action"], form.cleaned_data)
+                messages.success(request, "Order workflow updated.")
+                return redirect("staff_online_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
     return render(request, "marketplace/staff_order_detail.html", {
         "title": order.public_reference, "order": order, "form": form,
+        "tracking_form": tracking_form,
         "handover_code": services.handover_code(order),
+        "delivery_updates": order.delivery_updates.all(),
+        "return_requests": order.return_requests.all(),
     })
 
 

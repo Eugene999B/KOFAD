@@ -9,8 +9,10 @@
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'marketplace/market.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}">
+<link rel="stylesheet" href="{% static 'marketplace/market-v3.css' %}">
 <script defer src="{% static 'marketplace/market.js' %}"></script>
 <script defer src="{% static 'marketplace/market-v2.js' %}"></script>
+<script defer src="{% static 'marketplace/market-v3.js' %}"></script>
 </head>
 <body class="market-body market-v2">
 <a class="market-skip" href="#main">Skip to content</a>
@@ -23,6 +25,7 @@
 {% if market_customer %}
 <a href="/market/account/" class="{% if request.path == '/market/account/' %}active{% endif %}">Account</a>
 <a href="/market/orders/">Orders</a>
+<a href="/market/account/wishlist/" class="wishlist-nav-link">Saved{% if market_wishlist_count %}<b>{{ market_wishlist_count }}</b>{% endif %}</a>
 <a href="/market/messages/" class="support-nav-link">Support{% if market_unread_count %}<b>{{ market_unread_count }}</b>{% endif %}</a>
 <a href="/market/cart/" class="market-cart-link">Cart <b>{{ market_cart_count }}</b></a>
 {% else %}

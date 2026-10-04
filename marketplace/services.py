@@ -21,13 +21,15 @@ from core.identity import normalize_ghana_phone
 from core.models import Branch, Closing, Document, Line, Party, Payment, Product, Stock
 from core.sms.providers import get_provider
 from .models import (
-    CustomerAccount, DeliveryZone, MarketListing, MarketPaymentAttempt, OnlineOrder,
-    OnlineOrderLine, OrderEvent, OtpThrottle, StockReservation,
+    CustomerAccount, DeliveryZone, DeliveryTrackingUpdate, MarketListing, MarketListingImage,
+    MarketPaymentAttempt, MarketReturnAttachment, MarketReturnRequest, MarketReturnRequestLine,
+    OnlineOrder, OnlineOrderLine, OrderEvent, OtpThrottle, StockReservation,
 )
 
 
 PAYSTACK_INITIALIZE = "https://api.paystack.co/transaction/initialize"
 PAYSTACK_VERIFY = "https://api.paystack.co/transaction/verify/"
+PAYSTACK_REFUND = "https://api.paystack.co/refund"
 ARKESEL_OTP_GENERATE = "https://sms.arkesel.com/api/otp/generate"
 ARKESEL_OTP_VERIFY = "https://sms.arkesel.com/api/otp/verify"
 
@@ -110,6 +112,19 @@ def save_listing_image(listing, upload):
     listing.image_updated_at = timezone.now()
     listing.image_url = ""
     listing.image_credit = ""
+
+
+def save_gallery_image(listing, upload, *, alt_text="", sort_order=100):
+    large, thumb, mime = compress_market_image(upload)
+    return MarketListingImage.objects.create(
+        listing=listing,
+        image_data=large,
+        image_thumb=thumb,
+        image_mime=mime,
+        image_name=str(getattr(upload, "name", "gallery-image"))[:180],
+        alt_text=(alt_text or listing.display_name)[:180],
+        sort_order=sort_order,
+    )
 
 
 SUPPORT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
@@ -578,11 +593,13 @@ def post_order_to_ledger(order, actor=None):
         external_reference=order.payment_reference,
     )
     for item in lines:
-        Line.objects.create(
+        sale_line = Line.objects.create(
             document=doc, product=item.product, description=item.description, mode=item.mode,
             quantity=item.quantity, factor=item.factor, list_price=item.unit_price,
             unit_price=item.unit_price, discount_percent=0, unit_cost=item.unit_cost, total=item.total,
         )
+        item.sale_line = sale_line
+        item.save(update_fields=["sale_line"])
         core_services.stock_move(
             actor, branch, item.product, -item.base_units, doc.reference,
             f"Online order {order.public_reference}",
@@ -745,6 +762,7 @@ def advance_order(user, order, action, cleaned):
     if action == "dispatch":
         order.delivery_agent_name = cleaned.get("delivery_agent_name", "").strip()
         order.delivery_agent_phone = cleaned.get("delivery_agent_phone", "")
+        order.dispatched_at = timezone.now()
     order.status = target
     if target in {"delivered", "picked_up"}:
         order.completed_at = timezone.now()
@@ -752,7 +770,7 @@ def advance_order(user, order, action, cleaned):
         order.reservations.update(active=False)
     order.staff_note = cleaned.get("note", "").strip() or order.staff_note
     order.save(update_fields=[
-        "status", "delivery_agent_name", "delivery_agent_phone",
+        "status", "delivery_agent_name", "delivery_agent_phone", "dispatched_at",
         "completed_at", "staff_note", "updated_at",
     ])
     note = cleaned.get("note", "").strip()
@@ -766,3 +784,451 @@ def advance_order(user, order, action, cleaned):
             extra = f" Your handover code is {handover_code(order)}."
         send_transactional_sms(order.phone, f"KOFAD: {title} for {order.public_reference}.{extra}")
     return order
+
+
+
+def market_return_value(item):
+    return sum(
+        (row.order_line.unit_price * row.quantity for row in item.lines.select_related("order_line")),
+        Decimal("0"),
+    )
+
+
+def _apply_refund_provider_state(item, data, message=""):
+    status = str((data or {}).get("status", "")).strip().lower()[:32]
+    refund_id = str((data or {}).get("id", "") or item.provider_refund_id)[:80]
+    raw_amount = (data or {}).get("amount")
+    if raw_amount is not None:
+        try:
+            item.refund_amount = Decimal(str(raw_amount)) / Decimal("100")
+        except (ArithmeticError, ValueError):
+            pass
+    item.provider_refund_id = refund_id
+    item.provider_refund_status = status
+    item.provider_refund_message = str(message or "")[:240]
+    if status == "processed":
+        item.status = "completed"
+        item.refund_processed_at = timezone.now()
+        if not item.completed_at:
+            item.completed_at = timezone.now()
+    elif status in {"failed", "needs-attention"}:
+        item.status = "refund_attention"
+    else:
+        item.status = "processing"
+    item.save(update_fields=[
+        "status", "refund_amount", "provider_refund_id", "provider_refund_status",
+        "provider_refund_message", "refund_processed_at", "completed_at",
+    ])
+    return item
+
+
+def initiate_paystack_refund(item):
+    item = MarketReturnRequest.objects.select_related(
+        "order", "core_return_request"
+    ).prefetch_related("lines__order_line").get(pk=item.pk)
+    if item.provider_refund_id:
+        return item
+    if item.refund_initiated_at and item.provider_refund_status in {"submitting", "submission_unknown"}:
+        raise ValidationError(
+            "A previous Paystack refund submission has an unknown outcome. "
+            "Reconcile it in Paystack before attempting another refund."
+        )
+    if not item.core_return_request_id or item.core_return_request.status != "approved":
+        raise ValidationError("The KOFAD return must be posted before the payment refund can begin.")
+    if not item.order.payment_reference:
+        raise ValidationError("The original Paystack payment reference is missing.")
+    if not settings.PAYSTACK_SECRET_KEY:
+        raise ValidationError("Paystack refund processing is not configured yet.")
+
+    amount = market_return_value(item)
+    if amount <= 0:
+        raise ValidationError("This return does not have a refundable amount.")
+    if amount > item.order.total:
+        raise ValidationError("The refund amount cannot exceed the original online order total.")
+
+    payload = {
+        "transaction": item.order.payment_reference,
+        "amount": int(amount * 100),
+        "currency": "GHS",
+        "customer_note": item.reason[:240],
+        "merchant_note": f"KOFAD {item.order.public_reference} return {item.pk}"[:240],
+    }
+    item.refund_amount = amount
+    item.refund_initiated_at = timezone.now()
+    item.provider_refund_status = "submitting"
+    item.provider_refund_message = "KOFAD submitted the refund request to Paystack."
+    item.save(update_fields=[
+        "refund_amount", "refund_initiated_at",
+        "provider_refund_status", "provider_refund_message",
+    ])
+    try:
+        response = requests.post(
+            PAYSTACK_REFUND,
+            headers=_paystack_headers(),
+            json=payload,
+            timeout=settings.PAYSTACK_TIMEOUT_SECONDS,
+            allow_redirects=False,
+        )
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        item.provider_refund_status = "submission_unknown"
+        item.provider_refund_message = (
+            "Paystack submission outcome is unknown because the network response was lost. "
+            "Reconcile this refund before retrying."
+        )
+        item.save(update_fields=["provider_refund_status", "provider_refund_message"])
+        raise ValidationError(item.provider_refund_message) from exc
+    if not 200 <= response.status_code < 300 or not body.get("status"):
+        item.provider_refund_status = "rejected"
+        item.provider_refund_message = str(
+            body.get("message") or "Paystack did not accept the refund request."
+        )[:240]
+        item.save(update_fields=["provider_refund_status", "provider_refund_message"])
+        raise ValidationError(item.provider_refund_message)
+    data = body.get("data") or {}
+    _apply_refund_provider_state(item, data, body.get("message", ""))
+
+    OrderEvent.objects.create(
+        order=item.order,
+        status="refund_started",
+        title="Refund submitted to Paystack",
+        note=f"GHS {amount:.2f} was submitted to the original payment channel.",
+        customer_visible=True,
+    )
+    core_services.audit(
+        _system_actor(), item.order.branch, "sale.online_refund_started", item.order.public_reference,
+        {
+            "market_return": str(item.pk),
+            "refund_amount": str(amount),
+            "paystack_refund_id": item.provider_refund_id,
+            "paystack_status": item.provider_refund_status,
+        },
+    )
+    return item
+
+
+def refresh_paystack_refund(item):
+    item = MarketReturnRequest.objects.select_related("order").get(pk=item.pk)
+    if not item.provider_refund_id:
+        raise ValidationError("No Paystack refund has been initiated for this return.")
+    if not settings.PAYSTACK_SECRET_KEY:
+        raise ValidationError("Paystack refund processing is not configured yet.")
+    try:
+        response = requests.get(
+            f"{PAYSTACK_REFUND}/{item.provider_refund_id}",
+            headers=_paystack_headers(),
+            timeout=settings.PAYSTACK_TIMEOUT_SECONDS,
+            allow_redirects=False,
+        )
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValidationError("KOFAD could not refresh the Paystack refund status.") from exc
+    if not 200 <= response.status_code < 300 or not body.get("status"):
+        raise ValidationError(str(body.get("message") or "Paystack could not retrieve this refund.")[:240])
+    item = _apply_refund_provider_state(item, body.get("data") or {}, body.get("message", ""))
+    if item.provider_refund_status == "processed":
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your GHS {item.refund_amount:.2f} refund for "
+            f"{item.order.public_reference} has been processed by Paystack.",
+        )
+    return item
+
+
+def apply_paystack_refund_webhook(event_name, data):
+    refund_id = str((data or {}).get("id", ""))
+    if not refund_id:
+        return None
+    item = MarketReturnRequest.objects.select_related("order").filter(
+        provider_refund_id=refund_id
+    ).first()
+    if not item:
+        return None
+    previous_status = item.provider_refund_status
+    item = _apply_refund_provider_state(item, data, event_name)
+    if previous_status == item.provider_refund_status:
+        return item
+    OrderEvent.objects.create(
+        order=item.order,
+        status=event_name.replace(".", "_")[:32],
+        title={
+            "refund.pending": "Refund pending",
+            "refund.processing": "Refund processing",
+            "refund.processed": "Refund processed",
+            "refund.failed": "Refund failed",
+            "refund.needs-attention": "Refund needs attention",
+        }.get(event_name, "Refund status updated"),
+        note=(
+            f"Paystack refund status: {item.provider_refund_status}."
+            if item.provider_refund_status
+            else "Paystack sent a refund status update."
+        ),
+        customer_visible=True,
+    )
+    if item.provider_refund_status == "processed":
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your GHS {item.refund_amount:.2f} refund for "
+            f"{item.order.public_reference} has been processed.",
+        )
+    return item
+
+
+def eligible_market_return_quantity(order_line):
+    reserved = MarketReturnRequestLine.objects.filter(
+        order_line=order_line,
+        request__status__in=["requested", "approved", "processing", "refund_attention", "completed"],
+    ).aggregate(total=Sum("quantity"))["total"] or 0
+    return max(int(order_line.quantity) - int(reserved), 0)
+
+
+@transaction.atomic
+def create_market_return_request(customer, order, line_payload, reason, resolution, evidence=None):
+    order = OnlineOrder.objects.select_for_update().get(
+        pk=order.pk, customer=customer
+    )
+    if order.payment_status != "paid" or order.status not in {"delivered", "picked_up"}:
+        raise ValidationError("Returns can be requested only after a paid order has been handed over.")
+    if not order.sale_document_id:
+        raise ValidationError("This order has not reached the KOFAD sales ledger yet.")
+    reason = str(reason or "").strip()
+    if len(reason) < 10:
+        raise ValidationError("Explain the reason for the return in a little more detail.")
+    if resolution not in dict(MarketReturnRequest.RESOLUTIONS):
+        raise ValidationError("Choose a valid resolution.")
+
+    validated = []
+    for raw in line_payload:
+        order_line = OnlineOrderLine.objects.select_for_update().filter(
+            pk=raw.get("line"), order=order
+        ).first()
+        if not order_line:
+            raise ValidationError("One selected item does not belong to this order.")
+        try:
+            quantity = int(raw.get("quantity") or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+        if quantity <= 0:
+            continue
+        eligible = eligible_market_return_quantity(order_line)
+        if quantity > eligible:
+            raise ValidationError(
+                f"{order_line.description}: only {eligible} item(s) are currently eligible for return."
+            )
+        condition = str(raw.get("condition") or "sellable")
+        if condition not in {"sellable", "damaged"}:
+            raise ValidationError("Choose a valid item condition.")
+        if not order_line.sale_line_id:
+            raise ValidationError(
+                f"{order_line.description} is not linked to its posted KOFAD sale line yet."
+            )
+        validated.append((order_line, quantity, condition))
+    if not validated:
+        raise ValidationError("Choose at least one item and quantity to return.")
+
+    refund_amount = sum(
+        (order_line.unit_price * quantity for order_line, quantity, _ in validated),
+        Decimal("0"),
+    )
+    item = MarketReturnRequest.objects.create(
+        order=order,
+        customer=customer,
+        resolution=resolution,
+        reason=reason,
+        refund_amount=refund_amount,
+    )
+    MarketReturnRequestLine.objects.bulk_create([
+        MarketReturnRequestLine(
+            request=item, order_line=order_line, quantity=quantity, condition=condition
+        )
+        for order_line, quantity, condition in validated
+    ])
+    if evidence:
+        payload = prepare_support_attachment(evidence)
+        MarketReturnAttachment.objects.create(request=item, **payload)
+
+    OrderEvent.objects.create(
+        order=order, status="return_requested", title="Return request submitted",
+        note="KOFAD is reviewing your return request.",
+    )
+    send_transactional_sms(
+        order.phone,
+        f"KOFAD: Return request received for {order.public_reference}. "
+        "You can follow its status in My KOFAD.",
+    )
+    return item
+
+
+@transaction.atomic
+def review_market_return_request(user, item, action, note=""):
+    from core import returns as return_service
+
+    item = MarketReturnRequest.objects.select_for_update().select_related(
+        "order", "order__branch"
+    ).get(pk=item.pk)
+    note = str(note or "").strip()[:1000]
+
+    if action == "approve":
+        if item.status != "requested":
+            raise ValidationError("Only a new return request can be approved.")
+        item.status = "approved"
+        item.staff_note = note
+        item.reviewed_by = user
+        item.reviewed_at = timezone.now()
+        item.save(update_fields=["status", "staff_note", "reviewed_by", "reviewed_at"])
+        OrderEvent.objects.create(
+            order=item.order, status="return_approved", title="Return approved",
+            note=note or "KOFAD approved the return request. Follow staff instructions for handover.",
+            actor=user,
+        )
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your return request for {item.order.public_reference} was approved.",
+        )
+        return item
+
+    if action == "reject":
+        if item.status not in {"requested", "approved"}:
+            raise ValidationError("This return request cannot be rejected now.")
+        item.status = "rejected"
+        item.staff_note = note
+        item.reviewed_by = user
+        item.reviewed_at = timezone.now()
+        item.save(update_fields=["status", "staff_note", "reviewed_by", "reviewed_at"])
+        OrderEvent.objects.create(
+            order=item.order, status="return_rejected", title="Return request declined",
+            note=note or "KOFAD could not approve this return request.", actor=user,
+        )
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your return request for {item.order.public_reference} was reviewed. "
+            "Open My KOFAD for the decision.",
+        )
+        return item
+
+    if action in {"sync_refund", "refresh_refund"}:
+        if not item.core_return_request_id or item.core_return_request.status != "approved":
+            raise ValidationError("The KOFAD return must be approved and posted before refunding the payment.")
+        try:
+            if item.provider_refund_id:
+                return refresh_paystack_refund(item)
+            return initiate_paystack_refund(item)
+        except ValidationError as exc:
+            item.status = "refund_attention"
+            item.provider_refund_message = str(exc)[:240]
+            item.save(update_fields=["status", "provider_refund_message"])
+            return item
+
+    if action != "process":
+        raise ValidationError("Choose a valid return action.")
+    if item.status != "approved":
+        raise ValidationError("Approve the customer request before processing the physical return.")
+
+    payload = []
+    for row in item.lines.select_related("order_line__sale_line"):
+        if not row.order_line.sale_line_id:
+            raise ValidationError("One return item is not linked to the original KOFAD sale line.")
+        payload.append({
+            "line": row.order_line.sale_line_id,
+            "quantity": row.quantity,
+            "disposition": "sellable" if row.condition == "sellable" else "quarantine",
+        })
+
+    refund_method = _payment_method(item.order.payment_channel)
+    core_item, direct = return_service.create_customer_return(
+        user,
+        item.order.branch,
+        item.order.sale_document,
+        payload,
+        item.reason,
+        refund_method,
+    )
+    item.core_return_request = core_item
+    item.status = "processing"
+    item.staff_note = note or item.staff_note
+    item.reviewed_by = user
+    item.reviewed_at = timezone.now()
+    item.refund_amount = market_return_value(item)
+    if not direct and getattr(core_item, "status", "") != "approved":
+        item.provider_refund_status = "awaiting_kofad_approval"
+        item.provider_refund_message = (
+            "The physical return is waiting for KOFAD approval before Paystack is refunded."
+        )
+    item.save(update_fields=[
+        "core_return_request", "status", "staff_note", "reviewed_by",
+        "reviewed_at", "refund_amount", "provider_refund_status", "provider_refund_message",
+    ])
+    OrderEvent.objects.create(
+        order=item.order,
+        status="return_processing",
+        title="Return entered into KOFAD returns",
+        note=(
+            "The return is waiting for KOFAD approval before the payment refund begins."
+            if item.provider_refund_status == "awaiting_kofad_approval"
+            else "The physical return was posted to KOFAD. Payment refund is starting."
+        ),
+        actor=user,
+    )
+    if direct or getattr(core_item, "status", "") == "approved":
+        try:
+            item = initiate_paystack_refund(item)
+        except ValidationError as exc:
+            item.status = "refund_attention"
+            item.provider_refund_message = str(exc)[:240]
+            item.save(update_fields=["status", "provider_refund_message"])
+    return item
+
+
+@transaction.atomic
+def save_delivery_tracking(user, order, cleaned):
+    order = OnlineOrder.objects.select_for_update().get(pk=order.pk)
+    if order.fulfilment != "delivery":
+        raise ValidationError("Delivery tracking is available only for delivery orders.")
+    if order.status in {"cancelled", "refunded"}:
+        raise ValidationError("This order is no longer active.")
+
+    name = str(cleaned.get("delivery_agent_name") or "").strip()
+    phone = str(cleaned.get("delivery_agent_phone") or "").strip()
+    eta = cleaned.get("estimated_delivery_at")
+    update_fields = []
+    if name:
+        order.delivery_agent_name = name
+        update_fields.append("delivery_agent_name")
+    if phone:
+        order.delivery_agent_phone = phone
+        update_fields.append("delivery_agent_phone")
+    if eta:
+        order.estimated_delivery_at = eta
+        update_fields.append("estimated_delivery_at")
+    if update_fields:
+        update_fields.append("updated_at")
+        order.save(update_fields=update_fields)
+
+    update = DeliveryTrackingUpdate.objects.create(
+        order=order,
+        status=str(cleaned.get("status") or "").strip()[:40],
+        note=str(cleaned.get("note") or "").strip()[:320],
+        latitude=cleaned.get("latitude"),
+        longitude=cleaned.get("longitude"),
+        actor=user,
+        customer_visible=bool(cleaned.get("customer_visible")),
+    )
+    if update.customer_visible:
+        OrderEvent.objects.create(
+            order=order,
+            status="delivery_update",
+            title=update.status or "Delivery update",
+            note=update.note,
+            actor=user,
+            customer_visible=True,
+        )
+    core_services.audit(user, order.branch, "sale.online_delivery_tracking", order.public_reference, {
+        "driver": order.delivery_agent_name,
+        "eta": order.estimated_delivery_at.isoformat() if order.estimated_delivery_at else "",
+        "tracking_status": update.status,
+        "location": (
+            f"{update.latitude},{update.longitude}"
+            if update.latitude is not None and update.longitude is not None else ""
+        ),
+    })
+    return update

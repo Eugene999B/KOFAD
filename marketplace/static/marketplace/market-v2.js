@@ -53,8 +53,14 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-live-thread]").forEach(stream => {
     const conversation = stream.dataset.conversation;
     if (!conversation) return;
+    const container = stream.closest(".support-conversation, .staff-thread") || stream.parentElement;
+    const typingIndicator = container?.querySelector("[data-typing-indicator]");
+    const compose = container?.querySelector("[data-support-compose]");
+    const textarea = compose?.querySelector("textarea");
+    const csrf = compose?.querySelector("input[name='csrfmiddlewaretoken']")?.value || "";
     let last = Number(stream.dataset.lastMessage || 0);
     let timer = null;
+    let typingSentAt = 0;
 
     const nearBottom = () => stream.scrollHeight - stream.scrollTop - stream.clientHeight < 100;
     const scrollBottom = () => { stream.scrollTop = stream.scrollHeight; };
@@ -76,15 +82,32 @@ document.addEventListener("DOMContentLoaded", () => {
           last = Math.max(last, Number(message.id));
         }
         stream.dataset.lastMessage = String(last);
+        if (typingIndicator) typingIndicator.hidden = !payload.other_typing;
         if (shouldScroll) scrollBottom();
       } catch (_) {
         // Temporary network loss should never interrupt composing a message.
       }
     };
+
+    const signalTyping = async () => {
+      const now = Date.now();
+      if (!csrf || now - typingSentAt < 1800) return;
+      typingSentAt = now;
+      try {
+        await fetch("/market/support/conversations/" + conversation + "/typing/", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {"X-CSRFToken": csrf, "Accept": "application/json"},
+        });
+      } catch (_) {}
+    };
+    textarea?.addEventListener("input", signalTyping);
+
     const schedule = () => {
       window.clearInterval(timer);
-      timer = window.setInterval(poll, 3500);
+      timer = window.setInterval(poll, 1600);
     };
+    poll();
     schedule();
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
