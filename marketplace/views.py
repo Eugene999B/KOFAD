@@ -306,9 +306,12 @@ def customer_access(request):
         existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
         if existing:
             request.session["market_login_phone"] = phone
+            request.session.pop("market_pending_phone", None)
+            request.session.pop("market_verified_phone", None)
             return redirect("market_login")
         try:
             services.send_otp(phone, "register")
+            request.session.pop("market_login_phone", None)
             request.session["market_pending_phone"] = phone
             messages.success(request, "We sent a six-digit verification code to your phone.")
             return redirect("market_verify")
@@ -374,7 +377,7 @@ def account_start(request):
 def account_verify(request):
     phone = request.session.get("market_pending_phone")
     if not phone:
-        return redirect("market_register")
+        return redirect("market_access")
     if request.method == "POST":
         if request.POST.get("action") == "resend":
             try:
@@ -397,7 +400,7 @@ def account_verify(request):
 def account_finish(request):
     phone = request.session.get("market_verified_phone")
     if not phone:
-        return redirect("market_register")
+        return redirect("market_access")
     existing = CustomerAccount.objects.filter(phone=phone).first()
     if existing and existing.active:
         services.set_customer_session(request, existing)
@@ -407,7 +410,6 @@ def account_finish(request):
         data = form.cleaned_data
         customer = existing or CustomerAccount(phone=phone)
         customer.full_name = data["full_name"].strip()
-        customer.email = data["email"].strip().lower()
         customer.verified_at = timezone.now()
         customer.active = True
         customer.set_password(data["password"])
@@ -527,7 +529,7 @@ def customer_login(request):
             return redirect(after or "market_account")
         messages.error(request, "The phone number or password is incorrect.")
     return render(request, "marketplace/login.html", _market_context(
-        request, title="Customer sign in", form=form,
+        request, title="Customer sign in", form=form, locked_phone=initial_phone,
     ))
 
 
