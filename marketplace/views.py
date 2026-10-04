@@ -823,6 +823,68 @@ def support_attachment(request, pk):
     return response
 
 
+@protected("change_product|manage_company")
+def market_catalog_admin(request, branch):
+    from core.models import Stock
+    query = request.GET.get("q", "").strip()[:100]
+    state = request.GET.get("state", "all")
+    products = Product.objects.all().order_by("category", "name")
+    if query:
+        products = products.filter(
+            Q(name__icontains=query) | Q(sku__icontains=query) | Q(category__icontains=query)
+        )
+    listing_map = {
+        row.product_id: row
+        for row in MarketListing.objects.filter(product_id__in=products.values("pk")).select_related("product")
+    }
+    stock_map = dict(
+        Stock.objects.filter(branch=branch, product_id__in=products.values("pk"))
+        .values_list("product_id", "quantity")
+    )
+    rows = []
+    for product in products[:400]:
+        listing = listing_map.get(product.pk)
+        photo = bool(listing and (listing.image_data or listing.image_url))
+        description = bool(listing and listing.description.strip())
+        published = bool(listing and listing.enabled)
+        ready = bool(published and photo and description and listing.market_price > 0)
+        row = {
+            "product": product,
+            "listing": listing,
+            "photo": photo,
+            "description": description,
+            "published": published,
+            "ready": ready,
+            "stock": stock_map.get(product.pk, 0),
+            "photo_source": (
+                "Business upload" if listing and listing.image_data
+                else "Curated" if listing and listing.image_url else "Missing"
+            ),
+        }
+        if state == "published" and not published:
+            continue
+        if state == "hidden" and published:
+            continue
+        if state == "incomplete" and (not published or ready):
+            continue
+        rows.append(row)
+
+    all_listings = MarketListing.objects.select_related("product")
+    summary = {
+        "products": Product.objects.count(),
+        "published": all_listings.filter(enabled=True).count(),
+        "featured": all_listings.filter(enabled=True, featured=True).count(),
+        "photos": sum(1 for listing in all_listings if listing.image_data or listing.image_url),
+    }
+    return render(request, "marketplace/catalog_admin.html", {
+        "title": "Market Catalog",
+        "rows": rows,
+        "summary": summary,
+        "q": query,
+        "selected_state": state,
+    })
+
+
 @protected("manage_company")
 def market_settings(request, branch):
     selected = None
