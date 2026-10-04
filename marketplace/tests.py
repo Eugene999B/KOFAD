@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import io
 import json
+import requests
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
@@ -551,7 +552,20 @@ class MarketV3CommerceTests(MarketFixtures):
         response = self.client.get(f"/market/products/{self.listing.pk}/")
         self.assertContains(response, f"/market/gallery/{photo.pk}/image/thumb/")
 
-    def test_online_return_posts_through_existing_kofad_return_engine(self):
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_refund", SMS_ENABLED=False)
+    @patch("marketplace.services.requests.post")
+    def test_online_return_posts_kofad_return_then_exact_paystack_refund(self, post):
+        post.return_value.status_code = 200
+        post.return_value.json.return_value = {
+            "status": True,
+            "message": "Refund has been queued for processing",
+            "data": {
+                "id": 3018284,
+                "status": "pending",
+                "amount": 10000,
+                "currency": "GHS",
+            },
+        }
         order = self.paid_completed_order()
         line = order.lines.get(product=self.product)
         self.assertIsNotNone(line.sale_line_id)
@@ -564,17 +578,68 @@ class MarketV3CommerceTests(MarketFixtures):
             "The item does not match the required specification.",
             "refund",
         )
-        self.assertEqual(item.status, "requested")
+        self.assertEqual(item.refund_amount, Decimal("100.00"))
         services.review_market_return_request(self.staff, item, "approve", "Eligible return.")
-        item.refresh_from_db()
-        self.assertEqual(item.status, "approved")
         services.review_market_return_request(self.staff, item, "process", "Physical item received.")
         item.refresh_from_db()
-        self.assertEqual(item.status, "completed")
+        self.assertEqual(item.status, "processing")
+        self.assertEqual(item.provider_refund_id, "3018284")
+        self.assertEqual(item.provider_refund_status, "pending")
         self.assertIsNotNone(item.core_return_request_id)
         core_return = CustomerReturnRequest.objects.get(pk=item.core_return_request_id)
         self.assertEqual(core_return.status, "approved")
         self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, 19)
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["transaction"], order.payment_reference)
+        self.assertEqual(payload["amount"], 10000)
+        self.assertEqual(payload["currency"], "GHS")
+
+        services.apply_paystack_refund_webhook("refund.processed", {
+            "id": 3018284,
+            "status": "processed",
+            "amount": 10000,
+            "currency": "GHS",
+        })
+        item.refresh_from_db()
+        self.assertEqual(item.status, "completed")
+        self.assertEqual(item.provider_refund_status, "processed")
+        self.assertIsNotNone(item.refund_processed_at)
+        event_count = order.events.filter(status="refund_processed").count()
+        services.apply_paystack_refund_webhook("refund.processed", {
+            "id": 3018284,
+            "status": "processed",
+            "amount": 10000,
+            "currency": "GHS",
+        })
+        self.assertEqual(order.events.filter(status="refund_processed").count(), event_count)
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_refund", SMS_ENABLED=False)
+    @patch("marketplace.services.requests.post")
+    def test_unknown_refund_submission_outcome_cannot_be_blindly_retried(self, post):
+        post.side_effect = requests.Timeout("connection lost after submission")
+        order = self.paid_completed_order()
+        line = order.lines.get(product=self.product)
+        item = services.create_market_return_request(
+            self.customer,
+            order,
+            [{"line": line.pk, "quantity": 1, "condition": "sellable"}],
+            "The item is faulty and needs to be returned safely.",
+            "refund",
+        )
+        services.review_market_return_request(self.staff, item, "approve", "Eligible.")
+        services.review_market_return_request(self.staff, item, "process", "Item received.")
+        item.refresh_from_db()
+        self.assertEqual(item.status, "refund_attention")
+        self.assertEqual(item.provider_refund_status, "submission_unknown")
+        self.assertIsNotNone(item.refund_initiated_at)
+        self.assertEqual(post.call_count, 1)
+
+        services.review_market_return_request(self.staff, item, "sync_refund", "")
+        item.refresh_from_db()
+        self.assertEqual(item.status, "refund_attention")
+        self.assertEqual(item.provider_refund_status, "submission_unknown")
+        self.assertEqual(post.call_count, 1)
 
     def test_delivery_tracking_keeps_driver_eta_and_customer_visible_evidence(self):
         order = self.order(fulfilment="delivery")
