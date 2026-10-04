@@ -100,6 +100,9 @@ def resolve_login_identifier(identifier):
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
+    if request.session.get("market_customer_id"):
+        from marketplace import services as market_services
+        market_services.clear_customer_session(request)
     error = ""
     if request.method == "POST":
         identifier = request.POST.get("username", "").strip()[:150]
