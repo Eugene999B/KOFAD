@@ -18,11 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const marketOfflineHint = document.querySelector("[data-market-offline-hint]");
   const marketImage = document.querySelector("#id_image");
   const marketRemoveImage = document.querySelector("#id_remove_image");
+  const marketPreviewLink = document.querySelector("[data-market-preview-link]");
 
   function syncMarket() {
     const published = Boolean(marketEnabled?.checked);
     if (marketDetails) marketDetails.hidden = !published;
     if (marketOfflineHint) marketOfflineHint.hidden = published;
+    if (marketPreviewLink) marketPreviewLink.hidden = !published;
     marketEnabled?.setAttribute("aria-expanded", published ? "true" : "false");
     if (!published) {
       if (marketImage?.files?.length) marketImage.value = "";
