@@ -33,6 +33,11 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   };
 
+  const referrerIsSameZone = (() => {
+    if (!document.referrer) return false;
+    try { return isSameZone(document.referrer); } catch (_) { return false; }
+  })();
+
   const clearSensitiveClientState = () => {
     try {
       Object.keys(sessionStorage)
@@ -160,6 +165,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("popstate", () => {
     if (leaving) return;
+    // Forwarding back onto this page's synthetic guard is still inside the zone.
+    if (history.state?.kofadZoneGuard === zone) return;
+    // If this page was reached from another page in the same authenticated zone,
+    // the first Back only removes our synthetic guard. Continue to that prior page
+    // without asking the user to sign out.
+    if (referrerIsSameZone) {
+      history.back();
+      return;
+    }
+    // The page was entered from outside the zone (or directly), so the next Back
+    // really leaves Market/Staff. Only this boundary needs confirmation.
     askToLeave({kind: "back"});
   });
 

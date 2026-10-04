@@ -55,6 +55,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!conversation) return;
     const container = stream.closest(".support-conversation, .staff-thread") || stream.parentElement;
     const typingIndicator = container?.querySelector("[data-typing-indicator]");
+    const agentState = container?.querySelector("[data-support-agent-state]");
+    const side = stream.dataset.side || "";
     const compose = container?.querySelector("[data-support-compose]");
     const textarea = compose?.querySelector("textarea");
     const csrf = compose?.querySelector("input[name='csrfmiddlewaretoken']")?.value || "";
@@ -75,6 +77,28 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         if (!response.ok) return;
         const payload = await response.json();
+        if (payload.status === "closed" && stream.dataset.status !== "closed") {
+          window.location.reload();
+          return;
+        }
+        const previousAgent = stream.dataset.agent || "";
+        const nextAgent = payload.agent || "";
+        if (side === "staff" && previousAgent !== nextAgent) {
+          window.location.reload();
+          return;
+        }
+        stream.dataset.status = payload.status || stream.dataset.status || "open";
+        stream.dataset.agent = nextAgent;
+        if (agentState && side === "customer") {
+          agentState.innerHTML = nextAgent
+            ? '<span class="online"></span><strong></strong> has connected with you'
+            : '<span class="waiting"></span><strong>Waiting for customer care</strong> · A support worker will accept your chat shortly';
+          if (nextAgent) agentState.querySelector("strong").textContent = nextAgent;
+        }
+        const typingText = typingIndicator?.querySelector("b");
+        if (typingText && side === "customer") {
+          typingText.textContent = (nextAgent || "Customer care") + " is typing…";
+        }
         const shouldScroll = nearBottom();
         for (const message of payload.messages || []) {
           if (stream.querySelector('[data-message-id="' + message.id + '"]')) continue;
