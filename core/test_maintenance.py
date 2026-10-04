@@ -93,6 +93,16 @@ class MaintenanceServiceTests(TransactionTestCase):
             expire_date=timezone.now() + timedelta(hours=1),
         )
 
+    def test_full_backup_tracks_every_managed_business_model(self):
+        expected = {
+            model._meta.label_lower for model in maintenance.reset_models()
+        } - maintenance.EXCLUDED_BACKUP_MODELS
+        expected.update({
+            "contenttypes.contenttype", "auth.permission", "auth.group",
+            "auth.user", "admin.logentry",
+        })
+        self.assertEqual(maintenance.backup_model_labels(), expected)
+
     def test_signed_backup_rejects_tampering(self):
         bundle = maintenance.create_backup(self.user)
         maintenance.validate_backup(bundle)
@@ -118,6 +128,14 @@ class MaintenanceServiceTests(TransactionTestCase):
         self.assertIn("marketplace.marketlisting", bundle["model_counts"])
 
         result = maintenance.reset_business_data(self.user)
+
+        expected_shell_counts = {"core.company": 1, "core.branch": 1, "core.access": 1}
+        for model in maintenance.reset_models():
+            self.assertEqual(
+                model._default_manager.count(),
+                expected_shell_counts.get(model._meta.label_lower, 0),
+                f"{model._meta.label_lower} unexpectedly survived the fresh-start reset",
+            )
 
         self.assertEqual(Product.objects.count(), 0)
         self.assertEqual(Party.objects.count(), 0)
