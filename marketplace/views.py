@@ -522,6 +522,13 @@ def customer_logout(request):
     return redirect("public_home")
 
 
+def market_session_state(request):
+    customer = services.customer_from_session(request)
+    response = JsonResponse({"authenticated": bool(customer)})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
 @market_customer_required
 @require_POST
 def cart_add(request, customer, pk):
