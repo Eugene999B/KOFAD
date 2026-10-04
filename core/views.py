@@ -625,18 +625,19 @@ def product_edit(request, branch, pk=None):
 
     listing = MarketListing.objects.filter(product=obj).first() if obj else None
     form = ProductForm(request.POST or None, instance=obj)
+    market_posted = request.method != "POST" or request.POST.get("market_form_present") == "1"
     market_form = MarketListingForm(
-        request.POST or None,
-        request.FILES or None,
+        request.POST if market_posted else None,
+        request.FILES if market_posted else None,
         instance=listing,
         product=obj,
     )
 
     if request.method == "POST":
         product_valid = form.is_valid()
-        if product_valid:
+        if product_valid and market_posted:
             market_form.product = form.save(commit=False)
-        market_valid = market_form.is_valid()
+        market_valid = market_form.is_valid() if market_posted else True
         if product_valid and market_valid:
             opening_total = getattr(form, "opening_total", 0)
             if opening_total and not request.user.has_perm("core.operate_inventory"):
@@ -651,17 +652,19 @@ def product_edit(request, branch, pk=None):
                             "price_source": getattr(listing, "price_source", ""),
                         }
                         product = form.save()
-                        market = market_form.save(commit=False)
-                        market.product = product
-                        if market_form.cleaned_data.get("remove_image") and not market.enabled:
-                            market.image_data = None
-                            market.image_thumb = None
-                            market.image_name = ""
-                            market.image_updated_at = None
-                        upload = market_form.cleaned_data.get("image")
-                        if upload:
-                            save_listing_image(market, upload)
-                        market.save()
+                        market = listing
+                        if market_posted:
+                            market = market_form.save(commit=False)
+                            market.product = product
+                            if market_form.cleaned_data.get("remove_image") and not market.enabled:
+                                market.image_data = None
+                                market.image_thumb = None
+                                market.image_name = ""
+                                market.image_updated_at = None
+                            upload = market_form.cleaned_data.get("image")
+                            if upload:
+                                save_listing_image(market, upload)
+                            market.save()
 
                         if opening_total:
                             s.stock_move(
@@ -676,11 +679,11 @@ def product_edit(request, branch, pk=None):
                                 "opening_stock_base_units": opening_total,
                                 "market_before": before_market,
                                 "market_after": {
-                                    "enabled": market.enabled,
-                                    "featured": market.featured,
-                                    "price_source": market.price_source,
-                                    "title": market.title,
-                                    "has_image": bool(market.image_data),
+                                    "enabled": getattr(market, "enabled", False),
+                                    "featured": getattr(market, "featured", False),
+                                    "price_source": getattr(market, "price_source", ""),
+                                    "title": getattr(market, "title", ""),
+                                    "has_image": bool(getattr(market, "image_data", None)),
                                 },
                             },
                         )
@@ -691,7 +694,7 @@ def product_edit(request, branch, pk=None):
                         request,
                         "Product saved"
                         + (f" with {opening_total} opening base units" if opening_total else "")
-                        + (" and published to KOFAD Market." if market.enabled else "."),
+                        + (" and published to KOFAD Market." if getattr(market, "enabled", False) else "."),
                     )
                     return redirect("inventory")
 
