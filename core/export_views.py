@@ -262,6 +262,11 @@ def _rows(request, dataset, branch, first, last):
                 "reviewed_by": item.reviewed_by.username if item.reviewed_by else "",
                 "reviewed_at": item.reviewed_at,
                 "core_return": str(item.core_return_request_id or ""),
+                "refund_amount": item.refund_amount,
+                "paystack_refund_id": item.provider_refund_id,
+                "paystack_refund_status": item.provider_refund_status,
+                "refund_initiated": item.refund_initiated_at,
+                "refund_processed": item.refund_processed_at,
                 "reason": item.reason,
                 "staff_note": item.staff_note,
             })
@@ -270,7 +275,10 @@ def _rows(request, dataset, branch, first, last):
             ("phone", "Phone"), ("resolution", "Requested resolution"), ("status", "Status"),
             ("lines", "Item lines"), ("value", "Requested value"), ("attachments", "Evidence files"),
             ("reviewed_by", "Reviewed by"), ("reviewed_at", "Reviewed at"),
-            ("core_return", "KOFAD return request"), ("reason", "Customer reason"), ("staff_note", "Staff note"),
+            ("core_return", "KOFAD return request"), ("refund_amount", "Refund amount"),
+            ("paystack_refund_id", "Paystack refund ID"), ("paystack_refund_status", "Paystack refund status"),
+            ("refund_initiated", "Refund initiated"), ("refund_processed", "Refund processed"),
+            ("reason", "Customer reason"), ("staff_note", "Staff note"),
         ]
 
     if dataset == "delivery_tracking":
