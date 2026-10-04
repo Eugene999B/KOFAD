@@ -3,10 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#f7f5f2">
+<meta name="theme-color" content="#102B46">
 <meta name="color-scheme" content="light dark">
 <title>Sign in · KOFAD</title>
-<link rel="icon" type="image/svg+xml" href="{% static 'brand/v4/kofad-mark.svg' %}">
 <link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}">
 <link rel="apple-touch-icon" href="{% static 'brand/kofad-emblem.png' %}">
 <script src="{% static 'theme.js' %}"></script>
@@ -14,10 +13,10 @@
 <script defer src="{% static 'app.js' %}"></script>
 </head>
 <body class="login-page">
-<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/v4/kofad-mark.svg' %}" alt=""></div><span>KOFAD</span></div>
+<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOPEX</span></div>
 
 <header class="login-header premium-login-header">
-<a class="brand" href="/login/" aria-label="KOFAD IMPEX ENTERPRISE">{% include "brand.html" %}</a>
+<a class="brand" href="/login/" aria-label="KOPEX IMPEX">{% include "brand.html" %}</a>
 <div class="login-header-actions"><button type="button" class="theme-toggle mode-toggle login-theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><span data-theme-icon aria-hidden="true">☾</span><span data-theme-label>Dark mode</span></button><div class="login-header-meta"><span class="login-online-dot"></span><span>Secure operations gateway</span></div></div>
 </header>
 
@@ -39,15 +38,15 @@
 </div>
 
 <div class="login-story-bottom">
-<div class="login-emblem-orbit"><img src="{% static 'brand/v4/kofad-mark.svg' %}" alt=""></div>
-<div><strong>KOFAD IMPEX ENTERPRISE</strong><small>Sales · Stock · Customers · Finance</small></div>
+<div class="login-emblem-orbit"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div><strong>KOPEX IMPEX</strong><small>Sales · Stock · Customers · Finance</small></div>
 </div>
 </section>
 
 <main class="login-card premium-login-card" id="main">
 <div class="login-access-chip"><span>PRIVATE STAFF ACCESS</span><b>● LIVE</b></div>
 <div class="login-card-top">
-<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/v4/kofad-mark.svg' %}" alt=""></div>
+<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
 <div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KOFAD.</h2></div>
 </div>
 <p class="muted login-intro-copy">Your permissions decide exactly what you can see and do after sign-in.</p>
@@ -74,6 +73,6 @@
 </main>
 </div>
 
-<footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Built for controlled, connected trading.</span></footer>
+<footer class="login-footer"><span>© {% now "Y" %} KOPEX IMPEX</span><span>Built for controlled, connected trading.</span></footer>
 </body>
 </html>

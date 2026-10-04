@@ -1,0 +1,47 @@
+{% load static %}<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Verify {{ worker.employee_code }} · KOPEX IMPEX</title>
+<link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}">
+<link rel="stylesheet" href="{% static 'app.css' %}">
+</head>
+<body class="credential-verify-page">
+<main class="credential-verify-shell">
+  <header class="credential-verify-brand">
+    <span class="verify-emblem"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span>
+    <span><strong>KOPEX</strong><small>IMPEX · CREDENTIAL VERIFICATION</small></span>
+  </header>
+
+  <section class="credential-verify-card {% if credential_valid %}is-valid{% else %}is-inactive{% endif %}">
+    <div class="verify-status-mark" aria-hidden="true">{% if credential_valid %}✓{% else %}!{% endif %}</div>
+    <p class="eyebrow">WORKFORCE CREDENTIAL</p>
+    <h1>{% if credential_valid %}Verified employee{% else %}Credential not currently active{% endif %}</h1>
+    <p class="verify-lead">
+      {% if credential_valid %}This QR belongs to a current KOPEX workforce credential.{% else %}The worker record exists, but this credential should not be treated as active.{% endif %}
+    </p>
+
+    <div class="verify-person">
+      <span class="verify-initials">{{ worker.first_name|first }}{{ worker.last_name|first }}</span>
+      <div><h2>{{ worker.full_name }}</h2><p>{{ worker.job_title }}{% if worker.department %} · {{ worker.department }}{% endif %}</p></div>
+    </div>
+
+    <dl class="verify-grid">
+      <div><dt>Employee ID</dt><dd>{{ worker.employee_code }}</dd></div>
+      <div><dt>Status</dt><dd>{{ worker.get_status_display }}</dd></div>
+      <div><dt>Location</dt><dd>{{ worker.branch.name }}</dd></div>
+      <div><dt>Employed since</dt><dd>{{ worker.hire_date|date:"j M Y" }}</dd></div>
+      <div><dt>Card issued</dt><dd>{{ issue|date:"j M Y" }}</dd></div>
+      <div><dt>Valid until</dt><dd>{{ expiry|date:"j M Y"|default:"Employment duration" }}</dd></div>
+    </dl>
+
+    <div class="verify-serial"><span>Credential serial</span><code>{{ serial }}</code></div>
+  </section>
+
+  <p class="verify-privacy">This verification page intentionally excludes salary, residential address, banking details, Ghana Card, SSNIT and other private HR information.</p>
+  <footer>{{ company.name }}{% if company.phone %} · {{ company.phone }}{% endif %}</footer>
+</main>
+</body>
+</html>

@@ -1,14 +1,163 @@
 {% extends "base.html" %}
-{% block actions %}<div class="actions"><a class="button secondary" href="/workers/{{ worker.pk }}/id-card.pdf">⇩ ID card PDF</a><a class="button" href="/workers/{{ worker.pk }}/edit/">Edit worker</a></div>{% endblock %}
+{% block actions %}
+<div class="actions workforce-profile-actions">
+  <a class="button secondary" href="/workers/{{ worker.pk }}/profile.pdf">⇩ Worker profile PDF</a>
+  <a class="button secondary" href="/workers/{{ worker.pk }}/id-card-print-sheet.pdf">▣ ID print sheet</a>
+  <a class="button secondary" href="/workers/{{ worker.pk }}/id-card.pdf">⇩ CR80 ID card</a>
+  <a class="button" href="/workers/{{ worker.pk }}/edit/">Edit worker</a>
+</div>
+{% endblock %}
 {% block content %}
-<section class="profile-hero panel"><div class="worker-avatar">{% if photo %}<img src="/workers/{{ worker.pk }}/documents/{{ photo.pk }}/" alt="{{ worker.full_name }}">{% else %}<span>{{ worker.first_name|first }}{{ worker.last_name|first }}</span>{% endif %}</div><div class="profile-title"><p class="eyebrow">{{ worker.employee_code }}</p><h2>{{ worker.full_name }}</h2><p>{{ worker.job_title }}{% if worker.department %} · {{ worker.department }}{% endif %}</p><div class="profile-pills"><span class="pill {% if worker.status == 'active' %}success{% else %}amber{% endif %}">{{ worker.get_status_display }}</span><span class="pill">{{ worker.get_employment_type_display }}</span><span class="pill">{{ worker.branch.name }}</span></div></div><div class="profile-pay"><small>Base salary</small><strong>{{ company.currency }} {{ worker.base_salary|floatformat:2 }}</strong><span>+ {{ company.currency }} {{ worker.recurring_allowance|floatformat:2 }} recurring allowance</span></div></section>
+<section class="profile-hero premium-worker-hero panel">
+  <div class="worker-avatar premium-worker-avatar">
+    {% if photo %}<img src="/workers/{{ worker.pk }}/documents/{{ photo.pk }}/" alt="{{ worker.full_name }}">{% else %}<span>{{ worker.first_name|first }}{{ worker.last_name|first }}</span>{% endif %}
+  </div>
+  <div class="profile-title">
+    <p class="eyebrow">{{ worker.employee_code }}</p>
+    <h2>{{ worker.full_name }}</h2>
+    <p>{{ worker.job_title }}{% if worker.department %} · {{ worker.department }}{% endif %}</p>
+    <div class="profile-pills">
+      <span class="pill {% if worker.status == 'active' %}success{% else %}amber{% endif %}">{{ worker.get_status_display }}</span>
+      <span class="pill">{{ worker.get_employment_type_display }}</span>
+      <span class="pill">{{ worker.branch.name }}</span>
+    </div>
+  </div>
+  <div class="profile-pay">
+    <small>Base salary</small>
+    <strong>{{ company.currency }} {{ worker.base_salary|floatformat:2 }}</strong>
+    <span>+ {{ company.currency }} {{ worker.recurring_allowance|floatformat:2 }} recurring allowance</span>
+  </div>
+</section>
+
 {% for alert in alerts %}<div class="notice warning">{{ alert }}</div>{% endfor %}
-<div class="profile-grid"><section class="panel"><p class="eyebrow">EMPLOYMENT</p><div class="detail-grid"><div><small>Joined</small><strong>{{ worker.hire_date|date:"j F Y" }}</strong></div><div><small>Contract</small><strong>{{ worker.contract_start|date:"j M Y"|default:"—" }} → {{ worker.contract_end|date:"j M Y"|default:"Open" }}</strong></div><div><small>Salary basis</small><strong>{{ worker.get_salary_basis_display }}</strong></div><div><small>Tax treatment</small><strong>{{ worker.get_tax_mode_display }}</strong></div><div><small>SSNIT</small><strong>{% if worker.ssnit_enabled %}Enabled{% else %}Not applied{% endif %}</strong></div><div><small>Junior staff</small><strong>{% if worker.junior_staff %}Yes{% else %}No{% endif %}</strong></div></div></section>
-<section class="panel"><p class="eyebrow">CONTACT</p><div class="detail-grid"><div><small>Phone</small><strong>{{ worker.phone }}</strong></div><div><small>Alternate</small><strong>{{ worker.alternate_phone|default:"—" }}</strong></div><div><small>Email</small><strong>{{ worker.email|default:"—" }}</strong></div><div><small>Digital address</small><strong>{{ worker.digital_address|default:"—" }}</strong></div><div class="span-2"><small>Residential address</small><strong>{{ worker.residential_address|default:"—" }}</strong></div></div></section>
-<section class="panel"><p class="eyebrow">IDENTITY & STATUTORY</p><div class="detail-grid"><div><small>Ghana Card</small><strong>{{ worker.ghana_card_number|default:"Not recorded" }}</strong></div><div><small>Tax ID</small><strong>{{ worker.tax_id|default:"Not recorded" }}</strong></div><div><small>SSNIT number</small><strong>{{ worker.ssnit_number|default:"Not recorded" }}</strong></div><div><small>Date of birth</small><strong>{{ worker.date_of_birth|date:"j F Y"|default:"—" }}</strong></div></div></section>
-<section class="panel"><p class="eyebrow">PAYMENT & EMERGENCY</p><div class="detail-grid"><div><small>Bank</small><strong>{{ worker.bank_name|default:"—" }}</strong></div><div><small>Account</small><strong>{{ worker.bank_account_number|default:"—" }}</strong></div><div><small>MoMo</small><strong>{{ worker.momo_network }} {{ worker.momo_number }}</strong></div><div><small>Emergency contact</small><strong>{{ worker.emergency_name|default:"—" }}{% if worker.emergency_relationship %} · {{ worker.emergency_relationship }}{% endif %}</strong><span>{{ worker.emergency_phone }}</span></div></div></section></div>
-<section class="panel"><div class="section-heading"><div><p class="eyebrow">PRIVATE HR VAULT</p><h2>Worker documents</h2><p class="muted">Uploads are stored with SHA-256 evidence and management-only access.</p></div><span class="pill">{{ documents.count }} documents</span></div>
-<form method="post" enctype="multipart/form-data" action="/workers/{{ worker.pk }}/documents/" class="document-upload-grid">{% csrf_token %}<label>Category<select name="category">{% for value,label in document_categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label><label>Document title<input name="title" required placeholder="e.g. Employment contract"></label><label>Document number<input name="document_number"></label><label>Issued date<input type="date" name="issued_date"></label><label>Expiry date<input type="date" name="expiry_date"></label><label>File · max 10 MB<input type="file" name="file" required></label><label class="span-2">Notes<input name="notes"></label><button class="button">Upload document</button></form>
-<div class="table-wrap"><table><thead><tr><th>Document</th><th>Category</th><th>Number</th><th>Issued</th><th>Expires</th><th>Evidence</th><th></th></tr></thead><tbody>{% for doc in documents %}<tr><td><strong>{{ doc.title }}</strong><small class="table-sub">{{ doc.original_filename }} · {{ doc.file_size_bytes|filesizeformat }}</small></td><td>{{ doc.get_category_display }}</td><td>{{ doc.document_number|default:"—" }}</td><td>{{ doc.issued_date|date:"j M Y"|default:"—" }}</td><td>{{ doc.expiry_date|date:"j M Y"|default:"—" }}</td><td><code>{{ doc.checksum_sha256|slice:":12" }}…</code></td><td><a href="/workers/{{ worker.pk }}/documents/{{ doc.pk }}/">Download</a></td></tr>{% empty %}<tr><td colspan="7" class="empty">No private worker documents uploaded yet.</td></tr>{% endfor %}</tbody></table></div></section>
+
+<section class="worker-credential-studio">
+  <div class="panel worker-photo-studio">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">ID PHOTOGRAPH</p>
+        <h2>Profile & credential photo</h2>
+        <p class="muted">Upload a normal portrait from a phone or camera. KOPEX automatically rotates, crops, resizes and compresses it into an ID-ready portrait.</p>
+      </div>
+      <span class="pill success">Auto-compressed</span>
+    </div>
+    <div class="worker-photo-workbench">
+      <div class="worker-photo-preview">
+        {% if photo %}<img src="/workers/{{ worker.pk }}/documents/{{ photo.pk }}/" alt="{{ worker.full_name }} profile photograph">{% else %}<span>{{ worker.first_name|first }}{{ worker.last_name|first }}</span>{% endif %}
+      </div>
+      <form method="post" enctype="multipart/form-data" action="/workers/{{ worker.pk }}/documents/" class="worker-photo-form">
+        {% csrf_token %}
+        <input type="hidden" name="category" value="photo">
+        <input type="hidden" name="title" value="Profile & ID photograph">
+        <label>Choose portrait
+          <input type="file" name="file" accept="image/*" required>
+          <small>Common image formats accepted · up to 25 MB before compression · stored as compact JPEG.</small>
+        </label>
+        <button class="button">Upload & prepare photo</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel credential-download-card">
+    <div>
+      <p class="eyebrow">PRINT-READY CREDENTIAL</p>
+      <h2>KOPEX workforce ID</h2>
+      <p class="muted">Exact CR80 card dimensions, front and back, secure QR verification, credential serial, emergency information and print-safe artwork.</p>
+    </div>
+    <div class="credential-specs">
+      <span><strong>85.60 × 53.98 mm</strong><small>ISO ID-1 / CR80</small></span>
+      <span><strong>2-sided</strong><small>front + secure back</small></span>
+      <span><strong>QR verified</strong><small>safe public validation</small></span>
+    </div>
+    <div class="credential-buttons">
+      <a class="button" href="/workers/{{ worker.pk }}/id-card-print-sheet.pdf">Download A4 print sheet</a>
+      <a class="button secondary" href="/workers/{{ worker.pk }}/id-card.pdf">Download exact CR80 PDF</a>
+    </div>
+  </div>
+</section>
+
+<div class="profile-grid">
+  <section class="panel"><p class="eyebrow">EMPLOYMENT</p><div class="detail-grid">
+    <div><small>Joined</small><strong>{{ worker.hire_date|date:"j F Y" }}</strong></div>
+    <div><small>Contract</small><strong>{{ worker.contract_start|date:"j M Y"|default:"—" }} → {{ worker.contract_end|date:"j M Y"|default:"Open" }}</strong></div>
+    <div><small>Salary basis</small><strong>{{ worker.get_salary_basis_display }}</strong></div>
+    <div><small>Tax treatment</small><strong>{{ worker.get_tax_mode_display }}</strong></div>
+    <div><small>SSNIT</small><strong>{% if worker.ssnit_enabled %}Enabled{% else %}Not applied{% endif %}</strong></div>
+    <div><small>Junior staff</small><strong>{% if worker.junior_staff %}Yes{% else %}No{% endif %}</strong></div>
+  </div></section>
+
+  <section class="panel"><p class="eyebrow">CONTACT</p><div class="detail-grid">
+    <div><small>Phone</small><strong>{{ worker.phone }}</strong></div>
+    <div><small>Alternate</small><strong>{{ worker.alternate_phone|default:"—" }}</strong></div>
+    <div><small>Email</small><strong>{{ worker.email|default:"—" }}</strong></div>
+    <div><small>Digital address</small><strong>{{ worker.digital_address|default:"—" }}</strong></div>
+    <div class="span-2"><small>Residential address</small><strong>{{ worker.residential_address|default:"—" }}</strong></div>
+  </div></section>
+
+  <section class="panel"><p class="eyebrow">IDENTITY & STATUTORY</p><div class="detail-grid">
+    <div><small>Ghana Card</small><strong>{{ worker.ghana_card_number|default:"Not recorded" }}</strong></div>
+    <div><small>Tax ID</small><strong>{{ worker.tax_id|default:"Not recorded" }}</strong></div>
+    <div><small>SSNIT number</small><strong>{{ worker.ssnit_number|default:"Not recorded" }}</strong></div>
+    <div><small>Date of birth</small><strong>{{ worker.date_of_birth|date:"j F Y"|default:"—" }}</strong></div>
+    <div><small>Blood group</small><strong>{{ worker.blood_group|default:"Not recorded" }}</strong></div>
+    <div><small>ID card validity</small><strong>{{ worker.id_card_issue_date|date:"j M Y"|default:"Auto" }} → {{ worker.id_card_expiry_date|date:"j M Y"|default:worker.contract_end|date:"j M Y"|default:"Employment duration" }}</strong></div>
+  </div></section>
+
+  <section class="panel"><p class="eyebrow">PAYMENT & EMERGENCY</p><div class="detail-grid">
+    <div><small>Bank</small><strong>{{ worker.bank_name|default:"—" }}</strong></div>
+    <div><small>Account</small><strong>{{ worker.bank_account_number|default:"—" }}</strong></div>
+    <div><small>MoMo</small><strong>{{ worker.momo_network }} {{ worker.momo_number }}</strong></div>
+    <div><small>Emergency contact</small><strong>{{ worker.emergency_name|default:"—" }}{% if worker.emergency_relationship %} · {{ worker.emergency_relationship }}{% endif %}</strong><span>{{ worker.emergency_phone }}</span></div>
+  </div></section>
+</div>
+
+<section class="panel premium-document-vault">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">PRIVATE HR VAULT</p>
+      <h2>Worker document centre</h2>
+      <p class="muted">Every file is stored with SHA-256 evidence and management-only access. Download the individual source document or the complete generated worker profile.</p>
+    </div>
+    <div class="vault-summary-actions">
+      <span class="pill">{{ documents.count }} documents</span>
+      <a class="button secondary" href="/workers/{{ worker.pk }}/profile.pdf">⇩ Download worker profile PDF</a>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" action="/workers/{{ worker.pk }}/documents/" class="document-upload-grid premium-document-upload">
+    {% csrf_token %}
+    <label>Category<select name="category">{% for value,label in document_categories %}{% if value != "photo" %}<option value="{{ value }}">{{ label }}</option>{% endif %}{% endfor %}</select></label>
+    <label>Document title<input name="title" required placeholder="e.g. Employment contract"></label>
+    <label>Document number<input name="document_number"></label>
+    <label>Issued date<input type="date" name="issued_date"></label>
+    <label>Expiry date<input type="date" name="expiry_date"></label>
+    <label>File · max 10 MB<input type="file" name="file" required></label>
+    <label class="span-2">Notes<input name="notes"></label>
+    <button class="button">Secure upload</button>
+  </form>
+
+  <div class="worker-document-grid">
+    {% for doc in documents %}
+    <article class="worker-document-card">
+      <div class="document-card-icon" aria-hidden="true">▤</div>
+      <div class="document-card-copy">
+        <span class="document-card-category">{{ doc.get_category_display }}</span>
+        <h3>{{ doc.title }}</h3>
+        <p>{{ doc.original_filename }} · {{ doc.file_size_bytes|filesizeformat }}</p>
+        <div class="document-card-meta">
+          <span><small>Number</small>{{ doc.document_number|default:"—" }}</span>
+          <span><small>Issued</small>{{ doc.issued_date|date:"j M Y"|default:"—" }}</span>
+          <span><small>Expires</small>{{ doc.expiry_date|date:"j M Y"|default:"—" }}</span>
+        </div>
+        <code title="SHA-256 evidence">{{ doc.checksum_sha256|slice:":16" }}…</code>
+      </div>
+      <a class="button secondary document-download-button" href="/workers/{{ worker.pk }}/documents/{{ doc.pk }}/">⇩ Download original</a>
+    </article>
+    {% empty %}
+    <div class="premium-empty-state"><strong>No worker documents yet</strong><p>Upload contracts, identification, certificates, statutory records or other protected HR evidence above.</p></div>
+    {% endfor %}
+  </div>
+</section>
+
 {% if worker.notes %}<section class="panel"><p class="eyebrow">MANAGEMENT NOTES</p><p>{{ worker.notes|linebreaksbr }}</p></section>{% endif %}
 {% endblock %}

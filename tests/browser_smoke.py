@@ -54,8 +54,9 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
     assert page.get_by_text("Private setup key", exact=True).count() == 0
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
-    assert any(href.endswith("/static/brand/v4/kofad-mark.svg") for href in icon_hrefs)
-    assert page.locator('img[src$="/static/brand/v4/kofad-mark.svg"]').count() >= 1
+    assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
+    assert page.locator('img[src$="/static/brand/kofad-emblem.png"]').count() >= 1
+    assert page.get_by_text("KOPEX", exact=True).count() >= 1
     page.get_by_role("button", name="Show password", exact=True).click()
     assert page.locator("#password").get_attribute("type") == "text"
     page.get_by_role("button", name="Hide password", exact=True).click()
@@ -215,6 +216,14 @@ with sync_playwright() as p:
     admin_page.wait_for_url("http://127.0.0.1:8000/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/administration/")
+    admin_sidebar = admin_page.locator(".sidebar")
+    max_sidebar_scroll = admin_sidebar.evaluate("el => { el.scrollTop = el.scrollHeight; return el.scrollTop; }")
+    assert max_sidebar_scroll > 50
+    admin_page.get_by_role("link",name="Workers",exact=True).click()
+    admin_page.wait_for_url("http://127.0.0.1:8000/workers/")
+    admin_page.wait_for_timeout(100)
+    assert admin_page.locator(".sidebar").evaluate("el => el.scrollTop") > 50
     admin_page.goto("http://127.0.0.1:8000/account/")
     admin_page.get_by_label("Recovery phone number",exact=False).fill("0241234567")
     admin_page.get_by_label("Current password",exact=False).fill("admin")
