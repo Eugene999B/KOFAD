@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.conf import settings
@@ -179,56 +180,100 @@ def market(request):
     category = request.GET.get("category", "").strip()[:80]
     sort = request.GET.get("sort", "featured")
     in_stock = request.GET.get("stock") == "available"
+    featured_only = request.GET.get("featured") == "1"
+    price_min_raw = request.GET.get("min_price", "").strip()
+    price_max_raw = request.GET.get("max_price", "").strip()
+    try:
+        price_min = Decimal(price_min_raw) if price_min_raw else None
+        price_max = Decimal(price_max_raw) if price_max_raw else None
+    except InvalidOperation:
+        price_min = price_max = None
+
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product")
     if query:
-        rows = rows.filter(
-            Q(title__icontains=query) | Q(description__icontains=query) | Q(tags__icontains=query)
-            | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
-            | Q(product__category__icontains=query)
-        )
+        terms = [term for term in query.replace(",", " ").split() if term][:8]
+        for term in terms:
+            rows = rows.filter(
+                Q(title__icontains=term) | Q(description__icontains=term) | Q(tags__icontains=term)
+                | Q(product__name__icontains=term) | Q(product__sku__icontains=term)
+                | Q(product__category__icontains=term) | Q(highlights__icontains=term)
+            )
     if category:
         rows = rows.filter(product__category=category)
+    if featured_only:
+        rows = rows.filter(featured=True)
+
     branch = None
     try:
         branch = services.market_branch()
     except ValidationError:
         pass
-    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:180]), branch)
+    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:220]), branch)
     if in_stock:
         listings = [listing for listing in listings if listing.available_sell_qty > 0]
+    if price_min is not None:
+        listings = [listing for listing in listings if listing.market_price_value >= price_min]
+    if price_max is not None:
+        listings = [listing for listing in listings if listing.market_price_value <= price_max]
     if sort == "price_low":
         listings.sort(key=lambda listing: (listing.market_price_value, listing.display_name.lower()))
     elif sort == "price_high":
         listings.sort(key=lambda listing: (-listing.market_price_value, listing.display_name.lower()))
     elif sort == "name":
         listings.sort(key=lambda listing: listing.display_name.lower())
+
+    customer = services.customer_from_session(request)
+    wishlist_ids = set(
+        WishlistItem.objects.filter(customer=customer).values_list("listing_id", flat=True)
+    ) if customer else set()
+    for listing in listings:
+        listing.in_wishlist = listing.pk in wishlist_ids
+
     categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
     )
+    prices = [listing.market_price_value for listing in listings]
     return render(request, "marketplace/market.html", _market_context(
         request, title="KOFAD Market", listings=listings, q=query,
         selected_category=category, categories=categories,
-        selected_sort=sort, in_stock=in_stock,
+        selected_sort=sort, in_stock=in_stock, featured_only=featured_only,
+        price_min=price_min_raw, price_max=price_max_raw,
+        visible_price_low=min(prices) if prices else None,
+        visible_price_high=max(prices) if prices else None,
         total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
     ))
 
 
 def product_detail(request, pk):
     listing = get_object_or_404(
-        MarketListing.objects.select_related("product"),
+        MarketListing.objects.select_related("product").prefetch_related("gallery_images"),
         pk=pk, enabled=True, product__active=True,
     )
     branch = services.market_branch()
     _decorate_listings([listing], branch)
+    customer = services.customer_from_session(request)
+    in_wishlist = False
+    if customer:
+        RecentView.objects.update_or_create(
+            customer=customer,
+            listing=listing,
+            defaults={"view_count": 1},
+        )
+        recent = RecentView.objects.get(customer=customer, listing=listing)
+        if recent.view_count > 1:
+            RecentView.objects.filter(pk=recent.pk).update(view_count=recent.view_count + 1)
+        in_wishlist = WishlistItem.objects.filter(customer=customer, listing=listing).exists()
     related = list(
         MarketListing.objects.filter(
             enabled=True, product__active=True, product__category=listing.product.category
         ).exclude(pk=listing.pk).select_related("product").order_by("-featured", "sort_order")[:4]
     )
     _decorate_listings(related, branch)
+    gallery = list(listing.gallery_images.all())
     return render(request, "marketplace/product.html", _market_context(
         request, title=listing.display_name, listing=listing, related=related,
+        gallery=gallery, in_wishlist=in_wishlist,
     ))
 
 
@@ -291,6 +336,8 @@ def customer_account(request, customer):
             status__in=["delivered", "picked_up", "cancelled", "refunded"]
         ).count(),
         "support_threads": customer.conversations.count(),
+        "wishlist": customer.wishlist_items.count(),
+        "returns": customer.return_requests.count(),
     }
     recent_lines = []
     for order in orders[:8]:
@@ -313,6 +360,9 @@ def customer_account(request, customer):
         recent_lines=recent_lines,
         addresses=customer.addresses.all()[:4],
         conversations=customer.conversations.all()[:5],
+        wishlist=customer.wishlist_items.select_related("listing__product")[:6],
+        recent_views=customer.recent_views.select_related("listing__product")[:6],
+        return_requests=customer.return_requests.select_related("order")[:5],
     ))
 
 
