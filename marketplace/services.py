@@ -944,7 +944,10 @@ def apply_paystack_refund_webhook(event_name, data):
     ).first()
     if not item:
         return None
+    previous_status = item.provider_refund_status
     item = _apply_refund_provider_state(item, data, event_name)
+    if previous_status == item.provider_refund_status:
+        return item
     OrderEvent.objects.create(
         order=item.order,
         status=event_name.replace(".", "_")[:32],
