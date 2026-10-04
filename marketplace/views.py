@@ -122,16 +122,18 @@ def market_customer_required(view):
 def home(request):
     listings = list(
         MarketListing.objects.filter(enabled=True, product__active=True)
-        .select_related("product").order_by("-featured", "sort_order", "product__name")[:6]
+        .select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
     )
     branch = None
     try:
         branch = services.market_branch()
     except ValidationError:
         pass
-    for listing in listings:
-        listing.available_units = services.available_units(branch, listing.product) if branch else 0
-        listing.market_price_value = listing.market_price
+    _decorate_listings(listings, branch)
+    categories = list(
+        Product.objects.filter(market_listing__enabled=True, active=True)
+        .exclude(category="").values_list("category", flat=True).distinct().order_by("category")[:8]
+    )
 
     enquiry_form = PublicMessageForm(request.POST or None)
     if request.method == "POST" and enquiry_form.is_valid():
@@ -164,6 +166,7 @@ def home(request):
         request,
         title="KOFAD Market & Operations",
         listings=listings,
+        categories=categories,
         enquiry_form=enquiry_form,
     ))
 
@@ -171,11 +174,12 @@ def home(request):
 def market(request):
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:80]
+    sort = request.GET.get("sort", "featured")
+    in_stock = request.GET.get("stock") == "available"
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product")
     if query:
-        from django.db.models import Q
         rows = rows.filter(
-            Q(title__icontains=query) | Q(description__icontains=query)
+            Q(title__icontains=query) | Q(description__icontains=query) | Q(tags__icontains=query)
             | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
             | Q(product__category__icontains=query)
         )
@@ -186,18 +190,24 @@ def market(request):
         branch = services.market_branch()
     except ValidationError:
         pass
-    listings = list(rows.order_by("-featured", "sort_order", "product__name")[:120])
-    for listing in listings:
-        listing.available_units = services.available_units(branch, listing.product) if branch else 0
-        listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
-        listing.market_price_value = listing.market_price
-    categories = (
+    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:180]), branch)
+    if in_stock:
+        listings = [listing for listing in listings if listing.available_sell_qty > 0]
+    if sort == "price_low":
+        listings.sort(key=lambda listing: (listing.market_price_value, listing.display_name.lower()))
+    elif sort == "price_high":
+        listings.sort(key=lambda listing: (-listing.market_price_value, listing.display_name.lower()))
+    elif sort == "name":
+        listings.sort(key=lambda listing: listing.display_name.lower())
+    categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
     )
     return render(request, "marketplace/market.html", _market_context(
         request, title="KOFAD Market", listings=listings, q=query,
         selected_category=category, categories=categories,
+        selected_sort=sort, in_stock=in_stock,
+        total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
     ))
 
 
@@ -207,11 +217,15 @@ def product_detail(request, pk):
         pk=pk, enabled=True, product__active=True,
     )
     branch = services.market_branch()
-    listing.available_units = services.available_units(branch, listing.product)
-    listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
-    listing.market_price_value = listing.market_price
+    _decorate_listings([listing], branch)
+    related = list(
+        MarketListing.objects.filter(
+            enabled=True, product__active=True, product__category=listing.product.category
+        ).exclude(pk=listing.pk).select_related("product").order_by("-featured", "sort_order")[:4]
+    )
+    _decorate_listings(related, branch)
     return render(request, "marketplace/product.html", _market_context(
-        request, title=listing.display_name, listing=listing,
+        request, title=listing.display_name, listing=listing, related=related,
     ))
 
 
