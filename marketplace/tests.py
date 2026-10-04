@@ -104,7 +104,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, "+233242223333")
         self.assertContains(response, "sales@kofad.example")
         self.assertContains(response, "+233243334444")
-        self.assertContains(response, "Message customer care", html=False) if False else None
+        self.assertContains(response, "Sign in to chat with us")
         self.assertNotContains(response, "Everything stays connected.")
         self.assertNotContains(response, "More than a checkout account.")
         self.assertNotContains(response, "Not sure what to order?")
