@@ -54,8 +54,9 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
     assert page.get_by_text("Private setup key", exact=True).count() == 0
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
-    assert any(href.endswith("/static/brand/v4/kofad-mark.svg") for href in icon_hrefs)
-    assert page.locator('img[src$="/static/brand/v4/kofad-mark.svg"]').count() >= 1
+    assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
+    assert page.locator('img[src$="/static/brand/kofad-emblem.png"]').count() >= 1
+    assert page.get_by_text("KOPEX", exact=True).count() >= 1
     page.get_by_role("button", name="Show password", exact=True).click()
     assert page.locator("#password").get_attribute("type") == "text"
     page.get_by_role("button", name="Hide password", exact=True).click()
