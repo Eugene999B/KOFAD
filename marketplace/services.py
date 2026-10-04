@@ -984,7 +984,7 @@ def eligible_market_return_quantity(order_line):
 
 @transaction.atomic
 def create_market_return_request(customer, order, line_payload, reason, resolution, evidence=None):
-    order = OnlineOrder.objects.select_for_update().select_related("sale_document").get(
+    order = OnlineOrder.objects.select_for_update().get(
         pk=order.pk, customer=customer
     )
     if order.payment_status != "paid" or order.status not in {"delivered", "picked_up"}:
