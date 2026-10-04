@@ -217,6 +217,33 @@ class StaffOrderUpdateForm(forms.Form):
         return normalize_ghana_phone(raw) if raw else ""
 
 
+class CustomerPasswordChangeForm(forms.Form):
+    current_password = forms.CharField(widget=forms.PasswordInput, label="Current password")
+    password = forms.CharField(widget=forms.PasswordInput, label="New password")
+    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
+
+    def __init__(self, *args, customer=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.customer = customer
+
+    def clean_current_password(self):
+        value = self.cleaned_data["current_password"]
+        if not self.customer or not self.customer.check_password(value):
+            raise forms.ValidationError("The current password is incorrect.")
+        return value
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        validate_password(password)
+        return password
+
+    def clean(self):
+        data = super().clean()
+        if data.get("password") and data.get("password_confirm") and data["password"] != data["password_confirm"]:
+            self.add_error("password_confirm", "The two passwords do not match.")
+        return data
+
+
 class CustomerPasswordResetForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, label="New password")
     password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
