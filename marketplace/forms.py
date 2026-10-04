@@ -9,6 +9,12 @@ from .models import CustomerAccount, DeliveryZone, MarketListing
 
 
 class MarketListingForm(forms.ModelForm):
+    highlights_text = forms.CharField(
+        required=False,
+        label="Product highlights",
+        help_text="One customer-facing highlight per line, up to 5.",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Durable everyday construction\nDelivery or pickup\nLive KOFAD stock"}),
+    )
     image = forms.FileField(
         required=False,
         label="Market product photo",
@@ -19,12 +25,13 @@ class MarketListingForm(forms.ModelForm):
 
     class Meta:
         model = MarketListing
-        fields = ["enabled", "featured", "title", "description", "price_source", "sort_order"]
+        fields = ["enabled", "featured", "title", "description", "tags", "price_source", "sort_order"]
         labels = {
             "enabled": "Publish this product to KOFAD Market",
             "featured": "Feature this product",
             "title": "Market display name",
             "description": "Customer-facing description",
+            "tags": "Search tags",
             "price_source": "Market selling price",
             "sort_order": "Display order",
         }
@@ -32,6 +39,7 @@ class MarketListingForm(forms.ModelForm):
             "enabled": "Only published products appear to customers. Stock still comes from KOFAD inventory.",
             "featured": "Featured items receive stronger placement on the public Market.",
             "title": "Leave blank to use the normal product name.",
+            "tags": "Comma-separated words customers may search for, such as hydraulic, filter, SANY, excavator.",
             "price_source": "Choose whether Market follows the product's retail or wholesale, unit or pack price.",
             "sort_order": "Lower numbers appear first.",
         }
@@ -40,6 +48,8 @@ class MarketListingForm(forms.ModelForm):
     def __init__(self, *args, product=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.product = product
+        if self.instance and self.instance.pk and not self.is_bound:
+            self.fields["highlights_text"].initial = "\n".join(self.instance.highlights or [])
         if product:
             disabled = []
             for value, label in self.fields["price_source"].choices:
@@ -63,7 +73,24 @@ class MarketListingForm(forms.ModelForm):
                 self.add_error("image", "Add a product photo before publishing this item to Market.")
             if data.get("remove_image") and not self.files.get("image"):
                 self.add_error("remove_image", "A published product must keep a photo. Upload a replacement or unpublish it first.")
+        highlights = [
+            line.strip()
+            for line in (data.get("highlights_text") or "").splitlines()
+            if line.strip()
+        ][:5]
+        data["highlights_text"] = "\n".join(highlights)
         return data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.highlights = [
+            line.strip()
+            for line in self.cleaned_data.get("highlights_text", "").splitlines()
+            if line.strip()
+        ][:5]
+        if commit:
+            obj.save()
+        return obj
 
 
 class CustomerAccessForm(forms.Form):
