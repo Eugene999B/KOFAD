@@ -126,7 +126,7 @@ class AccountRecoveryTests(TestCase):
         response = self.client.post("/account/password/", {"old_password":"ADMIN",
             "new_password1":"Changed-private-password-987!", "new_password2":"Changed-private-password-987!"})
         self.assertRedirects(response, "/account/")
-        self.assertEqual(self.client.get("/").status_code, 200)
+        self.assertEqual(self.client.get("/workspace/").status_code, 200)
 
     def test_admin_phone_update_invalidates_existing_codes(self):
         challenge = self.request_code()
