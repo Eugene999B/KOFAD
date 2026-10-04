@@ -164,6 +164,11 @@ def _approval_items(user, branch, include_history=False):
     return items
 
 
+def pending_approval_count(user, branch):
+    """Return the universal pending-approval count visible to this user."""
+    return len(_approval_items(user, branch))
+
+
 @login_required
 def approval_summary(request):
     branch = branch_for(request)
