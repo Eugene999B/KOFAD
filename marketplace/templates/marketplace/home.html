@@ -8,7 +8,7 @@
 {% if listings %}
 <section class="home-products"><div class="market-section-head"><div><p class="market-eyebrow">FROM THE MARKET</p><h2>Available now.</h2></div><a href="/market/">See all products →</a></div><div class="market-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div></section>
 {% endif %}
-<section class="home-dual">
+<section class="home-dual" id="contact">
 <div class="contact-story"><p class="market-eyebrow">NEED HELP?</p><h2>Talk to KOFAD before you order.</h2><p>Ask about a product, availability, delivery area or an existing order. Your message enters the same customer inbox our staff use.</p><div class="contact-points"><span>Product enquiries</span><span>Delivery questions</span><span>Order support</span></div></div>
 <form method="post" class="public-contact-card">{% csrf_token %}<div><label>Your name{{ enquiry_form.name }}</label><label>Phone number{{ enquiry_form.phone }}</label></div><label>Subject{{ enquiry_form.subject }}</label><label>Message{{ enquiry_form.message }}</label><button class="market-button primary">Send message to KOFAD <span>→</span></button></form>
 </section>
