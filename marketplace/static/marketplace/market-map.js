@@ -285,6 +285,16 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    const fulfilment = document.querySelector("[data-checkout-form] select[name='fulfilment']");
+    fulfilment?.addEventListener("change", () => {
+      if (fulfilment.value === "pickup") {
+        if (feeNode) feeNode.textContent = "GHS 0.00";
+        if (totalNode && subtotal !== null) totalNode.textContent = "GHS " + subtotal.toFixed(2);
+      } else if (latitude !== null && longitude !== null) {
+        refreshQuote();
+      }
+    });
+
     if (latitude !== null && longitude !== null && mapEl.dataset.quoteUrl) refreshQuote();
   });
 
