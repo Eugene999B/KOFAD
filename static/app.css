@@ -2042,3 +2042,5 @@ html[data-theme="dark"] .market-publishing-section{background:linear-gradient(14
 html[data-theme="dark"] .market-photo-setup{background:#0d263a;border-color:#294e63}
 html[data-theme="dark"] .market-photo-preview{background:#0a2133;border-color:#31576d}
 @media(max-width:680px){.market-photo-setup{grid-template-columns:1fr}.market-photo-preview{width:140px}}
+
+.nav-market-count{margin-left:auto;display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#138c94;color:#fff;font-size:9px;font-weight:850}.nav-market-count.inbox{background:#e9ac32;color:#102b46}
