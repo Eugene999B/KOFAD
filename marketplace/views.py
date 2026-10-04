@@ -68,6 +68,15 @@ def home(request):
     enquiry_form = PublicMessageForm(request.POST or None)
     if request.method == "POST" and enquiry_form.is_valid():
         data = enquiry_form.cleaned_data
+        recent_count = Conversation.objects.filter(
+            public_phone=data["phone"],
+            created_at__gte=timezone.now() - timedelta(minutes=15),
+        ).count()
+        if recent_count >= 3:
+            messages.error(request, "Too many messages were sent from this number. Please wait a little and try again.")
+            return render(request, "marketplace/home.html", _market_context(
+                request, title="KOFAD Market & Operations", listings=listings, enquiry_form=enquiry_form,
+            ))
         customer = CustomerAccount.objects.filter(phone=data["phone"], active=True).first()
         conversation = Conversation.objects.create(
             customer=customer,
@@ -148,7 +157,7 @@ def product_image(request, pk, size="large"):
     if not data:
         raise Http404
     response = HttpResponse(bytes(data), content_type=listing.image_mime or "image/webp")
-    response["Cache-Control"] = "public, max-age=86400"
+    response["Cache-Control"] = "public, max-age=86400" if listing.enabled else "private, no-store"
     response["Content-Disposition"] = "inline"
     return response
 
@@ -537,8 +546,13 @@ def customer_order(request, customer, pk):
 @market_customer_required
 def customer_messages(request, customer, conversation_id=None):
     conversation = None
+    order_hint = None
     if conversation_id:
         conversation = get_object_or_404(Conversation, pk=conversation_id, customer=customer)
+    else:
+        raw_order = request.GET.get("order", "")
+        if raw_order:
+            order_hint = OnlineOrder.objects.filter(pk=raw_order, customer=customer).first()
     if request.method == "POST":
         body = request.POST.get("message", "").strip()[:2000]
         if not body:
@@ -565,6 +579,7 @@ def customer_messages(request, customer, conversation_id=None):
         conversation.messages.filter(sender_type="staff").update(read_by_customer=True)
     return render(request, "marketplace/messages.html", _market_context(
         request, title="Messages", conversations=conversations, conversation=conversation,
+        order_hint=order_hint,
     ))
 
 
