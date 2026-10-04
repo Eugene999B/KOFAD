@@ -118,7 +118,7 @@ def _auto_close_stale_support():
     cutoff = timezone.now() - timedelta(hours=24)
     closed_ids = []
     conversations = Conversation.objects.filter(
-        status="open", assigned_to__isnull=False,
+        status="open", assigned_to__isnull=False, updated_at__lte=cutoff,
     ).prefetch_related("messages")
     for conversation in conversations:
         rows = list(conversation.messages.all())
