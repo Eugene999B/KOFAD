@@ -39,6 +39,8 @@ DATASETS = {
     "market_customers": ("Market customer accounts", ("operate_sales", "manage_company", "view_reports")),
     "market_catalog": ("Published Market catalog", ("operate_sales", "operate_inventory", "manage_company", "view_reports")),
     "customer_support": ("Customer support conversations", ("operate_sales", "manage_company", "view_reports")),
+    "online_returns": ("Online return requests", ("operate_sales", "operate_finance", "manage_company", "view_reports")),
+    "delivery_tracking": ("Online delivery tracking", ("operate_sales", "manage_company", "view_reports")),
 }
 
 
@@ -230,6 +232,76 @@ def _rows(request, dataset, branch, first, last):
             ("payment_reference", "Provider reference"), ("subtotal", "Products"),
             ("delivery_fee", "Delivery"), ("total", "Total"), ("ledger", "Ledger status"),
             ("sale_document", "KOFAD sale"), ("completed", "Completed at"),
+        ]
+
+    if dataset == "online_returns":
+        from marketplace.models import MarketReturnRequest
+        rows = []
+        items = MarketReturnRequest.objects.filter(
+            order__branch=branch,
+            created_at__date__gte=first,
+            created_at__date__lte=last,
+        ).select_related(
+            "order", "customer", "reviewed_by", "core_return_request"
+        ).prefetch_related("lines__order_line", "attachments").order_by("-created_at")
+        for item in items:
+            value = sum(
+                (row.order_line.unit_price * row.quantity for row in item.lines.all()),
+                Decimal("0"),
+            )
+            rows.append({
+                "created": item.created_at,
+                "order": item.order.public_reference,
+                "customer": item.customer.full_name,
+                "phone": item.customer.phone,
+                "resolution": item.get_resolution_display(),
+                "status": item.get_status_display(),
+                "lines": item.lines.count(),
+                "value": value,
+                "attachments": item.attachments.count(),
+                "reviewed_by": item.reviewed_by.username if item.reviewed_by else "",
+                "reviewed_at": item.reviewed_at,
+                "core_return": str(item.core_return_request_id or ""),
+                "reason": item.reason,
+                "staff_note": item.staff_note,
+            })
+        return rows, [
+            ("created", "Requested at"), ("order", "Online order"), ("customer", "Customer"),
+            ("phone", "Phone"), ("resolution", "Requested resolution"), ("status", "Status"),
+            ("lines", "Item lines"), ("value", "Requested value"), ("attachments", "Evidence files"),
+            ("reviewed_by", "Reviewed by"), ("reviewed_at", "Reviewed at"),
+            ("core_return", "KOFAD return request"), ("reason", "Customer reason"), ("staff_note", "Staff note"),
+        ]
+
+    if dataset == "delivery_tracking":
+        from marketplace.models import DeliveryTrackingUpdate
+        rows = []
+        updates = DeliveryTrackingUpdate.objects.filter(
+            order__branch=branch,
+            created_at__date__gte=first,
+            created_at__date__lte=last,
+        ).select_related("order", "order__customer", "actor").order_by("-created_at")
+        for item in updates:
+            rows.append({
+                "created": item.created_at,
+                "order": item.order.public_reference,
+                "customer": item.order.customer.full_name,
+                "driver": item.order.delivery_agent_name,
+                "driver_phone": item.order.delivery_agent_phone,
+                "eta": item.order.estimated_delivery_at,
+                "status": item.status,
+                "note": item.note,
+                "latitude": item.latitude or "",
+                "longitude": item.longitude or "",
+                "customer_visible": "Yes" if item.customer_visible else "No",
+                "staff": item.actor.username if item.actor else "",
+            })
+        return rows, [
+            ("created", "Update time"), ("order", "Online order"), ("customer", "Customer"),
+            ("driver", "Driver"), ("driver_phone", "Driver phone"), ("eta", "ETA"),
+            ("status", "Tracking status"), ("note", "Tracking note"),
+            ("latitude", "Latitude"), ("longitude", "Longitude"),
+            ("customer_visible", "Customer visible"), ("staff", "Staff"),
         ]
 
     if dataset == "customer_support":
