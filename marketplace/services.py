@@ -29,6 +29,7 @@ from .models import (
 
 PAYSTACK_INITIALIZE = "https://api.paystack.co/transaction/initialize"
 PAYSTACK_VERIFY = "https://api.paystack.co/transaction/verify/"
+PAYSTACK_REFUND = "https://api.paystack.co/refund"
 ARKESEL_OTP_GENERATE = "https://sms.arkesel.com/api/otp/generate"
 ARKESEL_OTP_VERIFY = "https://sms.arkesel.com/api/otp/verify"
 
@@ -783,6 +784,174 @@ def advance_order(user, order, action, cleaned):
             extra = f" Your handover code is {handover_code(order)}."
         send_transactional_sms(order.phone, f"KOFAD: {title} for {order.public_reference}.{extra}")
     return order
+
+
+
+def market_return_value(item):
+    return sum(
+        (row.order_line.unit_price * row.quantity for row in item.lines.select_related("order_line")),
+        Decimal("0"),
+    )
+
+
+def _apply_refund_provider_state(item, data, message=""):
+    status = str((data or {}).get("status", "")).strip().lower()[:32]
+    refund_id = str((data or {}).get("id", "") or item.provider_refund_id)[:80]
+    raw_amount = (data or {}).get("amount")
+    if raw_amount is not None:
+        try:
+            item.refund_amount = Decimal(str(raw_amount)) / Decimal("100")
+        except (ArithmeticError, ValueError):
+            pass
+    item.provider_refund_id = refund_id
+    item.provider_refund_status = status
+    item.provider_refund_message = str(message or "")[:240]
+    if status == "processed":
+        item.status = "completed"
+        item.refund_processed_at = timezone.now()
+        if not item.completed_at:
+            item.completed_at = timezone.now()
+    elif status in {"failed", "needs-attention"}:
+        item.status = "refund_attention"
+    else:
+        item.status = "processing"
+    item.save(update_fields=[
+        "status", "refund_amount", "provider_refund_id", "provider_refund_status",
+        "provider_refund_message", "refund_processed_at", "completed_at",
+    ])
+    return item
+
+
+def initiate_paystack_refund(item):
+    item = MarketReturnRequest.objects.select_related(
+        "order", "core_return_request"
+    ).prefetch_related("lines__order_line").get(pk=item.pk)
+    if item.provider_refund_id:
+        return item
+    if not item.core_return_request_id or item.core_return_request.status != "approved":
+        raise ValidationError("The KOFAD return must be posted before the payment refund can begin.")
+    if not item.order.payment_reference:
+        raise ValidationError("The original Paystack payment reference is missing.")
+    if not settings.PAYSTACK_SECRET_KEY:
+        raise ValidationError("Paystack refund processing is not configured yet.")
+
+    amount = market_return_value(item)
+    if amount <= 0:
+        raise ValidationError("This return does not have a refundable amount.")
+    if amount > item.order.total:
+        raise ValidationError("The refund amount cannot exceed the original online order total.")
+
+    payload = {
+        "transaction": item.order.payment_reference,
+        "amount": int(amount * 100),
+        "currency": "GHS",
+        "customer_note": item.reason[:240],
+        "merchant_note": f"KOFAD {item.order.public_reference} return {item.pk}"[:240],
+    }
+    try:
+        response = requests.post(
+            PAYSTACK_REFUND,
+            headers=_paystack_headers(),
+            json=payload,
+            timeout=settings.PAYSTACK_TIMEOUT_SECONDS,
+            allow_redirects=False,
+        )
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValidationError(
+            "The KOFAD return is posted, but Paystack could not be reached to start the refund."
+        ) from exc
+    if not 200 <= response.status_code < 300 or not body.get("status"):
+        raise ValidationError(
+            str(body.get("message") or "Paystack did not accept the refund request.")[:240]
+        )
+    data = body.get("data") or {}
+    item.refund_amount = amount
+    item.refund_initiated_at = timezone.now()
+    item.save(update_fields=["refund_amount", "refund_initiated_at"])
+    _apply_refund_provider_state(item, data, body.get("message", ""))
+
+    OrderEvent.objects.create(
+        order=item.order,
+        status="refund_started",
+        title="Refund submitted to Paystack",
+        note=f"GHS {amount:.2f} was submitted to the original payment channel.",
+        customer_visible=True,
+    )
+    core_services.audit(
+        _system_actor(), item.order.branch, "sale.online_refund_started", item.order.public_reference,
+        {
+            "market_return": str(item.pk),
+            "refund_amount": str(amount),
+            "paystack_refund_id": item.provider_refund_id,
+            "paystack_status": item.provider_refund_status,
+        },
+    )
+    return item
+
+
+def refresh_paystack_refund(item):
+    item = MarketReturnRequest.objects.select_related("order").get(pk=item.pk)
+    if not item.provider_refund_id:
+        raise ValidationError("No Paystack refund has been initiated for this return.")
+    if not settings.PAYSTACK_SECRET_KEY:
+        raise ValidationError("Paystack refund processing is not configured yet.")
+    try:
+        response = requests.get(
+            f"{PAYSTACK_REFUND}/{item.provider_refund_id}",
+            headers=_paystack_headers(),
+            timeout=settings.PAYSTACK_TIMEOUT_SECONDS,
+            allow_redirects=False,
+        )
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValidationError("KOFAD could not refresh the Paystack refund status.") from exc
+    if not 200 <= response.status_code < 300 or not body.get("status"):
+        raise ValidationError(str(body.get("message") or "Paystack could not retrieve this refund.")[:240])
+    item = _apply_refund_provider_state(item, body.get("data") or {}, body.get("message", ""))
+    if item.provider_refund_status == "processed":
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your GHS {item.refund_amount:.2f} refund for "
+            f"{item.order.public_reference} has been processed by Paystack.",
+        )
+    return item
+
+
+def apply_paystack_refund_webhook(event_name, data):
+    refund_id = str((data or {}).get("id", ""))
+    if not refund_id:
+        return None
+    item = MarketReturnRequest.objects.select_related("order").filter(
+        provider_refund_id=refund_id
+    ).first()
+    if not item:
+        return None
+    item = _apply_refund_provider_state(item, data, event_name)
+    OrderEvent.objects.create(
+        order=item.order,
+        status=event_name.replace(".", "_")[:32],
+        title={
+            "refund.pending": "Refund pending",
+            "refund.processing": "Refund processing",
+            "refund.processed": "Refund processed",
+            "refund.failed": "Refund failed",
+            "refund.needs-attention": "Refund needs attention",
+        }.get(event_name, "Refund status updated"),
+        note=(
+            f"Paystack refund status: {item.provider_refund_status}."
+            if item.provider_refund_status
+            else "Paystack sent a refund status update."
+        ),
+        customer_visible=True,
+    )
+    if item.provider_refund_status == "processed":
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your GHS {item.refund_amount:.2f} refund for "
+            f"{item.order.public_reference} has been processed.",
+        )
+    return item
 
 
 def eligible_market_return_quantity(order_line):
