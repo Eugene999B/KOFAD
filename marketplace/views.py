@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,12 +18,13 @@ from core.models import Product
 from core.views import problem, protected
 
 from .forms import (
-    CheckoutForm, CustomerLoginForm, CustomerPasswordResetForm, CustomerRegistrationForm,
+    CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
+    CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
     DeliveryZoneForm, PublicMessageForm, StaffOrderUpdateForm,
 )
 from .models import (
-    Conversation, ConversationMessage, CustomerAccount, DeliveryZone, MarketListing,
-    MarketPaymentAttempt, OnlineOrder, OtpThrottle,
+    Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
+    DeliveryZone, MarketListing, MarketPaymentAttempt, OnlineOrder, OtpThrottle,
 )
 from . import services
 
@@ -30,13 +32,79 @@ from . import services
 def _market_context(request, **extra):
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
+    unread = 0
+    if customer:
+        unread = ConversationMessage.objects.filter(
+            conversation__customer=customer,
+            sender_type="staff",
+            read_by_customer=False,
+        ).count()
     context = {
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
+        "market_unread_count": unread,
         "company": getattr(request, "company", None),
         **extra,
     }
     return context
+
+
+def _decorate_listings(listings, branch):
+    for listing in listings:
+        listing.available_units = services.available_units(branch, listing.product) if branch else 0
+        listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
+        listing.market_price_value = listing.market_price
+    return listings
+
+
+def _save_conversation_message(conversation, sender_type, body="", attachment=None, staff=None):
+    body = (body or "").strip()[:2000]
+    payload = services.prepare_support_attachment(attachment) if attachment else None
+    message = ConversationMessage.objects.create(
+        conversation=conversation,
+        sender_type=sender_type,
+        staff=staff,
+        body=body,
+        read_by_staff=sender_type == "staff",
+        read_by_customer=sender_type != "staff",
+    )
+    if payload:
+        ConversationAttachment.objects.create(message=message, **payload)
+    Conversation.objects.filter(pk=conversation.pk).update(
+        updated_at=timezone.now(), status="open"
+    )
+    return message
+
+
+def _conversation_access(request, conversation):
+    if request.user.is_authenticated and (
+        request.user.is_superuser
+        or request.user.has_perm("core.operate_sales")
+        or request.user.has_perm("core.manage_company")
+    ):
+        return "staff"
+    customer = services.customer_from_session(request)
+    if customer and conversation.customer_id == customer.pk:
+        return "customer"
+    return ""
+
+
+def _message_json(message):
+    return {
+        "id": message.pk,
+        "sender": message.sender_type,
+        "sender_label": message.get_sender_type_display(),
+        "body": message.body,
+        "created": timezone.localtime(message.created_at).strftime("%d %b · %H:%M"),
+        "attachments": [{
+            "id": attachment.pk,
+            "name": attachment.original_name,
+            "mime": attachment.mime_type,
+            "is_image": attachment.is_image,
+            "url": f"/market/support/attachments/{attachment.pk}/",
+            "preview_url": f"/market/support/attachments/{attachment.pk}/?inline=1",
+        } for attachment in message.attachments.all()],
+    }
 
 
 def market_customer_required(view):
