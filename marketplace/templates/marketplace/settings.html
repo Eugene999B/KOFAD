@@ -1,17 +1,48 @@
-{% extends "base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market.css' %}">{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'marketplace/market.css' %}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{% static 'marketplace/market-map.css' %}">
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script defer src="{% static 'marketplace/market-map.js' %}"></script>
+{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/market/" target="_blank" rel="noopener">Open Market ↗</a><a class="button secondary" href="/online-orders/">Online Orders</a></div>{% endblock %}
 {% block content %}
-<section class="hero-panel compact-hero online-order-hero"><div><p class="eyebrow">ONLINE COMMERCE CONTROL</p><h2>Market, payments & delivery.</h2><p>Configure the customer-facing fulfilment layer without changing KOFAD’s core stock and ledger controls.</p></div><span class="pill success">Connected channel</span></section>
-<div class="market-readiness-grid">
-<article class="{% if paystack_ready %}ready{% else %}pending{% endif %}"><span>{% if paystack_ready %}✓{% else %}1{% endif %}</span><div><strong>Paystack</strong><small>{% if paystack_ready %}Secret key configured on the server.{% else %}Secret key still required before live checkout can initialize.{% endif %}</small></div></article>
-<article class="{% if otp_ready %}ready{% else %}pending{% endif %}"><span>{% if otp_ready %}✓{% else %}2{% endif %}</span><div><strong>Customer OTP</strong><small>{% if otp_ready %}Arkesel verification is enabled.{% else %}Keep disabled until Arkesel OTP is confirmed for production.{% endif %}</small></div></article>
-<article class="{% if sms_ready %}ready{% else %}pending{% endif %}"><span>{% if sms_ready %}✓{% else %}3{% endif %}</span><div><strong>Order SMS</strong><small>{% if sms_ready %}Transactional status messages can be submitted.{% else %}Order SMS follows the existing KOFAD SMS configuration.{% endif %}</small></div></article>
-</div>
 <div class="market-settings-layout">
-<section class="panel"><div class="section-heading"><div><p class="eyebrow">DELIVERY AREAS</p><h2>What should customers see at checkout?</h2><p class="muted">Each active area has its own fee and expected delivery time. Pickup remains available separately.</p></div></div>
-<div class="delivery-zone-list">{% for zone in zones %}<article class="{% if not zone.active %}inactive{% endif %}"><div><strong>{{ zone.name }}</strong><small>{{ zone.eta_text|default:"Delivery timing not set" }}</small></div><div><strong>GHS {{ zone.fee|floatformat:2 }}</strong><span>{% if zone.active %}Available{% else %}Hidden{% endif %}</span></div><div class="actions"><a class="text-link" href="/market-settings/?zone={{ zone.pk }}">Edit</a><form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle"><input type="hidden" name="zone" value="{{ zone.pk }}"><button class="text-button">{% if zone.active %}Hide{% else %}Enable{% endif %}</button></form></div></article>{% empty %}<div class="empty"><h3>No delivery areas yet.</h3><p>Add the first delivery area. Until then, customers can choose pickup.</p></div>{% endfor %}</div></section>
-<aside>
-<section class="panel market-zone-form"><p class="eyebrow">{% if selected_zone %}EDIT DELIVERY AREA{% else %}NEW DELIVERY AREA{% endif %}</p><h2>{% if selected_zone %}{{ selected_zone.name }}{% else %}Add delivery coverage{% endif %}</h2><form method="post">{% csrf_token %}{{ form.non_field_errors }}<label>Delivery area{{ form.name }}{{ form.name.errors }}</label><label>Delivery fee{{ form.fee }}{{ form.fee.errors }}</label><label>Expected time{{ form.eta_text }}{{ form.eta_text.errors }}</label><label>Display order{{ form.sort_order }}{{ form.sort_order.errors }}</label><label class="switch-row">{{ form.active }}<span><strong>Available to customers</strong><small>Hidden zones remain in old order history but cannot be selected for new orders.</small></span></label><button class="button wide">Save delivery area</button>{% if selected_zone %}<a class="text-link market-zone-cancel" href="/market-settings/">Cancel editing</a>{% endif %}</form></section>
-<section class="panel market-integration-card"><p class="eyebrow">PAYSTACK WEBHOOK</p><h3>Production callback address</h3><p class="muted">Add this exact HTTPS address in the Paystack dashboard when live payments are enabled.</p><code>{{ webhook_url }}</code><p class="hint">KOFAD validates Paystack’s HMAC signature and verifies the transaction again before posting the sale.</p></section>
-</aside></div>
+<div>
+<section class="panel"><div class="section-heading"><div><p class="eyebrow">DELIVERY PRICING</p><h2>Delivery rules</h2></div></div>
+<form method="post" data-delivery-policy>{% csrf_token %}<input type="hidden" name="action" value="policy">{{ policy_form.non_field_errors }}
+<div class="delivery-policy-grid">
+<label class="switch-row full">{{ policy_form.delivery_enabled }}<span><strong>Offer delivery</strong><small>Turn this off to offer pickup only.</small></span></label>
+<label class="full">Pricing method{{ policy_form.delivery_pricing_mode }}{{ policy_form.delivery_pricing_mode.errors }}</label>
+<label data-price-mode="flat">Flat fee{{ policy_form.delivery_flat_fee }}{{ policy_form.delivery_flat_fee.errors }}</label>
+<label data-price-mode="distance">Price per kilometre{{ policy_form.delivery_rate_per_km }}{{ policy_form.delivery_rate_per_km.errors }}</label>
+<label data-price-mode="distance">Minimum fee{{ policy_form.delivery_minimum_fee }}{{ policy_form.delivery_minimum_fee.errors }}</label>
+<label data-price-mode="distance">Maximum distance{{ policy_form.delivery_max_distance_km }}{{ policy_form.delivery_max_distance_km.errors }}</label>
+</div>
+<div class="delivery-price-example" data-price-mode="distance">Distance pricing is proportional: for example, at GHS 1.00/km, 0.10 km costs GHS 0.10. KOFAD recalculates the fee on the server before creating the order.</div>
+<div class="section-heading delivery-policy-map"><div><p class="eyebrow">DISPATCH POINT</p><h2>Company location</h2></div></div>
+<label>Location name{{ policy_form.delivery_origin_label }}{{ policy_form.delivery_origin_label.errors }}</label>
+{{ policy_form.delivery_origin_latitude }}{{ policy_form.delivery_origin_longitude }}
+<div class="kofad-map-shell" data-map-shell>
+<div class="kofad-location-search" data-location-search><input type="search" placeholder="Search your shop, office or landmark" aria-label="Search company dispatch location"><button type="button">Search location</button></div>
+<div class="location-search-results" data-location-search-results></div>
+<div class="kofad-map compact"
+ data-location-map data-picker="true"
+ data-lat="{{ policy_form.delivery_origin_latitude.value|default_if_none:'' }}" data-lng="{{ policy_form.delivery_origin_longitude.value|default_if_none:'' }}"
+ data-lat-input="id_delivery_origin_latitude" data-lng-input="id_delivery_origin_longitude" data-address-input="id_delivery_origin_label"
+ data-search-url="/market/location/search/" data-reverse-url="/market/location/reverse/"></div>
+<div class="kofad-map-actions"><button type="button" class="primary" data-capture-location>◎ Use current location</button><a data-google-map-link href="#" target="_blank" rel="noopener" hidden>Open in Google Maps ↗</a></div>
+<div class="location-result" data-location-result>{% if company.delivery_origin_latitude %}Dispatch point saved.{% else %}Search, tap the map or use the device location.{% endif %}</div>
+</div>
+<p class="hint">{% if google_maps_ready %}Road distance is calculated with Google Maps routing.{% else %}KOFAD is using a straight-line distance fallback until a Google Maps server key is configured.{% endif %}</p>
+<button class="button wide">Save delivery settings</button>
+</form></section>
+
+<section class="panel"><div class="section-heading"><div><p class="eyebrow">OPTIONAL COVERAGE LABELS</p><h2>Delivery areas</h2><p class="muted">Use these only if customers should choose a named area. Pricing still follows the delivery rule above.</p></div></div>
+<div class="delivery-zone-list">{% for zone in zones %}<article class="{% if not zone.active %}inactive{% endif %}"><div><strong>{{ zone.name }}</strong><small>{{ zone.eta_text|default:"Delivery timing not set" }}</small></div><div><span>{% if zone.active %}Available{% else %}Hidden{% endif %}</span></div><div class="actions"><a class="text-link" href="/market-settings/?zone={{ zone.pk }}">Edit</a><form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle"><input type="hidden" name="zone" value="{{ zone.pk }}"><button class="text-button">{% if zone.active %}Hide{% else %}Enable{% endif %}</button></form></div></article>{% empty %}<div class="empty"><h3>No delivery areas.</h3><p>You can leave this empty and let customers pin their exact location.</p></div>{% endfor %}</div>
+</section>
+</div>
+<aside><section class="panel market-zone-form"><p class="eyebrow">{% if selected_zone %}EDIT AREA{% else %}NEW AREA{% endif %}</p><h2>{% if selected_zone %}{{ selected_zone.name }}{% else %}Add area{% endif %}</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="zone">{{ form.non_field_errors }}<label>Area name{{ form.name }}{{ form.name.errors }}</label><label>Expected time{{ form.eta_text }}{{ form.eta_text.errors }}</label><label>Display order{{ form.sort_order }}{{ form.sort_order.errors }}</label><label class="switch-row">{{ form.active }}<span><strong>Available to customers</strong></span></label><button class="button wide">Save area</button>{% if selected_zone %}<a class="text-link market-zone-cancel" href="/market-settings/">Cancel editing</a>{% endif %}</form></section></aside>
+</div>
 {% endblock %}
