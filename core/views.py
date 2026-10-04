@@ -120,6 +120,8 @@ def login_view(request):
                 if user is not None:
                     access, _ = Access.objects.get_or_create(user=user)
                     login(request, user)
+                    from marketplace import services as market_services
+                    market_services.clear_customer_session(request)
                     request.session["access_version"] = access.session_version
                     request.session["staff_session_expires_at"] = (
                         timezone.now().timestamp() + settings.STAFF_SESSION_SECONDS
@@ -151,6 +153,12 @@ def mfa(request):
 def logout_view(request):
     logout(request)
     return redirect("login")
+
+
+def staff_session_state(request):
+    response = JsonResponse({"authenticated": bool(request.user.is_authenticated)})
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @login_required
