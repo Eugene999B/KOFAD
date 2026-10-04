@@ -1,14 +1,20 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="commerce-home-hero commerce-home-hero-simple">
-<div class="commerce-home-copy">
+<section class="commerce-home-hero commerce-home-hero-simple home-hero-v7">
+<div class="commerce-home-copy home-hero-copy-v7">
 <div class="commerce-kicker"><span class="commerce-live-dot"></span> KOFAD MARKET</div>
 <h1>Shop KOPEX IMPEX<br><span>online with confidence.</span></h1>
-<p>Browse products available from KOFAD, order securely and choose delivery or pickup.</p>
-<div class="commerce-hero-actions"><a class="market-button primary commerce-primary" href="/market/">Explore the Market <span>→</span></a>{% if market_customer %}<a class="market-button ghost" href="/market/account/">My account</a>{% else %}<a class="market-button ghost" href="/market/access/">Sign in / Create account</a>{% endif %}</div>
+<p>Browse available products, order securely and choose delivery or pickup from one simple Market experience.</p>
+<div class="commerce-hero-actions"><a class="market-button primary commerce-primary" href="/market/">Explore the Market <span>→</span></a>{% if market_customer %}<a class="market-button ghost" href="/market/account/">My account</a>{% else %}<a class="market-button ghost" href="/market/access/">Sign in</a>{% endif %}</div>
+<div class="home-hero-trust"><span>Secure ordering</span><i></i><span>Delivery or pickup</span><i></i><span>Live KOFAD support</span></div>
 </div>
 </section>
-{% if categories %}<section class="commerce-category-section"><div class="commerce-section-title"><div><p class="market-eyebrow">SHOP BY DEPARTMENT</p><h2>Browse categories.</h2></div><a href="/market/">View all products →</a></div><div class="commerce-category-row">{% for category in categories %}<a href="/market/?category={{ category|urlencode }}"><span>{{ forloop.counter|stringformat:"02d" }}</span><strong>{{ category }}</strong><i>→</i></a>{% endfor %}</div></section>{% endif %}
-{% if listings %}<section class="commerce-featured-section"><div class="commerce-section-title"><div><p class="market-eyebrow">FEATURED PRODUCTS</p><h2>Available from KOFAD.</h2></div><a href="/market/">Shop all products →</a></div><div class="market-grid commerce-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div></section>{% endif %}
+
+{% if listings %}<section class="home-featured-v7">
+<header class="home-featured-head"><div><span>CURATED FROM THE MARKET</span><h2>Featured picks</h2></div><a href="/market/" aria-label="Shop all products">Shop all <b>→</b></a></header>
+<div class="market-grid commerce-product-grid home-featured-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
+<a class="home-featured-mobile-cta" href="/market/">See everything in the Market <span>→</span></a>
+</section>{% endif %}
+
 <section class="commerce-contact-simple" id="contact">
 <div class="commerce-section-title"><div><p class="market-eyebrow">CONTACT US</p><h2>Talk to KOPEX IMPEX.</h2><p>Call, email, WhatsApp or use KOFAD customer chat.</p></div></div>
 <div class="contact-method-grid">
@@ -16,7 +22,7 @@
 {% if company.secondary_phone %}<a href="tel:{{ company.secondary_phone }}" class="contact-method-card"><span>CALL</span><strong>{{ company.secondary_phone }}</strong><small>Alternative business number</small></a>{% endif %}
 {% if company.email %}<a href="mailto:{{ company.email }}" class="contact-method-card"><span>EMAIL</span><strong>{{ company.email }}</strong><small>Business enquiries</small></a>{% endif %}
 {% if company.whatsapp_phone %}<a href="https://wa.me/{{ company.whatsapp_phone|cut:'+' }}" target="_blank" rel="noopener" class="contact-method-card"><span>WHATSAPP</span><strong>{{ company.whatsapp_phone }}</strong><small>Open WhatsApp chat</small></a>{% endif %}
-<a href="/market/messages/" class="contact-method-card contact-method-chat"><span>KOFAD CHAT</span><strong>{% if market_customer %}Message customer care{% else %}Sign in to chat with us{% endif %}</strong><small>Keep support and order conversations in your account.</small></a>
+<a href="/market/messages/" class="contact-method-card contact-method-chat"><span>KOFAD CHAT</span><strong>{% if market_customer %}Message customer care{% else %}Sign in to chat with us{% endif %}</strong><small>Product, order and delivery support.</small></a>
 {% if company.address %}<div class="contact-method-card contact-method-static"><span>LOCATION</span><strong>{{ company.address }}</strong><small>Business address</small></div>{% endif %}
 </div>
 </section>
