@@ -150,3 +150,36 @@ class StaffOrderUpdateForm(forms.Form):
     def clean_delivery_agent_phone(self):
         raw = self.cleaned_data.get("delivery_agent_phone", "").strip()
         return normalize_ghana_phone(raw) if raw else ""
+
+
+class CustomerPasswordResetForm(forms.Form):
+    password = forms.CharField(widget=forms.PasswordInput, label="New password")
+    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        validate_password(password)
+        return password
+
+    def clean(self):
+        data = super().clean()
+        if data.get("password") and data.get("password_confirm") and data["password"] != data["password_confirm"]:
+            self.add_error("password_confirm", "The two passwords do not match.")
+        return data
+
+
+class DeliveryZoneForm(forms.ModelForm):
+    class Meta:
+        model = DeliveryZone
+        fields = ["name", "fee", "eta_text", "sort_order", "active"]
+        labels = {
+            "name": "Delivery area / zone",
+            "fee": "Delivery fee (GHS)",
+            "eta_text": "Expected delivery time",
+            "sort_order": "Display order",
+            "active": "Available to customers",
+        }
+        help_texts = {
+            "eta_text": "Example: Same day, 1–2 business days, or Call to confirm.",
+            "sort_order": "Lower numbers appear first at checkout.",
+        }
