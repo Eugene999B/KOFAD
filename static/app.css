@@ -2378,3 +2378,196 @@ html[data-theme="light"] .selected-customer{background:#EEF6F7;border-color:#D1E
 html[data-theme="light"] .selected-customer strong{color:#173A54}
 html[data-theme="light"] .permission-box{background:#F8FBFC;border-color:#DCE7ED}
 html[data-theme="light"] .switch-row{border-color:#DCE7ED}
+
+
+/* ==========================================================================
+   KOPEX definitive dark theme · October 2026
+   Final cascade layer: keep every workspace control and reading surface
+   legible even when older page-specific rules use hard-coded light colours.
+   ========================================================================== */
+html[data-theme="dark"]{
+  --paper:#071522;
+  --white:#0D2131;
+  --ink:#EAF2F7;
+  --muted:#9DB1C0;
+  --line:#29465A;
+  --green:#63C9CE;
+  --teal:#63C9CE;
+  --soft:#122D40;
+  --red:#F28B82;
+  --gold:#E9AC32;
+  --kofad-accent:#55BBC1;
+  --kofad-accent-soft:#123A4B;
+  --kofad-shadow:0 1px 2px rgba(0,0,0,.18),0 14px 36px rgba(0,0,0,.16);
+  --kofad-shadow-hover:0 3px 8px rgba(0,0,0,.22),0 18px 44px rgba(0,0,0,.22);
+  color-scheme:dark;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .body,
+html[data-theme="dark"] main{background:#071522;color:#EAF2F7}
+
+/* Typography */
+html[data-theme="dark"] :where(.page-heading h1,.page-heading h2,.section-heading h2,.section-heading h3,.panel h1,.panel h2,.panel h3,.panel h4,label,legend,summary){color:#EAF2F7}
+html[data-theme="dark"] :where(.muted,.hint,label small,.section-heading .muted,td small,.page-footer,.top-user-card small,.empty,.empty p){color:#9DB1C0!important}
+html[data-theme="dark"] :where(.reference,code,pre){color:#C8D8E3}
+html[data-theme="dark"] :where(.text-link,.text-button,.section-heading>a,main a:not(.button):not(.pill):not(.quick-action):not(.settings-card)){color:#6DCDD2}
+html[data-theme="dark"] :where(.text-link,.text-button,.section-heading>a,main a:not(.button):not(.pill):not(.quick-action):not(.settings-card)):hover{color:#9BE1E4}
+
+/* Form controls including native dropdown menus. */
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .branch-form select,
+html[data-theme="dark"] .login-card input{
+  background:#0A1B29!important;
+  color:#EDF5F9!important;
+  border-color:#345267!important;
+  box-shadow:none;
+  caret-color:#8EDCE0;
+  color-scheme:dark;
+}
+html[data-theme="dark"] select option,
+html[data-theme="dark"] select optgroup{
+  background:#0A1B29!important;
+  color:#EDF5F9!important;
+}
+html[data-theme="dark"] select option:checked{background:#17465A!important;color:#fff!important}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder{color:#718A9C!important;opacity:1}
+html[data-theme="dark"] input:hover,
+html[data-theme="dark"] select:hover,
+html[data-theme="dark"] textarea:hover{border-color:#4F7186!important}
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] select:focus,
+html[data-theme="dark"] textarea:focus{
+  border-color:#55BBC1!important;
+  box-shadow:0 0 0 4px rgba(85,187,193,.16)!important;
+  outline:none;
+}
+html[data-theme="dark"] input:disabled,
+html[data-theme="dark"] select:disabled,
+html[data-theme="dark"] textarea:disabled{
+  background:#102535!important;
+  color:#8299AA!important;
+  border-color:#284456!important;
+  opacity:1;
+}
+html[data-theme="dark"] input[type="checkbox"],
+html[data-theme="dark"] input[type="radio"]{accent-color:#55BBC1}
+html[data-theme="dark"] input[type="file"]::file-selector-button{
+  background:#16374B;
+  color:#EAF2F7;
+  border:1px solid #3B5C70;
+  border-radius:7px;
+  padding:7px 10px;
+}
+html[data-theme="dark"] input:-webkit-autofill,
+html[data-theme="dark"] input:-webkit-autofill:hover,
+html[data-theme="dark"] input:-webkit-autofill:focus{
+  -webkit-text-fill-color:#EDF5F9!important;
+  -webkit-box-shadow:0 0 0 1000px #0A1B29 inset!important;
+  caret-color:#EDF5F9!important;
+}
+html[data-theme="dark"] ::selection{background:#225B68;color:#fff}
+
+/* Stable dark surfaces. */
+html[data-theme="dark"] :where(
+  .topbar,.panel,.metrics article,.quick-action,.setup-step,.product-card,
+  .settings-card,.admin-metrics article,.role-card,.format-card,.export-catalog article,
+  .metric-card,.debt-account-pane,.debt-detail-pane,.check-card,.permission-row,
+  .permission-box,.switch-row,.transaction-message-preview,.debt-balance-card,
+  .command-rail,.selected-customer,.chalin-cart-panel,.chalin-checkout-panel,
+  .chalin-customer-card,.chalin-payment-card,.chalin-total-panel,.success-mini-receipt
+){
+  background:#0D2131!important;
+  border-color:#29465A!important;
+  color:#EAF2F7;
+}
+html[data-theme="dark"] :where(.quick-action:hover,.settings-card:hover,.product-card:hover){background:#102A3B!important;border-color:#41647A!important}
+html[data-theme="dark"] th{background:#112B3D!important;color:#AFC1CD!important;border-color:#29465A!important}
+html[data-theme="dark"] td{border-color:#223E51!important;color:#E4EDF3}
+html[data-theme="dark"] tbody tr:hover{background:#0F293A!important}
+html[data-theme="dark"] .button{background:#17465A;border-color:#2C6574;color:#fff}
+html[data-theme="dark"] .button:hover{background:#1D566A;border-color:#3B7582}
+html[data-theme="dark"] .button.secondary{background:#112B3D!important;color:#E8F2F7!important;border-color:#34566B!important}
+html[data-theme="dark"] .button.secondary:hover{background:#17384C!important;border-color:#456A80!important}
+html[data-theme="dark"] .notice{background:#102F3C!important;color:#DCEAF0!important;border-color:#55BBC1!important}
+html[data-theme="dark"] .notice.success{background:#12382F!important;color:#C5F0DB!important}
+html[data-theme="dark"] .notice.error{background:#40252A!important;color:#FFD0C9!important;border-color:#E37C73!important}
+html[data-theme="dark"] .pill{background:#15384A;color:#9DDFE2}
+html[data-theme="dark"] .eyebrow{color:#92ACBC}
+html[data-theme="dark"] .hero-panel .eyebrow,
+html[data-theme="dark"] .overview-intro .eyebrow,
+html[data-theme="dark"] .debt-hero .eyebrow,
+html[data-theme="dark"] .comms-hero .eyebrow{color:#E9AC32}
+html[data-theme="dark"] .hero-panel,
+html[data-theme="dark"] .overview-intro,
+html[data-theme="dark"] .debt-hero,
+html[data-theme="dark"] .comms-hero{
+  background:
+    radial-gradient(circle at 88% 18%,rgba(85,187,193,.18),transparent 33%),
+    linear-gradient(145deg,#071C2C,#0E344B 64%,#10475B)!important;
+  border-color:#2C5369!important;
+  color:#F7FBFD;
+}
+html[data-theme="dark"] .hero-panel p,
+html[data-theme="dark"] .overview-intro p:last-child,
+html[data-theme="dark"] .debt-hero p,
+html[data-theme="dark"] .comms-hero p{color:#BCD0DB}
+
+/* Product Market publication progressively reveals only relevant controls. */
+.market-publishing-details[hidden],
+.market-offline-hint[hidden]{display:none!important}
+.market-publishing-details{margin-top:14px}
+.market-offline-hint{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  margin-top:12px;
+  padding:11px 13px;
+  border:1px dashed #BCD3DD;
+  border-radius:12px;
+  background:#F7FAFC;
+}
+.market-offline-hint>span{
+  flex:none;
+  padding:4px 7px;
+  border-radius:999px;
+  background:#E4F3F4;
+  color:#0F747A;
+  font-size:8px;
+  font-weight:850;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.market-offline-hint small{color:#647C8D;line-height:1.55}
+html[data-theme="dark"] .market-publishing-section{
+  background:linear-gradient(145deg,#0A1D2D,#0D2B3E)!important;
+  border-color:#315469!important;
+}
+html[data-theme="dark"] .market-offline-hint{
+  background:#0A1B29;
+  border-color:#355469;
+}
+html[data-theme="dark"] .market-offline-hint>span{background:#123B4C;color:#83D7DA}
+html[data-theme="dark"] .market-offline-hint small{color:#9FB4C2}
+html[data-theme="dark"] .market-photo-setup{background:#0B2030!important;border-color:#315469!important}
+html[data-theme="dark"] .market-photo-preview{background:#091A28!important;border-color:#35596E!important}
+html[data-theme="dark"] .market-photo-preview span{color:#93ABBA}
+html[data-theme="dark"] .market-publishing-details .switch-row{background:#0C2232!important}
+
+/* Common operational components that previously carried hard-coded light paint. */
+html[data-theme="dark"] :where(
+  .debt-search-form,.inventory-search,.comms-channel-switch,.comms-target-switch,
+  .comms-history-filter,.comms-target-pane,.comms-help-panel,.comms-send-bar,
+  .creditor-payment-box,.verification-review,.payroll-status,.return-decision
+){background:#0D2131!important;border-color:#29465A!important;color:#EAF2F7}
+html[data-theme="dark"] :where(.customer-result:hover,.debt-account-card:hover,.comms-customer-row:hover){background:#102D3E!important}
+html[data-theme="dark"] :where(.comms-channel-switch button,.comms-target-switch button,.comms-history-filter button){color:#A9BBC7}
+html[data-theme="dark"] :where(.comms-channel-switch button.active,.comms-target-switch button.active,.comms-history-filter button.active){background:#176775!important;color:#fff!important}
+html[data-theme="dark"] .detail-row summary{color:#74CDD2}
+html[data-theme="dark"] .pnl .subtotal{background:#102E3B}
+html[data-theme="dark"] .pnl .total{background:#0A2D43;color:#fff}
+
+/* Scrollbars stay visible without becoming bright bars in dark mode. */
+html[data-theme="dark"] *{scrollbar-color:#3A566A #0A1B29}
