@@ -47,6 +47,7 @@ class WorkerIdentityExperienceTests(TestCase):
             created_by=self.user,
         )
         self.client.force_login(self.user)
+        self.user.access.refresh_from_db()
         session = self.client.session
         session["access_version"] = self.user.access.session_version
         session.save()
