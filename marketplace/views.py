@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Avg, Count, Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,11 +20,13 @@ from core.views import problem, protected
 from .forms import (
     CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
     CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
-    DeliveryZoneForm, PublicMessageForm, StaffOrderUpdateForm,
+    DeliveryTrackingForm, DeliveryZoneForm, MarketGalleryForm, MarketReturnRequestForm,
+    PublicMessageForm, StaffOrderUpdateForm,
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketPaymentAttempt, OnlineOrder, OtpThrottle,
+    DeliveryTrackingUpdate, DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
+    MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OtpThrottle, RecentView, WishlistItem,
 )
 from . import services
 
@@ -43,6 +45,7 @@ def _market_context(request, **extra):
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
+        "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "company": getattr(request, "company", None),
         **extra,
     }
