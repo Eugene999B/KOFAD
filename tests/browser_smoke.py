@@ -41,6 +41,73 @@ browser_debt = core_services.post_trade(
     uuid.uuid5(uuid.NAMESPACE_URL, "kofad-browser-debt-fixture"),
 )
 
+browser_market_customer, _ = CustomerAccount.objects.get_or_create(
+    phone="+233245550090",
+    defaults={
+        "full_name": "Mobile Market Customer",
+        "email": "mobile-market@example.test",
+        "verified_at": timezone.now(),
+        "password_hash": "!",
+    },
+)
+browser_market_customer.full_name = "Mobile Market Customer"
+browser_market_customer.email = "mobile-market@example.test"
+browser_market_customer.verified_at = browser_market_customer.verified_at or timezone.now()
+browser_market_customer.active = True
+browser_market_customer.save(update_fields=["full_name", "email", "verified_at", "active"])
+browser_listing, _ = MarketListing.objects.get_or_create(
+    product=demo_product,
+    defaults={"enabled": True, "title": demo_product.name, "price_source": "retail_unit"},
+)
+if not browser_listing.enabled:
+    browser_listing.enabled = True
+    browser_listing.save(update_fields=["enabled"])
+browser_stock, _ = Stock.objects.get_or_create(
+    branch=main_branch, product=demo_product, defaults={"quantity": 50},
+)
+if browser_stock.quantity < 10:
+    browser_stock.quantity = 50
+    browser_stock.save(update_fields=["quantity"])
+browser_market_order = market_services.create_order(
+    browser_market_customer,
+    {str(browser_listing.pk): 1},
+    {
+        "fulfilment": "pickup",
+        "recipient_name": browser_market_customer.full_name,
+        "phone": browser_market_customer.phone,
+        "email": browser_market_customer.email,
+        "delivery_zone": None,
+        "region": "",
+        "town": "",
+        "address_line": "",
+        "landmark": "",
+        "ghana_post_gps": "",
+        "latitude": None,
+        "longitude": None,
+        "customer_note": "",
+    },
+)
+browser_payment_reference = "BROWSER-" + uuid.uuid4().hex[:12].upper()
+MarketPaymentAttempt.objects.create(
+    order=browser_market_order,
+    reference=browser_payment_reference,
+    amount=browser_market_order.total,
+    currency="GHS",
+    status="pending",
+)
+browser_market_order = market_services.finalize_payment(
+    browser_payment_reference,
+    {
+        "status": "success",
+        "amount": int(browser_market_order.total * 100),
+        "currency": "GHS",
+        "channel": "mobile_money",
+    },
+)
+browser_customer_session = SessionStore()
+browser_customer_session["market_customer_id"] = browser_market_customer.pk
+browser_customer_session.create()
+
 out = Path("test-results")
 out.mkdir(exist_ok=True)
 with sync_playwright() as p:
