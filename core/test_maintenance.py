@@ -1,5 +1,6 @@
 import copy
 import json
+from datetime import timedelta
 
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.sessions.models import Session
@@ -89,7 +90,7 @@ class MaintenanceServiceTests(TransactionTestCase):
         Session.objects.create(
             session_key="demo-session",
             session_data="e30:1test:signature",
-            expire_date=timezone.now() + timezone.timedelta(hours=1),
+            expire_date=timezone.now() + timedelta(hours=1),
         )
 
     def test_signed_backup_rejects_tampering(self):
