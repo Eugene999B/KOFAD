@@ -905,9 +905,9 @@ class MarketV2SupportTests(MarketFixtures):
         reply = thread.messages.create(
             sender_type="staff", staff=self.staff, body="Are you still there?", read_by_staff=True
         )
-        thread.messages.filter(pk=reply.pk).update(
-            created_at=timezone.now() - timedelta(hours=25)
-        )
+        stale_at = timezone.now() - timedelta(hours=25)
+        thread.messages.filter(pk=reply.pk).update(created_at=stale_at)
+        Conversation.objects.filter(pk=thread.pk).update(updated_at=stale_at)
         self.customer_session()
         response = self.client.get(f"/market/messages/{thread.pk}/")
         self.assertEqual(response.status_code, 200)
