@@ -405,8 +405,11 @@ with sync_playwright() as p:
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
     assert market_page.locator("[data-location-map]").count() == 1
-    assert market_page.get_by_role("button", name="Use my current location", exact=True).is_visible()
     market_page.screenshot(path=str(out / "market-checkout-map-mobile.png"), full_page=True)
+    fulfilment_select = market_page.locator("select[name='fulfilment']")
+    assert fulfilment_select.input_value() == "delivery"
+    assert market_page.locator("[data-delivery-fields]").get_attribute("hidden") is None
+    assert market_page.get_by_role("button", name="Use my current location", exact=True).is_visible()
     market_page.goto(f"http://127.0.0.1:8000/market/orders/{browser_market_order.pk}/")
     assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=False).count() >= 1
     assert market_page.get_by_text(browser_payment_reference, exact=False).count() == 0
