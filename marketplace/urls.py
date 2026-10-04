@@ -37,6 +37,7 @@ urlpatterns = [
     path("market/messages/", views.customer_messages, name="market_messages"),
     path("market/messages/<int:conversation_id>/", views.customer_messages, name="market_message_thread"),
     path("market/support/conversations/<int:conversation_id>/updates/", views.conversation_updates, name="market_conversation_updates"),
+    path("market/support/conversations/<int:conversation_id>/typing/", views.conversation_typing, name="market_conversation_typing"),
     path("market/support/attachments/<int:pk>/", views.support_attachment, name="market_support_attachment"),
     path("market/payment/return/", views.payment_return, name="market_payment_return"),
     path("market/payments/paystack/webhook/", views.paystack_webhook, name="paystack_webhook"),
