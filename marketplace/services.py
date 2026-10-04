@@ -1064,7 +1064,7 @@ def review_market_return_request(user, item, action, note=""):
     from core import returns as return_service
 
     item = MarketReturnRequest.objects.select_for_update().select_related(
-        "order", "order__branch", "order__sale_document", "core_return_request"
+        "order", "order__branch"
     ).get(pk=item.pk)
     note = str(note or "").strip()[:1000]
 
