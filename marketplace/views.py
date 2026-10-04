@@ -688,6 +688,8 @@ def checkout(request, customer):
     return render(request, "marketplace/checkout.html", _market_context(
         request, title="Checkout", form=form, rows=rows, subtotal=subtotal,
         zones=DeliveryZone.objects.filter(active=True), delivery_quote=initial_quote,
+        delivery_fee_preview=initial_quote["fee"] if initial_quote else Decimal("0"),
+        checkout_total=subtotal + (initial_quote["fee"] if initial_quote else Decimal("0")),
         delivery_company=company,
     ))
 
