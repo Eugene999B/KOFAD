@@ -860,11 +860,36 @@ def conversation_updates(request, conversation_id):
         conversation.messages.filter(pk__gt=after, sender_type="staff").update(read_by_customer=True)
     else:
         conversation.messages.filter(pk__gt=after).exclude(sender_type="staff").update(read_by_staff=True)
+    typing_cutoff = timezone.now() - timedelta(seconds=5)
+    other_typing = (
+        conversation.staff_typing_at and conversation.staff_typing_at >= typing_cutoff
+        if side == "customer"
+        else conversation.customer_typing_at and conversation.customer_typing_at >= typing_cutoff
+    )
     response = JsonResponse({
         "conversation": conversation.pk,
         "status": conversation.status,
         "messages": [_message_json(message) for message in rows],
+        "other_typing": bool(other_typing),
     })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_POST
+def conversation_typing(request, conversation_id):
+    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    side = _conversation_access(request, conversation)
+    if not side:
+        return JsonResponse({"detail": "Not found."}, status=404)
+    now = timezone.now()
+    if side == "customer":
+        conversation.customer_typing_at = now
+        conversation.save(update_fields=["customer_typing_at", "updated_at"])
+    else:
+        conversation.staff_typing_at = now
+        conversation.save(update_fields=["staff_typing_at", "updated_at"])
+    response = JsonResponse({"ok": True})
     response["Cache-Control"] = "no-store"
     return response
 
