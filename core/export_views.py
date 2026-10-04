@@ -35,6 +35,10 @@ DATASETS = {
     "staff": ("System user accounts", ("manage_company",)),
     "workers": ("Workforce register", ("manage_company",)),
     "payroll": ("Payroll register", ("operate_finance", "view_reports")),
+    "online_orders": ("Online orders & fulfilment", ("operate_sales", "manage_company", "view_reports")),
+    "market_customers": ("Market customer accounts", ("operate_sales", "manage_company", "view_reports")),
+    "market_catalog": ("Published Market catalog", ("operate_sales", "operate_inventory", "manage_company", "view_reports")),
+    "customer_support": ("Customer support conversations", ("operate_sales", "manage_company", "view_reports")),
 }
 
 
@@ -132,6 +136,130 @@ def _rows(request, dataset, branch, first, last):
             ("next_due", "Next due"), ("max_days_overdue", "Max days overdue"),
             ("purchases", "Purchase value"), ("direct_bills", "Direct bills"),
             ("payments", "Supplier payments"),
+        ]
+
+    if dataset == "market_customers":
+        from marketplace.models import CustomerAccount
+        rows = []
+        for customer in CustomerAccount.objects.order_by("-created_at"):
+            paid_spend = customer.orders.filter(
+                payment_status="paid"
+            ).aggregate(total=Sum("total"))["total"] or Decimal("0")
+            rows.append({
+                "name": customer.full_name,
+                "phone": customer.phone,
+                "email": customer.email,
+                "verified": customer.verified_at,
+                "created": customer.created_at,
+                "last_login": customer.last_login_at,
+                "orders": customer.orders.count(),
+                "paid_spend": paid_spend,
+                "support_threads": customer.conversations.count(),
+                "addresses": customer.addresses.count(),
+                "status": "Active" if customer.active else "Disabled",
+            })
+        return rows, [
+            ("name", "Customer"), ("phone", "Phone"), ("email", "Email"),
+            ("verified", "Verified at"), ("created", "Account created"), ("last_login", "Last login"),
+            ("orders", "Orders"), ("paid_spend", "Paid online spend"),
+            ("support_threads", "Support threads"), ("addresses", "Saved addresses"), ("status", "Status"),
+        ]
+
+    if dataset == "market_catalog":
+        from marketplace.models import MarketListing
+        rows = []
+        for listing in MarketListing.objects.select_related("product").order_by(
+            "-enabled", "-featured", "sort_order", "product__name"
+        ):
+            product = listing.product
+            rows.append({
+                "sku": product.sku,
+                "product": product.name,
+                "market_title": listing.display_name,
+                "category": product.category,
+                "published": "Published" if listing.enabled else "Hidden",
+                "featured": "Yes" if listing.featured else "No",
+                "price_source": listing.get_price_source_display(),
+                "market_price": listing.market_price,
+                "selling_unit": listing.selling_label,
+                "sort_order": listing.sort_order,
+                "photo": "Uploaded" if listing.image_data else ("Curated" if listing.image_url else "Missing"),
+                "description": listing.description,
+                "tags": listing.tags,
+            })
+        return rows, [
+            ("sku", "SKU"), ("product", "KOFAD product"), ("market_title", "Market title"),
+            ("category", "Category"), ("published", "Publication"), ("featured", "Featured"),
+            ("price_source", "Price source"), ("market_price", "Market price"),
+            ("selling_unit", "Selling unit"), ("sort_order", "Display order"),
+            ("photo", "Photo"), ("description", "Customer description"), ("tags", "Search tags"),
+        ]
+
+    if dataset == "online_orders":
+        from marketplace.models import OnlineOrder
+        rows = []
+        orders = OnlineOrder.objects.filter(
+            branch=branch, created_at__date__gte=first, created_at__date__lte=last
+        ).select_related("customer", "delivery_zone", "sale_document").prefetch_related("lines").order_by("-created_at")
+        for order in orders:
+            rows.append({
+                "reference": order.public_reference,
+                "created": order.created_at,
+                "customer": order.customer.full_name,
+                "phone": order.phone,
+                "email": order.email,
+                "items": order.lines.count(),
+                "fulfilment": order.get_fulfilment_display(),
+                "delivery_area": order.delivery_zone.name if order.delivery_zone else "",
+                "status": order.get_status_display(),
+                "payment_status": order.get_payment_status_display(),
+                "payment_channel": order.payment_channel,
+                "payment_reference": order.payment_reference,
+                "subtotal": order.subtotal,
+                "delivery_fee": order.delivery_fee,
+                "total": order.total,
+                "ledger": order.get_ledger_status_display(),
+                "sale_document": order.sale_document.reference if order.sale_document else "",
+                "completed": order.completed_at,
+            })
+        return rows, [
+            ("reference", "Online order"), ("created", "Created"), ("customer", "Customer"),
+            ("phone", "Phone"), ("email", "Email"), ("items", "Item lines"),
+            ("fulfilment", "Fulfilment"), ("delivery_area", "Delivery area"), ("status", "Order status"),
+            ("payment_status", "Payment"), ("payment_channel", "Payment channel"),
+            ("payment_reference", "Provider reference"), ("subtotal", "Products"),
+            ("delivery_fee", "Delivery"), ("total", "Total"), ("ledger", "Ledger status"),
+            ("sale_document", "KOFAD sale"), ("completed", "Completed at"),
+        ]
+
+    if dataset == "customer_support":
+        from marketplace.models import Conversation
+        rows = []
+        threads = Conversation.objects.filter(
+            updated_at__date__gte=first, updated_at__date__lte=last
+        ).select_related("customer", "order", "assigned_to").prefetch_related(
+            "messages", "messages__attachments"
+        ).order_by("-updated_at")
+        for thread in threads:
+            messages = list(thread.messages.all())
+            rows.append({
+                "opened": thread.created_at,
+                "updated": thread.updated_at,
+                "customer": thread.customer.full_name if thread.customer else thread.public_name,
+                "phone": thread.customer.phone if thread.customer else thread.public_phone,
+                "subject": thread.subject,
+                "order": thread.order.public_reference if thread.order else "",
+                "status": thread.get_status_display(),
+                "assigned_to": thread.assigned_to.username if thread.assigned_to else "",
+                "messages": len(messages),
+                "attachments": sum(message.attachments.count() for message in messages),
+                "last_message": messages[-1].body if messages else "",
+            })
+        return rows, [
+            ("opened", "Opened"), ("updated", "Last activity"), ("customer", "Customer"),
+            ("phone", "Phone"), ("subject", "Subject"), ("order", "Online order"),
+            ("status", "Status"), ("assigned_to", "Assigned staff"),
+            ("messages", "Messages"), ("attachments", "Attachments"), ("last_message", "Last message"),
         ]
 
     if dataset == "inventory":
@@ -508,7 +636,7 @@ def download(request, format):
         s.audit(request.user, branch, "export.downloaded", dataset, {
             "format": format, "start": start, "end": end, "rows": len(rows),
         })
-        date_suffix = "" if dataset in {"customers", "suppliers", "creditors", "inventory", "staff", "workers"} else f" · {start} to {end}"
+        date_suffix = "" if dataset in {"customers", "suppliers", "creditors", "inventory", "staff", "workers", "market_customers", "market_catalog"} else f" · {start} to {end}"
         company = shell(request)["company"]
         return export(
             rows, format, f"{label}{date_suffix}", company, columns,

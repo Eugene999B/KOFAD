@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q, Sum
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,12 +18,13 @@ from core.models import Product
 from core.views import problem, protected
 
 from .forms import (
-    CheckoutForm, CustomerLoginForm, CustomerPasswordResetForm, CustomerRegistrationForm,
+    CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
+    CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
     DeliveryZoneForm, PublicMessageForm, StaffOrderUpdateForm,
 )
 from .models import (
-    Conversation, ConversationMessage, CustomerAccount, DeliveryZone, MarketListing,
-    MarketPaymentAttempt, OnlineOrder, OtpThrottle,
+    Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
+    DeliveryZone, MarketListing, MarketPaymentAttempt, OnlineOrder, OtpThrottle,
 )
 from . import services
 
@@ -30,13 +32,79 @@ from . import services
 def _market_context(request, **extra):
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
+    unread = 0
+    if customer:
+        unread = ConversationMessage.objects.filter(
+            conversation__customer=customer,
+            sender_type="staff",
+            read_by_customer=False,
+        ).count()
     context = {
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
+        "market_unread_count": unread,
         "company": getattr(request, "company", None),
         **extra,
     }
     return context
+
+
+def _decorate_listings(listings, branch):
+    for listing in listings:
+        listing.available_units = services.available_units(branch, listing.product) if branch else 0
+        listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
+        listing.market_price_value = listing.market_price
+    return listings
+
+
+def _save_conversation_message(conversation, sender_type, body="", attachment=None, staff=None):
+    body = (body or "").strip()[:2000]
+    payload = services.prepare_support_attachment(attachment) if attachment else None
+    message = ConversationMessage.objects.create(
+        conversation=conversation,
+        sender_type=sender_type,
+        staff=staff,
+        body=body,
+        read_by_staff=sender_type == "staff",
+        read_by_customer=sender_type != "staff",
+    )
+    if payload:
+        ConversationAttachment.objects.create(message=message, **payload)
+    Conversation.objects.filter(pk=conversation.pk).update(
+        updated_at=timezone.now(), status="open"
+    )
+    return message
+
+
+def _conversation_access(request, conversation):
+    if request.user.is_authenticated and (
+        request.user.is_superuser
+        or request.user.has_perm("core.operate_sales")
+        or request.user.has_perm("core.manage_company")
+    ):
+        return "staff"
+    customer = services.customer_from_session(request)
+    if customer and conversation.customer_id == customer.pk:
+        return "customer"
+    return ""
+
+
+def _message_json(message):
+    return {
+        "id": message.pk,
+        "sender": message.sender_type,
+        "sender_label": message.get_sender_type_display(),
+        "body": message.body,
+        "created": timezone.localtime(message.created_at).strftime("%d %b · %H:%M"),
+        "attachments": [{
+            "id": attachment.pk,
+            "name": attachment.original_name,
+            "mime": attachment.mime_type,
+            "is_image": attachment.is_image,
+            "url": f"/market/support/attachments/{attachment.pk}/",
+            "preview_url": f"/market/support/attachments/{attachment.pk}/?inline=1",
+        } for attachment in message.attachments.all()],
+    }
 
 
 def market_customer_required(view):
@@ -46,7 +114,7 @@ def market_customer_required(view):
         if not customer:
             request.session["market_after_login"] = request.get_full_path()
             messages.info(request, "Sign in with your verified phone number to continue.")
-            return redirect("market_login")
+            return redirect("market_access")
         return view(request, customer, *args, **kwargs)
     return inner
 
@@ -54,16 +122,18 @@ def market_customer_required(view):
 def home(request):
     listings = list(
         MarketListing.objects.filter(enabled=True, product__active=True)
-        .select_related("product").order_by("-featured", "sort_order", "product__name")[:6]
+        .select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
     )
     branch = None
     try:
         branch = services.market_branch()
     except ValidationError:
         pass
-    for listing in listings:
-        listing.available_units = services.available_units(branch, listing.product) if branch else 0
-        listing.market_price_value = listing.market_price
+    _decorate_listings(listings, branch)
+    categories = list(
+        Product.objects.filter(market_listing__enabled=True, active=True)
+        .exclude(category="").values_list("category", flat=True).distinct().order_by("category")[:8]
+    )
 
     enquiry_form = PublicMessageForm(request.POST or None)
     if request.method == "POST" and enquiry_form.is_valid():
@@ -96,6 +166,7 @@ def home(request):
         request,
         title="KOFAD Market & Operations",
         listings=listings,
+        categories=categories,
         enquiry_form=enquiry_form,
     ))
 
@@ -103,11 +174,12 @@ def home(request):
 def market(request):
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:80]
+    sort = request.GET.get("sort", "featured")
+    in_stock = request.GET.get("stock") == "available"
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product")
     if query:
-        from django.db.models import Q
         rows = rows.filter(
-            Q(title__icontains=query) | Q(description__icontains=query)
+            Q(title__icontains=query) | Q(description__icontains=query) | Q(tags__icontains=query)
             | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
             | Q(product__category__icontains=query)
         )
@@ -118,18 +190,24 @@ def market(request):
         branch = services.market_branch()
     except ValidationError:
         pass
-    listings = list(rows.order_by("-featured", "sort_order", "product__name")[:120])
-    for listing in listings:
-        listing.available_units = services.available_units(branch, listing.product) if branch else 0
-        listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
-        listing.market_price_value = listing.market_price
-    categories = (
+    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:180]), branch)
+    if in_stock:
+        listings = [listing for listing in listings if listing.available_sell_qty > 0]
+    if sort == "price_low":
+        listings.sort(key=lambda listing: (listing.market_price_value, listing.display_name.lower()))
+    elif sort == "price_high":
+        listings.sort(key=lambda listing: (-listing.market_price_value, listing.display_name.lower()))
+    elif sort == "name":
+        listings.sort(key=lambda listing: listing.display_name.lower())
+    categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
     )
     return render(request, "marketplace/market.html", _market_context(
         request, title="KOFAD Market", listings=listings, q=query,
         selected_category=category, categories=categories,
+        selected_sort=sort, in_stock=in_stock,
+        total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
     ))
 
 
@@ -139,11 +217,15 @@ def product_detail(request, pk):
         pk=pk, enabled=True, product__active=True,
     )
     branch = services.market_branch()
-    listing.available_units = services.available_units(branch, listing.product)
-    listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
-    listing.market_price_value = listing.market_price
+    _decorate_listings([listing], branch)
+    related = list(
+        MarketListing.objects.filter(
+            enabled=True, product__active=True, product__category=listing.product.category
+        ).exclude(pk=listing.pk).select_related("product").order_by("-featured", "sort_order")[:4]
+    )
+    _decorate_listings(related, branch)
     return render(request, "marketplace/product.html", _market_context(
-        request, title=listing.display_name, listing=listing,
+        request, title=listing.display_name, listing=listing, related=related,
     ))
 
 
@@ -162,26 +244,77 @@ def product_image(request, pk, size="large"):
     return response
 
 
-def account_start(request):
+def customer_access(request):
     customer = services.customer_from_session(request)
     if customer:
-        return redirect("market")
-    phone = request.POST.get("phone", "").strip()
-    if request.method == "POST":
+        return redirect("market_account")
+    requested_next = request.GET.get("next", "")
+    if requested_next.startswith("/") and not requested_next.startswith("//"):
+        request.session["market_after_login"] = requested_next
+    form = CustomerAccessForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        phone = form.cleaned_data["phone"]
+        existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
+        if existing:
+            request.session["market_login_phone"] = phone
+            return redirect("market_login")
         try:
-            canonical = normalize_ghana_phone(phone)
-            if CustomerAccount.objects.filter(phone=canonical, active=True).exists():
-                messages.info(request, "This number already has a KOFAD Market account. Sign in instead.")
-                return redirect("market_login")
-            services.send_otp(canonical, "register")
-            request.session["market_pending_phone"] = canonical
-            messages.success(request, "Verification code sent by SMS.")
+            services.send_otp(phone, "register")
+            request.session["market_pending_phone"] = phone
+            messages.success(request, "We sent a six-digit verification code to your phone.")
             return redirect("market_verify")
         except ValidationError as exc:
             messages.error(request, problem(exc))
-    return render(request, "marketplace/account_start.html", _market_context(
-        request, title="Create your KOFAD Market account", phone=phone,
+    return render(request, "marketplace/access.html", _market_context(
+        request, title="Sign in or create your account", form=form,
     ))
+
+
+@market_customer_required
+def customer_account(request, customer):
+    profile_form = CustomerProfileForm(request.POST or None, instance=customer)
+    if request.method == "POST" and profile_form.is_valid():
+        profile_form.save()
+        messages.success(request, "Your account details were updated.")
+        return redirect("market_account")
+
+    orders = customer.orders.prefetch_related("lines", "events").all()
+    paid_orders = customer.orders.filter(payment_status="paid")
+    summary = {
+        "orders": customer.orders.count(),
+        "paid_orders": paid_orders.count(),
+        "spend": paid_orders.aggregate(total=Sum("total"))["total"] or 0,
+        "active_orders": customer.orders.exclude(
+            status__in=["delivered", "picked_up", "cancelled", "refunded"]
+        ).count(),
+        "support_threads": customer.conversations.count(),
+    }
+    recent_lines = []
+    for order in orders[:8]:
+        for line in order.lines.all():
+            recent_lines.append(line)
+            if len(recent_lines) >= 8:
+                break
+        if len(recent_lines) >= 8:
+            break
+    active = customer.orders.exclude(
+        status__in=["delivered", "picked_up", "cancelled", "refunded"]
+    ).prefetch_related("events")[:4]
+    return render(request, "marketplace/account.html", _market_context(
+        request,
+        title="My KOFAD account",
+        profile_form=profile_form,
+        summary=summary,
+        recent_orders=orders[:6],
+        active_orders=active,
+        recent_lines=recent_lines,
+        addresses=customer.addresses.all()[:4],
+        conversations=customer.conversations.all()[:5],
+    ))
+
+
+def account_start(request):
+    return redirect("market_access")
 
 
 def account_verify(request):
@@ -306,11 +439,12 @@ def customer_password_reset_finish(request):
 
 def customer_login(request):
     if services.customer_from_session(request):
-        return redirect("market")
+        return redirect("market_account")
     requested_next = request.GET.get("next", "")
     if requested_next.startswith("/") and not requested_next.startswith("//"):
         request.session["market_after_login"] = requested_next
-    form = CustomerLoginForm(request.POST or None)
+    initial_phone = request.session.get("market_login_phone", "")
+    form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
         now = timezone.now()
@@ -334,11 +468,25 @@ def customer_login(request):
                 throttle.save(update_fields=["attempts", "blocked_until"])
         if valid:
             services.set_customer_session(request, customer)
+            request.session.pop("market_login_phone", None)
             after = request.session.pop("market_after_login", None)
-            return redirect(after or "market")
+            return redirect(after or "market_account")
         messages.error(request, "The phone number or password is incorrect.")
     return render(request, "marketplace/login.html", _market_context(
         request, title="Customer sign in", form=form,
+    ))
+
+
+@market_customer_required
+def customer_security(request, customer):
+    form = CustomerPasswordChangeForm(request.POST or None, customer=customer)
+    if request.method == "POST" and form.is_valid():
+        customer.set_password(form.cleaned_data["password"])
+        customer.save(update_fields=["password_hash"])
+        messages.success(request, "Your customer password has been changed securely.")
+        return redirect("market_account")
+    return render(request, "marketplace/security.html", _market_context(
+        request, title="Account security", form=form,
     ))
 
 
@@ -525,9 +673,27 @@ def paystack_webhook(request):
 
 @market_customer_required
 def customer_orders(request, customer):
-    rows = customer.orders.prefetch_related("lines").all()
+    status = request.GET.get("status", "").strip()
+    query = request.GET.get("q", "").strip()[:80]
+    rows = customer.orders.prefetch_related("lines", "events")
+    if status in dict(OnlineOrder.STATUSES):
+        rows = rows.filter(status=status)
+    if query:
+        rows = rows.filter(
+            Q(public_reference__icontains=query)
+            | Q(lines__description__icontains=query)
+            | Q(lines__sku__icontains=query)
+        ).distinct()
+    counts = {
+        "all": customer.orders.count(),
+        "active": customer.orders.exclude(
+            status__in=["delivered", "picked_up", "cancelled", "refunded"]
+        ).count(),
+        "complete": customer.orders.filter(status__in=["delivered", "picked_up"]).count(),
+    }
     return render(request, "marketplace/orders.html", _market_context(
-        request, title="My orders", orders=rows,
+        request, title="My orders", orders=rows, selected_status=status,
+        q=query, counts=counts, order_status_choices=OnlineOrder.STATUSES,
     ))
 
 
@@ -569,39 +735,154 @@ def customer_messages(request, customer, conversation_id=None):
     conversation = None
     order_hint = None
     if conversation_id:
-        conversation = get_object_or_404(Conversation, pk=conversation_id, customer=customer)
+        conversation = get_object_or_404(
+            Conversation.objects.prefetch_related("messages__attachments"),
+            pk=conversation_id, customer=customer,
+        )
     else:
         raw_order = request.GET.get("order", "")
         if raw_order:
             order_hint = OnlineOrder.objects.filter(pk=raw_order, customer=customer).first()
-    if request.method == "POST":
-        body = request.POST.get("message", "").strip()[:2000]
-        if not body:
-            messages.error(request, "Write a message first.")
-        else:
-            if not conversation:
-                order = None
-                order_id = request.POST.get("order")
-                if order_id:
-                    order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
-                conversation = Conversation.objects.create(
-                    customer=customer, public_name=customer.full_name,
-                    public_phone=customer.phone, order=order,
-                    subject=request.POST.get("subject", "Customer message")[:180],
-                )
-            ConversationMessage.objects.create(
-                conversation=conversation, sender_type="customer", body=body,
-                read_by_customer=True,
+
+    form = ConversationMessageForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        if not conversation:
+            order = None
+            order_id = request.POST.get("order")
+            if order_id:
+                order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
+            subject = request.POST.get("subject", "").strip()[:180] or (
+                f"Order support · {order.public_reference}" if order else "Customer support"
             )
-            Conversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now(), status="open")
+            conversation = Conversation.objects.create(
+                customer=customer, public_name=customer.full_name,
+                public_phone=customer.phone, order=order, subject=subject,
+            )
+        try:
+            _save_conversation_message(
+                conversation, "customer",
+                body=form.cleaned_data.get("message", ""),
+                attachment=form.cleaned_data.get("attachment"),
+            )
+        except ValidationError as exc:
+            form.add_error("attachment", problem(exc))
+        else:
             return redirect("market_message_thread", conversation_id=conversation.pk)
-    conversations = customer.conversations.prefetch_related("messages").all()
+
+    conversations = customer.conversations.select_related("order", "assigned_to").prefetch_related(
+        "messages__attachments"
+    ).all()
     if conversation:
         conversation.messages.filter(sender_type="staff").update(read_by_customer=True)
     return render(request, "marketplace/messages.html", _market_context(
-        request, title="Messages", conversations=conversations, conversation=conversation,
-        order_hint=order_hint,
+        request, title="Support", conversations=conversations, conversation=conversation,
+        order_hint=order_hint, support_form=form,
     ))
+
+
+def conversation_updates(request, conversation_id):
+    conversation = get_object_or_404(Conversation, pk=conversation_id)
+    side = _conversation_access(request, conversation)
+    if not side:
+        return JsonResponse({"detail": "Not found."}, status=404)
+    try:
+        after = max(0, int(request.GET.get("after", "0")))
+    except ValueError:
+        after = 0
+    rows = conversation.messages.filter(pk__gt=after).prefetch_related("attachments")[:100]
+    if side == "customer":
+        conversation.messages.filter(pk__gt=after, sender_type="staff").update(read_by_customer=True)
+    else:
+        conversation.messages.filter(pk__gt=after).exclude(sender_type="staff").update(read_by_staff=True)
+    response = JsonResponse({
+        "conversation": conversation.pk,
+        "status": conversation.status,
+        "messages": [_message_json(message) for message in rows],
+    })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def support_attachment(request, pk):
+    attachment = get_object_or_404(
+        ConversationAttachment.objects.select_related("message__conversation"),
+        pk=pk,
+    )
+    if not _conversation_access(request, attachment.message.conversation):
+        raise Http404
+    disposition = "inline" if (
+        request.GET.get("inline") == "1" and attachment.is_image
+    ) else "attachment"
+    filename = "".join(
+        ch for ch in attachment.original_name if ch.isalnum() or ch in " ._()-"
+    ).strip() or "kofad-support-file"
+    response = HttpResponse(bytes(attachment.data), content_type=attachment.mime_type)
+    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@protected("change_product|manage_company")
+def market_catalog_admin(request, branch):
+    from core.models import Stock
+    query = request.GET.get("q", "").strip()[:100]
+    state = request.GET.get("state", "all")
+    products = Product.objects.all().order_by("category", "name")
+    if query:
+        products = products.filter(
+            Q(name__icontains=query) | Q(sku__icontains=query) | Q(category__icontains=query)
+        )
+    listing_map = {
+        row.product_id: row
+        for row in MarketListing.objects.filter(product_id__in=products.values("pk")).select_related("product")
+    }
+    stock_map = dict(
+        Stock.objects.filter(branch=branch, product_id__in=products.values("pk"))
+        .values_list("product_id", "quantity")
+    )
+    rows = []
+    for product in products[:400]:
+        listing = listing_map.get(product.pk)
+        photo = bool(listing and (listing.image_data or listing.image_url))
+        description = bool(listing and listing.description.strip())
+        published = bool(listing and listing.enabled)
+        ready = bool(published and photo and description and listing.market_price > 0)
+        row = {
+            "product": product,
+            "listing": listing,
+            "photo": photo,
+            "description": description,
+            "published": published,
+            "ready": ready,
+            "stock": stock_map.get(product.pk, 0),
+            "photo_source": (
+                "Business upload" if listing and listing.image_data
+                else "Curated" if listing and listing.image_url else "Missing"
+            ),
+        }
+        if state == "published" and not published:
+            continue
+        if state == "hidden" and published:
+            continue
+        if state == "incomplete" and (not published or ready):
+            continue
+        rows.append(row)
+
+    all_listings = MarketListing.objects.select_related("product")
+    summary = {
+        "products": Product.objects.count(),
+        "published": all_listings.filter(enabled=True).count(),
+        "featured": all_listings.filter(enabled=True, featured=True).count(),
+        "photos": sum(1 for listing in all_listings if listing.image_data or listing.image_url),
+    }
+    return render(request, "marketplace/catalog_admin.html", {
+        "title": "Market Catalog",
+        "rows": rows,
+        "summary": summary,
+        "q": query,
+        "selected_state": state,
+    })
 
 
 @protected("manage_company")
@@ -691,33 +972,62 @@ def staff_order(request, branch, pk):
 
 @protected("operate_sales|manage_company")
 def staff_inbox(request, branch, conversation_id=None):
-    conversations = Conversation.objects.select_related("customer", "order", "assigned_to").prefetch_related("messages")
+    status = request.GET.get("status", "open")
+    conversations = Conversation.objects.select_related(
+        "customer", "order", "assigned_to"
+    ).prefetch_related("messages__attachments")
+    if status in {"open", "closed"}:
+        conversations = conversations.filter(status=status)
     conversation = None
+    support_form = ConversationMessageForm(request.POST or None, request.FILES or None)
     if conversation_id:
-        conversation = get_object_or_404(conversations, pk=conversation_id)
+        conversation = get_object_or_404(conversations.model.objects.select_related(
+            "customer", "order", "assigned_to"
+        ).prefetch_related("messages__attachments"), pk=conversation_id)
         conversation.messages.exclude(sender_type="staff").update(read_by_staff=True)
         if request.method == "POST":
-            body = request.POST.get("message", "").strip()[:2000]
             action = request.POST.get("action", "reply")
             if action == "close":
                 conversation.status = "closed"
-                conversation.save(update_fields=["status", "updated_at"])
-            elif body:
-                ConversationMessage.objects.create(
-                    conversation=conversation, sender_type="staff", staff=request.user,
-                    body=body, read_by_staff=True,
-                )
                 conversation.assigned_to = request.user
+                conversation.save(update_fields=["status", "assigned_to", "updated_at"])
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+            if action == "reopen":
                 conversation.status = "open"
-                conversation.save(update_fields=["assigned_to", "status", "updated_at"])
-                if conversation.public_phone:
-                    services.send_transactional_sms(
-                        conversation.public_phone,
-                        "KOFAD: A staff member replied to your message. Sign in to KOFAD Market to read it.",
+                conversation.assigned_to = request.user
+                conversation.save(update_fields=["status", "assigned_to", "updated_at"])
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+            if support_form.is_valid():
+                try:
+                    _save_conversation_message(
+                        conversation, "staff",
+                        body=support_form.cleaned_data.get("message", ""),
+                        attachment=support_form.cleaned_data.get("attachment"),
+                        staff=request.user,
                     )
-            return redirect("staff_market_thread", conversation_id=conversation.pk)
+                except ValidationError as exc:
+                    support_form.add_error("attachment", problem(exc))
+                else:
+                    conversation.assigned_to = request.user
+                    conversation.status = "open"
+                    conversation.save(update_fields=["assigned_to", "status", "updated_at"])
+                    if conversation.public_phone:
+                        services.send_transactional_sms(
+                            conversation.public_phone,
+                            "KOFAD: A staff member replied to your support conversation. "
+                            "Sign in to KOFAD Market to view the reply.",
+                        )
+                    return redirect("staff_market_thread", conversation_id=conversation.pk)
     return render(request, "marketplace/staff_inbox.html", {
-        "title": "Customer Inbox", "conversations": conversations[:150],
+        "title": "Customer Inbox",
+        "conversations": conversations[:180],
         "conversation": conversation,
-        "unread": ConversationMessage.objects.filter(read_by_staff=False).exclude(sender_type="staff").count(),
+        "support_form": support_form,
+        "selected_status": status,
+        "unread": ConversationMessage.objects.filter(
+            read_by_staff=False
+        ).exclude(sender_type="staff").count(),
+        "open_count": Conversation.objects.filter(status="open").count(),
+        "closed_count": Conversation.objects.filter(status="closed").count(),
     })
+

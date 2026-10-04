@@ -16,7 +16,7 @@ class AccessMiddleware:
             if access.force_password_change and request.path not in ("/account/password/", "/logout/"):
                 return redirect("password_change")
         response = self.get_response(request)
-        response["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        response["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://images.unsplash.com; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         geolocation = "(self)" if request.path.startswith("/market/checkout/") else "()"
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):

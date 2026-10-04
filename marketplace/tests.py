@@ -13,7 +13,10 @@ from django.utils import timezone
 from PIL import Image
 
 from core.models import Branch, Closing, Company, Document, Payment, Product, Stock
-from .models import CustomerAccount, MarketListing, MarketPaymentAttempt, OnlineOrder
+from .models import (
+    Conversation, ConversationAttachment, CustomerAccount, MarketListing,
+    MarketPaymentAttempt, OnlineOrder,
+)
 from . import services
 
 
@@ -84,7 +87,7 @@ class MarketPublicExperienceTests(MarketFixtures):
     def test_public_home_replaces_staff_dashboard_at_root(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Visit KOFAD Market")
+        self.assertContains(response, "Explore the Market")
         self.assertContains(response, "Staff workspace")
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
@@ -139,7 +142,7 @@ class MarketCustomerAndCartTests(MarketFixtures):
             {"quantity": "1"},
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/market/account/login/")
+        self.assertEqual(response.url, "/market/access/")
 
     def test_customer_login_throttles_repeated_wrong_passwords(self):
         for _ in range(5):
@@ -298,3 +301,166 @@ class MarketInboxTests(MarketFixtures):
         item = Conversation.objects.get(public_phone="+233245556677")
         self.assertEqual(item.messages.get().sender_type, "visitor")
         self.assertFalse(item.messages.get().read_by_staff)
+
+
+
+class MarketV2CustomerExperienceTests(MarketFixtures):
+    def customer_session(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    def staff_session(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+
+    def test_unified_access_routes_existing_number_to_password_sign_in(self):
+        response = self.client.post("/market/access/", {"phone": "0241234567"})
+        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
+        self.assertEqual(self.client.session["market_login_phone"], "+233241234567")
+
+    @patch("marketplace.views.services.send_otp")
+    def test_unified_access_starts_verified_creation_for_new_number(self, send_otp):
+        send_otp.return_value = "+233245550001"
+        response = self.client.post("/market/access/", {"phone": "0245550001"})
+        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
+        send_otp.assert_called_once_with("+233245550001", "register")
+        self.assertEqual(self.client.session["market_pending_phone"], "+233245550001")
+
+    def test_customer_account_dashboard_contains_history_summary(self):
+        self.customer_session()
+        order = self.order()
+        response = self.client.get("/market/account/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "My KOFAD")
+        self.assertContains(response, order.public_reference)
+        self.assertContains(response, "Active orders")
+
+    def test_market_search_uses_customer_facing_tags(self):
+        self.listing.tags = "hydraulic excavator service filter maintenance"
+        self.listing.save(update_fields=["tags"])
+        response = self.client.get("/market/?q=maintenance")
+        self.assertContains(response, self.listing.display_name)
+
+    def test_curated_external_photo_renders_when_no_uploaded_photo_exists(self):
+        self.listing.image_data = None
+        self.listing.image_thumb = None
+        self.listing.image_url = "https://images.unsplash.com/photo-test?auto=format"
+        self.listing.image_credit = "Unsplash · Test"
+        self.listing.save(update_fields=["image_data", "image_thumb", "image_url", "image_credit"])
+        response = self.client.get("/market/")
+        self.assertContains(response, self.listing.image_url)
+        self.assertIn("https://images.unsplash.com", response["Content-Security-Policy"])
+
+    def test_customer_can_change_password_with_current_password(self):
+        self.customer_session()
+        response = self.client.post("/market/account/security/", {
+            "current_password": "Very-strong-customer-password-42!",
+            "password": "Stronger-new-customer-password-643!",
+            "password_confirm": "Stronger-new-customer-password-643!",
+        })
+        self.assertRedirects(response, "/market/account/", fetch_redirect_response=False)
+        self.customer.refresh_from_db()
+        self.assertTrue(self.customer.check_password("Stronger-new-customer-password-643!"))
+
+    def test_online_commerce_datasets_appear_in_export_center(self):
+        self.staff_session()
+        response = self.client.get("/exports/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Online orders &amp; fulfilment")
+        self.assertContains(response, "Market customer accounts")
+        self.assertContains(response, "Published Market catalog")
+        self.assertContains(response, "Customer support conversations")
+
+
+class MarketV2SupportTests(MarketFixtures):
+    def customer_session(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    def test_customer_support_accepts_and_hashes_document_attachment(self):
+        self.customer_session()
+        upload = SimpleUploadedFile(
+            "concern.txt", b"Serial number and issue details", content_type="text/plain"
+        )
+        response = self.client.post("/market/messages/", {
+            "subject": "Product concern",
+            "message": "Please review the attached details.",
+            "attachment": upload,
+        })
+        thread = Conversation.objects.get(customer=self.customer)
+        self.assertRedirects(
+            response, f"/market/messages/{thread.pk}/", fetch_redirect_response=False
+        )
+        attachment = ConversationAttachment.objects.get(message__conversation=thread)
+        self.assertEqual(attachment.original_name, "concern.txt")
+        self.assertEqual(
+            attachment.sha256,
+            hashlib.sha256(b"Serial number and issue details").hexdigest(),
+        )
+
+    def test_support_attachment_is_private_to_thread_participants(self):
+        self.customer_session()
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Private support",
+        )
+        message = thread.messages.create(
+            sender_type="customer", body="Evidence", read_by_customer=True
+        )
+        attachment = ConversationAttachment.objects.create(
+            message=message,
+            original_name="evidence.txt",
+            mime_type="text/plain",
+            size=8,
+            sha256=hashlib.sha256(b"evidence").hexdigest(),
+            data=b"evidence",
+        )
+        response = self.client.get(f"/market/support/attachments/{attachment.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"evidence")
+        self.client.post("/market/account/logout/")
+        denied = self.client.get(f"/market/support/attachments/{attachment.pk}/")
+        self.assertEqual(denied.status_code, 404)
+
+    def test_live_support_updates_return_only_new_messages(self):
+        self.customer_session()
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Live support",
+        )
+        first = thread.messages.create(
+            sender_type="customer", body="First", read_by_customer=True
+        )
+        second = thread.messages.create(
+            sender_type="staff", body="Second", read_by_staff=True
+        )
+        response = self.client.get(
+            f"/market/support/conversations/{thread.pk}/updates/?after={first.pk}"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual([row["id"] for row in payload["messages"]], [second.pk])
+        second.refresh_from_db()
+        self.assertTrue(second.read_by_customer)
+
+    def test_image_support_attachment_is_normalized_to_webp(self):
+        image = Image.new("RGB", (1400, 900), (15, 80, 120))
+        source = io.BytesIO()
+        image.save(source, "JPEG")
+        upload = SimpleUploadedFile(
+            "problem.jpg", source.getvalue(), content_type="image/jpeg"
+        )
+        payload = services.prepare_support_attachment(upload)
+        self.assertEqual(payload["mime_type"], "image/webp")
+        self.assertTrue(payload["original_name"].endswith(".webp"))
+        self.assertLessEqual(payload["size"], 10 * 1024 * 1024)

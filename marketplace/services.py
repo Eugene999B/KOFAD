@@ -108,6 +108,65 @@ def save_listing_image(listing, upload):
     listing.image_mime = mime
     listing.image_name = str(getattr(upload, "name", "product-image"))[:180]
     listing.image_updated_at = timezone.now()
+    listing.image_url = ""
+    listing.image_credit = ""
+
+
+SUPPORT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+SUPPORT_DOCUMENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".txt": "text/plain",
+}
+
+
+def prepare_support_attachment(upload):
+    raw = upload.read()
+    if not raw:
+        raise ValidationError("The attached file is empty.")
+    if len(raw) > SUPPORT_ATTACHMENT_MAX_BYTES:
+        raise ValidationError("Support attachments must be 10 MB or smaller.")
+
+    name = str(getattr(upload, "name", "attachment"))[:220]
+    lower = name.lower()
+    if (getattr(upload, "content_type", "") or "").startswith("image/"):
+        try:
+            image = Image.open(io.BytesIO(raw))
+            image = ImageOps.exif_transpose(image)
+            image.load()
+        except (UnidentifiedImageError, OSError, ValueError):
+            raise ValidationError("KOFAD could not read that attached image.")
+        if image.width * image.height > 60000000:
+            raise ValidationError("That attached image has too many pixels.")
+        image.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
+        if image.mode not in ("RGB", "RGBA"):
+            image = image.convert("RGB")
+        output = io.BytesIO()
+        image.convert("RGB").save(output, "WEBP", quality=82, method=6)
+        stem = name.rsplit(".", 1)[0][:190] or "support-image"
+        data = output.getvalue()
+        return {
+            "original_name": stem + ".webp",
+            "mime_type": "image/webp",
+            "size": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "data": data,
+        }
+
+    extension = next((ext for ext in SUPPORT_DOCUMENT_TYPES if lower.endswith(ext)), "")
+    if not extension:
+        raise ValidationError("Attach an image, PDF, Word, Excel or text file.")
+    mime = SUPPORT_DOCUMENT_TYPES[extension]
+    return {
+        "original_name": name,
+        "mime_type": mime,
+        "size": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "data": raw,
+    }
 
 
 def _otp_headers():

@@ -5,10 +5,16 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
 from core.identity import normalize_ghana_phone
-from .models import DeliveryZone, MarketListing
+from .models import CustomerAccount, DeliveryZone, MarketListing
 
 
 class MarketListingForm(forms.ModelForm):
+    highlights_text = forms.CharField(
+        required=False,
+        label="Product highlights",
+        help_text="One customer-facing highlight per line, up to 5.",
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Durable everyday construction\nDelivery or pickup\nLive KOFAD stock"}),
+    )
     image = forms.FileField(
         required=False,
         label="Market product photo",
@@ -19,12 +25,13 @@ class MarketListingForm(forms.ModelForm):
 
     class Meta:
         model = MarketListing
-        fields = ["enabled", "featured", "title", "description", "price_source", "sort_order"]
+        fields = ["enabled", "featured", "title", "description", "tags", "price_source", "sort_order"]
         labels = {
             "enabled": "Publish this product to KOFAD Market",
             "featured": "Feature this product",
             "title": "Market display name",
             "description": "Customer-facing description",
+            "tags": "Search tags",
             "price_source": "Market selling price",
             "sort_order": "Display order",
         }
@@ -32,6 +39,7 @@ class MarketListingForm(forms.ModelForm):
             "enabled": "Only published products appear to customers. Stock still comes from KOFAD inventory.",
             "featured": "Featured items receive stronger placement on the public Market.",
             "title": "Leave blank to use the normal product name.",
+            "tags": "Comma-separated words customers may search for, such as hydraulic, filter, SANY, excavator.",
             "price_source": "Choose whether Market follows the product's retail or wholesale, unit or pack price.",
             "sort_order": "Lower numbers appear first.",
         }
@@ -40,6 +48,8 @@ class MarketListingForm(forms.ModelForm):
     def __init__(self, *args, product=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.product = product
+        if self.instance and self.instance.pk and not self.is_bound:
+            self.fields["highlights_text"].initial = "\n".join(self.instance.highlights or [])
         if product:
             disabled = []
             for value, label in self.fields["price_source"].choices:
@@ -56,11 +66,66 @@ class MarketListingForm(forms.ModelForm):
             source = data.get("price_source")
             if not source or getattr(self.product, source, None) is None:
                 self.add_error("price_source", "Choose a selling price that is enabled on this product.")
-            has_existing = bool(getattr(self.instance, "image_data", None))
+            has_existing = bool(
+                getattr(self.instance, "image_data", None) or getattr(self.instance, "image_url", "")
+            )
             if not self.files.get("image") and not has_existing:
                 self.add_error("image", "Add a product photo before publishing this item to Market.")
             if data.get("remove_image") and not self.files.get("image"):
                 self.add_error("remove_image", "A published product must keep a photo. Upload a replacement or unpublish it first.")
+        highlights = [
+            line.strip()
+            for line in (data.get("highlights_text") or "").splitlines()
+            if line.strip()
+        ][:5]
+        data["highlights_text"] = "\n".join(highlights)
+        return data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.highlights = [
+            line.strip()
+            for line in self.cleaned_data.get("highlights_text", "").splitlines()
+            if line.strip()
+        ][:5]
+        if commit:
+            obj.save()
+        return obj
+
+
+class CustomerAccessForm(forms.Form):
+    phone = forms.CharField(max_length=30, label="Mobile number")
+
+    def clean_phone(self):
+        return normalize_ghana_phone(self.cleaned_data["phone"])
+
+
+class CustomerProfileForm(forms.ModelForm):
+    class Meta:
+        model = CustomerAccount
+        fields = ["full_name", "email"]
+        labels = {"full_name": "Full name", "email": "Email address"}
+
+
+class ConversationMessageForm(forms.Form):
+    message = forms.CharField(
+        required=False,
+        max_length=2000,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Write a message to KOFAD…"}),
+    )
+    attachment = forms.FileField(
+        required=False,
+        label="Attach a file",
+        widget=forms.ClearableFileInput(attrs={
+            "accept": "image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt",
+        }),
+        help_text="Images, PDF, Word, Excel or text files up to 10 MB.",
+    )
+
+    def clean(self):
+        data = super().clean()
+        if not (data.get("message") or data.get("attachment")):
+            raise forms.ValidationError("Write a message or attach a file.")
         return data
 
 
@@ -150,6 +215,33 @@ class StaffOrderUpdateForm(forms.Form):
     def clean_delivery_agent_phone(self):
         raw = self.cleaned_data.get("delivery_agent_phone", "").strip()
         return normalize_ghana_phone(raw) if raw else ""
+
+
+class CustomerPasswordChangeForm(forms.Form):
+    current_password = forms.CharField(widget=forms.PasswordInput, label="Current password")
+    password = forms.CharField(widget=forms.PasswordInput, label="New password")
+    password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
+
+    def __init__(self, *args, customer=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.customer = customer
+
+    def clean_current_password(self):
+        value = self.cleaned_data["current_password"]
+        if not self.customer or not self.customer.check_password(value):
+            raise forms.ValidationError("The current password is incorrect.")
+        return value
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        validate_password(password)
+        return password
+
+    def clean(self):
+        data = super().clean()
+        if data.get("password") and data.get("password_confirm") and data["password"] != data["password_confirm"]:
+            self.add_error("password_confirm", "The two passwords do not match.")
+        return data
 
 
 class CustomerPasswordResetForm(forms.Form):
