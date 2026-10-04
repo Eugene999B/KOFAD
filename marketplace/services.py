@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import secrets
 from datetime import timedelta
 from decimal import Decimal
@@ -32,6 +33,8 @@ PAYSTACK_VERIFY = "https://api.paystack.co/transaction/verify/"
 PAYSTACK_REFUND = "https://api.paystack.co/refund"
 ARKESEL_OTP_GENERATE = "https://sms.arkesel.com/api/otp/generate"
 ARKESEL_OTP_VERIFY = "https://sms.arkesel.com/api/otp/verify"
+
+logger = logging.getLogger(__name__)
 
 
 def market_branch():
@@ -184,26 +187,50 @@ def prepare_support_attachment(upload):
     }
 
 
-def _otp_headers():
-    if not settings.ARKESEL_API_KEY:
-        raise ValidationError("Customer phone verification is not configured yet.")
-    return {
-        "api-key": settings.ARKESEL_API_KEY,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+def _otp_digest(phone, purpose, code):
+    payload = f"kofad-market-otp:{phone}:{purpose}:{code}".encode()
+    return hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).hexdigest()
 
 
-def _otp_provider_code(data):
-    if not isinstance(data, dict):
-        return ""
-    return str(data.get("code", "")).strip()
+def _submit_customer_otp_sms(phone, code):
+    if not settings.SMS_ENABLED or not settings.ARKESEL_API_KEY:
+        raise ValidationError("Customer phone verification is temporarily unavailable.")
+    body = f"KOFAD verification code: {code}. It expires in 5 minutes. Do not share this code."
+    try:
+        provider = get_provider(settings.SMS_PROVIDER)
+        provider.validate()
+        # Customer verification must reach the handset; never use the SMS sandbox here.
+        result = provider.submit(
+            phone,
+            body,
+            settings.SMS_SENDER_ID,
+            "",
+            False,
+        )
+    except ValidationError:
+        logger.exception("Customer OTP SMS configuration rejected")
+        raise ValidationError("We could not send the verification code right now. Please try again.")
+    except Exception:
+        logger.exception("Customer OTP SMS submission raised an unexpected error")
+        raise ValidationError("We could not send the verification code right now. Please try again.")
 
-
-def _otp_provider_message(data):
-    if not isinstance(data, dict):
-        return ""
-    return str(data.get("message", "")).strip()[:220]
+    if result.status not in {"accepted", "delivered", "unknown"}:
+        logger.warning(
+            "Customer OTP SMS rejected status=%s error_code=%s detail=%s recipient_suffix=%s",
+            result.status,
+            result.error_code,
+            result.error_detail,
+            phone[-4:],
+        )
+        raise ValidationError("We could not send the verification code right now. Please try again.")
+    if result.status == "unknown":
+        logger.warning(
+            "Customer OTP SMS provider result uncertain error_code=%s detail=%s recipient_suffix=%s",
+            result.error_code,
+            result.error_detail,
+            phone[-4:],
+        )
+    return result
 
 
 def send_otp(phone, purpose="register"):
@@ -225,29 +252,9 @@ def send_otp(phone, purpose="register"):
 
     if not settings.CUSTOMER_OTP_ENABLED:
         raise ValidationError("Customer phone verification is temporarily unavailable.")
-    payload = {
-        "expiry": 5,
-        "length": 6,
-        "medium": "sms",
-        "message": "Your KOFAD verification code is %otp_code%. It expires in 5 minutes.",
-        "number": phone,
-        "sender_id": settings.SMS_SENDER_ID,
-        "type": "numeric",
-    }
-    try:
-        response = requests.post(
-            ARKESEL_OTP_GENERATE, headers=_otp_headers(), json=payload,
-            timeout=settings.SMS_TIMEOUT_SECONDS, allow_redirects=False,
-        )
-        data = response.json()
-    except (requests.RequestException, ValueError):
-        raise ValidationError("We could not send the verification code right now. Please try again.")
 
-    provider_code = _otp_provider_code(data)
-    if not 200 <= response.status_code < 300 or provider_code != "1000":
-        raise ValidationError(
-            "We could not send the verification code right now. Please try again."
-        )
+    code = f"{secrets.randbelow(1000000):06d}"
+    _submit_customer_otp_sms(phone, code)
 
     with transaction.atomic():
         row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
@@ -256,7 +263,11 @@ def send_otp(phone, purpose="register"):
         row.last_sent_at = now
         row.expires_at = now + timedelta(minutes=5)
         row.verified_at = None
-        row.save(update_fields=["send_count", "attempts", "last_sent_at", "expires_at", "verified_at"])
+        row.code_digest = _otp_digest(phone, purpose, code)
+        row.save(update_fields=[
+            "send_count", "attempts", "last_sent_at", "expires_at",
+            "verified_at", "code_digest",
+        ])
     return phone
 
 
@@ -266,36 +277,27 @@ def verify_otp(phone, code, purpose="register"):
     if not code.isdigit() or len(code) != 6:
         raise ValidationError("Enter the six-digit verification code.")
     now = timezone.now()
+
     with transaction.atomic():
         row = OtpThrottle.objects.select_for_update().filter(phone=phone, purpose=purpose).first()
-        if not row or not row.expires_at or row.expires_at < now:
+        if not row or not row.expires_at or row.expires_at < now or not row.code_digest:
             raise ValidationError("That verification code has expired. Request a new one.")
         if row.blocked_until and row.blocked_until > now:
             raise ValidationError("Too many verification attempts. Try again later.")
 
-    try:
-        response = requests.post(
-            ARKESEL_OTP_VERIFY, headers=_otp_headers(), json={"code": code, "number": phone},
-            timeout=settings.SMS_TIMEOUT_SECONDS, allow_redirects=False,
-        )
-        data = response.json()
-    except (requests.RequestException, ValueError):
-        raise ValidationError("We could not verify the code right now. Please try again.")
-
-    provider_code = _otp_provider_code(data)
-    success = 200 <= response.status_code < 300 and provider_code == "1100"
-
-    with transaction.atomic():
-        row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
-        if success:
+        expected = _otp_digest(phone, purpose, code)
+        if hmac.compare_digest(row.code_digest, expected):
             row.verified_at = now
             row.attempts = 0
-            row.save(update_fields=["verified_at", "attempts"])
+            row.code_digest = ""
+            row.save(update_fields=["verified_at", "attempts", "code_digest"])
             return phone
+
         row.attempts += 1
         if row.attempts >= 6:
             row.blocked_until = now + timedelta(minutes=15)
         row.save(update_fields=["attempts", "blocked_until"])
+
     raise ValidationError("That verification code is not correct.")
 
 
