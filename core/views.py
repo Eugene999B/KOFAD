@@ -121,6 +121,10 @@ def login_view(request):
                     access, _ = Access.objects.get_or_create(user=user)
                     login(request, user)
                     request.session["access_version"] = access.session_version
+                    request.session["staff_session_expires_at"] = (
+                        timezone.now().timestamp() + settings.STAFF_SESSION_SECONDS
+                    )
+                    request.session.set_expiry(settings.SESSION_COOKIE_AGE)
                     request.session.pop("enroll_secret", None)
                     attempt.failures = 0
                     attempt.save()

@@ -6,6 +6,7 @@ from decimal import Decimal
 from io import BytesIO
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
@@ -213,6 +214,27 @@ class BusinessTests(Fixtures, TestCase):
             self.client.post("/login/",{"username":"owner","password":"wrong"})
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
         self.assertContains(response,"Too many attempts")
+
+    def test_staff_login_sets_twelve_hour_session_window(self):
+        before = timezone.now().timestamp()
+        response = self.client.post("/login/", {
+            "username": "owner",
+            "password": "test-password-long-enough",
+        })
+        self.assertEqual(response.status_code, 302)
+        expires_at = float(self.client.session["staff_session_expires_at"])
+        self.assertGreaterEqual(expires_at, before + settings.STAFF_SESSION_SECONDS - 2)
+        self.assertLessEqual(expires_at, timezone.now().timestamp() + settings.STAFF_SESSION_SECONDS + 2)
+        self.assertEqual(settings.STAFF_SESSION_SECONDS, 12 * 60 * 60)
+
+    def test_expired_staff_session_is_logged_out(self):
+        self.authenticate_client()
+        session = self.client.session
+        session["staff_session_expires_at"] = timezone.now().timestamp() - 1
+        session.save()
+        response = self.client.get("/workspace/")
+        self.assertRedirects(response, "/login/", fetch_redirect_response=False)
+        self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_login_session_survives_last_login_update(self):
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
