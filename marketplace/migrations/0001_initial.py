@@ -229,7 +229,7 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("phone", models.CharField(max_length=20)),
-                ("purpose", models.CharField(choices=[("register", "Register"), ("reset", "Reset password")], max_length=12)),
+                ("purpose", models.CharField(choices=[("register", "Register"), ("reset", "Reset password"), ("login", "Customer login")], max_length=12)),
                 ("send_count", models.PositiveIntegerField(default=0)),
                 ("attempts", models.PositiveIntegerField(default=0)),
                 ("last_sent_at", models.DateTimeField(blank=True, null=True)),
