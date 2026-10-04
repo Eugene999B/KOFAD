@@ -10,6 +10,8 @@ class AccessMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        if request.user.is_authenticated and request.path.startswith("/market/"):
+            logout(request)
         if request.user.is_authenticated:
             now = timezone.now().timestamp()
             staff_expires_at = request.session.get("staff_session_expires_at")
