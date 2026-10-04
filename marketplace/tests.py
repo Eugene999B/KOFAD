@@ -100,6 +100,11 @@ class MarketPublicExperienceTests(MarketFixtures):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Explore the Market")
+        self.assertContains(response, "Featured picks")
+        self.assertContains(response, "home-hero-v7")
+        self.assertNotContains(response, "SHOP BY DEPARTMENT")
+        self.assertNotContains(response, "Browse categories.")
+        self.assertLessEqual(response.content.count(b'class="market-product-card'), 3)
         self.assertContains(response, "CONTACT US")
         self.assertContains(response, "+233241112222")
         self.assertContains(response, "+233242223333")
@@ -714,6 +719,14 @@ class MarketV2SupportTests(MarketFixtures):
         session["market_customer_id"] = self.customer.pk
         session.save()
 
+    def staff_session(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+
     def test_customer_support_accepts_and_hashes_document_attachment(self):
         self.customer_session()
         upload = SimpleUploadedFile(
@@ -783,6 +796,126 @@ class MarketV2SupportTests(MarketFixtures):
         self.assertEqual([row["id"] for row in payload["messages"]], [second.pk])
         second.refresh_from_db()
         self.assertTrue(second.read_by_customer)
+
+    def test_staff_accepts_chat_before_reply_and_customer_sees_worker_name(self):
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Need help",
+        )
+        thread.messages.create(
+            sender_type="customer", body="Can somebody help me?", read_by_customer=True
+        )
+        self.staff.first_name = "Ama"
+        self.staff.last_name = "Support"
+        self.staff.save(update_fields=["first_name", "last_name"])
+        self.staff_session()
+
+        blocked = self.client.post(
+            f"/online-inbox/{thread.pk}/",
+            {"message": "Reply before accept", "action": "reply"},
+        )
+        self.assertEqual(blocked.status_code, 302)
+        self.assertFalse(thread.messages.filter(sender_type="staff").exists())
+
+        accepted = self.client.post(
+            f"/online-inbox/{thread.pk}/", {"action": "accept"}
+        )
+        self.assertEqual(accepted.status_code, 302)
+        thread.refresh_from_db()
+        self.assertEqual(thread.assigned_to, self.staff)
+        self.assertIsNotNone(thread.accepted_at)
+
+        self.client.logout()
+        self.customer_session()
+        customer_page = self.client.get(f"/market/messages/{thread.pk}/")
+        self.assertContains(customer_page, "Ama Support")
+        self.assertContains(customer_page, "has connected with you")
+        state = self.client.get(
+            f"/market/support/conversations/{thread.pk}/updates/?after=0"
+        ).json()
+        self.assertEqual(state["agent"], "Ama Support")
+        self.assertTrue(state["agent_connected"])
+
+    def test_assigned_worker_can_leave_chat_back_to_waiting_queue(self):
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Queue test",
+            assigned_to=self.staff,
+            accepted_at=timezone.now(),
+        )
+        thread.messages.create(
+            sender_type="customer", body="Waiting", read_by_customer=True
+        )
+        self.staff_session()
+        response = self.client.post(
+            f"/online-inbox/{thread.pk}/", {"action": "leave"}
+        )
+        self.assertRedirects(response, "/online-inbox/", fetch_redirect_response=False)
+        thread.refresh_from_db()
+        self.assertIsNone(thread.assigned_to)
+        self.assertIsNone(thread.accepted_at)
+
+    def test_closing_chat_clears_messages_and_attachments(self):
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Private chat",
+            assigned_to=self.staff,
+            accepted_at=timezone.now(),
+        )
+        message = thread.messages.create(
+            sender_type="customer", body="Sensitive details", read_by_customer=True
+        )
+        ConversationAttachment.objects.create(
+            message=message,
+            original_name="private.txt",
+            mime_type="text/plain",
+            size=7,
+            sha256=hashlib.sha256(b"private").hexdigest(),
+            data=b"private",
+        )
+        self.staff_session()
+        response = self.client.post(
+            f"/online-inbox/{thread.pk}/", {"action": "close"}
+        )
+        self.assertEqual(response.status_code, 302)
+        thread.refresh_from_db()
+        self.assertEqual(thread.status, "closed")
+        self.assertEqual(thread.closed_reason, "staff_closed")
+        self.assertIsNotNone(thread.closed_at)
+        self.assertEqual(thread.messages.count(), 0)
+        self.assertEqual(
+            ConversationAttachment.objects.filter(message__conversation=thread).count(), 0
+        )
+
+    def test_staff_reply_without_customer_response_auto_closes_after_24_hours(self):
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Stale support",
+            assigned_to=self.staff,
+            accepted_at=timezone.now() - timedelta(hours=26),
+        )
+        reply = thread.messages.create(
+            sender_type="staff", staff=self.staff, body="Are you still there?", read_by_staff=True
+        )
+        thread.messages.filter(pk=reply.pk).update(
+            created_at=timezone.now() - timedelta(hours=25)
+        )
+        self.customer_session()
+        response = self.client.get(f"/market/messages/{thread.pk}/")
+        self.assertEqual(response.status_code, 200)
+        thread.refresh_from_db()
+        self.assertEqual(thread.status, "closed")
+        self.assertEqual(thread.closed_reason, "customer_inactive")
+        self.assertEqual(thread.messages.count(), 0)
+        self.assertContains(response, "closed automatically after 24 hours")
 
     def test_image_support_attachment_is_normalized_to_webp(self):
         image = Image.new("RGB", (1400, 900), (15, 80, 120))
