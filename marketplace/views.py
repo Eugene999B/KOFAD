@@ -15,7 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from core.identity import normalize_ghana_phone
-from core.models import Product
+from core.models import Company, Product
 from core.views import problem, protected
 
 from .forms import (
@@ -48,7 +48,7 @@ def _market_context(request, **extra):
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
-        "company": getattr(request, "company", None),
+        "company": getattr(request, "company", None) or Company.objects.first() or Company(),
         **extra,
     }
     return context
