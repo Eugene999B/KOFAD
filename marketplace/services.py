@@ -436,28 +436,30 @@ def _payment_method(channel):
 
 
 @transaction.atomic
-def finalize_payment(reference, provider_data):
-    attempt = MarketPaymentAttempt.objects.select_for_update().select_related("order").filter(reference=reference).first()
-    if not attempt:
-        raise ValidationError("This payment reference does not belong to a KOFAD order.")
-    order = OnlineOrder.objects.select_for_update().get(pk=attempt.order_id)
-    if order.payment_status == "paid" and order.sale_document_id:
+def post_order_to_ledger(order, actor=None):
+    order = OnlineOrder.objects.select_for_update().select_related("branch", "customer").get(pk=order.pk)
+    if order.sale_document_id:
         return order
-    if str(provider_data.get("status", "")).lower() != "success":
-        attempt.status = str(provider_data.get("status", "failed"))[:24]
-        attempt.save(update_fields=["status"])
-        order.payment_status = "failed"
-        order.save(update_fields=["payment_status", "updated_at"])
-        raise ValidationError("The payment has not been completed.")
-    amount = provider_data.get("amount")
-    currency = str(provider_data.get("currency", "")).upper()
-    if amount != int(order.total * 100) or currency != "GHS":
-        order.ledger_status = "attention"
-        order.save(update_fields=["ledger_status", "updated_at"])
-        raise ValidationError("The verified payment amount does not match this order.")
+    if order.payment_status != "paid":
+        raise ValidationError("Only a verified paid order can enter the KOFAD sales ledger.")
 
     branch = core_services.lock_branch(order.branch)
-    actor = _system_actor()
+    core_services.ensure_open(branch)
+    actor = actor or _system_actor()
+
+    lines = list(order.lines.select_related("product"))
+    for item in lines:
+        stock = Stock.objects.select_for_update().filter(branch=branch, product=item.product).first()
+        available = stock.quantity if stock else 0
+        reserved_by_others = active_reserved_units(branch, item.product, exclude_order=order)
+        if item.base_units > max(available - reserved_by_others, 0):
+            order.ledger_status = "attention"
+            order.save(update_fields=["ledger_status", "updated_at"])
+            raise ValidationError(
+                f"{item.description} no longer has enough stock to post this paid order. "
+                "Resolve the stock shortage before fulfilment."
+            )
+
     party = Party.objects.filter(branch=branch, kind="customer", phone=order.phone).first()
     if not party:
         party = Party.objects.create(
@@ -466,20 +468,18 @@ def finalize_payment(reference, provider_data):
             address=", ".join(value for value in [order.address_line, order.town, order.region] if value),
             consent=False,
         )
+
     doc = Document.objects.create(
         branch=branch, kind="sale", party=party, reference=core_services.reference("sale", branch),
         total=order.total, paid=order.total, document_date=timezone.localdate(),
-        note=f"Online Market order {order.public_reference}", created_by=actor,
-        external_reference=reference,
+        note=(
+            f"Online Market order {order.public_reference}. "
+            f"Paystack paid at {order.paid_at.isoformat() if order.paid_at else 'verified time unavailable'}."
+        ),
+        created_by=actor,
+        external_reference=order.payment_reference,
     )
-    for item in order.lines.select_related("product"):
-        stock = Stock.objects.select_for_update().filter(branch=branch, product=item.product).first()
-        available = stock.quantity if stock else 0
-        reserved_by_others = active_reserved_units(branch, item.product, exclude_order=order)
-        if item.base_units > max(available - reserved_by_others, 0):
-            order.ledger_status = "attention"
-            order.save(update_fields=["ledger_status", "updated_at"])
-            raise ValidationError(f"Stock changed before payment completed for {item.description}. Management has been alerted.")
+    for item in lines:
         Line.objects.create(
             document=doc, product=item.product, description=item.description, mode=item.mode,
             quantity=item.quantity, factor=item.factor, list_price=item.unit_price,
@@ -495,41 +495,92 @@ def finalize_payment(reference, provider_data):
             quantity=1, factor=1, list_price=order.delivery_fee, unit_price=order.delivery_fee,
             discount_percent=0, unit_cost=0, total=order.delivery_fee,
         )
-    channel = str(provider_data.get("channel", ""))
     Payment.objects.create(
-        document=doc, method=_payment_method(channel), amount=order.total,
-        reference=reference, direction=1,
+        document=doc, method=_payment_method(order.payment_channel), amount=order.total,
+        reference=order.payment_reference, direction=1,
     )
-    now = timezone.now()
     order.party = party
     order.sale_document = doc
+    order.ledger_status = "posted"
+    order.save(update_fields=["party", "sale_document", "ledger_status", "updated_at"])
+    order.reservations.update(active=False)
+    core_services.audit(actor, branch, "sale.online_posted", order.public_reference, {
+        "document": doc.reference,
+        "paystack_reference": order.payment_reference,
+        "amount": str(order.total),
+        "channel": order.payment_channel,
+    })
+    return order
+
+
+@transaction.atomic
+def finalize_payment(reference, provider_data):
+    attempt = MarketPaymentAttempt.objects.select_for_update().select_related("order").filter(reference=reference).first()
+    if not attempt:
+        raise ValidationError("This payment reference does not belong to a KOFAD order.")
+    order = OnlineOrder.objects.select_for_update().get(pk=attempt.order_id)
+    if order.payment_status == "paid":
+        return order
+
+    if str(provider_data.get("status", "")).lower() != "success":
+        attempt.status = str(provider_data.get("status", "failed"))[:24]
+        attempt.save(update_fields=["status"])
+        order.payment_status = "failed"
+        order.save(update_fields=["payment_status", "updated_at"])
+        raise ValidationError("The payment has not been completed.")
+
+    amount = provider_data.get("amount")
+    currency = str(provider_data.get("currency", "")).upper()
+    if amount != int(order.total * 100) or currency != "GHS":
+        order.ledger_status = "attention"
+        order.save(update_fields=["ledger_status", "updated_at"])
+        raise ValidationError("The verified payment amount does not match this order.")
+
+    channel = str(provider_data.get("channel", ""))[:40]
+    now = timezone.now()
     order.status = "paid"
     order.payment_status = "paid"
     order.payment_reference = reference
-    order.payment_channel = channel[:40]
+    order.payment_channel = channel
     order.paid_at = now
-    order.ledger_status = "attention" if Closing.objects.filter(branch=branch, date=timezone.localdate()).exists() else "posted"
+    order.ledger_status = "pending"
     order.save(update_fields=[
-        "party", "sale_document", "status", "payment_status", "payment_reference",
-        "payment_channel", "paid_at", "ledger_status", "updated_at",
+        "status", "payment_status", "payment_reference", "payment_channel",
+        "paid_at", "ledger_status", "updated_at",
     ])
-    order.reservations.update(active=False)
     attempt.status = "success"
     attempt.verified_at = now
     attempt.save(update_fields=["status", "verified_at"])
+    order.reservations.update(expires_at=now + timedelta(hours=24), active=True)
     OrderEvent.objects.create(
         order=order, status="paid", title="Payment confirmed",
-        note="Payment was verified by Paystack and the order entered KOFAD fulfilment.",
+        note="Payment was independently verified by KOFAD with Paystack.",
     )
-    core_services.audit(actor, branch, "sale.online_paid", order.public_reference, {
-        "document": doc.reference, "paystack_reference": reference,
-        "amount": str(order.total), "channel": channel,
-        "late_after_close": order.ledger_status == "attention",
-    })
+
+    branch_closed = Closing.objects.filter(branch=order.branch, date=timezone.localdate()).exists()
+    if branch_closed:
+        order.ledger_status = "attention"
+        order.save(update_fields=["ledger_status", "updated_at"])
+        OrderEvent.objects.create(
+            order=order, status="paid", title="Awaiting ledger posting",
+            note="The shop day was already closed. KOFAD preserved the payment and stock hold for the next open business period.",
+            customer_visible=False,
+        )
+    else:
+        try:
+            order = post_order_to_ledger(order)
+        except ValidationError as exc:
+            order.ledger_status = "attention"
+            order.save(update_fields=["ledger_status", "updated_at"])
+            OrderEvent.objects.create(
+                order=order, status="paid", title="Fulfilment attention required",
+                note=str(exc), customer_visible=False,
+            )
+
     send_transactional_sms(
         order.phone,
         f"KOFAD: Payment confirmed for {order.public_reference}. We are preparing your order. "
-        f"Track it in your KOFAD Market account.",
+        "Track it in your KOFAD Market account.",
     )
     return order
 
