@@ -59,7 +59,9 @@
 <section class="product-form-section market-publishing-section">
 <div class="section-heading"><div><p class="eyebrow">5 · ONLINE MARKET</p><h2>Publish for online ordering</h2><p class="muted">The Market uses the same KOFAD stock. You decide which products customers can see and which configured selling price they pay.</p></div><a class="text-link" href="/market/" target="_blank" rel="noopener">Preview Market ↗</a></div>
 {{ market_form.non_field_errors }}
-<label class="switch-row">{{ market_form.enabled }}<span><strong>Show this product in KOFAD Market</strong><small>{{ market_form.enabled.help_text }}</small></span></label>
+<label class="switch-row market-publish-switch">{{ market_form.enabled }}<span><strong>Show this product in KOFAD Market</strong><small>{{ market_form.enabled.help_text }}</small></span></label>
+<div class="market-offline-hint" data-market-offline-hint {% if market_form.enabled.value %}hidden{% endif %}><span>Market settings are hidden.</span><small>Turn on “Show this product in KOFAD Market” to configure customer information, online pricing and product photos.</small></div>
+<div class="market-publishing-details" data-market-details {% if not market_form.enabled.value %}hidden{% endif %}>
 <div class="two-column">
 <label>Market display name <small>{{ market_form.title.help_text }}</small>{{ market_form.title }}{{ market_form.title.errors }}</label>
 <label>Market selling price <small>{{ market_form.price_source.help_text }}</small>{{ market_form.price_source }}{{ market_form.price_source.errors }}</label>
@@ -74,6 +76,7 @@
 <div class="market-photo-setup">
 <div class="market-photo-preview">{% if market_form.instance.image_thumb %}<img src="/market/products/{{ market_form.instance.pk }}/image/thumb/" alt="Current market product photo">{% elif market_form.instance.image_url %}<img src="{{ market_form.instance.image_url }}" alt="Current curated market product photo" referrerpolicy="no-referrer">{% else %}<span>PRODUCT PHOTO</span>{% endif %}</div>
 <div><label>Market product photo <small>{{ market_form.image.help_text }}</small>{{ market_form.image }}{{ market_form.image.errors }}</label>{% if market_form.instance.image_thumb or market_form.instance.image_url %}<label class="check-row">{{ market_form.remove_image }} Remove current photo</label>{% endif %}{% if market_form.instance.image_credit %}<p class="hint"><strong>Current curated image:</strong> {{ market_form.instance.image_credit }}. Uploading your own business photo will replace it.</p>{% endif %}<p class="hint">KOFAD corrects phone rotation, converts the picture to WebP, creates a full image and thumbnail, and stores the compressed result safely in the database.</p></div>
+</div>
 </div>
 </section>
 <button class="button">Save product</button>
