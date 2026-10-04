@@ -111,6 +111,10 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertNotContains(response, "Not sure what to order?")
         self.assertNotContains(response, "Send enquiry")
         self.assertNotContains(response, "Live stock · Secure checkout · Tracked fulfilment")
+        self.assertNotContains(response, "commerce-global-search")
+        self.assertContains(response, 'class="market-contact-link"')
+        self.assertContains(response, 'class="market-staff-link"')
+        self.assertContains(response, 'href="/login/"')
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
     def test_customer_access_page_is_only_the_sign_in_or_create_account_card(self):
@@ -478,6 +482,133 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         initialize_payment.assert_called_once()
         self.assertEqual(initialize_payment.call_args.args[0].pk, order.pk)
         self.assertEqual(self.client.session["market_cart"], {})
+
+    @patch("marketplace.services._google_route")
+    def test_distance_delivery_price_is_proportional_and_saved_on_order(self, google_route):
+        company = Company.objects.get()
+        company.delivery_pricing_mode = "distance"
+        company.delivery_rate_per_km = Decimal("1.00")
+        company.delivery_minimum_fee = Decimal("0")
+        company.delivery_max_distance_km = Decimal("50")
+        company.delivery_origin_latitude = Decimal("5.603700")
+        company.delivery_origin_longitude = Decimal("-0.186900")
+        company.delivery_origin_label = "KOPEX Main Shop"
+        company.save()
+        google_route.return_value = {
+            "distance_km": Decimal("0.10"),
+            "duration_seconds": 90,
+            "polyline": "test-route",
+            "source": "google_route",
+        }
+
+        quote = services.delivery_quote(Decimal("5.604000"), Decimal("-0.187000"))
+        self.assertEqual(quote["fee"], Decimal("0.10"))
+        self.assertEqual(quote["distance_km"], Decimal("0.10"))
+
+        order = services.create_order(
+            self.customer,
+            {str(self.listing.pk): 2},
+            {
+                "fulfilment": "delivery",
+                "recipient_name": self.customer.full_name,
+                "phone": self.customer.phone,
+                "email": self.customer.email,
+                "delivery_zone": None,
+                "region": "Greater Accra",
+                "town": "Accra",
+                "address_line": "Pinned delivery point",
+                "landmark": "",
+                "ghana_post_gps": "",
+                "latitude": Decimal("5.604000"),
+                "longitude": Decimal("-0.187000"),
+                "customer_note": "",
+            },
+        )
+        self.assertEqual(order.delivery_fee, Decimal("0.10"))
+        self.assertEqual(order.total, Decimal("200.10"))
+        self.assertEqual(order.delivery_distance_km, Decimal("0.10"))
+        self.assertEqual(order.delivery_distance_source, "google_route")
+        self.assertEqual(order.delivery_route_polyline, "test-route")
+        self.assertEqual(order.delivery_origin_latitude, Decimal("5.603700"))
+
+    def test_delivery_quote_endpoint_and_checkout_show_map_picker(self):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
+        response = self.client.get("/market/checkout/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-location-map")
+        self.assertContains(response, "Use my current location")
+        self.assertContains(response, "Search location")
+        quote = self.client.get("/market/delivery/quote/?lat=5.60&lng=-0.18")
+        self.assertEqual(quote.status_code, 200)
+        self.assertEqual(quote.json()["fee"], "0.00")
+
+    @override_settings(GOOGLE_MAPS_SERVER_KEY="test-google-key")
+    @patch("marketplace.services.requests.get")
+    def test_location_search_uses_google_when_configured(self, get):
+        self.customer_session()
+        response = Mock()
+        response.ok = True
+        response.json.return_value = {
+            "status": "OK",
+            "results": [{
+                "formatted_address": "Osu, Accra, Ghana",
+                "geometry": {"location": {"lat": 5.556, "lng": -0.182}},
+            }],
+        }
+        get.return_value = response
+        result = self.client.get("/market/location/search/?q=Osu%20Accra")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["results"][0]["label"], "Osu, Accra, Ghana")
+
+    def test_delivery_policy_settings_save_company_origin_and_rate(self):
+        self.staff_session()
+        response = self.client.post("/market-settings/", {
+            "action": "policy",
+            "delivery_enabled": "on",
+            "delivery_pricing_mode": "distance",
+            "delivery_flat_fee": "0",
+            "delivery_rate_per_km": "1.00",
+            "delivery_minimum_fee": "0",
+            "delivery_max_distance_km": "100",
+            "delivery_origin_label": "KOPEX Main Shop",
+            "delivery_origin_latitude": "5.603717",
+            "delivery_origin_longitude": "-0.186964",
+        })
+        self.assertRedirects(response, "/market-settings/", fetch_redirect_response=False)
+        company = Company.objects.get()
+        self.assertEqual(company.delivery_pricing_mode, "distance")
+        self.assertEqual(company.delivery_rate_per_km, Decimal("1.00"))
+        self.assertEqual(company.delivery_origin_latitude, Decimal("5.603717"))
+
+    def test_staff_order_page_shows_customer_delivery_map(self):
+        order = services.create_order(
+            self.customer,
+            {str(self.listing.pk): 1},
+            {
+                "fulfilment": "delivery",
+                "recipient_name": self.customer.full_name,
+                "phone": self.customer.phone,
+                "email": self.customer.email,
+                "delivery_zone": None,
+                "region": "Greater Accra",
+                "town": "Accra",
+                "address_line": "Pinned delivery point",
+                "landmark": "",
+                "ghana_post_gps": "",
+                "latitude": Decimal("5.603717"),
+                "longitude": Decimal("-0.186964"),
+                "customer_note": "",
+            },
+        )
+        self.staff_session()
+        response = self.client.get(f"/online-orders/{order.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "DELIVERY MAP")
+        self.assertContains(response, "data-location-map")
+        self.assertContains(response, "5.603717")
 
     def test_market_search_uses_customer_facing_tags(self):
         self.listing.tags = "hydraulic excavator service filter maintenance"

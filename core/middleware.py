@@ -30,8 +30,9 @@ class AccessMiddleware:
             if access.force_password_change and request.path not in ("/account/password/", "/logout/"):
                 return redirect("password_change")
         response = self.get_response(request)
-        response["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://images.unsplash.com; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-        geolocation = "(self)" if request.path.startswith("/market/checkout/") else "()"
+        response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://*.tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        geolocation_paths = ("/market/checkout/", "/market-settings/", "/online-orders/")
+        geolocation = "(self)" if request.path.startswith(geolocation_paths) else "()"
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):
             response["Cache-Control"] = "no-store"

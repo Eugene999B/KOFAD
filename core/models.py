@@ -43,6 +43,29 @@ class Company(models.Model):
     address = models.TextField(blank=True)
     currency = models.CharField(max_length=3, default="GHS")
 
+    DELIVERY_PRICING = [
+        ("free", "Free delivery"),
+        ("flat", "Flat delivery fee"),
+        ("distance", "Price per kilometre"),
+    ]
+    delivery_enabled = models.BooleanField(default=True)
+    delivery_pricing_mode = models.CharField(max_length=16, choices=DELIVERY_PRICING, default="free")
+    delivery_flat_fee = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+    )
+    delivery_rate_per_km = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+    )
+    delivery_minimum_fee = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+    )
+    delivery_max_distance_km = models.DecimalField(
+        max_digits=9, decimal_places=2, default=0, validators=[MinValueValidator(0)]
+    )
+    delivery_origin_label = models.CharField(max_length=180, blank=True, default="")
+    delivery_origin_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    delivery_origin_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
     # Payment channels can be switched off for new postings without rewriting historical ledgers.
     payment_cash = models.BooleanField(default=True)
     payment_momo = models.BooleanField(default=True)

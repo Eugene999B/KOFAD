@@ -1,14 +1,37 @@
-{% extends "marketplace/base.html" %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="{% static 'marketplace/market-map.css' %}">
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script defer src="{% static 'marketplace/market-map.js' %}"></script>
+{% endblock %}
+{% block content %}
 <section class="commerce-checkout-page">
 <header class="commerce-flow-head"><div><p class="market-eyebrow">CHECKOUT</p><h1>Delivery or pickup</h1></div><a href="/market/cart/">← Back to cart</a></header>
 <div class="commerce-checkout-steps"><span class="done"><b>✓</b> Cart</span><i></i><span class="active"><b>2</b> Delivery</span><i></i><span><b>3</b> Payment</span><i></i><span><b>4</b> Tracking</span></div>
 <div class="commerce-checkout-layout">
 <form method="post" class="commerce-checkout-form" data-checkout-form>{% csrf_token %}{{ form.non_field_errors }}
 <section class="checkout-v2-section"><div class="checkout-v2-number">01</div><div class="checkout-v2-content"><p class="market-eyebrow">FULFILMENT</p><h2>How do you want to receive it?</h2><div class="fulfilment-choice commerce-fulfilment-choice">{{ form.fulfilment }}{{ form.fulfilment.errors }}</div></div></section>
-<section class="checkout-v2-section"><div class="checkout-v2-number">02</div><div class="checkout-v2-content"><p class="market-eyebrow">RECIPIENT</p><h2>Who should KOFAD contact?</h2><div class="checkout-grid"><label>Recipient name{{ form.recipient_name }}{{ form.recipient_name.errors }}</label><label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><label class="full">Email address{{ form.email }}{{ form.email.errors }}</label></div></div></section>
-<section class="checkout-v2-section" data-delivery-fields><div class="checkout-v2-number">03</div><div class="checkout-v2-content"><p class="market-eyebrow">DELIVERY POINT</p><div class="section-title-inline"><div><h2>Delivery address</h2></div><button type="button" class="location-button commerce-location-button" data-capture-location>◎ Capture current location</button></div><div class="checkout-grid"><label>Delivery area{{ form.delivery_zone }}{{ form.delivery_zone.errors }}</label><label>Region{{ form.region }}</label><label>Town / community{{ form.town }}{{ form.town.errors }}</label><label>GhanaPost GPS{{ form.ghana_post_gps }}</label><label class="full">Street / delivery address{{ form.address_line }}{{ form.address_line.errors }}</label><label class="full">Nearest landmark{{ form.landmark }}</label>{{ form.latitude }}{{ form.longitude }}<div class="location-result full" data-location-result>Optional location pin not captured yet.</div></div></div></section>
+<section class="checkout-v2-section"><div class="checkout-v2-number">02</div><div class="checkout-v2-content"><p class="market-eyebrow">RECIPIENT</p><h2>Who should we contact?</h2><div class="checkout-grid"><label>Recipient name{{ form.recipient_name }}{{ form.recipient_name.errors }}</label><label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><label class="full">Email address{{ form.email }}{{ form.email.errors }}</label></div></div></section>
+<section class="checkout-v2-section" data-delivery-fields><div class="checkout-v2-number">03</div><div class="checkout-v2-content"><p class="market-eyebrow">DELIVERY LOCATION</p><h2>Pin the exact delivery point</h2>
+<div class="checkout-grid">{% if zones %}<label>Delivery area <small>Optional</small>{{ form.delivery_zone }}{{ form.delivery_zone.errors }}</label>{% endif %}<label>Region{{ form.region }}</label><label>Town / community{{ form.town }}{{ form.town.errors }}</label><label>GhanaPost GPS{{ form.ghana_post_gps }}</label><label class="full">Street / delivery address{{ form.address_line }}{{ form.address_line.errors }}</label><label class="full">Nearest landmark{{ form.landmark }}</label>{{ form.latitude }}{{ form.longitude }}</div>
+<div class="kofad-map-shell" data-map-shell>
+<div class="kofad-location-search" data-location-search><input type="search" placeholder="Search area, landmark or address" aria-label="Search delivery location"><button type="button">Search location</button></div>
+<div class="location-search-results" data-location-search-results></div>
+<div class="kofad-map"
+ data-location-map data-picker="true"
+ data-lat="{{ form.latitude.value|default_if_none:'' }}" data-lng="{{ form.longitude.value|default_if_none:'' }}"
+ data-origin-lat="{{ delivery_company.delivery_origin_latitude|default_if_none:'' }}" data-origin-lng="{{ delivery_company.delivery_origin_longitude|default_if_none:'' }}"
+ data-lat-input="id_latitude" data-lng-input="id_longitude" data-address-input="id_address_line"
+ data-search-url="/market/location/search/" data-reverse-url="/market/location/reverse/" data-quote-url="/market/delivery/quote/"></div>
+<div class="kofad-map-actions"><button type="button" class="primary" data-capture-location>◎ Use my current location</button><a data-google-map-link href="#" target="_blank" rel="noopener" hidden>Open pin in Google Maps ↗</a></div>
+<div class="location-result full" data-location-result>{% if form.latitude.value %}Delivery pin saved.{% else %}Search, tap the map, drag the pin, or use your current location.{% endif %}</div>
+<div class="delivery-quote-card" data-delivery-quote>{% if delivery_quote %}<strong>Delivery: GHS {{ delivery_quote.fee|floatformat:2 }}</strong><span>{% if delivery_quote.distance_km %}{{ delivery_quote.distance_km|floatformat:2 }} km{% else %}Configured delivery price{% endif %}</span>{% else %}<strong>Delivery fee</strong><span>Pin your location to confirm the charge.</span>{% endif %}</div>
+</div>
+</div></section>
 <section class="checkout-v2-section"><div class="checkout-v2-number">04</div><div class="checkout-v2-content"><p class="market-eyebrow">OPTIONAL</p><h2>Order note</h2><label>Instruction{{ form.customer_note }}</label></div></section>
-<div class="checkout-v2-submit"><div><strong>Total is confirmed on the payment screen.</strong></div><button class="market-button primary">Make payment <span>→</span></button></div>
+<div class="checkout-v2-submit"><div><strong>Total is confirmed before payment.</strong></div><button class="market-button primary">Make payment <span>→</span></button></div>
 </form>
-<aside class="commerce-checkout-summary"><p class="market-eyebrow">YOUR ORDER</p><h2>Review before continuing.</h2><div class="checkout-v2-items">{% for row in rows %}<article><span>{{ row.quantity }}</span><div><strong>{{ row.listing.display_name }}</strong><small>{{ row.listing.selling_label }} · GHS {{ row.price|floatformat:2 }} each</small></div><b>GHS {{ row.total|floatformat:2 }}</b></article>{% endfor %}</div><div class="summary-row"><span>Products</span><strong>GHS {{ subtotal|floatformat:2 }}</strong></div><div class="summary-row"><span>Delivery</span><strong>Selected area</strong></div><div class="checkout-security-box"><span>✓</span><div><strong>Secure payment</strong><p>Choose Mobile Money, card or bank payment in the next step.</p></div></div><div class="checkout-account-box"><small>ACCOUNT</small><strong>{{ market_customer.full_name }}</strong></div></aside>
-</div></section>{% endblock %}
+<aside class="commerce-checkout-summary"><p class="market-eyebrow">YOUR ORDER</p><h2>Order summary</h2><div class="checkout-v2-items">{% for row in rows %}<article><span>{{ row.quantity }}</span><div><strong>{{ row.listing.display_name }}</strong><small>{{ row.listing.selling_label }} · GHS {{ row.price|floatformat:2 }} each</small></div><b>GHS {{ row.total|floatformat:2 }}</b></article>{% endfor %}</div><div class="summary-row"><span>Products</span><strong data-checkout-subtotal data-checkout-subtotal="{{ subtotal }}">GHS {{ subtotal|floatformat:2 }}</strong></div><div class="summary-row"><span>Delivery</span><strong data-delivery-fee>GHS {{ delivery_fee_preview|floatformat:2 }}</strong></div><div class="summary-row grand"><span>Total</span><strong data-checkout-total>GHS {{ checkout_total|floatformat:2 }}</strong></div><div class="checkout-account-box"><small>ACCOUNT</small><strong>{{ market_customer.full_name }}</strong></div></aside>
+</div></section>
+{% endblock %}

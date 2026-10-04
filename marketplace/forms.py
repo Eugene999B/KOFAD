@@ -5,6 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
 from core.identity import normalize_ghana_phone
+from core.models import Company
 from .models import CustomerAccount, DeliveryZone, MarketListing, MarketReturnRequest
 
 
@@ -264,9 +265,11 @@ class CheckoutForm(forms.Form):
     longitude = forms.DecimalField(max_digits=9, decimal_places=6, required=False, widget=forms.HiddenInput)
     customer_note = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False, label="Order note")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, delivery_enabled=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["delivery_zone"].queryset = DeliveryZone.objects.filter(active=True)
+        if not delivery_enabled:
+            self.fields["fulfilment"].choices = [("pickup", "I will pick it up")]
 
     def clean_phone(self):
         return normalize_ghana_phone(self.cleaned_data["phone"])
@@ -274,9 +277,11 @@ class CheckoutForm(forms.Form):
     def clean(self):
         data = super().clean()
         if data.get("fulfilment") == "delivery":
-            for field in ("delivery_zone", "town", "address_line"):
+            for field in ("town", "address_line"):
                 if not data.get(field):
                     self.add_error(field, "This is required for delivery.")
+            if data.get("latitude") is None or data.get("longitude") is None:
+                raise forms.ValidationError("Pin your delivery location on the map or use current location.")
         else:
             data["delivery_zone"] = None
             for field in ("region", "town", "address_line", "landmark", "ghana_post_gps", "latitude", "longitude"):
@@ -344,13 +349,62 @@ class CustomerPasswordResetForm(forms.Form):
         return data
 
 
+class DeliveryPolicyForm(forms.ModelForm):
+    class Meta:
+        model = Company
+        fields = [
+            "delivery_enabled", "delivery_pricing_mode", "delivery_flat_fee",
+            "delivery_rate_per_km", "delivery_minimum_fee", "delivery_max_distance_km",
+            "delivery_origin_label", "delivery_origin_latitude", "delivery_origin_longitude",
+        ]
+        labels = {
+            "delivery_enabled": "Offer delivery",
+            "delivery_pricing_mode": "Delivery pricing",
+            "delivery_flat_fee": "Flat fee (GHS)",
+            "delivery_rate_per_km": "Price per kilometre (GHS)",
+            "delivery_minimum_fee": "Minimum delivery fee (GHS)",
+            "delivery_max_distance_km": "Maximum delivery distance (km)",
+            "delivery_origin_label": "Dispatch location name",
+            "delivery_origin_latitude": "Dispatch latitude",
+            "delivery_origin_longitude": "Dispatch longitude",
+        }
+        help_texts = {
+            "delivery_max_distance_km": "Use 0 for no distance limit.",
+            "delivery_minimum_fee": "Use 0 if there is no minimum charge.",
+            "delivery_origin_label": "Example: KOPEX IMPEX Main Shop.",
+        }
+        widgets = {
+            "delivery_origin_latitude": forms.HiddenInput(),
+            "delivery_origin_longitude": forms.HiddenInput(),
+        }
+
+    def clean(self):
+        data = super().clean()
+        lat = data.get("delivery_origin_latitude")
+        lng = data.get("delivery_origin_longitude")
+        if (lat is None) ^ (lng is None):
+            raise forms.ValidationError("Pin both latitude and longitude for the dispatch location.")
+        if lat is not None and not Decimal("-90") <= lat <= Decimal("90"):
+            self.add_error("delivery_origin_latitude", "Latitude must be between -90 and 90.")
+        if lng is not None and not Decimal("-180") <= lng <= Decimal("180"):
+            self.add_error("delivery_origin_longitude", "Longitude must be between -180 and 180.")
+        if data.get("delivery_enabled") and data.get("delivery_pricing_mode") == "distance":
+            if (data.get("delivery_rate_per_km") or Decimal("0")) <= 0:
+                self.add_error("delivery_rate_per_km", "Set a price per kilometre.")
+            if lat is None or lng is None:
+                raise forms.ValidationError("Pin the company dispatch location for distance-based pricing.")
+        if data.get("delivery_enabled") and (data.get("delivery_max_distance_km") or Decimal("0")) > 0:
+            if lat is None or lng is None:
+                raise forms.ValidationError("Pin the company dispatch location to enforce a maximum delivery distance.")
+        return data
+
+
 class DeliveryZoneForm(forms.ModelForm):
     class Meta:
         model = DeliveryZone
-        fields = ["name", "fee", "eta_text", "sort_order", "active"]
+        fields = ["name", "eta_text", "sort_order", "active"]
         labels = {
             "name": "Delivery area / zone",
-            "fee": "Delivery fee (GHS)",
             "eta_text": "Expected delivery time",
             "sort_order": "Display order",
             "active": "Available to customers",
