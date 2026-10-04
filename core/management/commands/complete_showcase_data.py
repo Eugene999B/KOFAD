@@ -26,6 +26,7 @@ from core.models import (
     ManualJournal,
     Party,
     PayrollPeriod,
+    PayrollRule,
     ReturnPrivilege,
     Worker,
     WorkerDocument,
@@ -362,7 +363,46 @@ class Command(BaseCommand):
                 uploaded_by=actor,
             )
 
+    def _ensure_payroll_rule(self, actor):
+        """Restore the project's canonical September 2026 Ghana rule if a test DB lacks its data migration."""
+        PayrollRule.objects.get_or_create(
+            code="GH-PAYROLL",
+            effective_from=date(2026, 9, 1),
+            defaults={
+                "name": "Ghana payroll rules — September 2026",
+                "resident_bands": [
+                    {"amount": "588.00", "rate": "0"},
+                    {"amount": "80.00", "rate": "5"},
+                    {"amount": "100.00", "rate": "10"},
+                    {"amount": "2900.00", "rate": "17.5"},
+                    {"amount": "16000.00", "rate": "25"},
+                    {"amount": "30332.00", "rate": "30"},
+                    {"amount": None, "rate": "35"},
+                ],
+                "employee_ssnit_rate": Decimal("5.5"),
+                "employer_pension_rate": Decimal("13"),
+                "first_tier_rate": Decimal("13.5"),
+                "tier2_rate": Decimal("5"),
+                "min_insurable_earnings": Decimal("587.80"),
+                "max_insurable_earnings": Decimal("69000.00"),
+                "nonresident_rate": Decimal("25"),
+                "casual_rate": Decimal("5"),
+                "bonus_rate": Decimal("5"),
+                "bonus_limit_percent": Decimal("15"),
+                "junior_overtime_rate": Decimal("5"),
+                "junior_overtime_excess_rate": Decimal("10"),
+                "junior_overtime_basic_limit": Decimal("18000"),
+                "notes": (
+                    "Canonical KOFAD 2026 payroll rule used by migration 0018. "
+                    "Review official GRA and SSNIT notices before changing effective versions."
+                ),
+                "active": True,
+                "created_by": actor,
+            },
+        )
+
     def _create_payroll(self, actor, branch):
+        self._ensure_payroll_rule(actor)
         today = timezone.localdate()
         current_first, _ = _month_bounds(today)
         previous_last = current_first - timedelta(days=1)
