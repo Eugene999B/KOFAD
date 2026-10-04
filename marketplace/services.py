@@ -81,6 +81,8 @@ def _validated_coordinates(latitude, longitude):
         lng = Decimal(str(longitude))
     except (TypeError, ValueError, ArithmeticError) as exc:
         raise ValidationError("Choose a valid map location.") from exc
+    if not lat.is_finite() or not lng.is_finite():
+        raise ValidationError("Choose a valid map location.")
     if not Decimal("-90") <= lat <= Decimal("90") or not Decimal("-180") <= lng <= Decimal("180"):
         raise ValidationError("Choose a valid map location.")
     return lat, lng
