@@ -15,6 +15,7 @@ urlpatterns = [
     path("market/account/password-reset/", views.customer_password_reset_start, name="market_password_reset"),
     path("market/account/password-reset/verify/", views.customer_password_reset_verify, name="market_password_reset_verify"),
     path("market/account/password-reset/finish/", views.customer_password_reset_finish, name="market_password_reset_finish"),
+    path("market/account/security/", views.customer_security, name="market_security"),
     path("market/account/logout/", views.customer_logout, name="market_logout"),
     path("market/cart/", views.cart, name="market_cart"),
     path("market/cart/add/<int:pk>/", views.cart_add, name="market_cart_add"),
