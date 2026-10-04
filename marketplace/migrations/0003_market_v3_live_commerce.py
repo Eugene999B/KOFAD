@@ -98,7 +98,7 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ("status", models.CharField(choices=[("requested", "Requested"), ("approved", "Approved"), ("rejected", "Rejected"), ("processing", "Processing"), ("completed", "Completed")], default="requested", max_length=16)),
-                ("resolution", models.CharField(choices=[("refund", "Refund"), ("exchange", "Exchange")], default="refund", max_length=12)),
+                ("resolution", models.CharField(choices=[("refund", "Refund to original payment method")], default="refund", max_length=12)),
                 ("reason", models.TextField()),
                 ("customer_note", models.TextField(blank=True)),
                 ("staff_note", models.TextField(blank=True)),
