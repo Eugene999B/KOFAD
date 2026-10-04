@@ -2571,3 +2571,23 @@ html[data-theme="dark"] .pnl .total{background:#0A2D43;color:#fff}
 
 /* Scrollbars stay visible without becoming bright bars in dark mode. */
 html[data-theme="dark"] *{scrollbar-color:#3A566A #0A1B29}
+
+html[data-theme="dark"] .danger,
+html[data-theme="dark"] a.danger,
+html[data-theme="dark"] button.danger{color:#F28B82!important}
+html[data-theme="dark"] .product-card button{
+  background:#123044!important;
+  border-color:#355A70!important;
+  color:#EAF2F7!important;
+}
+html[data-theme="dark"] .payment-method-option{
+  background:#0B2030!important;
+  border-color:#34566B!important;
+  color:#DDE9EF!important;
+}
+html[data-theme="dark"] .payment-method-option:hover{background:#123247!important;border-color:#4C7186!important}
+html[data-theme="dark"] .payment-method-option.active{background:#176775!important;border-color:#3A8991!important;color:#fff!important}
+html[data-theme="dark"] .theme-toggle,
+html[data-theme="dark"] .top-user-card{color:#DCE8EF}
+html[data-theme="dark"] .theme-toggle:hover,
+html[data-theme="dark"] .top-user-card:hover{background:#112C3E!important;border-color:#315368!important}
