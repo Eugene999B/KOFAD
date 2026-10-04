@@ -1,36 +1,35 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="account-v2-page">
-<header class="account-v2-hero">
-<div><p class="market-eyebrow">MY KOFAD</p><h1>Welcome back, {{ market_customer.full_name|default:"customer" }}.</h1><p>Your orders, payments, delivery details and conversations are together in one secure customer account.</p></div>
-<div class="account-identity-card"><span>{{ market_customer.full_name|first|upper }}</span><div><small>VERIFIED MOBILE</small><strong>{{ market_customer.phone }}</strong><em>Member since {{ market_customer.created_at|date:"M Y" }}</em></div></div>
-</header>
-<div class="account-kpi-grid">
-<article><span>Orders</span><strong>{{ summary.orders }}</strong><small>All online orders</small></article>
-<article><span>Paid online</span><strong>GHS {{ summary.spend|floatformat:2 }}</strong><small>{{ summary.paid_orders }} paid order{{ summary.paid_orders|pluralize }}</small></article>
-<article><span>Active now</span><strong>{{ summary.active_orders }}</strong><small>Still in progress</small></article>
-<article><span>Support</span><strong>{{ summary.support_threads }}</strong><small>Conversation{{ summary.support_threads|pluralize }}</small></article>
-<article><span>Saved</span><strong>{{ summary.wishlist }}</strong><small>Wishlist product{{ summary.wishlist|pluralize }}</small></article>
-<article><span>Returns</span><strong>{{ summary.returns }}</strong><small>Online return request{{ summary.returns|pluralize }}</small></article>
-</div>
-<div class="account-v2-layout">
-<div class="account-main-column">
+<section class="account-v4-page">
+<header class="account-v4-head"><div><p class="market-eyebrow">MY ACCOUNT</p><h1>Hi, {{ market_customer.full_name|default:"there" }}.</h1><p>Orders, saved items and support — all in one place.</p></div><a class="market-button ghost" href="/market/">Continue shopping</a></header>
+
+<nav class="account-v4-grid" aria-label="Account shortcuts">
+<a class="account-v4-tile" href="/market/orders/"><span>▤</span><div><strong>Your orders</strong><small>{{ summary.orders }} total · {{ summary.active_orders }} active</small></div></a>
+<a class="account-v4-tile" href="/market/account/wishlist/"><span>♡</span><div><strong>Saved items</strong><small>{{ summary.wishlist }} saved</small></div></a>
+<a class="account-v4-tile" href="/market/messages/"><span>✦</span><div><strong>Support</strong><small>Messages and order help</small></div></a>
+<a class="account-v4-tile" href="/market/account/returns/"><span>↩</span><div><strong>Returns</strong><small>{{ summary.returns }} request{{ summary.returns|pluralize }}</small></div></a>
+<a class="account-v4-tile" href="/market/account/security/"><span>⌁</span><div><strong>Security</strong><small>Change your password</small></div></a>
+</nav>
+
+<div class="account-v4-layout">
+<div class="account-v4-main">
 {% if active_orders %}
-<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">IN PROGRESS</p><h2>Active orders</h2></div><a href="/market/orders/">See all orders →</a></div>
-<div class="account-active-orders">{% for order in active_orders %}<a href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{{ order.public_reference }}</strong><small>{{ order.created_at|date:"d M Y · H:i" }} · {{ order.get_fulfilment_display }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b><i>→</i></a>{% endfor %}</div></section>
-{% endif %}
-<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">HISTORY</p><h2>Recent purchases</h2></div><a href="/market/orders/">Full order history →</a></div>
-{% if recent_orders %}<div class="account-history-list">{% for order in recent_orders %}<a href="/market/orders/{{ order.pk }}/"><div><strong>{{ order.public_reference }}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.get_status_display }}</small></div><span>{{ order.lines.count }} item{{ order.lines.count|pluralize }}</span><b>GHS {{ order.total|floatformat:2 }}</b><i>→</i></a>{% endfor %}</div>{% else %}<div class="account-empty"><strong>No orders yet.</strong><span>Your KOFAD Market purchases will build your account history here.</span><a href="/market/">Start shopping →</a></div>{% endif %}
+<section class="account-v4-card"><div class="account-v4-card-head"><h2>Active orders</h2><a href="/market/orders/">View all</a></div>
+<div>{% for order in active_orders %}<a class="account-v4-order" href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{{ order.customer_reference }}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.get_fulfilment_display }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b></a>{% endfor %}</div>
 </section>
-{% if recent_lines %}<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">BOUGHT RECENTLY</p><h2>Your recent items</h2></div></div><div class="recent-purchase-grid">{% for line in recent_lines %}<article><span>{{ line.product.category|default:"KOFAD" }}</span><strong>{{ line.description }}</strong><small>{{ line.quantity }} × {{ line.mode }}</small></article>{% endfor %}</div></section>{% endif %}
-{% if wishlist %}<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">SAVED FOR LATER</p><h2>Your wishlist</h2></div><a href="/market/account/wishlist/">Open wishlist →</a></div><div class="account-saved-grid">{% for item in wishlist %}<a href="/market/products/{{ item.listing.pk }}/"><strong>{{ item.listing.display_name }}</strong><small>{{ item.listing.product.category|default:"KOFAD Market" }}</small><span>GHS {{ item.listing.market_price|floatformat:2 }}</span></a>{% endfor %}</div></section>{% endif %}
-{% if recent_views %}<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">RECENTLY VIEWED</p><h2>Continue browsing</h2></div></div><div class="account-saved-grid">{% for item in recent_views %}<a href="/market/products/{{ item.listing.pk }}/"><strong>{{ item.listing.display_name }}</strong><small>Viewed {{ item.view_count }} time{{ item.view_count|pluralize }}</small><span>GHS {{ item.listing.market_price|floatformat:2 }}</span></a>{% endfor %}</div></section>{% endif %}
-{% if return_requests %}<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">RETURNS & REFUNDS</p><h2>Recent return requests</h2></div><a href="/market/account/returns/">See all returns →</a></div><div class="account-return-list">{% for item in return_requests %}<a href="/market/returns/{{ item.pk }}/"><span class="order-status status-{{ item.status }}">{{ item.get_status_display }}</span><div><strong>{{ item.order.public_reference }}</strong><small>{{ item.get_resolution_display }} · {{ item.created_at|date:"d M Y" }}</small></div><i>→</i></a>{% endfor %}</div></section>{% endif %}
+{% endif %}
+<section class="account-v4-card"><div class="account-v4-card-head"><h2>Recent orders</h2>{% if recent_orders %}<a href="/market/orders/">Order history</a>{% endif %}</div>
+{% if recent_orders %}<div>{% for order in recent_orders %}<a class="account-v4-order" href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{{ order.customer_reference }}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.lines.count }} item{{ order.lines.count|pluralize }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b></a>{% endfor %}</div>
+{% else %}<div class="account-empty"><strong>No orders yet.</strong><span>Your purchases will appear here.</span><a href="/market/">Start shopping →</a></div>{% endif %}
+</section>
+{% if wishlist %}
+<section class="account-v4-card"><div class="account-v4-card-head"><h2>Saved for later</h2><a href="/market/account/wishlist/">View saved</a></div><div class="account-saved-grid">{% for item in wishlist|slice:":4" %}<a href="/market/products/{{ item.listing.pk }}/"><strong>{{ item.listing.display_name }}</strong><span>GHS {{ item.listing.market_price|floatformat:2 }}</span></a>{% endfor %}</div></section>
+{% endif %}
 </div>
-<aside class="account-side-column">
-<section class="account-profile-card"><div class="account-section-head"><div><p class="market-eyebrow">PROFILE</p><h2>Account details</h2></div></div><form method="post">{% csrf_token %}<label>Full name{{ profile_form.full_name }}{{ profile_form.full_name.errors }}</label><label>Email address{{ profile_form.email }}{{ profile_form.email.errors }}</label><label>Mobile number<input value="{{ market_customer.phone }}" disabled></label><button class="market-button ghost wide">Save account details</button></form><a class="account-security-link" href="/market/account/security/">Change password →</a></section>
-<section class="account-side-card"><div class="account-section-head"><div><p class="market-eyebrow">DELIVERY</p><h2>Saved details</h2></div></div>{% for address in addresses %}<article class="saved-address"><strong>{{ address.label }}</strong><p>{{ address.recipient_name }} · {{ address.phone }}<br>{{ address.address_line }}{% if address.town %}, {{ address.town }}{% endif %}</p>{% if address.ghana_post_gps %}<small>{{ address.ghana_post_gps }}</small>{% endif %}</article>{% empty %}<p class="account-muted">Your latest delivery address will appear here after checkout.</p>{% endfor %}</section>
-<section class="account-side-card support-account-card"><p class="market-eyebrow">SUPPORT</p><h2>Need KOFAD?</h2><p>Open a support conversation, attach a product photo or document, and keep the full discussion with your account.</p><a class="market-button primary wide" href="/market/messages/">Open customer support <span>→</span></a>{% if conversations %}<small>Last conversation: {{ conversations.0.updated_at|date:"d M · H:i" }}</small>{% endif %}</section>
-<form method="post" action="/market/account/logout/" class="account-signout">{% csrf_token %}<button>Sign out of customer account</button></form>
+
+<aside class="account-v4-side">
+<section class="account-v4-card"><div class="account-v4-profile"><span>{{ market_customer.full_name|first|upper }}</span><div><strong>{{ market_customer.full_name }}</strong><small>{{ market_customer.phone }}</small>{% if market_customer.email %}<small>{{ market_customer.email }}</small>{% endif %}</div></div><div class="account-v4-actions"><a href="/market/account/security/"><span>Password & security</span><b>›</b></a><a href="/market/messages/"><span>Customer support</span><b>›</b></a><a href="/market/account/returns/"><span>Returns & refunds</span><b>›</b></a></div></section>
+<section class="account-v4-card"><div class="account-v4-card-head"><h2>Delivery</h2></div>{% for address in addresses|slice:":1" %}<div class="saved-address"><strong>{{ address.label }}</strong><p>{{ address.address_line }}{% if address.town %}, {{ address.town }}{% endif %}</p></div>{% empty %}<p class="account-muted">Your latest delivery address will appear after checkout.</p>{% endfor %}</section>
+<form method="post" action="/market/account/logout/" class="account-v4-signout">{% csrf_token %}<button>Sign out</button></form>
 </aside>
 </div>
 </section>{% endblock %}
