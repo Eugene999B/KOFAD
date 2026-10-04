@@ -23,7 +23,7 @@ from .models import Access, Audit, Branch, Company
 
 
 BACKUP_FORMAT = "kofad-full-system-backup"
-BACKUP_VERSION = 1
+BACKUP_VERSION = 2
 MAX_BACKUP_BYTES = 100 * 1024 * 1024
 RECENT_BACKUP_SECONDS = 30 * 60
 RESTORE_CONFIRMATION = "RESTORE KOFAD FULL BACKUP"
