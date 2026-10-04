@@ -127,7 +127,7 @@ def market_customer_required(view):
 def home(request):
     listings = list(
         MarketListing.objects.filter(enabled=True, product__active=True)
-        .select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
+        .select_related("product").order_by("-featured", "sort_order", "product__name")[:3]
     )
     branch = None
     try:
@@ -135,15 +135,10 @@ def home(request):
     except ValidationError:
         pass
     _decorate_listings(listings, branch)
-    categories = list(
-        Product.objects.filter(market_listing__enabled=True, active=True)
-        .exclude(category="").values_list("category", flat=True).distinct().order_by("category")[:8]
-    )
     return render(request, "marketplace/home.html", _market_context(
         request,
         title="KOFAD Market & Operations",
         listings=listings,
-        categories=categories,
     ))
 
 def market(request):
