@@ -244,26 +244,77 @@ def product_image(request, pk, size="large"):
     return response
 
 
-def account_start(request):
+def customer_access(request):
     customer = services.customer_from_session(request)
     if customer:
-        return redirect("market")
-    phone = request.POST.get("phone", "").strip()
-    if request.method == "POST":
+        return redirect("market_account")
+    requested_next = request.GET.get("next", "")
+    if requested_next.startswith("/") and not requested_next.startswith("//"):
+        request.session["market_after_login"] = requested_next
+    form = CustomerAccessForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        phone = form.cleaned_data["phone"]
+        existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
+        if existing:
+            request.session["market_login_phone"] = phone
+            return redirect("market_login")
         try:
-            canonical = normalize_ghana_phone(phone)
-            if CustomerAccount.objects.filter(phone=canonical, active=True).exists():
-                messages.info(request, "This number already has a KOFAD Market account. Sign in instead.")
-                return redirect("market_login")
-            services.send_otp(canonical, "register")
-            request.session["market_pending_phone"] = canonical
-            messages.success(request, "Verification code sent by SMS.")
+            services.send_otp(phone, "register")
+            request.session["market_pending_phone"] = phone
+            messages.success(request, "We sent a six-digit verification code to your phone.")
             return redirect("market_verify")
         except ValidationError as exc:
             messages.error(request, problem(exc))
-    return render(request, "marketplace/account_start.html", _market_context(
-        request, title="Create your KOFAD Market account", phone=phone,
+    return render(request, "marketplace/access.html", _market_context(
+        request, title="Sign in or create your account", form=form,
     ))
+
+
+@market_customer_required
+def customer_account(request, customer):
+    profile_form = CustomerProfileForm(request.POST or None, instance=customer)
+    if request.method == "POST" and profile_form.is_valid():
+        profile_form.save()
+        messages.success(request, "Your account details were updated.")
+        return redirect("market_account")
+
+    orders = customer.orders.prefetch_related("lines", "events").all()
+    paid_orders = customer.orders.filter(payment_status="paid")
+    summary = {
+        "orders": customer.orders.count(),
+        "paid_orders": paid_orders.count(),
+        "spend": paid_orders.aggregate(total=Sum("total"))["total"] or 0,
+        "active_orders": customer.orders.exclude(
+            status__in=["delivered", "picked_up", "cancelled", "refunded"]
+        ).count(),
+        "support_threads": customer.conversations.count(),
+    }
+    recent_lines = []
+    for order in orders[:8]:
+        for line in order.lines.all():
+            recent_lines.append(line)
+            if len(recent_lines) >= 8:
+                break
+        if len(recent_lines) >= 8:
+            break
+    active = customer.orders.exclude(
+        status__in=["delivered", "picked_up", "cancelled", "refunded"]
+    ).prefetch_related("events")[:4]
+    return render(request, "marketplace/account.html", _market_context(
+        request,
+        title="My KOFAD account",
+        profile_form=profile_form,
+        summary=summary,
+        recent_orders=orders[:6],
+        active_orders=active,
+        recent_lines=recent_lines,
+        addresses=customer.addresses.all()[:4],
+        conversations=customer.conversations.all()[:5],
+    ))
+
+
+def account_start(request):
+    return redirect("market_access")
 
 
 def account_verify(request):
@@ -388,11 +439,12 @@ def customer_password_reset_finish(request):
 
 def customer_login(request):
     if services.customer_from_session(request):
-        return redirect("market")
+        return redirect("market_account")
     requested_next = request.GET.get("next", "")
     if requested_next.startswith("/") and not requested_next.startswith("//"):
         request.session["market_after_login"] = requested_next
-    form = CustomerLoginForm(request.POST or None)
+    initial_phone = request.session.get("market_login_phone", "")
+    form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
         now = timezone.now()
@@ -416,8 +468,9 @@ def customer_login(request):
                 throttle.save(update_fields=["attempts", "blocked_until"])
         if valid:
             services.set_customer_session(request, customer)
+            request.session.pop("market_login_phone", None)
             after = request.session.pop("market_after_login", None)
-            return redirect(after or "market")
+            return redirect(after or "market_account")
         messages.error(request, "The phone number or password is incorrect.")
     return render(request, "marketplace/login.html", _market_context(
         request, title="Customer sign in", form=form,
