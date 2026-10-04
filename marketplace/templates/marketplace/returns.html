@@ -1,0 +1,5 @@
+{% extends "marketplace/base.html" %}{% block content %}
+<section class="returns-v3-page">
+<header class="commerce-flow-head"><div><p class="market-eyebrow">MY KOFAD · RETURNS</p><h1>Returns & refunds.</h1><p>Follow every online return request and the KOFAD review/approval stage.</p></div><a href="/market/orders/">Order history →</a></header>
+{% if return_requests %}<div class="returns-v3-list">{% for item in return_requests %}<a href="/market/returns/{{ item.pk }}/"><div><span class="order-status status-{{ item.status }}">{{ item.get_status_display }}</span><strong>{{ item.order.public_reference }}</strong><small>{{ item.created_at|date:"d M Y · H:i" }} · {{ item.get_resolution_display }}</small></div><p>{{ item.reason|truncatechars:105 }}</p><b>{{ item.lines.count }} item line{{ item.lines.count|pluralize }}</b><i>Open →</i></a>{% endfor %}</div>{% else %}<div class="market-empty commerce-empty"><b>↩</b><h2>No return requests.</h2><p>If an eligible delivered order needs attention, start from that order’s tracking page.</p><a class="market-button ghost" href="/market/orders/">View order history</a></div>{% endif %}
+</section>{% endblock %}
