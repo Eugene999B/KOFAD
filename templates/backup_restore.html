@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">SYSTEM RECOVERY</p>
     <h2>Backup before you change what cannot be undone.</h2>
-    <p>Full-system backups preserve KOFAD business data, users, roles, settings, audit evidence and transactional records. Restore accepts only an untampered backup created by this KOFAD installation on the exact deployed schema.</p>
+    <p>Full-system backups preserve KOFAD Core and Market data: business records, staff, products, stock, accounting, workers, online customers, orders, support conversations, product galleries, returns, delivery tracking, settings and database-stored files/photos. Restore accepts only an untampered backup created by this KOFAD installation on the exact deployed schema.</p>
   </div>
   <span class="pill">System administrator only</span>
 </section>
@@ -15,7 +15,7 @@
     <div>
       <p class="eyebrow">1 · BACKUP</p>
       <h2>Download a signed full-system backup</h2>
-      <p class="muted">The file is checksummed and cryptographically signed. Keep it private because it contains customer, staff and financial information.</p>
+      <p class="muted">The file is checksummed and cryptographically signed. Keep it private because it contains customer, staff, financial, Marketplace and database-stored document/photo information. Active browser sessions and temporary one-time security codes are intentionally not restored.</p>
     </div>
     {% if recent_backup %}<span class="pill status-good">Safety backup downloaded</span>{% endif %}
   </div>
@@ -54,7 +54,7 @@
     <div>
       <p class="eyebrow">3 · RESTORE</p>
       <h2>Replace the current system from a backup</h2>
-      <p class="muted">Restore replaces KOFAD users, permissions, settings, products, customers, stock, transactions, debts, messages and audit history with the selected backup snapshot. You will be signed out after a successful restore.</p>
+      <p class="muted">Restore replaces the current Core and Marketplace database state with the selected backup snapshot, including customer accounts, online orders, product media, support history and operational records. Active browser sessions are invalidated. You will be signed out after a successful restore.</p>
     </div>
     <span class="pill amber">Destructive</span>
   </div>
@@ -79,13 +79,13 @@
   <div class="section-heading">
     <div>
       <p class="eyebrow">4 · RESET</p>
-      <h2>Reset all business data</h2>
-      <p class="muted">This clears products, stock, customers, suppliers, sales, purchases, debts, payments, expenses, returns, stock operations, closings, messages and business audit records.</p>
+      <h2>Fresh-start reset</h2>
+      <p class="muted">This clears all Core and Marketplace activity: products, stock, customers, suppliers, sales, purchases, finance, workers, payroll, accounting, audit history, Market customers, online orders, OTP records, wishlists, support conversations/files, product galleries, returns/refunds and delivery tracking.</p>
     </div>
     <span class="pill amber">Fresh start</span>
   </div>
   <div class="notice">
-    <strong>KOFAD deliberately preserves access and configuration:</strong> administrator accounts, roles/permissions, company settings, business locations and message templates remain so the system does not lock you out after a reset.
+    <strong>What survives:</strong> only the system administrator account performing the reset, Django permission definitions, deployment secrets and freshly rebuilt standard role templates. Company/contact settings and location details are reset to a clean starting state. Every other staff/demo/customer/business/Market record is removed.
   </div>
   <form method="post" class="stack-form maintenance-confirm-form" data-required-confirmation="{{ reset_phrase }}">
     {% csrf_token %}
@@ -96,9 +96,9 @@
     <input id="reset-confirm" name="confirmation" autocomplete="off" required>
     <label class="switch-row">
       <input type="checkbox" name="understand" value="yes" required>
-      <span><strong>I understand business data will be permanently cleared.</strong><small>A fresh downloaded backup is required before KOFAD will execute the reset.</small></span>
+      <span><strong>I understand KOFAD will be returned to a clean launch state.</strong><small>All Core and Marketplace data except the minimum administrator access described above will be removed. A fresh downloaded backup is required first.</small></span>
     </label>
-    <button class="button danger" {% if not recent_backup %}disabled title="Download a fresh backup first"{% endif %}>Reset business data</button>
+    <button class="button danger" {% if not recent_backup %}disabled title="Download a fresh backup first"{% endif %}>Reset KOFAD to fresh start</button>
   </form>
 </section>
 
