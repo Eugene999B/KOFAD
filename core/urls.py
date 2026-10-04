@@ -25,7 +25,7 @@ urlpatterns = [
     path("search/", v.search, name="search"),
     path("health/", v.health, name="health"), path("login/", v.login_view, name="login"),
     path("logout/", v.logout_view, name="logout"), path("mfa/", v.mfa, name="mfa"),
-    path("branch/", v.switch_branch, name="switch_branch"), path("", v.dashboard, name="dashboard"),
+    path("branch/", v.switch_branch, name="switch_branch"), path("workspace/", v.dashboard, name="dashboard"),
     path("sales/new/", v.pos, name="pos"), path("purchasing/", v.purchasing, name="purchasing"),
     path("api/trades/", v.complete_trade),
     path("api/documents/<uuid:pk>/send-sms/", v.send_transaction_message_api, name="send_transaction_message_api"),
