@@ -1,0 +1,31 @@
+{% extends "marketplace/base.html" %}{% block content %}
+<section class="account-v2-page">
+<header class="account-v2-hero">
+<div><p class="market-eyebrow">MY KOFAD</p><h1>Welcome back, {{ market_customer.full_name|default:"customer" }}.</h1><p>Your orders, payments, delivery details and conversations are together in one secure customer account.</p></div>
+<div class="account-identity-card"><span>{{ market_customer.full_name|first|upper }}</span><div><small>VERIFIED MOBILE</small><strong>{{ market_customer.phone }}</strong><em>Member since {{ market_customer.created_at|date:"M Y" }}</em></div></div>
+</header>
+<div class="account-kpi-grid">
+<article><span>Orders</span><strong>{{ summary.orders }}</strong><small>All online orders</small></article>
+<article><span>Paid online</span><strong>GHS {{ summary.spend|floatformat:2 }}</strong><small>{{ summary.paid_orders }} paid order{{ summary.paid_orders|pluralize }}</small></article>
+<article><span>Active now</span><strong>{{ summary.active_orders }}</strong><small>Still in progress</small></article>
+<article><span>Support</span><strong>{{ summary.support_threads }}</strong><small>Conversation{{ summary.support_threads|pluralize }}</small></article>
+</div>
+<div class="account-v2-layout">
+<div class="account-main-column">
+{% if active_orders %}
+<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">IN PROGRESS</p><h2>Active orders</h2></div><a href="/market/orders/">See all orders →</a></div>
+<div class="account-active-orders">{% for order in active_orders %}<a href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{{ order.public_reference }}</strong><small>{{ order.created_at|date:"d M Y · H:i" }} · {{ order.get_fulfilment_display }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b><i>→</i></a>{% endfor %}</div></section>
+{% endif %}
+<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">HISTORY</p><h2>Recent purchases</h2></div><a href="/market/orders/">Full order history →</a></div>
+{% if recent_orders %}<div class="account-history-list">{% for order in recent_orders %}<a href="/market/orders/{{ order.pk }}/"><div><strong>{{ order.public_reference }}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.get_status_display }}</small></div><span>{{ order.lines.count }} item{{ order.lines.count|pluralize }}</span><b>GHS {{ order.total|floatformat:2 }}</b><i>→</i></a>{% endfor %}</div>{% else %}<div class="account-empty"><strong>No orders yet.</strong><span>Your KOFAD Market purchases will build your account history here.</span><a href="/market/">Start shopping →</a></div>{% endif %}
+</section>
+{% if recent_lines %}<section class="account-section-card"><div class="account-section-head"><div><p class="market-eyebrow">BOUGHT RECENTLY</p><h2>Your recent items</h2></div></div><div class="recent-purchase-grid">{% for line in recent_lines %}<article><span>{{ line.product.category|default:"KOFAD" }}</span><strong>{{ line.description }}</strong><small>{{ line.quantity }} × {{ line.mode }}</small></article>{% endfor %}</div></section>{% endif %}
+</div>
+<aside class="account-side-column">
+<section class="account-profile-card"><div class="account-section-head"><div><p class="market-eyebrow">PROFILE</p><h2>Account details</h2></div></div><form method="post">{% csrf_token %}<label>Full name{{ profile_form.full_name }}{{ profile_form.full_name.errors }}</label><label>Email address{{ profile_form.email }}{{ profile_form.email.errors }}</label><label>Mobile number<input value="{{ market_customer.phone }}" disabled></label><button class="market-button ghost wide">Save account details</button></form><a class="account-security-link" href="/market/account/password-reset/">Change password →</a></section>
+<section class="account-side-card"><div class="account-section-head"><div><p class="market-eyebrow">DELIVERY</p><h2>Saved details</h2></div></div>{% for address in addresses %}<article class="saved-address"><strong>{{ address.label }}</strong><p>{{ address.recipient_name }} · {{ address.phone }}<br>{{ address.address_line }}{% if address.town %}, {{ address.town }}{% endif %}</p>{% if address.ghana_post_gps %}<small>{{ address.ghana_post_gps }}</small>{% endif %}</article>{% empty %}<p class="account-muted">Your latest delivery address will appear here after checkout.</p>{% endfor %}</section>
+<section class="account-side-card support-account-card"><p class="market-eyebrow">SUPPORT</p><h2>Need KOFAD?</h2><p>Open a support conversation, attach a product photo or document, and keep the full discussion with your account.</p><a class="market-button primary wide" href="/market/messages/">Open customer support <span>→</span></a>{% if conversations %}<small>Last conversation: {{ conversations.0.updated_at|date:"d M · H:i" }}</small>{% endif %}</section>
+<form method="post" action="/market/account/logout/" class="account-signout">{% csrf_token %}<button>Sign out of customer account</button></form>
+</aside>
+</div>
+</section>{% endblock %}
