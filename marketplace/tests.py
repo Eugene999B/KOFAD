@@ -439,18 +439,18 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertContains(page, "Sign out")
         self.assertContains(page, 'action="/market/account/logout/"')
 
-    def test_expired_market_session_does_not_expire_staff_identity(self):
+    def test_entering_customer_market_ends_staff_identity(self):
         self.staff_session()
         session = self.client.session
         session["market_customer_id"] = self.customer.pk
-        session["market_session_expires_at"] = timezone.now().timestamp() - 1
+        session["market_session_expires_at"] = timezone.now().timestamp() + (2 * 60 * 60)
         session["staff_session_expires_at"] = timezone.now().timestamp() + (12 * 60 * 60)
         session.save()
         response = self.client.get("/market/account/")
         self.assertRedirects(response, "/market/access/", fetch_redirect_response=False)
         self.assertNotIn("market_customer_id", self.client.session)
-        self.assertIn("_auth_user_id", self.client.session)
-        self.assertEqual(self.client.get("/workspace/").status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertRedirects(self.client.get("/workspace/"), "/login/?next=/workspace/")
 
     def test_unified_access_routes_existing_number_to_password_sign_in(self):
         response = self.client.post("/market/access/", {"phone": "0241234567"})
