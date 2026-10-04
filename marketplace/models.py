@@ -431,6 +431,7 @@ class OtpThrottle(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     blocked_until = models.DateTimeField(null=True, blank=True)
+    code_digest = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["phone", "purpose"], name="one_market_otp_throttle")]
