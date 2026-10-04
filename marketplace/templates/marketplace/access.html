@@ -1,0 +1,24 @@
+{% extends "marketplace/base.html" %}{% block content %}
+<section class="access-v2-shell">
+<div class="access-v2-story">
+<p class="market-eyebrow">ONE KOFAD ACCOUNT</p>
+<h1>One number.<br><span>Your whole buying history.</span></h1>
+<p class="access-v2-lead">Enter your Ghana mobile number once. If you already have an account, KOFAD takes you to sign in. If you are new, we verify the number and create your account securely.</p>
+<div class="access-benefit-grid">
+<article><b>01</b><div><strong>Orders & receipts</strong><span>See every online order, payment and fulfilment stage.</span></div></article>
+<article><b>02</b><div><strong>Saved delivery details</strong><span>Reuse your preferred delivery points and contact details.</span></div></article>
+<article><b>03</b><div><strong>Direct support</strong><span>Chat with KOFAD and attach photos or documents when needed.</span></div></article>
+</div>
+<div class="access-security-note"><span>✓</span><p><strong>Phone-first identity.</strong> New numbers are verified by SMS before an account is created.</p></div>
+</div>
+<div class="access-v2-card">
+<div class="access-card-mark">K</div>
+<p class="market-eyebrow">CUSTOMER ACCESS</p>
+<h2>Sign in or create your account.</h2>
+<p>Use the mobile number you want attached to your KOFAD orders and delivery updates.</p>
+<form method="post" class="access-phone-form">{% csrf_token %}{{ form.non_field_errors }}<label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><button class="market-button primary wide">Continue securely <span>→</span></button></form>
+<div class="access-card-divider"><span>WHAT HAPPENS NEXT</span></div>
+<ul class="access-next-list"><li><span>Returning customer</span><strong>Password sign-in</strong></li><li><span>New customer</span><strong>SMS verification → create password</strong></li></ul>
+<small class="access-privacy">Your account information is used only to operate your KOFAD customer account and fulfil orders.</small>
+</div>
+</section>{% endblock %}
