@@ -8,5 +8,6 @@ urlpatterns = [
     path("admin/", RedirectView.as_view(pattern_name="administration", permanent=False)),
     path("technical-admin/login/", login_view),
     path("technical-admin/", admin.site.urls),
+    path("", include("marketplace.urls")),
     path("", include("core.urls")),
 ]

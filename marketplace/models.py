@@ -1,0 +1,288 @@
+import uuid
+from decimal import Decimal
+
+from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
+from django.core.validators import MinValueValidator
+from django.db import models
+from django.utils import timezone
+
+
+class CustomerAccount(models.Model):
+    phone = models.CharField(max_length=20, unique=True)
+    full_name = models.CharField(max_length=140)
+    email = models.EmailField(blank=True)
+    password_hash = models.CharField(max_length=160)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["full_name", "phone"]
+
+    def set_password(self, raw):
+        self.password_hash = make_password(raw)
+
+    def check_password(self, raw):
+        return check_password(raw, self.password_hash)
+
+    def __str__(self):
+        return f"{self.full_name} · {self.phone}"
+
+
+class MarketListing(models.Model):
+    PRICE_SOURCES = [
+        ("retail_unit", "Retail price · single unit"),
+        ("retail_pack", "Retail price · full pack"),
+        ("wholesale_unit", "Wholesale price · single unit"),
+        ("wholesale_pack", "Wholesale price · full pack"),
+    ]
+    product = models.OneToOneField("core.Product", related_name="market_listing", on_delete=models.CASCADE)
+    enabled = models.BooleanField(default=False)
+    featured = models.BooleanField(default=False)
+    title = models.CharField(max_length=160, blank=True)
+    description = models.TextField(blank=True)
+    price_source = models.CharField(max_length=24, choices=PRICE_SOURCES, default="retail_unit")
+    sort_order = models.PositiveIntegerField(default=100)
+    image_data = models.BinaryField(null=True, blank=True, editable=False)
+    image_thumb = models.BinaryField(null=True, blank=True, editable=False)
+    image_mime = models.CharField(max_length=40, blank=True, default="image/webp")
+    image_name = models.CharField(max_length=180, blank=True)
+    image_updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["sort_order", "product__name"]
+
+    @property
+    def display_name(self):
+        return self.title.strip() or self.product.name
+
+    @property
+    def market_price(self):
+        value = getattr(self.product, self.price_source, None)
+        return value if value is not None else Decimal("0")
+
+    @property
+    def factor(self):
+        return self.product.pack_size if self.price_source.endswith("_pack") else 1
+
+    @property
+    def selling_label(self):
+        return self.product.pack_name if self.price_source.endswith("_pack") else self.product.base_unit
+
+    def __str__(self):
+        return self.display_name
+
+
+class DeliveryZone(models.Model):
+    name = models.CharField(max_length=120)
+    fee = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    eta_text = models.CharField(max_length=120, blank=True, default="")
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=100)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class CustomerAddress(models.Model):
+    customer = models.ForeignKey(CustomerAccount, related_name="addresses", on_delete=models.CASCADE)
+    label = models.CharField(max_length=60, default="Delivery address")
+    recipient_name = models.CharField(max_length=140)
+    phone = models.CharField(max_length=20)
+    region = models.CharField(max_length=100, blank=True)
+    town = models.CharField(max_length=120)
+    address_line = models.TextField()
+    landmark = models.CharField(max_length=220, blank=True)
+    ghana_post_gps = models.CharField(max_length=40, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_default", "-created_at"]
+
+
+class OnlineOrder(models.Model):
+    STATUSES = [
+        ("awaiting_payment", "Awaiting payment"),
+        ("paid", "Paid"),
+        ("confirmed", "Confirmed"),
+        ("preparing", "Preparing"),
+        ("ready_pickup", "Ready for pickup"),
+        ("out_for_delivery", "Out for delivery"),
+        ("delivered", "Delivered"),
+        ("picked_up", "Picked up"),
+        ("cancelled", "Cancelled"),
+        ("refund_pending", "Refund pending"),
+        ("refunded", "Refunded"),
+    ]
+    PAYMENT_STATUSES = [
+        ("unpaid", "Unpaid"), ("initializing", "Initializing"), ("pending", "Pending"),
+        ("paid", "Paid"), ("failed", "Failed"), ("refunded", "Refunded"),
+    ]
+    FULFILMENT = [("delivery", "Delivery"), ("pickup", "Pickup")]
+    LEDGER = [("pending", "Pending"), ("posted", "Posted"), ("attention", "Needs attention")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    public_reference = models.CharField(max_length=32, unique=True)
+    customer = models.ForeignKey(CustomerAccount, related_name="orders", on_delete=models.PROTECT)
+    branch = models.ForeignKey("core.Branch", related_name="online_orders", on_delete=models.PROTECT)
+    party = models.ForeignKey("core.Party", null=True, blank=True, related_name="online_orders", on_delete=models.PROTECT)
+    sale_document = models.OneToOneField("core.Document", null=True, blank=True, related_name="online_order", on_delete=models.PROTECT)
+    delivery_zone = models.ForeignKey(DeliveryZone, null=True, blank=True, on_delete=models.PROTECT)
+    status = models.CharField(max_length=24, choices=STATUSES, default="awaiting_payment")
+    payment_status = models.CharField(max_length=16, choices=PAYMENT_STATUSES, default="unpaid")
+    ledger_status = models.CharField(max_length=16, choices=LEDGER, default="pending")
+    fulfilment = models.CharField(max_length=12, choices=FULFILMENT, default="delivery")
+    recipient_name = models.CharField(max_length=140)
+    phone = models.CharField(max_length=20)
+    email = models.EmailField()
+    region = models.CharField(max_length=100, blank=True)
+    town = models.CharField(max_length=120, blank=True)
+    address_line = models.TextField(blank=True)
+    landmark = models.CharField(max_length=220, blank=True)
+    ghana_post_gps = models.CharField(max_length=40, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    customer_note = models.TextField(blank=True)
+    staff_note = models.TextField(blank=True)
+    subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    delivery_fee = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    payment_reference = models.CharField(max_length=100, blank=True)
+    payment_channel = models.CharField(max_length=40, blank=True)
+    delivery_agent_name = models.CharField(max_length=140, blank=True)
+    delivery_agent_phone = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["branch", "status", "created_at"], name="market_order_status_idx"),
+            models.Index(fields=["customer", "created_at"], name="market_customer_order_idx"),
+        ]
+
+    def __str__(self):
+        return self.public_reference
+
+
+class OnlineOrderLine(models.Model):
+    order = models.ForeignKey(OnlineOrder, related_name="lines", on_delete=models.PROTECT)
+    product = models.ForeignKey("core.Product", on_delete=models.PROTECT)
+    listing = models.ForeignKey(MarketListing, null=True, blank=True, on_delete=models.SET_NULL)
+    description = models.CharField(max_length=180)
+    sku = models.CharField(max_length=40)
+    mode = models.CharField(max_length=40)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    factor = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["pk"]
+
+    @property
+    def base_units(self):
+        return self.quantity * self.factor
+
+
+class StockReservation(models.Model):
+    order = models.ForeignKey(OnlineOrder, related_name="reservations", on_delete=models.CASCADE)
+    branch = models.ForeignKey("core.Branch", on_delete=models.PROTECT)
+    product = models.ForeignKey("core.Product", on_delete=models.PROTECT)
+    units = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    expires_at = models.DateTimeField()
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["order", "product"], name="one_market_reservation_per_product")]
+        indexes = [models.Index(fields=["branch", "product", "active", "expires_at"], name="market_stock_reservation_idx")]
+
+    @property
+    def expired(self):
+        return self.expires_at <= timezone.now()
+
+
+class MarketPaymentAttempt(models.Model):
+    order = models.ForeignKey(OnlineOrder, related_name="payment_attempts", on_delete=models.PROTECT)
+    provider = models.CharField(max_length=24, default="paystack")
+    reference = models.CharField(max_length=100, unique=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, default="GHS")
+    status = models.CharField(max_length=24, default="initialized")
+    access_code = models.CharField(max_length=120, blank=True)
+    authorization_url = models.URLField(blank=True)
+    provider_message = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class OrderEvent(models.Model):
+    order = models.ForeignKey(OnlineOrder, related_name="events", on_delete=models.CASCADE)
+    status = models.CharField(max_length=32)
+    title = models.CharField(max_length=140)
+    note = models.TextField(blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    customer_visible = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+
+class Conversation(models.Model):
+    customer = models.ForeignKey(CustomerAccount, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
+    order = models.ForeignKey(OnlineOrder, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
+    public_name = models.CharField(max_length=140, blank=True)
+    public_phone = models.CharField(max_length=20, blank=True)
+    subject = models.CharField(max_length=180, default="Customer enquiry")
+    status = models.CharField(max_length=12, choices=[("open", "Open"), ("closed", "Closed")], default="open")
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="market_conversations", on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+
+class ConversationMessage(models.Model):
+    SENDERS = [("visitor", "Visitor"), ("customer", "Customer"), ("staff", "Staff")]
+    conversation = models.ForeignKey(Conversation, related_name="messages", on_delete=models.CASCADE)
+    sender_type = models.CharField(max_length=12, choices=SENDERS)
+    staff = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.SET_NULL)
+    body = models.TextField()
+    read_by_staff = models.BooleanField(default=False)
+    read_by_customer = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+
+class OtpThrottle(models.Model):
+    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login")]
+    phone = models.CharField(max_length=20)
+    purpose = models.CharField(max_length=12, choices=PURPOSES)
+    send_count = models.PositiveIntegerField(default=0)
+    attempts = models.PositiveIntegerField(default=0)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    blocked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["phone", "purpose"], name="one_market_otp_throttle")]

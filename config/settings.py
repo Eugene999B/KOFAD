@@ -13,6 +13,7 @@ CSRF_TRUSTED_ORIGINS = [s for s in os.environ.get("CSRF_TRUSTED_ORIGINS", "").sp
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles", "core",
+    "marketplace.apps.MarketplaceConfig",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -53,7 +54,7 @@ STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"
             "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "/workspace/"
 LOGOUT_REDIRECT_URL = "/login/"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
@@ -68,7 +69,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
-DATA_UPLOAD_MAX_MEMORY_SIZE = 1048576
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26214400
 LOGGING = {"version": 1, "disable_existing_loggers": False, "handlers": {"console": {"class": "logging.StreamHandler"}},
            "root": {"handlers": ["console"], "level": "INFO"}}
 
@@ -97,3 +98,11 @@ WHATSAPP_GRAPH_VERSION = os.environ.get("WHATSAPP_GRAPH_VERSION", "v25.0")
 WHATSAPP_TIMEOUT_SECONDS = int(os.environ.get("WHATSAPP_TIMEOUT_SECONDS", "20"))
 WHATSAPP_WEBHOOK_MAX_BYTES = int(os.environ.get("WHATSAPP_WEBHOOK_MAX_BYTES", "524288"))
 
+
+
+# Public KOFAD Market. Secrets remain server-side deployment variables.
+CUSTOMER_OTP_ENABLED = os.environ.get("CUSTOMER_OTP_ENABLED", "0") == "1"
+PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY", "")
+PAYSTACK_TIMEOUT_SECONDS = int(os.environ.get("PAYSTACK_TIMEOUT_SECONDS", "20"))
+MARKET_IMAGE_MAX_BYTES = int(os.environ.get("MARKET_IMAGE_MAX_BYTES", "26214400"))
+MARKET_RESERVATION_MINUTES = int(os.environ.get("MARKET_RESERVATION_MINUTES", "20"))

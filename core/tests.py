@@ -166,14 +166,14 @@ class BusinessTests(Fixtures, TestCase):
 
     def test_session_revoked_on_security_change(self):
         self.authenticate_client()
-        self.assertEqual(self.client.get("/").status_code,200)
+        self.assertEqual(self.client.get("/workspace/").status_code,200)
         self.user.is_active = False
         self.user.save()
-        self.assertEqual(self.client.get("/").status_code,302)
+        self.assertEqual(self.client.get("/workspace/").status_code,302)
 
     def test_all_pages_render(self):
         self.authenticate_client()
-        for path in ["/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
+        for path in ["/workspace/","/inventory/","/sales/new/","/purchasing/","/documents/","/parties/",
                      "/finance/","/creditors/","/accounting/","/payroll/","/payroll/rules/","/workers/","/returns/","/closings/","/reports/","/audit/","/settings/","/settings/company/",
                      "/administration/","/administration/users/","/administration/roles/","/exports/","/communications/",
                      "/products/new/","/parties/new/"]:
@@ -217,8 +217,8 @@ class BusinessTests(Fixtures, TestCase):
     def test_login_session_survives_last_login_update(self):
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
         self.assertEqual(response.status_code,302)
-        self.assertEqual(self.client.get("/mfa/").url,"/")
-        self.assertEqual(self.client.get("/").status_code,200)
+        self.assertEqual(self.client.get("/mfa/").url,"/workspace/")
+        self.assertEqual(self.client.get("/workspace/").status_code,200)
 
     def test_login_accepts_ghana_phone_and_forces_temporary_password_change(self):
         self.user.access.recovery_phone = "+233241234567"
@@ -230,7 +230,7 @@ class BusinessTests(Fixtures, TestCase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/account/password/")
-        self.assertEqual(self.client.get("/").url, "/account/password/")
+        self.assertEqual(self.client.get("/workspace/").url, "/account/password/")
 
     def test_owner_provision_command_creates_equal_full_admin_without_storing_password_in_code(self):
         with patch.dict(os.environ, {
@@ -804,7 +804,7 @@ class ControlCentreIntelligenceTests(Fixtures, TestCase):
 
     def test_dashboard_uses_universal_approvals_and_no_retired_operations_links(self):
         self.authenticate_client()
-        response = self.client.get("/")
+        response = self.client.get("/workspace/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Approvals awaiting review")
         self.assertContains(response, 'href="/approvals/"')
@@ -886,7 +886,7 @@ class OwnerSecurityTests(Fixtures, TestCase):
         owner.user_permissions.add(Permission.objects.get(codename="manage_company"))
         owner.access.branches.add(self.branch)
         self.client.post("/login/",{"username":"business-owner","password":"business-owner-password"})
-        self.assertEqual(self.client.get("/").url,"/inventory/")
+        self.assertEqual(self.client.get("/workspace/").url,"/inventory/")
     def test_cashier_cannot_search_supplier_contacts(self):
         cashier = User.objects.create_user("limited-cashier",password="limited-cashier-password")
         cashier.user_permissions.add(Permission.objects.get(codename="operate_sales"))
@@ -972,7 +972,7 @@ class AdministrationAndExportTests(Fixtures, TestCase):
 
     def test_single_store_hides_location_switcher(self):
         self.other.delete()
-        response = self.client.get("/")
+        response = self.client.get("/workspace/")
         self.assertNotContains(response, 'id="branch-select"')
         self.assertNotContains(response, ">Switch<")
         self.assertContains(response, self.branch.name)
