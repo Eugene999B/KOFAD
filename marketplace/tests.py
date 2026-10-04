@@ -123,6 +123,18 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertNotContains(response, "Phone-first identity.")
         self.assertNotContains(response, "KOFAD CHOOSES THE NEXT STEP")
 
+    def test_existing_customer_password_screen_is_plain_and_focused(self):
+        session = self.client.session
+        session["market_login_phone"] = self.customer.phone
+        session.save()
+        response = self.client.get("/market/account/login/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sign in")
+        self.assertContains(response, self.customer.phone)
+        self.assertNotContains(response, "Your orders are")
+        self.assertNotContains(response, "WELCOME BACK")
+        self.assertNotContains(response, "Staff member?")
+
     def test_only_published_products_appear_in_market(self):
         hidden = Product.objects.create(
             name="Internal only part", sku="MKT-002", base_unit="piece",

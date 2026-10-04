@@ -1,1 +1,19 @@
-{% extends "marketplace/base.html" %}{% block content %}<section class="account-shell compact"><div class="account-story"><p class="market-eyebrow">WELCOME BACK</p><h1>Your orders are<br><span>right where you left them.</span></h1><p>KOFAD recognized your customer number. Enter your password to continue to your orders, saved products, delivery tracking and support.</p><div class="account-alt-action"><span>USING A DIFFERENT NUMBER?</span><a href="/market/access/">Start again with another mobile number →</a></div></div><div class="account-card"><span class="account-step">CUSTOMER SIGN IN</span><h2>Welcome back.</h2><form method="post">{% csrf_token %}{% if locked_phone %}<div class="account-known-phone"><span>MOBILE NUMBER</span><strong>{{ locked_phone }}</strong><a href="/market/access/">Change</a></div><input type="hidden" name="phone" value="{{ locked_phone }}">{% else %}<label>Phone number{{ form.phone }}{{ form.phone.errors }}</label>{% endif %}<label>Password{{ form.password }}{{ form.password.errors }}</label>{% if locked_phone %}{{ form.phone.errors }}{% endif %}<button class="market-button primary wide">Sign in <span>→</span></button></form><p class="account-foot"><a href="/market/account/password-reset/">Forgot password?</a></p><p class="account-foot">Staff member? <a href="/login/">Use the private staff workspace</a></p></div></section>{% endblock %}
+{% extends "marketplace/base.html" %}{% block content %}
+<section class="simple-customer-access">
+<div class="simple-access-card">
+<div class="access-card-mark">K</div>
+<h1>Sign in</h1>
+<p>Enter your password to continue.</p>
+<form method="post">{% csrf_token %}{{ form.non_field_errors }}
+{% if locked_phone %}
+<div class="account-known-phone"><span>MOBILE NUMBER</span><strong>{{ locked_phone }}</strong><a href="/market/access/">Change</a></div>
+<input type="hidden" name="phone" value="{{ locked_phone }}">{{ form.phone.errors }}
+{% else %}
+<label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label>
+{% endif %}
+<label>Password{{ form.password }}{{ form.password.errors }}</label>
+<button class="market-button primary wide">Sign in <span>→</span></button>
+</form>
+<div class="simple-access-links"><a href="/market/account/password-reset/">Forgot password?</a><a href="/market/access/">Use another number</a></div>
+</div>
+</section>{% endblock %}

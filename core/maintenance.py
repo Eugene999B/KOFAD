@@ -149,7 +149,7 @@ def parse_backup(raw):
     if not isinstance(raw, (bytes, bytearray)):
         raise BackupError("Backup content is missing.")
     if len(raw) > MAX_BACKUP_BYTES:
-        raise BackupError("Backup file is larger than the supported 50 MB limit.")
+        raise BackupError("Backup file is larger than the supported 100 MB limit.")
     try:
         bundle = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
