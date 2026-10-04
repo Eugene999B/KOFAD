@@ -714,14 +714,21 @@ def paystack_webhook(request):
         event = json.loads(request.body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return HttpResponse(status=400)
-    if event.get("event") == "charge.success":
-        reference = str((event.get("data") or {}).get("reference", ""))
+    event_name = str(event.get("event", ""))
+    data = event.get("data") or {}
+    if event_name == "charge.success":
+        reference = str(data.get("reference", ""))
         if reference:
             try:
                 verified = services.verify_paystack(reference)
                 services.finalize_payment(reference, verified)
             except ValidationError:
                 return HttpResponse(status=200)
+    elif event_name in {
+        "refund.pending", "refund.processing", "refund.processed",
+        "refund.failed", "refund.needs-attention",
+    }:
+        services.apply_paystack_refund_webhook(event_name, data)
     return HttpResponse(status=200)
 
 
