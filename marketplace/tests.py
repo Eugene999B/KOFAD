@@ -12,10 +12,11 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
 
-from core.models import Branch, Closing, Company, Document, Payment, Product, Stock
+from core.models import Branch, Closing, Company, CustomerReturnRequest, Document, Payment, Product, Stock
 from .models import (
-    Conversation, ConversationAttachment, CustomerAccount, MarketListing,
-    MarketPaymentAttempt, OnlineOrder,
+    Conversation, ConversationAttachment, CustomerAccount, DeliveryTrackingUpdate,
+    MarketListing, MarketListingImage, MarketPaymentAttempt, MarketReturnRequest,
+    OnlineOrder, RecentView, WishlistItem,
 )
 from . import services
 
@@ -464,3 +465,174 @@ class MarketV2SupportTests(MarketFixtures):
         self.assertEqual(payload["mime_type"], "image/webp")
         self.assertTrue(payload["original_name"].endswith(".webp"))
         self.assertLessEqual(payload["size"], 10 * 1024 * 1024)
+
+
+
+class MarketV3CommerceTests(MarketFixtures):
+    def customer_session(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    def staff_session(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+
+    def paid_completed_order(self):
+        order = self.order()
+        reference = "KFD-V3-PAID"
+        MarketPaymentAttempt.objects.create(
+            order=order, reference=reference, amount=order.total,
+            currency="GHS", status="pending",
+        )
+        order = services.finalize_payment(reference, {
+            "status": "success",
+            "amount": int(order.total * 100),
+            "currency": "GHS",
+            "channel": "mobile_money",
+        })
+        order = services.advance_order(self.staff, order, "prepare", {
+            "delivery_agent_name": "", "delivery_agent_phone": "",
+            "handover_code": "", "note": "",
+        })
+        order = services.advance_order(self.staff, order, "ready_pickup", {
+            "delivery_agent_name": "", "delivery_agent_phone": "",
+            "handover_code": "", "note": "",
+        })
+        order = services.advance_order(self.staff, order, "complete_pickup", {
+            "delivery_agent_name": "", "delivery_agent_phone": "",
+            "handover_code": services.handover_code(order), "note": "",
+        })
+        return order
+
+    def test_wishlist_toggle_and_reorder_restore_customer_shopping_intent(self):
+        self.customer_session()
+        response = self.client.post(
+            f"/market/wishlist/{self.listing.pk}/toggle/",
+            {"next": "/market/"},
+        )
+        self.assertRedirects(response, "/market/", fetch_redirect_response=False)
+        self.assertTrue(WishlistItem.objects.filter(
+            customer=self.customer, listing=self.listing
+        ).exists())
+
+        order = self.order()
+        response = self.client.post(f"/market/orders/{order.pk}/reorder/")
+        self.assertRedirects(response, "/market/cart/", fetch_redirect_response=False)
+        self.assertEqual(self.client.session["market_cart"][str(self.listing.pk)], 2)
+
+    def test_product_views_build_recent_history_and_search_suggestions(self):
+        self.customer_session()
+        self.client.get(f"/market/products/{self.listing.pk}/")
+        self.client.get(f"/market/products/{self.listing.pk}/")
+        recent = RecentView.objects.get(customer=self.customer, listing=self.listing)
+        self.assertEqual(recent.view_count, 2)
+
+        self.listing.tags = "excavator hydraulic maintenance"
+        self.listing.save(update_fields=["tags"])
+        response = self.client.get("/market/search/suggestions/?q=hydraulic")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], self.listing.pk)
+
+    def test_gallery_photos_are_compressed_and_render_on_product_page(self):
+        image = Image.new("RGB", (1800, 1100), (30, 100, 145))
+        source = io.BytesIO()
+        image.save(source, "JPEG")
+        upload = SimpleUploadedFile("detail.jpg", source.getvalue(), content_type="image/jpeg")
+        photo = services.save_gallery_image(self.listing, upload, alt_text="Filter side view")
+        self.assertTrue(photo.image_data)
+        self.assertTrue(photo.image_thumb)
+        self.assertEqual(photo.image_mime, "image/webp")
+        response = self.client.get(f"/market/products/{self.listing.pk}/")
+        self.assertContains(response, f"/market/gallery/{photo.pk}/image/thumb/")
+
+    def test_online_return_posts_through_existing_kofad_return_engine(self):
+        order = self.paid_completed_order()
+        line = order.lines.get(product=self.product)
+        self.assertIsNotNone(line.sale_line_id)
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, 18)
+
+        item = services.create_market_return_request(
+            self.customer,
+            order,
+            [{"line": line.pk, "quantity": 1, "condition": "sellable"}],
+            "The item does not match the required specification.",
+            "refund",
+        )
+        self.assertEqual(item.status, "requested")
+        services.review_market_return_request(self.staff, item, "approve", "Eligible return.")
+        item.refresh_from_db()
+        self.assertEqual(item.status, "approved")
+        services.review_market_return_request(self.staff, item, "process", "Physical item received.")
+        item.refresh_from_db()
+        self.assertEqual(item.status, "completed")
+        self.assertIsNotNone(item.core_return_request_id)
+        core_return = CustomerReturnRequest.objects.get(pk=item.core_return_request_id)
+        self.assertEqual(core_return.status, "approved")
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, 19)
+
+    def test_delivery_tracking_keeps_driver_eta_and_customer_visible_evidence(self):
+        order = self.order(fulfilment="delivery")
+        eta = timezone.now() + timezone.timedelta(hours=2)
+        update = services.save_delivery_tracking(self.staff, order, {
+            "delivery_agent_name": "Kojo Driver",
+            "delivery_agent_phone": "+233241111111",
+            "estimated_delivery_at": eta,
+            "status": "Driver assigned",
+            "note": "Your order is being loaded for delivery.",
+            "latitude": Decimal("5.603717"),
+            "longitude": Decimal("-0.186964"),
+            "customer_visible": True,
+        })
+        order.refresh_from_db()
+        self.assertEqual(order.delivery_agent_name, "Kojo Driver")
+        self.assertEqual(update.status, "Driver assigned")
+        self.assertTrue(order.events.filter(status="delivery_update").exists())
+
+    def test_market_intelligence_and_v3_exports_are_staff_accessible(self):
+        self.staff_session()
+        response = self.client.get("/market-analytics/?days=30")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Market Intelligence")
+        export = self.client.get("/exports/")
+        self.assertContains(export, "Online return requests")
+        self.assertContains(export, "Online delivery tracking")
+
+
+class MarketV3LiveSupportTests(MarketFixtures):
+    def customer_session(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    def test_typing_presence_is_visible_to_other_side(self):
+        self.customer_session()
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Typing test",
+        )
+        response = self.client.post(
+            f"/market/support/conversations/{thread.pk}/typing/"
+        )
+        self.assertEqual(response.status_code, 200)
+        thread.refresh_from_db()
+        self.assertIsNotNone(thread.customer_typing_at)
+
+        self.client.post("/market/account/logout/")
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+        response = self.client.get(
+            f"/market/support/conversations/{thread.pk}/updates/?after=0"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["other_typing"])
