@@ -420,7 +420,7 @@ with sync_playwright() as p:
 
     # Enter Market from the public site, then move within Market. Back inside the
     # same authenticated zone must navigate normally without a logout prompt.
-    market_page.get_by_role("link", name="Market", exact=True).first.click()
+    market_page.locator(".public-mobile-market").click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/")
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.locator(".shop-shell-account").click()
