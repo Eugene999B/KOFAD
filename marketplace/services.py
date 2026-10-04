@@ -3,15 +3,17 @@ import hmac
 import io
 import json
 import logging
+import math
 import secrets
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlsplit
 
 import requests
 from PIL import Image, ImageOps, UnidentifiedImageError
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
@@ -19,7 +21,7 @@ from django.utils import timezone
 
 from core import services as core_services
 from core.identity import normalize_ghana_phone
-from core.models import Branch, Closing, Document, Line, Party, Payment, Product, Stock
+from core.models import Branch, Closing, Company, Document, Line, Party, Payment, Product, Stock
 from core.sms.providers import get_provider
 from .models import (
     CustomerAccount, DeliveryZone, DeliveryTrackingUpdate, MarketListing, MarketListingImage,
@@ -33,6 +35,10 @@ PAYSTACK_VERIFY = "https://api.paystack.co/transaction/verify/"
 PAYSTACK_REFUND = "https://api.paystack.co/refund"
 ARKESEL_OTP_GENERATE = "https://sms.arkesel.com/api/otp/generate"
 ARKESEL_OTP_VERIFY = "https://sms.arkesel.com/api/otp/verify"
+GOOGLE_ROUTES = "https://routes.googleapis.com/directions/v2:computeRoutes"
+GOOGLE_GEOCODE = "https://maps.googleapis.com/maps/api/geocode/json"
+NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse"
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +69,229 @@ def active_reserved_units(branch, product, exclude_order=None):
 def available_units(branch, product):
     stock = Stock.objects.filter(branch=branch, product=product).values_list("quantity", flat=True).first() or 0
     return max(int(stock) - int(active_reserved_units(branch, product)), 0)
+
+
+def _delivery_company():
+    return Company.objects.first() or Company()
+
+
+def _validated_coordinates(latitude, longitude):
+    try:
+        lat = Decimal(str(latitude))
+        lng = Decimal(str(longitude))
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise ValidationError("Choose a valid map location.") from exc
+    if not Decimal("-90") <= lat <= Decimal("90") or not Decimal("-180") <= lng <= Decimal("180"):
+        raise ValidationError("Choose a valid map location.")
+    return lat, lng
+
+
+def _haversine_km(origin_lat, origin_lng, destination_lat, destination_lng):
+    lat1, lon1, lat2, lon2 = map(
+        math.radians,
+        [float(origin_lat), float(origin_lng), float(destination_lat), float(destination_lng)],
+    )
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return Decimal(str(6371.0088 * 2 * math.asin(math.sqrt(a))))
+
+
+def _google_route(origin_lat, origin_lng, destination_lat, destination_lng):
+    if not settings.GOOGLE_MAPS_SERVER_KEY:
+        return None
+    payload = {
+        "origin": {"location": {"latLng": {"latitude": float(origin_lat), "longitude": float(origin_lng)}}},
+        "destination": {"location": {"latLng": {"latitude": float(destination_lat), "longitude": float(destination_lng)}}},
+        "travelMode": "DRIVE",
+        "routingPreference": "TRAFFIC_AWARE",
+        "computeAlternativeRoutes": False,
+        "languageCode": "en-GB",
+        "units": "METRIC",
+    }
+    try:
+        response = requests.post(
+            GOOGLE_ROUTES,
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": settings.GOOGLE_MAPS_SERVER_KEY,
+                "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline",
+            },
+            json=payload,
+            timeout=settings.GOOGLE_MAPS_TIMEOUT_SECONDS,
+        )
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("Google route lookup failed: %s", exc)
+        return None
+    routes = body.get("routes") or []
+    if not (200 <= response.status_code < 300 and routes):
+        logger.warning("Google route lookup was unavailable: %s", body.get("error") or body)
+        return None
+    route = routes[0]
+    duration = str(route.get("duration") or "0s").rstrip("s")
+    try:
+        duration_seconds = max(int(float(duration or 0)), 0)
+    except ValueError:
+        duration_seconds = 0
+    return {
+        "distance_km": Decimal(str(route.get("distanceMeters", 0))) / Decimal("1000"),
+        "duration_seconds": duration_seconds,
+        "polyline": ((route.get("polyline") or {}).get("encodedPolyline") or "")[:12000],
+        "source": "google_route",
+    }
+
+
+def delivery_quote(latitude=None, longitude=None):
+    company = _delivery_company()
+    mode = company.delivery_pricing_mode
+    if not company.delivery_enabled:
+        raise ValidationError("Delivery is not available right now.")
+
+    destination = None
+    if latitude not in (None, "") and longitude not in (None, ""):
+        destination = _validated_coordinates(latitude, longitude)
+
+    origin = None
+    if company.delivery_origin_latitude is not None and company.delivery_origin_longitude is not None:
+        origin = (company.delivery_origin_latitude, company.delivery_origin_longitude)
+
+    route = None
+    if destination and origin:
+        route = _google_route(*origin, *destination) if mode == "distance" else None
+        if route is None:
+            route = {
+                "distance_km": _haversine_km(*origin, *destination),
+                "duration_seconds": 0,
+                "polyline": "",
+                "source": "straight_line",
+            }
+
+    if mode == "distance" and not origin:
+        raise ValidationError("Delivery pricing is not ready yet. Please choose pickup or contact us.")
+    if mode == "distance" and not destination:
+        raise ValidationError("Pin your delivery location to calculate the delivery fee.")
+
+    distance = route["distance_km"] if route else None
+    if distance is not None:
+        distance = distance.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        maximum = company.delivery_max_distance_km
+        if maximum > 0 and distance > maximum:
+            raise ValidationError(
+                f"This location is {distance} km away, outside the {maximum} km delivery range."
+            )
+
+    if mode == "free":
+        fee = Decimal("0")
+    elif mode == "flat":
+        fee = company.delivery_flat_fee
+    else:
+        fee = (distance * company.delivery_rate_per_km).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        fee = max(fee, company.delivery_minimum_fee)
+
+    return {
+        "mode": mode,
+        "fee": fee.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        "distance_km": distance,
+        "distance_source": route["source"] if route else "",
+        "duration_seconds": route["duration_seconds"] if route else 0,
+        "polyline": route["polyline"] if route else "",
+        "origin_latitude": origin[0] if origin else None,
+        "origin_longitude": origin[1] if origin else None,
+        "origin_label": company.delivery_origin_label or company.address or company.name,
+    }
+
+
+def _nominatim_headers():
+    company = _delivery_company()
+    contact = company.email or "support@kofad.local"
+    return {"User-Agent": f"KOFAD-Market/1.0 ({contact})", "Accept": "application/json"}
+
+
+def location_search(query):
+    query = (query or "").strip()[:180]
+    if len(query) < 3:
+        raise ValidationError("Enter at least 3 characters to search for a location.")
+    if settings.GOOGLE_MAPS_SERVER_KEY:
+        try:
+            response = requests.get(
+                GOOGLE_GEOCODE,
+                params={"address": query, "components": "country:GH", "key": settings.GOOGLE_MAPS_SERVER_KEY},
+                timeout=settings.GOOGLE_MAPS_TIMEOUT_SECONDS,
+            )
+            body = response.json()
+            if response.ok and body.get("status") in {"OK", "ZERO_RESULTS"}:
+                return [
+                    {
+                        "label": row.get("formatted_address") or query,
+                        "latitude": row["geometry"]["location"]["lat"],
+                        "longitude": row["geometry"]["location"]["lng"],
+                    }
+                    for row in (body.get("results") or [])[:5]
+                    if row.get("geometry", {}).get("location")
+                ]
+        except (requests.RequestException, ValueError, KeyError) as exc:
+            logger.warning("Google geocoding failed: %s", exc)
+
+    if not cache.add("kofad:nominatim:search-lock", "1", timeout=1):
+        raise ValidationError("Please wait a moment before searching again.")
+    try:
+        response = requests.get(
+            NOMINATIM_SEARCH,
+            params={
+                "q": query,
+                "format": "jsonv2",
+                "limit": 5,
+                "countrycodes": "gh",
+                "addressdetails": 1,
+            },
+            headers=_nominatim_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValidationError("Location search is temporarily unavailable. You can still use current location or pin the map.") from exc
+    return [
+        {
+            "label": str(row.get("display_name") or query)[:240],
+            "latitude": row.get("lat"),
+            "longitude": row.get("lon"),
+        }
+        for row in rows[:5]
+        if row.get("lat") and row.get("lon")
+    ]
+
+
+def reverse_location(latitude, longitude):
+    lat, lng = _validated_coordinates(latitude, longitude)
+    if settings.GOOGLE_MAPS_SERVER_KEY:
+        try:
+            response = requests.get(
+                GOOGLE_GEOCODE,
+                params={"latlng": f"{lat},{lng}", "key": settings.GOOGLE_MAPS_SERVER_KEY},
+                timeout=settings.GOOGLE_MAPS_TIMEOUT_SECONDS,
+            )
+            body = response.json()
+            if response.ok and body.get("status") == "OK" and body.get("results"):
+                return {"label": body["results"][0].get("formatted_address") or f"{lat}, {lng}"}
+        except (requests.RequestException, ValueError, KeyError) as exc:
+            logger.warning("Google reverse geocoding failed: %s", exc)
+
+    if not cache.add("kofad:nominatim:reverse-lock", "1", timeout=1):
+        return {"label": f"{lat}, {lng}"}
+    try:
+        response = requests.get(
+            NOMINATIM_REVERSE,
+            params={"lat": str(lat), "lon": str(lng), "format": "jsonv2", "zoom": 18},
+            headers=_nominatim_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        body = response.json()
+        return {"label": str(body.get("display_name") or f"{lat}, {lng}")[:240]}
+    except (requests.RequestException, ValueError):
+        return {"label": f"{lat}, {lng}"}
 
 
 def _square_webp(image, size, quality):
@@ -384,7 +613,16 @@ def create_order(customer, cart, cleaned):
     if not rows:
         raise ValidationError("Your cart is empty.")
     zone = cleaned.get("delivery_zone") if cleaned.get("fulfilment") == "delivery" else None
-    delivery_fee = zone.fee if zone else Decimal("0")
+    quote = (
+        delivery_quote(cleaned.get("latitude"), cleaned.get("longitude"))
+        if cleaned.get("fulfilment") == "delivery"
+        else {
+            "mode": "pickup", "fee": Decimal("0"), "distance_km": None,
+            "distance_source": "", "duration_seconds": 0, "polyline": "",
+            "origin_latitude": None, "origin_longitude": None,
+        }
+    )
+    delivery_fee = quote["fee"]
     subtotal = sum((row["total"] for row in rows), Decimal("0"))
     order = OnlineOrder.objects.create(
         public_reference=_reference(),
@@ -405,6 +643,13 @@ def create_order(customer, cart, cleaned):
         customer_note=cleaned.get("customer_note") or "",
         subtotal=subtotal,
         delivery_fee=delivery_fee,
+        delivery_distance_km=quote["distance_km"],
+        delivery_distance_source=quote["distance_source"],
+        delivery_pricing_mode=quote["mode"],
+        delivery_origin_latitude=quote["origin_latitude"],
+        delivery_origin_longitude=quote["origin_longitude"],
+        delivery_route_polyline=quote["polyline"],
+        delivery_duration_seconds=quote["duration_seconds"] or None,
         total=subtotal + delivery_fee,
     )
     expiry = timezone.now() + timedelta(minutes=settings.MARKET_RESERVATION_MINUTES)
