@@ -15,14 +15,14 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from core.identity import normalize_ghana_phone
-from core.models import Product
+from core.models import Company, Product
 from core.views import problem, protected
 
 from .forms import (
     CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
     CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
     DeliveryTrackingForm, DeliveryZoneForm, MarketGalleryForm, MarketReturnRequestForm,
-    PublicMessageForm, StaffOrderUpdateForm,
+    StaffOrderUpdateForm,
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
@@ -48,7 +48,7 @@ def _market_context(request, **extra):
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
-        "company": getattr(request, "company", None),
+        "company": getattr(request, "company", None) or Company.objects.first() or Company(),
         **extra,
     }
     return context
@@ -139,42 +139,12 @@ def home(request):
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")[:8]
     )
-
-    enquiry_form = PublicMessageForm(request.POST or None)
-    if request.method == "POST" and enquiry_form.is_valid():
-        data = enquiry_form.cleaned_data
-        recent_count = Conversation.objects.filter(
-            public_phone=data["phone"],
-            created_at__gte=timezone.now() - timedelta(minutes=15),
-        ).count()
-        if recent_count >= 3:
-            messages.error(request, "Too many messages were sent from this number. Please wait a little and try again.")
-            return render(request, "marketplace/home.html", _market_context(
-                request, title="KOFAD Market & Operations", listings=listings, enquiry_form=enquiry_form,
-            ))
-        customer = CustomerAccount.objects.filter(phone=data["phone"], active=True).first()
-        conversation = Conversation.objects.create(
-            customer=customer,
-            public_name=data["name"],
-            public_phone=data["phone"],
-            subject=data["subject"],
-        )
-        ConversationMessage.objects.create(
-            conversation=conversation,
-            sender_type="customer" if customer else "visitor",
-            body=data["message"].strip(),
-            read_by_customer=True,
-        )
-        messages.success(request, "Your message has reached KOFAD. A staff member can now respond from the customer inbox.")
-        return redirect("public_home")
     return render(request, "marketplace/home.html", _market_context(
         request,
         title="KOFAD Market & Operations",
         listings=listings,
         categories=categories,
-        enquiry_form=enquiry_form,
     ))
-
 
 def market(request):
     query = request.GET.get("q", "").strip()[:100]

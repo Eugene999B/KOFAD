@@ -26,7 +26,7 @@ def _uploaded_backup(request):
     if not uploaded:
         raise maintenance.BackupError("Choose a KOFAD backup file.")
     if uploaded.size > maintenance.MAX_BACKUP_BYTES:
-        raise maintenance.BackupError("Backup file is larger than the supported 50 MB limit.")
+        raise maintenance.BackupError("Backup file is larger than the supported 100 MB limit.")
     return maintenance.parse_backup(uploaded.read())
 
 
@@ -78,13 +78,9 @@ def backup_restore(request):
                     )
                 if request.POST.get("understand") != "yes":
                     raise maintenance.BackupError("Confirm that the business data will be permanently cleared.")
-                result = maintenance.reset_business_data(request.user)
-                messages.success(
-                    request,
-                    f"Business data reset completed. {result['cleared_model_count']} business data areas were cleared; "
-                    "administrator access, company settings, locations, roles and message templates were preserved."
-                )
-                return redirect("backup_restore")
+                maintenance.reset_business_data(request.user)
+                request.session.flush()
+                return redirect("/login/?fresh_start=1")
             else:
                 raise maintenance.BackupError("Choose a valid maintenance action.")
         except maintenance.BackupError as exc:

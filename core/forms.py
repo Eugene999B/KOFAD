@@ -97,16 +97,20 @@ class PartyForm(forms.ModelForm):
 class CompanyForm(forms.ModelForm):
     class Meta:
         model = Company
-        fields = ["name", "phone", "secondary_phone", "address"]
+        fields = ["name", "phone", "secondary_phone", "email", "whatsapp_phone", "address"]
         labels = {
             "name": "Business name",
             "phone": "Business phone 1",
             "secondary_phone": "Business phone 2",
+            "email": "Business email",
+            "whatsapp_phone": "Public WhatsApp number",
             "address": "Business address / public location",
         }
         help_texts = {
             "phone": "Printed as a KOFAD business contact number, not as the customer's number.",
             "secondary_phone": "Optional second public business number.",
+            "email": "Shown publicly on the Market Contact Us section.",
+            "whatsapp_phone": "Optional WhatsApp number customers can open directly from the Market.",
             "address": "Public business address. Each store/location can also have its own address.",
         }
 
@@ -116,6 +120,10 @@ class CompanyForm(forms.ModelForm):
 
     def clean_secondary_phone(self):
         value = self.cleaned_data["secondary_phone"].strip()
+        return normalize_ghana_phone(value) if value else ""
+
+    def clean_whatsapp_phone(self):
+        value = self.cleaned_data["whatsapp_phone"].strip()
         return normalize_ghana_phone(value) if value else ""
 
 

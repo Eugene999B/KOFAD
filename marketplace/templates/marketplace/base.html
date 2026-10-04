@@ -16,7 +16,6 @@
 </head>
 <body class="market-body market-v2">
 <a class="market-skip" href="#main">Skip to content</a>
-<div class="commerce-utility"><div><span class="commerce-live-dot"></span><strong>KOPEX IMPEX</strong><span>Live stock · Secure checkout · Tracked fulfilment</span></div><div><a href="/#contact">Help & enquiries</a><a href="/login/">Staff workspace</a></div></div>
 <header class="market-header commerce-header">
 <a class="market-brand" href="/" aria-label="KOPEX IMPEX home"><span class="market-brand-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span><span><strong>KOPEX</strong><small>IMPEX · KOFAD MARKET</small></span></a>
 <form class="commerce-global-search" action="/market/" method="get" role="search"><span aria-hidden="true">⌕</span><input name="q" value="{{ q|default:'' }}" type="search" placeholder="Search products, categories or SKU" aria-label="Search KOFAD Market"><button>Search</button></form>
@@ -38,5 +37,5 @@
 {% for message in messages %}<div class="market-flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
 <main id="main">{% block content %}{% endblock %}</main>
 {% if market_customer %}<a class="commerce-support-fab" href="/market/messages/" aria-label="Open KOFAD support"><span>✦</span><b>Support</b>{% if market_unread_count %}<i>{{ market_unread_count }}</i>{% endif %}</a>{% endif %}
-<footer class="market-footer commerce-footer"><div><span class="footer-brand-row"><span class="market-brand-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span><strong>KOPEX IMPEX</strong></span><span>KOFAD Market connects customer ordering directly to controlled stock, payment and fulfilment operations.</span></div><div class="footer-links"><a href="/market/">Market</a><a href="/market/orders/">Track an order</a><a href="/market/messages/">Customer support</a><a href="/login/">Staff access</a></div><small>© {% now "Y" %} KOPEX IMPEX · Secure commerce powered by KOFAD.</small></footer>
+<footer class="market-footer commerce-footer"><div><span class="footer-brand-row"><span class="market-brand-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span><strong>KOPEX IMPEX</strong></span><span>Shop, order and manage your KOFAD customer account.</span></div><div class="footer-links"><a href="/market/">Market</a><a href="/#contact">Contact us</a><a href="/market/messages/">Customer chat</a><a href="/login/">Staff access</a></div><small>© {% now "Y" %} KOPEX IMPEX · Powered by KOFAD.</small></footer>
 </body></html>

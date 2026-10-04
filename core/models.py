@@ -38,6 +38,8 @@ class Company(models.Model):
     name = models.CharField(max_length=150, default="KOFAD IMPEX ENTERPRISE")
     phone = models.CharField(max_length=40, blank=True)
     secondary_phone = models.CharField(max_length=40, blank=True)
+    email = models.EmailField(blank=True)
+    whatsapp_phone = models.CharField(max_length=40, blank=True)
     address = models.TextField(blank=True)
     currency = models.CharField(max_length=3, default="GHS")
 

@@ -26,7 +26,15 @@ from . import services
 class MarketFixtures(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name="Main", code="main", active=True)
-        Company.objects.create(name="KOFAD IMPEX ENTERPRISE", currency="GHS")
+        Company.objects.create(
+            name="KOFAD IMPEX ENTERPRISE",
+            currency="GHS",
+            phone="+233241112222",
+            secondary_phone="+233242223333",
+            email="sales@kofad.example",
+            whatsapp_phone="+233243334444",
+            address="Dunkwa Offin",
+        )
         self.staff = User.objects.create_superuser(
             "market-owner", "owner@example.test", "market-owner-password"
         )
@@ -87,12 +95,33 @@ class MarketFixtures(TestCase):
 
 
 class MarketPublicExperienceTests(MarketFixtures):
-    def test_public_home_replaces_staff_dashboard_at_root(self):
+    def test_public_home_is_simplified_and_uses_company_contact_settings(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Explore the Market")
-        self.assertContains(response, "Staff workspace")
+        self.assertContains(response, "CONTACT US")
+        self.assertContains(response, "+233241112222")
+        self.assertContains(response, "+233242223333")
+        self.assertContains(response, "sales@kofad.example")
+        self.assertContains(response, "+233243334444")
+        self.assertContains(response, "Sign in to chat with us")
+        self.assertNotContains(response, "Everything stays connected.")
+        self.assertNotContains(response, "More than a checkout account.")
+        self.assertNotContains(response, "Not sure what to order?")
+        self.assertNotContains(response, "Send enquiry")
+        self.assertNotContains(response, "Live stock · Secure checkout · Tracked fulfilment")
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
+
+    def test_customer_access_page_is_only_the_sign_in_or_create_account_card(self):
+        response = self.client.get("/market/access/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sign in or create account")
+        self.assertContains(response, "Enter your mobile number to continue.")
+        self.assertNotContains(response, "ONE KOFAD ACCOUNT")
+        self.assertNotContains(response, "One number.")
+        self.assertNotContains(response, "Existing customer")
+        self.assertNotContains(response, "Phone-first identity.")
+        self.assertNotContains(response, "KOFAD CHOOSES THE NEXT STEP")
 
     def test_only_published_products_appear_in_market(self):
         hidden = Product.objects.create(
@@ -292,18 +321,18 @@ class MarketFulfilmentTests(MarketFixtures):
 
 
 class MarketInboxTests(MarketFixtures):
-    def test_public_enquiry_enters_staff_inbox(self):
+    def test_public_home_no_longer_creates_visitor_enquiries(self):
+        before = Conversation.objects.count()
         response = self.client.post("/", {
             "name": "Visitor",
             "phone": "0245556677",
             "subject": "Delivery question",
             "message": "Can you deliver this product to my area?",
         })
-        self.assertEqual(response.status_code, 302)
-        from .models import Conversation
-        item = Conversation.objects.get(public_phone="+233245556677")
-        self.assertEqual(item.messages.get().sender_type, "visitor")
-        self.assertFalse(item.messages.get().read_by_staff)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Conversation.objects.count(), before)
+        self.assertNotContains(response, "Send enquiry")
+        self.assertContains(response, "CONTACT US")
 
 
 
