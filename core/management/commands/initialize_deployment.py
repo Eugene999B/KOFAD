@@ -24,6 +24,9 @@ class Command(BaseCommand):
                 call_command("provision_owner_admin", confirm_owner_admin=True)
             if os.environ.get("KOFAD_LOAD_SHOWCASE_DATA", "").strip() == "1":
                 call_command("load_showcase_data", confirm_live_showcase=True)
+            # Existing showcase environments must keep pace with newly added KOFAD modules.
+            # This command is a guarded no-op unless the SHOWCASE-DATA-V1 marker exists.
+            call_command("complete_showcase_data", confirm_live_showcase=True)
         finally:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT pg_advisory_unlock(734001620)")
