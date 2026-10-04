@@ -4,6 +4,7 @@ import json
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.sessions.models import Session
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from . import maintenance
 from .models import Access, Audit, Branch, Company, Party, Product, Stock
@@ -83,6 +84,12 @@ class MaintenanceServiceTests(TransactionTestCase):
             purpose="register",
             send_count=1,
             code_digest="a" * 64,
+        )
+        Group.objects.create(name="Demo Custom Role")
+        Session.objects.create(
+            session_key="demo-session",
+            session_data="e30:1test:signature",
+            expire_date=timezone.now() + timezone.timedelta(hours=1),
         )
 
     def test_signed_backup_rejects_tampering(self):
