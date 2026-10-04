@@ -76,7 +76,7 @@ with sync_playwright() as p:
     page.get_by_label("Username or phone number", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
-    page.wait_for_url("http://127.0.0.1:8000/")
+    page.wait_for_url("http://127.0.0.1:8000/workspace/")
     page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
@@ -161,7 +161,7 @@ with sync_playwright() as p:
 
     page.goto("http://127.0.0.1:8000/sales/new/")
     page.screenshot(path=str(out / "pos-desktop.png"), full_page=True)
-    for path in ["/","/inventory/","/finance/","/operations/","/reports/","/communications/"]:
+    for path in ["/workspace/","/inventory/","/finance/","/operations/","/reports/","/communications/"]:
         page.goto("http://127.0.0.1:8000"+path)
         assert page.locator("h1").count() > 0
     page.set_viewport_size({"width":390,"height":844})
@@ -175,7 +175,7 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "debt-payment-sheet-mobile.png"), full_page=True)
     mobile_dialog.get_by_role("button", name="Cancel", exact=True).click()
 
-    for name,path in [("dashboard","/"),("pos","/sales/new/"),("inventory","/inventory/")]:
+    for name,path in [("dashboard","/workspace/"),("pos","/sales/new/"),("inventory","/inventory/")]:
         page.goto("http://127.0.0.1:8000"+path)
         page.screenshot(path=str(out / (name+"-mobile.png")), full_page=True)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), path + " overflows"
@@ -204,7 +204,7 @@ with sync_playwright() as p:
     page.locator("#cart").get_by_role("button",name="Remove",exact=False).click()
     for width in (320, 768):
         page.set_viewport_size({"width":width,"height":900})
-        for path in ("/", "/sales/new/", "/inventory/", "/finance/"):
+        for path in ("/workspace/", "/sales/new/", "/inventory/", "/finance/"):
             page.goto("http://127.0.0.1:8000"+path)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width)+path
     page.set_viewport_size({"width":390,"height":844})
@@ -213,7 +213,7 @@ with sync_playwright() as p:
     admin_page.get_by_label("Username or phone number",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("admin")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
-    admin_page.wait_for_url("http://127.0.0.1:8000/")
+    admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
     admin_page.goto("http://127.0.0.1:8000/administration/")
