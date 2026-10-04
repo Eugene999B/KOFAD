@@ -4,7 +4,7 @@
 {% block content %}
 <section class="hero-panel compact-hero"><div><p class="eyebrow">PRODUCT SETUP</p><h2>{{ title }}</h2><p>{{ description }}</p></div><span class="pill">Pack-aware stock</span></section>
 {% if not editing %}<div class="notice subtle"><strong>Opening-stock location:</strong> {{ current_branch.name }}{% if current_branch.address %} · {{ current_branch.address }}{% endif %}. Product identity is shared across KOFAD, but the opening quantity entered below is posted to this current location.</div>{% endif %}
-<form method="post" class="panel product-setup-form" id="product-setup-form">{% csrf_token %}
+<form method="post" enctype="multipart/form-data" class="panel product-setup-form" id="product-setup-form">{% csrf_token %}
 {{ form.non_field_errors }}
 
 <section class="product-form-section">
@@ -52,6 +52,23 @@
 <div class="two-column">
 <label>Low-stock warning quantity{{ form.reorder_level }}<small>Stored in the smallest sellable unit.</small>{{ form.reorder_level.errors }}</label>
 <label class="switch-row">{{ form.active }}<span><strong>Product active</strong><small>Inactive products remain in history but cannot be newly sold or received.</small></span></label>
+</div>
+</section>
+
+<section class="product-form-section market-publishing-section">
+<div class="section-heading"><div><p class="eyebrow">5 · ONLINE MARKET</p><h2>Publish for online ordering</h2><p class="muted">The Market uses the same KOFAD stock. You decide which products customers can see and which configured selling price they pay.</p></div><a class="text-link" href="/market/" target="_blank" rel="noopener">Preview Market ↗</a></div>
+{{ market_form.non_field_errors }}
+<label class="switch-row">{{ market_form.enabled }}<span><strong>Show this product in KOFAD Market</strong><small>{{ market_form.enabled.help_text }}</small></span></label>
+<div class="two-column">
+<label>Market display name <small>{{ market_form.title.help_text }}</small>{{ market_form.title }}{{ market_form.title.errors }}</label>
+<label>Market selling price <small>{{ market_form.price_source.help_text }}</small>{{ market_form.price_source }}{{ market_form.price_source.errors }}</label>
+<label class="switch-row">{{ market_form.featured }}<span><strong>Feature this product</strong><small>Featured items receive stronger placement on the public Market.</small></span>{{ market_form.featured.errors }}</label>
+<label>Display order <small>Lower numbers appear before higher numbers.</small>{{ market_form.sort_order }}{{ market_form.sort_order.errors }}</label>
+</div>
+<label>Customer-facing description{{ market_form.description }}{{ market_form.description.errors }}</label>
+<div class="market-photo-setup">
+<div class="market-photo-preview">{% if market_form.instance.image_thumb %}<img src="/market/products/{{ market_form.instance.pk }}/image/thumb/" alt="Current market product photo">{% else %}<span>PRODUCT PHOTO</span>{% endif %}</div>
+<div><label>Market product photo <small>{{ market_form.image.help_text }}</small>{{ market_form.image }}{{ market_form.image.errors }}</label>{% if market_form.instance.image_thumb %}<label class="check-row">{{ market_form.remove_image }} Remove current photo</label>{% endif %}<p class="hint">KOFAD corrects phone rotation, converts the picture to WebP, creates a full image and thumbnail, and stores the compressed result safely in the database.</p></div>
 </div>
 </section>
 <button class="button">Save product</button>
