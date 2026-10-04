@@ -2354,3 +2354,27 @@ html[data-theme="light"] .executive-brief{border-left-color:#138C94}
 html[data-theme="light"] .page-footer{color:#718697}
 html[data-theme="light"] ::selection{background:#D9EFF0;color:#102B46}
 html[data-theme="light"] *{scrollbar-color:#AFC5D1 transparent}
+
+
+/* Residual warm neutrals from the retired light skin. */
+html[data-theme="light"] .eyebrow{color:#647E90}
+html[data-theme="light"] .text-link,
+html[data-theme="light"] .text-button,
+html[data-theme="light"] .section-heading>a{color:#0F747A}
+html[data-theme="light"] .text-link:hover,
+html[data-theme="light"] .text-button:hover,
+html[data-theme="light"] .section-heading>a:hover{color:#0A5D63}
+html[data-theme="light"] .search-result-symbol,
+html[data-theme="light"] .catalog-empty-icon{background:#E4F3F4;color:#138C94}
+html[data-theme="light"] .transaction-message-preview,
+html[data-theme="light"] .debt-balance-card,
+html[data-theme="light"] .command-rail{background:#F8FBFC;border-color:#DCE7ED}
+html[data-theme="light"] .customer-result:hover,
+html[data-theme="light"] .debt-account-card:hover{background:#F1F8F9}
+html[data-theme="light"] .comms-one-customer-row em{color:#0F747A}
+html[data-theme="light"] .debt-search-form,
+html[data-theme="light"] .inventory-search{background:#fff;border-color:#D7E4EB}
+html[data-theme="light"] .selected-customer{background:#EEF6F7;border-color:#D1E4E6}
+html[data-theme="light"] .selected-customer strong{color:#173A54}
+html[data-theme="light"] .permission-box{background:#F8FBFC;border-color:#DCE7ED}
+html[data-theme="light"] .switch-row{border-color:#DCE7ED}
