@@ -828,6 +828,11 @@ def initiate_paystack_refund(item):
     ).prefetch_related("lines__order_line").get(pk=item.pk)
     if item.provider_refund_id:
         return item
+    if item.refund_initiated_at and item.provider_refund_status in {"submitting", "submission_unknown"}:
+        raise ValidationError(
+            "A previous Paystack refund submission has an unknown outcome. "
+            "Reconcile it in Paystack before attempting another refund."
+        )
     if not item.core_return_request_id or item.core_return_request.status != "approved":
         raise ValidationError("The KOFAD return must be posted before the payment refund can begin.")
     if not item.order.payment_reference:
@@ -848,6 +853,14 @@ def initiate_paystack_refund(item):
         "customer_note": item.reason[:240],
         "merchant_note": f"KOFAD {item.order.public_reference} return {item.pk}"[:240],
     }
+    item.refund_amount = amount
+    item.refund_initiated_at = timezone.now()
+    item.provider_refund_status = "submitting"
+    item.provider_refund_message = "KOFAD submitted the refund request to Paystack."
+    item.save(update_fields=[
+        "refund_amount", "refund_initiated_at",
+        "provider_refund_status", "provider_refund_message",
+    ])
     try:
         response = requests.post(
             PAYSTACK_REFUND,
@@ -858,17 +871,21 @@ def initiate_paystack_refund(item):
         )
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
-        raise ValidationError(
-            "The KOFAD return is posted, but Paystack could not be reached to start the refund."
-        ) from exc
-    if not 200 <= response.status_code < 300 or not body.get("status"):
-        raise ValidationError(
-            str(body.get("message") or "Paystack did not accept the refund request.")[:240]
+        item.provider_refund_status = "submission_unknown"
+        item.provider_refund_message = (
+            "Paystack submission outcome is unknown because the network response was lost. "
+            "Reconcile this refund before retrying."
         )
+        item.save(update_fields=["provider_refund_status", "provider_refund_message"])
+        raise ValidationError(item.provider_refund_message) from exc
+    if not 200 <= response.status_code < 300 or not body.get("status"):
+        item.provider_refund_status = "rejected"
+        item.provider_refund_message = str(
+            body.get("message") or "Paystack did not accept the refund request."
+        )[:240]
+        item.save(update_fields=["provider_refund_status", "provider_refund_message"])
+        raise ValidationError(item.provider_refund_message)
     data = body.get("data") or {}
-    item.refund_amount = amount
-    item.refund_initiated_at = timezone.now()
-    item.save(update_fields=["refund_amount", "refund_initiated_at"])
     _apply_refund_provider_state(item, data, body.get("message", ""))
 
     OrderEvent.objects.create(
@@ -957,7 +974,7 @@ def apply_paystack_refund_webhook(event_name, data):
 def eligible_market_return_quantity(order_line):
     reserved = MarketReturnRequestLine.objects.filter(
         order_line=order_line,
-        request__status__in=["requested", "approved", "processing", "completed"],
+        request__status__in=["requested", "approved", "processing", "refund_attention", "completed"],
     ).aggregate(total=Sum("quantity"))["total"] or 0
     return max(int(order_line.quantity) - int(reserved), 0)
 
