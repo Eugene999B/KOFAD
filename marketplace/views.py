@@ -876,6 +876,205 @@ def support_attachment(request, pk):
     return response
 
 
+
+def market_search_suggestions(request):
+    query = request.GET.get("q", "").strip()[:80]
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+    rows = MarketListing.objects.filter(
+        enabled=True, product__active=True
+    ).filter(
+        Q(title__icontains=query) | Q(tags__icontains=query)
+        | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
+        | Q(product__category__icontains=query)
+    ).select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
+    results = [{
+        "id": row.pk,
+        "name": row.display_name,
+        "category": row.product.category or "KOFAD Market",
+        "sku": row.product.sku,
+        "price": str(row.market_price),
+        "url": f"/market/products/{row.pk}/",
+        "image": (
+            f"/market/products/{row.pk}/image/thumb/"
+            if row.image_thumb else row.image_url
+        ),
+    } for row in rows]
+    response = JsonResponse({"results": results})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def gallery_image(request, pk, size="large"):
+    image = get_object_or_404(MarketListingImage.objects.select_related("listing"), pk=pk)
+    if not image.listing.enabled and not (
+        request.user.is_authenticated and request.user.has_perm("core.change_product")
+    ):
+        raise Http404
+    data = image.image_thumb if size == "thumb" else image.image_data
+    if not data:
+        raise Http404
+    response = HttpResponse(bytes(data), content_type=image.image_mime or "image/webp")
+    response["Content-Disposition"] = "inline"
+    response["Cache-Control"] = "public, max-age=86400" if image.listing.enabled else "private, no-store"
+    return response
+
+
+@market_customer_required
+@require_POST
+def wishlist_toggle(request, customer, pk):
+    listing = get_object_or_404(MarketListing, pk=pk, enabled=True, product__active=True)
+    item = WishlistItem.objects.filter(customer=customer, listing=listing).first()
+    if item:
+        item.delete()
+        saved = False
+        messages.success(request, "Removed from your wishlist.")
+    else:
+        WishlistItem.objects.create(customer=customer, listing=listing)
+        saved = True
+        messages.success(request, "Saved to your wishlist.")
+    if request.headers.get("Accept") == "application/json":
+        return JsonResponse({"saved": saved, "count": customer.wishlist_items.count()})
+    target = request.POST.get("next", "")
+    return redirect(target if target.startswith("/") and not target.startswith("//") else "market_product", pk=listing.pk)
+
+
+@market_customer_required
+def customer_wishlist(request, customer):
+    rows = list(
+        customer.wishlist_items.select_related("listing__product").filter(
+            listing__enabled=True, listing__product__active=True
+        )
+    )
+    branch = None
+    try:
+        branch = services.market_branch()
+    except ValidationError:
+        pass
+    listings = [row.listing for row in rows]
+    _decorate_listings(listings, branch)
+    return render(request, "marketplace/wishlist.html", _market_context(
+        request, title="Wishlist", listings=listings,
+    ))
+
+
+@market_customer_required
+@require_POST
+def reorder_order(request, customer, pk):
+    order = get_object_or_404(
+        OnlineOrder.objects.prefetch_related("lines__listing"),
+        pk=pk, customer=customer,
+    )
+    cart = request.session.get("market_cart", {})
+    added = 0
+    skipped = 0
+    for line in order.lines.all():
+        listing = line.listing
+        if not listing or not listing.enabled or not listing.product.active:
+            skipped += 1
+            continue
+        key = str(listing.pk)
+        current = int(cart.get(key, 0) or 0)
+        cart[key] = min(current + line.quantity, 999)
+        added += 1
+    request.session["market_cart"] = cart
+    request.session.modified = True
+    if added:
+        messages.success(request, f"Added {added} previous item line(s) to your cart.")
+    if skipped:
+        messages.info(request, f"{skipped} previous item line(s) are no longer available online.")
+    return redirect("market_cart")
+
+
+@market_customer_required
+def customer_returns(request, customer):
+    rows = customer.return_requests.select_related("order", "reviewed_by").prefetch_related(
+        "lines__order_line", "attachments"
+    )
+    return render(request, "marketplace/returns.html", _market_context(
+        request, title="My returns", return_requests=rows,
+    ))
+
+
+@market_customer_required
+def customer_return_request(request, customer, pk):
+    order = get_object_or_404(
+        OnlineOrder.objects.prefetch_related("lines", "return_requests__lines"),
+        pk=pk, customer=customer,
+    )
+    if order.payment_status != "paid" or order.status not in {"delivered", "picked_up"}:
+        messages.error(request, "A return request can be started only after a paid order has been handed over.")
+        return redirect("market_order", pk=order.pk)
+
+    return_rows = []
+    for line in order.lines.all():
+        eligible = services.eligible_market_return_quantity(line)
+        return_rows.append({"line": line, "eligible": eligible})
+
+    form = MarketReturnRequestForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        payload = [{
+            "line": row["line"].pk,
+            "quantity": request.POST.get(f"qty_{row['line'].pk}", "0"),
+            "condition": request.POST.get(f"condition_{row['line'].pk}", "sellable"),
+        } for row in return_rows]
+        try:
+            item = services.create_market_return_request(
+                customer,
+                order,
+                payload,
+                form.cleaned_data["reason"],
+                form.cleaned_data["resolution"],
+                form.cleaned_data.get("evidence"),
+            )
+        except ValidationError as exc:
+            form.add_error(None, problem(exc))
+        else:
+            messages.success(request, "Your return request was submitted to KOFAD.")
+            return redirect("market_return_detail", pk=item.pk)
+    return render(request, "marketplace/return_request.html", _market_context(
+        request, title="Request a return", order=order, rows=return_rows, form=form,
+    ))
+
+
+@market_customer_required
+def customer_return_detail(request, customer, pk):
+    item = get_object_or_404(
+        MarketReturnRequest.objects.select_related("order", "reviewed_by").prefetch_related(
+            "lines__order_line", "attachments"
+        ),
+        pk=pk, customer=customer,
+    )
+    return render(request, "marketplace/return_detail.html", _market_context(
+        request, title="Return request", item=item,
+    ))
+
+
+def market_return_attachment(request, pk):
+    attachment = get_object_or_404(
+        MarketReturnAttachment.objects.select_related("request__customer"),
+        pk=pk,
+    )
+    customer = services.customer_from_session(request)
+    staff_allowed = request.user.is_authenticated and (
+        request.user.is_superuser
+        or request.user.has_perm("core.operate_sales")
+        or request.user.has_perm("core.approve_operations")
+        or request.user.has_perm("core.manage_company")
+    )
+    if not staff_allowed and (not customer or attachment.request.customer_id != customer.pk):
+        raise Http404
+    inline = request.GET.get("inline") == "1" and attachment.is_image
+    filename = "".join(
+        ch for ch in attachment.original_name if ch.isalnum() or ch in " ._()-"
+    ).strip() or "kofad-return-evidence"
+    response = HttpResponse(bytes(attachment.data), content_type=attachment.mime_type)
+    response["Content-Disposition"] = f'{"inline" if inline else "attachment"}; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @protected("change_product|manage_company")
 def market_catalog_admin(request, branch):
     from core.models import Stock
