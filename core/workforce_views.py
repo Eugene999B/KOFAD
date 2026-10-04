@@ -492,7 +492,6 @@ def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
             x + 64 * mm * scale, yy - 4 * mm * scale,
             x + width - 4 * mm * scale, yy,
         )
-        pdf.stroke()
     pdf.restoreState()
 
     _draw_logo(pdf, x + 5 * mm * scale, y + height - 12.2 * mm * scale, 9.4 * mm * scale)
