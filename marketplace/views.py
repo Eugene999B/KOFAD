@@ -5,7 +5,6 @@ from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout as auth_logout
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q, Sum
@@ -126,10 +125,6 @@ def market_customer_required(view):
 
 
 def home(request):
-    if request.user.is_authenticated:
-        auth_logout(request)
-    else:
-        services.clear_customer_session(request)
     listings = list(
         MarketListing.objects.filter(enabled=True, product__active=True)
         .select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
