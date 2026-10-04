@@ -783,3 +783,234 @@ def advance_order(user, order, action, cleaned):
             extra = f" Your handover code is {handover_code(order)}."
         send_transactional_sms(order.phone, f"KOFAD: {title} for {order.public_reference}.{extra}")
     return order
+
+
+def eligible_market_return_quantity(order_line):
+    reserved = MarketReturnRequestLine.objects.filter(
+        order_line=order_line,
+        request__status__in=["requested", "approved", "processing", "completed"],
+    ).aggregate(total=Sum("quantity"))["total"] or 0
+    return max(int(order_line.quantity) - int(reserved), 0)
+
+
+@transaction.atomic
+def create_market_return_request(customer, order, line_payload, reason, resolution, evidence=None):
+    order = OnlineOrder.objects.select_for_update().select_related("sale_document").get(
+        pk=order.pk, customer=customer
+    )
+    if order.payment_status != "paid" or order.status not in {"delivered", "picked_up"}:
+        raise ValidationError("Returns can be requested only after a paid order has been handed over.")
+    if not order.sale_document_id:
+        raise ValidationError("This order has not reached the KOFAD sales ledger yet.")
+    reason = str(reason or "").strip()
+    if len(reason) < 10:
+        raise ValidationError("Explain the reason for the return in a little more detail.")
+    if resolution not in dict(MarketReturnRequest.RESOLUTIONS):
+        raise ValidationError("Choose a valid resolution.")
+
+    validated = []
+    for raw in line_payload:
+        order_line = OnlineOrderLine.objects.select_for_update().filter(
+            pk=raw.get("line"), order=order
+        ).first()
+        if not order_line:
+            raise ValidationError("One selected item does not belong to this order.")
+        try:
+            quantity = int(raw.get("quantity") or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+        if quantity <= 0:
+            continue
+        eligible = eligible_market_return_quantity(order_line)
+        if quantity > eligible:
+            raise ValidationError(
+                f"{order_line.description}: only {eligible} item(s) are currently eligible for return."
+            )
+        condition = str(raw.get("condition") or "sellable")
+        if condition not in {"sellable", "damaged"}:
+            raise ValidationError("Choose a valid item condition.")
+        if not order_line.sale_line_id:
+            raise ValidationError(
+                f"{order_line.description} is not linked to its posted KOFAD sale line yet."
+            )
+        validated.append((order_line, quantity, condition))
+    if not validated:
+        raise ValidationError("Choose at least one item and quantity to return.")
+
+    item = MarketReturnRequest.objects.create(
+        order=order,
+        customer=customer,
+        resolution=resolution,
+        reason=reason,
+    )
+    MarketReturnRequestLine.objects.bulk_create([
+        MarketReturnRequestLine(
+            request=item, order_line=order_line, quantity=quantity, condition=condition
+        )
+        for order_line, quantity, condition in validated
+    ])
+    if evidence:
+        payload = prepare_support_attachment(evidence)
+        MarketReturnAttachment.objects.create(request=item, **payload)
+
+    OrderEvent.objects.create(
+        order=order, status="return_requested", title="Return request submitted",
+        note="KOFAD is reviewing your return request.",
+    )
+    send_transactional_sms(
+        order.phone,
+        f"KOFAD: Return request received for {order.public_reference}. "
+        "You can follow its status in My KOFAD.",
+    )
+    return item
+
+
+@transaction.atomic
+def review_market_return_request(user, item, action, note=""):
+    from core import returns as return_service
+
+    item = MarketReturnRequest.objects.select_for_update().select_related(
+        "order", "order__branch", "order__sale_document"
+    ).get(pk=item.pk)
+    note = str(note or "").strip()[:1000]
+
+    if action == "approve":
+        if item.status != "requested":
+            raise ValidationError("Only a new return request can be approved.")
+        item.status = "approved"
+        item.staff_note = note
+        item.reviewed_by = user
+        item.reviewed_at = timezone.now()
+        item.save(update_fields=["status", "staff_note", "reviewed_by", "reviewed_at"])
+        OrderEvent.objects.create(
+            order=item.order, status="return_approved", title="Return approved",
+            note=note or "KOFAD approved the return request. Follow staff instructions for handover.",
+            actor=user,
+        )
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your return request for {item.order.public_reference} was approved.",
+        )
+        return item
+
+    if action == "reject":
+        if item.status not in {"requested", "approved"}:
+            raise ValidationError("This return request cannot be rejected now.")
+        item.status = "rejected"
+        item.staff_note = note
+        item.reviewed_by = user
+        item.reviewed_at = timezone.now()
+        item.save(update_fields=["status", "staff_note", "reviewed_by", "reviewed_at"])
+        OrderEvent.objects.create(
+            order=item.order, status="return_rejected", title="Return request declined",
+            note=note or "KOFAD could not approve this return request.", actor=user,
+        )
+        send_transactional_sms(
+            item.order.phone,
+            f"KOFAD: Your return request for {item.order.public_reference} was reviewed. "
+            "Open My KOFAD for the decision.",
+        )
+        return item
+
+    if action != "process":
+        raise ValidationError("Choose a valid return action.")
+    if item.status != "approved":
+        raise ValidationError("Approve the customer request before processing the physical return.")
+
+    payload = []
+    for row in item.lines.select_related("order_line__sale_line"):
+        if not row.order_line.sale_line_id:
+            raise ValidationError("One return item is not linked to the original KOFAD sale line.")
+        payload.append({
+            "line": row.order_line.sale_line_id,
+            "quantity": row.quantity,
+            "disposition": "sellable" if row.condition == "sellable" else "quarantine",
+        })
+
+    refund_method = _payment_method(item.order.payment_channel)
+    core_item, direct = return_service.create_customer_return(
+        user,
+        item.order.branch,
+        item.order.sale_document,
+        payload,
+        item.reason,
+        refund_method,
+    )
+    item.core_return_request = core_item
+    item.status = "completed" if direct or getattr(core_item, "status", "") == "approved" else "processing"
+    item.staff_note = note or item.staff_note
+    item.reviewed_by = user
+    item.reviewed_at = timezone.now()
+    if item.status == "completed":
+        item.completed_at = timezone.now()
+    item.save(update_fields=[
+        "core_return_request", "status", "staff_note", "reviewed_by",
+        "reviewed_at", "completed_at",
+    ])
+    OrderEvent.objects.create(
+        order=item.order,
+        status="return_processing" if item.status == "processing" else "return_completed",
+        title="Return entered into KOFAD returns",
+        note=(
+            "The return is waiting for KOFAD approval."
+            if item.status == "processing"
+            else "The return was posted to KOFAD."
+        ),
+        actor=user,
+    )
+    return item
+
+
+@transaction.atomic
+def save_delivery_tracking(user, order, cleaned):
+    order = OnlineOrder.objects.select_for_update().get(pk=order.pk)
+    if order.fulfilment != "delivery":
+        raise ValidationError("Delivery tracking is available only for delivery orders.")
+    if order.status in {"cancelled", "refunded"}:
+        raise ValidationError("This order is no longer active.")
+
+    name = str(cleaned.get("delivery_agent_name") or "").strip()
+    phone = str(cleaned.get("delivery_agent_phone") or "").strip()
+    eta = cleaned.get("estimated_delivery_at")
+    update_fields = []
+    if name:
+        order.delivery_agent_name = name
+        update_fields.append("delivery_agent_name")
+    if phone:
+        order.delivery_agent_phone = phone
+        update_fields.append("delivery_agent_phone")
+    if eta:
+        order.estimated_delivery_at = eta
+        update_fields.append("estimated_delivery_at")
+    if update_fields:
+        update_fields.append("updated_at")
+        order.save(update_fields=update_fields)
+
+    update = DeliveryTrackingUpdate.objects.create(
+        order=order,
+        status=str(cleaned.get("status") or "").strip()[:40],
+        note=str(cleaned.get("note") or "").strip()[:320],
+        latitude=cleaned.get("latitude"),
+        longitude=cleaned.get("longitude"),
+        actor=user,
+        customer_visible=bool(cleaned.get("customer_visible")),
+    )
+    if update.customer_visible:
+        OrderEvent.objects.create(
+            order=order,
+            status="delivery_update",
+            title=update.status or "Delivery update",
+            note=update.note,
+            actor=user,
+            customer_visible=True,
+        )
+    core_services.audit(user, order.branch, "sale.online_delivery_tracking", order.public_reference, {
+        "driver": order.delivery_agent_name,
+        "eta": order.estimated_delivery_at.isoformat() if order.estimated_delivery_at else "",
+        "tracking_status": update.status,
+        "location": (
+            f"{update.latitude},{update.longitude}"
+            if update.latitude is not None and update.longitude is not None else ""
+        ),
+    })
+    return update
