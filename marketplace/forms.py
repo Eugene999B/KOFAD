@@ -389,10 +389,13 @@ class DeliveryPolicyForm(forms.ModelForm):
         if lng is not None and not Decimal("-180") <= lng <= Decimal("180"):
             self.add_error("delivery_origin_longitude", "Longitude must be between -180 and 180.")
         if data.get("delivery_enabled") and data.get("delivery_pricing_mode") == "distance":
-            if data.get("delivery_rate_per_km", Decimal("0")) <= 0:
+            if (data.get("delivery_rate_per_km") or Decimal("0")) <= 0:
                 self.add_error("delivery_rate_per_km", "Set a price per kilometre.")
             if lat is None or lng is None:
                 raise forms.ValidationError("Pin the company dispatch location for distance-based pricing.")
+        if data.get("delivery_enabled") and (data.get("delivery_max_distance_km") or Decimal("0")) > 0:
+            if lat is None or lng is None:
+                raise forms.ValidationError("Pin the company dispatch location to enforce a maximum delivery distance.")
         return data
 
 
