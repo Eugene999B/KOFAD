@@ -374,6 +374,8 @@ class Conversation(models.Model):
     subject = models.CharField(max_length=180, default="Customer enquiry")
     status = models.CharField(max_length=12, choices=[("open", "Open"), ("closed", "Closed")], default="open")
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="market_conversations", on_delete=models.SET_NULL)
+    customer_typing_at = models.DateTimeField(null=True, blank=True)
+    staff_typing_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
