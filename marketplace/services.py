@@ -309,9 +309,14 @@ def customer_from_session(request):
     expires_at = request.session.get("market_session_expires_at")
     if expires_at is None:
         request.session["market_session_expires_at"] = now + settings.MARKET_SESSION_SECONDS
-    elif float(expires_at) <= now:
-        clear_customer_session(request)
-        return None
+    else:
+        try:
+            expired = float(expires_at) <= now
+        except (TypeError, ValueError):
+            expired = True
+        if expired:
+            clear_customer_session(request)
+            return None
     customer = CustomerAccount.objects.filter(pk=pk, active=True).first()
     if not customer:
         clear_customer_session(request)
