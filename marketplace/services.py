@@ -1006,11 +1006,16 @@ def create_market_return_request(customer, order, line_payload, reason, resoluti
     if not validated:
         raise ValidationError("Choose at least one item and quantity to return.")
 
+    refund_amount = sum(
+        (order_line.unit_price * quantity for order_line, quantity, _ in validated),
+        Decimal("0"),
+    )
     item = MarketReturnRequest.objects.create(
         order=order,
         customer=customer,
         resolution=resolution,
         reason=reason,
+        refund_amount=refund_amount,
     )
     MarketReturnRequestLine.objects.bulk_create([
         MarketReturnRequestLine(
@@ -1039,7 +1044,7 @@ def review_market_return_request(user, item, action, note=""):
     from core import returns as return_service
 
     item = MarketReturnRequest.objects.select_for_update().select_related(
-        "order", "order__branch", "order__sale_document"
+        "order", "order__branch", "order__sale_document", "core_return_request"
     ).get(pk=item.pk)
     note = str(note or "").strip()[:1000]
 
@@ -1081,6 +1086,19 @@ def review_market_return_request(user, item, action, note=""):
         )
         return item
 
+    if action in {"sync_refund", "refresh_refund"}:
+        if not item.core_return_request_id or item.core_return_request.status != "approved":
+            raise ValidationError("The KOFAD return must be approved and posted before refunding the payment.")
+        try:
+            if item.provider_refund_id:
+                return refresh_paystack_refund(item)
+            return initiate_paystack_refund(item)
+        except ValidationError as exc:
+            item.status = "refund_attention"
+            item.provider_refund_message = str(exc)[:240]
+            item.save(update_fields=["status", "provider_refund_message"])
+            return item
+
     if action != "process":
         raise ValidationError("Choose a valid return action.")
     if item.status != "approved":
@@ -1106,27 +1124,38 @@ def review_market_return_request(user, item, action, note=""):
         refund_method,
     )
     item.core_return_request = core_item
-    item.status = "completed" if direct or getattr(core_item, "status", "") == "approved" else "processing"
+    item.status = "processing"
     item.staff_note = note or item.staff_note
     item.reviewed_by = user
     item.reviewed_at = timezone.now()
-    if item.status == "completed":
-        item.completed_at = timezone.now()
+    item.refund_amount = market_return_value(item)
+    if not direct and getattr(core_item, "status", "") != "approved":
+        item.provider_refund_status = "awaiting_kofad_approval"
+        item.provider_refund_message = (
+            "The physical return is waiting for KOFAD approval before Paystack is refunded."
+        )
     item.save(update_fields=[
         "core_return_request", "status", "staff_note", "reviewed_by",
-        "reviewed_at", "completed_at",
+        "reviewed_at", "refund_amount", "provider_refund_status", "provider_refund_message",
     ])
     OrderEvent.objects.create(
         order=item.order,
-        status="return_processing" if item.status == "processing" else "return_completed",
+        status="return_processing",
         title="Return entered into KOFAD returns",
         note=(
-            "The return is waiting for KOFAD approval."
-            if item.status == "processing"
-            else "The return was posted to KOFAD."
+            "The return is waiting for KOFAD approval before the payment refund begins."
+            if item.provider_refund_status == "awaiting_kofad_approval"
+            else "The physical return was posted to KOFAD. Payment refund is starting."
         ),
         actor=user,
     )
+    if direct or getattr(core_item, "status", "") == "approved":
+        try:
+            item = initiate_paystack_refund(item)
+        except ValidationError as exc:
+            item.status = "refund_attention"
+            item.provider_refund_message = str(exc)[:240]
+            item.save(update_fields=["status", "provider_refund_message"])
     return item
 
 
