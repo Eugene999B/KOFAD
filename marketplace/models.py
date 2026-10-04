@@ -50,6 +50,10 @@ class MarketListing(models.Model):
     image_mime = models.CharField(max_length=40, blank=True, default="image/webp")
     image_name = models.CharField(max_length=180, blank=True)
     image_updated_at = models.DateTimeField(null=True, blank=True)
+    image_url = models.URLField(blank=True, default="")
+    image_credit = models.CharField(max_length=180, blank=True, default="")
+    tags = models.CharField(max_length=320, blank=True, default="")
+    highlights = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["sort_order", "product__name"]
@@ -271,6 +275,23 @@ class ConversationMessage(models.Model):
 
     class Meta:
         ordering = ["created_at", "pk"]
+
+
+class ConversationAttachment(models.Model):
+    message = models.ForeignKey(ConversationMessage, related_name="attachments", on_delete=models.CASCADE)
+    original_name = models.CharField(max_length=220)
+    mime_type = models.CharField(max_length=100)
+    size = models.PositiveIntegerField(default=0)
+    sha256 = models.CharField(max_length=64)
+    data = models.BinaryField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+
+    @property
+    def is_image(self):
+        return self.mime_type.startswith("image/")
 
 
 class OtpThrottle(models.Model):
