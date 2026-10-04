@@ -187,7 +187,23 @@ def prepare_support_attachment(upload):
 def _otp_headers():
     if not settings.ARKESEL_API_KEY:
         raise ValidationError("Customer phone verification is not configured yet.")
-    return {"api-key": settings.ARKESEL_API_KEY, "Content-Type": "application/json", "Accept": "application/json"}
+    return {
+        "api-key": settings.ARKESEL_API_KEY,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
+def _otp_provider_code(data):
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("code", "")).strip()
+
+
+def _otp_provider_message(data):
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("message", "")).strip()[:220]
 
 
 def send_otp(phone, purpose="register"):
@@ -226,10 +242,12 @@ def send_otp(phone, purpose="register"):
         data = response.json()
     except (requests.RequestException, ValueError):
         raise ValidationError("We could not send the verification code right now. Please try again.")
-    if not 200 <= response.status_code < 300 or (
-        isinstance(data, dict) and str(data.get("status", "")).lower() in {"error", "failed", "failure"}
-    ):
-        raise ValidationError("We could not send the verification code right now. Please try again.")
+
+    provider_code = _otp_provider_code(data)
+    if not 200 <= response.status_code < 300 or provider_code != "1000":
+        raise ValidationError(
+            "We could not send the verification code right now. Please try again."
+        )
 
     with transaction.atomic():
         row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
@@ -264,10 +282,8 @@ def verify_otp(phone, code, purpose="register"):
     except (requests.RequestException, ValueError):
         raise ValidationError("We could not verify the code right now. Please try again.")
 
-    success = 200 <= response.status_code < 300 and isinstance(data, dict)
-    if success:
-        status = str(data.get("status", "")).lower()
-        success = status in {"success", "successful", "verified", "ok"} or data.get("success") is True
+    provider_code = _otp_provider_code(data)
+    success = 200 <= response.status_code < 300 and provider_code == "1100"
 
     with transaction.atomic():
         row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)

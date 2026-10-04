@@ -3,22 +3,22 @@
 <div class="access-v2-story">
 <p class="market-eyebrow">ONE KOFAD ACCOUNT</p>
 <h1>One number.<br><span>Your whole buying history.</span></h1>
-<p class="access-v2-lead">Enter your Ghana mobile number once. If you already have an account, KOFAD takes you to sign in. If you are new, we verify the number and create your account securely.</p>
+<p class="access-v2-lead">Enter your Ghana mobile number. KOFAD checks whether you already have a customer account before deciding the next secure step.</p>
 <div class="access-benefit-grid">
-<article><b>01</b><div><strong>Orders & receipts</strong><span>See every online order, payment and fulfilment stage.</span></div></article>
-<article><b>02</b><div><strong>Saved delivery details</strong><span>Reuse your preferred delivery points and contact details.</span></div></article>
-<article><b>03</b><div><strong>Direct support</strong><span>Chat with KOFAD and attach photos or documents when needed.</span></div></article>
+<article><b>01</b><div><strong>Existing customer</strong><span>If the number is already registered, KOFAD asks only for your password.</span></div></article>
+<article><b>02</b><div><strong>New customer</strong><span>If the number is new, KOFAD sends a six-digit SMS code to verify that you own it.</span></div></article>
+<article><b>03</b><div><strong>One account afterwards</strong><span>After verification, add your name and choose the password you will use with this number next time.</span></div></article>
 </div>
-<div class="access-security-note"><span>✓</span><p><strong>Phone-first identity.</strong> New numbers are verified by SMS before an account is created.</p></div>
+<div class="access-security-note"><span>✓</span><p><strong>Phone-first identity.</strong> New customer accounts are created only after successful phone verification.</p></div>
 </div>
 <div class="access-v2-card">
 <div class="access-card-mark">K</div>
 <p class="market-eyebrow">CUSTOMER ACCESS</p>
-<h2>Sign in or create your account.</h2>
-<p>Use the mobile number you want attached to your KOFAD orders and delivery updates.</p>
-<form method="post" class="access-phone-form">{% csrf_token %}{{ form.non_field_errors }}<label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><button class="market-button primary wide">Continue securely <span>→</span></button></form>
-<div class="access-card-divider"><span>WHAT HAPPENS NEXT</span></div>
-<ul class="access-next-list"><li><span>Returning customer</span><strong>Password sign-in</strong></li><li><span>New customer</span><strong>SMS verification → create password</strong></li></ul>
-<small class="access-privacy">Your account information is used only to operate your KOFAD customer account and fulfil orders.</small>
+<h2>Enter your mobile number.</h2>
+<p>Use the Ghana mobile number you want connected to your KOFAD orders, receipts, delivery tracking and messages.</p>
+<form method="post" class="access-phone-form">{% csrf_token %}{{ form.non_field_errors }}<label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><button class="market-button primary wide">Continue <span>→</span></button></form>
+<div class="access-card-divider"><span>KOFAD CHOOSES THE NEXT STEP</span></div>
+<ul class="access-next-list"><li><span>Number already registered</span><strong>Enter password</strong></li><li><span>New number</span><strong>SMS code → name & password</strong></li></ul>
+<small class="access-privacy">Your number is used to secure your KOFAD customer account and keep your orders connected to you.</small>
 </div>
 </section>{% endblock %}

@@ -741,3 +741,93 @@ class ProductMarketVisibilityTests(MarketFixtures):
             f"/products/{self.product.pk}/",
             fetch_redirect_response=False,
         )
+
+
+class CustomerOtpProviderTests(MarketFixtures):
+    @override_settings(
+        CUSTOMER_OTP_ENABLED=True,
+        ARKESEL_API_KEY="main-sms-api-key-for-test",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("marketplace.services.requests.post")
+    def test_arkesel_generate_code_1000_is_accepted(self, post):
+        post.return_value.status_code = 200
+        post.return_value.json.return_value = {
+            "code": "1000",
+            "message": "Successful, OTP is being processed for delivery",
+        }
+        phone = services.send_otp("+233245550001", "register")
+        self.assertEqual(phone, "+233245550001")
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["number"], "+233245550001")
+        self.assertEqual(payload["length"], 6)
+        self.assertIn("%otp_code%", payload["message"])
+
+    @override_settings(
+        CUSTOMER_OTP_ENABLED=True,
+        ARKESEL_API_KEY="main-sms-api-key-for-test",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("marketplace.services.requests.post")
+    def test_arkesel_verify_code_1100_is_accepted(self, post):
+        post.return_value.status_code = 200
+        post.return_value.json.side_effect = [
+            {"code": "1000", "message": "Successful"},
+            {"code": "1100", "message": "Successful"},
+        ]
+        services.send_otp("+233245550002", "register")
+        verified = services.verify_otp("+233245550002", "123456", "register")
+        self.assertEqual(verified, "+233245550002")
+
+    @override_settings(
+        CUSTOMER_OTP_ENABLED=True,
+        ARKESEL_API_KEY="main-sms-api-key-for-test",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("marketplace.services.requests.post")
+    def test_arkesel_non_success_generate_code_is_rejected(self, post):
+        post.return_value.status_code = 200
+        post.return_value.json.return_value = {
+            "code": "1007",
+            "message": "Insufficient balance",
+        }
+        with self.assertRaisesMessage(
+            ValidationError,
+            "We could not send the verification code right now. Please try again.",
+        ):
+            services.send_otp("+233245550003", "register")
+
+
+class CustomerPhoneOnboardingTests(MarketFixtures):
+    def test_existing_number_moves_to_password_only_screen(self):
+        response = self.client.post("/market/access/", {"phone": "0241234567"})
+        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
+        response = self.client.get("/market/account/login/")
+        self.assertContains(response, "+233241234567")
+        self.assertContains(response, 'type="hidden" name="phone"')
+        self.assertNotContains(response, "<label>Phone number")
+
+    @patch("marketplace.views.services.send_otp")
+    def test_new_number_moves_to_otp_then_name_and_password(self, send_otp):
+        send_otp.return_value = "+233245550004"
+        response = self.client.post("/market/access/", {"phone": "0245550004"})
+        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
+
+        session = self.client.session
+        session["market_verified_phone"] = "+233245550004"
+        session.save()
+        response = self.client.get("/market/account/finish/")
+        self.assertContains(response, "Full name")
+        self.assertContains(response, "Create password")
+        self.assertNotContains(response, "Email address")
+
+        response = self.client.post("/market/account/finish/", {
+            "full_name": "New Market Customer",
+            "password": "Strong-new-market-password-842!",
+            "password_confirm": "Strong-new-market-password-842!",
+        })
+        self.assertRedirects(response, "/market/", fetch_redirect_response=False)
+        customer = CustomerAccount.objects.get(phone="+233245550004")
+        self.assertEqual(customer.full_name, "New Market Customer")
+        self.assertTrue(customer.check_password("Strong-new-market-password-842!"))
+        self.assertEqual(self.client.session["market_customer_id"], customer.pk)
