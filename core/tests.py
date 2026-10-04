@@ -802,6 +802,16 @@ class ControlCentreIntelligenceTests(Fixtures, TestCase):
         self.assertEqual(audit.status_code, 200)
         self.assertContains(audit, "AUDIT INTELLIGENCE")
 
+    def test_dashboard_uses_universal_approvals_and_no_retired_operations_links(self):
+        self.authenticate_client()
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Approvals awaiting review")
+        self.assertContains(response, 'href="/approvals/"')
+        self.assertContains(response, 'href="/stock-counts/"')
+        self.assertContains(response, 'href="/debts/"')
+        self.assertNotContains(response, 'href="/operations/"')
+
     def test_stock_operations_are_retired_in_production(self):
         from django.test import override_settings
         self.authenticate_client()
