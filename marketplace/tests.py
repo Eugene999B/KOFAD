@@ -117,15 +117,22 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, 'href="/login/"')
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
-    def test_market_catalog_has_refined_products_and_account_entry(self):
+    def test_market_catalog_uses_dedicated_commerce_shell(self):
         response = self.client.get("/market/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "<h1>Products</h1>", html=True)
-        self.assertContains(response, "storefront-account-panel")
-        self.assertContains(response, "storefront-mobile-categories")
-        self.assertContains(response, "Sign in to order and track purchases")
-        self.assertNotContains(response, "Shop KOFAD")
-        self.assertNotContains(response, "catalog-customer-chip")
+        self.assertContains(response, 'class="shop-shell-header"')
+        self.assertContains(response, 'aria-label="Search KOFAD Market"')
+        self.assertContains(response, "Hello, sign in")
+        self.assertContains(response, "<h1>All products</h1>", html=True)
+        self.assertContains(response, "shop-category-strip")
+        self.assertContains(response, "shop-product-grid")
+        self.assertNotContains(response, 'class="market-contact-link"')
+        self.assertNotContains(response, 'class="market-staff-link"')
+        self.assertNotContains(response, "storefront-account-panel")
+        self.assertNotContains(response, "storefront-head")
+        self.assertNotContains(response, "storefront-side-account")
+        self.assertNotContains(response, "Browse available products, compare prices")
+        self.assertNotContains(response, "From <b>GHS", html=True)
 
     def test_market_session_state_and_zone_metadata(self):
         session = self.client.session
@@ -435,7 +442,8 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertLessEqual(expires_at, timezone.now().timestamp() + settings.MARKET_SESSION_SECONDS + 2)
         self.assertEqual(settings.MARKET_SESSION_SECONDS, 2 * 60 * 60)
         page = self.client.get("/market/account/")
-        self.assertContains(page, "market-top-signout")
+        self.assertContains(page, "shop-shell-header")
+        self.assertContains(page, "account-v4-signout")
         self.assertContains(page, "Sign out")
         self.assertContains(page, 'action="/market/account/logout/"')
 
