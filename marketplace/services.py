@@ -21,8 +21,9 @@ from core.identity import normalize_ghana_phone
 from core.models import Branch, Closing, Document, Line, Party, Payment, Product, Stock
 from core.sms.providers import get_provider
 from .models import (
-    CustomerAccount, DeliveryZone, MarketListing, MarketPaymentAttempt, OnlineOrder,
-    OnlineOrderLine, OrderEvent, OtpThrottle, StockReservation,
+    CustomerAccount, DeliveryZone, DeliveryTrackingUpdate, MarketListing, MarketListingImage,
+    MarketPaymentAttempt, MarketReturnAttachment, MarketReturnRequest, MarketReturnRequestLine,
+    OnlineOrder, OnlineOrderLine, OrderEvent, OtpThrottle, StockReservation,
 )
 
 
@@ -110,6 +111,19 @@ def save_listing_image(listing, upload):
     listing.image_updated_at = timezone.now()
     listing.image_url = ""
     listing.image_credit = ""
+
+
+def save_gallery_image(listing, upload, *, alt_text="", sort_order=100):
+    large, thumb, mime = compress_market_image(upload)
+    return MarketListingImage.objects.create(
+        listing=listing,
+        image_data=large,
+        image_thumb=thumb,
+        image_mime=mime,
+        image_name=str(getattr(upload, "name", "gallery-image"))[:180],
+        alt_text=(alt_text or listing.display_name)[:180],
+        sort_order=sort_order,
+    )
 
 
 SUPPORT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
@@ -578,11 +592,13 @@ def post_order_to_ledger(order, actor=None):
         external_reference=order.payment_reference,
     )
     for item in lines:
-        Line.objects.create(
+        sale_line = Line.objects.create(
             document=doc, product=item.product, description=item.description, mode=item.mode,
             quantity=item.quantity, factor=item.factor, list_price=item.unit_price,
             unit_price=item.unit_price, discount_percent=0, unit_cost=item.unit_cost, total=item.total,
         )
+        item.sale_line = sale_line
+        item.save(update_fields=["sale_line"])
         core_services.stock_move(
             actor, branch, item.product, -item.base_units, doc.reference,
             f"Online order {order.public_reference}",
@@ -745,6 +761,7 @@ def advance_order(user, order, action, cleaned):
     if action == "dispatch":
         order.delivery_agent_name = cleaned.get("delivery_agent_name", "").strip()
         order.delivery_agent_phone = cleaned.get("delivery_agent_phone", "")
+        order.dispatched_at = timezone.now()
     order.status = target
     if target in {"delivered", "picked_up"}:
         order.completed_at = timezone.now()
@@ -752,7 +769,7 @@ def advance_order(user, order, action, cleaned):
         order.reservations.update(active=False)
     order.staff_note = cleaned.get("note", "").strip() or order.staff_note
     order.save(update_fields=[
-        "status", "delivery_agent_name", "delivery_agent_phone",
+        "status", "delivery_agent_name", "delivery_agent_phone", "dispatched_at",
         "completed_at", "staff_note", "updated_at",
     ])
     note = cleaned.get("note", "").strip()
