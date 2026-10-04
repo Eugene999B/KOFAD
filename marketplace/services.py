@@ -305,21 +305,33 @@ def customer_from_session(request):
     pk = request.session.get("market_customer_id")
     if not pk:
         return None
+    now = timezone.now().timestamp()
+    expires_at = request.session.get("market_session_expires_at")
+    if expires_at is None:
+        request.session["market_session_expires_at"] = now + settings.MARKET_SESSION_SECONDS
+    elif float(expires_at) <= now:
+        clear_customer_session(request)
+        return None
     customer = CustomerAccount.objects.filter(pk=pk, active=True).first()
     if not customer:
-        request.session.pop("market_customer_id", None)
+        clear_customer_session(request)
     return customer
 
 
 def set_customer_session(request, customer):
     request.session.cycle_key()
     request.session["market_customer_id"] = customer.pk
+    request.session["market_session_expires_at"] = (
+        timezone.now().timestamp() + settings.MARKET_SESSION_SECONDS
+    )
+    request.session.set_expiry(settings.SESSION_COOKIE_AGE)
     customer.last_login_at = timezone.now()
     customer.save(update_fields=["last_login_at"])
 
 
 def clear_customer_session(request):
     request.session.pop("market_customer_id", None)
+    request.session.pop("market_session_expires_at", None)
     request.session.pop("market_pending_phone", None)
     request.session.pop("market_verified_phone", None)
 
