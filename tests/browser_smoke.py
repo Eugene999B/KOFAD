@@ -15,9 +15,12 @@ import django
 django.setup()
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.sessions.backends.db import SessionStore
 from django.utils import timezone
 from core import services as core_services
-from core.models import Branch, Document, Party, Product
+from core.models import Branch, Document, Party, Product, Stock
+from marketplace import services as market_services
+from marketplace.models import CustomerAccount, MarketListing, MarketPaymentAttempt
 if not settings.DEBUG:
     raise RuntimeError("Browser fixtures are forbidden outside DEBUG environments.")
 warehouse, _ = Branch.objects.get_or_create(code="browser-wh", defaults={"name": "Browser warehouse"})
