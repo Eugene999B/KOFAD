@@ -156,6 +156,7 @@ class OnlineOrder(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     public_reference = models.CharField(max_length=32, unique=True)
+    confirmed_reference = models.CharField(max_length=32, unique=True, null=True, blank=True)
     customer = models.ForeignKey(CustomerAccount, related_name="orders", on_delete=models.PROTECT)
     branch = models.ForeignKey("core.Branch", related_name="online_orders", on_delete=models.PROTECT)
     party = models.ForeignKey("core.Party", null=True, blank=True, related_name="online_orders", on_delete=models.PROTECT)
@@ -197,6 +198,10 @@ class OnlineOrder(models.Model):
             models.Index(fields=["branch", "status", "created_at"], name="market_order_status_idx"),
             models.Index(fields=["customer", "created_at"], name="market_customer_order_idx"),
         ]
+
+    @property
+    def customer_reference(self):
+        return self.confirmed_reference or "Awaiting payment"
 
     def __str__(self):
         return self.public_reference
