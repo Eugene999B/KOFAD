@@ -284,16 +284,6 @@ class CheckoutForm(forms.Form):
         return data
 
 
-class PublicMessageForm(forms.Form):
-    name = forms.CharField(max_length=140)
-    phone = forms.CharField(max_length=30)
-    subject = forms.CharField(max_length=180, initial="Product or order enquiry")
-    message = forms.CharField(widget=forms.Textarea(attrs={"rows": 4}), max_length=2000)
-
-    def clean_phone(self):
-        return normalize_ghana_phone(self.cleaned_data["phone"])
-
-
 class StaffOrderUpdateForm(forms.Form):
     action = forms.ChoiceField(choices=[
         ("confirm", "Confirm order"), ("prepare", "Start preparing"),
