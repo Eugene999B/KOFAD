@@ -117,6 +117,59 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, 'href="/login/"')
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
+    def test_market_catalog_has_refined_products_and_account_entry(self):
+        response = self.client.get("/market/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<h1>Products</h1>", html=True)
+        self.assertContains(response, "storefront-account-panel")
+        self.assertContains(response, "storefront-mobile-categories")
+        self.assertContains(response, "Sign in to order and track purchases")
+        self.assertNotContains(response, "Shop KOFAD")
+        self.assertNotContains(response, "catalog-customer-chip")
+
+    def test_market_session_state_and_zone_metadata(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+        response = self.client.get("/market/account/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-session-zone="market"')
+        self.assertContains(response, 'data-session-status-url="/market/session/state/"')
+        state = self.client.get("/market/session/state/")
+        self.assertEqual(state.status_code, 200)
+        self.assertTrue(state.json()["authenticated"])
+        self.assertEqual(state["Cache-Control"], "no-store")
+        self.client.post("/market/account/logout/")
+        self.assertFalse(self.client.get("/market/session/state/").json()["authenticated"])
+
+    def test_customer_login_replaces_any_staff_identity(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session["market_login_phone"] = self.customer.phone
+        session.save()
+        response = self.client.post("/market/account/login/", {
+            "phone": self.customer.phone,
+            "password": "Very-strong-customer-password-42!",
+        })
+        self.assertRedirects(response, "/market/account/", fetch_redirect_response=False)
+        self.assertEqual(self.client.session["market_customer_id"], self.customer.pk)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_staff_login_replaces_any_customer_identity(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+        response = self.client.post("/login/", {
+            "username": self.staff.username,
+            "password": "market-owner-password",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.assertNotIn("market_customer_id", self.client.session)
+
     def test_customer_access_page_is_only_the_sign_in_or_create_account_card(self):
         response = self.client.get("/market/access/")
         self.assertEqual(response.status_code, 200)
