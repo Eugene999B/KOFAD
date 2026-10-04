@@ -19,7 +19,7 @@ from core.views import problem, protected
 
 from .forms import (
     CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
-    CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
+    CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
     DeliveryZoneForm, PublicMessageForm, StaffOrderUpdateForm,
 )
 from .models import (
@@ -477,6 +477,19 @@ def customer_login(request):
     ))
 
 
+@market_customer_required
+def customer_security(request, customer):
+    form = CustomerPasswordChangeForm(request.POST or None, customer=customer)
+    if request.method == "POST" and form.is_valid():
+        customer.set_password(form.cleaned_data["password"])
+        customer.save(update_fields=["password_hash"])
+        messages.success(request, "Your customer password has been changed securely.")
+        return redirect("market_account")
+    return render(request, "marketplace/security.html", _market_context(
+        request, title="Account security", form=form,
+    ))
+
+
 @require_POST
 def customer_logout(request):
     services.clear_customer_session(request)
@@ -680,7 +693,7 @@ def customer_orders(request, customer):
     }
     return render(request, "marketplace/orders.html", _market_context(
         request, title="My orders", orders=rows, selected_status=status,
-        q=query, counts=counts,
+        q=query, counts=counts, order_status_choices=OnlineOrder.STATUSES,
     ))
 
 
