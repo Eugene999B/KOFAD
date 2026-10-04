@@ -624,7 +624,7 @@ def checkout(request, customer):
                 )
             request.session["market_cart"] = {}
             request.session.modified = True
-            messages.success(request, f"Order {order.public_reference} created. Complete payment to send it to fulfilment.")
+            messages.success(request, "Order ready. Complete payment to confirm it.")
             return redirect("market_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
