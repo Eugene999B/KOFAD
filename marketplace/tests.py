@@ -18,7 +18,7 @@ from core.models import Branch, Closing, Company, CustomerReturnRequest, Documen
 from .models import (
     Conversation, ConversationAttachment, CustomerAccount, DeliveryTrackingUpdate,
     MarketListing, MarketListingImage, MarketPaymentAttempt, MarketReturnRequest,
-    OnlineOrder, RecentView, WishlistItem,
+    OnlineOrder, OtpThrottle, RecentView, WishlistItem,
 )
 from . import services
 
@@ -746,56 +746,106 @@ class ProductMarketVisibilityTests(MarketFixtures):
 class CustomerOtpProviderTests(MarketFixtures):
     @override_settings(
         CUSTOMER_OTP_ENABLED=True,
-        ARKESEL_API_KEY="main-sms-api-key-for-test",
+        SMS_ENABLED=True,
+        ARKESEL_API_KEY="sms-api-key-for-test",
+        SMS_PROVIDER="arkesel",
         SMS_SENDER_ID="KOFAD",
     )
-    @patch("marketplace.services.requests.post")
-    def test_arkesel_generate_code_1000_is_accepted(self, post):
-        post.return_value.status_code = 200
-        post.return_value.json.return_value = {
-            "code": "1000",
-            "message": "Successful, OTP is being processed for delivery",
-        }
+    @patch("marketplace.services.secrets.randbelow", return_value=123456)
+    @patch("marketplace.services.get_provider")
+    def test_customer_otp_uses_regular_live_sms_and_stores_only_digest(
+        self, get_provider_mock, _randbelow
+    ):
+        provider = get_provider_mock.return_value
+        provider.submit.return_value = Mock(
+            status="accepted", error_code="", error_detail=""
+        )
+
         phone = services.send_otp("+233245550001", "register")
         self.assertEqual(phone, "+233245550001")
-        payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["number"], "+233245550001")
-        self.assertEqual(payload["length"], 6)
-        self.assertIn("%otp_code%", payload["message"])
+        provider.validate.assert_called_once()
+        args = provider.submit.call_args.args
+        self.assertEqual(args[0], "+233245550001")
+        self.assertIn("123456", args[1])
+        self.assertEqual(args[2], "KOFAD")
+        self.assertFalse(args[4])
+
+        row = OtpThrottle.objects.get(phone=phone, purpose="register")
+        self.assertNotEqual(row.code_digest, "123456")
+        self.assertEqual(len(row.code_digest), 64)
+        self.assertIsNone(row.verified_at)
 
     @override_settings(
         CUSTOMER_OTP_ENABLED=True,
-        ARKESEL_API_KEY="main-sms-api-key-for-test",
+        SMS_ENABLED=True,
+        ARKESEL_API_KEY="sms-api-key-for-test",
+        SMS_PROVIDER="arkesel",
         SMS_SENDER_ID="KOFAD",
     )
-    @patch("marketplace.services.requests.post")
-    def test_arkesel_verify_code_1100_is_accepted(self, post):
-        post.return_value.status_code = 200
-        post.return_value.json.side_effect = [
-            {"code": "1000", "message": "Successful"},
-            {"code": "1100", "message": "Successful"},
-        ]
+    @patch("marketplace.services.secrets.randbelow", return_value=123456)
+    @patch("marketplace.services.get_provider")
+    def test_locally_generated_otp_verifies_without_second_provider_call(
+        self, get_provider_mock, _randbelow
+    ):
+        provider = get_provider_mock.return_value
+        provider.submit.return_value = Mock(
+            status="accepted", error_code="", error_detail=""
+        )
         services.send_otp("+233245550002", "register")
+
         verified = services.verify_otp("+233245550002", "123456", "register")
         self.assertEqual(verified, "+233245550002")
+        self.assertEqual(provider.submit.call_count, 1)
+        row = OtpThrottle.objects.get(phone=verified, purpose="register")
+        self.assertIsNotNone(row.verified_at)
+        self.assertEqual(row.code_digest, "")
 
     @override_settings(
         CUSTOMER_OTP_ENABLED=True,
-        ARKESEL_API_KEY="main-sms-api-key-for-test",
+        SMS_ENABLED=True,
+        ARKESEL_API_KEY="sms-api-key-for-test",
+        SMS_PROVIDER="arkesel",
         SMS_SENDER_ID="KOFAD",
     )
-    @patch("marketplace.services.requests.post")
-    def test_arkesel_non_success_generate_code_is_rejected(self, post):
-        post.return_value.status_code = 200
-        post.return_value.json.return_value = {
-            "code": "1007",
-            "message": "Insufficient balance",
-        }
+    @patch("marketplace.services.get_provider")
+    def test_sms_gateway_rejection_does_not_create_a_usable_otp(self, get_provider_mock):
+        provider = get_provider_mock.return_value
+        provider.submit.return_value = Mock(
+            status="failed",
+            error_code="provider_rejected",
+            error_detail="Insufficient balance",
+        )
         with self.assertRaisesMessage(
             ValidationError,
             "We could not send the verification code right now. Please try again.",
         ):
             services.send_otp("+233245550003", "register")
+        row = OtpThrottle.objects.get(phone="+233245550003", purpose="register")
+        self.assertEqual(row.code_digest, "")
+        self.assertIsNone(row.last_sent_at)
+
+    @override_settings(
+        CUSTOMER_OTP_ENABLED=True,
+        SMS_ENABLED=True,
+        ARKESEL_API_KEY="sms-api-key-for-test",
+        SMS_PROVIDER="arkesel",
+        SMS_SENDER_ID="KOFAD",
+    )
+    @patch("marketplace.services.secrets.randbelow", return_value=654321)
+    @patch("marketplace.services.get_provider")
+    def test_wrong_otp_is_throttled_and_cannot_verify(
+        self, get_provider_mock, _randbelow
+    ):
+        provider = get_provider_mock.return_value
+        provider.submit.return_value = Mock(
+            status="accepted", error_code="", error_detail=""
+        )
+        phone = services.send_otp("+233245550005", "register")
+        with self.assertRaisesMessage(ValidationError, "That verification code is not correct."):
+            services.verify_otp(phone, "111111", "register")
+        row = OtpThrottle.objects.get(phone=phone, purpose="register")
+        self.assertEqual(row.attempts, 1)
+        self.assertIsNone(row.verified_at)
 
 
 class CustomerPhoneOnboardingTests(MarketFixtures):
