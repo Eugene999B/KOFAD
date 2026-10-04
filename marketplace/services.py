@@ -633,6 +633,10 @@ def advance_order(user, order, action, cleaned):
     if not rule or order.status not in rule[0]:
         raise ValidationError("That order cannot move to the selected stage.")
     target, title = rule[1], rule[2]
+    if action != "cancel_unpaid" and order.payment_status == "paid" and not order.sale_document_id:
+        # A payment accepted after daily closing remains safely outside the closed
+        # ledger until the next open period. Fulfilment cannot advance first.
+        order = post_order_to_ledger(order, actor=user)
     if action == "dispatch" and order.fulfilment != "delivery":
         raise ValidationError("A pickup order cannot be sent out for delivery.")
     if action == "ready_pickup" and order.fulfilment != "pickup":
