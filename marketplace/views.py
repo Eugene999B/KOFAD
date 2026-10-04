@@ -754,12 +754,24 @@ def customer_orders(request, customer):
 @market_customer_required
 def customer_order(request, customer, pk):
     order = get_object_or_404(
-        OnlineOrder.objects.prefetch_related("lines", "events"),
+        OnlineOrder.objects.prefetch_related(
+            "lines", "events", "delivery_updates", "return_requests__lines"
+        ),
         pk=pk, customer=customer,
     )
+    returnable = []
+    if order.payment_status == "paid" and order.status in {"delivered", "picked_up"}:
+        for line in order.lines.all():
+            eligible = services.eligible_market_return_quantity(line)
+            if eligible:
+                returnable.append((line, eligible))
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
+        can_request_return=bool(returnable),
+        returnable=returnable,
+        delivery_updates=order.delivery_updates.filter(customer_visible=True),
+        return_requests=order.return_requests.all(),
     ))
 
 
@@ -1406,20 +1418,40 @@ def staff_order(request, branch, pk):
     order = get_object_or_404(
         OnlineOrder.objects.filter(branch=branch).select_related(
             "customer", "delivery_zone", "party", "sale_document"
-        ).prefetch_related("lines", "events", "payment_attempts"),
+        ).prefetch_related(
+            "lines", "events", "payment_attempts", "delivery_updates", "return_requests"
+        ),
         pk=pk,
     )
-    form = StaffOrderUpdateForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
+    form_type = request.POST.get("form_type", "workflow") if request.method == "POST" else "workflow"
+    form = StaffOrderUpdateForm(request.POST if form_type == "workflow" else None)
+    tracking_form = DeliveryTrackingForm(
+        request.POST if form_type == "tracking" else None,
+        initial={
+            "delivery_agent_name": order.delivery_agent_name,
+            "delivery_agent_phone": order.delivery_agent_phone,
+            "estimated_delivery_at": order.estimated_delivery_at,
+            "customer_visible": True,
+        },
+    )
+    if request.method == "POST":
         try:
-            services.advance_order(request.user, order, form.cleaned_data["action"], form.cleaned_data)
-            messages.success(request, "Order workflow updated.")
-            return redirect("staff_online_order", pk=order.pk)
+            if form_type == "tracking" and tracking_form.is_valid():
+                services.save_delivery_tracking(request.user, order, tracking_form.cleaned_data)
+                messages.success(request, "Delivery assignment / tracking updated.")
+                return redirect("staff_online_order", pk=order.pk)
+            if form_type == "workflow" and form.is_valid():
+                services.advance_order(request.user, order, form.cleaned_data["action"], form.cleaned_data)
+                messages.success(request, "Order workflow updated.")
+                return redirect("staff_online_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
     return render(request, "marketplace/staff_order_detail.html", {
         "title": order.public_reference, "order": order, "form": form,
+        "tracking_form": tracking_form,
         "handover_code": services.handover_code(order),
+        "delivery_updates": order.delivery_updates.all(),
+        "return_requests": order.return_requests.all(),
     })
 
 
