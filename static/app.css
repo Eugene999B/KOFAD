@@ -2031,3 +2031,14 @@ html[data-theme="dark"] .sale-success-mark{background:#123C3A;color:#80D9C7}
 html[data-theme="dark"] .mobile-dock{background:rgba(6,22,36,.92);border-color:#244A60}
 html[data-theme="dark"] .mobile-dock a{color:#A8BFCC}
 html[data-theme="dark"] .mobile-dock a.active{background:#123B50;color:#7DD5D8}
+
+
+/* KOFAD Market publishing inside Product Setup */
+.market-publishing-section{border:1px solid #c8dfe5;border-radius:18px;padding:20px;background:linear-gradient(145deg,#f9fcfd,#edf6f7)}
+.market-photo-setup{display:grid;grid-template-columns:180px minmax(0,1fr);gap:20px;align-items:center;margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--white)}
+.market-photo-preview{width:180px;aspect-ratio:1/1;border-radius:16px;overflow:hidden;display:grid;place-items:center;background:#e8f2f5;border:1px solid #bfd5df}
+.market-photo-preview img{width:100%;height:100%;object-fit:cover}.market-photo-preview span{font-size:10px;font-weight:850;letter-spacing:.12em;color:#6b8494}
+html[data-theme="dark"] .market-publishing-section{background:linear-gradient(145deg,#0b2235,#0d2c40);border-color:#31576d}
+html[data-theme="dark"] .market-photo-setup{background:#0d263a;border-color:#294e63}
+html[data-theme="dark"] .market-photo-preview{background:#0a2133;border-color:#31576d}
+@media(max-width:680px){.market-photo-setup{grid-template-columns:1fr}.market-photo-preview{width:140px}}
