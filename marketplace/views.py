@@ -21,7 +21,7 @@ from core.views import problem, protected
 from .forms import (
     CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
     CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
-    DeliveryTrackingForm, DeliveryZoneForm, MarketGalleryForm, MarketReturnRequestForm,
+    DeliveryPolicyForm, DeliveryTrackingForm, DeliveryZoneForm, MarketGalleryForm, MarketReturnRequestForm,
     StaffOrderUpdateForm,
 )
 from .models import (
@@ -580,6 +580,48 @@ def cart_update(request, customer):
     return redirect("market_cart")
 
 
+def _map_access_allowed(request):
+    return bool(request.user.is_authenticated or services.customer_from_session(request))
+
+
+def market_location_search(request):
+    if not _map_access_allowed(request):
+        return JsonResponse({"error": "Sign in to search locations."}, status=401)
+    try:
+        rows = services.location_search(request.GET.get("q", ""))
+        return JsonResponse({"results": rows})
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc), "results": []}, status=400)
+
+
+def market_location_reverse(request):
+    if not _map_access_allowed(request):
+        return JsonResponse({"error": "Sign in to use location services."}, status=401)
+    try:
+        row = services.reverse_location(request.GET.get("lat"), request.GET.get("lng"))
+        return JsonResponse(row)
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+def market_delivery_quote(request):
+    if not _map_access_allowed(request):
+        return JsonResponse({"error": "Sign in to calculate delivery."}, status=401)
+    try:
+        quote = services.delivery_quote(request.GET.get("lat"), request.GET.get("lng"))
+        return JsonResponse({
+            "mode": quote["mode"],
+            "fee": str(quote["fee"]),
+            "distance_km": str(quote["distance_km"]) if quote["distance_km"] is not None else None,
+            "distance_source": quote["distance_source"],
+            "origin_latitude": str(quote["origin_latitude"]) if quote["origin_latitude"] is not None else None,
+            "origin_longitude": str(quote["origin_longitude"]) if quote["origin_longitude"] is not None else None,
+            "origin_label": quote["origin_label"],
+        })
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
 @market_customer_required
 def checkout(request, customer):
     rows = services.cart_rows(request.session.get("market_cart", {}))
@@ -605,10 +647,11 @@ def checkout(request, customer):
             "latitude": default_address.latitude,
             "longitude": default_address.longitude,
         })
-    has_delivery = DeliveryZone.objects.filter(active=True).exists()
+    company = Company.objects.first() or Company()
+    has_delivery = company.delivery_enabled
     if not has_delivery:
         initial["fulfilment"] = "pickup"
-    form = CheckoutForm(request.POST or None, initial=initial)
+    form = CheckoutForm(request.POST or None, initial=initial, delivery_enabled=has_delivery)
     if request.method == "POST" and form.is_valid():
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
@@ -635,10 +678,17 @@ def checkout(request, customer):
                 return redirect("market_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
-    subtotal = sum((row["total"] for row in rows), 0)
+    subtotal = sum((row["total"] for row in rows), Decimal("0"))
+    initial_quote = None
+    if has_delivery:
+        try:
+            initial_quote = services.delivery_quote(initial.get("latitude"), initial.get("longitude"))
+        except ValidationError:
+            initial_quote = None
     return render(request, "marketplace/checkout.html", _market_context(
         request, title="Checkout", form=form, rows=rows, subtotal=subtotal,
-        zones=DeliveryZone.objects.filter(active=True),
+        zones=DeliveryZone.objects.filter(active=True), delivery_quote=initial_quote,
+        delivery_company=company,
     ))
 
 
@@ -1378,14 +1428,23 @@ def market_catalog_admin(request, branch):
 
 @protected("manage_company")
 def market_settings(request, branch):
+    company = Company.objects.first() or Company.objects.create()
     selected = None
     zone_id = request.GET.get("zone", "")
     if zone_id.isdigit():
         selected = DeliveryZone.objects.filter(pk=int(zone_id)).first()
-    form = DeliveryZoneForm(request.POST or None, instance=selected)
+
+    action = request.POST.get("action", "") if request.method == "POST" else ""
+    form = DeliveryZoneForm(
+        request.POST if request.method == "POST" and action in {"zone", "toggle"} else None,
+        instance=selected,
+    )
+    policy_form = DeliveryPolicyForm(
+        request.POST if request.method == "POST" and action == "policy" else None,
+        instance=company,
+    )
 
     if request.method == "POST":
-        action = request.POST.get("action", "save")
         if action == "toggle":
             zone = get_object_or_404(DeliveryZone, pk=request.POST.get("zone"))
             zone.active = not zone.active
@@ -1397,7 +1456,21 @@ def market_settings(request, branch):
             )
             messages.success(request, f"{zone.name} is now {'available' if zone.active else 'hidden'} at checkout.")
             return redirect("market_settings")
-        if form.is_valid():
+        if action == "policy" and policy_form.is_valid():
+            policy = policy_form.save()
+            from core import services as core_services
+            core_services.audit(
+                request.user, branch, "market.delivery_policy_saved", policy.pk,
+                {
+                    "enabled": policy.delivery_enabled,
+                    "mode": policy.delivery_pricing_mode,
+                    "flat_fee": str(policy.delivery_flat_fee),
+                    "rate_per_km": str(policy.delivery_rate_per_km),
+                },
+            )
+            messages.success(request, "Delivery pricing and dispatch location saved.")
+            return redirect("market_settings")
+        if action == "zone" and form.is_valid():
             zone = form.save()
             from core import services as core_services
             core_services.audit(
@@ -1410,15 +1483,13 @@ def market_settings(request, branch):
     return render(request, "marketplace/settings.html", {
         "title": "Market & Delivery",
         "form": form,
+        "policy_form": policy_form,
         "selected_zone": selected,
         "zones": DeliveryZone.objects.all(),
-        "paystack_ready": bool(settings.PAYSTACK_SECRET_KEY),
-        "otp_ready": bool(settings.CUSTOMER_OTP_ENABLED and settings.ARKESEL_API_KEY),
-        "sms_ready": bool(settings.SMS_ENABLED and settings.ARKESEL_API_KEY),
-        "webhook_url": request.build_absolute_uri("/market/payments/paystack/webhook/"),
+        "google_maps_ready": bool(settings.GOOGLE_MAPS_SERVER_KEY),
         "market_url": request.build_absolute_uri("/market/"),
+        "company": company,
     })
-
 
 @protected("operate_sales|manage_company")
 def staff_orders(request, branch):
@@ -1477,6 +1548,7 @@ def staff_order(request, branch, pk):
         "tracking_form": tracking_form,
         "handover_code": services.handover_code(order),
         "delivery_updates": order.delivery_updates.all(),
+        "latest_delivery_location": order.delivery_updates.exclude(latitude__isnull=True).exclude(longitude__isnull=True).last(),
         "return_requests": order.return_requests.all(),
     })
 
