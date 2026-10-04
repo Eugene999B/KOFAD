@@ -69,7 +69,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
-DATA_UPLOAD_MAX_MEMORY_SIZE = 1048576
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26214400
 LOGGING = {"version": 1, "disable_existing_loggers": False, "handlers": {"console": {"class": "logging.StreamHandler"}},
            "root": {"handlers": ["console"], "level": "INFO"}}
 
