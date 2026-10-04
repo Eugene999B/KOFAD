@@ -1,12 +1,65 @@
-{% extends "base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}"><script defer src="{% static 'marketplace/market-v2.js' %}"></script>{% endblock %}
-{% block actions %}<div class="actions"><a class="button secondary" href="/online-orders/">Online Orders</a><a class="button secondary" href="/exports/?dataset=customer_support">Export support</a><a class="button secondary" href="/market/" target="_blank" rel="noopener">Open Market ↗</a></div>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block body_class %}support-workspace-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}"><link rel="stylesheet" href="{% static 'marketplace/support-v3.css' %}"><script defer src="{% static 'marketplace/market-v2.js' %}"></script>{% endblock %}
+{% block actions %}{% endblock %}
 {% block content %}
-<section class="staff-support-command"><div><p class="eyebrow">CUSTOMER SUPPORT</p><h2>One inbox for Market conversations.</h2><p>Reply to customers, review linked orders and securely exchange supporting images or business documents.</p></div><div class="staff-support-kpis"><span><strong>{{ open_count }}</strong><small>Open</small></span><span><strong>{{ unread }}</strong><small>Unread</small></span><span><strong>{{ closed_count }}</strong><small>Closed</small></span></div></section>
-<nav class="staff-support-tabs"><a href="/online-inbox/?status=open" class="{% if selected_status == 'open' %}active{% endif %}">Open conversations</a><a href="/online-inbox/?status=closed" class="{% if selected_status == 'closed' %}active{% endif %}">Closed</a><a href="/online-inbox/?status=all" class="{% if selected_status == 'all' %}active{% endif %}">All</a></nav>
-<section class="panel customer-inbox-shell support-v2-staff">
-<aside class="staff-conversation-list"><div><p class="eyebrow">CONVERSATIONS</p><h2>{{ conversations|length }} thread{{ conversations|length|pluralize }}</h2></div>{% for item in conversations %}<a href="/online-inbox/{{ item.pk }}/?status={{ selected_status }}" class="{% if conversation.pk == item.pk %}active{% endif %}"><span class="staff-thread-avatar">{{ item.public_name|default:item.customer.full_name|first|upper }}</span><div><strong>{{ item.subject }}</strong><span>{{ item.public_name|default:item.customer.full_name }}</span><small>{{ item.updated_at|date:"d M · H:i" }}{% if item.order %} · {{ item.order.public_reference }}{% endif %}</small></div></a>{% empty %}<div class="empty"><strong>No conversations in this view.</strong></div>{% endfor %}</aside>
-<section class="staff-thread">{% if conversation %}<header><div><p class="eyebrow">{{ conversation.status|upper }} · CUSTOMER SUPPORT</p><h2>{{ conversation.subject }}</h2><span>{{ conversation.public_name|default:conversation.customer.full_name }} · {{ conversation.public_phone|default:conversation.customer.phone }}</span></div><div class="actions">{% if conversation.order %}<a class="button secondary" href="/online-orders/{{ conversation.order.pk }}/">{{ conversation.order.public_reference }}</a>{% endif %}{% if conversation.status == 'open' %}<form method="post">{% csrf_token %}<button class="button secondary" name="action" value="close">Close</button></form>{% else %}<form method="post">{% csrf_token %}<button class="button secondary" name="action" value="reopen">Reopen</button></form>{% endif %}</div></header>
-<div class="staff-message-stream support-message-stream" data-live-thread data-conversation="{{ conversation.pk }}" data-side="staff" data-last-message="{% with last=conversation.messages.last %}{{ last.pk|default:0 }}{% endwith %}">{% for item in conversation.messages.all %}<article class="support-message {{ item.sender_type }}" data-message-id="{{ item.pk }}"><div class="support-bubble">{% if item.body %}<p>{{ item.body|linebreaksbr }}</p>{% endif %}{% if item.attachments.all %}<div class="support-attachments">{% for attachment in item.attachments.all %}{% if attachment.is_image %}<a class="support-image-attachment" href="/market/support/attachments/{{ attachment.pk }}/" target="_blank"><img src="/market/support/attachments/{{ attachment.pk }}/?inline=1" alt="{{ attachment.original_name }}"><span>{{ attachment.original_name }}</span></a>{% else %}<a class="support-file-attachment" href="/market/support/attachments/{{ attachment.pk }}/"><b>⇩</b><span><strong>{{ attachment.original_name }}</strong><small>{{ attachment.mime_type }}</small></span></a>{% endif %}{% endfor %}</div>{% endif %}</div><small>{{ item.get_sender_type_display }} · {{ item.created_at|date:"d M Y · H:i" }}</small></article>{% endfor %}</div><div class="support-typing-indicator" data-typing-indicator hidden><span></span><span></span><span></span><b>Customer is typing…</b></div>
-<form method="post" enctype="multipart/form-data" class="staff-reply support-compose" data-support-compose>{% csrf_token %}<div class="support-compose-field">{{ support_form.message }}{{ support_form.message.errors }}</div><div class="support-compose-actions"><label class="support-attach-button">＋<span>Attach</span>{{ support_form.attachment }}</label><button class="button" name="action" value="reply">Send reply</button></div>{{ support_form.attachment.errors }}<small class="support-file-note">Protected image/PDF/Word/Excel/text attachment · max 10 MB</small></form>
-{% else %}<div class="inbox-empty support-staff-empty"><span>✦</span><h2>Select a customer conversation.</h2><p>Messages from customer accounts and the public enquiry form remain in one auditable support history.</p></div>{% endif %}</section></section>
+<section class="support-desk-v3">
+<header class="support-desk-top">
+<div class="support-desk-title"><p>LIVE CUSTOMER CARE</p><h2>Customer Inbox</h2><span>Accept one customer at a time, reply as yourself, and return chats to the queue whenever needed.</span></div>
+<div class="support-desk-metrics"><span><b>{{ waiting_count }}</b><small>Waiting</small></span><span><b>{{ mine_count }}</b><small>Mine</small></span><span><b>{{ unread }}</b><small>Unread</small></span></div>
+<nav class="support-desk-tabs" aria-label="Inbox filters"><a href="/online-inbox/?status=waiting" class="{% if selected_status == 'waiting' %}active{% endif %}">Waiting <b>{{ waiting_count }}</b></a><a href="/online-inbox/?status=mine" class="{% if selected_status == 'mine' %}active{% endif %}">My chats <b>{{ mine_count }}</b></a><a href="/online-inbox/?status=open" class="{% if selected_status == 'open' %}active{% endif %}">All open <b>{{ open_count }}</b></a><a href="/online-inbox/?status=closed" class="{% if selected_status == 'closed' %}active{% endif %}">Closed</a></nav>
+</header>
+
+<div class="support-desk-shell {% if conversation %}has-thread{% endif %}">
+<aside class="support-queue-v3">
+<header><div><strong>Conversations</strong><small>{{ conversations|length }} in this view</small></div><a href="/online-orders/" title="Open online orders">Orders ↗</a></header>
+<div class="support-queue-list">
+{% for item in conversations %}
+<a href="/online-inbox/{{ item.pk }}/?status={{ selected_status }}" class="support-queue-item {% if conversation.pk == item.pk %}active{% endif %}">
+<span class="support-queue-avatar">{{ item.public_name|default:item.customer.full_name|first|upper }}</span>
+<div class="support-queue-copy"><div><strong>{{ item.public_name|default:item.customer.full_name|default:"Customer" }}</strong>{% if item.status == 'closed' %}<i class="closed">Closed</i>{% elif item.assigned_to %}<i class="connected">With {{ item.assigned_to.get_full_name|default:item.assigned_to.username }}</i>{% else %}<i class="waiting">Waiting</i>{% endif %}</div><p>{{ item.subject }}</p><small>{% with last=item.messages.last %}{% if last %}{{ last.body|default:"Attachment"|truncatechars:48 }} · {% endif %}{% endwith %}{{ item.updated_at|date:"H:i" }}{% if item.order %} · {{ item.order.public_reference }}{% endif %}</small></div>
+<span class="support-queue-arrow">›</span>
+</a>
+{% empty %}<div class="support-queue-empty"><span>✓</span><strong>Nothing waiting here.</strong><small>New customer chats will appear automatically.</small></div>{% endfor %}
+</div>
+</aside>
+
+<section class="support-agent-thread-v3">
+{% if conversation %}
+<header class="support-agent-head">
+<a class="support-mobile-back" href="/online-inbox/?status={{ selected_status }}">‹ Inbox</a>
+<div class="support-agent-customer"><span class="support-agent-avatar">{{ conversation.public_name|default:conversation.customer.full_name|first|upper }}</span><div><p>{{ conversation.status|upper }} · {{ conversation.subject }}</p><h3>{{ conversation.public_name|default:conversation.customer.full_name|default:"Customer" }}</h3><small>{{ conversation.public_phone|default:conversation.customer.phone }}{% if conversation.order %} · {{ conversation.order.public_reference }}{% endif %}</small></div></div>
+<div class="support-agent-actions">
+{% if conversation.status == 'open' %}
+{% if not conversation.assigned_to %}<form method="post">{% csrf_token %}<button class="support-action primary" name="action" value="accept">Accept chat</button></form>
+{% elif conversation.assigned_to == request.user %}<span class="support-connected-pill"><i></i>You are connected</span><form method="post">{% csrf_token %}<button class="support-action" name="action" value="leave">Leave</button></form><form method="post">{% csrf_token %}<button class="support-action danger" name="action" value="close">Close</button></form>
+{% else %}<span class="support-connected-pill other"><i></i>{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.username }}</span>{% if perms.core.manage_company %}<form method="post">{% csrf_token %}<button class="support-action" name="action" value="takeover">Take over</button></form>{% endif %}
+{% endif %}
+{% endif %}
+</div>
+</header>
+
+{% if conversation.status == 'closed' %}
+<div class="support-ended-v3"><span>✓</span><h3>Chat closed</h3><p>The conversation content and attachments have been cleared. A new enquiry starts a fresh chat.</p>{% if conversation.closed_reason == 'customer_inactive' %}<small>Closed automatically after 24 hours without a customer reply.</small>{% elif conversation.closed_at %}<small>Closed {{ conversation.closed_at|date:"d M Y · H:i" }}</small>{% endif %}</div>
+{% else %}
+<div class="support-live-status" data-support-agent-state>{% if conversation.assigned_to %}<span class="online"></span><strong>{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.username }}</strong> is connected to this customer{% else %}<span class="waiting"></span><strong>Waiting for an agent</strong> · Accept the chat before replying{% endif %}</div>
+<div class="staff-message-stream support-message-stream support-stream-v3" data-live-thread data-conversation="{{ conversation.pk }}" data-side="staff" data-status="{{ conversation.status }}" data-agent="{% if conversation.assigned_to %}{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.username }}{% endif %}" data-last-message="{% with last=conversation.messages.last %}{{ last.pk|default:0 }}{% endwith %}">
+{% for item in conversation.messages.all %}<article class="support-message {{ item.sender_type }}" data-message-id="{{ item.pk }}"><div class="support-bubble">{% if item.body %}<p>{{ item.body|linebreaksbr }}</p>{% endif %}{% if item.attachments.all %}<div class="support-attachments">{% for attachment in item.attachments.all %}{% if attachment.is_image %}<a class="support-image-attachment" href="/market/support/attachments/{{ attachment.pk }}/" target="_blank"><img src="/market/support/attachments/{{ attachment.pk }}/?inline=1" alt="{{ attachment.original_name }}"><span>{{ attachment.original_name }}</span></a>{% else %}<a class="support-file-attachment" href="/market/support/attachments/{{ attachment.pk }}/"><b>⇩</b><span><strong>{{ attachment.original_name }}</strong><small>{{ attachment.mime_type }}</small></span></a>{% endif %}{% endfor %}</div>{% endif %}</div><small>{% if item.sender_type == 'staff' %}{{ item.staff.get_full_name|default:item.staff.username }}{% else %}Customer{% endif %} · {{ item.created_at|date:"H:i" }}</small></article>{% empty %}<div class="support-stream-empty">No messages remain in this chat.</div>{% endfor %}
+</div>
+<div class="support-typing-indicator support-typing-v3" data-typing-indicator hidden><span></span><span></span><span></span><b>Customer is typing…</b></div>
+
+{% if conversation.assigned_to == request.user %}
+<form method="post" enctype="multipart/form-data" class="staff-reply support-compose support-compose-v3" data-support-compose>{% csrf_token %}<div class="support-compose-field">{{ support_form.message }}{{ support_form.message.errors }}</div><div class="support-compose-actions"><label class="support-attach-button">＋<span>Attach</span>{{ support_form.attachment }}</label><button class="button" name="action" value="reply">Send</button></div>{{ support_form.attachment.errors }}</form>
+{% elif not conversation.assigned_to %}
+<div class="support-accept-panel"><div><strong>This customer is waiting.</strong><span>Accept the conversation to connect your name and unlock replies.</span></div><form method="post">{% csrf_token %}<button name="action" value="accept">Accept chat</button></form></div>
+{% else %}
+<div class="support-accept-panel locked"><div><strong>{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.username }} is handling this chat.</strong><span>Only the connected worker can reply until they leave the conversation.</span></div></div>
+{% endif %}
+{% endif %}
+{% else %}
+<div class="support-desk-empty"><span>✦</span><h2>Select a conversation</h2><p>Waiting chats appear on the left. Accept one to connect directly with the customer.</p></div>
+{% endif %}
+</section>
+</div>
+</section>
 {% endblock %}
