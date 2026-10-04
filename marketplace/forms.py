@@ -5,7 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
 from core.identity import normalize_ghana_phone
-from .models import CustomerAccount, DeliveryZone, MarketListing
+from .models import CustomerAccount, DeliveryZone, MarketListing, MarketReturnRequest
 
 
 class MarketListingForm(forms.ModelForm):
@@ -126,6 +126,101 @@ class ConversationMessageForm(forms.Form):
         data = super().clean()
         if not (data.get("message") or data.get("attachment")):
             raise forms.ValidationError("Write a message or attach a file.")
+        return data
+
+
+
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput(attrs={"accept": "image/*,.heic,.heif"}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single(item, initial) for item in data]
+        return [single(data, initial)] if data else []
+
+
+class MarketGalleryForm(forms.Form):
+    images = MultipleFileField(
+        required=False,
+        label="Add product gallery photos",
+        help_text="Upload up to 8 product photos at a time. KOFAD compresses and normalizes them automatically.",
+    )
+    alt_text = forms.CharField(
+        required=False, max_length=180,
+        help_text="Optional shared accessibility description for this upload batch.",
+    )
+
+    def clean_images(self):
+        images = self.cleaned_data.get("images") or []
+        if len(images) > 8:
+            raise forms.ValidationError("Upload at most 8 gallery photos at a time.")
+        return images
+
+
+class MarketReturnRequestForm(forms.Form):
+    resolution = forms.ChoiceField(choices=MarketReturnRequest.RESOLUTIONS)
+    reason = forms.CharField(
+        max_length=2000,
+        widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Explain what is wrong and what happened…"}),
+    )
+    evidence = forms.FileField(
+        required=False,
+        label="Photo or document evidence",
+        widget=forms.ClearableFileInput(attrs={
+            "accept": "image/jpeg,image/png,image/webp,application/pdf,.doc,.docx,.txt",
+        }),
+        help_text="Optional image or document up to 10 MB.",
+    )
+
+    def clean_reason(self):
+        value = self.cleaned_data["reason"].strip()
+        if len(value) < 10:
+            raise forms.ValidationError("Give KOFAD a little more detail about the return request.")
+        return value
+
+
+class DeliveryTrackingForm(forms.Form):
+    delivery_agent_name = forms.CharField(max_length=140, required=False, label="Delivery person / driver")
+    delivery_agent_phone = forms.CharField(max_length=30, required=False, label="Driver phone")
+    estimated_delivery_at = forms.DateTimeField(
+        required=False,
+        label="Estimated delivery time",
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+    status = forms.CharField(max_length=40, required=False, label="Tracking status")
+    note = forms.CharField(
+        max_length=320, required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        label="Customer-visible tracking note",
+    )
+    latitude = forms.DecimalField(max_digits=9, decimal_places=6, required=False)
+    longitude = forms.DecimalField(max_digits=9, decimal_places=6, required=False)
+    customer_visible = forms.BooleanField(required=False, initial=True)
+
+    def clean_delivery_agent_phone(self):
+        raw = self.cleaned_data.get("delivery_agent_phone", "").strip()
+        return normalize_ghana_phone(raw) if raw else ""
+
+    def clean(self):
+        data = super().clean()
+        lat, lng = data.get("latitude"), data.get("longitude")
+        if (lat is None) ^ (lng is None):
+            raise forms.ValidationError("Provide both latitude and longitude, or leave both blank.")
+        if not any([
+            data.get("delivery_agent_name"), data.get("delivery_agent_phone"),
+            data.get("estimated_delivery_at"), data.get("status"), data.get("note"),
+            lat is not None,
+        ]):
+            raise forms.ValidationError("Add an assignment, ETA, status, note or location before saving a tracking update.")
         return data
 
 
