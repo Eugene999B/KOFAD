@@ -92,7 +92,7 @@ def _normalized_photo(uploaded):
 
 
 def _card_dates(worker):
-    issue = worker.id_card_issue_date or timezone.localdate()
+    issue = worker.id_card_issue_date or timezone.localtime(worker.created_at).date()
     expiry = worker.id_card_expiry_date or worker.contract_end
     return issue, expiry
 
