@@ -215,6 +215,19 @@ class BusinessTests(Fixtures, TestCase):
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
         self.assertContains(response,"Too many attempts")
 
+    def test_staff_workspace_exposes_session_zone_and_state(self):
+        self.authenticate_client()
+        response = self.client.get("/workspace/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-session-zone="staff"')
+        self.assertContains(response, 'data-session-status-url="/session/state/"')
+        state = self.client.get("/session/state/")
+        self.assertEqual(state.status_code, 200)
+        self.assertTrue(state.json()["authenticated"])
+        self.assertEqual(state["Cache-Control"], "no-store")
+        self.client.post("/logout/")
+        self.assertFalse(self.client.get("/session/state/").json()["authenticated"])
+
     def test_staff_login_sets_twelve_hour_session_window(self):
         before = timezone.now().timestamp()
         response = self.client.post("/login/", {
