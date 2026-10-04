@@ -1,5 +1,5 @@
 import os
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
@@ -41,6 +41,10 @@ class InitialAccessTests(TestCase):
         self.user.set_password("existing-private-password")
         self.user.save()
         call_command("initialize_deployment")
-        command.assert_called_once_with("migrate", interactive=False)
+        command.assert_has_calls([
+            call("migrate", interactive=False),
+            call("complete_showcase_data", confirm_live_showcase=True),
+        ])
+        self.assertEqual(command.call_count, 2)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("existing-private-password"))
