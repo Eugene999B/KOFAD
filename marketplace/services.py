@@ -319,6 +319,38 @@ def create_order(customer, cart, cleaned):
     return order
 
 
+@transaction.atomic
+def refresh_order_reservations(order):
+    order = OnlineOrder.objects.select_for_update().select_related("branch").get(pk=order.pk)
+    if order.payment_status == "paid":
+        return order
+    if order.status != "awaiting_payment":
+        raise ValidationError("This order can no longer be paid.")
+
+    branch = core_services.lock_branch(order.branch)
+    expiry = timezone.now() + timedelta(minutes=settings.MARKET_RESERVATION_MINUTES)
+    for item in order.lines.select_related("product"):
+        stock = Stock.objects.select_for_update().filter(branch=branch, product=item.product).first()
+        stock_units = stock.quantity if stock else 0
+        reserved_by_others = active_reserved_units(branch, item.product, exclude_order=order)
+        if item.base_units > max(stock_units - reserved_by_others, 0):
+            raise ValidationError(
+                f"{item.description} no longer has enough stock for this order. "
+                "Please contact KOFAD or create a new order with the available quantity."
+            )
+        StockReservation.objects.update_or_create(
+            order=order,
+            product=item.product,
+            defaults={
+                "branch": branch,
+                "units": item.base_units,
+                "expires_at": expiry,
+                "active": True,
+            },
+        )
+    return order
+
+
 def _paystack_headers():
     if not settings.PAYSTACK_SECRET_KEY:
         raise ValidationError("Online payment is not configured yet. Please contact KOFAD.")
@@ -330,6 +362,13 @@ def _paystack_headers():
 
 
 def initialize_paystack(order, callback_url):
+    order = refresh_order_reservations(order)
+    recent = order.payment_attempts.filter(
+        status="pending",
+        created_at__gte=timezone.now() - timedelta(minutes=10),
+    ).exclude(authorization_url="").order_by("-created_at").first()
+    if recent:
+        return recent
     reference = order.public_reference + "-" + secrets.token_hex(3).upper()
     payload = {
         "email": order.email,
