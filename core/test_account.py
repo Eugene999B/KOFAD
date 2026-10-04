@@ -33,7 +33,7 @@ class AccountRecoveryTests(TestCase):
     def test_direct_login_even_with_legacy_security_flags(self):
         Access.objects.filter(user=self.user).update(must_change_password=True, totp_secret="legacy-secret")
         response = self.client.post("/login/", {"username":"admin", "password":"ADMIN"}, follow=True)
-        self.assertEqual(response.request["PATH_INFO"], "/")
+        self.assertEqual(response.request["PATH_INFO"], "/workspace/")
         self.assertContains(response, "Command centre")
 
     def test_code_is_hashed_sent_only_to_saved_number_and_consumed_once(self):
