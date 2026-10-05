@@ -306,10 +306,16 @@ with sync_playwright() as p:
 
     approval = admin_page.locator("#approval-attention")
     approval.evaluate("el => { el.hidden = false; }")
+    handle = approval.locator(".approval-drag-handle")
+    handle.wait_for(state="visible")
     before = approval.bounding_box()
-    admin_page.mouse.move(before["x"] + 20, before["y"] + 20)
+    handle_box = handle.bounding_box()
+    admin_page.mouse.move(
+        handle_box["x"] + handle_box["width"] / 2,
+        handle_box["y"] + handle_box["height"] / 2,
+    )
     admin_page.mouse.down()
-    admin_page.mouse.move(before["x"] - 120, before["y"] - 90, steps=8)
+    admin_page.mouse.move(handle_box["x"] - 120, handle_box["y"] - 90, steps=8)
     admin_page.mouse.up()
     after = approval.bounding_box()
     assert abs(after["x"] - before["x"]) > 40 or abs(after["y"] - before["y"]) > 40
