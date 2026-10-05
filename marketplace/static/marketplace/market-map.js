@@ -246,9 +246,10 @@ document.addEventListener("DOMContentLoaded", () => {
               setLocation(lat,lng,"",true);
             });
           }
-        } else if ("position" in destinationMarker) {
+        } else if (destinationMarker.setPosition) {
+          destinationMarker.setPosition(position);
+        } else {
           destinationMarker.position = position;
-          if (destinationMarker.setPosition) destinationMarker.setPosition(position);
         }
         drawGoogleRoute();
       } else if (provider === "leaflet") {
