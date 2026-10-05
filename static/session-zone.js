@@ -119,7 +119,15 @@ document.addEventListener("DOMContentLoaded", () => {
       button.disabled = true;
       button.textContent = "Signing out…";
       const action = pendingLeave;
-      await performLogout();
+      const signedOut = await performLogout();
+      if (!signedOut) {
+        leaving = false;
+        button.disabled = false;
+        button.textContent = "Leave & sign out";
+        const copy = dialog.querySelector(".session-leave-copy");
+        if (copy) copy.textContent = "We could not end the session yet. Check your connection and try again before leaving.";
+        return;
+      }
       closeDialog();
       if (action?.kind === "link" && action.href) {
         window.location.assign(action.href);
