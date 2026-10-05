@@ -36,6 +36,15 @@ from . import services
 def _market_context(request, **extra):
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
+    market_auth_page = request.path in {
+        "/market/access/",
+        "/market/account/login/",
+        "/market/account/verify/",
+        "/market/account/finish/",
+        "/market/account/password-reset/",
+        "/market/account/password-reset/verify/",
+        "/market/account/password-reset/finish/",
+    }
     unread = 0
     if customer:
         unread = ConversationMessage.objects.filter(
@@ -48,6 +57,7 @@ def _market_context(request, **extra):
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
+        "market_auth_page": market_auth_page,
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
