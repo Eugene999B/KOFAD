@@ -1500,3 +1500,44 @@ class MarketCatalogScaleAndDeletionTests(MarketFixtures):
         response = self.client.post(f"/online-inbox/{thread.pk}/", {"action": "delete"})
         self.assertRedirects(response, "/online-inbox/", fetch_redirect_response=False)
         self.assertFalse(Conversation.objects.filter(pk=thread.pk).exists())
+
+
+class MarketOtpReliabilityTests(MarketFixtures):
+    def test_verify_otp_accepts_code_pasted_with_spacing(self):
+        phone = "+233245551111"
+        code = "123456"
+        OtpThrottle.objects.create(
+            phone=phone,
+            purpose="reset",
+            expires_at=timezone.now() + timedelta(minutes=10),
+            code_digest=services._otp_digest(phone, "reset", code),
+        )
+        self.assertEqual(services.verify_otp(phone, "123 456", "reset"), phone)
+        row = OtpThrottle.objects.get(phone=phone, purpose="reset")
+        self.assertIsNotNone(row.verified_at)
+        self.assertEqual(row.code_digest, "")
+
+    @patch("marketplace.views.services.verify_otp")
+    def test_duplicate_reset_verification_redirects_to_finish_without_reusing_code(self, verify_otp):
+        session = self.client.session
+        session["market_reset_phone"] = self.customer.phone
+        session["market_reset_verified_phone"] = self.customer.phone
+        session.save()
+        response = self.client.post("/market/account/password-reset/verify/", {"code": "123456"})
+        self.assertRedirects(
+            response,
+            "/market/account/password-reset/finish/",
+            fetch_redirect_response=False,
+        )
+        verify_otp.assert_not_called()
+
+    @patch("marketplace.views.services.verify_otp")
+    def test_duplicate_registration_verification_redirects_to_finish_without_reusing_code(self, verify_otp):
+        phone = "+233245552222"
+        session = self.client.session
+        session["market_pending_phone"] = phone
+        session["market_verified_phone"] = phone
+        session.save()
+        response = self.client.post("/market/account/verify/", {"code": "123456"})
+        self.assertRedirects(response, "/market/account/finish/", fetch_redirect_response=False)
+        verify_otp.assert_not_called()
