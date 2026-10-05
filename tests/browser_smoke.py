@@ -366,6 +366,53 @@ with sync_playwright() as p:
     admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
     admin_page.reload()
 
+    # System-wide mobile layout hardening: representative administration,
+    # finance and settings pages must fit without horizontal document overflow.
+    mobile_pages = (
+        "/administration/users/",
+        "/administration/",
+        "/workers/",
+        "/parties/?kind=customer",
+        "/finance/",
+        "/accounting/",
+        "/settings/",
+        "/settings/payments/",
+        "/settings/finance/",
+        "/settings/receipts/",
+        "/settings/debt/",
+        "/settings/communications/",
+    )
+    for mobile_width in (390, 320):
+        admin_page.set_viewport_size({"width":mobile_width,"height":844})
+        for path in mobile_pages:
+            admin_page.goto("http://127.0.0.1:8000" + path, wait_until="domcontentloaded")
+            admin_page.wait_for_timeout(80)
+            assert admin_page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), f"Mobile layout overflows at {mobile_width}px: {path}"
+
+    admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.goto("http://127.0.0.1:8000/administration/users/")
+    staff_table = admin_page.locator(".table-wrap > table.mobile-card-table")
+    staff_table.wait_for()
+    first_staff_cell = staff_table.locator("tbody tr td").first
+    assert first_staff_cell.get_attribute("data-mobile-label") == "Staff member"
+    assert staff_table.evaluate("el => parseFloat(getComputedStyle(el).minWidth) == 0")
+    admin_page.screenshot(path=str(out / "staff-users-mobile-hardened.png"), full_page=True)
+
+    admin_page.goto("http://127.0.0.1:8000/settings/payments/")
+    form_actions = admin_page.locator(".form-actions")
+    form_actions.wait_for()
+    assert form_actions.evaluate("el => getComputedStyle(el).position") == "static"
+    assert admin_page.locator(".setting-shortcuts").evaluate(
+        "el => el.getBoundingClientRect().right <= window.innerWidth + 1"
+    )
+    assert admin_page.locator(".form-panel").evaluate(
+        "el => el.getBoundingClientRect().right <= window.innerWidth + 1"
+    )
+    admin_page.screenshot(path=str(out / "payment-methods-mobile-hardened.png"), full_page=True)
+
+    admin_page.set_viewport_size({"width":1280,"height":900})
     admin_page.goto("http://127.0.0.1:8000/settings/backup/")
     reset_button = admin_page.get_by_role("button", name="Reset KOFAD to fresh start", exact=True)
     restore_button = admin_page.get_by_role("button", name="Restore full system", exact=True)
