@@ -1,30 +1,24 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="home-hero-v8">
-<div class="home-hero-copy-v8">
-<div class="commerce-kicker"><span class="commerce-live-dot"></span> KOFAD MARKET</div>
-<h1>Shop KOPEX IMPEX<br><span>online with confidence.</span></h1>
-<p>Browse real products available in KOFAD, order securely, and choose delivery or pickup from one connected Market experience.</p>
-<div class="commerce-hero-actions"><a class="market-button primary commerce-primary" href="/market/">Explore the Market <span>→</span></a>{% if market_customer %}<a class="market-button ghost" href="/market/account/">My account</a>{% else %}<a class="market-button ghost" href="/market/access/">Sign in</a>{% endif %}</div>
-<div class="home-hero-trust"><span>Live product stock</span><i></i><span>Secure ordering</span><i></i><span>Delivery or pickup</span></div>
+<section class="home-hero-v9">
+<div class="home-hero-v9-content">
+<div class="home-hero-v9-kicker"><span></span> KOPEX IMPEX · RETAIL + WHOLESALE</div>
+<h1>Retail or wholesale.<br><em>One powerful market.</em></h1>
+<p>Shop single items or buy in quantity from KOPEX IMPEX. KOFAD brings live stock, secure ordering, delivery and pickup into one professional shopping experience.</p>
+<div class="home-hero-v9-actions">
+<a class="home-hero-v9-primary" href="/market/">Shop the Market <span>→</span></a>
+{% if market_customer %}<a class="home-hero-v9-secondary" href="/market/account/">My account</a>{% else %}<a class="home-hero-v9-secondary" href="/market/access/">Sign in / Create account</a>{% endif %}
 </div>
-<div class="home-hero-products" aria-label="Products available in KOFAD Market">
-{% for listing in listings %}
-<a class="home-hero-product" href="/market/products/{{ listing.pk }}/">
-{% if listing.image_thumb %}<img src="/market/products/{{ listing.pk }}/image/thumb/" alt="{{ listing.display_name }}">
-{% elif listing.image_url %}<img src="{{ listing.image_url }}" alt="{{ listing.display_name }}" referrerpolicy="no-referrer">
-{% else %}<div class="home-hero-product-fallback">KOPEX IMPEX<br>Market product</div>{% endif %}
-<div class="home-hero-product-copy"><small>{{ listing.product.category|default:"KOFAD Market" }}</small><strong>{{ listing.display_name }}</strong><b>GHS {{ listing.market_price_value|floatformat:2 }}</b></div>
-</a>
-{% empty %}
-<div class="home-hero-product home-hero-product-fallback">Products from KOPEX IMPEX</div>
-<div class="home-hero-product home-hero-product-fallback">Connected stock and ordering</div>
-<div class="home-hero-product home-hero-product-fallback">Delivery or pickup</div>
-{% endfor %}
+<div class="home-hero-v9-capabilities" aria-label="KOFAD Market capabilities">
+<div><b>01</b><span><strong>Retail shopping</strong><small>Buy what you need, when you need it.</small></span></div>
+<div><b>02</b><span><strong>Wholesale quantities</strong><small>Built for larger and repeat orders.</small></span></div>
+<div><b>03</b><span><strong>Delivery or pickup</strong><small>Choose the fulfilment that works for you.</small></span></div>
 </div>
+</div>
+<div class="home-hero-v9-mark" aria-hidden="true"><span>K</span><small>KOFAD MARKET</small></div>
 </section>
 
-{% if listings %}<section class="home-featured-v7">
-<header class="home-featured-head"><div><span>CURATED FROM THE MARKET</span><h2>Featured picks</h2></div><a href="/market/" aria-label="Shop all products">Shop all <b>→</b></a></header>
+{% if listings %}<section class="home-featured-v7 home-featured-v9">
+<header class="home-featured-head"><div><span>CURATED FROM THE MARKET</span><h2>Featured picks</h2><p>A quick look at products currently available in KOFAD.</p></div><a href="/market/" aria-label="Shop all products">Shop all <b>→</b></a></header>
 <div class="market-grid commerce-product-grid home-featured-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
 <a class="home-featured-mobile-cta" href="/market/">See everything in the Market <span>→</span></a>
 </section>{% endif %}
