@@ -1456,6 +1456,7 @@ def communication_settings(request, branch):
         "sms_enabled": settings.SMS_ENABLED,
         "sms_sandbox": settings.SMS_SANDBOX,
         "sms_provider": settings.SMS_PROVIDER,
+        "can_archive_messages": request.user.is_superuser or request.user.has_perm("core.manage_company"),
     })
 
 
@@ -1505,7 +1506,18 @@ def communications(request, branch):
     if request.method == "POST":
         try:
             action = request.POST.get("action", "send_compose")
-            if action in ("send", "queue", "retry"):
+            if action == "archive_message":
+                if not (request.user.is_superuser or request.user.has_perm("core.manage_company")):
+                    raise PermissionDenied
+                item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True)
+                Message.objects.filter(pk=item.pk).update(archived_at=timezone.now(), archived_by=request.user)
+                s.audit(
+                    request.user, branch, "communications.message_archived", item.pk,
+                    {"channel": item.channel, "status": item.status, "recipient": item.recipient[-4:] if item.recipient else ""},
+                    category="communications", entity_type="message",
+                )
+                messages.success(request, f"{item.get_channel_display()} history item removed from the workspace.")
+            elif action in ("send", "queue", "retry"):
                 item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch)
                 sent = send_message_now(request.user, branch, item.pk, action == "retry")
                 if sent.status == "accepted":
@@ -1650,7 +1662,7 @@ def communications(request, branch):
     communication_policy = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
     debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
     rows = list(
-        Message.objects.filter(branch=branch).select_related(
+        Message.objects.filter(branch=branch, archived_at__isnull=True).select_related(
             "party", "management_contact", "created_by", "submitted_by"
         ).order_by("-created_at")[:120]
     )
