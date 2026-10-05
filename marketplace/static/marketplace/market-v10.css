@@ -4,10 +4,11 @@
   background-image:
     linear-gradient(90deg,rgba(2,17,29,.90) 0%,rgba(3,24,37,.76) 30%,rgba(4,31,45,.48) 52%,rgba(4,31,44,.22) 72%,rgba(4,25,36,.08) 100%),
     linear-gradient(180deg,rgba(2,17,28,.02) 0%,rgba(2,18,30,.08) 58%,rgba(2,18,30,.34) 100%),
+    url("https://images.unsplash.com/photo-1768176136613-96a7bfc0049e?auto=format&fit=crop&fm=jpg&q=95&w=3000"),
     url("kofad-market-retail-hero.webp");
-  background-repeat:no-repeat,no-repeat,no-repeat;
-  background-size:cover,cover,cover;
-  background-position:center center,center center,66% center;
+  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;
+  background-size:cover,cover,cover,cover;
+  background-position:center center,center center,center center,66% center;
 }
 .home-hero-v9:before{
   background:
@@ -24,7 +25,7 @@
   text-shadow:0 2px 16px rgba(0,0,0,.26);
 }
 @media(max-width:980px){
-  .home-hero-v9{background-position:center center,center center,70% center}
+  .home-hero-v9{background-position:center center,center center,center center,70% center}
 }
 @media(max-width:720px){
   .home-hero-v9{
@@ -33,10 +34,11 @@
     background-color:#041a29;
     background-image:
       linear-gradient(180deg,rgba(2,16,27,.04) 0%,rgba(2,17,29,.10) 17%,rgba(2,18,30,.34) 34%,rgba(2,18,30,.72) 49%,rgba(2,18,30,.94) 63%,rgba(2,17,29,.995) 100%),
+      url("https://images.unsplash.com/photo-1768176136613-96a7bfc0049e?auto=format&fit=crop&fm=jpg&q=94&w=1800"),
       url("kofad-market-retail-hero.webp");
-    background-repeat:no-repeat,no-repeat;
-    background-size:cover,auto 58%;
-    background-position:center center,72% top;
+    background-repeat:no-repeat,no-repeat,no-repeat;
+    background-size:cover,cover,auto 58%;
+    background-position:center center,center top,72% top;
   }
   .home-hero-v9:before{
     background:
@@ -60,12 +62,12 @@
 }
 @media(max-width:430px){
   .home-hero-v9{
-    background-size:cover,auto 54%;
-    background-position:center center,74% top;
+    background-size:cover,cover,auto 54%;
+    background-position:center center,center top,74% top;
   }
   .home-hero-v9-content{padding-top:134px}
 }
 @media(max-width:360px){
-  .home-hero-v9{background-position:center center,76% top}
+  .home-hero-v9{background-position:center center,center top,76% top}
   .home-hero-v9-content{padding-top:120px}
 }

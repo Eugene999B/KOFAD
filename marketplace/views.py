@@ -300,9 +300,10 @@ def product_image(request, pk, size="large"):
 
 
 def customer_access(request):
-    customer = services.customer_from_session(request)
-    if customer:
-        return redirect("market_account")
+    # Opening the Market sign-in gateway means the previous customer account has
+    # been left. Never bounce a returning visitor back into a stale account.
+    if services.customer_from_session(request):
+        services.clear_customer_session(request)
     requested_next = request.GET.get("next", "")
     if requested_next.startswith("/") and not requested_next.startswith("//"):
         request.session["market_after_login"] = requested_next
@@ -500,8 +501,10 @@ def customer_password_reset_finish(request):
 
 
 def customer_login(request):
+    # /market/account/login/ is also a hard re-entry boundary: reaching it must
+    # require credentials rather than restoring an earlier customer session.
     if services.customer_from_session(request):
-        return redirect("market_account")
+        services.clear_customer_session(request)
     requested_next = request.GET.get("next", "")
     if requested_next.startswith("/") and not requested_next.startswith("//"):
         request.session["market_after_login"] = requested_next
