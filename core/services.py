@@ -658,6 +658,18 @@ def post_return(user, branch, payload, key):
     return doc
 
 
+EXPENSE_FUNDING_SOURCES = {
+    "today_sales_receipts": "Today's sales receipts",
+    "petty_cash": "Petty cash",
+    "prior_business_funds": "Prior business funds",
+    "owner_manager_funds": "Owner / manager funds",
+    "bank_account": "Business bank account",
+    "momo_wallet": "Business MoMo wallet",
+    "unpaid_credit": "Unpaid / on credit",
+    "other": "Other source",
+}
+
+
 @transaction.atomic
 def post_expense(user, branch, payload, key):
     permit(user, branch, "operate_finance")
@@ -674,6 +686,31 @@ def post_expense(user, branch, payload, key):
         raise ValidationError("Choose a valid expense category.")
     if amount <= 0 or len(note) < 5:
         raise ValidationError("Provide a positive amount and a meaningful expense description.")
+
+    funding_source = str(payload.get("funding_source", "today_sales_receipts")).strip().lower()
+    if funding_source not in EXPENSE_FUNDING_SOURCES:
+        raise ValidationError("Choose a valid source of funds for this expense.")
+    raw_affects = payload.get("affects_daily_closing", "1")
+    affects_daily_closing = str(raw_affects).lower() in {"1", "true", "yes", "on"}
+    funding_note = str(payload.get("funding_note", "")).strip()[:500]
+    method = str(payload.get("method", "cash")).strip().lower()
+
+    if funding_source == "today_sales_receipts" and not affects_daily_closing:
+        raise ValidationError("Today's sales receipts must reduce the matching Daily Closing channel.")
+    if funding_source != "today_sales_receipts" and affects_daily_closing:
+        raise ValidationError("Only an expense paid from today's sales receipts may reduce Daily Closing.")
+    if funding_source == "unpaid_credit" and affects_daily_closing:
+        raise ValidationError("An unpaid expense cannot reduce Daily Closing.")
+    if funding_source == "other" and len(funding_note) < 8:
+        raise ValidationError("Describe the other funding source using at least eight characters.")
+
+    if funding_source == "petty_cash":
+        method = "cash"
+    elif funding_source == "bank_account":
+        method = "bank"
+    elif funding_source == "momo_wallet":
+        method = "momo"
+
     company = company_policy()
     elevated = bool(company.expense_manager_threshold and amount > company.expense_manager_threshold)
     if elevated and not user.has_perm("core.approve_operations"):
@@ -681,13 +718,38 @@ def post_expense(user, branch, payload, key):
             f"A manager with approval authority must post expenses above "
             f"{company.currency} {company.expense_manager_threshold}."
         )
-    doc = Document.objects.create(branch=branch, kind="expense", reference=reference("expense", branch),
-        total=amount, paid=amount, note=note, expense_category=category, created_by=user)
-    payments(doc, [{"method": payload.get("method"), "amount": amount}], -1)
+
+    paid = ZERO if funding_source == "unpaid_credit" else amount
+    doc = Document.objects.create(
+        branch=branch,
+        kind="expense",
+        reference=reference("expense", branch),
+        total=amount,
+        paid=paid,
+        note=note,
+        expense_category=category,
+        expense_funding_source=funding_source,
+        expense_affects_daily_closing=affects_daily_closing,
+        expense_funding_note=funding_note,
+        created_by=user,
+    )
+
+    # Owner-funded expenses and unpaid credit do not move a KOFAD cash/bank channel.
+    if funding_source not in {"owner_manager_funds", "unpaid_credit"}:
+        payments(doc, [{"method": method, "amount": amount}], -1)
+
     request.document = doc
     request.save(update_fields=["document"])
     audit(user, branch, "expense.posted", doc.reference, {
-        "amount": str(amount), "note": note, "category": category, "manager_threshold": elevated,
+        "amount": str(amount),
+        "note": note,
+        "category": category,
+        "manager_threshold": elevated,
+        "funding_source": funding_source,
+        "funding_source_label": EXPENSE_FUNDING_SOURCES[funding_source],
+        "affects_daily_closing": affects_daily_closing,
+        "payment_method": method if funding_source not in {"owner_manager_funds", "unpaid_credit"} else "",
+        "funding_note": funding_note,
     })
     return doc
 
@@ -748,7 +810,10 @@ def advance_operation(user, operation_id, action, quantity=None, note=""):
 
 
 def channel_totals(branch, day):
-    rows = Payment.objects.filter(document__branch=branch, document__created_at__date=day)
+    rows = Payment.objects.filter(document__branch=branch, document__created_at__date=day).exclude(
+        document__kind="expense",
+        document__expense_affects_daily_closing=False,
+    )
     totals = {method: ZERO for method, _ in Payment.METHODS}
     for row in rows:
         totals[row.method] += row.amount * row.direction
@@ -799,6 +864,8 @@ def closing_summary(branch, day):
         document__branch=branch, document__created_at__date=day
     ).select_related("document")
     for payment in payment_rows:
+        if payment.document.kind == "expense" and not payment.document.expense_affects_daily_closing:
+            continue
         label = source_codes.get(payment.document.kind)
         if label:
             breakdown[label][payment.method] += payment.amount * payment.direction
@@ -814,6 +881,8 @@ def closing_summary(branch, day):
         "supplier_returns_total": total(supplier_returns),
         "supplier_debt_payments": total(supplier_payments),
         "expenses_total": total(expenses),
+        "expenses_closing_deducted": total(expenses.filter(expense_affects_daily_closing=True)),
+        "expenses_accounting_only": total(expenses.filter(expense_affects_daily_closing=False)),
         "inventory_losses": total(losses),
         "sale_count": sales.count(),
         "credit_sale_count": sales.filter(total__gt=F("paid")).count(),
