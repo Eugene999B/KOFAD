@@ -335,6 +335,27 @@ with sync_playwright() as p:
     assert mobile_desk["y"] >= 0 and mobile_desk["y"] + mobile_desk["height"] <= 844 + 2
     admin_page.set_viewport_size({"width":1280,"height":900})
 
+    admin_page.goto("http://127.0.0.1:8000/market-catalog/")
+    admin_page.locator(".market-admin-product").first.wait_for()
+    assert float(admin_page.locator(".market-admin-copy h3").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
+    assert float(admin_page.locator(".market-admin-health span").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 9
+    assert admin_page.locator(".market-admin-list").evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 2
+    admin_page.screenshot(path=str(out / "market-catalog-readable.png"), full_page=True)
+
+    admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
+    admin_page.locator("tbody td").first.wait_for()
+    assert float(admin_page.locator("tbody td").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+    assert admin_page.locator("tbody td").first.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
+    admin_page.reload()
+    dark_input = admin_page.locator("input").first
+    dark_input.wait_for()
+    assert dark_input.evaluate("el => getComputedStyle(el).backgroundColor") != "rgb(255, 255, 255)"
+    assert dark_input.evaluate("el => getComputedStyle(el).color") != "rgb(0, 0, 0)"
+    admin_page.screenshot(path=str(out / "sales-history-dark-readable.png"), full_page=True)
+    admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
+    admin_page.reload()
+
     admin_page.goto("http://127.0.0.1:8000/administration/")
     admin_sidebar = admin_page.locator(".sidebar")
     max_sidebar_scroll = admin_sidebar.evaluate("el => { el.scrollTop = el.scrollHeight; return el.scrollTop; }")
