@@ -310,9 +310,8 @@ def trade_screen(request, branch, kind):
     })
 
 def _receipt_sms_result(user, branch, doc):
-    """Send or resolve the receipt SMS for one sale without duplicating a prior accepted send."""
-    if not user.has_perm("core.send_messages"):
-        raise PermissionDenied
+    """Send or resolve a sale receipt SMS under the cashier's branch sale authority."""
+    s.permit(user, branch, "operate_sales")
     if not doc.party_id:
         raise ValidationError("This is a walk-in sale with no customer phone number.")
     if not doc.party.consent:
@@ -345,14 +344,14 @@ def _receipt_sms_result(user, branch, doc):
     if item and item.status == "unknown":
         return item, "The previous SMS delivery result is unknown. Check the provider result before sending again."
     if item and item.status in retryable:
-        sent = send_message_now(user, branch, item.pk, retry=True)
+        sent = send_message_now(user, branch, item.pk, retry=True, automatic=True)
     else:
         if not item:
             item = create_draft(
                 user, branch, doc.party, body,
                 source_key=f"document:receipt:{doc.pk}",
             )
-        sent = send_message_now(user, branch, item.pk)
+        sent = send_message_now(user, branch, item.pk, automatic=True)
 
     message = (
         "Receipt SMS sent to Arkesel."
