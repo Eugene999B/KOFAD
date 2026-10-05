@@ -113,3 +113,53 @@ html[data-theme="dark"] .shop-product-grid .commerce-card-body>p{color:#b3c6d0!i
  .home-hero-copy-v8 h1{font-size:37px!important}
  .home-hero-products{height:240px}
 }
+
+
+/* Public header and customer account surfaces */
+.public-desktop-nav>a{font-size:11px!important;padding:0 12px!important}
+.public-site-brand strong{font-size:20px!important}.public-site-brand small{font-size:8px!important}
+.public-theme-toggle{font-size:10px!important}
+.contact-method-card span{font-size:9px!important}.contact-method-card strong{font-size:13px!important}.contact-method-card small{font-size:10px!important}
+.account-v4-head p{font-size:12px!important}.account-v4-tile strong{font-size:13px!important}.account-v4-tile small{font-size:10.5px!important}
+.account-v4-card-head h2{font-size:19px!important}.account-v4-card-head a{font-size:10.5px!important}
+.account-v4-order strong{font-size:12px!important}.account-v4-order small{font-size:10px!important}.account-v4-order>b{font-size:12px!important}
+.account-v4-profile strong{font-size:13px!important}.account-v4-profile small{font-size:10.5px!important}
+.account-v4-actions a,.account-v4-signout button{font-size:11px!important}
+.minimal-flow-copy,.payment-confirmation-id{font-size:10.5px!important}
+
+/* Cart, checkout, order history and tracking */
+.commerce-flow-head p:not(.market-eyebrow),.commerce-flow-head>a{font-size:11px!important}
+.commerce-checkout-steps span{font-size:10px!important}.commerce-checkout-steps span b{font-size:10px!important}
+.cart-table-head{font-size:9.5px!important}
+.commerce-cart-copy>span{font-size:9px!important}.commerce-cart-copy strong{font-size:12px!important}.commerce-cart-copy small{font-size:10px!important}
+.commerce-line-total{font-size:12px!important}.commerce-cart-update span,.commerce-cart-update button{font-size:10px!important}
+.summary-row,.summary-total span{font-size:11px!important}.summary-assurance p{font-size:9.5px!important}
+.checkout-v2-number{font-size:10px!important}.checkout-v2-content>p:not(.market-eyebrow),.section-title-inline>div>p{font-size:10px!important}
+.checkout-v2-submit strong{font-size:11.5px!important}.checkout-v2-submit span{font-size:10px!important}
+.checkout-v2-items strong,.checkout-v2-items b{font-size:11px!important}.checkout-v2-items small{font-size:9.5px!important}
+.checkout-account-box small{font-size:9px!important}.checkout-account-box strong{font-size:11px!important}
+.order-v2-label small,.order-v2-payment small{font-size:9px!important}
+.order-v2-hero>div:first-child>p,.order-v2-payment span{font-size:10px!important}
+.order-v2-payment strong{font-size:15px!important}
+.order-v2-items strong,.order-v2-items b{font-size:11px!important}.order-v2-items small,.order-v2-items span{font-size:10px!important}
+.order-v2-totals>div{font-size:10.5px!important}
+.order-action-card>p:not(.market-eyebrow),.order-action-card>small{font-size:10px!important}
+.order-contact-line{font-size:11px!important}
+
+/* Featured preview cards follow the same readable standard. */
+.home-featured-grid .product-card-top span,.home-featured-grid .product-card-top small{font-size:9.5px!important}
+.home-featured-grid .commerce-stock-line span,.home-featured-grid .commerce-stock-line small{font-size:10px!important}
+.home-featured-grid .commerce-product-price strong{font-size:18px!important}.home-featured-grid .commerce-product-price span{font-size:10px!important}
+.home-featured-grid .commerce-card-actions>a,.home-featured-grid .commerce-card-actions button{font-size:11px!important;min-height:37px!important}
+
+@media(max-width:720px){
+ .public-mobile-market,.public-mobile-account,.public-mobile-menu>summary{font-size:9.5px!important}
+ .public-mobile-menu a,.public-mobile-menu button{font-size:10px!important}
+ .account-v4-tile small{font-size:9.5px!important}
+ .market-mobile-dock a{font-size:9px!important}
+ .commerce-checkout-steps span{font-size:9px!important}
+ .home-featured-grid .commerce-card-body h3{font-size:12.5px!important}
+ .home-featured-grid .commerce-stock-line span{font-size:8.5px!important}
+ .home-featured-grid .commerce-product-price strong{font-size:15px!important}
+ .home-featured-grid .commerce-card-actions>a,.home-featured-grid .commerce-card-actions button{font-size:9.5px!important}
+}
