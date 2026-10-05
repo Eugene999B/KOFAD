@@ -72,6 +72,13 @@ def health(request):
         return JsonResponse({"status": "unavailable"}, status=503)
 
 
+def csrf_failure(request, reason=""):
+    """Recover only stale duplicate staff login posts; keep normal CSRF strict."""
+    if request.path == "/login/" and request.user.is_authenticated:
+        return redirect("dashboard")
+    return render(request, "403.html", status=403)
+
+
 def resolve_login_identifier(identifier):
     """Resolve a login name to one user without weakening per-account lockout."""
     username_matches = list(
@@ -98,9 +105,9 @@ def resolve_login_identifier(identifier):
 
 @sensitive_post_parameters("password")
 def login_view(request):
-    # The sign-in gateway is an explicit new staff session boundary. If a stale
-    # staff session reaches /login/ after the user has left the workspace, end it
-    # instead of silently restoring the previous account.
+    # The sign-in gateway is an explicit new staff session boundary. If an
+    # authenticated user intentionally revisits /login/, start fresh; stale
+    # duplicate login POSTs are recovered by csrf_failure before reaching here.
     if request.user.is_authenticated:
         logout(request)
     if request.session.get("market_customer_id"):
@@ -301,9 +308,8 @@ def trade_screen(request, branch, kind):
     })
 
 def _receipt_sms_result(user, branch, doc):
-    """Send or resolve the receipt SMS for one sale without duplicating a prior accepted send."""
-    if not user.has_perm("core.send_messages"):
-        raise PermissionDenied
+    """Send or resolve a sale receipt SMS under the cashier's branch sale authority."""
+    s.permit(user, branch, "operate_sales")
     if not doc.party_id:
         raise ValidationError("This is a walk-in sale with no customer phone number.")
     if not doc.party.consent:
@@ -336,14 +342,14 @@ def _receipt_sms_result(user, branch, doc):
     if item and item.status == "unknown":
         return item, "The previous SMS delivery result is unknown. Check the provider result before sending again."
     if item and item.status in retryable:
-        sent = send_message_now(user, branch, item.pk, retry=True)
+        sent = send_message_now(user, branch, item.pk, retry=True, automatic=True)
     else:
         if not item:
             item = create_draft(
                 user, branch, doc.party, body,
                 source_key=f"document:receipt:{doc.pk}",
             )
-        sent = send_message_now(user, branch, item.pk)
+        sent = send_message_now(user, branch, item.pk, automatic=True)
 
     message = (
         "Receipt SMS sent to Arkesel."
@@ -377,7 +383,7 @@ def complete_trade(request):
             doc.kind == "sale"
             and party
             and party.consent
-            and request.user.has_perm("core.send_messages")
+            and request.user.has_perm("core.operate_sales")
             and settings.SMS_ENABLED
         )
         sms_reason = (
@@ -387,8 +393,8 @@ def complete_trade(request):
             if not party
             else "Customer SMS consent is not enabled."
             if not party.consent
-            else "Your account does not have message-sending permission."
-            if not request.user.has_perm("core.send_messages")
+            else "Your account cannot send sale receipts."
+            if not request.user.has_perm("core.operate_sales")
             else "SMS delivery is not enabled for this deployment."
         )
 

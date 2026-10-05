@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from . import services as s
-from .models import Document, Stock
+from .models import Document, PayrollEntry, PayrollPeriod, PayrollRule, Stock, Worker
 from .reporting import branch_comparison, limited
 from .tests import Fixtures
 
@@ -97,3 +97,43 @@ class BranchReportingTests(Fixtures, TestCase):
         self.assertEqual(len(first.context["rows"]), 100)
         self.assertEqual(len(second.context["rows"]), 5)
         self.assertEqual(self.client.get("/reports/export/csv/").content.count(b"PAGE-"), 105)
+
+
+    def test_accounting_renders_locked_payroll_entries_with_current_ssnit_field(self):
+        rule = PayrollRule.objects.create(
+            name="Accounting regression payroll rule",
+            effective_from=self.today.replace(day=1),
+            created_by=self.user,
+        )
+        worker = Worker.objects.create(
+            employee_code="ACC-001",
+            branch=self.branch,
+            first_name="Accounting",
+            last_name="Worker",
+            phone="0241234567",
+            job_title="Tester",
+            hire_date=self.today.replace(day=1),
+            created_by=self.user,
+        )
+        period = PayrollPeriod.objects.create(
+            branch=self.branch,
+            year=self.today.year,
+            month=self.today.month,
+            start_date=self.today.replace(day=1),
+            end_date=self.today,
+            rule=rule,
+            status="locked",
+            created_by=self.user,
+        )
+        PayrollEntry.objects.create(
+            period=period,
+            worker=worker,
+            gross_pay=Decimal("1000"),
+            ssnit_employee=Decimal("55"),
+            employer_pension=Decimal("130"),
+            net_pay=Decimal("945"),
+        )
+        self.authenticate_client()
+        response = self.client.get("/accounting/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Accounting Intelligence")

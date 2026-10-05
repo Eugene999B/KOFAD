@@ -6,7 +6,7 @@ import requests
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -74,6 +74,40 @@ class SmsTests(Fixtures,TestCase):
             send_message_now(self.user,self.branch,message.pk)
         message.refresh_from_db()
         self.assertEqual(message.status,"draft")
+
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_cashier_sale_receipt_sms_does_not_require_general_messaging_permission(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "sale-receipt-provider-id", 200, recipient="+233241234567")
+        ]
+        cashier = User.objects.create_user("receipt-cashier", password="cashier-password-long")
+        cashier.user_permissions.add(Permission.objects.get(codename="operate_sales"))
+        cashier.access.branches.add(self.branch)
+        self.assertFalse(cashier.has_perm("core.send_messages"))
+        self.customer.consent = False
+        self.customer.save(update_fields=["consent"])
+        self.authenticate_client(cashier)
+
+        response = self.client.post(
+            "/api/trades/",
+            data=json.dumps({
+                "kind": "sale",
+                "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1}],
+                "party": self.customer.pk,
+                "customer_consent": True,
+                "payments": [{"method": "cash", "amount": "50"}],
+            }),
+            content_type="application/json",
+            HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["sms_requested"])
+        self.assertTrue(payload["can_send_sms"])
+        self.assertEqual(payload["sms_status"], "accepted")
+        self.assertEqual(submit_many.call_count, 1)
+        self.customer.refresh_from_db()
+        self.assertTrue(self.customer.consent)
 
     @patch("core.sms.providers.Arkesel.submit_many")
     def test_direct_acceptance_is_sent_not_delivery(self, submit_many):

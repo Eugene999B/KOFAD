@@ -10,6 +10,7 @@ if len(SECRET_KEY) < 32:
     raise RuntimeError("Set DJANGO_SECRET_KEY to at least 32 random characters.")
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
 CSRF_TRUSTED_ORIGINS = [s for s in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if s]
+CSRF_FAILURE_VIEW = "core.views.csrf_failure"
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles", "core",

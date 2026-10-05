@@ -11,7 +11,7 @@ from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
 from django.db import close_old_connections, connection, connections, transaction, DatabaseError
-from django.test import TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from . import services as s
@@ -171,6 +171,27 @@ class BusinessTests(Fixtures, TestCase):
         self.user.is_active = False
         self.user.save()
         self.assertEqual(self.client.get("/workspace/").status_code,302)
+
+    def test_stale_duplicate_login_post_recovers_without_raw_csrf_403(self):
+        client = Client(enforce_csrf_checks=True)
+        login_page = client.get("/login/")
+        stale_token = login_page.cookies["csrftoken"].value
+        credentials = {
+            "username": "owner",
+            "password": "test-password-long-enough",
+            "csrfmiddlewaretoken": stale_token,
+        }
+        first = client.post("/login/", credentials)
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(first["Location"], "/workspace/")
+
+        duplicate = client.post("/login/", credentials)
+        self.assertEqual(duplicate.status_code, 302)
+        self.assertEqual(duplicate["Location"], "/workspace/")
+
+        fresh_login = client.get("/login/")
+        self.assertEqual(fresh_login.status_code, 200)
+        self.assertFalse("_auth_user_id" in client.session)
 
     def test_all_pages_render(self):
         self.authenticate_client()

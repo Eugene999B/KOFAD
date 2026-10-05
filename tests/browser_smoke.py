@@ -191,6 +191,7 @@ with sync_playwright() as p:
     assert page.locator("#cart-count").inner_text() == "2 lines"
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
+    assert page.locator("#customer-consent").is_checked(), "Receipt SMS should default on for an attached customer"
     page.locator("#checkout-panel").scroll_into_view_if_needed()
     assert page.locator("#single-payment-value").is_visible()
     assert page.locator("#single-payment-value").input_value() == page.locator("#total").inner_text()

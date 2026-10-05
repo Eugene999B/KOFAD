@@ -19,6 +19,7 @@
   let selectedCustomer = null;
   let selectedSupplier = null;
   let newCustomerMode = false;
+  let smsPreferenceExplicit = false;
   let restoredState = null;
   let hydrating = true;
   let selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
@@ -581,7 +582,8 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
-    if (customerConsent) customerConsent.checked = Boolean(customer.consent);
+    smsPreferenceExplicit = false;
+    if (customerConsent) customerConsent.checked = true;
     changed();
     updateConsentAvailability();
     persist();
@@ -597,7 +599,8 @@
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
-    if (customerConsent) customerConsent.checked = false;
+    smsPreferenceExplicit = false;
+    if (customerConsent) customerConsent.checked = true;
     changed();
     updateConsentAvailability();
     persist();
@@ -609,7 +612,7 @@
     newCustomerFields?.classList.remove("hidden");
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
-    if (customerConsent) customerConsent.checked = false;
+    if (customerConsent) customerConsent.checked = true;
     updateConsentAvailability();
     customerName?.focus();
     persist();
@@ -717,10 +720,11 @@
     if (!customerConsent) return;
     const available = hasAttachedCustomer();
     customerConsent.disabled = !available;
-    if (!available) customerConsent.checked = false;
+    if (available && !smsPreferenceExplicit) customerConsent.checked = true;
   }
 
   customerConsent?.addEventListener("change", () => {
+    smsPreferenceExplicit = true;
     changed();
     persist();
   });
@@ -1101,7 +1105,8 @@
     if (customerSearch) customerSearch.value = "";
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
-    if (customerConsent) customerConsent.checked = false;
+    smsPreferenceExplicit = false;
+    if (customerConsent) customerConsent.checked = true;
     if (paymentPlan) paymentPlan.value = "full";
     if (dueDate) dueDate.value = "";
     selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
@@ -1230,7 +1235,15 @@
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
-      if (customerConsent) customerConsent.checked = Boolean(saved.customer_consent || saved.customer?.consent);
+      if (customerConsent) {
+        if (Object.prototype.hasOwnProperty.call(saved, "customer_consent")) {
+          smsPreferenceExplicit = true;
+          customerConsent.checked = Boolean(saved.customer_consent);
+        } else {
+          smsPreferenceExplicit = false;
+          customerConsent.checked = true;
+        }
+      }
       applyPaymentPlan();
       render();
       heldSalesDialog?.close?.();
@@ -1254,7 +1267,15 @@
     if (customerPhone && restoredState.customerPhone) customerPhone.value = restoredState.customerPhone;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
-    if (customerConsent) customerConsent.checked = Boolean(restoredState.customerConsent || selectedCustomer?.consent);
+    if (customerConsent) {
+      if (Object.prototype.hasOwnProperty.call(restoredState, "customerConsent")) {
+        smsPreferenceExplicit = true;
+        customerConsent.checked = Boolean(restoredState.customerConsent);
+      } else {
+        smsPreferenceExplicit = false;
+        customerConsent.checked = true;
+      }
+    }
     if (purchaseReference) purchaseReference.value = restoredState.purchaseReference || "";
     if (purchaseDocumentDate && restoredState.purchaseDocumentDate) purchaseDocumentDate.value = restoredState.purchaseDocumentDate;
     if (purchaseNote) purchaseNote.value = restoredState.purchaseNote || "";
@@ -1275,6 +1296,11 @@
       beginNewCustomer();
       customerName.value = pendingBody.customer_name;
       customerPhone.value = pendingBody.customer_phone || "";
+    }
+    if (customerConsent && Object.prototype.hasOwnProperty.call(pendingBody, "customer_consent")) {
+      smsPreferenceExplicit = true;
+      customerConsent.checked = Boolean(pendingBody.customer_consent);
+      updateConsentAvailability();
     }
     if (dueDate) dueDate.value = pendingBody.due_date || "";
     if (purchaseReference) purchaseReference.value = pendingBody.external_reference || "";

@@ -215,7 +215,7 @@ def _payroll_entries(branch, first, last):
         day = item.period.end_date
         ref = f"PAY-{item.period.year}-{item.period.month:02d}-{item.worker.employee_code}"
         taxes = _money(item.paye_tax) + _money(item.bonus_tax) + _money(item.overtime_tax)
-        pension = _money(item.employee_ssnit) + _money(item.employer_pension)
+        pension = _money(item.ssnit_employee) + _money(item.employer_pension)
         deductions = _money(item.other_deductions)
         _row(rows, day, ref, "Payroll accrual", item.worker.full_name, "6100", debit=item.gross_pay)
         _row(rows, day, ref, "Payroll accrual", item.worker.full_name, "6110", debit=item.employer_pension)

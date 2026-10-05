@@ -105,9 +105,26 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("pageshow", guardPasswordUntilInteraction);
   }
   const loginForm = document.querySelector(".login-card form");
-  loginForm?.addEventListener("submit", () => {
-    try { sessionStorage.setItem("kofad-welcome-after-login", "1"); } catch (_) {}
-  });
+  if (loginForm) {
+    let loginSubmitting = false;
+    const loginSubmitButton = loginForm.querySelector('button[type="submit"],input[type="submit"],button:not([type])');
+    loginForm.addEventListener("submit", event => {
+      if (loginSubmitting) {
+        event.preventDefault();
+        return;
+      }
+      loginSubmitting = true;
+      loginForm.setAttribute("aria-busy", "true");
+      if (loginSubmitButton) loginSubmitButton.disabled = true;
+      try { sessionStorage.setItem("kofad-welcome-after-login", "1"); } catch (_) {}
+    });
+    window.addEventListener("pageshow", event => {
+      if (!event.persisted) return;
+      loginSubmitting = false;
+      loginForm.removeAttribute("aria-busy");
+      if (loginSubmitButton) loginSubmitButton.disabled = false;
+    });
+  }
   if (!document.body.classList.contains("login-page")) {
     try {
       if (sessionStorage.getItem("kofad-welcome-after-login") === "1") {
@@ -135,17 +152,28 @@ document.addEventListener("DOMContentLoaded", () => {
   const toggle = document.querySelector("#menu-toggle"), sidebar = document.querySelector(".sidebar");
   const backdrop = document.querySelector(".nav-backdrop"), body = document.querySelector(".body"), dock = document.querySelector(".mobile-dock");
 
-  // Preserve the desktop navigation position between page loads so choosing a
-  // lower item (Workers, Administration, Settings, etc.) never jumps the menu
-  // back to the top.
+  // Preserve navigation position on desktop and mobile. Mobile focus previously
+  // pulled the long sidebar back to the top after its saved scroll had restored.
   const sidebarScrollKey = "kofad-sidebar-scroll-v1";
+  let restoreSidebarScroll = () => {};
   if (sidebar) {
-    let savedSidebarScroll = 0;
-    try { savedSidebarScroll = Number(sessionStorage.getItem(sidebarScrollKey) || 0); } catch (_) {}
-    requestAnimationFrame(() => { sidebar.scrollTop = Math.max(0, savedSidebarScroll); });
+    const readSidebarScroll = () => {
+      try { return Math.max(0, Number(sessionStorage.getItem(sidebarScrollKey) || 0)); }
+      catch (_) { return 0; }
+    };
     const rememberSidebarScroll = () => {
       try { sessionStorage.setItem(sidebarScrollKey, String(Math.round(sidebar.scrollTop))); } catch (_) {}
     };
+    restoreSidebarScroll = () => {
+      const saved = readSidebarScroll();
+      const apply = () => {
+        const maximum = Math.max(0, sidebar.scrollHeight - sidebar.clientHeight);
+        sidebar.scrollTop = Math.min(saved, maximum);
+      };
+      requestAnimationFrame(() => requestAnimationFrame(apply));
+      window.setTimeout(apply, 90);
+    };
+    restoreSidebarScroll();
     let sidebarScrollFrame = null;
     sidebar.addEventListener("scroll", () => {
       if (sidebarScrollFrame) return;
@@ -154,7 +182,11 @@ document.addEventListener("DOMContentLoaded", () => {
         rememberSidebarScroll();
       });
     }, {passive:true});
-    sidebar.querySelectorAll("a").forEach(link => link.addEventListener("click", rememberSidebarScroll));
+    sidebar.querySelectorAll("a").forEach(link => {
+      link.addEventListener("pointerdown", rememberSidebarScroll, {passive:true});
+      link.addEventListener("click", rememberSidebarScroll);
+    });
+    window.addEventListener("pageshow", restoreSidebarScroll);
     window.addEventListener("pagehide", rememberSidebarScroll);
   }
   const mobile = matchMedia("(max-width:950px)");
@@ -163,8 +195,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!toggle) return;
     toggle.setAttribute("aria-expanded", String(open)); backdrop.hidden = !open;
     body.inert = open; if (dock) dock.inert = open;
-    if (open) sidebar.querySelector(".nav-close").focus();
-    else if (restore) toggle.focus();
+    if (open) {
+      sidebar.querySelector(".nav-close")?.focus({preventScroll:true});
+      restoreSidebarScroll();
+    } else if (restore) toggle.focus();
   }
   toggle?.addEventListener("click", () => menu(true));
   backdrop?.addEventListener("click", () => menu(false));
