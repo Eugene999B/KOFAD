@@ -35,8 +35,7 @@
   };
 
   if (launcher) {
-    launcher.draggable = false;
-    launcher.addEventListener("dragstart", event => event.preventDefault());
+    const dragHandle = launcher.querySelector(".approval-drag-handle");
 
     const beginDrag = (clientX, clientY, pointerId) => {
       const rect = launcher.getBoundingClientRect();
@@ -88,7 +87,7 @@
     // Mouse input uses ordinary mouse events so desktop browsers and browser
     // automation behave identically. Pointer events are reserved for touch/pen,
     // avoiding compatibility-event cancellation after pointerdown.
-    launcher.addEventListener("pointerdown", event => {
+    dragHandle?.addEventListener("pointerdown", event => {
       if (event.pointerType === "mouse" || event.button !== 0) return;
       beginDrag(event.clientX, event.clientY, event.pointerId);
       event.preventDefault();
@@ -104,7 +103,7 @@
       if (event.pointerType !== "mouse") finishDrag(event.pointerId);
     });
 
-    launcher.addEventListener("mousedown", event => {
+    dragHandle?.addEventListener("mousedown", event => {
       if (event.button !== 0) return;
       beginDrag(event.clientX, event.clientY, "mouse");
       event.preventDefault();
@@ -114,13 +113,11 @@
     });
     document.addEventListener("mouseup", () => finishDrag("mouse"));
 
-    launcher.addEventListener("click", event => {
-      if (!dragged) return;
+    dragHandle?.addEventListener("click", event => {
       event.preventDefault();
-      event.stopPropagation();
       dragged = false;
     });
-    launcher.addEventListener("dblclick", event => {
+    dragHandle?.addEventListener("dblclick", event => {
       event.preventDefault();
       try { localStorage.removeItem(POSITION_KEY); } catch (_) {}
       launcher.style.left = "";
