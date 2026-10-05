@@ -398,6 +398,8 @@ class Conversation(models.Model):
     closed_reason = models.CharField(max_length=24, blank=True, default="")
     customer_typing_at = models.DateTimeField(null=True, blank=True)
     staff_typing_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
