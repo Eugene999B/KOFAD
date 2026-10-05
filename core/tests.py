@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from . import accounting_engine
 from . import services as s
-from .models import Access, Audit, Branch, Company, Document, Line, Movement, Party, Payment, Product, Stock
+from .models import Access, Audit, Branch, Company, Document, Line, Message, Movement, Party, Payment, Product, Stock
 
 
 class Fixtures:
@@ -1142,3 +1142,47 @@ class AdministrationAndExportTests(Fixtures, TestCase):
         self.assertNotContains(response, 'id="branch-select"')
         self.assertNotContains(response, ">Switch<")
         self.assertContains(response, self.branch.name)
+
+
+class ExecutiveWorkspaceAndCommunicationArchiveTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+        self.authenticate_client()
+
+    def test_overview_and_accounting_expose_management_controls(self):
+        self.sale()
+        overview = self.client.get("/workspace/")
+        self.assertEqual(overview.status_code, 200)
+        self.assertContains(overview, "Operational control pulse")
+        self.assertContains(overview, "Supplier payables")
+        self.assertContains(overview, "Customer money received")
+
+        accounting = self.client.get("/accounting/")
+        self.assertEqual(accounting.status_code, 200)
+        self.assertContains(accounting, "Cash & equivalents")
+        self.assertContains(accounting, "Working capital")
+        self.assertContains(accounting, "Does Accounting agree with operations?")
+
+    def test_manager_delete_archives_message_without_destroying_delivery_evidence(self):
+        item = Message.objects.create(
+            branch=self.branch,
+            party=self.customer,
+            channel="sms",
+            body="Customer delivery update",
+            status="accepted",
+            created_by=self.user,
+            recipient="+233241234567",
+            provider="arkesel",
+            sandbox=False,
+        )
+        response = self.client.post("/communications/", {
+            "action": "delete",
+            "id": item.pk,
+        })
+        self.assertRedirects(response, "/communications/", fetch_redirect_response=False)
+        item.refresh_from_db()
+        self.assertIsNotNone(item.archived_at)
+        self.assertEqual(item.archived_by_id, self.user.pk)
+        page = self.client.get("/communications/")
+        self.assertNotContains(page, "Customer delivery update")
+        self.assertTrue(Audit.objects.filter(action="communication.archived").exists())
