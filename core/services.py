@@ -311,6 +311,49 @@ def payments(document, rows, direction, enforce_enabled=True):
     return total
 
 
+def _new_purchase_product(data):
+    if not isinstance(data, dict):
+        raise ValidationError("New product details are invalid.")
+    name = str(data.get("name", "")).strip()
+    sku = str(data.get("sku", "")).strip().upper()
+    if len(name) < 2 or len(name) > 150:
+        raise ValidationError("Enter a product name between 2 and 150 characters.")
+    if not (2 <= len(sku) <= 40) or not all(ch.isalnum() or ch in "._/-" for ch in sku):
+        raise ValidationError("Enter a valid SKU using letters, numbers, dot, dash, slash or underscore.")
+    if Product.objects.filter(sku__iexact=sku).exists():
+        raise ValidationError(f"SKU {sku} already exists. Search and choose the existing product instead.")
+    try:
+        pack_size = int(data.get("pack_size", 1))
+        reorder_level = int(data.get("reorder_level", 10))
+    except (TypeError, ValueError):
+        raise ValidationError("Pack size and reorder level must be whole numbers.")
+    if not 1 <= pack_size <= 1000000:
+        raise ValidationError("Units per pack must be between 1 and 1,000,000.")
+    if not 0 <= reorder_level <= 1000000000:
+        raise ValidationError("Reorder level is outside the supported range.")
+
+    def optional_price(key):
+        value = data.get(key)
+        return None if value in (None, "") else money(value)
+
+    return Product.objects.create(
+        name=name,
+        sku=sku,
+        barcode=str(data.get("barcode", "")).strip()[:80],
+        category=str(data.get("category", "")).strip()[:80],
+        base_unit=str(data.get("base_unit", "piece")).strip()[:24] or "piece",
+        pack_name=str(data.get("pack_name", "carton")).strip()[:24] or "carton",
+        pack_size=pack_size,
+        cost=ZERO,
+        retail_unit=optional_price("retail_unit"),
+        retail_pack=optional_price("retail_pack"),
+        wholesale_unit=optional_price("wholesale_unit"),
+        wholesale_pack=optional_price("wholesale_pack"),
+        reorder_level=reorder_level,
+        active=True,
+    )
+
+
 @transaction.atomic
 def post_trade(user, branch, payload, key, kind="sale"):
     if kind not in ("sale", "purchase"):
@@ -365,12 +408,20 @@ def post_trade(user, branch, payload, key, kind="sale"):
     )
     total = ZERO
 
+    created_products = []
     for row in rows:
         if not isinstance(row, dict):
             raise ValidationError("Invalid line item.")
-        product = Product.objects.filter(pk=row.get("product"), active=True).first()
+        new_product_data = row.get("new_product")
+        if new_product_data and kind != "purchase":
+            raise ValidationError("New products can only be created through purchasing.")
+        product = _new_purchase_product(new_product_data) if new_product_data else Product.objects.filter(
+            pk=row.get("product"), active=True
+        ).first()
         if not product:
             raise ValidationError("A product is missing or archived.")
+        if new_product_data:
+            created_products.append(product.sku)
         qty = units(row.get("quantity"))
         mode = row.get("mode", "retail_unit")
         if mode not in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack"):
@@ -441,10 +492,23 @@ def post_trade(user, branch, payload, key, kind="sale"):
         if qty * factor > 1000000000:
             raise ValidationError("Base-unit quantity exceeds the supported posting limit.")
         line_total = money(price * qty)
+        purchase_base_cost = product.cost
+        stock_before = 0
+        if kind == "purchase":
+            purchase_base_cost = (price / Decimal(factor)).quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
+            stock_before = Stock.objects.filter(branch=branch, product=product).values_list("quantity", flat=True).first() or 0
         Line.objects.create(document=doc, product=product, description=product.name,
             mode=mode, quantity=qty, factor=factor, list_price=list_price, unit_price=price,
-            discount_percent=discount, unit_cost=product.cost, total=line_total)
-        stock_move(user, branch, product, qty * factor * (-1 if kind == "sale" else 1), doc.reference, kind)
+            discount_percent=discount, unit_cost=purchase_base_cost, total=line_total)
+        base_units = qty * factor
+        stock_move(user, branch, product, base_units * (-1 if kind == "sale" else 1), doc.reference, kind)
+        if kind == "purchase":
+            denominator = stock_before + base_units
+            weighted = (
+                (product.cost * stock_before) + (purchase_base_cost * base_units)
+            ) / Decimal(denominator)
+            product.cost = weighted.quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
+            product.save(update_fields=["cost"])
         total += line_total
 
     total = money(total)
@@ -510,6 +574,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
         "override_reason": override_reason if overrides or credit_override else "",
         "external_reference": external_reference if kind == "purchase" else "",
         "document_date": str(document_date) if kind == "purchase" else "",
+        "new_products_created": created_products if kind == "purchase" else [],
     })
     if kind == "sale":
         from . import automations
