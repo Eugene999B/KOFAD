@@ -1,0 +1,274 @@
+/* KOFAD Market v11 — premium minimal authentication */
+.market-auth-header{
+  width:min(100%,1440px);
+  height:76px;
+  margin:0 auto;
+  padding:0 clamp(20px,4vw,54px);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  position:relative;
+  z-index:20;
+}
+.market-auth-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:11px;
+  color:#0a2236!important;
+}
+.market-auth-brand-mark{
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
+  box-shadow:0 7px 22px rgba(7,31,51,.08);
+  flex:none;
+}
+.market-auth-brand-mark img{width:100%;height:100%;object-fit:contain}
+.market-auth-brand>span:last-child{display:flex;flex-direction:column;line-height:1}
+.market-auth-brand strong{
+  font-size:15px;
+  letter-spacing:-.02em;
+  font-weight:780;
+}
+.market-auth-brand small{
+  margin-top:5px;
+  font-size:8px!important;
+  letter-spacing:.13em;
+  color:#668091!important;
+  font-weight:800;
+}
+.market-auth-theme{
+  width:42px;
+  height:42px;
+  border:1px solid #d8e3e8;
+  border-radius:13px;
+  background:rgba(255,255,255,.76);
+  color:#18364b;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  font-size:16px;
+  box-shadow:0 4px 16px rgba(7,31,51,.035);
+  transition:border-color .18s ease,background .18s ease,transform .18s ease;
+}
+.market-auth-theme:hover{border-color:#b9ccd6;background:#fff}
+.market-auth-theme:active{transform:scale(.96)}
+
+.shop-shell-main.guest{
+  grid-template-columns:auto auto!important;
+  justify-content:space-between;
+}
+.shop-shell-main.guest .shop-shell-actions{justify-self:end}
+
+.market-access-page{
+  min-height:100svh;
+  background:
+    radial-gradient(circle at 50% 16%,rgba(19,140,148,.065),transparent 31rem),
+    #f7fafb!important;
+}
+.market-access-page>main{min-height:calc(100svh - 76px)}
+.market-access-page .shop-shell-footer{display:none!important}
+
+.premium-market-access{
+  min-height:calc(100svh - 76px)!important;
+  padding:48px 22px 90px!important;
+  display:grid!important;
+  place-items:center!important;
+  background:transparent!important;
+}
+.premium-access-card{
+  width:min(100%,430px)!important;
+  padding:38px 38px 34px!important;
+  border:1px solid #dfe8ed!important;
+  border-radius:26px!important;
+  background:rgba(255,255,255,.96)!important;
+  box-shadow:
+    0 28px 80px rgba(15,42,61,.08),
+    0 2px 8px rgba(15,42,61,.025)!important;
+}
+.premium-access-logo{
+  width:56px;
+  height:56px;
+  margin:0 0 27px;
+  border-radius:16px;
+  overflow:hidden;
+  background:#fff;
+  box-shadow:0 8px 28px rgba(7,31,51,.10);
+}
+.premium-access-logo img{width:100%;height:100%;object-fit:contain}
+.premium-access-card h1{
+  margin:0!important;
+  max-width:340px;
+  color:#071f33!important;
+  font-size:34px!important;
+  line-height:1.08!important;
+  letter-spacing:-.042em!important;
+  font-weight:780!important;
+}
+.premium-access-card>p{
+  margin:10px 0 30px!important;
+  color:#657b89!important;
+  font-size:14px!important;
+  line-height:1.55!important;
+}
+.premium-access-card .access-phone-form{margin:0!important}
+.premium-access-card .access-phone-form label{
+  margin:0 0 8px!important;
+  color:#17384e!important;
+  font-size:12px!important;
+  line-height:1.3!important;
+  font-weight:760!important;
+}
+.premium-access-card .access-phone-form input{
+  width:100%;
+  min-height:54px!important;
+  margin:0!important;
+  padding:0 16px!important;
+  border:1px solid #cfdde5!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  color:#092239!important;
+  font-size:16px!important;
+  font-weight:540;
+  letter-spacing:.01em!important;
+  box-shadow:0 1px 2px rgba(7,31,51,.02)!important;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.premium-access-card .access-phone-form input:focus{
+  outline:0!important;
+  border-color:#168b93!important;
+  box-shadow:0 0 0 4px rgba(19,140,148,.11)!important;
+}
+.premium-access-card .market-button{
+  min-height:54px!important;
+  margin-top:14px!important;
+  border-radius:14px!important;
+  background:#08283f!important;
+  border-color:#08283f!important;
+  color:#fff!important;
+  font-size:14px!important;
+  font-weight:760!important;
+  letter-spacing:-.005em;
+  box-shadow:none!important;
+  transition:background .18s ease,transform .18s ease;
+}
+.premium-access-card .market-button:hover{background:#0c3652!important}
+.premium-access-card .market-button:active{transform:translateY(1px)}
+.premium-access-card .market-button span{font-size:18px;line-height:1}
+.premium-access-card .simple-access-back{
+  width:max-content;
+  margin:22px auto 0!important;
+  display:block!important;
+  color:#5d7483!important;
+  font-size:12px!important;
+  font-weight:680!important;
+  text-align:center;
+}
+.premium-access-card .simple-access-back:hover{color:#0f747a!important}
+.premium-access-card .errorlist{
+  list-style:none;
+  margin:8px 0 0;
+  padding:0;
+  color:#a2403a;
+  font-size:11px;
+  line-height:1.45;
+}
+
+html[data-theme="dark"] .market-access-page{
+  background:
+    radial-gradient(circle at 50% 15%,rgba(37,144,151,.11),transparent 30rem),
+    #06131d!important;
+}
+html[data-theme="dark"] .market-auth-brand{color:#f4f8fa!important}
+html[data-theme="dark"] .market-auth-brand small{color:#91a8b6!important}
+html[data-theme="dark"] .market-auth-brand-mark{
+  background:#fff;
+  box-shadow:0 7px 24px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] .market-auth-theme{
+  background:#0c202e;
+  border-color:#284354;
+  color:#edf5f8;
+  box-shadow:none;
+}
+html[data-theme="dark"] .market-auth-theme:hover{background:#102a3b;border-color:#3b5d70}
+html[data-theme="dark"] .premium-access-card{
+  background:#0b1c28!important;
+  border-color:#203b4d!important;
+  box-shadow:0 30px 90px rgba(0,0,0,.28)!important;
+}
+html[data-theme="dark"] .premium-access-logo{
+  background:#fff;
+  box-shadow:0 10px 28px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] .premium-access-card h1{color:#f7fafb!important}
+html[data-theme="dark"] .premium-access-card>p{color:#9eb3c0!important}
+html[data-theme="dark"] .premium-access-card .access-phone-form label{color:#d6e3e9!important}
+html[data-theme="dark"] .premium-access-card .access-phone-form input{
+  background:#081822!important;
+  border-color:#2b495c!important;
+  color:#f6fafc!important;
+  box-shadow:none!important;
+}
+html[data-theme="dark"] .premium-access-card .access-phone-form input:focus{
+  border-color:#45afb4!important;
+  box-shadow:0 0 0 4px rgba(69,175,180,.12)!important;
+}
+html[data-theme="dark"] .premium-access-card .market-button{
+  background:#f2f6f8!important;
+  border-color:#f2f6f8!important;
+  color:#071f33!important;
+}
+html[data-theme="dark"] .premium-access-card .market-button:hover{background:#fff!important}
+html[data-theme="dark"] .premium-access-card .simple-access-back{color:#9eb2bf!important}
+html[data-theme="dark"] .premium-access-card .simple-access-back:hover{color:#d7e6ec!important}
+
+@media(max-width:720px){
+  .market-auth-header{
+    height:68px;
+    padding:0 18px;
+  }
+  .market-auth-brand-mark{width:38px;height:38px;border-radius:11px}
+  .market-auth-brand strong{font-size:14px}
+  .market-auth-brand small{font-size:7.5px!important}
+  .market-auth-theme{width:40px;height:40px;border-radius:12px}
+  .market-access-page>main{min-height:calc(100svh - 68px)}
+  .premium-market-access{
+    min-height:calc(100svh - 68px)!important;
+    padding:24px 18px 58px!important;
+    align-items:center!important;
+  }
+  .premium-access-card{
+    width:min(100%,410px)!important;
+    padding:30px 24px 28px!important;
+    border-radius:22px!important;
+    box-shadow:0 20px 58px rgba(15,42,61,.07)!important;
+  }
+  .premium-access-logo{width:52px;height:52px;margin-bottom:24px}
+  .premium-access-card h1{font-size:30px!important;max-width:310px}
+  .premium-access-card>p{margin:9px 0 27px!important;font-size:13px!important}
+}
+
+@media(max-width:430px){
+  .market-access-page{
+    background:#f9fbfc!important;
+  }
+  .premium-market-access{
+    padding:18px 16px 46px!important;
+  }
+  .premium-access-card{
+    padding:26px 20px 24px!important;
+    border-color:transparent!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  html[data-theme="dark"] .market-access-page{background:#06131d!important}
+  html[data-theme="dark"] .premium-access-card{
+    background:transparent!important;
+    border-color:transparent!important;
+    box-shadow:none!important;
+  }
+}
