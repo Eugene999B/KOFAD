@@ -7,4 +7,4 @@ COPY . .
 RUN DJANGO_SECRET_KEY=build-only-placeholder-not-for-runtime-0000 DATABASE_URL=postgresql://build:build@localhost/build python manage.py collectstatic --noinput
 RUN useradd --create-home app && chown -R app:app /app
 USER app
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 60 --access-logfile - --access-logformat '%(h)s %(m)s %(U)s %(s)s %(L)s'"]
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout 60 --access-logfile - --access-logformat '%(h)s %(m)s %(U)s %(s)s %(L)s'"]
