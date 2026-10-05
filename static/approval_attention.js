@@ -11,6 +11,28 @@
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+  // Mobile CSS intentionally anchors the approval control above the bottom dock
+  // with !important. Once the user drags it, release those anchors with the same
+  // priority and freeze the control's measured box so moving can never resize it.
+  const pinLauncher = (x, y, width, height) => {
+    if (!launcher) return;
+    launcher.style.setProperty("left", x + "px", "important");
+    launcher.style.setProperty("top", y + "px", "important");
+    launcher.style.setProperty("right", "auto", "important");
+    launcher.style.setProperty("bottom", "auto", "important");
+    launcher.style.setProperty("width", width + "px", "important");
+    launcher.style.setProperty("height", height + "px", "important");
+    launcher.style.setProperty("min-width", width + "px", "important");
+    launcher.style.setProperty("max-width", width + "px", "important");
+    launcher.style.setProperty("box-sizing", "border-box", "important");
+  };
+
+  const resetLauncherGeometry = () => {
+    if (!launcher) return;
+    ["left", "top", "right", "bottom", "width", "height", "min-width", "max-width", "box-sizing"]
+      .forEach(name => launcher.style.removeProperty(name));
+  };
+
   const applySavedPosition = () => {
     if (!launcher) return;
     try {
@@ -19,10 +41,7 @@
       const rect = launcher.getBoundingClientRect();
       const x = clamp(saved.x, 8, Math.max(8, window.innerWidth - rect.width - 8));
       const y = clamp(saved.y, 8, Math.max(8, window.innerHeight - rect.height - 8));
-      launcher.style.left = x + "px";
-      launcher.style.top = y + "px";
-      launcher.style.right = "auto";
-      launcher.style.bottom = "auto";
+      pinLauncher(x, y, rect.width, rect.height);
     } catch (_) {}
   };
 
@@ -50,10 +69,7 @@
         height: rect.height,
       };
       dragged = false;
-      launcher.style.left = rect.left + "px";
-      launcher.style.top = rect.top + "px";
-      launcher.style.right = "auto";
-      launcher.style.bottom = "auto";
+      pinLauncher(rect.left, rect.top, rect.width, rect.height);
       event.preventDefault();
     };
 
@@ -74,8 +90,7 @@
         8,
         Math.max(8, window.innerHeight - dragState.height - 8),
       );
-      launcher.style.left = x + "px";
-      launcher.style.top = y + "px";
+      pinLauncher(x, y, dragState.width, dragState.height);
       event.preventDefault();
     };
 
@@ -102,10 +117,7 @@
       event.preventDefault();
       event.stopPropagation();
       try { localStorage.removeItem(POSITION_KEY); } catch (_) {}
-      launcher.style.left = "";
-      launcher.style.top = "";
-      launcher.style.right = "";
-      launcher.style.bottom = "";
+      resetLauncherGeometry();
     });
     window.addEventListener("resize", applySavedPosition);
   }
