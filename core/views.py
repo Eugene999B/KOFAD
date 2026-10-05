@@ -72,6 +72,15 @@ def health(request):
         return JsonResponse({"status": "unavailable"}, status=503)
 
 
+def csrf_failure(request, reason=""):
+    """Recover stale sign-in forms without weakening CSRF on business actions."""
+    if request.path == "/login/":
+        return redirect("login")
+    if request.path in {"/market/access/", "/market/account/login/"}:
+        return redirect("market_access")
+    return render(request, "403.html", status=403)
+
+
 def resolve_login_identifier(identifier):
     """Resolve a login name to one user without weakening per-account lockout."""
     username_matches = list(
@@ -98,11 +107,11 @@ def resolve_login_identifier(identifier):
 
 @sensitive_post_parameters("password")
 def login_view(request):
-    # The sign-in gateway is an explicit new staff session boundary. If a stale
-    # staff session reaches /login/ after the user has left the workspace, end it
-    # instead of silently restoring the previous account.
+    # A valid staff session that reaches the sign-in URL is already authenticated.
+    # Actual zone exits POST to /logout/ before navigation; do not rotate the
+    # session/CSRF token again just because a stale tab revisits /login/.
     if request.user.is_authenticated:
-        logout(request)
+        return redirect("dashboard")
     if request.session.get("market_customer_id"):
         from marketplace import services as market_services
         market_services.clear_customer_session(request)
@@ -377,7 +386,7 @@ def complete_trade(request):
             doc.kind == "sale"
             and party
             and party.consent
-            and request.user.has_perm("core.send_messages")
+            and request.user.has_perm("core.operate_sales")
             and settings.SMS_ENABLED
         )
         sms_reason = (
@@ -387,8 +396,8 @@ def complete_trade(request):
             if not party
             else "Customer SMS consent is not enabled."
             if not party.consent
-            else "Your account does not have message-sending permission."
-            if not request.user.has_perm("core.send_messages")
+            else "Your account cannot send sale receipts."
+            if not request.user.has_perm("core.operate_sales")
             else "SMS delivery is not enabled for this deployment."
         )
 
