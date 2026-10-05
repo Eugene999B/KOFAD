@@ -1,13 +1,20 @@
-{% extends "marketplace/base.html" %}{% block content %}
-<section class="simple-customer-access">
-<div class="simple-access-card">
-<div class="access-card-mark">K</div>
-<h1>Sign in or create account</h1>
-<p>Enter your mobile number to continue.</p>
-<form method="post" class="access-phone-form">{% csrf_token %}{{ form.non_field_errors }}
-<label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label>
-<button class="market-button primary wide">Continue <span>→</span></button>
-</form>
-<a class="simple-access-back" href="/market/">← Back to Market</a>
-</div>
-</section>{% endblock %}
+{% extends "marketplace/base.html" %}{% load static %}{% block content %}
+<section class="simple-customer-access premium-market-access" aria-labelledby="market-access-title">
+  <div class="simple-access-card premium-access-card">
+    <div class="premium-access-logo" aria-hidden="true">
+      <img src="{% static 'brand/kofad-emblem.png' %}" alt="">
+    </div>
+    <h1 id="market-access-title">Sign in or create account</h1>
+    <p>Enter your mobile number.</p>
+    <form method="post" class="access-phone-form" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label for="{{ form.phone.id_for_label }}">Mobile number</label>
+      {{ form.phone }}
+      {{ form.phone.errors }}
+      <button class="market-button primary wide" type="submit">Continue <span aria-hidden="true">→</span></button>
+    </form>
+    <a class="simple-access-back" href="/market/">Back to Market</a>
+  </div>
+</section>
+{% endblock %}

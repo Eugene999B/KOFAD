@@ -586,11 +586,43 @@ with sync_playwright() as p:
     assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=False).count() >= 1
     assert market_page.get_by_text(browser_payment_reference, exact=False).count() == 0
     assert market_page.get_by_text("Paystack", exact=False).count() == 0
+    assert market_page.locator(".shop-shell-search").count() == 1
     market_page.screenshot(path=str(out / "market-order-mobile.png"), full_page=True)
+
     market_page.goto("http://127.0.0.1:8000/market/access/")
     assert market_page.locator("body.customer-session").count() == 0
+    assert market_page.locator("body.market-access-page").count() == 1
+    assert market_page.locator(".market-auth-header").count() == 1
+    assert market_page.locator(".market-auth-brand img").count() == 1
+    assert market_page.locator(".premium-access-logo img").count() == 1
+    assert market_page.locator(".access-card-mark").count() == 0
+    assert market_page.locator(".shop-shell-search").count() == 0
+    assert market_page.locator(".shop-shell-cart").count() == 0
+    assert market_page.locator(".market-flash").count() == 0
+    assert market_page.get_by_text("Sign in with your verified phone number to continue.", exact=False).count() == 0
+    phone_input = market_page.get_by_label("Mobile number", exact=True)
+    assert phone_input.get_attribute("inputmode") == "tel"
+    assert phone_input.get_attribute("autocomplete") == "tel"
+
+    market_page.evaluate("localStorage.setItem('kofad-theme','light'); document.documentElement.dataset.theme='light'")
+    market_page.screenshot(path=str(out / "market-access-light-mobile.png"), full_page=True)
+    market_page.locator(".market-auth-theme").click()
+    market_page.wait_for_timeout(80)
+    assert market_page.evaluate("document.documentElement.dataset.theme") == "dark"
+    market_page.screenshot(path=str(out / "market-access-dark-mobile.png"), full_page=True)
+
+    market_page.set_viewport_size({"width":1440,"height":1000})
+    market_page.goto("http://127.0.0.1:8000/market/access/")
+    assert market_page.locator(".market-auth-header").is_visible()
+    assert market_page.locator(".premium-access-card").is_visible()
+    assert market_page.locator(".shop-shell-search").count() == 0
+    assert market_page.locator(".shop-shell-cart").count() == 0
+    market_page.screenshot(path=str(out / "market-access-desktop.png"), full_page=True)
+
     market_state = market_page.request.get("http://127.0.0.1:8000/market/session/state/").json()
     assert market_state["authenticated"] is False
+    market_page.goto("http://127.0.0.1:8000/market/")
+    assert market_page.locator(".shop-shell-search").count() == 0
     market_page.close()
 
     admin_page.set_viewport_size({"width":1440,"height":1000})
