@@ -172,7 +172,6 @@ def market_customer_required(view):
         customer = services.customer_from_session(request)
         if not customer:
             request.session["market_after_login"] = request.get_full_path()
-            messages.info(request, "Sign in with your verified phone number to continue.")
             return redirect("market_access")
         return view(request, customer, *args, **kwargs)
     return inner
