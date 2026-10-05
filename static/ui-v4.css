@@ -173,3 +173,43 @@ html[data-theme="dark"] .premium-login-form input{background:transparent!importa
   .market-admin-commerce{grid-row:auto!important;display:grid!important;grid-template-columns:1fr auto;gap:3px 12px}
   .approval-attention{min-width:0}
 }
+
+
+/* Lift legacy micro-copy across the operational workspace. */
+:is(
+  .page-footer,.workflow-strip,.quick-action small,.permission-tags span,.format-badge,
+  .export-catalog small,.cart-control-field small,.debt-hero-actions span,
+  .debt-account-copy>small,.debt-account-meta,.debt-account-balance small,
+  .debt-account-balance em,.debt-credit-strip span,.debt-invoice-row small,
+  .debt-invoice-row em,.sale-command-badges span,.sale-search-help,.stock-copy,
+  .composer-quantity strong,.stage-heading small,.stock-state,.movement-list small,
+  .receipt-business-bar span,.receipt-table th,.compact-heading small,
+  .automation-catalog article small,.automation-catalog article>b,
+  .automation-catalog article>a,.management-contact-grid article>div:first-child small,
+  .communication-status-grid small,.auto-message-list strong,.checkout-consent small,
+  .transaction-message-actions small,.compact-payment-grid label,.success-receipt-meta,
+  .document-card-meta small,.document-card-copy code,.verify-grid dt
+){font-size:10.5px!important;line-height:1.45!important}
+:is(
+  .debt-aging-grid span,.receipt-business-bar small,.receipt-table small,
+  .receipt-payment-list small,.settings-explainer-grid small,
+  .automation-catalog article>span,.template-preview-grid article>span,
+  .template-preview-grid small,.communication-status-grid span,.auto-message-list small,
+  .sale-checkout-total small,.counter-customer-title label small,.compact-consent small,
+  .success-receipt-line span small,.market-offline-hint>span
+){font-size:10px!important;line-height:1.45!important}
+.mobile-dock a{font-size:10.5px!important}
+.nav-market-count{font-size:10px!important}
+.page-footer{color:var(--ui-muted)!important}
+.searchbar input{font-size:14px!important}
+.searchbar button{font-size:12.5px!important}
+.panel .section-heading .muted{font-size:11px!important}
+
+/* Document/history tables get stronger visual separation without feeling heavy. */
+.table-wrap{background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:14px}
+.table-wrap table{background:transparent}
+html[data-theme="light"] .table-wrap td{color:#17344a}
+html[data-theme="light"] .table-wrap th{color:#526b7d;background:#f4f8fa!important}
+html[data-theme="dark"] .table-wrap{background:#0d2435;border-color:#2b5065}
+html[data-theme="dark"] .table-wrap td{color:#eef5f8}
+html[data-theme="dark"] .table-wrap th{color:#c1d2dc;background:#102d40!important}
