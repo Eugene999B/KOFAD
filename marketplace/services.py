@@ -424,10 +424,23 @@ def _otp_digest(phone, purpose, code):
     return hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).hexdigest()
 
 
+def _otp_code(phone, purpose, expires_at):
+    """Derive a stable six-digit code for one short-lived OTP challenge.
+
+    Resending an active challenge sends the same code again. That prevents
+    delayed/out-of-order SMS delivery from making the code a customer sees
+    immediately invalid.
+    """
+    stamp = int(expires_at.timestamp())
+    payload = f"kofad-market-otp-code:{phone}:{purpose}:{stamp}".encode()
+    digest = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 1000000:06d}"
+
+
 def _submit_customer_otp_sms(phone, code):
     if not settings.SMS_ENABLED or not settings.ARKESEL_API_KEY:
         raise ValidationError("Customer phone verification is temporarily unavailable.")
-    body = f"KOFAD verification code: {code}. It expires in 5 minutes. Do not share this code."
+    body = f"KOFAD verification code: {code}. It expires in 10 minutes. Do not share this code."
     try:
         provider = get_provider(settings.SMS_PROVIDER)
         provider.validate()
@@ -467,7 +480,11 @@ def _submit_customer_otp_sms(phone, code):
 
 def send_otp(phone, purpose="register"):
     phone = normalize_ghana_phone(phone)
+    if not settings.CUSTOMER_OTP_ENABLED:
+        raise ValidationError("Customer phone verification is temporarily unavailable.")
+
     now = timezone.now()
+    previous = None
     with transaction.atomic():
         row, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=phone, purpose=purpose)
         if row.blocked_until and row.blocked_until > now:
@@ -482,24 +499,45 @@ def send_otp(phone, purpose="register"):
             row.save(update_fields=["blocked_until"])
             raise ValidationError("Too many codes were requested. Try again in one hour.")
 
-    if not settings.CUSTOMER_OTP_ENABLED:
-        raise ValidationError("Customer phone verification is temporarily unavailable.")
+        previous = {
+            "send_count": row.send_count,
+            "attempts": row.attempts,
+            "last_sent_at": row.last_sent_at,
+            "expires_at": row.expires_at,
+            "verified_at": row.verified_at,
+            "code_digest": row.code_digest,
+        }
 
-    code = f"{secrets.randbelow(1000000):06d}"
-    _submit_customer_otp_sms(phone, code)
+        reusable = bool(row.expires_at and row.expires_at > now and row.code_digest and not row.verified_at)
+        if reusable:
+            code = _otp_code(phone, purpose, row.expires_at)
+            reusable = hmac.compare_digest(row.code_digest, _otp_digest(phone, purpose, code))
+        if not reusable:
+            row.expires_at = now + timedelta(minutes=10)
+            code = _otp_code(phone, purpose, row.expires_at)
+            row.code_digest = _otp_digest(phone, purpose, code)
 
-    with transaction.atomic():
-        row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
         row.send_count += 1
         row.attempts = 0
         row.last_sent_at = now
-        row.expires_at = now + timedelta(minutes=5)
         row.verified_at = None
-        row.code_digest = _otp_digest(phone, purpose, code)
         row.save(update_fields=[
             "send_count", "attempts", "last_sent_at", "expires_at",
             "verified_at", "code_digest",
         ])
+
+    try:
+        _submit_customer_otp_sms(phone, code)
+    except ValidationError:
+        # Undo only this reservation. Another request cannot pass the 60-second
+        # guard while this send is in flight, so restoring the previous state is safe.
+        with transaction.atomic():
+            row = OtpThrottle.objects.select_for_update().filter(phone=phone, purpose=purpose).first()
+            if row and row.last_sent_at == now and row.code_digest == _otp_digest(phone, purpose, code):
+                for key, value in previous.items():
+                    setattr(row, key, value)
+                row.save(update_fields=list(previous))
+        raise
     return phone
 
 
@@ -531,7 +569,6 @@ def verify_otp(phone, code, purpose="register"):
         row.save(update_fields=["attempts", "blocked_until"])
 
     raise ValidationError("That verification code is not correct.")
-
 
 def customer_from_session(request):
     pk = request.session.get("market_customer_id")
