@@ -1,0 +1,81 @@
+/* KOFAD Market v10 — photographic retail + wholesale hero
+   Photo: Antonius Natan / Pexels, photo 11835349 (Pexels free license).
+   The desktop and mobile rules intentionally use different CDN widths/crops. */
+.home-hero-v9{
+  background-color:#061c2a;
+  background-image:
+    linear-gradient(90deg,rgba(2,17,29,.97) 0%,rgba(3,25,39,.92) 31%,rgba(4,31,45,.73) 50%,rgba(4,31,44,.38) 69%,rgba(4,25,36,.16) 100%),
+    linear-gradient(180deg,rgba(2,17,28,.08) 0%,rgba(2,18,30,.18) 58%,rgba(2,18,30,.48) 100%),
+    url("https://images.pexels.com/photos/11835349/pexels-photo-11835349.jpeg?auto=compress&cs=tinysrgb&w=2400");
+  background-repeat:no-repeat;
+  background-size:cover;
+  background-position:center center,center center,56% center;
+}
+.home-hero-v9:before{
+  background:
+    radial-gradient(circle at 76% 20%,rgba(55,188,190,.10),transparent 24%),
+    linear-gradient(180deg,rgba(1,13,22,0) 55%,rgba(1,13,22,.34) 100%);
+}
+.home-hero-v9:after{display:none}
+.home-hero-v9-kicker,
+.home-hero-v9-secondary,
+.home-hero-v9-capabilities>div{
+  box-shadow:0 14px 36px rgba(0,0,0,.14);
+}
+.home-hero-v9-content>p{
+  text-shadow:0 2px 16px rgba(0,0,0,.28);
+}
+
+@media(max-width:980px){
+  .home-hero-v9{
+    background-position:center center,center center,61% center;
+  }
+}
+
+@media(max-width:720px){
+  .home-hero-v9{
+    min-height:0;
+    align-items:stretch;
+    background-image:
+      linear-gradient(180deg,rgba(2,16,27,.13) 0%,rgba(2,17,29,.27) 22%,rgba(2,18,30,.67) 43%,rgba(2,18,30,.95) 64%,rgba(2,17,29,.995) 100%),
+      url("https://images.pexels.com/photos/11835349/pexels-photo-11835349.jpeg?auto=compress&cs=tinysrgb&w=1200");
+    background-size:cover;
+    background-position:center center,64% center;
+  }
+  .home-hero-v9:before{
+    background:linear-gradient(90deg,rgba(2,18,30,.18),rgba(2,18,30,.03) 62%,rgba(2,18,30,.12));
+  }
+  .home-hero-v9-content{
+    width:calc(100% - 28px);
+    padding:132px 0 28px;
+  }
+  .home-hero-v9-kicker{
+    background:rgba(4,28,42,.70);
+    backdrop-filter:blur(10px);
+  }
+  .home-hero-v9 h1{
+    text-shadow:0 3px 20px rgba(0,0,0,.38);
+  }
+  .home-hero-v9-content>p{
+    max-width:38rem;
+    color:#e2edf1!important;
+  }
+  .home-hero-v9-capabilities>div{
+    background:rgba(4,28,42,.69);
+  }
+}
+
+@media(max-width:430px){
+  .home-hero-v9{
+    background-position:center center,66% center;
+  }
+  .home-hero-v9-content{
+    padding-top:118px;
+  }
+}
+
+@media(max-width:360px){
+  .home-hero-v9-content{
+    padding-top:104px;
+  }
+}
