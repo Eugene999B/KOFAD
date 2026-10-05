@@ -13,5 +13,14 @@
 
 {% if q or selected_category or in_stock or featured_only or price_min or price_max %}<div class="shop-active-filter"><span>Showing a filtered view</span><a href="/market/">Clear all ×</a></div>{% endif %}
 
-{% if listings %}<div class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>{% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
+{% if listings %}
+<div class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="shop-pagination" aria-label="Product pages">
+  {% if page_obj.has_previous %}<a href="?q={{ q|urlencode }}&category={{ selected_category|urlencode }}&sort={{ selected_sort }}{% if in_stock %}&stock=available{% endif %}{% if featured_only %}&featured=1{% endif %}{% if price_min %}&min_price={{ price_min }}{% endif %}{% if price_max %}&max_price={{ price_max }}{% endif %}&page={{ page_obj.previous_page_number }}">← Previous</a>{% else %}<span></span>{% endif %}
+  <p><strong>Page {{ page_obj.number }}</strong> of {{ page_obj.paginator.num_pages }}<small>{{ page_obj.paginator.count }} products in this view</small></p>
+  {% if page_obj.has_next %}<a href="?q={{ q|urlencode }}&category={{ selected_category|urlencode }}&sort={{ selected_sort }}{% if in_stock %}&stock=available{% endif %}{% if featured_only %}&featured=1{% endif %}{% if price_min %}&min_price={{ price_min }}{% endif %}{% if price_max %}&max_price={{ price_max }}{% endif %}&page={{ page_obj.next_page_number }}">Next →</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
+{% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
 </section>{% endblock %}
