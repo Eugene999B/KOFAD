@@ -254,6 +254,9 @@ class Document(models.Model):
     external_reference = models.CharField(max_length=120, blank=True, default="")
     payable_category = models.CharField(max_length=40, blank=True, default="")
     expense_category = models.CharField(max_length=40, blank=True, default="")
+    expense_funding_source = models.CharField(max_length=40, blank=True, default="today_sales_receipts")
+    expense_affects_daily_closing = models.BooleanField(default=True)
+    expense_funding_note = models.CharField(max_length=500, blank=True, default="")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
