@@ -130,7 +130,7 @@ def backup_status(request):
     except (TypeError, ValueError):
         timestamp = None
     remaining = 0
-    if recent && timestamp is not None:
+    if recent and timestamp is not None:
         remaining = max(
             0,
             int(maintenance.RECENT_BACKUP_SECONDS - (timezone.now().timestamp() - timestamp))
