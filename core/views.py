@@ -73,9 +73,9 @@ def health(request):
 
 
 def csrf_failure(request, reason=""):
-    """Recover a stale staff sign-in form without weakening CSRF elsewhere."""
-    if request.path == "/login/":
-        return redirect("dashboard" if request.user.is_authenticated else "login")
+    """Recover only stale duplicate staff login posts; keep normal CSRF strict."""
+    if request.path == "/login/" and request.user.is_authenticated:
+        return redirect("dashboard")
     return render(request, "403.html", status=403)
 
 
