@@ -568,6 +568,7 @@ with sync_playwright() as p:
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
     assert market_page.locator("[data-location-map]").count() == 1
     market_page.wait_for_timeout(250)
+    assert market_page.get_by_text("Open map fallback", exact=True).count() >= 1
     assert osm_tile_requests, "Checkout map did not request canonical OpenStreetMap tiles"
     assert all(
         request.url.startswith("https://tile.openstreetmap.org/")
@@ -621,8 +622,19 @@ with sync_playwright() as p:
 
     market_state = market_page.request.get("http://127.0.0.1:8000/market/session/state/").json()
     assert market_state["authenticated"] is False
+    market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/")
+    assert market_page.locator("body.market-gateway-page").count() == 1
+    assert market_page.locator(".market-entry").is_visible()
+    assert market_page.get_by_role("link", name="Sign in to explore", exact=False).is_visible()
+    assert market_page.locator(".market-entry-tile").count() >= 1
     assert market_page.locator(".shop-shell-search").count() == 0
+    assert market_page.locator(".shop-shell-cart").count() == 0
+    market_page.screenshot(path=str(out / "market-gateway-mobile.png"), full_page=True)
+    market_page.set_viewport_size({"width":1440,"height":1000})
+    market_page.goto("http://127.0.0.1:8000/market/")
+    assert market_page.locator(".market-entry").is_visible()
+    market_page.screenshot(path=str(out / "market-gateway-desktop.png"), full_page=True)
     market_page.close()
 
     admin_page.set_viewport_size({"width":1440,"height":1000})

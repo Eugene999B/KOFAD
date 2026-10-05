@@ -36,6 +36,15 @@ from . import services
 def _market_context(request, **extra):
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
+    market_auth_page = request.path in {
+        "/market/access/",
+        "/market/account/login/",
+        "/market/account/verify/",
+        "/market/account/finish/",
+        "/market/account/password-reset/",
+        "/market/account/password-reset/verify/",
+        "/market/account/password-reset/finish/",
+    }
     unread = 0
     if customer:
         unread = ConversationMessage.objects.filter(
@@ -48,7 +57,11 @@ def _market_context(request, **extra):
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
+        "market_auth_page": market_auth_page,
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
         **extra,
     }
     return context
@@ -159,7 +172,6 @@ def market_customer_required(view):
         customer = services.customer_from_session(request)
         if not customer:
             request.session["market_after_login"] = request.get_full_path()
-            messages.info(request, "Sign in with your verified phone number to continue.")
             return redirect("market_access")
         return view(request, customer, *args, **kwargs)
     return inner
@@ -183,6 +195,28 @@ def home(request):
     ))
 
 def market(request):
+    customer = services.customer_from_session(request)
+    if not customer:
+        branch = None
+        try:
+            branch = services.market_branch()
+        except ValidationError:
+            pass
+        previews = _decorate_listings(
+            list(
+                MarketListing.objects.filter(enabled=True, product__active=True)
+                .select_related("product")
+                .order_by("-featured", "sort_order", "product__name")[:4]
+            ),
+            branch,
+        )
+        return render(request, "marketplace/market_gateway.html", _market_context(
+            request,
+            title="Explore KOFAD Market",
+            gateway_listings=previews,
+            market_gateway=True,
+        ))
+
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:80]
     sort = request.GET.get("sort", "featured")
@@ -229,7 +263,6 @@ def market(request):
     elif sort == "name":
         listings.sort(key=lambda listing: listing.display_name.lower())
 
-    customer = services.customer_from_session(request)
     wishlist_ids = set(
         WishlistItem.objects.filter(customer=customer).values_list("listing_id", flat=True)
     ) if customer else set()
@@ -1557,6 +1590,9 @@ def market_settings(request, branch):
         "selected_zone": selected,
         "zones": DeliveryZone.objects.all(),
         "google_maps_ready": bool(settings.GOOGLE_MAPS_SERVER_KEY),
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
         "market_url": request.build_absolute_uri("/market/"),
         "company": company,
     })
@@ -1620,6 +1656,9 @@ def staff_order(request, branch, pk):
         "delivery_updates": order.delivery_updates.all(),
         "latest_delivery_location": order.delivery_updates.exclude(latitude__isnull=True).exclude(longitude__isnull=True).last(),
         "return_requests": order.return_requests.all(),
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
     })
 
 

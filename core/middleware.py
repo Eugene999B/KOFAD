@@ -30,8 +30,24 @@ class AccessMiddleware:
             if access.force_password_change and request.path not in ("/account/password/", "/logout/"):
                 return redirect("password_change")
         response = self.get_response(request)
-        response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         geolocation_paths = ("/market/checkout/", "/market-settings/", "/online-orders/")
+        google_map_page = bool(
+            settings.GOOGLE_MAPS_BROWSER_KEY
+            and request.path.startswith(geolocation_paths)
+        )
+        if google_map_page:
+            response["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com https://*.googleusercontent.com blob:; "
+                "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; "
+                "img-src 'self' data: blob: https://images.unsplash.com https://tile.openstreetmap.org https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com https://*.googleusercontent.com; "
+                "font-src 'self' https://fonts.gstatic.com; "
+                "connect-src 'self' data: blob: https://*.googleapis.com *.google.com https://*.gstatic.com; "
+                "frame-src *.google.com; worker-src blob:; "
+                "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+            )
+        else:
+            response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         geolocation = "(self)" if request.path.startswith(geolocation_paths) else "()"
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):

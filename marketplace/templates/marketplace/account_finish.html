@@ -1,14 +1,15 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="simple-customer-access">
-<div class="simple-access-card">
-<div class="access-card-mark">K</div>
+<section class="simple-customer-access premium-market-access">
+<div class="simple-access-card premium-access-card">
+{% include "marketplace/_auth_logo.html" %}
 <h1>Create account</h1>
-<p><strong>{{ phone }}</strong> is verified. Add your name and choose your password.</p>
-<form method="post">{% csrf_token %}{{ form.non_field_errors }}
+<p>Your number is verified. Finish setting up your account.</p>
+{% include "marketplace/_auth_messages.html" %}
+<form method="post" class="premium-auth-form">{% csrf_token %}{{ form.non_field_errors }}
 <label>Full name{{ form.full_name }}{{ form.full_name.errors }}</label>
 <label>Create password{{ form.password }}{{ form.password.errors }}</label>
 <label>Confirm password{{ form.password_confirm }}{{ form.password_confirm.errors }}</label>
-<button class="market-button primary wide">Create account <span>→</span></button>
+<button class="market-button primary wide" type="submit">Create account <span>→</span></button>
 </form>
 </div>
 </section>{% endblock %}

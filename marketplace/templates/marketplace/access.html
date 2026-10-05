@@ -6,6 +6,7 @@
     </div>
     <h1 id="market-access-title">Sign in or create account</h1>
     <p>Enter your mobile number.</p>
+    {% include "marketplace/_auth_messages.html" %}
     <form method="post" class="access-phone-form" novalidate>
       {% csrf_token %}
       {{ form.non_field_errors }}

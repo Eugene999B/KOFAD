@@ -1,0 +1,167 @@
+/* KOFAD premium dark system v2 — charcoal glass, teal signal, warm gold */
+html[data-theme="dark"]{
+  --paper:#080b0f;
+  --white:#10151b;
+  --ink:#f2f5f7;
+  --muted:#98a6b2;
+  --line:#27313a;
+  --green:#4ed1c9;
+  --gold:#f2b84b;
+  --red:#ff7d73;
+  --soft:#151c23;
+  --teal:#45d0c8;
+  color-scheme:dark;
+}
+html[data-theme="dark"] body{
+  background:
+    radial-gradient(circle at 82% -10%,rgba(69,208,200,.055),transparent 32rem),
+    radial-gradient(circle at -10% 80%,rgba(242,184,75,.035),transparent 30rem),
+    var(--paper);
+  color:var(--ink);
+}
+html[data-theme="dark"] .workspace{background:transparent}
+html[data-theme="dark"] .sidebar{
+  background:
+    linear-gradient(180deg,rgba(17,23,30,.98),rgba(8,12,16,.99)),
+    #0b0f14;
+  border-right:1px solid #232d36;
+  box-shadow:18px 0 50px rgba(0,0,0,.12);
+  scrollbar-color:#34424e #0b0f14;
+}
+html[data-theme="dark"] .sidebar .brand{filter:brightness(1.08)}
+html[data-theme="dark"] .sidebar nav a{color:#aab7c1}
+html[data-theme="dark"] .sidebar nav a:hover{
+  color:#eff7f7;
+  background:#161f27;
+}
+html[data-theme="dark"] .sidebar nav a.active{
+  color:#f7fbfb;
+  background:linear-gradient(90deg,rgba(69,208,200,.17),rgba(69,208,200,.055));
+  box-shadow:inset 3px 0 0 #45d0c8;
+}
+html[data-theme="dark"] .nav-label{color:#687985}
+html[data-theme="dark"] .sidebar-bottom{border-color:#222d35;color:#8496a2}
+html[data-theme="dark"] .topbar{
+  background:rgba(12,16,21,.88);
+  border-color:#222d35;
+  box-shadow:0 10px 35px rgba(0,0,0,.14);
+  backdrop-filter:blur(18px) saturate(145%);
+}
+html[data-theme="dark"] .top-user-card:hover,
+html[data-theme="dark"] .mode-toggle:hover,
+html[data-theme="dark"] .icon-button:hover{background:#161f27;border-color:#2c3944}
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .metrics article,
+html[data-theme="dark"] .quick-action,
+html[data-theme="dark"] .setup-step,
+html[data-theme="dark"] .product-card,
+html[data-theme="dark"] .settings-card,
+html[data-theme="dark"] .admin-metrics article,
+html[data-theme="dark"] .role-card,
+html[data-theme="dark"] .format-card,
+html[data-theme="dark"] .export-catalog article,
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .check-card,
+html[data-theme="dark"] .permission-row,
+html[data-theme="dark"] .switch-row{
+  background:linear-gradient(180deg,#11171d,#0f1419);
+  border-color:#27323b;
+  color:var(--ink);
+  box-shadow:0 10px 30px rgba(0,0,0,.08);
+}
+html[data-theme="dark"] .hero-panel,
+html[data-theme="dark"] .online-order-command{
+  background:
+    radial-gradient(circle at 85% 20%,rgba(69,208,200,.14),transparent 24rem),
+    linear-gradient(135deg,#0d151b,#121d23 58%,#0f2526);
+  border:1px solid #29383d;
+  box-shadow:0 24px 60px rgba(0,0,0,.18);
+}
+html[data-theme="dark"] .hero-panel h2,
+html[data-theme="dark"] .online-order-command h2{color:#f8fbfc}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .branch-form select,
+html[data-theme="dark"] .login-card input{
+  background:#0c1116;
+  border-color:#303b45;
+  color:#f5f8fa;
+  box-shadow:none;
+}
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] select:focus,
+html[data-theme="dark"] textarea:focus{
+  border-color:#4bcfc8;
+  box-shadow:0 0 0 4px rgba(75,207,200,.10);
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder{color:#697985}
+html[data-theme="dark"] th{background:#151c23;color:#aab8c2;border-color:#28333d}
+html[data-theme="dark"] td{border-color:#222c35}
+html[data-theme="dark"] tbody tr:hover{background:#131a20}
+html[data-theme="dark"] .button.secondary{
+  background:#151c23;
+  color:#e7eef2;
+  border-color:#303c46;
+}
+html[data-theme="dark"] .button.secondary:hover{background:#1a232b;border-color:#3a4a55}
+html[data-theme="dark"] .button:not(.secondary),
+html[data-theme="dark"] button.button:not(.secondary){
+  box-shadow:0 10px 24px rgba(0,0,0,.14);
+}
+html[data-theme="dark"] .notice{background:#132224;color:#dff7f4;border-color:#3da9a3}
+html[data-theme="dark"] .notice.success{background:#11261f;color:#c9f1df}
+html[data-theme="dark"] .notice.error{background:#2c1719;color:#ffd0cb;border-color:#b95d57}
+html[data-theme="dark"] .pill{background:#142523;color:#8ce4dd}
+html[data-theme="dark"] .pill.amber{background:#302514;color:#f5cc72}
+html[data-theme="dark"] .status-good{background:#11271f;color:#8dddb8}
+html[data-theme="dark"] .status-muted{background:#1a2128;color:#a8b4bd}
+html[data-theme="dark"] .product-symbol,
+html[data-theme="dark"] .quick-action>span,
+html[data-theme="dark"] .settings-icon,
+html[data-theme="dark"] .metric-icon,
+html[data-theme="dark"] .export-catalog article>span{
+  background:#142523;
+  color:#62d8d0;
+}
+html[data-theme="dark"] .mobile-dock{
+  background:rgba(13,18,23,.96);
+  border-color:#25313a;
+  box-shadow:0 -10px 38px rgba(0,0,0,.34);
+  backdrop-filter:blur(18px);
+}
+html[data-theme="dark"] .mobile-dock a{color:#9babb6}
+html[data-theme="dark"] .mobile-dock a.active{background:#142523;color:#67ddd5}
+html[data-theme="dark"] .approval-attention{
+  background:#101820!important;
+  border-color:#39454f!important;
+  box-shadow:0 18px 54px rgba(0,0,0,.32)!important;
+}
+html[data-theme="dark"] .trade-hub,
+html[data-theme="dark"] .checkout-customer,
+html[data-theme="dark"] .selected-customer,
+html[data-theme="dark"] .customer-result{
+  background:#10151b!important;
+  color:var(--ink)!important;
+  border-color:#29343e!important;
+}
+html[data-theme="dark"] .login-page,
+html[data-theme="dark"] .mfa-page{
+  background:
+    radial-gradient(circle at 50% 8%,rgba(69,208,200,.08),transparent 28rem),
+    #080b0f;
+}
+html[data-theme="dark"] .login-welcome-overlay{
+  background:
+    radial-gradient(circle at 50% 42%,rgba(69,208,200,.16),transparent 18rem),
+    linear-gradient(145deg,#080b0f,#101820);
+}
+html[data-theme="dark"] .login-brand-intro{background:#080b0f}
+html[data-theme="dark"] .login-card,
+html[data-theme="dark"] .mfa-page .panel{
+  background:#10151b;
+  border-color:#2a343d;
+  box-shadow:0 30px 90px rgba(0,0,0,.34);
+}
+html[data-theme="dark"] .page-footer{color:#687b88}

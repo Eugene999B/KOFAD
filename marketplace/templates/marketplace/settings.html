@@ -25,15 +25,16 @@
 <label>Location name{{ policy_form.delivery_origin_label }}{{ policy_form.delivery_origin_label.errors }}</label>
 {{ policy_form.delivery_origin_latitude }}{{ policy_form.delivery_origin_longitude }}
 <div class="kofad-map-shell" data-map-shell>
+<div class="map-provider-badge {% if google_maps_browser_ready %}google{% endif %}" data-map-provider>{% if google_maps_browser_ready %}Google Maps + Places{% else %}Open map fallback{% endif %}</div>
 <div class="kofad-location-search" data-location-search><input type="search" placeholder="Search your shop, office or landmark" aria-label="Search company dispatch location"><button type="button">Search location</button></div>
 <div class="location-search-results" data-location-search-results></div>
 <div class="kofad-map compact"
- data-location-map data-picker="true"
+ data-location-map data-google-maps-key="{{ google_maps_browser_key|default:'' }}" data-google-map-id="{{ google_maps_map_id|default:'' }}" data-picker="true"
  data-lat="{{ policy_form.delivery_origin_latitude.value|default_if_none:'' }}" data-lng="{{ policy_form.delivery_origin_longitude.value|default_if_none:'' }}"
  data-lat-input="id_delivery_origin_latitude" data-lng-input="id_delivery_origin_longitude" data-address-input="id_delivery_origin_label"
  data-search-url="/market/location/search/" data-reverse-url="/market/location/reverse/"></div>
 <div class="kofad-map-actions"><button type="button" class="primary" data-capture-location>◎ Use current location</button><a data-google-map-link href="#" target="_blank" rel="noopener" hidden>Open in Google Maps ↗</a></div>
-<div class="location-result" data-location-result>{% if company.delivery_origin_latitude %}Dispatch point saved.{% else %}Search, tap the map or use the device location.{% endif %}</div>
+<div class="location-result-row"><div class="location-result" data-location-result>{% if company.delivery_origin_latitude %}Dispatch point saved.{% else %}Search, tap the map or use the device location.{% endif %}</div><span class="location-accuracy" data-location-accuracy></span></div>
 </div>
 <p class="hint">{% if google_maps_ready %}Road distance is calculated with Google Maps routing.{% else %}KOFAD is using a straight-line distance fallback until a Google Maps server key is configured.{% endif %}</p>
 <button class="button wide">Save delivery settings</button>
