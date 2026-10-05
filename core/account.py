@@ -162,9 +162,13 @@ def reset_password(request):
             if valid:
                 challenge.attempts += 1
                 challenge.save(update_fields=["attempts"])
-                code = re.sub(r"\D", "", request.POST.get("code", ""))
-                valid = len(code) == 6 and constant_time_compare(
-                    challenge.code_digest, digest(str(challenge.pk)+":"+code)
+                raw_code = request.POST.get("code", "").strip()
+                code = re.sub(r"[\s-]", "", raw_code)
+                valid = bool(
+                    re.fullmatch(r"\d(?:[\s-]?\d){5}", raw_code)
+                    and constant_time_compare(
+                        challenge.code_digest, digest(str(challenge.pk)+":"+code)
+                    )
                 )
             if valid:
                 form = SetPasswordForm(user, request.POST)
