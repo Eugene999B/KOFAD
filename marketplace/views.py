@@ -469,6 +469,9 @@ def account_start(request):
 
 
 def account_verify(request):
+    verified_phone = request.session.get("market_verified_phone")
+    if verified_phone:
+        return redirect("market_finish")
     phone = request.session.get("market_pending_phone")
     if not phone:
         return redirect("market_access")
@@ -532,6 +535,7 @@ def customer_password_reset_start(request):
                 return redirect("market_login")
             services.send_otp(canonical, "reset")
             request.session["market_reset_phone"] = canonical
+            request.session.pop("market_reset_verified_phone", None)
             messages.success(request, "Verification code sent by SMS.")
             return redirect("market_password_reset_verify")
         except ValidationError as exc:
@@ -542,6 +546,9 @@ def customer_password_reset_start(request):
 
 
 def customer_password_reset_verify(request):
+    verified_phone = request.session.get("market_reset_verified_phone")
+    if verified_phone:
+        return redirect("market_password_reset_finish")
     phone = request.session.get("market_reset_phone")
     if not phone:
         return redirect("market_password_reset")

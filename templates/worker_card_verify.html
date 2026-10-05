@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Verify {{ worker.employee_code }} · KOPEX IMPEX</title>
+<title>Verify {{ worker.employee_code }} · KOFAD IMPEX ENTERPRISE</title>
 <link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}">
 <link rel="stylesheet" href="{% static 'app.css' %}">
 </head>
@@ -12,7 +12,7 @@
 <main class="credential-verify-shell">
   <header class="credential-verify-brand">
     <span class="verify-emblem"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span>
-    <span><strong>KOPEX</strong><small>IMPEX · CREDENTIAL VERIFICATION</small></span>
+    <span><strong>KOFAD</strong><small>IMPEX · CREDENTIAL VERIFICATION</small></span>
   </header>
 
   <section class="credential-verify-card {% if credential_valid %}is-valid{% else %}is-inactive{% endif %}">
@@ -20,7 +20,7 @@
     <p class="eyebrow">WORKFORCE CREDENTIAL</p>
     <h1>{% if credential_valid %}Verified employee{% else %}Credential not currently active{% endif %}</h1>
     <p class="verify-lead">
-      {% if credential_valid %}This QR belongs to a current KOPEX workforce credential.{% else %}The worker record exists, but this credential should not be treated as active.{% endif %}
+      {% if credential_valid %}This QR belongs to a current KOFAD workforce credential.{% else %}The worker record exists, but this credential should not be treated as active.{% endif %}
     </p>
 
     <div class="verify-person">

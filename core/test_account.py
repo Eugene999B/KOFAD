@@ -59,6 +59,10 @@ class AccountRecoveryTests(TestCase):
         self.provider.submit.assert_not_called()
         self.assertContains(self.reset(), "invalid, expired or unavailable")
 
+    def test_code_copied_with_sms_spacing_is_accepted(self):
+        self.request_code()
+        self.assertRedirects(self.reset("123 456"), "/login/")
+
     def test_only_five_attempts_and_no_prefix_match(self):
         challenge = self.request_code()
         self.assertContains(self.reset("123456extra"), "invalid, expired or unavailable")

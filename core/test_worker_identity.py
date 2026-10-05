@@ -137,7 +137,7 @@ class WorkerIdentityExperienceTests(TestCase):
         self.assertContains(response, "Verified employee")
         self.assertContains(response, self.worker.full_name)
         self.assertContains(response, self.worker.employee_code)
-        self.assertContains(response, "KOPEX")
+        self.assertContains(response, "KOFAD")
         self.assertNotContains(response, self.worker.ghana_card_number)
         self.assertNotContains(response, self.worker.ssnit_number)
         self.assertNotContains(response, self.worker.bank_account_number)
