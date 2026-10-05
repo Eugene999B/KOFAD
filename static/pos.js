@@ -822,9 +822,11 @@
 
   function updateConsentAvailability() {
     if (!customerConsent) return;
-    const available = hasAttachedCustomer();
-    customerConsent.disabled = !available;
-    if (available && !smsPreferenceExplicit) customerConsent.checked = true;
+    // Receipt SMS is an operator preference, not a locked consent control.
+    // Keep it default-on but always allow the cashier to turn it off. If no
+    // customer/phone is attached the backend simply has nobody to message.
+    customerConsent.disabled = false;
+    if (!smsPreferenceExplicit) customerConsent.checked = true;
   }
 
   customerConsent?.addEventListener("change", () => {
