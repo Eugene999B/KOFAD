@@ -375,7 +375,11 @@ with sync_playwright() as p:
     admin_page.locator(".catalog-product-card").first.wait_for()
     assert float(admin_page.locator(".catalog-product-main h3").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
     assert float(admin_page.locator(".catalog-readiness span").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 9
-    assert admin_page.locator(".catalog-product-card").first.evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 4
+    assert admin_page.locator(".catalog-studio-list").evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 2
+    first_catalog_card = admin_page.locator(".catalog-product-card").first
+    assert first_catalog_card.evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 2
+    assert first_catalog_card.locator(".catalog-product-photo").bounding_box()["x"] < first_catalog_card.locator(".catalog-product-main").bounding_box()["x"]
+    assert first_catalog_card.locator(".catalog-product-commerce").evaluate("el => getComputedStyle(el).gridColumnEnd") == "-1"
     admin_page.screenshot(path=str(out / "market-catalog-readable.png"), full_page=True)
 
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
