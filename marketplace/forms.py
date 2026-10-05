@@ -95,7 +95,16 @@ class MarketListingForm(forms.ModelForm):
 
 
 class CustomerAccessForm(forms.Form):
-    phone = forms.CharField(max_length=30, label="Mobile number")
+    phone = forms.CharField(
+        max_length=30,
+        label="Mobile number",
+        widget=forms.TextInput(attrs={
+            "inputmode": "tel",
+            "autocomplete": "tel",
+            "placeholder": "024 123 4567",
+            "autofocus": True,
+        }),
+    )
 
     def clean_phone(self):
         return normalize_ghana_phone(self.cleaned_data["phone"])
