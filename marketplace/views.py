@@ -1738,6 +1738,32 @@ def staff_inbox(request, branch, conversation_id=None):
                     messages.error(request, "Accept this chat before closing it.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
 
+            if action == "delete":
+                if not can_manage:
+                    messages.error(request, "Company management permission is required to delete a conversation.")
+                    return redirect("staff_market_thread", conversation_id=conversation.pk)
+                if conversation.status != "closed":
+                    messages.error(request, "Close the conversation first. Closing clears its message content before the record can be removed.")
+                    return redirect("staff_market_thread", conversation_id=conversation.pk)
+                from core import services as core_services
+                core_services.audit(
+                    request.user, branch, "market.support_conversation_deleted", conversation.pk,
+                    {
+                        "subject": conversation.subject,
+                        "customer": conversation.public_name or (
+                            conversation.customer.full_name if conversation.customer else ""
+                        ),
+                        "order": conversation.order.public_reference if conversation.order else "",
+                        "closed_reason": conversation.closed_reason,
+                    },
+                    category="communications",
+                    entity_type="support_conversation",
+                    entity_id=str(conversation.pk),
+                )
+                conversation.delete()
+                messages.success(request, "Closed conversation removed from Customer Inbox.")
+                return redirect("staff_market_inbox")
+
             if conversation.status == "closed":
                 messages.error(request, "This chat has ended. Closed chats cannot be reopened.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
