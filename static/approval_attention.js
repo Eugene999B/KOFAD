@@ -37,6 +37,7 @@
   if (launcher) {
     launcher.draggable = false;
     launcher.addEventListener("dragstart", event => event.preventDefault());
+
     launcher.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
       const rect = launcher.getBoundingClientRect();
@@ -48,10 +49,10 @@
         top: rect.top,
       };
       dragged = false;
-      launcher.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
     });
 
-    launcher.addEventListener("pointermove", event => {
+    document.addEventListener("pointermove", event => {
       if (!dragState || event.pointerId !== dragState.pointerId) return;
       const dx = event.clientX - dragState.startX;
       const dy = event.clientY - dragState.startY;
@@ -66,17 +67,17 @@
       launcher.style.right = "auto";
       launcher.style.bottom = "auto";
       event.preventDefault();
-    });
+    }, {passive: false});
 
     const endDrag = event => {
       if (!dragState || event.pointerId !== dragState.pointerId) return;
-      launcher.releasePointerCapture?.(event.pointerId);
       dragState = null;
       launcher.classList.remove("is-dragging");
       if (dragged) savePosition();
     };
-    launcher.addEventListener("pointerup", endDrag);
-    launcher.addEventListener("pointercancel", endDrag);
+    document.addEventListener("pointerup", endDrag);
+    document.addEventListener("pointercancel", endDrag);
+
     launcher.addEventListener("click", event => {
       if (!dragged) return;
       event.preventDefault();
