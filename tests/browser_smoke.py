@@ -192,6 +192,10 @@ with sync_playwright() as p:
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
     assert page.locator("#customer-consent").is_checked(), "Receipt SMS should default on for an attached customer"
+    page.locator("#customer-consent").click()
+    assert not page.locator("#customer-consent").is_checked(), "Receipt SMS must be possible to turn off"
+    page.locator("#customer-consent").click()
+    assert page.locator("#customer-consent").is_checked(), "Receipt SMS must be possible to turn back on"
     page.locator("#checkout-panel").scroll_into_view_if_needed()
     assert page.locator("#single-payment-value").is_visible()
     assert page.locator("#single-payment-value").input_value() == page.locator("#total").inner_text()
