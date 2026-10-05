@@ -304,6 +304,7 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
     assert float(admin_page.locator(".sidebar nav a").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
 
+    admin_page.set_viewport_size({"width":390,"height":844})
     approval = admin_page.locator("#approval-attention")
     approval.evaluate("el => { el.hidden = false; }")
     handle = approval.locator(".approval-drag-handle")
@@ -463,6 +464,10 @@ with sync_playwright() as p:
         route.fulfill(status=200, content_type="image/png", body=transparent_png)
 
     market_page.route("https://tile.openstreetmap.org/**", serve_osm_tile)
+    market_page.route(
+        "https://images.unsplash.com/**",
+        lambda route: route.fulfill(status=200, content_type="image/png", body=transparent_png),
+    )
 
     market_page.goto("http://127.0.0.1:8000/")
     assert market_page.locator(".commerce-global-search").count() == 0
@@ -478,8 +483,9 @@ with sync_playwright() as p:
     mobile_hero_background = market_page.locator(".home-hero-v9").evaluate(
         "el => getComputedStyle(el).backgroundImage"
     )
+    assert "images.unsplash.com/photo-1768176136613-96a7bfc0049e" in mobile_hero_background
+    assert "w=1800" in mobile_hero_background
     assert "kofad-market-retail-hero" in mobile_hero_background
-    assert "images.pexels.com" not in mobile_hero_background
     assert "kofad-market-hero.svg" not in mobile_hero_background
     hero_asset = market_page.request.get(
         "http://127.0.0.1:8000/static/marketplace/kofad-market-retail-hero.webp"
@@ -493,8 +499,9 @@ with sync_playwright() as p:
     desktop_hero_background = market_page.locator(".home-hero-v9").evaluate(
         "el => getComputedStyle(el).backgroundImage"
     )
+    assert "images.unsplash.com/photo-1768176136613-96a7bfc0049e" in desktop_hero_background
+    assert "w=3000" in desktop_hero_background
     assert "kofad-market-retail-hero" in desktop_hero_background
-    assert "images.pexels.com" not in desktop_hero_background
     assert "kofad-market-hero.svg" not in desktop_hero_background
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
@@ -579,10 +586,18 @@ with sync_playwright() as p:
     assert market_page.get_by_text(browser_payment_reference, exact=False).count() == 0
     assert market_page.get_by_text("Paystack", exact=False).count() == 0
     market_page.screenshot(path=str(out / "market-order-mobile.png"), full_page=True)
+    market_page.goto("http://127.0.0.1:8000/market/access/")
+    assert market_page.locator("body.customer-session").count() == 0
+    market_state = market_page.request.get("http://127.0.0.1:8000/market/session/state/").json()
+    assert market_state["authenticated"] is False
     market_page.close()
 
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/login/")
+    assert admin_page.get_by_label("Username or phone number", exact=True).is_visible()
+    staff_state = admin_page.request.get("http://127.0.0.1:8000/session/state/").json()
+    assert staff_state["authenticated"] is False
     assert not errors, errors
     browser.close()
 print("Readable light/dark design system, live-product homepage hero, movable Approval Center, redesigned Customer Inbox and Market Catalog, responsive staff/customer layouts, delivery map checkout, verified order IDs, sales checkout, debt payment, stock counts and transfers passed.")
