@@ -129,7 +129,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         response = self.client.get("/market/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="shop-shell-header"')
-        self.assertContains(response, 'aria-label="Search KOFAD Market"')
+        self.assertNotContains(response, 'aria-label="Search KOFAD Market"')
         self.assertContains(response, "Hello, sign in")
         self.assertContains(response, "<h1>All products</h1>", html=True)
         self.assertContains(response, "shop-category-strip")
@@ -141,6 +141,16 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertNotContains(response, "storefront-side-account")
         self.assertNotContains(response, "Browse available products, compare prices")
         self.assertNotContains(response, "From <b>GHS", html=True)
+
+
+    def test_market_search_appears_only_after_customer_sign_in(self):
+        guest = self.client.get("/market/")
+        self.assertNotContains(guest, 'aria-label="Search KOFAD Market"')
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+        signed_in = self.client.get("/market/")
+        self.assertContains(signed_in, 'aria-label="Search KOFAD Market"')
 
     def test_market_session_state_and_zone_metadata(self):
         session = self.client.session
@@ -189,7 +199,14 @@ class MarketPublicExperienceTests(MarketFixtures):
         response = self.client.get("/market/access/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sign in or create account")
-        self.assertContains(response, "Enter your mobile number to continue.")
+        self.assertContains(response, "Enter your mobile number.")
+        self.assertContains(response, 'class="market-auth-header"')
+        self.assertContains(response, 'class="premium-access-logo"')
+        self.assertContains(response, "kofad-emblem")
+        self.assertNotContains(response, 'aria-label="Search KOFAD Market"')
+        self.assertNotContains(response, 'class="shop-shell-cart"')
+        self.assertNotContains(response, 'class="shop-shell-footer"')
+        self.assertNotContains(response, "Sign in with your verified phone number to continue.")
         self.assertNotContains(response, "ONE KOFAD ACCOUNT")
         self.assertNotContains(response, "One number.")
         self.assertNotContains(response, "Existing customer")
