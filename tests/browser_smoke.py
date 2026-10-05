@@ -487,8 +487,9 @@ with sync_playwright() as p:
     )
     assert "images.pexels.com/photos/11835349/" in mobile_hero_background
     assert "kofad-market-hero.svg" not in mobile_hero_background
-    assert hero_photo_requests, "Homepage hero did not request the photographic retail background"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
+    market_page.wait_for_timeout(300)
+    assert hero_photo_requests, "Homepage hero did not request the photographic retail background"
 
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
