@@ -70,7 +70,7 @@
     <td>{{ row.get_kind_display }}</td>
     <td>{% if row.kind == 'expense' %}{{ row.expense_category|default:"other"|title }}{% else %}—{% endif %}</td>
     <td>{% if row.kind == 'expense' %}
-      <strong>{{ row.expense_funding_source|default:"today_sales_receipts"|cut:"_"|title }}</strong>
+      <strong>{{ row.expense_funding_label }}</strong>
       <small>{% if row.expense_affects_daily_closing %}Deducts from Daily Closing{% else %}Accounting only{% endif %}</small>
       {% else %}—{% endif %}
     </td>
