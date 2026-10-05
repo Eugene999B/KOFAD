@@ -91,6 +91,7 @@ urlpatterns = [
     path("settings/receipts/", v.receipt_policy_settings, name="receipt_policy_settings"),
     path("settings/backup/", maintenance_views.backup_restore, name="backup_restore"),
     path("settings/backup/download/", maintenance_views.download_backup, name="backup_download"),
+    path("settings/backup/status/", maintenance_views.backup_status, name="backup_status"),
     path("exports/", export_views.export_center, name="export_center"),
     path("exports/download/<str:format>/", export_views.download, name="export_download"),
     path("communications/", v.communications, name="communications"),

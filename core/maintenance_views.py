@@ -1,14 +1,17 @@
+import logging
 from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from . import maintenance
+
+logger = logging.getLogger(__name__)
 
 
 def system_administrator(view):
@@ -85,6 +88,13 @@ def backup_restore(request):
                 raise maintenance.BackupError("Choose a valid maintenance action.")
         except maintenance.BackupError as exc:
             messages.error(request, str(exc))
+        except Exception:
+            logger.exception("KOFAD maintenance action failed and was rolled back: action=%s user=%s", action, request.user.username)
+            messages.error(
+                request,
+                "The maintenance operation did not finish cleanly. Check the current system state and server logs "
+                "before attempting another destructive action. Database restore/reset work is transaction-protected."
+            )
 
     return render(request, "backup_restore.html", {
         "title": "Backup, restore & reset",
@@ -106,5 +116,29 @@ def download_backup(request):
     response = HttpResponse(raw, content_type="application/json")
     response["Content-Disposition"] = f'attachment; filename="KOFAD-full-backup-{stamp}.kofad.json"'
     response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@system_administrator
+@require_GET
+def backup_status(request):
+    recent = maintenance.recent_backup_downloaded(request.session)
+    raw = request.session.get("kofad_recent_backup_at")
+    try:
+        timestamp = float(raw)
+    except (TypeError, ValueError):
+        timestamp = None
+    remaining = 0
+    if recent and timestamp is not None:
+        remaining = max(
+            0,
+            int(maintenance.RECENT_BACKUP_SECONDS - (timezone.now().timestamp() - timestamp))
+        )
+    response = JsonResponse({
+        "recent": recent,
+        "downloaded_at": timestamp,
+        "expires_in_seconds": remaining,
+    })
     response["Cache-Control"] = "no-store"
     return response

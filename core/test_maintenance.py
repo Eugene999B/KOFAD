@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.sessions.models import Session
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
@@ -262,6 +263,11 @@ class MaintenanceViewTests(TestCase):
 
     def test_download_marks_recent_safety_backup(self):
         self._login(self.admin)
+        before = self.client.get("/settings/backup/status/")
+        self.assertEqual(before.status_code, 200)
+        self.assertFalse(before.json()["recent"])
+        self.assertEqual(before["Cache-Control"], "no-store")
+
         response = self.client.get("/settings/backup/download/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("attachment;", response["Content-Disposition"])
@@ -269,6 +275,11 @@ class MaintenanceViewTests(TestCase):
         parsed = maintenance.parse_backup(response.content)
         self.assertEqual(parsed["format"], maintenance.BACKUP_FORMAT)
         self.assertTrue(maintenance.recent_backup_downloaded(self.client.session))
+
+        after = self.client.get("/settings/backup/status/")
+        self.assertEqual(after.status_code, 200)
+        self.assertTrue(after.json()["recent"])
+        self.assertGreater(after.json()["expires_in_seconds"], 0)
 
     def test_reset_requires_recent_backup_and_exact_confirmation(self):
         self._login(self.admin)
@@ -280,3 +291,82 @@ class MaintenanceViewTests(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Download a fresh backup before resetting")
+
+
+class MaintenanceDestructiveViewTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            "reset-admin", "reset-admin@example.test", "test-password-long-enough"
+        )
+        self.branch = Branch.objects.create(name="Main", code="main")
+        self.admin.access.branches.add(self.branch)
+        Company.objects.create(name="Business Before Reset", phone="+233241234567")
+        Product.objects.create(
+            name="Product To Clear",
+            sku="RESET-ME",
+            retail_unit="10",
+            cost="5",
+        )
+
+    def _login(self):
+        self.client.force_login(self.admin)
+        self.admin.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.admin.access.session_version
+        session["mfa_ok"] = True
+        session["branch"] = self.branch.pk
+        session.save()
+
+    def test_reset_view_completes_after_safety_backup(self):
+        self._login()
+        backup = self.client.get("/settings/backup/download/")
+        self.assertEqual(backup.status_code, 200)
+
+        response = self.client.post("/settings/backup/", {
+            "action": "reset",
+            "password": "test-password-long-enough",
+            "confirmation": maintenance.RESET_CONFIRMATION,
+            "understand": "yes",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/login/?fresh_start=1")
+        self.assertEqual(Product.objects.count(), 0)
+        self.assertEqual(User.objects.count(), 1)
+        self.assertTrue(User.objects.get(username="reset-admin").is_superuser)
+        company = Company.objects.get()
+        self.assertEqual(company.name, "KOFAD IMPEX ENTERPRISE")
+        self.assertEqual(company.phone, "")
+
+    def test_restore_view_round_trip_completes_after_safety_backup(self):
+        self._login()
+        original = maintenance.backup_bytes(self.admin)
+        Company.objects.update(name="Changed After Backup", phone="+233209999999")
+        Product.objects.create(
+            name="Temporary Product",
+            sku="TEMP-RESTORE",
+            retail_unit="1",
+            cost="1",
+        )
+
+        safety = self.client.get("/settings/backup/download/")
+        self.assertEqual(safety.status_code, 200)
+        upload = SimpleUploadedFile(
+            "original.kofad.json",
+            original,
+            content_type="application/json",
+        )
+        response = self.client.post("/settings/backup/", {
+            "action": "restore",
+            "password": "test-password-long-enough",
+            "confirmation": maintenance.RESTORE_CONFIRMATION,
+            "understand": "yes",
+            "backup_file": upload,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/login/?restored=1")
+        self.assertFalse(Product.objects.filter(sku="TEMP-RESTORE").exists())
+        company = Company.objects.get()
+        self.assertEqual(company.name, "Business Before Reset")
+        self.assertEqual(company.phone, "+233241234567")
