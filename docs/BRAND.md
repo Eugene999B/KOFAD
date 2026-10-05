@@ -1,6 +1,6 @@
-# KOPEX IMPEX identity
+# KOFAD IMPEX ENTERPRISE identity
 
-KOPEX uses KOFAD's original trade emblem: a parcel with interwoven navy, gold and teal routes representing goods moving through a connected business. The emblem is intentionally separate from the wordmark so it remains clear at favicon, ID-card and receipt sizes.
+KOFAD uses KOFAD's original trade emblem: a parcel with interwoven navy, gold and teal routes representing goods moving through a connected business. The emblem is intentionally separate from the wordmark so it remains clear at favicon, ID-card and receipt sizes.
 
 - Navy: #102B46
 - Gold: #E9AC32
@@ -8,7 +8,7 @@ KOPEX uses KOFAD's original trade emblem: a parcel with interwoven navy, gold an
 - Workspace background: #F3F6FA
 - Text: #172F47
 
-The heritage transparent emblem is `static/brand/kofad-emblem.png`. The shared `templates/brand.html` component pairs it with a concise **KOPEX / IMPEX** wordmark. The same emblem is used for sign-in, navigation, welcome, receipts, workforce credentials and browser icons.
+The heritage transparent emblem is `static/brand/kofad-emblem.png`. The shared `templates/brand.html` component pairs it with a concise **KOFAD / IMPEX ENTERPRISE** wordmark. The same emblem is used for sign-in, navigation, welcome, receipts, workforce credentials and browser icons.
 
 Keep the emblem aspect ratio unchanged. Use a clean white tile behind it on dark surfaces. Navy is the trust/control colour, teal is the interactive/verification colour, and gold is reserved for premium highlights and credential security accents.
 
@@ -16,4 +16,4 @@ The product internals and historical KOFAD references remain unchanged; this doc
 
 ## Origin
 
-The heritage emblem was the first production identity used by this system. Its original generation brief described a navy, gold and teal circular trade emblem with interwoven routes around a parcel cube and no embedded lettering. The KOPEX IMPEX wordmark is rendered separately for legibility and easy future brand maintenance.
+The heritage emblem was the first production identity used by this system. Its original generation brief described a navy, gold and teal circular trade emblem with interwoven routes around a parcel cube and no embedded lettering. The KOFAD IMPEX ENTERPRISE wordmark is rendered separately for legibility and easy future brand maintenance.
