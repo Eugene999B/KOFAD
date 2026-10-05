@@ -11,13 +11,13 @@
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'app.css' %}">
 <link rel="stylesheet" href="{% static 'ui-v4.css' %}">
-<script defer src="{% static 'app.js' %}"></script>
+<script defer src="{% static 'app.js' %}"></script><script defer src="{% static 'auth-flow.js' %}"></script>
 </head>
 <body class="login-page">
-<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOPEX</span></div>
+<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOFAD</span></div>
 
 <header class="login-header premium-login-header">
-<a class="brand" href="/" aria-label="KOPEX IMPEX public home">{% include "brand.html" %}</a>
+<a class="brand" href="/" aria-label="KOFAD IMPEX ENTERPRISE public home">{% include "brand.html" %}</a>
 <div class="login-header-actions"><button type="button" class="theme-toggle mode-toggle login-theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><span data-theme-icon aria-hidden="true">☾</span><span data-theme-label>Dark mode</span></button><div class="login-header-meta"><span class="login-online-dot"></span><span>Secure operations gateway</span></div></div>
 </header>
 
@@ -40,7 +40,7 @@
 
 <div class="login-story-bottom">
 <div class="login-emblem-orbit"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
-<div><strong>KOPEX IMPEX</strong><small>Sales · Stock · Customers · Finance</small></div>
+<div><strong>KOFAD IMPEX ENTERPRISE</strong><small>Sales · Stock · Customers · Finance</small></div>
 </div>
 </section>
 
@@ -74,6 +74,6 @@
 </main>
 </div>
 
-<footer class="login-footer"><span>© {% now "Y" %} KOPEX IMPEX</span><span>Built for controlled, connected trading.</span></footer>
+<footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Built for controlled, connected trading.</span></footer>
 </body>
 </html>
