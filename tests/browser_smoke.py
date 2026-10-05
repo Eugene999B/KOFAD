@@ -136,6 +136,8 @@ with sync_playwright() as p:
         except Exception:
             time.sleep(1)
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
+    assert float(page.locator(".premium-login-form label").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+    assert float(page.locator(".premium-login-form input").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
     assert page.get_by_text("Private setup key", exact=True).count() == 0
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
     assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
@@ -300,10 +302,31 @@ with sync_playwright() as p:
     admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
+    assert float(admin_page.locator(".sidebar nav a").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+
+    approval = admin_page.locator("#approval-attention")
+    approval.evaluate("el => { el.hidden = false; }")
+    handle = approval.locator(".approval-drag-handle")
+    handle.wait_for(state="visible")
+    before = approval.bounding_box()
+    handle_box = handle.bounding_box()
+    admin_page.mouse.move(
+        handle_box["x"] + handle_box["width"] / 2,
+        handle_box["y"] + handle_box["height"] / 2,
+    )
+    admin_page.mouse.down()
+    admin_page.mouse.move(handle_box["x"] - 120, handle_box["y"] - 90, steps=8)
+    admin_page.mouse.up()
+    after = approval.bounding_box()
+    assert abs(after["x"] - before["x"]) > 40 or abs(after["y"] - before["y"]) > 40
+    assert admin_page.evaluate("Boolean(localStorage.getItem(\'kofad-approval-position-v1\'))")
+    assert approval.evaluate("el => getComputedStyle(el).animationName") == "none"
 
     admin_page.goto(f"http://127.0.0.1:8000/online-inbox/{browser_support.pk}/?status=waiting")
     assert "support-workspace-page" in (admin_page.get_attribute("body", "class") or "")
     assert admin_page.get_by_role("button", name="Accept chat", exact=True).count() >= 1
+    assert admin_page.locator(".support-waiting-callout").is_visible()
+    assert float(admin_page.locator(".support-queue-copy strong").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 11
     desk = admin_page.locator(".support-desk-v3")
     desk_box = desk.bounding_box()
     assert desk_box["y"] >= 0 and desk_box["y"] + desk_box["height"] <= 1000 + 2
@@ -317,6 +340,27 @@ with sync_playwright() as p:
     mobile_desk = admin_page.locator(".support-desk-v3").bounding_box()
     assert mobile_desk["y"] >= 0 and mobile_desk["y"] + mobile_desk["height"] <= 844 + 2
     admin_page.set_viewport_size({"width":1280,"height":900})
+
+    admin_page.goto("http://127.0.0.1:8000/market-catalog/")
+    admin_page.locator(".market-admin-product").first.wait_for()
+    assert float(admin_page.locator(".market-admin-copy h3").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
+    assert float(admin_page.locator(".market-admin-health span").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 9
+    assert admin_page.locator(".market-admin-list").evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 2
+    admin_page.screenshot(path=str(out / "market-catalog-readable.png"), full_page=True)
+
+    admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
+    admin_page.locator("tbody td").first.wait_for()
+    assert float(admin_page.locator("tbody td").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+    assert admin_page.locator("tbody td").first.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
+    admin_page.reload()
+    dark_input = admin_page.locator("input:visible").first
+    dark_input.wait_for()
+    assert dark_input.evaluate("el => getComputedStyle(el).backgroundColor") != "rgb(255, 255, 255)"
+    assert dark_input.evaluate("el => getComputedStyle(el).color") != "rgb(0, 0, 0)"
+    admin_page.screenshot(path=str(out / "sales-history-dark-readable.png"), full_page=True)
+    admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
+    admin_page.reload()
 
     admin_page.goto("http://127.0.0.1:8000/administration/")
     admin_sidebar = admin_page.locator(".sidebar")
@@ -424,7 +468,8 @@ with sync_playwright() as p:
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
-    assert market_page.locator(".home-hero-v7").count() == 1
+    assert market_page.locator(".home-hero-v8").count() == 1
+    assert market_page.locator(".home-hero-products .home-hero-product").count() >= 1
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
@@ -435,6 +480,17 @@ with sync_playwright() as p:
     market_page.locator(".public-mobile-market").click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/")
     market_page.set_viewport_size({"width":1440,"height":1000})
+    first_market_title = market_page.locator(".shop-product-grid .commerce-card-body h3").first
+    first_market_title.wait_for()
+    assert float(first_market_title.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
+    market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
+    market_page.reload()
+    sort_select = market_page.locator(".shop-sort select")
+    assert sort_select.evaluate("el => getComputedStyle(el).backgroundColor") != "rgb(255, 255, 255)"
+    assert sort_select.evaluate("el => getComputedStyle(el).color") != "rgb(0, 0, 0)"
+    market_page.screenshot(path=str(out / "market-dark-readable.png"), full_page=True)
+    market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
+    market_page.reload()
     market_page.locator(".shop-shell-account").click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/account/")
     market_page.locator(".shop-shell-orders").click()
@@ -504,4 +560,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Homepage hero/featured preview, true Market exit confirmation, full-screen assigned Customer Inbox, staff/customer mobile layouts, delivery map checkout, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
+print("Readable light/dark design system, live-product homepage hero, movable Approval Center, redesigned Customer Inbox and Market Catalog, responsive staff/customer layouts, delivery map checkout, verified order IDs, sales checkout, debt payment, stock counts and transfers passed.")

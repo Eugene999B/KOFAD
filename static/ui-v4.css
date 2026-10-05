@@ -1,0 +1,229 @@
+/* KOFAD UI v4 — shared readability, contrast and interaction layer */
+:root{
+  --ui-bg:#f3f7fa;
+  --ui-surface:#ffffff;
+  --ui-surface-soft:#f7fafc;
+  --ui-text:#10283d;
+  --ui-text-strong:#071d2f;
+  --ui-muted:#607789;
+  --ui-line:#d6e2e9;
+  --ui-teal:#0f7c84;
+  --ui-navy:#0b2c45;
+  --ui-gold:#e8aa32;
+}
+html[data-theme="light"]{color-scheme:light}
+html[data-theme="dark"]{
+  --ui-bg:#071724;
+  --ui-surface:#0d2435;
+  --ui-surface-soft:#102c3f;
+  --ui-text:#edf5f9;
+  --ui-text-strong:#ffffff;
+  --ui-muted:#aec2ce;
+  --ui-line:#2c5065;
+  --ui-teal:#62cbd0;
+  --ui-navy:#071b2a;
+  color-scheme:dark;
+}
+
+/* Core type scale: never use micro-copy for operational information. */
+body{font-size:15px;line-height:1.55;color:var(--ui-text)}
+h1{font-size:clamp(28px,2.2vw,34px);color:var(--ui-text-strong);letter-spacing:-.035em}
+h2{font-size:clamp(20px,1.55vw,24px);color:var(--ui-text-strong)}
+h3{font-size:16px;color:var(--ui-text-strong)}
+small{font-size:12px}
+label{font-size:13px;color:var(--ui-text-strong)}
+label small,.muted,.hint{color:var(--ui-muted)}
+.hint{font-size:12px}
+.eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--ui-muted)}
+.button,.text-button,.text-link{font-size:13px}
+input,select,textarea{font-size:14px;color:var(--ui-text);background:var(--ui-surface);border-color:var(--ui-line)}
+input::placeholder,textarea::placeholder{color:#7d91a1;opacity:1}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .branch-form select{
+  color:#f5f9fb!important;
+  background-color:#0a2030!important;
+  border-color:#355b70!important;
+  color-scheme:dark!important;
+}
+html[data-theme="dark"] select option,
+html[data-theme="dark"] select optgroup{
+  color:#f5f9fb!important;
+  background:#0a2030!important;
+}
+html[data-theme="dark"] select option:checked{background:#17616d!important;color:#fff!important}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder{color:#8fa6b5!important}
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea{color:#10283d!important;background:#fff!important}
+
+/* Shared workspace surfaces and readable navigation. */
+.sidebar nav a{font-size:13px;line-height:1.25;min-height:43px}
+.nav-label{font-size:10px;letter-spacing:.12em}
+.sidebar-bottom,.sidebar-bottom small{font-size:10px}
+.single-location,.branch-form select,.top-right{font-size:13px}
+.top-user-card strong{font-size:13px}.top-user-card small{font-size:11px}
+.page-heading{margin-bottom:24px}.page-heading .eyebrow{font-size:10.5px}
+.panel{border-color:var(--ui-line);box-shadow:0 8px 28px rgba(12,43,64,.04)}
+.notice{font-size:13px}
+.metrics p{font-size:12px}.metrics article>span,.metrics a{font-size:11.5px}
+.quick-action strong{font-size:13px}.quick-action small{font-size:11px}
+table{font-size:13px;color:var(--ui-text)}
+th{font-size:10.5px;color:var(--ui-muted);letter-spacing:.055em}
+td{font-size:13px;line-height:1.45}
+td small{font-size:11px;color:var(--ui-muted)}
+.reference{font-size:12px}
+html[data-theme="light"] body{background:var(--ui-bg);color:var(--ui-text)}
+html[data-theme="light"] :is(.panel,.metrics article,.quick-action,.settings-card,.role-card,.format-card,.export-catalog article){background:#fff;color:var(--ui-text)}
+html[data-theme="light"] :is(h1,h2,h3,strong,td,.single-location strong){color:var(--ui-text-strong)}
+html[data-theme="dark"] body{background:var(--ui-bg);color:var(--ui-text)}
+html[data-theme="dark"] :is(.panel,.metrics article,.quick-action,.settings-card,.role-card,.format-card,.export-catalog article){
+  background:var(--ui-surface)!important;border-color:var(--ui-line)!important;color:var(--ui-text)!important
+}
+html[data-theme="dark"] :is(h1,h2,h3,strong,td,.single-location strong){color:var(--ui-text-strong)}
+html[data-theme="dark"] :is(.muted,.hint,small,td small,.metrics p,.metrics article>span){color:var(--ui-muted)}
+html[data-theme="dark"] th{background:#102b3e!important;color:#bdd0db!important}
+html[data-theme="dark"] tbody tr:hover{background:#102b3e!important}
+
+/* Staff market catalog: replace tiny spreadsheet-like rows with clear merchandise cards. */
+.market-catalog-admin-hero p{font-size:12px!important;line-height:1.65!important}
+.market-admin-kpis{gap:12px!important}
+.market-admin-kpis article{padding:17px 18px!important}
+.market-admin-kpis span{font-size:10px!important}
+.market-admin-kpis strong{font-size:28px!important}
+.market-admin-kpis small{font-size:10px!important}
+.market-admin-toolbar form input{font-size:13px!important}
+.market-admin-toolbar nav a{font-size:10.5px!important;padding:8px 11px!important}
+.market-admin-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px!important}
+.market-admin-product{
+  grid-template-columns:82px minmax(0,1fr) auto!important;
+  grid-template-rows:auto auto auto!important;
+  gap:8px 13px!important;
+  align-items:center!important;
+  padding:14px!important;
+  border-radius:15px!important;
+  background:var(--ui-surface)!important;
+  border-color:var(--ui-line)!important;
+  min-width:0;
+}
+.market-admin-photo{width:82px!important;height:82px!important;grid-row:1/4!important;border-radius:12px!important}
+.market-admin-photo span{font-size:8.5px!important}
+.market-admin-copy{grid-column:2!important;grid-row:1!important}
+.market-admin-title>span{font-size:9.5px!important;font-weight:850!important}
+.market-admin-title b{font-size:8.5px!important;padding:4px 7px!important}
+.market-admin-copy h3{font-size:14px!important;margin:5px 0 3px!important}
+.market-admin-copy p{font-size:10.5px!important}
+.market-admin-commerce{grid-column:3!important;grid-row:1!important;min-width:120px}
+.market-admin-commerce small{font-size:8.5px!important}
+.market-admin-commerce strong{font-size:13px!important}
+.market-admin-commerce span,.market-admin-commerce em{font-size:9px!important}
+.market-admin-health{grid-column:2/4!important;grid-row:2!important}
+.market-admin-health span{font-size:9px!important;padding:5px 7px!important}
+.market-admin-row-actions{grid-column:2/4!important;grid-row:3!important;display:flex;gap:7px;flex-wrap:wrap}
+.market-admin-row-actions .button{min-height:36px!important;font-size:10.5px!important;padding:7px 11px!important}
+html[data-theme="dark"] .market-admin-product{background:#0d2638!important;border-color:#2d5065!important}
+
+/* Approval Center: important, but it must not cover work or flash constantly. */
+.approval-attention{
+  cursor:default;
+  touch-action:none;
+  user-select:none;
+  min-width:194px;
+  padding:6px!important;
+  gap:4px!important;
+  box-shadow:0 14px 38px rgba(4,21,34,.25)!important;
+}
+.approval-attention.has-approvals{animation:none!important}
+.approval-attention.approval-new{animation:kofadApprovalNew .65s ease-in-out 3!important}
+.approval-drag-handle{
+  width:28px;height:46px;flex:none;border:0;border-radius:11px;background:rgba(255,255,255,.08);
+  color:#b9cad3;cursor:grab;touch-action:none;font-size:15px;font-weight:900;letter-spacing:-3px;
+}
+.approval-drag-handle:hover{background:rgba(255,255,255,.14);color:#fff}
+.approval-drag-handle:active{cursor:grabbing}
+.approval-attention-link{
+  min-width:0;flex:1;display:flex;align-items:center;gap:10px;padding:6px 7px;color:#fff!important;
+  text-decoration:none!important;border-radius:12px;
+}
+.approval-attention-link:hover{background:rgba(255,255,255,.06);color:#fff!important}
+.approval-attention.is-dragging{transition:none!important;transform:none!important}
+@media(prefers-reduced-motion:reduce){.approval-attention.approval-new{animation:none!important}}
+
+/* Welcome is visual only; it must never block immediate staff interaction. */
+.login-welcome-overlay{pointer-events:none!important}
+
+/* Login readability and business-first visual hierarchy. */
+.login-header-meta{font-size:10.5px}
+.premium-login-story .story-copy{font-size:13px!important;line-height:1.65!important}
+.login-command-map article strong{font-size:13px!important}
+.login-command-map article small{font-size:10px!important;line-height:1.4!important}
+.premium-login-card .login-card-top h2{font-size:30px!important}
+.login-intro-copy{font-size:13px!important}
+.premium-login-form label{font-size:13px!important}
+.premium-login-form input{font-size:14px!important}
+.login-form-row{font-size:10.5px!important}
+.login-assurance strong{font-size:10.5px!important}.login-assurance small{font-size:9.5px!important}
+.login-security{font-size:10px!important}
+html[data-theme="light"] .premium-login-card{background:#fff;border-color:#d8e4ea}
+html[data-theme="dark"] .premium-login-card{background:#0d2435!important;border-color:#31566b!important}
+html[data-theme="dark"] .login-input-shell{background:#0a2030!important;border-color:#355b70!important}
+html[data-theme="dark"] .premium-login-form input{background:transparent!important;color:#f7fafb!important}
+
+/* General focus clarity. */
+:focus-visible{outline:3px solid rgba(44,166,177,.55)!important;outline-offset:2px!important}
+
+@media(max-width:1200px){
+  .market-admin-list{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  body{font-size:14px}
+  .sidebar nav a{font-size:12.5px}
+  .market-admin-product{grid-template-columns:68px minmax(0,1fr)!important}
+  .market-admin-photo{width:68px!important;height:68px!important}
+  .market-admin-copy{grid-column:2!important}
+  .market-admin-commerce,.market-admin-health,.market-admin-row-actions{grid-column:1/3!important}
+  .market-admin-commerce{grid-row:auto!important;display:grid!important;grid-template-columns:1fr auto;gap:3px 12px}
+  .approval-attention{min-width:0}
+}
+
+
+/* Lift legacy micro-copy across the operational workspace. */
+:is(
+  .page-footer,.workflow-strip,.quick-action small,.permission-tags span,.format-badge,
+  .export-catalog small,.cart-control-field small,.debt-hero-actions span,
+  .debt-account-copy>small,.debt-account-meta,.debt-account-balance small,
+  .debt-account-balance em,.debt-credit-strip span,.debt-invoice-row small,
+  .debt-invoice-row em,.sale-command-badges span,.sale-search-help,.stock-copy,
+  .composer-quantity strong,.stage-heading small,.stock-state,.movement-list small,
+  .receipt-business-bar span,.receipt-table th,.compact-heading small,
+  .automation-catalog article small,.automation-catalog article>b,
+  .automation-catalog article>a,.management-contact-grid article>div:first-child small,
+  .communication-status-grid small,.auto-message-list strong,.checkout-consent small,
+  .transaction-message-actions small,.compact-payment-grid label,.success-receipt-meta,
+  .document-card-meta small,.document-card-copy code,.verify-grid dt
+){font-size:10.5px!important;line-height:1.45!important}
+:is(
+  .debt-aging-grid span,.receipt-business-bar small,.receipt-table small,
+  .receipt-payment-list small,.settings-explainer-grid small,
+  .automation-catalog article>span,.template-preview-grid article>span,
+  .template-preview-grid small,.communication-status-grid span,.auto-message-list small,
+  .sale-checkout-total small,.counter-customer-title label small,.compact-consent small,
+  .success-receipt-line span small,.market-offline-hint>span
+){font-size:10px!important;line-height:1.45!important}
+.mobile-dock a{font-size:10.5px!important}
+.nav-market-count{font-size:10px!important}
+.page-footer{color:var(--ui-muted)!important}
+.searchbar input{font-size:14px!important}
+.searchbar button{font-size:12.5px!important}
+.panel .section-heading .muted{font-size:11px!important}
+
+/* Document/history tables get stronger visual separation without feeling heavy. */
+.table-wrap{background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:14px}
+.table-wrap table{background:transparent}
+html[data-theme="light"] .table-wrap td{color:#17344a}
+html[data-theme="light"] .table-wrap th{color:#526b7d;background:#f4f8fa!important}
+html[data-theme="dark"] .table-wrap{background:#0d2435;border-color:#2b5065}
+html[data-theme="dark"] .table-wrap td{color:#eef5f8}
+html[data-theme="dark"] .table-wrap th{color:#c1d2dc;background:#102d40!important}

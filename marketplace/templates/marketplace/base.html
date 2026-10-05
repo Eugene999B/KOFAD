@@ -21,6 +21,8 @@
 <script defer src="{% static 'marketplace/market-v3.js' %}"></script>
 <script defer src="{% static 'session-zone.js' %}"></script>
 {% block head %}{% endblock %}
+<link rel="stylesheet" href="{% static 'marketplace/market-v8.css' %}">
+<link rel="stylesheet" href="{% static 'marketplace/support-v4.css' %}">
 </head>
 <body class="market-body market-v2{% if market_customer and '/market/' in request.path %} customer-session{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
 <a class="market-skip" href="#main">Skip to content</a>
