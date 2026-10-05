@@ -97,7 +97,9 @@
       moveDrag(event.clientX, event.clientY, event.pointerId, event);
     }, {passive: false});
     document.addEventListener("pointerup", event => {
-      if (event.pointerType !== "mouse") finishDrag(event.pointerId);
+      if (event.pointerType === "mouse") return;
+      moveDrag(event.clientX, event.clientY, event.pointerId, event);
+      finishDrag(event.pointerId);
     });
     document.addEventListener("pointercancel", event => {
       if (event.pointerType !== "mouse") finishDrag(event.pointerId);
@@ -111,7 +113,10 @@
     document.addEventListener("mousemove", event => {
       moveDrag(event.clientX, event.clientY, "mouse", event);
     });
-    document.addEventListener("mouseup", () => finishDrag("mouse"));
+    document.addEventListener("mouseup", event => {
+      moveDrag(event.clientX, event.clientY, "mouse", event);
+      finishDrag("mouse");
+    });
 
     dragHandle?.addEventListener("click", event => {
       event.preventDefault();
