@@ -611,6 +611,29 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertEqual(quote.status_code, 200)
         self.assertEqual(quote.json()["fee"], "0.00")
 
+    def test_map_pages_use_policy_compliant_osm_headers_and_host(self):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
+        response = self.client.get("/market/checkout/")
+        self.assertEqual(
+            response["Referrer-Policy"],
+            "strict-origin-when-cross-origin",
+        )
+        csp = response["Content-Security-Policy"]
+        self.assertIn("https://tile.openstreetmap.org", csp)
+        self.assertNotIn("https://*.tile.openstreetmap.org", csp)
+        map_js = (
+            settings.BASE_DIR
+            / "marketplace/static/marketplace/market-map.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            map_js,
+        )
+        self.assertNotIn("{s}.tile.openstreetmap.org", map_js)
+
     @override_settings(GOOGLE_MAPS_SERVER_KEY="test-google-key")
     @patch("marketplace.services.requests.get")
     def test_location_search_uses_google_when_configured(self, get):
