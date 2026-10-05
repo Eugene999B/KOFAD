@@ -187,10 +187,11 @@ class BusinessTests(Fixtures, TestCase):
 
         duplicate = client.post("/login/", credentials)
         self.assertEqual(duplicate.status_code, 302)
-        self.assertEqual(duplicate["Location"], "/login/")
-        authenticated_login = client.get("/login/")
-        self.assertEqual(authenticated_login.status_code, 302)
-        self.assertEqual(authenticated_login["Location"], "/workspace/")
+        self.assertEqual(duplicate["Location"], "/workspace/")
+
+        fresh_login = client.get("/login/")
+        self.assertEqual(fresh_login.status_code, 200)
+        self.assertFalse("_auth_user_id" in client.session)
 
     def test_all_pages_render(self):
         self.authenticate_client()
