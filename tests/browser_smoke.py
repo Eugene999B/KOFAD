@@ -372,10 +372,10 @@ with sync_playwright() as p:
     admin_page.set_viewport_size({"width":1280,"height":900})
 
     admin_page.goto("http://127.0.0.1:8000/market-catalog/")
-    admin_page.locator(".market-admin-product").first.wait_for()
-    assert float(admin_page.locator(".market-admin-copy h3").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
-    assert float(admin_page.locator(".market-admin-health span").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 9
-    assert admin_page.locator(".market-admin-list").evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 2
+    admin_page.locator(".catalog-product-card").first.wait_for()
+    assert float(admin_page.locator(".catalog-product-main h3").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
+    assert float(admin_page.locator(".catalog-readiness span").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 9
+    assert admin_page.locator(".catalog-studio-list").evaluate("el => getComputedStyle(el).gridTemplateColumns.split(\' \').length") >= 2
     admin_page.screenshot(path=str(out / "market-catalog-readable.png"), full_page=True)
 
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
