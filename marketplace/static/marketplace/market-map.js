@@ -182,10 +182,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const defaultLat = latitude ?? originLat ?? 7.9465;
       const defaultLng = longitude ?? originLng ?? -1.0232;
       map = L.map(mapEl, {scrollWheelZoom: false}).setView([defaultLat, defaultLng], latitude !== null ? 16 : 7);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      const baseTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       }).addTo(map);
+      let tileFailures = 0;
+      baseTiles.on("tileerror", () => {
+        tileFailures += 1;
+        if (tileFailures < 3 || !resultNode) return;
+        resultNode.textContent = "Map background could not load. You can still search a location, enter coordinates or open the pin in Google Maps.";
+        resultNode.classList.remove("success");
+      });
 
       if (originLat !== null && originLng !== null) {
         L.marker([originLat, originLng], {icon: icon("origin"), title: "Company dispatch point"}).addTo(map);
