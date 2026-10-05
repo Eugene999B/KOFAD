@@ -49,6 +49,9 @@ def _market_context(request, **extra):
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
         **extra,
     }
     return context
@@ -1578,6 +1581,9 @@ def market_settings(request, branch):
         "selected_zone": selected,
         "zones": DeliveryZone.objects.all(),
         "google_maps_ready": bool(settings.GOOGLE_MAPS_SERVER_KEY),
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
         "market_url": request.build_absolute_uri("/market/"),
         "company": company,
     })
