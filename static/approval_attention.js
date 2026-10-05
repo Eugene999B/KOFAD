@@ -85,20 +85,25 @@
       if (dragged) savePosition();
     };
 
-    // Pointer events cover touch, pen and modern mouse input.
+    // Mouse input uses ordinary mouse events so desktop browsers and browser
+    // automation behave identically. Pointer events are reserved for touch/pen,
+    // avoiding compatibility-event cancellation after pointerdown.
     launcher.addEventListener("pointerdown", event => {
-      if (event.button !== 0) return;
+      if (event.pointerType === "mouse" || event.button !== 0) return;
       beginDrag(event.clientX, event.clientY, event.pointerId);
       event.preventDefault();
     });
     document.addEventListener("pointermove", event => {
+      if (event.pointerType === "mouse") return;
       moveDrag(event.clientX, event.clientY, event.pointerId, event);
     }, {passive: false});
-    document.addEventListener("pointerup", event => finishDrag(event.pointerId));
-    document.addEventListener("pointercancel", event => finishDrag(event.pointerId));
+    document.addEventListener("pointerup", event => {
+      if (event.pointerType !== "mouse") finishDrag(event.pointerId);
+    });
+    document.addEventListener("pointercancel", event => {
+      if (event.pointerType !== "mouse") finishDrag(event.pointerId);
+    });
 
-    // Mouse fallback is deliberate. Some browser automation, embedded browsers
-    // and older desktop engines don't preserve pointer capture consistently.
     launcher.addEventListener("mousedown", event => {
       if (event.button !== 0) return;
       beginDrag(event.clientX, event.clientY, "mouse");
