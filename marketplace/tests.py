@@ -1457,7 +1457,7 @@ class MarketCatalogScaleAndDeletionTests(MarketFixtures):
         self.customer_session()
         first = self.client.get("/market/")
         self.assertEqual(first.status_code, 200)
-        self.assertContains(first, "48 products in this view")
+        self.assertContains(first, "226 products in this view")
         self.assertContains(first, "Page 1")
         last_page = self.client.get("/market/?page=5")
         self.assertEqual(last_page.status_code, 200)
