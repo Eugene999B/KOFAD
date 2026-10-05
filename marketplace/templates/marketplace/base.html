@@ -20,7 +20,7 @@
 <script defer src="{% static 'marketplace/market-v2.js' %}"></script>
 <script defer src="{% static 'marketplace/market-v3.js' %}"></script>
 <script defer src="{% static 'session-zone.js' %}"></script>
-<script defer src="{% static 'auth-submit.js' %}"></script>
+{% if market_auth_page %}<script defer src="{% static 'auth-submit.js' %}"></script>{% endif %}
 {% block head %}{% endblock %}
 <link rel="stylesheet" href="{% static 'marketplace/market-v8.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/market-v9.css' %}">
