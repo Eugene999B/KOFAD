@@ -741,6 +741,51 @@ with sync_playwright() as p:
     market_page.screenshot(path=str(out / "market-gateway-desktop.png"), full_page=True)
     market_page.close()
 
+    # Executive and accounting workspaces remain readable across narrow phones
+    # and dark theme. Market Catalog Studio must expose real customer visibility.
+    for width in (320, 390):
+        admin_page.set_viewport_size({"width":width,"height":900})
+        for staff_path in (
+            "/workspace/",
+            "/accounting/?view=overview",
+            "/market-catalog/",
+            "/communications/",
+        ):
+            admin_page.goto("http://127.0.0.1:8000" + staff_path)
+            assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width) + staff_path
+
+    admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.goto("http://127.0.0.1:8000/workspace/")
+    assert admin_page.locator(".executive-kpis").is_visible()
+    assert admin_page.get_by_text("Operational control pulse", exact=True).is_visible()
+    admin_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
+    admin_page.reload()
+    assert admin_page.locator(".executive-kpis article").first.evaluate(
+        "el => getComputedStyle(el).backgroundColor"
+    ) != "rgb(255, 255, 255)"
+    admin_page.screenshot(path=str(out / "executive-overview-dark-mobile.png"), full_page=True)
+
+    admin_page.goto("http://127.0.0.1:8000/accounting/")
+    assert admin_page.locator(".accounting-executive-metrics").is_visible()
+    assert admin_page.get_by_text("Cash & equivalents", exact=True).count() >= 1
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    admin_page.screenshot(path=str(out / "accounting-dark-mobile.png"), full_page=True)
+
+    admin_page.goto("http://127.0.0.1:8000/market-catalog/")
+    assert admin_page.locator(".catalog-product-card").count() >= 1
+    assert admin_page.get_by_text("Market Catalog Studio", exact=True).is_visible()
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    admin_page.screenshot(path=str(out / "market-catalog-dark-mobile.png"), full_page=True)
+    admin_page.evaluate("localStorage.setItem('kofad-theme','light'); document.documentElement.dataset.theme='light'")
+
+    # A sale-history row opens from its body, not only from the receipt reference.
+    admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
+    transaction_rows = admin_page.locator("tr.transaction-row")
+    if transaction_rows.count():
+        target = transaction_rows.first.get_attribute("data-row-href")
+        transaction_rows.first.locator("td").nth(2).click()
+        admin_page.wait_for_url("http://127.0.0.1:8000" + target)
+
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     admin_page.goto("http://127.0.0.1:8000/login/")
