@@ -282,6 +282,20 @@ class Document(models.Model):
     @property
     def balance(self):
         return self.total - self.paid
+
+    @property
+    def expense_funding_label(self):
+        return {
+            "today_sales_receipts": "Today's sales receipts",
+            "petty_cash": "Petty cash",
+            "prior_business_funds": "Prior business funds",
+            "owner_manager_funds": "Owner / manager funds",
+            "bank_account": "Business bank account",
+            "momo_wallet": "Business MoMo wallet",
+            "unpaid_credit": "Unpaid / on credit",
+            "other": "Other source",
+        }.get(self.expense_funding_source or "", "Other source")
+
     def __str__(self):
         return self.reference
 
