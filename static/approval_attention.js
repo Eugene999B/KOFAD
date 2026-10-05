@@ -37,12 +37,13 @@
   if (launcher) {
     const dragHandle = launcher.querySelector(".approval-drag-handle");
 
-    const beginDrag = (clientX, clientY, pointerId) => {
+    const beginDrag = event => {
+      if (!dragHandle || event.button !== undefined && event.button !== 0) return;
       const rect = launcher.getBoundingClientRect();
       dragState = {
-        pointerId,
-        startX: clientX,
-        startY: clientY,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
         left: rect.left,
         top: rect.top,
         width: rect.width,
@@ -53,12 +54,14 @@
       launcher.style.top = rect.top + "px";
       launcher.style.right = "auto";
       launcher.style.bottom = "auto";
+      dragHandle.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
     };
 
-    const moveDrag = (clientX, clientY, pointerId, event) => {
-      if (!dragState || dragState.pointerId !== pointerId) return;
-      const dx = clientX - dragState.startX;
-      const dy = clientY - dragState.startY;
+    const moveDrag = event => {
+      if (!dragState || event.pointerId !== dragState.pointerId) return;
+      const dx = event.clientX - dragState.startX;
+      const dy = event.clientY - dragState.startY;
       if (!dragged && Math.hypot(dx, dy) < 5) return;
       dragged = true;
       launcher.classList.add("is-dragging");
@@ -74,56 +77,32 @@
       );
       launcher.style.left = x + "px";
       launcher.style.top = y + "px";
-      event?.preventDefault?.();
+      event.preventDefault();
     };
 
-    const finishDrag = pointerId => {
-      if (!dragState || dragState.pointerId !== pointerId) return;
+    const finishDrag = event => {
+      if (!dragState || event.pointerId !== dragState.pointerId) return;
+      if (dragged) {
+        moveDrag(event);
+        savePosition();
+      }
+      dragHandle?.releasePointerCapture?.(event.pointerId);
       dragState = null;
       launcher.classList.remove("is-dragging");
-      if (dragged) savePosition();
     };
 
-    // Mouse input uses ordinary mouse events so desktop browsers and browser
-    // automation behave identically. Pointer events are reserved for touch/pen,
-    // avoiding compatibility-event cancellation after pointerdown.
-    dragHandle?.addEventListener("pointerdown", event => {
-      if (event.pointerType === "mouse" || event.button !== 0) return;
-      beginDrag(event.clientX, event.clientY, event.pointerId);
-      event.preventDefault();
-    });
-    document.addEventListener("pointermove", event => {
-      if (event.pointerType === "mouse") return;
-      moveDrag(event.clientX, event.clientY, event.pointerId, event);
-    }, {passive: false});
-    document.addEventListener("pointerup", event => {
-      if (event.pointerType === "mouse") return;
-      moveDrag(event.clientX, event.clientY, event.pointerId, event);
-      finishDrag(event.pointerId);
-    });
-    document.addEventListener("pointercancel", event => {
-      if (event.pointerType !== "mouse") finishDrag(event.pointerId);
-    });
-
-    dragHandle?.addEventListener("mousedown", event => {
-      if (event.button !== 0) return;
-      beginDrag(event.clientX, event.clientY, "mouse");
-      event.preventDefault();
-    });
-    document.addEventListener("mousemove", event => {
-      moveDrag(event.clientX, event.clientY, "mouse", event);
-    });
-    document.addEventListener("mouseup", event => {
-      moveDrag(event.clientX, event.clientY, "mouse", event);
-      finishDrag("mouse");
-    });
+    dragHandle?.addEventListener("pointerdown", beginDrag);
+    dragHandle?.addEventListener("pointermove", moveDrag);
+    dragHandle?.addEventListener("pointerup", finishDrag);
+    dragHandle?.addEventListener("pointercancel", finishDrag);
 
     dragHandle?.addEventListener("click", event => {
       event.preventDefault();
-      dragged = false;
+      event.stopPropagation();
     });
     dragHandle?.addEventListener("dblclick", event => {
       event.preventDefault();
+      event.stopPropagation();
       try { localStorage.removeItem(POSITION_KEY); } catch (_) {}
       launcher.style.left = "";
       launcher.style.top = "";
