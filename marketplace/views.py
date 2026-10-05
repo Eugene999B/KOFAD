@@ -1647,6 +1647,9 @@ def staff_order(request, branch, pk):
         "delivery_updates": order.delivery_updates.all(),
         "latest_delivery_location": order.delivery_updates.exclude(latitude__isnull=True).exclude(longitude__isnull=True).last(),
         "return_requests": order.return_requests.all(),
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
     })
 
 
