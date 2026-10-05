@@ -38,45 +38,76 @@
     launcher.draggable = false;
     launcher.addEventListener("dragstart", event => event.preventDefault());
 
-    launcher.addEventListener("pointerdown", event => {
-      if (event.button !== 0) return;
+    const beginDrag = (clientX, clientY, pointerId) => {
       const rect = launcher.getBoundingClientRect();
       dragState = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
+        pointerId,
+        startX: clientX,
+        startY: clientY,
         left: rect.left,
         top: rect.top,
+        width: rect.width,
+        height: rect.height,
       };
       dragged = false;
-      event.preventDefault();
-    });
+      launcher.style.left = rect.left + "px";
+      launcher.style.top = rect.top + "px";
+      launcher.style.right = "auto";
+      launcher.style.bottom = "auto";
+    };
 
-    document.addEventListener("pointermove", event => {
-      if (!dragState || event.pointerId !== dragState.pointerId) return;
-      const dx = event.clientX - dragState.startX;
-      const dy = event.clientY - dragState.startY;
+    const moveDrag = (clientX, clientY, pointerId, event) => {
+      if (!dragState || dragState.pointerId !== pointerId) return;
+      const dx = clientX - dragState.startX;
+      const dy = clientY - dragState.startY;
       if (!dragged && Math.hypot(dx, dy) < 5) return;
       dragged = true;
       launcher.classList.add("is-dragging");
-      const rect = launcher.getBoundingClientRect();
-      const x = clamp(dragState.left + dx, 8, Math.max(8, window.innerWidth - rect.width - 8));
-      const y = clamp(dragState.top + dy, 8, Math.max(8, window.innerHeight - rect.height - 8));
+      const x = clamp(
+        dragState.left + dx,
+        8,
+        Math.max(8, window.innerWidth - dragState.width - 8),
+      );
+      const y = clamp(
+        dragState.top + dy,
+        8,
+        Math.max(8, window.innerHeight - dragState.height - 8),
+      );
       launcher.style.left = x + "px";
       launcher.style.top = y + "px";
-      launcher.style.right = "auto";
-      launcher.style.bottom = "auto";
-      event.preventDefault();
-    }, {passive: false});
+      event?.preventDefault?.();
+    };
 
-    const endDrag = event => {
-      if (!dragState || event.pointerId !== dragState.pointerId) return;
+    const finishDrag = pointerId => {
+      if (!dragState || dragState.pointerId !== pointerId) return;
       dragState = null;
       launcher.classList.remove("is-dragging");
       if (dragged) savePosition();
     };
-    document.addEventListener("pointerup", endDrag);
-    document.addEventListener("pointercancel", endDrag);
+
+    // Pointer events cover touch, pen and modern mouse input.
+    launcher.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      beginDrag(event.clientX, event.clientY, event.pointerId);
+      event.preventDefault();
+    });
+    document.addEventListener("pointermove", event => {
+      moveDrag(event.clientX, event.clientY, event.pointerId, event);
+    }, {passive: false});
+    document.addEventListener("pointerup", event => finishDrag(event.pointerId));
+    document.addEventListener("pointercancel", event => finishDrag(event.pointerId));
+
+    // Mouse fallback is deliberate. Some browser automation, embedded browsers
+    // and older desktop engines don't preserve pointer capture consistently.
+    launcher.addEventListener("mousedown", event => {
+      if (event.button !== 0) return;
+      beginDrag(event.clientX, event.clientY, "mouse");
+      event.preventDefault();
+    });
+    document.addEventListener("mousemove", event => {
+      moveDrag(event.clientX, event.clientY, "mouse", event);
+    });
+    document.addEventListener("mouseup", () => finishDrag("mouse"));
 
     launcher.addEventListener("click", event => {
       if (!dragged) return;
