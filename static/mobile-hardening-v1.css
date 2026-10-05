@@ -1,0 +1,276 @@
+/* KOFAD mobile hardening v1
+   Shared small-screen layout rules for administration, settings, forms and data tables. */
+
+@media(max-width:680px){
+  html,body{max-width:100%;overflow-x:hidden}
+  .body,main,.page-heading,.panel,.hero-panel,.settings-grid,.role-grid,.two-column,.three-column,
+  .check-grid,.policy-workspace,.admin-form,.form-panel,.form-grid,.actions,.setting-shortcuts{
+    min-width:0!important;
+    max-width:100%!important;
+  }
+
+  /* Page headings and page-level actions should read top-to-bottom on phones. */
+  .page-heading{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    align-items:start!important;
+    gap:12px!important;
+  }
+  .page-heading>div:first-child{min-width:0}
+  .page-heading>.button,
+  .page-heading>.actions{
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .page-heading>.button{justify-content:center}
+  .page-heading>.actions{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+  .page-heading>.actions>*{min-width:0!important;width:100%!important}
+  .page-heading>.actions>:only-child{grid-column:1/-1}
+  .page-heading h1{
+    overflow-wrap:anywhere;
+    word-break:normal;
+  }
+
+  /* Settings shortcuts should never be squeezed into awkward narrow buttons. */
+  .setting-shortcuts{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+    margin-bottom:14px!important;
+  }
+  .setting-shortcuts .button{
+    width:100%!important;
+    min-width:0!important;
+    min-height:46px;
+    padding:10px 12px!important;
+    white-space:normal!important;
+  }
+
+  /* Generic settings/forms: ordinary document flow, no floating action shelf. */
+  .form-panel{
+    width:100%!important;
+    padding:16px!important;
+    overflow:visible!important;
+  }
+  .form-panel>.muted{
+    margin:0 0 18px!important;
+    line-height:1.65;
+  }
+  .form-grid{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:10px!important;
+  }
+  .form-panel .field{
+    min-width:0!important;
+    margin:0!important;
+  }
+  .form-panel .field:has(input[type=checkbox]){
+    display:grid!important;
+    grid-template-columns:28px minmax(0,1fr)!important;
+    align-items:center!important;
+    gap:10px!important;
+    min-height:58px;
+    padding:12px 13px!important;
+    margin:0!important;
+    border-radius:13px!important;
+  }
+  .form-panel .field:has(input[type=checkbox]) label{
+    grid-column:2!important;
+    grid-row:1!important;
+    margin:0!important;
+    font-size:14px!important;
+    line-height:1.35!important;
+  }
+  .form-panel .field:has(input[type=checkbox]) input{
+    grid-column:1!important;
+    grid-row:1!important;
+    order:initial!important;
+    width:20px!important;
+    height:20px!important;
+    min-height:20px!important;
+    margin:0!important;
+    justify-self:start!important;
+  }
+  .form-actions{
+    position:static!important;
+    inset:auto!important;
+    z-index:auto!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:11px!important;
+    margin:20px 0 0!important;
+    padding:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  .form-actions .button{
+    width:100%!important;
+    min-width:0!important;
+    min-height:48px;
+    margin:0!important;
+  }
+  .form-actions .text-link{
+    min-height:40px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:7px 10px;
+  }
+
+  /* Shared data-table mobile cards. JS attaches labels from table headings. */
+  .table-wrap:has(> table.mobile-card-table){
+    width:100%!important;
+    max-width:100%!important;
+    overflow:visible!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+  }
+  .table-wrap>table.mobile-card-table{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    border-collapse:separate!important;
+    border-spacing:0!important;
+    background:transparent!important;
+  }
+  .mobile-card-table thead{
+    position:absolute!important;
+    width:1px!important;
+    height:1px!important;
+    padding:0!important;
+    margin:-1px!important;
+    overflow:hidden!important;
+    clip:rect(0 0 0 0)!important;
+    white-space:nowrap!important;
+    border:0!important;
+  }
+  .mobile-card-table tbody{
+    display:grid!important;
+    width:100%!important;
+    gap:11px!important;
+  }
+  .mobile-card-table tbody tr{
+    display:grid!important;
+    width:100%!important;
+    min-width:0!important;
+    padding:12px 14px!important;
+    border:1px solid var(--line)!important;
+    border-radius:15px!important;
+    background:var(--white)!important;
+    box-shadow:0 7px 22px rgba(9,35,53,.045);
+  }
+  .mobile-card-table tbody tr:hover{background:var(--white)!important}
+  .mobile-card-table tbody td{
+    display:grid!important;
+    grid-template-columns:minmax(92px,38%) minmax(0,1fr)!important;
+    align-items:start!important;
+    gap:10px!important;
+    width:100%!important;
+    min-width:0!important;
+    padding:8px 0!important;
+    border:0!important;
+    border-bottom:1px solid color-mix(in srgb,var(--line) 72%,transparent)!important;
+    text-align:left!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+  }
+  .mobile-card-table tbody td:last-child{border-bottom:0!important}
+  .mobile-card-table tbody td::before{
+    content:attr(data-mobile-label);
+    min-width:0;
+    color:var(--muted);
+    font-size:10px;
+    font-weight:800;
+    line-height:1.45;
+    letter-spacing:.055em;
+    text-transform:uppercase;
+  }
+  .mobile-card-table tbody td[data-mobile-label=""]::before{display:none}
+  .mobile-card-table tbody td.mobile-table-actions{
+    grid-template-columns:minmax(0,1fr)!important;
+    padding-top:11px!important;
+    border-top:1px solid color-mix(in srgb,var(--line) 72%,transparent)!important;
+    border-bottom:0!important;
+  }
+  .mobile-card-table tbody td.mobile-table-actions a,
+  .mobile-card-table tbody td.mobile-table-actions .button{
+    width:100%;
+    min-height:38px;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    white-space:normal;
+  }
+  .mobile-card-table tbody td.mobile-table-message{
+    display:block!important;
+    padding:16px 4px!important;
+    border:0!important;
+  }
+  .mobile-card-table tbody td.mobile-table-message::before{display:none!important}
+  .mobile-card-table .pill{max-width:100%;white-space:normal}
+  .mobile-card-table td strong,
+  .mobile-card-table td small,
+  .mobile-card-table td a{overflow-wrap:anywhere}
+  .mobile-card-table .number{white-space:normal!important}
+  html[data-theme="dark"] .mobile-card-table tbody tr{
+    background:#10171d!important;
+    border-color:#2d3942!important;
+    box-shadow:0 8px 24px rgba(0,0,0,.10);
+  }
+  html[data-theme="dark"] .mobile-card-table tbody tr:hover{background:#10171d!important}
+
+  /* Filters, multi-button strips and settings cards need predictable wrapping. */
+  .advanced-filter,.searchbar{
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .advanced-filter>*,
+  .searchbar>*{min-width:0!important}
+  .section-heading{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    align-items:start!important;
+    gap:8px!important;
+  }
+  .section-heading>*{min-width:0}
+  .section-heading>.pill,
+  .section-heading>.text-link{justify-self:start}
+  .settings-card,.role-card,.admin-metrics article{min-width:0}
+  .settings-card p,.role-card p,.panel p{overflow-wrap:anywhere}
+  .pagination{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+    width:100%!important;
+  }
+  .pagination p{grid-column:1/-1;margin:0!important}
+  .pagination .button{width:100%!important;min-width:0!important}
+}
+
+@media(max-width:430px){
+  .setting-shortcuts,
+  .page-heading>.actions{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .page-heading>.button{min-height:48px}
+  .mobile-card-table tbody tr{padding:11px 12px!important}
+  .mobile-card-table tbody td{
+    grid-template-columns:minmax(82px,36%) minmax(0,1fr)!important;
+    gap:8px!important;
+  }
+}
+
+@media(max-width:360px){
+  main{padding-left:9px!important;padding-right:9px!important}
+  .panel{padding:13px!important}
+  .mobile-card-table tbody td{
+    grid-template-columns:minmax(72px,34%) minmax(0,1fr)!important;
+  }
+}
