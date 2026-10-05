@@ -586,7 +586,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         company.delivery_max_distance_km = Decimal("50")
         company.delivery_origin_latitude = Decimal("5.603700")
         company.delivery_origin_longitude = Decimal("-0.186900")
-        company.delivery_origin_label = "KOPEX Main Shop"
+        company.delivery_origin_label = "KOFAD Main Shop"
         company.save()
         google_route.return_value = {
             "distance_km": Decimal("0.10"),
@@ -705,7 +705,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             "delivery_rate_per_km": "1.00",
             "delivery_minimum_fee": "0",
             "delivery_max_distance_km": "100",
-            "delivery_origin_label": "KOPEX Main Shop",
+            "delivery_origin_label": "KOFAD Main Shop",
             "delivery_origin_latitude": "5.603717",
             "delivery_origin_longitude": "-0.186964",
         })
