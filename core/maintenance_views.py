@@ -92,8 +92,8 @@ def backup_restore(request):
             logger.exception("KOFAD maintenance action failed and was rolled back: action=%s user=%s", action, request.user.username)
             messages.error(
                 request,
-                "The maintenance operation could not be completed. No destructive change was committed. "
-                "Try again, and if it still fails check the server logs before retrying."
+                "The maintenance operation did not finish cleanly. Check the current system state and server logs "
+                "before attempting another destructive action. Database restore/reset work is transaction-protected."
             )
 
     return render(request, "backup_restore.html", {
