@@ -1,15 +1,108 @@
-{% extends "base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-v3.css' %}">{% endblock %}
-{% block actions %}<div class="actions"><a class="button secondary" href="/exports/?dataset=market_catalog">Export catalog</a><a class="button secondary" href="/market/" target="_blank" rel="noopener">Open Market ↗</a><a class="button" href="/products/new/">+ New product</a></div>{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'marketplace/market.css' %}">
+<link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}">
+<link rel="stylesheet" href="{% static 'marketplace/market-v3.css' %}">
+<link rel="stylesheet" href="{% static 'marketplace/catalog-studio-v1.css' %}">
+{% endblock %}
+{% block actions %}
+<div class="actions">
+  <a class="button secondary" href="/exports/?dataset=market_catalog">⇩ Export catalog</a>
+  <a class="button secondary" href="/market/" target="_blank" rel="noopener">Open customer Market ↗</a>
+  <a class="button" href="/products/new/">＋ New product</a>
+</div>
+{% endblock %}
 {% block content %}
-<section class="market-catalog-admin-hero"><div><p class="eyebrow">MARKET MERCHANDISING</p><h2>Market Catalog Studio</h2><p>Control what customers see without separating online commerce from KOFAD inventory. Publication, pricing, product copy, imagery and live stock remain connected.</p></div><span class="pill success">Live catalog control</span></section>
-<div class="market-admin-kpis"><article><span>KOFAD products</span><strong>{{ summary.products }}</strong><small>Active + historical catalog</small></article><article><span>Published online</span><strong>{{ summary.published }}</strong><small>Visible in KOFAD Market</small></article><article><span>Featured</span><strong>{{ summary.featured }}</strong><small>Priority placement</small></article><article><span>With Market photo</span><strong>{{ summary.photos }}</strong><small>Uploaded or curated</small></article></div>
-<section class="panel market-catalog-admin-panel">
-<div class="market-admin-toolbar"><form method="get"><span>⌕</span><input name="q" value="{{ q }}" placeholder="Search product, SKU or category"><input type="hidden" name="state" value="{{ selected_state }}"><button class="button secondary">Search</button></form><nav><a href="/market-catalog/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'all' %}active{% endif %}">All</a><a href="/market-catalog/?state=published{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'published' %}active{% endif %}">Published</a><a href="/market-catalog/?state=hidden{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'hidden' %}active{% endif %}">Hidden</a><a href="/market-catalog/?state=incomplete{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'incomplete' %}active{% endif %}">Needs work</a></nav></div>
-<div class="market-admin-list">{% for row in rows %}<article class="market-admin-product {% if row.published %}published{% endif %}">
-<div class="market-admin-photo">{% if row.listing.image_thumb %}<img src="/market/products/{{ row.listing.pk }}/image/thumb/" alt="">{% elif row.listing.image_url %}<img src="{{ row.listing.image_url }}" alt="" referrerpolicy="no-referrer">{% else %}<span>NO PHOTO</span>{% endif %}</div>
-<div class="market-admin-copy"><div class="market-admin-title"><span>{{ row.product.category|default:"Uncategorised" }}</span>{% if row.published %}<b>Published</b>{% else %}<b class="hidden-state">Hidden</b>{% endif %}</div><h3>{{ row.listing.display_name|default:row.product.name }}</h3><p>{{ row.product.sku }} · {{ row.product.base_unit }}{% if row.product.pack_size > 1 %} · {{ row.product.pack_name }} × {{ row.product.pack_size }}{% endif %}</p></div>
-<div class="market-admin-health"><span class="{% if row.photo %}good{% else %}bad{% endif %}">Photo · {{ row.photo_source }}</span><span class="{% if row.description %}good{% else %}bad{% endif %}">{% if row.description %}Description ready{% else %}Description missing{% endif %}</span><span class="{% if row.ready %}good{% else %}warn{% endif %}">{% if row.ready %}Customer-ready{% else %}Review needed{% endif %}</span></div>
-<div class="market-admin-commerce"><small>MARKET PRICE</small><strong>{% if row.listing %}GHS {{ row.listing.market_price|floatformat:2 }}{% else %}Not configured{% endif %}</strong><span>{{ row.stock }} base unit{{ row.stock|pluralize }} in stock</span>{% if row.listing.featured %}<em>★ Featured</em>{% endif %}</div>
-<div class="market-admin-row-actions"><a class="button secondary" href="/products/{{ row.product.pk }}/edit/">Edit product</a>{% if row.listing and row.published %}<a class="button secondary" href="/market-catalog/{{ row.listing.pk }}/gallery/">Gallery</a>{% endif %}</div>
-</article>{% empty %}<div class="empty"><h3>No products match this Market view.</h3><p>Change the filters or search.</p></div>{% endfor %}</div>
-</section>{% endblock %}
+<section class="catalog-studio-hero">
+  <div>
+    <p class="eyebrow">MARKET MERCHANDISING</p>
+    <h2>Market Catalog Studio</h2>
+    <p>One place to see what customers can actually buy online. KOFAD inventory stays the source of stock; this screen controls presentation and publication.</p>
+  </div>
+  <div class="catalog-live-badge"><span></span><strong>{{ summary.published }} live</strong><small>customer-visible products</small></div>
+</section>
+
+<div class="catalog-studio-kpis">
+  <article><small>Total KOFAD products</small><strong>{{ summary.products }}</strong><span>Active + archived records</span></article>
+  <article class="success"><small>Published online</small><strong>{{ summary.published }}</strong><span>Visible to Market customers</span></article>
+  <article class="warning"><small>Hidden / not set up</small><strong>{{ summary.hidden }}</strong><span>Needs publication or setup</span></article>
+  <article><small>Featured</small><strong>{{ summary.featured }}</strong><span>Priority storefront placement</span></article>
+  <article><small>With a Market photo</small><strong>{{ summary.photos }}</strong><span>Uploaded or curated</span></article>
+</div>
+
+<section class="panel catalog-studio-panel">
+  <header class="catalog-studio-toolbar">
+    <form method="get" class="catalog-search">
+      <span aria-hidden="true">⌕</span>
+      <input name="q" value="{{ q }}" placeholder="Search product, SKU or category">
+      <input type="hidden" name="state" value="{{ selected_state }}">
+      <button class="button secondary">Search</button>
+    </form>
+    <nav aria-label="Catalog state">
+      <a href="/market-catalog/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'all' %}active{% endif %}">All</a>
+      <a href="/market-catalog/?state=published{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'published' %}active{% endif %}">Published</a>
+      <a href="/market-catalog/?state=hidden{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'hidden' %}active{% endif %}">Hidden</a>
+      <a href="/market-catalog/?state=incomplete{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_state == 'incomplete' %}active{% endif %}">Needs work</a>
+    </nav>
+  </header>
+
+  <div class="catalog-studio-list">
+  {% for row in rows %}
+    <article class="catalog-product-card {% if row.published %}is-live{% else %}is-hidden{% endif %}">
+      <div class="catalog-product-photo">
+        {% if row.listing.image_thumb %}<img src="/market/products/{{ row.listing.pk }}/image/thumb/" alt="">
+        {% elif row.listing.image_url %}<img src="{{ row.listing.image_url }}" alt="" referrerpolicy="no-referrer">
+        {% else %}<span><b>NO PHOTO</b><small>Add an image before publishing</small></span>{% endif %}
+      </div>
+
+      <div class="catalog-product-main">
+        <div class="catalog-product-kicker">
+          <span>{{ row.product.category|default:"Uncategorised" }}</span>
+          {% if row.published %}<b class="catalog-state live">● Live in Market</b>
+          {% elif row.listing %}<b class="catalog-state hidden">Hidden</b>
+          {% else %}<b class="catalog-state setup">Not set up</b>{% endif %}
+        </div>
+        <h3>{{ row.listing.display_name|default:row.product.name }}</h3>
+        <p>{{ row.product.sku }} · {{ row.product.base_unit }}{% if row.product.pack_size > 1 %} · {{ row.product.pack_name }} × {{ row.product.pack_size }}{% endif %}</p>
+
+        <div class="catalog-readiness">
+          <span class="{% if row.photo %}good{% else %}bad{% endif %}">Photo {% if row.photo %}✓{% else %}missing{% endif %}</span>
+          <span class="{% if row.description %}good{% else %}bad{% endif %}">Description {% if row.description %}✓{% else %}missing{% endif %}</span>
+          <span class="{% if row.priced %}good{% else %}bad{% endif %}">Price {% if row.priced %}✓{% else %}missing{% endif %}</span>
+        </div>
+        {% if row.visibility_reason %}<p class="catalog-visibility-reason"><strong>Why customers may not see it:</strong> {{ row.visibility_reason }}</p>{% endif %}
+      </div>
+
+      <div class="catalog-product-commerce">
+        <div><small>MARKET PRICE</small><strong>{% if row.listing and row.priced %}GHS {{ row.listing.market_price|floatformat:2 }}{% else %}Not configured{% endif %}</strong>{% if row.listing %}<span>{{ row.listing.selling_label }}</span>{% endif %}</div>
+        <div><small>LIVE STOCK</small><strong>{{ row.stock }}</strong><span>base unit{{ row.stock|pluralize }}</span></div>
+        {% if row.listing.featured %}<em>★ Featured placement</em>{% endif %}
+      </div>
+
+      <div class="catalog-product-actions">
+        <a class="button secondary" href="/products/{{ row.product.pk }}/">{% if row.listing %}Edit product & Market details{% else %}Set up for Market{% endif %}</a>
+        {% if row.listing %}
+          {% if row.published %}
+          <form method="post">{% csrf_token %}<input type="hidden" name="product" value="{{ row.product.pk }}"><input type="hidden" name="action" value="hide"><button class="text-button danger">Hide from Market</button></form>
+          <form method="post">{% csrf_token %}<input type="hidden" name="product" value="{{ row.product.pk }}"><input type="hidden" name="action" value="feature"><button class="text-button">{% if row.listing.featured %}Remove featured{% else %}★ Feature product{% endif %}</button></form>
+          <a class="text-link" href="/market-catalog/{{ row.listing.pk }}/gallery/">Gallery →</a>
+          {% else %}
+          <form method="post">{% csrf_token %}<input type="hidden" name="product" value="{{ row.product.pk }}"><input type="hidden" name="action" value="publish"><button class="button" {% if not row.photo or not row.priced or not row.product.active %}disabled title="Complete photo, price and active product setup first"{% endif %}>Publish to Market</button></form>
+          {% endif %}
+        {% endif %}
+      </div>
+    </article>
+  {% empty %}
+    <div class="empty"><h3>No products match this Market view.</h3><p>Change the filter or search another product.</p></div>
+  {% endfor %}
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav class="catalog-pagination" aria-label="Catalog pages">
+    {% if page_obj.has_previous %}<a href="?state={{ selected_state }}&q={{ q|urlencode }}&page={{ page_obj.previous_page_number }}">← Previous</a>{% endif %}
+    <span>Page <strong>{{ page_obj.number }}</strong> of {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} products</span>
+    {% if page_obj.has_next %}<a href="?state={{ selected_state }}&q={{ q|urlencode }}&page={{ page_obj.next_page_number }}">Next →</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}
