@@ -462,7 +462,8 @@ with sync_playwright() as p:
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
-    assert market_page.locator(".home-hero-v7").count() == 1
+    assert market_page.locator(".home-hero-v8").count() == 1
+    assert market_page.locator(".home-hero-products .home-hero-product").count() >= 1
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
@@ -473,6 +474,17 @@ with sync_playwright() as p:
     market_page.locator(".public-mobile-market").click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/")
     market_page.set_viewport_size({"width":1440,"height":1000})
+    first_market_title = market_page.locator(".shop-product-grid .commerce-card-body h3").first
+    first_market_title.wait_for()
+    assert float(first_market_title.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
+    market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
+    market_page.reload()
+    sort_select = market_page.locator(".shop-sort select")
+    assert sort_select.evaluate("el => getComputedStyle(el).backgroundColor") != "rgb(255, 255, 255)"
+    assert sort_select.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    market_page.screenshot(path=str(out / "market-dark-readable.png"), full_page=True)
+    market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
+    market_page.reload()
     market_page.locator(".shop-shell-account").click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/account/")
     market_page.locator(".shop-shell-orders").click()
@@ -542,4 +554,4 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     assert not errors, errors
     browser.close()
-print("Homepage hero/featured preview, true Market exit confirmation, full-screen assigned Customer Inbox, staff/customer mobile layouts, delivery map checkout, verified order IDs, sales checkout, debt payment, stock counts, transfers, and responsive checks passed.")
+print("Readable light/dark design system, live-product homepage hero, movable Approval Center, redesigned Customer Inbox and Market Catalog, responsive staff/customer layouts, delivery map checkout, verified order IDs, sales checkout, debt payment, stock counts and transfers passed.")
