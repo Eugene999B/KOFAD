@@ -18,7 +18,7 @@
     <section class="expense-funding-card">
       <div><p class="eyebrow">SOURCE OF FUNDS</p><h3>Where did this money come from?</h3><p class="muted">This determines cash-control treatment. It does not remove the expense from Accounting.</p></div>
       <div class="expense-form-grid">
-        <label>Funding source
+        <label for="expense-funding-source">Funding source</label>
           <select id="expense-funding-source" name="funding_source">
             <option value="today_sales_receipts">Today’s sales receipts</option>
             <option value="petty_cash">Petty cash</option>
@@ -29,16 +29,13 @@
             <option value="unpaid_credit">Unpaid / on credit</option>
             <option value="other">Other source</option>
           </select>
-        </label>
-        <label data-expense-method-wrap>Payment channel
-          <select id="expense-method" name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
-        </label>
-        <label>Daily Closing treatment
+        <label for="expense-method" data-expense-method-wrap>Payment channel</label>
+          <select id="expense-method" name="method" data-expense-method-control>{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+        <label for="expense-closing-treatment">Daily Closing treatment</label>
           <select id="expense-closing-treatment" name="affects_daily_closing">
             <option value="1">Deduct from today’s expected settlement</option>
             <option value="0">Accounting only · do not reduce today’s settlement</option>
           </select>
-        </label>
       </div>
       <label class="hidden" data-expense-funding-note>Funding / closing note
         <textarea name="funding_note" maxlength="500" placeholder="Explain the source of funds."></textarea>
