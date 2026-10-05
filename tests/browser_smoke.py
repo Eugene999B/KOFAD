@@ -1,4 +1,5 @@
 """Remote browser evidence: real login, navigation, checkout and narrow-screen overflow."""
+import base64
 import os
 import sys
 import time
@@ -408,6 +409,17 @@ with sync_playwright() as p:
         "value": browser_customer_session.session_key,
         "url": "http://127.0.0.1:8000",
     }])
+    osm_tile_requests = []
+    transparent_png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+
+    def serve_osm_tile(route):
+        osm_tile_requests.append(route.request)
+        route.fulfill(status=200, content_type="image/png", body=transparent_png)
+
+    market_page.route("https://tile.openstreetmap.org/**", serve_osm_tile)
+
     market_page.goto("http://127.0.0.1:8000/")
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
@@ -466,6 +478,16 @@ with sync_playwright() as p:
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
     assert market_page.locator("[data-location-map]").count() == 1
+    market_page.wait_for_timeout(250)
+    assert osm_tile_requests, "Checkout map did not request canonical OpenStreetMap tiles"
+    assert all(
+        request.url.startswith("https://tile.openstreetmap.org/")
+        for request in osm_tile_requests
+    )
+    assert all(
+        request.headers.get("referer") == "http://127.0.0.1:8000/"
+        for request in osm_tile_requests
+    ), "OSM tile requests must include an origin Referer"
     market_page.screenshot(path=str(out / "market-checkout-map-mobile.png"), full_page=True)
     fulfilment_select = market_page.locator("select[name='fulfilment']")
     assert fulfilment_select.input_value() == "delivery"
