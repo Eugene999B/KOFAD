@@ -136,7 +136,9 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertNotContains(guest, 'class="shop-shell-cart"')
         self.assertNotContains(guest, "<h1>All products</h1>", html=True)
 
-        self.customer_session()
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
         signed_in = self.client.get("/market/")
         self.assertEqual(signed_in.status_code, 200)
         self.assertContains(signed_in, 'class="shop-shell-header"')
@@ -237,6 +239,9 @@ class MarketPublicExperienceTests(MarketFixtures):
             product=hidden, enabled=False, price_source="retail_unit",
             image_data=b"x", image_thumb=b"x",
         )
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
         response = self.client.get("/market/")
         self.assertContains(response, self.product.name)
         self.assertNotContains(response, hidden.name)
@@ -669,8 +674,8 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertContains(response, 'data-google-map-id="map-id-123"')
         self.assertContains(response, "Google Maps + Places")
         csp = response["Content-Security-Policy"]
-        self.assertIn("maps.googleapis.com", csp)
-        self.assertIn("maps.gstatic.com", csp)
+        self.assertIn("https://*.googleapis.com", csp)
+        self.assertIn("https://*.gstatic.com", csp)
 
     @override_settings(GOOGLE_MAPS_SERVER_KEY="test-google-key")
     @patch("marketplace.services.requests.get")
