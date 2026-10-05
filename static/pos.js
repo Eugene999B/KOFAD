@@ -686,8 +686,7 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
-    smsPreferenceExplicit = false;
-    if (customerConsent) customerConsent.checked = true;
+    if (customerConsent && !smsPreferenceExplicit) customerConsent.checked = true;
     changed();
     updateConsentAvailability();
     persist();
@@ -822,9 +821,9 @@
 
   function updateConsentAvailability() {
     if (!customerConsent) return;
-    const available = hasAttachedCustomer();
-    customerConsent.disabled = !available;
-    if (available && !smsPreferenceExplicit) customerConsent.checked = true;
+    // Receipt SMS is an explicit user preference. Keep it interactive at all
+    // times; if no customer/phone is attached the backend simply ignores it.
+    customerConsent.disabled = false;
   }
 
   customerConsent?.addEventListener("change", () => {
