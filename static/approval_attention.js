@@ -35,6 +35,8 @@
   };
 
   if (launcher) {
+    launcher.draggable = false;
+    launcher.addEventListener("dragstart", event => event.preventDefault());
     launcher.addEventListener("pointerdown", event => {
       if (event.button !== 0) return;
       const rect = launcher.getBoundingClientRect();
