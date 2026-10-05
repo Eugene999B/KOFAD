@@ -151,6 +151,9 @@ html[data-theme="dark"] .market-admin-product{background:#0d2638!important;borde
 .approval-attention.is-dragging{transition:none!important;transform:none!important}
 @media(prefers-reduced-motion:reduce){.approval-attention.approval-new{animation:none!important}}
 
+/* Welcome is visual only; it must never block immediate staff interaction. */
+.login-welcome-overlay{pointer-events:none!important}
+
 /* Login readability and business-first visual hierarchy. */
 .login-header-meta{font-size:10.5px}
 .premium-login-story .story-copy{font-size:13px!important;line-height:1.65!important}
