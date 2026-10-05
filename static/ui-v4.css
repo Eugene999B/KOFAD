@@ -127,16 +127,27 @@ html[data-theme="dark"] .market-admin-product{background:#0d2638!important;borde
 
 /* Approval Center: important, but it must not cover work or flash constantly. */
 .approval-attention{
-  cursor:grab;
+  cursor:default;
   touch-action:none;
   user-select:none;
-  min-width:176px;
+  min-width:194px;
+  padding:6px!important;
+  gap:4px!important;
   box-shadow:0 14px 38px rgba(4,21,34,.25)!important;
 }
-.approval-attention:active{cursor:grabbing}
 .approval-attention.has-approvals{animation:none!important}
 .approval-attention.approval-new{animation:kofadApprovalNew .65s ease-in-out 3!important}
-.approval-drag-grip{font-size:14px;letter-spacing:-3px;opacity:.5;margin-left:-3px}
+.approval-drag-handle{
+  width:28px;height:46px;flex:none;border:0;border-radius:11px;background:rgba(255,255,255,.08);
+  color:#b9cad3;cursor:grab;touch-action:none;font-size:15px;font-weight:900;letter-spacing:-3px;
+}
+.approval-drag-handle:hover{background:rgba(255,255,255,.14);color:#fff}
+.approval-drag-handle:active{cursor:grabbing}
+.approval-attention-link{
+  min-width:0;flex:1;display:flex;align-items:center;gap:10px;padding:6px 7px;color:#fff!important;
+  text-decoration:none!important;border-radius:12px;
+}
+.approval-attention-link:hover{background:rgba(255,255,255,.06);color:#fff!important}
 .approval-attention.is-dragging{transition:none!important;transform:none!important}
 @media(prefers-reduced-motion:reduce){.approval-attention.approval-new{animation:none!important}}
 
