@@ -319,6 +319,8 @@ with sync_playwright() as p:
     admin_page.goto(f"http://127.0.0.1:8000/online-inbox/{browser_support.pk}/?status=waiting")
     assert "support-workspace-page" in (admin_page.get_attribute("body", "class") or "")
     assert admin_page.get_by_role("button", name="Accept chat", exact=True).count() >= 1
+    assert admin_page.locator(".support-waiting-callout").is_visible()
+    assert float(admin_page.locator(".support-queue-copy strong").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 11
     desk = admin_page.locator(".support-desk-v3")
     desk_box = desk.bounding_box()
     assert desk_box["y"] >= 0 and desk_box["y"] + desk_box["height"] <= 1000 + 2
