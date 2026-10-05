@@ -17,6 +17,7 @@ class Command(BaseCommand):
         delivery_updates = 0
         last_automation = 0.0
         last_delivery_sync = 0.0
+        last_recovery = None
 
         while True:
             close_old_connections()
@@ -36,11 +37,15 @@ class Command(BaseCommand):
                     self.stderr.write(f"SMS delivery-status check failed safely: {exc}")
                 last_delivery_sync = now
 
-            recover_stale()
+            # These records are only stale after five minutes. Avoid querying
+            # for them every second while preserving five-second receipt polling.
+            if last_recovery is None or now - last_recovery >= 30:
+                recover_stale()
+                last_recovery = now
 
             if not options["loop"]:
                 break
-            time.sleep(1)
+            time.sleep(5)
 
         self.stdout.write(
             f"Communication automation complete; delivery tracking updated {delivery_updates} SMS record(s)."

@@ -6,20 +6,6 @@ from xml.sax.saxutils import escape
 
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
-from docx import Document as WordDocument
-from docx.enum.section import WD_ORIENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape, portrait
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 COLUMNS = ["reference", "date", "kind", "party", "total", "paid", "balance"]
 CHARCOAL, COPPER, CREAM, LIGHT, WHITE = "171717", "B87333", "F6F2EA", "ECE8E1", "FFFFFF"
@@ -51,6 +37,9 @@ def excel_value(value):
 
 
 def shade_word(cell, colour):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
     tc_pr = cell._tc.get_or_add_tcPr()
     node = tc_pr.find(qn("w:shd"))
     if node is None:
@@ -73,6 +62,10 @@ def export(
     output = io.BytesIO()
 
     if format == "xlsx":
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
+
         book = Workbook()
         sheet = book.active
         sheet.title = (sheet_name or "Export")[:31]
@@ -157,6 +150,11 @@ def export(
         content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
     elif format == "docx":
+        from docx import Document as WordDocument
+        from docx.enum.section import WD_ORIENT
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches, Pt, RGBColor
+
         doc = WordDocument()
         section = doc.sections[0]
         section.orientation = WD_ORIENT.LANDSCAPE if len(headers) > 6 else WD_ORIENT.PORTRAIT
@@ -239,6 +237,12 @@ def export(
         content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     elif format == "pdf":
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape, portrait
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
         page_size = landscape(A4) if len(headers) > 6 else portrait(A4)
         styles = getSampleStyleSheet()
         body_style = ParagraphStyle("KofadBody", parent=styles["BodyText"], fontSize=6.6 if len(headers) > 6 else 7.4, leading=9)
