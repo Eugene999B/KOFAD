@@ -1,11 +1,25 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="commerce-home-hero commerce-home-hero-simple home-hero-v7">
-<div class="commerce-home-copy home-hero-copy-v7">
+<section class="home-hero-v8">
+<div class="home-hero-copy-v8">
 <div class="commerce-kicker"><span class="commerce-live-dot"></span> KOFAD MARKET</div>
 <h1>Shop KOPEX IMPEX<br><span>online with confidence.</span></h1>
-<p>Browse available products, order securely and choose delivery or pickup from one simple Market experience.</p>
+<p>Browse real products available in KOFAD, order securely, and choose delivery or pickup from one connected Market experience.</p>
 <div class="commerce-hero-actions"><a class="market-button primary commerce-primary" href="/market/">Explore the Market <span>→</span></a>{% if market_customer %}<a class="market-button ghost" href="/market/account/">My account</a>{% else %}<a class="market-button ghost" href="/market/access/">Sign in</a>{% endif %}</div>
-<div class="home-hero-trust"><span>Secure ordering</span><i></i><span>Delivery or pickup</span><i></i><span>Live KOFAD support</span></div>
+<div class="home-hero-trust"><span>Live product stock</span><i></i><span>Secure ordering</span><i></i><span>Delivery or pickup</span></div>
+</div>
+<div class="home-hero-products" aria-label="Products available in KOFAD Market">
+{% for listing in listings %}
+<a class="home-hero-product" href="/market/products/{{ listing.pk }}/">
+{% if listing.image_thumb %}<img src="/market/products/{{ listing.pk }}/image/thumb/" alt="{{ listing.display_name }}">
+{% elif listing.image_url %}<img src="{{ listing.image_url }}" alt="{{ listing.display_name }}" referrerpolicy="no-referrer">
+{% else %}<div class="home-hero-product-fallback">KOPEX IMPEX<br>Market product</div>{% endif %}
+<div class="home-hero-product-copy"><small>{{ listing.product.category|default:"KOFAD Market" }}</small><strong>{{ listing.display_name }}</strong><b>GHS {{ listing.market_price_value|floatformat:2 }}</b></div>
+</a>
+{% empty %}
+<div class="home-hero-product home-hero-product-fallback">Products from KOPEX IMPEX</div>
+<div class="home-hero-product home-hero-product-fallback">Connected stock and ordering</div>
+<div class="home-hero-product home-hero-product-fallback">Delivery or pickup</div>
+{% endfor %}
 </div>
 </section>
 
