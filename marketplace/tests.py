@@ -125,22 +125,25 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, 'href="/login/"')
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
-    def test_market_catalog_uses_dedicated_commerce_shell(self):
-        response = self.client.get("/market/")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="shop-shell-header"')
-        self.assertNotContains(response, 'aria-label="Search KOFAD Market"')
-        self.assertContains(response, "Hello, sign in")
-        self.assertContains(response, "<h1>All products</h1>", html=True)
-        self.assertContains(response, "shop-category-strip")
-        self.assertContains(response, "shop-product-grid")
-        self.assertNotContains(response, 'class="market-contact-link"')
-        self.assertNotContains(response, 'class="market-staff-link"')
-        self.assertNotContains(response, "storefront-account-panel")
-        self.assertNotContains(response, "storefront-head")
-        self.assertNotContains(response, "storefront-side-account")
-        self.assertNotContains(response, "Browse available products, compare prices")
-        self.assertNotContains(response, "From <b>GHS", html=True)
+    def test_market_guest_sees_visual_gateway_and_customer_sees_catalog(self):
+        guest = self.client.get("/market/")
+        self.assertEqual(guest.status_code, 200)
+        self.assertContains(guest, 'class="market-entry"')
+        self.assertContains(guest, "Sign in to explore")
+        self.assertContains(guest, 'class="market-auth-header"')
+        self.assertNotContains(guest, 'class="shop-shell-header"')
+        self.assertNotContains(guest, 'aria-label="Search KOFAD Market"')
+        self.assertNotContains(guest, 'class="shop-shell-cart"')
+        self.assertNotContains(guest, "<h1>All products</h1>", html=True)
+
+        self.customer_session()
+        signed_in = self.client.get("/market/")
+        self.assertEqual(signed_in.status_code, 200)
+        self.assertContains(signed_in, 'class="shop-shell-header"')
+        self.assertContains(signed_in, 'aria-label="Search KOFAD Market"')
+        self.assertContains(signed_in, "<h1>All products</h1>", html=True)
+        self.assertContains(signed_in, "shop-category-strip")
+        self.assertContains(signed_in, "shop-product-grid")
 
 
     def test_market_search_appears_only_after_customer_sign_in(self):
@@ -654,6 +657,21 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         )
         self.assertNotIn("{s}.tile.openstreetmap.org", map_js)
 
+    @override_settings(GOOGLE_MAPS_BROWSER_KEY="browser-google-key", GOOGLE_MAPS_MAP_ID="map-id-123")
+    def test_checkout_can_activate_google_maps_browser_experience(self):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): 1}
+        session.save()
+        response = self.client.get("/market/checkout/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-google-maps-key="browser-google-key"')
+        self.assertContains(response, 'data-google-map-id="map-id-123"')
+        self.assertContains(response, "Google Maps + Places")
+        csp = response["Content-Security-Policy"]
+        self.assertIn("maps.googleapis.com", csp)
+        self.assertIn("maps.gstatic.com", csp)
+
     @override_settings(GOOGLE_MAPS_SERVER_KEY="test-google-key")
     @patch("marketplace.services.requests.get")
     def test_location_search_uses_google_when_configured(self, get):
@@ -720,6 +738,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertContains(response, "5.603717")
 
     def test_market_search_uses_customer_facing_tags(self):
+        self.customer_session()
         self.listing.tags = "hydraulic excavator service filter maintenance"
         self.listing.save(update_fields=["tags"])
         response = self.client.get("/market/?q=maintenance")
