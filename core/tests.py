@@ -14,6 +14,7 @@ from django.db import close_old_connections, connection, connections, transactio
 from django.test import Client, TestCase, TransactionTestCase
 from django.utils import timezone
 
+from . import accounting_engine
 from . import services as s
 from .models import Access, Audit, Branch, Company, Document, Line, Movement, Party, Payment, Product, Stock
 
@@ -120,6 +121,65 @@ class BusinessTests(Fixtures, TestCase):
         self.assertEqual(Stock.objects.get(branch=self.branch,product=self.product).quantity,1440)
         self.assertEqual(doc.payments.get().direction,-1)
 
+    def test_purchase_updates_existing_stock_and_weighted_cost(self):
+        doc = s.post_trade(self.user, self.branch, {
+            "party": self.supplier.pk,
+            "items": [{"product": self.product.pk, "mode": "retail_pack", "quantity": 2, "price": "360"}],
+            "payments": [{"method": "bank", "amount": "720"}],
+        }, uuid.uuid4(), "purchase")
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, 264)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.cost, Decimal("20.91"))
+        self.assertEqual(doc.lines.get().unit_cost, Decimal("30.00"))
+
+    def test_purchase_can_create_new_product_and_receive_it_atomically(self):
+        doc = s.post_trade(self.user, self.branch, {
+            "party": self.supplier.pk,
+            "items": [{
+                "product": None,
+                "new_product": {
+                    "name": "New purchase filter",
+                    "sku": "NEW-FILTER-001",
+                    "category": "Filters",
+                    "base_unit": "piece",
+                    "pack_name": "box",
+                    "pack_size": 10,
+                    "reorder_level": 12,
+                    "retail_unit": "16.00",
+                    "wholesale_unit": "14.00",
+                },
+                "mode": "retail_pack",
+                "quantity": 3,
+                "price": "100.00",
+            }],
+            "payments": [{"method": "bank", "amount": "300.00"}],
+        }, uuid.uuid4(), "purchase")
+        product = Product.objects.get(sku="NEW-FILTER-001")
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=product).quantity, 30)
+        self.assertEqual(product.cost, Decimal("10.00"))
+        self.assertEqual(product.retail_unit, Decimal("16.00"))
+        self.assertEqual(doc.lines.get().product_id, product.pk)
+        self.assertEqual(doc.lines.get().unit_cost, Decimal("10.00"))
+
+        with self.assertRaises(ValidationError):
+            s.post_trade(self.user, self.branch, {
+                "party": self.supplier.pk,
+                "items": [{
+                    "new_product": {
+                        "name": "Rollback product",
+                        "sku": "ROLLBACK-NEW",
+                        "base_unit": "piece",
+                        "pack_name": "box",
+                        "pack_size": 1,
+                    },
+                    "mode": "retail_unit",
+                    "quantity": 1,
+                    "price": "50.00",
+                }],
+                "payments": [{"method": "cash", "amount": "60.00"}],
+            }, uuid.uuid4(), "purchase")
+        self.assertFalse(Product.objects.filter(sku="ROLLBACK-NEW").exists())
+
     def test_transfer_approval_dispatch_receive(self):
         op = s.request_operation(self.user,self.branch,{"kind":"transfer","product":self.product.pk,
             "quantity":12,"destination":self.other.pk,"reason":"Replenish warehouse"})
@@ -150,6 +210,56 @@ class BusinessTests(Fixtures, TestCase):
         s.post_expense(self.user,self.branch,{"amount":"20","method":"cash","note":"Transport expense"},uuid.uuid4())
         closing = s.submit_closing(self.user,self.branch,timezone.localdate(),{"cash":"-20"},"")
         self.assertEqual(closing.expected["cash"],"-20.00")
+
+    def test_expense_funding_separates_accounting_from_daily_closing(self):
+        today = timezone.localdate()
+        accounting_only = s.post_expense(self.user, self.branch, {
+            "amount": "25.00",
+            "method": "cash",
+            "note": "Fuel paid using earlier business cash",
+            "category": "fuel",
+            "funding_source": "prior_business_funds",
+            "affects_daily_closing": "0",
+        }, uuid.uuid4())
+        summary = s.closing_summary(self.branch, today)
+        self.assertEqual(summary["expenses_total"], Decimal("25.00"))
+        self.assertEqual(summary["expenses_accounting_only"], Decimal("25.00"))
+        self.assertEqual(summary["expenses_closing_deducted"], Decimal("0.00"))
+        self.assertEqual(summary["channel_net"]["cash"], Decimal("0.00"))
+        self.assertFalse(accounting_only.expense_affects_daily_closing)
+
+        owner_funded = s.post_expense(self.user, self.branch, {
+            "amount": "10.00",
+            "note": "Office item paid personally by owner",
+            "category": "office",
+            "funding_source": "owner_manager_funds",
+            "affects_daily_closing": "0",
+        }, uuid.uuid4())
+        unpaid = s.post_expense(self.user, self.branch, {
+            "amount": "7.00",
+            "note": "Utility charge still unpaid",
+            "category": "utilities",
+            "funding_source": "unpaid_credit",
+            "affects_daily_closing": "0",
+        }, uuid.uuid4())
+        self.assertEqual(owner_funded.payments.count(), 0)
+        self.assertEqual(unpaid.payments.count(), 0)
+        self.assertEqual(unpaid.paid, Decimal("0.00"))
+
+        entries = accounting_engine._document_entries(self.branch, today, today)
+        owner_entries = [row for row in entries if row["reference"] == owner_funded.reference]
+        unpaid_entries = [row for row in entries if row["reference"] == unpaid.reference]
+        self.assertTrue(any(row["account_code"] == "3000" and row["credit"] == Decimal("10.00") for row in owner_entries))
+        self.assertTrue(any(row["account_code"] == "2400" and row["credit"] == Decimal("7.00") for row in unpaid_entries))
+
+        with self.assertRaises(ValidationError):
+            s.post_expense(self.user, self.branch, {
+                "amount": "5.00",
+                "method": "cash",
+                "note": "Invalid closing treatment",
+                "funding_source": "prior_business_funds",
+                "affects_daily_closing": "1",
+            }, uuid.uuid4())
 
     def test_branch_scope_and_permissions(self):
         cashier = User.objects.create_user("cashier",password="cashier-long-password")
