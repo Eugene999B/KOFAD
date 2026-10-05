@@ -509,10 +509,12 @@ def send_otp(phone, purpose="register"):
 
 def verify_otp(phone, code, purpose="register"):
     phone = normalize_ghana_phone(phone)
-    # Accept codes copied from SMS clients that insert a space or dash.
-    code = re.sub(r"\D", "", str(code or ""))
-    if len(code) != 6:
+    # Accept common SMS formatting such as "123 456" or "123-456",
+    # but reject letters, extra digits and other ambiguous input.
+    raw_code = str(code or "").strip()
+    if not re.fullmatch(r"\d(?:[\s-]?\d){5}", raw_code):
         raise ValidationError("Enter the six-digit verification code.")
+    code = re.sub(r"[\s-]", "", raw_code)
     now = timezone.now()
 
     with transaction.atomic():
