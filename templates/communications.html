@@ -185,6 +185,7 @@
         <td><span class="pill">{{ row.channel|upper }}</span><small{% if row.channel == "sms" %} data-sms-status="{{ row.pk }}"{% endif %}>{{ row.status_label }}</small>{% if row.channel == "sms" %}<small class="comms-status-error{% if not row.last_error %} hidden{% endif %}" data-sms-error="{{ row.pk }}">{{ row.last_error }}</small>{% endif %}</td>
         <td>{{ row.created_at|date:"d M, H:i" }}</td>
         <td class="comms-row-action">
+          <div class="comms-row-actions">
           {% if row.channel == "whatsapp" and row.whatsapp_url %}
           <a class="button secondary comms-whatsapp-button" href="{{ row.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp</a>
           {% elif perms.core.send_messages and row.channel == "sms" %}
@@ -192,6 +193,10 @@
             {% elif row.status == "failed" or row.status == "undelivered" or row.status == "expired" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="retry">Retry</button></form>
             {% endif %}
           {% endif %}
+          {% if can_archive_messages %}
+          <form method="post" onsubmit="return confirm('Remove this {{ row.channel|upper }} item from Communications? Delivery/audit evidence will remain protected.')">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button danger" name="action" value="archive_message">Delete</button></form>
+          {% endif %}
+          </div>
         </td>
       </tr>
       {% empty %}<tr><td colspan="5"><div class="empty"><h3>No messages yet.</h3><p>Your SMS and WhatsApp activity will appear here.</p></div></td></tr>{% endfor %}
