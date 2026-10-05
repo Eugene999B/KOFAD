@@ -163,3 +163,75 @@ html[data-theme="dark"] .shop-product-grid .commerce-card-body>p{color:#b3c6d0!i
  .home-featured-grid .commerce-product-price strong{font-size:15px!important}
  .home-featured-grid .commerce-card-actions>a,.home-featured-grid .commerce-card-actions button{font-size:9.5px!important}
 }
+
+
+/* Lift legacy micro-copy across account, product, checkout, orders and returns. */
+:is(
+  .commerce-utility,.stage-top,.stage-order-row small,.commerce-service-strip>article>span,
+  .account-feature-pills span,.access-benefit-grid b,.access-benefit-grid span,
+  .access-security-note p,.access-next-list li,.access-next-list strong,.access-privacy,
+  .account-identity-card small,.account-identity-card em,.account-kpi-grid span,
+  .account-kpi-grid small,.account-section-head a,.account-active-orders small,
+  .account-history-list small,.account-active-orders i,.account-history-list i,
+  .account-history-list>a>span,.recent-purchase-grid span,.recent-purchase-grid small,
+  .account-empty span,.account-empty a,.account-security-link,.saved-address p,
+  .saved-address small,.account-muted,.support-account-card>p,.support-account-card>small,
+  .account-signout button,.commerce-breadcrumb,.commerce-photo-meta,.commerce-product-code,
+  .commerce-product-highlights li,.commerce-detail-price>span,.commerce-detail-price small,
+  .commerce-availability small,.commerce-buy-box label,.commerce-access-to-buy p,
+  .commerce-assurance-grid strong,.commerce-assurance-grid small,.order-summary-tabs span,
+  .order-history-search button,.order-status-filter a,.order-card-status small,
+  .order-card-main p,.order-card-main>span,.order-card-foot small,.order-card-foot i,
+  .support-live-chip,.support-new-thread strong,.support-new-thread small,
+  .support-thread-item strong,.support-thread-item small,.return-request-hero p,
+  .return-detail-hero p,.return-line-list small,.return-line-list label,
+  .return-policy-card li>b,.return-policy-card li strong,.return-policy-card li small,
+  .return-detail-line small,.return-detail-line>span,.return-evidence-grid strong,
+  .return-evidence-grid small,.return-status-card p,.delivery-eta-chip,
+  .delivery-update-list strong,.delivery-update-list p,.delivery-update-list small,
+  .delivery-update-list a,.delivery-driver-card span,.delivery-driver-card small,
+  .order-return-links strong,.order-return-links small,.order-return-links i,
+  .account-known-phone span,.account-known-phone a,.simple-access-card>p,
+  .simple-access-card label,.simple-access-back,.simple-access-links,
+  .simple-access-card .resend-form button,.contact-method-card>span,
+  .contact-method-card>small
+){font-size:10.5px!important;line-height:1.5!important}
+:is(
+  .commerce-kicker,.stage-number,.stage-account-strip span,.stage-account-strip strong,
+  .product-placeholder small,.catalog-customer-chip small,.catalog-customer-chip em,
+  .filter-rail-head span,.commerce-filter-rail nav a,.filter-support-box p,
+  .filter-support-box a,.catalog-refine-form label>span,.catalog-refine-form select,
+  .stock-filter span,.catalog-context-row span,.catalog-context-row>a,
+  .wishlist-v3-card>div:nth-child(2)>span,.wishlist-v3-card>div:nth-child(2) small,
+  .wishlist-v3-actions .market-button,.wishlist-remove,.returns-v3-list small,
+  .returns-v3-list p,.returns-v3-list>b,.returns-v3-list i,
+  .market-customer-id small,.account-v4-tile small,.account-v4-card-head a,
+  .account-v4-order small,.account-v4-profile small
+){font-size:10px!important;line-height:1.45!important}
+.commerce-checkout-page :is(
+  .checkout-v2-content>p:not(.market-eyebrow),.checkout-v2-submit span,
+  .cart-table-head,.commerce-cart-copy>span,.commerce-cart-copy small,
+  .commerce-cart-update span,.summary-row,.checkout-v2-items small,
+  .checkout-account-box small,.checkout-account-box span
+){font-size:10px!important}
+.commerce-checkout-page :is(.commerce-cart-copy strong,.checkout-v2-items strong,.checkout-account-box strong){font-size:11.5px!important}
+.order-v2-page :is(.order-v2-label small,.order-v2-hero>div:first-child>p,.order-v2-payment small,.order-v2-payment span,.order-v2-items small,.order-v2-items span,.order-v2-totals>div,.order-action-card>p:not(.market-eyebrow),.order-action-card>small){font-size:10px!important}
+.order-v2-page .order-v2-items strong{font-size:12px!important}
+.market-search-suggestions strong{font-size:11px!important}.market-search-suggestions small{font-size:9.5px!important}.market-search-suggestions b{font-size:10px!important}
+.contact-method-card>strong{font-size:13px!important}
+
+/* Customer authentication and account forms use the same dark-control policy. */
+html[data-theme="dark"] .market-body :is(input,select,textarea){
+  background:#0a2030!important;color:#f5f9fb!important;border-color:#355b70!important;color-scheme:dark!important
+}
+html[data-theme="dark"] .market-body select option,
+html[data-theme="dark"] .market-body select optgroup{background:#0a2030!important;color:#f5f9fb!important}
+html[data-theme="light"] .market-body :is(input,select,textarea){background:#fff!important;color:#10283d!important;border-color:#d2e0e8!important}
+html[data-theme="dark"] .contact-method-card,
+html[data-theme="dark"] .simple-access-card,
+html[data-theme="dark"] .account-v4-card,
+html[data-theme="dark"] .account-v4-tile{background:#0d2435!important;border-color:#2d5166!important;color:#edf5f8!important}
+html[data-theme="light"] .contact-method-card,
+html[data-theme="light"] .simple-access-card,
+html[data-theme="light"] .account-v4-card,
+html[data-theme="light"] .account-v4-tile{background:#fff!important;color:#10283d!important}
