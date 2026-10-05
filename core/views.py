@@ -98,8 +98,11 @@ def resolve_login_identifier(identifier):
 
 @sensitive_post_parameters("password")
 def login_view(request):
+    # The sign-in gateway is an explicit new staff session boundary. If a stale
+    # staff session reaches /login/ after the user has left the workspace, end it
+    # instead of silently restoring the previous account.
     if request.user.is_authenticated:
-        return redirect("dashboard")
+        logout(request)
     if request.session.get("market_customer_id"):
         from marketplace import services as market_services
         market_services.clear_customer_session(request)
