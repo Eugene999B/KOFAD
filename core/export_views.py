@@ -399,13 +399,21 @@ def _rows(request, dataset, branch, first, last):
             "business_date": doc.document_date or doc.created_at.date(),
             "supplier_reference": doc.external_reference,
             "balance": s.balance(doc) if doc.kind in ("sale", "purchase", "creditor_charge") else Decimal("0"),
+            "funding_source": doc.expense_funding_label if doc.kind == "expense" else "",
+            "daily_closing": (
+                "Deducts from Daily Closing" if doc.kind == "expense" and doc.expense_affects_daily_closing
+                else "Accounting only" if doc.kind == "expense"
+                else ""
+            ),
+            "funding_note": doc.expense_funding_note if doc.kind == "expense" else "",
             "note": doc.note,
         } for doc in docs]
         return rows, [
             ("reference", "Reference"), ("date", "Entered at"), ("business_date", "Business date"),
             ("type", "Type"), ("contact", "Contact"), ("supplier_reference", "Supplier reference"),
             ("staff", "Staff"), ("total", "Total"), ("paid", "Paid at posting"), ("balance", "Outstanding"),
-            ("note", "Note"),
+            ("funding_source", "Expense funding source"), ("daily_closing", "Daily Closing treatment"),
+            ("funding_note", "Funding note"), ("note", "Note"),
         ]
 
     if dataset == "movements":
