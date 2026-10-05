@@ -27,6 +27,15 @@ def digest(value):
     return salted_hmac("kofad-password-recovery", value, algorithm="sha256").hexdigest()
 
 
+def recovery_code(challenge_id):
+    value = salted_hmac(
+        "kofad-password-recovery-code",
+        str(challenge_id),
+        algorithm="sha256",
+    ).hexdigest()
+    return f"{int(value[:16], 16) % 1000000:06d}"
+
+
 def sms_ready():
     if not settings.SMS_ENABLED or settings.SMS_SANDBOX:
         return False
@@ -101,40 +110,74 @@ def forgot_password(request):
     ready = sms_ready()
     if request.method == "POST" and ready:
         username = request.POST.get("username", "").strip()[:150]
-        challenge_id = uuid.uuid4()
-        request.session["recovery_id"] = str(challenge_id)
         if username and consume_budget(username):
             users = list(User.objects.filter(username__iexact=username, is_active=True)[:2])
             if len(users) == 1:
                 user = users[0]
                 access, _ = Access.objects.get_or_create(user=user)
                 try:
-                    phone = normalize_phone(access.recovery_phone)
+                    normalized_phone = normalize_phone(access.recovery_phone)
                 except ValidationError:
-                    phone = ""
-                if phone:
-                    code = f"{secrets.randbelow(1000000):06d}"
+                    normalized_phone = ""
+                if normalized_phone:
+                    now = timezone.now()
                     with transaction.atomic():
                         user = User.objects.select_for_update().get(pk=user.pk)
                         current_access = Access.objects.select_for_update().get(pk=access.pk)
                         phone = current_access.recovery_phone
                         if not phone or not user.is_active:
+                            request.session.pop("recovery_id", None)
                             return redirect("reset_password")
-                        PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
-                        challenge = PasswordRecovery.objects.create(id=challenge_id, user=user, phone=phone,
-                            code_digest=digest(str(challenge_id)+":"+code), password_stamp=digest(user.password),
-                            expires_at=timezone.now()+timedelta(minutes=10))
+
+                        challenge = (
+                            PasswordRecovery.objects.select_for_update()
+                            .filter(
+                                user=user,
+                                used=False,
+                                expires_at__gt=now,
+                                password_stamp=digest(user.password),
+                            )
+                            .order_by("-created_at")
+                            .first()
+                        )
+                        reusable = bool(
+                            challenge
+                            and constant_time_compare(
+                                challenge.code_digest,
+                                digest(str(challenge.pk) + ":" + recovery_code(challenge.pk)),
+                            )
+                        )
+                        if not reusable:
+                            challenge = PasswordRecovery.objects.create(
+                                id=uuid.uuid4(),
+                                user=user,
+                                phone=phone,
+                                code_digest="",
+                                password_stamp=digest(user.password),
+                                expires_at=now + timedelta(minutes=10),
+                            )
+                            code = recovery_code(challenge.pk)
+                            challenge.code_digest = digest(str(challenge.pk) + ":" + code)
+                            challenge.save(update_fields=["code_digest"])
+                        else:
+                            code = recovery_code(challenge.pk)
+
                     try:
-                        result = get_provider(settings.SMS_PROVIDER).submit(phone,
+                        result = get_provider(settings.SMS_PROVIDER).submit(
+                            phone,
                             f"KOFAD password reset code: {code}. Expires in 10 minutes. Do not share this code.",
-                            settings.SMS_SENDER_ID, "", False)
-                        sent = result.status in ("accepted", "delivered")
+                            settings.SMS_SENDER_ID,
+                            "",
+                            False,
+                        )
+                        sent = result.status in ("accepted", "delivered", "unknown")
                     except Exception:
                         sent = False
                     PasswordRecovery.objects.filter(pk=challenge.pk).update(sent=sent)
-                    audit(None, None, "password.recovery_requested", user.pk, {"accepted":sent})
+                    request.session["recovery_id"] = str(challenge.pk)
+                    audit(None, None, "password.recovery_requested", user.pk, {"accepted": sent})
         return redirect("reset_password")
-    return render(request, "forgot_password.html", {"sms_ready":ready})
+    return render(request, "forgot_password.html", {"sms_ready": ready})
 
 
 @never_cache
