@@ -75,7 +75,7 @@ def health(request):
 def csrf_failure(request, reason=""):
     """Recover a stale staff sign-in form without weakening CSRF elsewhere."""
     if request.path == "/login/":
-        return redirect("login")
+        return redirect("dashboard" if request.user.is_authenticated else "login")
     return render(request, "403.html", status=403)
 
 
@@ -105,11 +105,11 @@ def resolve_login_identifier(identifier):
 
 @sensitive_post_parameters("password")
 def login_view(request):
-    # A valid staff session that reaches the sign-in URL is already authenticated.
-    # Actual zone exits POST to /logout/ before navigation; do not rotate the
-    # session/CSRF token again just because a stale tab revisits /login/.
+    # The sign-in gateway is an explicit new staff session boundary. If an
+    # authenticated user intentionally revisits /login/, start fresh; stale
+    # duplicate login POSTs are recovered by csrf_failure before reaching here.
     if request.user.is_authenticated:
-        return redirect("dashboard")
+        logout(request)
     if request.session.get("market_customer_id"):
         from marketplace import services as market_services
         market_services.clear_customer_session(request)
