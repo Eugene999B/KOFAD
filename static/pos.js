@@ -686,8 +686,6 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
-    smsPreferenceExplicit = false;
-    if (customerConsent) customerConsent.checked = true;
     changed();
     updateConsentAvailability();
     persist();
@@ -703,8 +701,6 @@
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
-    smsPreferenceExplicit = false;
-    if (customerConsent) customerConsent.checked = true;
     changed();
     updateConsentAvailability();
     persist();
@@ -716,7 +712,6 @@
     newCustomerFields?.classList.remove("hidden");
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
-    if (customerConsent) customerConsent.checked = true;
     updateConsentAvailability();
     customerName?.focus();
     persist();
