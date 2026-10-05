@@ -340,3 +340,94 @@ html[data-theme="dark"] .map-provider-badge.google{
   .market-entry-visual{min-height:340px}
   .market-entry-stack{height:315px}
 }
+
+
+/* Unified Market authentication flow */
+.premium-access-card .premium-auth-form{margin-top:22px}
+.premium-access-card .premium-auth-form>label{
+  display:block;
+  margin:14px 0 0!important;
+  color:#17384e!important;
+  font-size:12px!important;
+  line-height:1.35!important;
+  font-weight:760!important;
+}
+.premium-access-card .premium-auth-form>label:first-of-type{margin-top:0!important}
+.premium-access-card .premium-auth-form :is(input,select){
+  width:100%;
+  min-height:54px!important;
+  margin-top:7px!important;
+  padding:0 16px!important;
+  border:1px solid #cfdde5!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  color:#092239!important;
+  font-size:15px!important;
+  box-shadow:none!important;
+}
+.premium-access-card .premium-auth-form :is(input,select):focus{
+  outline:0!important;
+  border-color:#168b93!important;
+  box-shadow:0 0 0 4px rgba(19,140,148,.10)!important;
+}
+.premium-access-card .premium-auth-form .market-button{margin-top:18px!important}
+.premium-auth-notice{
+  margin:0 0 18px;
+  padding:11px 13px;
+  border:1px solid #c8e0dc;
+  border-radius:12px;
+  background:#f0f8f6;
+  color:#28685f;
+  font-size:11px;
+  line-height:1.5;
+}
+.premium-auth-notice.error{
+  background:#fff3f1;
+  border-color:#efcfca;
+  color:#96443e;
+}
+.premium-access-card .account-known-phone{
+  margin:0 0 15px!important;
+  background:#f5f8fa!important;
+  border-color:#dce6eb!important;
+}
+.premium-access-card .simple-access-links{
+  margin-top:20px!important;
+  font-size:11px!important;
+}
+.premium-access-card .simple-access-links a{color:#477184!important}
+.premium-access-card .resend-form{margin-top:13px!important}
+.premium-access-card .resend-form button{
+  border:0!important;
+  background:transparent!important;
+  color:#477184!important;
+  font-size:11px!important;
+  font-weight:720!important;
+  cursor:pointer;
+}
+html[data-theme="dark"] .premium-access-card .premium-auth-form>label{color:#dce5e9!important}
+html[data-theme="dark"] .premium-access-card .premium-auth-form :is(input,select){
+  background:#090f14!important;
+  border-color:#33414a!important;
+  color:#f5f8fa!important;
+}
+html[data-theme="dark"] .premium-access-card .premium-auth-form :is(input,select):focus{
+  border-color:#4ccfc8!important;
+  box-shadow:0 0 0 4px rgba(76,207,200,.10)!important;
+}
+html[data-theme="dark"] .premium-auth-notice{
+  background:#10211f;
+  border-color:#2f4f4b;
+  color:#a9e5de;
+}
+html[data-theme="dark"] .premium-auth-notice.error{
+  background:#2a1719;
+  border-color:#5d3434;
+  color:#f2b4ae;
+}
+html[data-theme="dark"] .premium-access-card .account-known-phone{
+  background:#0d151b!important;
+  border-color:#2d3942!important;
+}
+html[data-theme="dark"] .premium-access-card .simple-access-links a,
+html[data-theme="dark"] .premium-access-card .resend-form button{color:#9bc2c3!important}
