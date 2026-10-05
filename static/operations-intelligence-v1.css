@@ -1,0 +1,170 @@
+/* KOFAD Operations Intelligence v1
+   Debt clarity, blind-count results, intelligent purchasing and expense funding. */
+
+.transaction-row{cursor:pointer}
+.transaction-row:hover{background:color-mix(in srgb,var(--teal) 5%,transparent)}
+.transaction-row:focus-visible{outline:3px solid color-mix(in srgb,var(--teal) 34%,transparent);outline-offset:-3px}
+
+/* Debt desk: progressive account -> detail flow. */
+.debt-mobile-back{display:none}
+.debt-workspace{align-items:start}
+.debt-account-card{transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.debt-account-card:hover{transform:translateY(-1px);box-shadow:0 12px 30px rgba(8,31,48,.08)}
+.debt-account-card:focus-within{border-color:color-mix(in srgb,var(--teal) 55%,var(--line))}
+.debt-detail-empty{min-height:360px}
+.debt-invoice-row{transition:border-color .16s ease,background .16s ease}
+.debt-invoice-row:hover{border-color:color-mix(in srgb,var(--teal) 40%,var(--line))}
+
+/* Blind count: quantity-first input and automatic result comparison. */
+.verification-blind-notice{margin-bottom:16px}
+.blind-count-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.blind-count-item{
+  display:grid;grid-template-columns:minmax(0,1fr) 132px;align-items:center;gap:14px;
+  padding:14px 15px;border:1px solid var(--line);border-radius:15px;background:var(--white)
+}
+.blind-count-item>span:first-child{min-width:0}
+.blind-count-item strong,.blind-count-item small{display:block}
+.blind-count-item>span:first-child strong{overflow-wrap:anywhere}
+.blind-count-item>span:first-child small{margin-top:4px;color:var(--muted);font-size:11px}
+.blind-count-entry small{margin-bottom:6px;color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.blind-count-entry input{width:100%;min-height:46px;text-align:center;font-size:18px;font-weight:800}
+.verification-overall-note{display:block;margin-top:18px}
+.verification-overall-note small{display:block;margin:4px 0 8px;color:var(--muted);font-weight:500}
+.verification-submit-actions{margin-top:16px}
+.result-summary article{position:relative;overflow:hidden}
+.result-summary article span{display:block;margin-top:5px;color:var(--muted);font-size:11px}
+.result-summary .count-result-good{border-color:color-mix(in srgb,#2aa67d 35%,var(--line))}
+.result-summary .count-result-warn{border-color:color-mix(in srgb,#e3a82b 42%,var(--line))}
+.count-result-list{display:grid;gap:9px}
+.count-result-row{
+  display:grid;grid-template-columns:minmax(210px,1.5fr) repeat(3,minmax(90px,.58fr)) minmax(145px,.8fr);
+  gap:12px;align-items:center;padding:13px 15px;border:1px solid var(--line);border-radius:15px;background:var(--white)
+}
+.count-result-row.matched{border-left:4px solid #36a77f}
+.count-result-row.short{border-left:4px solid #dc5f55}
+.count-result-row.over{border-left:4px solid #e0aa39}
+.count-result-product strong,.count-result-product small,.count-result-row>div>small,.count-result-row>div>strong{display:block}
+.count-result-product small,.count-result-row>div>small{margin-top:3px;color:var(--muted);font-size:10px}
+.count-result-state{text-align:right}
+.count-result-state small{margin-top:5px!important}
+.verification-review{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}
+.verification-cancel{margin-top:18px}
+
+/* Existing landing-guide cards must remain readable in dark mode. */
+html[data-theme="dark"] .verification-guide article{
+  background:#11181e!important;border-color:#2d3942!important;color:#eef4f6!important;box-shadow:none!important
+}
+html[data-theme="dark"] .verification-guide article b{color:#f5f8fa!important}
+html[data-theme="dark"] .verification-guide article small{color:#9fb0bb!important}
+html[data-theme="dark"] .verification-guide article>strong{background:#302717!important;color:#f3c764!important}
+html[data-theme="dark"] .blind-count-item,
+html[data-theme="dark"] .count-result-row{
+  background:#10171d;border-color:#2d3942;color:#eef3f5
+}
+
+/* Purchasing: existing versus transactional new product. */
+.purchase-product-source{
+  margin:0 0 16px;padding:16px;border:1px solid var(--line);border-radius:17px;background:var(--white)
+}
+.purchase-source-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.purchase-source-head h3{margin:2px 0 5px}
+.purchase-source-switch{display:flex;gap:6px;padding:4px;border:1px solid var(--line);border-radius:13px;background:var(--soft)}
+.purchase-source-switch button{
+  min-height:38px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-weight:800;cursor:pointer
+}
+.purchase-source-switch button.active{background:var(--white);color:var(--ink);box-shadow:0 3px 12px rgba(8,31,48,.08)}
+.purchase-new-builder{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.purchase-new-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.purchase-new-grid.compact{grid-template-columns:repeat(3,minmax(0,1fr))}
+.purchase-new-grid label{min-width:0;margin:0}
+.purchase-new-commercial{margin:14px 0;padding:14px;border-radius:14px;background:var(--soft)}
+.purchase-new-commercial h4{margin:2px 0 10px}
+.purchase-selling-prices{margin:12px 0 15px;padding:12px 14px;border:1px solid var(--line);border-radius:13px}
+.purchase-selling-prices summary{cursor:pointer;font-weight:800}
+.purchase-selling-prices summary small{color:var(--muted);font-weight:600}
+.purchase-selling-prices[open] summary{margin-bottom:12px}
+html[data-theme="dark"] .purchase-product-source{background:#10171d;border-color:#2d3942}
+html[data-theme="dark"] .purchase-source-switch{background:#090f14;border-color:#303c46}
+html[data-theme="dark"] .purchase-source-switch button.active{background:#182128;color:#f3f7f8;box-shadow:none}
+html[data-theme="dark"] .purchase-new-commercial{background:#0c1217}
+html[data-theme="dark"] .purchase-selling-prices{border-color:#303c46}
+
+/* Finance: distinguish profitability from Daily Closing. */
+.finance-workspace{align-items:start}
+.expense-entry-panel form>label{display:block}
+.expense-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.expense-form-grid label{min-width:0;margin:0}
+.expense-funding-card{
+  margin:16px 0;padding:15px;border:1px solid color-mix(in srgb,var(--teal) 28%,var(--line));
+  border-radius:16px;background:color-mix(in srgb,var(--teal) 4%,var(--white))
+}
+.expense-funding-card h3{margin:2px 0 4px}
+.expense-funding-card .expense-form-grid{margin-top:12px}
+.expense-treatment-preview{
+  margin-top:12px;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--white)
+}
+.expense-treatment-preview strong,.expense-treatment-preview span{display:block}
+.expense-treatment-preview span{margin-top:3px;color:var(--muted);font-size:11px;line-height:1.5}
+.expense-treatment-preview.closing{border-color:#e4c46a;background:#fff9e8}
+.expense-treatment-preview.accounting{border-color:#9fd7d2;background:#eff9f7}
+html[data-theme="dark"] .expense-funding-card{background:#0d171b;border-color:#31504c}
+html[data-theme="dark"] .expense-treatment-preview{background:#0b1116;border-color:#303b45}
+html[data-theme="dark"] .expense-treatment-preview.closing{background:#271f11;border-color:#6c5727}
+html[data-theme="dark"] .expense-treatment-preview.accounting{background:#10201e;border-color:#31504c}
+
+@media(max-width:900px){
+  .blind-count-grid{grid-template-columns:minmax(0,1fr)}
+  .purchase-new-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .count-result-row{grid-template-columns:minmax(180px,1.25fr) repeat(3,minmax(72px,.55fr));}
+  .count-result-state{grid-column:1/-1;text-align:left}
+}
+
+@media(max-width:680px){
+  /* Debt: show one mental layer at a time. */
+  .debt-workspace{display:block!important}
+  .debt-workspace:not(.has-selection) .debt-detail-pane{display:none!important}
+  .debt-workspace.has-selection .debt-account-pane{display:none!important}
+  .debt-workspace.has-selection .debt-detail-pane{display:block!important}
+  .debt-mobile-back{
+    display:inline-flex;align-items:center;min-height:38px;margin:0 0 12px;color:var(--teal);font-size:12px;font-weight:800
+  }
+  .debt-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  .debt-metrics article{min-width:0!important;padding:12px!important}
+  .debt-searchbar{grid-template-columns:minmax(0,1fr)!important}
+  .debt-searchbar button{width:100%!important}
+  .debt-filter-row{overflow-x:auto;flex-wrap:nowrap!important;padding-bottom:2px}
+  .debt-filter-row a{flex:0 0 auto}
+  .debt-result-heading{display:block!important}
+  .debt-result-heading p{margin-top:4px}
+  .debt-invoice-row{padding:14px!important}
+  .debt-invoice-main,.debt-invoice-balance{min-width:0}
+  .debt-detail-pane{min-width:0}
+
+  .blind-count-item{grid-template-columns:minmax(0,1fr) 105px;padding:12px}
+  .count-result-list{gap:10px}
+  .count-result-row{
+    grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:13px
+  }
+  .count-result-product{grid-column:1/-1;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  .count-result-state{grid-column:1/-1;padding-top:4px}
+  .verification-summary.result-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .verification-submit-actions{display:grid!important;grid-template-columns:1fr!important}
+  .verification-submit-actions .button{width:100%!important}
+  .verification-guide{grid-template-columns:1fr!important}
+  .verification-guide article{min-width:0!important}
+
+  .purchase-source-head{display:grid;grid-template-columns:minmax(0,1fr)}
+  .purchase-source-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .purchase-new-grid,.purchase-new-grid.compact{grid-template-columns:minmax(0,1fr)}
+  .purchase-new-builder>.button{width:100%}
+
+  .expense-form-grid{grid-template-columns:minmax(0,1fr)}
+  .expense-funding-card{padding:13px}
+}
+
+@media(max-width:390px){
+  .blind-count-item{grid-template-columns:minmax(0,1fr) 92px;gap:9px}
+  .blind-count-entry input{min-height:44px;font-size:16px}
+  .verification-summary.result-summary{grid-template-columns:minmax(0,1fr)!important}
+  .debt-metrics{grid-template-columns:minmax(0,1fr)!important}
+}
