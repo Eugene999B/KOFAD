@@ -142,7 +142,8 @@ with sync_playwright() as p:
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
     assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
     assert page.locator('img[src$="/static/brand/kofad-emblem.png"]').count() >= 1
-    assert page.get_by_text("KOPEX", exact=True).count() >= 1
+    assert page.locator(".brand-wordmark").first.get_by_text("KOFAD", exact=True).count() >= 1
+    assert page.get_by_text("KOPEX", exact=True).count() == 0
     page.get_by_role("button", name="Show password", exact=True).click()
     assert page.locator("#password").get_attribute("type") == "text"
     page.get_by_role("button", name="Hide password", exact=True).click()
@@ -173,6 +174,11 @@ with sync_playwright() as p:
     assert page.locator("#open-payment").count() == 0
     assert page.evaluate("getComputedStyle(document.body).overflow !== 'hidden'")
     assert counter_panel.evaluate("el => !['auto','scroll','hidden'].includes(getComputedStyle(el).overflow)")
+    receipt_sms_choice = page.locator("#customer-consent")
+    assert receipt_sms_choice.is_enabled(), "Receipt SMS choice must remain user-toggleable"
+    assert receipt_sms_choice.is_checked(), "Receipt SMS should start checked on every new sale"
+    receipt_sms_choice.uncheck()
+    assert not receipt_sms_choice.is_checked(), "Cashier must be able to turn receipt SMS off before choosing a customer"
     page.locator("#product-query").fill("Classic leather")
     page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
     first_product = page.locator(".search-result-card").filter(has_text="Classic leather sandals")
@@ -191,7 +197,10 @@ with sync_playwright() as p:
     assert page.locator("#cart-count").inner_text() == "2 lines"
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
-    assert page.locator("#customer-consent").is_checked(), "Receipt SMS should default on for an attached customer"
+    assert receipt_sms_choice.is_enabled()
+    assert not receipt_sms_choice.is_checked(), "Selecting a customer must preserve the cashier's SMS choice"
+    page.get_by_role("button", name="Exact", exact=True).click()
+    assert not receipt_sms_choice.is_checked(), "Payment changes must not force receipt SMS back on"
     page.locator("#checkout-panel").scroll_into_view_if_needed()
     assert page.locator("#single-payment-value").is_visible()
     assert page.locator("#single-payment-value").input_value() == page.locator("#total").inner_text()
