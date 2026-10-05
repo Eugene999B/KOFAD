@@ -66,6 +66,9 @@
   const purchaseReference = document.querySelector("#purchase-reference");
   const purchaseDocumentDate = document.querySelector("#purchase-document-date");
   const purchaseNote = document.querySelector("#purchase-note");
+  const purchaseSourceButtons = [...document.querySelectorAll("[data-purchase-source]")];
+  const purchaseNewBuilder = document.querySelector("#purchase-new-builder");
+  const purchaseAddNewProduct = document.querySelector("#purchase-add-new-product");
   const paymentPlan = document.querySelector("#payment-plan");
   const creditFields = document.querySelector("#credit-fields");
   const dueDate = document.querySelector("#due-date");
@@ -343,9 +346,110 @@
     });
   }
 
+  function optionalMoney(id) {
+    const value = document.querySelector(id)?.value.trim() || "";
+    if (!value) return null;
+    cents(value);
+    return value;
+  }
+
+  function addNewPurchaseProduct() {
+    if (!purchase) return;
+    const name = document.querySelector("#purchase-new-name")?.value.trim() || "";
+    const sku = document.querySelector("#purchase-new-sku")?.value.trim().toUpperCase() || "";
+    const barcode = document.querySelector("#purchase-new-barcode")?.value.trim() || "";
+    const category = document.querySelector("#purchase-new-category")?.value.trim() || "";
+    const baseUnit = document.querySelector("#purchase-new-base-unit")?.value.trim() || "piece";
+    const packName = document.querySelector("#purchase-new-pack-name")?.value.trim() || "carton";
+    const packSize = Number(document.querySelector("#purchase-new-pack-size")?.value || 1);
+    const reorderLevel = Number(document.querySelector("#purchase-new-reorder")?.value || 0);
+    const mode = document.querySelector("#purchase-new-mode")?.value || "retail_unit";
+    const quantity = Number(document.querySelector("#purchase-new-quantity")?.value || 0);
+    const price = document.querySelector("#purchase-new-cost")?.value.trim() || "";
+
+    if (name.length < 2) throw new Error("Enter the new product name.");
+    if (!/^[A-Z0-9][A-Z0-9._/-]{1,39}$/.test(sku)) {
+      throw new Error("Enter a unique SKU using letters, numbers, dot, dash, slash or underscore.");
+    }
+    if (!Number.isInteger(packSize) || packSize < 1 || packSize > 1000000) {
+      throw new Error("Units per pack must be a whole number between 1 and 1,000,000.");
+    }
+    if (!Number.isInteger(reorderLevel) || reorderLevel < 0 || reorderLevel > 1000000000) {
+      throw new Error("Reorder level must be a valid whole number.");
+    }
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000000) {
+      throw new Error("Purchase quantity must be a whole number between 1 and 1,000,000.");
+    }
+    if (mode === "retail_pack" && packSize <= 1) {
+      throw new Error("Set units per pack above 1 before buying full packs.");
+    }
+    cents(price);
+    const newProduct = {
+      name, sku, barcode, category,
+      base_unit: baseUnit,
+      pack_name: packName,
+      pack_size: packSize,
+      reorder_level: reorderLevel,
+      retail_unit: optionalMoney("#purchase-new-retail-unit"),
+      retail_pack: optionalMoney("#purchase-new-retail-pack"),
+      wholesale_unit: optionalMoney("#purchase-new-wholesale-unit"),
+      wholesale_pack: optionalMoney("#purchase-new-wholesale-pack"),
+    };
+    if (cart.some(line => line.newProduct?.sku === sku)) {
+      throw new Error("This new SKU is already in the current purchase.");
+    }
+    const factor = mode.endsWith("pack") ? packSize : 1;
+    cart.push({
+      product: null,
+      newProduct,
+      name,
+      mode,
+      quantity,
+      factor,
+      price,
+      listPrice: price,
+      discount: "0",
+      packName,
+      baseUnit,
+    });
+    changed();
+    render();
+    [
+      "#purchase-new-name","#purchase-new-sku","#purchase-new-barcode","#purchase-new-category",
+      "#purchase-new-cost","#purchase-new-retail-unit","#purchase-new-retail-pack",
+      "#purchase-new-wholesale-unit","#purchase-new-wholesale-pack"
+    ].forEach(selector => {
+      const node = document.querySelector(selector);
+      if (node) node.value = "";
+    });
+    const qty = document.querySelector("#purchase-new-quantity");
+    if (qty) qty.value = "1";
+    document.querySelector("#purchase-new-name")?.focus();
+  }
+
   const productGrid = document.querySelector("#catalog");
   const catalogStatus = document.querySelector("#catalog-status");
   const productQuery = document.querySelector("#product-query");
+
+  purchaseSourceButtons.forEach(button => button.addEventListener("click", () => {
+    const source = button.dataset.purchaseSource;
+    purchaseSourceButtons.forEach(item => item.classList.toggle("active", item === button));
+    purchaseNewBuilder?.classList.toggle("hidden", source !== "new");
+    document.querySelector(".sale-search-shell")?.classList.toggle("hidden", source === "new");
+    productGrid?.classList.toggle("hidden", source === "new");
+    catalogStatus?.classList.toggle("hidden", source === "new");
+    if (source === "new") document.querySelector("#purchase-new-name")?.focus();
+    else productQuery?.focus();
+  }));
+  purchaseAddNewProduct?.addEventListener("click", () => {
+    try {
+      clearError();
+      addNewPurchaseProduct();
+    } catch (error) {
+      fail(error.message);
+    }
+  });
+
   let openComposerId = null;
   let searchTimer = null;
   let searchSerial = 0;
@@ -992,8 +1096,9 @@
 
     return {
       kind: root.dataset.kind,
-      items: cart.map(({product, mode, quantity, price, discount}) => ({
+      items: cart.map(({product, newProduct, mode, quantity, price, discount}) => ({
         product, mode, quantity,
+        ...(newProduct ? {new_product: newProduct} : {}),
         ...(purchase || allowPriceOverrides ? {price} : {}),
         ...(!purchase && allowDiscounts ? {discount: discount || "0"} : {})
       })),

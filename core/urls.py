@@ -17,6 +17,7 @@ urlpatterns = [
     path("forgot-password/code/", accounts.reset_password, name="reset_password"),
     path("stock-counts/", count_views.index, name="stock_counts"),
     path("stock-counts/<uuid:pk>/", count_views.detail, name="stock_count"),
+    path("stock-counts/<uuid:pk>/export/<str:format>/", count_views.export_count, name="stock_count_export"),
     path("sms/callback/<uuid:attempt_id>/", callback, name="sms_callback"),
     path("sms/delivery/", v_sms_delivery_callback, name="sms_delivery_callback"),
     path("whatsapp/webhook/", whatsapp_views.webhook, name="whatsapp_webhook"),

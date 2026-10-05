@@ -21,7 +21,7 @@ class CountTests(Fixtures, TestCase):
 
     def submit(self, count, quantity="235"):
         return counts.save_count(self.user, self.branch, count.pk,
-            {str(line.pk): (quantity, "Shelf checked") for line in count.lines.all()}, "Aisle one", True)
+            {str(line.pk): (quantity, "") for line in count.lines.all()}, "Aisle one", True)
 
     def test_blind_count_approval_posts_once(self):
         count = self.start()
@@ -137,13 +137,27 @@ class CountTests(Fixtures, TestCase):
         self.assertNotContains(response, ">240<")
         line = count.lines.get()
         response = self.client.post(f"/stock-counts/{count.pk}/", {
-            "action": "submit", f"quantity_{line.pk}": "235", f"reason_{line.pk}": "Shelf checked"})
+            "action": "submit", f"quantity_{line.pk}": "235"})
         self.assertEqual(response.status_code, 302)
-        self.assertContains(self.client.get(f"/stock-counts/{count.pk}/"), ">240<")
+        result_page = self.client.get(f"/stock-counts/{count.pk}/")
+        self.assertContains(result_page, ">240<")
+        self.assertContains(result_page, "Matches system")
+        self.assertContains(result_page, "Differences")
+        self.assertContains(result_page, "Short")
+        self.assertNotContains(result_page, "Observation")
+        for format, content_type in [
+            ("csv", "text/csv"),
+            ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            ("pdf", "application/pdf"),
+        ]:
+            exported = self.client.get(f"/stock-counts/{count.pk}/export/{format}/")
+            self.assertEqual(exported.status_code, 200)
+            self.assertTrue(exported["Content-Type"].startswith(content_type))
         self.authenticate_client(self.reviewer)
         response = self.client.post(f"/stock-counts/{count.pk}/", {"action": "approve", "review_note": "Recount verified"})
         self.assertEqual(response.status_code, 302)
-        self.assertContains(self.client.get(f"/stock-counts/{count.pk}/"), "approved")
+        self.assertContains(self.client.get(f"/stock-counts/{count.pk}/"), "Approved")
 
 
 class CountConcurrencyTests(Fixtures, TransactionTestCase):
@@ -153,7 +167,7 @@ class CountConcurrencyTests(Fixtures, TransactionTestCase):
     def test_two_reviewers_post_only_one_adjustment(self):
         count = counts.start_count(self.user, self.branch, uuid.uuid4())
         counts.save_count(self.user, self.branch, count.pk,
-            {str(count.lines.get().pk): ("235", "Shelf checked")}, submit=True)
+            {str(count.lines.get().pk): ("235", "")}, submit=True)
         def approve():
             close_old_connections()
             try:

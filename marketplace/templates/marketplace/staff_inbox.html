@@ -40,7 +40,9 @@
 </header>
 
 {% if conversation.status == 'closed' %}
-<div class="support-ended-v3"><span>✓</span><h3>Chat closed</h3><p>The conversation content and attachments have been cleared. A new enquiry starts a fresh chat.</p>{% if conversation.closed_reason == 'customer_inactive' %}<small>Closed automatically after 24 hours without a customer reply.</small>{% elif conversation.closed_at %}<small>Closed {{ conversation.closed_at|date:"d M Y · H:i" }}</small>{% endif %}</div>
+<div class="support-ended-v3"><span>✓</span><h3>Chat closed</h3><p>The conversation content and attachments have been cleared. A new enquiry starts a fresh chat.</p>{% if conversation.closed_reason == 'customer_inactive' %}<small>Closed automatically after 24 hours without a customer reply.</small>{% elif conversation.closed_at %}<small>Closed {{ conversation.closed_at|date:"d M Y · H:i" }}</small>{% endif %}
+{% if perms.core.manage_company %}<form method="post" class="support-delete-thread" onsubmit="return confirm('Delete this closed conversation from Customer Inbox? Its message content is already cleared and the deletion will be recorded in audit history.');">{% csrf_token %}<button class="support-action danger" name="action" value="delete">Delete conversation</button></form>{% endif %}
+</div>
 {% else %}
 <div class="support-live-status" data-support-agent-state>{% if conversation.assigned_to %}<span class="online"></span><strong>{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.username }}</strong> is connected to this customer{% else %}<span class="waiting"></span><strong>Waiting for an agent</strong> · Accept the chat before replying{% endif %}</div>
 <div class="staff-message-stream support-message-stream support-stream-v3{% if not conversation.assigned_to %} is-waiting{% endif %}" data-live-thread data-conversation="{{ conversation.pk }}" data-side="staff" data-status="{{ conversation.status }}" data-agent="{% if conversation.assigned_to %}{{ conversation.assigned_to.get_full_name|default:conversation.assigned_to.username }}{% endif %}" data-last-message="{% with last=conversation.messages.last %}{{ last.pk|default:0 }}{% endwith %}">

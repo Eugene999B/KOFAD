@@ -1,15 +1,92 @@
 {% extends "base.html" %}
-{% block actions %}<a class="button secondary" href="{% url 'stock_counts' %}">All verifications</a>{% if count.status == "submitted" %}<a class="button secondary" href="{% url 'approval_center' %}">Approval Center</a>{% endif %}{% endblock %}
+{% block actions %}
+<div class="actions">
+  <a class="button secondary" href="{% url 'stock_counts' %}">All verifications</a>
+  {% if count.status == "submitted" %}<a class="button secondary" href="{% url 'approval_center' %}">Approval Center</a>{% endif %}
+  {% if count.status != "draft" %}
+  <a class="button secondary" href="{% url 'stock_count_export' count.pk 'pdf' %}">PDF</a>
+  <a class="button secondary" href="{% url 'stock_count_export' count.pk 'xlsx' %}">Excel</a>
+  <a class="button secondary" href="{% url 'stock_count_export' count.pk 'docx' %}">Word</a>
+  <a class="button secondary" href="{% url 'stock_count_export' count.pk 'csv' %}">CSV</a>
+  {% endif %}
+</div>
+{% endblock %}
 {% block content %}
-<section class="hero-panel"><div><p class="eyebrow">INVENTORY VERIFICATION</p><h2>{{ count.scope|default:"All active products" }}</h2><p>{{ count.created_by }} · {{ count.created_at|date:"d M Y, H:i" }} · <span class="pill">{{ count.status|title }}</span><span class="sr-only">{{ count.status }}</span></p></div>{% if count.status != "draft" %}<div class="verification-exposure"><small>Variance exposure</small><strong>{{ company.currency }} {{ variance_value|floatformat:2 }}</strong><span>{{ exception_count }} exception line{{ exception_count|pluralize }}</span></div>{% endif %}</section>
-{% if count.status != "draft" %}<div class="verification-summary"><article><small>Absolute variance units</small><strong>{{ variance_units }}</strong></article><article><small>Exception products</small><strong>{{ exception_count }}</strong></article><article><small>Value exposure</small><strong>{{ company.currency }} {{ variance_value|floatformat:2 }}</strong></article><article><small>Control status</small><strong>{{ count.status|title }}</strong></article></div>{% endif %}
-<section class="panel">
-{% if editable %}<div class="notice"><strong>Blind verification:</strong> system quantities remain hidden until you submit. Count physical base units and record useful observations, especially where the shelf looks abnormal.</div><form method="post">{% csrf_token %}{% endif %}
-<div class="table-wrap"><table><thead><tr><th>Product</th><th>Physical count</th>{% if count.status != 'draft' %}<th>System at start</th><th>Variance</th><th>Value exposure</th><th>Risk</th>{% endif %}<th>Observation</th></tr></thead><tbody>
-{% for line in lines %}<tr class="{% if line.risk == 'high' %}verification-high{% elif line.risk == 'medium' %}verification-medium{% endif %}"><td><strong>{{ line.product.name }}</strong><small>{{ line.product.sku }} · {{ line.product.base_unit }}</small></td><td>{% if editable %}<input aria-label="Count {{ line.product.sku }}" name="quantity_{{ line.pk }}" type="number" min="0" max="2000000000" step="1" value="{{ line.counted|default_if_none:'' }}">{% else %}{{ line.counted|default_if_none:"—" }}{% endif %}</td>{% if count.status != 'draft' %}<td>{{ line.expected }}</td><td><strong>{{ line.variance|default_if_none:"—" }}</strong></td><td>{{ company.currency }} {{ line.variance_value|floatformat:2 }}</td><td><span class="pill">{{ line.risk|title }}</span></td>{% endif %}<td>{% if editable %}<input aria-label="Observation {{ line.product.sku }}" name="reason_{{ line.pk }}" maxlength="240" value="{{ line.reason }}" placeholder="Shelf checked, sealed cartons counted…">{% else %}{{ line.reason|default:"—" }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
-{% if editable %}<label>Verification note<textarea name="note" maxlength="2000">{{ count.note }}</textarea></label>{% if owner_direct %}<label class="check-row owner-direct-choice"><input type="checkbox" name="owner_direct" value="1"> Post immediately under owner authority instead of waiting for independent approval</label>{% endif %}<div class="actions"><button class="button secondary" name="action" value="save">Save progress</button><button class="button" name="action" value="submit">Submit count</button></div></form>{% else %}<p>{{ count.note }}</p>{% endif %}
-{% if can_review %}<div class="verification-review"><h2>Review inventory exceptions</h2><p>Approval posts each variance once. KOFAD blocks posting if stock moved after the snapshot, forcing a fresh verification instead of applying stale corrections.</p><form method="post">{% csrf_token %}{% if owner_direct %}<input type="hidden" name="owner_direct" value="1">{% endif %}<label>Review note<textarea name="review_note" required minlength="5" maxlength="2000" placeholder="Independent recount / evidence reviewed…"></textarea></label><div class="actions"><button class="button" name="action" value="approve">Approve and post variances</button><button class="button secondary danger" name="action" value="reject">Reject verification</button></div></form></div>{% endif %}
-{% if count.created_by_id == request.user.pk and count.status == 'draft' %}<form method="post">{% csrf_token %}<button class="text-button danger" name="action" value="cancel">Cancel draft verification</button></form>{% endif %}
+<section class="hero-panel verification-hero">
+  <div>
+    <p class="eyebrow">INVENTORY VERIFICATION</p>
+    <h2>{{ count.scope|default:"All active products" }}</h2>
+    <p>{{ count.created_by }} · {{ count.created_at|date:"d M Y, H:i" }} · <span class="pill">{{ count.status|title }}</span></p>
+  </div>
+  {% if count.status != "draft" %}
+  <div class="verification-exposure">
+    <small>Variance exposure</small>
+    <strong>{{ company.currency }} {{ variance_value|floatformat:2 }}</strong>
+    <span>{{ exception_count }} product{{ exception_count|pluralize }} need{{ exception_count|pluralize:"s," }} attention</span>
+  </div>
+  {% endif %}
+</section>
+
+{% if count.status != "draft" %}
+<div class="verification-summary result-summary">
+  <article class="count-result-good"><small>Matches system</small><strong>{{ matched_count }}</strong><span>No adjustment needed</span></article>
+  <article class="count-result-warn"><small>Differences</small><strong>{{ exception_count }}</strong><span>{{ shortage_count }} short · {{ excess_count }} over</span></article>
+  <article><small>Absolute variance</small><strong>{{ variance_units }}</strong><span>Base units</span></article>
+  <article><small>Value exposure</small><strong>{{ company.currency }} {{ variance_value|floatformat:2 }}</strong><span>At current cost</span></article>
+</div>
+{% endif %}
+
+<section class="panel verification-workspace">
+{% if editable %}
+  <div class="notice verification-blind-notice">
+    <strong>Blind count.</strong>
+    Enter only what you physically counted. KOFAD keeps the system quantity hidden until you submit the full sheet.
+  </div>
+  <form method="post">{% csrf_token %}
+    <div class="blind-count-grid">
+      {% for line in lines %}
+      <label class="blind-count-item">
+        <span><strong>{{ line.product.name }}</strong><small>{{ line.product.sku }} · {{ line.product.base_unit }}{% if line.product.pack_size > 1 %} · {{ line.product.pack_name }} × {{ line.product.pack_size }}{% endif %}</small></span>
+        <span class="blind-count-entry"><small>Physical count</small><input aria-label="Count {{ line.product.sku }}" name="quantity_{{ line.pk }}" type="number" min="0" max="2000000000" step="1" value="{{ line.counted|default_if_none:'' }}" inputmode="numeric" required></span>
+      </label>
+      {% endfor %}
+    </div>
+    <label class="verification-overall-note">Overall verification note <small>Optional — use this for anything important about the whole count.</small><textarea name="note" maxlength="2000" placeholder="Example: counted after closing; sealed cartons verified.">{{ count.note }}</textarea></label>
+    {% if owner_direct %}<label class="check-row owner-direct-choice"><input type="checkbox" name="owner_direct" value="1"> Post immediately under owner authority instead of waiting for independent approval</label>{% endif %}
+    <div class="actions verification-submit-actions"><button class="button secondary" name="action" value="save">Save progress</button><button class="button" name="action" value="submit">Submit & compare with system</button></div>
+  </form>
+{% else %}
+  <div class="section-heading verification-result-heading">
+    <div><h2>Count result</h2><p class="muted">KOFAD compared the submitted physical quantity with the locked system snapshot.</p></div>
+  </div>
+  <div class="count-result-list">
+    {% for line in lines %}
+    <article class="count-result-row {{ line.result_state }}">
+      <div class="count-result-product"><strong>{{ line.product.name }}</strong><small>{{ line.product.sku }} · {{ line.product.base_unit }}</small></div>
+      <div><small>Physical</small><strong>{{ line.counted|default_if_none:"—" }}</strong></div>
+      <div><small>System</small><strong>{{ line.expected }}</strong></div>
+      <div><small>Variance</small><strong>{% if line.variance > 0 %}+{% endif %}{{ line.variance|default_if_none:"—" }}</strong></div>
+      <div class="count-result-state"><span class="pill">{{ line.result_label }}</span>{% if line.variance %}<small>{{ company.currency }} {{ line.variance_value|floatformat:2 }} exposure</small>{% endif %}</div>
+    </article>
+    {% endfor %}
+  </div>
+  {% if count.note %}<div class="notice subtle"><strong>Verification note</strong><br>{{ count.note }}</div>{% endif %}
+{% endif %}
+
+{% if can_review %}
+  <div class="verification-review">
+    <h2>Review differences before inventory changes</h2>
+    <p>Products that match need no action. Approval posts only the differences. KOFAD blocks posting if stock moved after the snapshot and requires a fresh count instead.</p>
+    <form method="post">{% csrf_token %}{% if owner_direct %}<input type="hidden" name="owner_direct" value="1">{% endif %}
+      <label>Review note<textarea name="review_note" required minlength="5" maxlength="2000" placeholder="Recount / evidence reviewed…"></textarea></label>
+      <div class="actions"><button class="button" name="action" value="approve">Approve differences & update stock</button><button class="button secondary danger" name="action" value="reject">Reject verification</button></div>
+    </form>
+  </div>
+{% endif %}
+
+{% if count.created_by_id == request.user.pk and count.status == 'draft' %}
+<form method="post" class="verification-cancel">{% csrf_token %}<button class="text-button danger" name="action" value="cancel">Cancel draft verification</button></form>
+{% endif %}
 {% if count.reviewed_at %}<div class="notice success">Reviewed by {{ count.reviewed_by }} · {{ count.reviewed_at|date:"d M Y, H:i" }}{% if count.review_note %}<br>{{ count.review_note }}{% endif %}</div>{% endif %}
 </section>
 {% endblock %}

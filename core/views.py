@@ -191,36 +191,173 @@ def dashboard(request):
             return redirect("pos")
         return redirect("inventory")
     s.permit(request.user, branch, "view_reports")
+
+    from . import creditors as creditor_service
+    from . import debts as debt_service
+    from .approval_views import pending_approval_count
+
     today = timezone.localdate()
+    month_start = today.replace(day=1)
     docs = Document.objects.filter(branch=branch)
-    sales = docs.filter(kind="sale", created_at__date=today)
-    returned = docs.filter(kind="return", created_at__date=today)
-    revenue = (sales.aggregate(t=Sum("total"))["t"] or 0) - (returned.aggregate(t=Sum("total"))["t"] or 0)
-    expenses = (docs.filter(kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or 0) - (docs.filter(kind="reversal", original__kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or 0)
-    debt = sum((s.party_debt(p) for p in Party.objects.filter(branch=branch, kind="customer")), Decimal(0))
-    stock = Stock.objects.filter(branch=branch).select_related("product")
-    low = stock.filter(quantity__lte=F("product__reorder_level"))
+    sales_today = docs.filter(kind="sale", created_at__date=today)
+    returns_today = docs.filter(kind="return", created_at__date=today)
+    gross_sales = sales_today.aggregate(t=Sum("total"))["t"] or Decimal("0")
+    returns_value = returns_today.aggregate(t=Sum("total"))["t"] or Decimal("0")
+    revenue = gross_sales - returns_value
+    expenses = (
+        docs.filter(kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or Decimal("0")
+    ) - (
+        docs.filter(kind="reversal", original__kind="expense", created_at__date=today).aggregate(t=Sum("total"))["t"] or Decimal("0")
+    )
+    customer_inflow = Payment.objects.filter(
+        document__branch=branch,
+        document__created_at__date=today,
+        document__kind__in=["sale", "collection"],
+        direction=1,
+    ).aggregate(t=Sum("amount"))["t"] or Decimal("0")
+
+    month_sales = docs.filter(kind="sale", created_at__date__gte=month_start, created_at__date__lte=today)
+    month_returns = docs.filter(kind="return", created_at__date__gte=month_start, created_at__date__lte=today)
+    month_net_sales = (
+        month_sales.aggregate(t=Sum("total"))["t"] or Decimal("0")
+    ) - (
+        month_returns.aggregate(t=Sum("total"))["t"] or Decimal("0")
+    )
+
+    debt_overview = debt_service.debt_overview(branch)
+    creditor_overview = creditor_service.creditors_overview(branch)
+    debt = debt_overview["total_receivables"]
+    payables = creditor_overview["total_payables"]
+
+    products = list(Product.objects.filter(active=True).order_by("name"))
+    stock_rows = list(Stock.objects.filter(branch=branch).select_related("product"))
+    stock_map = {row.product_id: row.quantity for row in stock_rows}
+    inventory_value = sum(
+        (Decimal(stock_map.get(product.pk, 0)) * product.cost for product in products),
+        Decimal("0"),
+    )
+    attention_products = []
+    for product in products:
+        quantity = stock_map.get(product.pk, 0)
+        if quantity <= product.reorder_level:
+            attention_products.append({
+                "product": product,
+                "quantity": quantity,
+                "out": quantity == 0,
+            })
+    attention_products.sort(key=lambda row: (0 if row["out"] else 1, row["quantity"], row["product"].name.lower()))
+    low_count = len(attention_products)
+    stock_health = 100 if not products else round(max(0, (len(products) - low_count) * 100 / len(products)))
+
+    pending_approvals = pending_approval_count(request.user, branch)
+    debt_health = 100 if debt <= 0 else max(0, round(100 - (debt_overview["overdue"] * 100 / debt)))
+    payable_health = 100 if payables <= 0 else max(0, round(100 - (creditor_overview["overdue"] * 100 / payables)))
+    approval_health = 100 if pending_approvals == 0 else max(0, 100 - pending_approvals * 15)
+    control_score = round((stock_health + debt_health + payable_health + approval_health) / 4)
+    if control_score >= 85:
+        control_label = "Strong"
+    elif control_score >= 70:
+        control_label = "Stable"
+    elif control_score >= 50:
+        control_label = "Watch closely"
+    else:
+        control_label = "Action needed"
+
+    alerts = []
+    if pending_approvals:
+        alerts.append({
+            "title": f"{pending_approvals} approval{'s' if pending_approvals != 1 else ''} waiting",
+            "note": "Review controlled stock, finance or journal actions.",
+            "href": "/approvals/",
+            "tone": "warning",
+        })
+    if debt_overview["overdue"] > 0:
+        alerts.append({
+            "title": "Overdue customer receivables",
+            "note": f"{debt_overview['overdue_customers']} customer account{'s' if debt_overview['overdue_customers'] != 1 else ''} need follow-up.",
+            "href": "/debts/?status=overdue",
+            "tone": "danger",
+        })
+    if creditor_overview["overdue"] > 0:
+        alerts.append({
+            "title": "Overdue supplier payables",
+            "note": f"{creditor_overview['overdue_creditors']} supplier account{'s' if creditor_overview['overdue_creditors'] != 1 else ''} are overdue.",
+            "href": "/creditors/",
+            "tone": "danger",
+        })
+    if low_count:
+        alerts.append({
+            "title": f"{low_count} stock item{'s' if low_count != 1 else ''} need attention",
+            "note": "Includes out-of-stock and reorder-level products.",
+            "href": "/inventory/?status=low",
+            "tone": "warning",
+        })
+    if not alerts:
+        alerts.append({
+            "title": "No urgent control exceptions",
+            "note": "Approvals, overdue accounts and stock warnings are currently clear.",
+            "href": "/reports/",
+            "tone": "success",
+        })
+
     week = []
     for offset in reversed(range(7)):
         day = today - timedelta(days=offset)
-        value = docs.filter(kind="sale", created_at__date=day).aggregate(t=Sum("total"))["t"] or 0
+        sale_value = docs.filter(kind="sale", created_at__date=day).aggregate(t=Sum("total"))["t"] or Decimal("0")
+        return_value = docs.filter(kind="return", created_at__date=day).aggregate(t=Sum("total"))["t"] or Decimal("0")
+        value = sale_value - return_value
         week.append({"day": day.strftime("%a"), "amount": value})
-    maximum = max([d["amount"] for d in week] + [1])
-    for d in week:
-        d["height"] = round(float(d["amount"] / maximum) * 110) if d["amount"] else 2
-        d["y"] = 130 - d["height"]
-    has_products = Product.objects.filter(active=True).exists()
-    has_stock = stock.filter(quantity__gt=0).exists()
+    maximum = max([max(d["amount"], Decimal("0")) for d in week] + [Decimal("1")])
+    for day in week:
+        day["height"] = round(float(max(day["amount"], Decimal("0")) / maximum) * 110) if day["amount"] > 0 else 2
+        day["y"] = 130 - day["height"]
+
+    has_products = bool(products)
+    has_stock = any(quantity > 0 for quantity in stock_map.values())
     has_sales = docs.filter(kind="sale").exists()
     setup_complete = sum((has_products, has_stock, has_sales))
-    from .approval_views import pending_approval_count
-    pending_approvals = pending_approval_count(request.user, branch)
-    return render(request, "dashboard.html", {"title": "Command centre", "revenue": revenue, "expenses": expenses,
-        "debt": debt, "low": low[:6], "low_count": low.count(), "recent": docs[:7], "week": week,
-        "pending_approvals": pending_approvals, "today": today,
-        "channels": s.channel_totals(branch, today).items(), "sales_count": sales.count(),
-        "needs_setup": setup_complete < 3, "setup_complete": setup_complete,
-        "has_products": has_products, "has_stock": has_stock, "has_sales": has_sales})
+    channel_rows = [
+        {"code": code, "label": dict(Payment.METHODS).get(code, code.title()), "amount": amount}
+        for code, amount in s.channel_totals(branch, today).items()
+    ]
+
+    return render(request, "dashboard.html", {
+        "title": "Command centre",
+        "today": today,
+        "gross_sales": gross_sales,
+        "returns_value": returns_value,
+        "revenue": revenue,
+        "month_net_sales": month_net_sales,
+        "expenses": expenses,
+        "customer_inflow": customer_inflow,
+        "debt": debt,
+        "debt_overview": debt_overview,
+        "payables": payables,
+        "creditor_overview": creditor_overview,
+        "inventory_value": inventory_value,
+        "low": attention_products[:6],
+        "low_count": low_count,
+        "stock_health": stock_health,
+        "pending_approvals": pending_approvals,
+        "control_score": control_score,
+        "control_label": control_label,
+        "control_factors": [
+            {"label": "Stock health", "value": stock_health},
+            {"label": "Receivables health", "value": debt_health},
+            {"label": "Payables health", "value": payable_health},
+            {"label": "Approval control", "value": approval_health},
+        ],
+        "alerts": alerts[:5],
+        "recent": docs.select_related("party", "created_by")[:8],
+        "week": week,
+        "channels": channel_rows,
+        "sales_count": sales_today.count(),
+        "needs_setup": setup_complete < 3,
+        "setup_complete": setup_complete,
+        "has_products": has_products,
+        "has_stock": has_stock,
+        "has_sales": has_sales,
+    })
 
 
 @protected("operate_sales")
@@ -834,9 +971,6 @@ def debts(request, branch):
                 snapshot = debt_service.customer_account_snapshot(party)
                 if snapshot["outstanding"] > 0:
                     selected = {"party": party, **snapshot}
-    if selected is None and rows:
-        selected = rows[0]
-
     payment_doc = None
     payment_id = request.GET.get("payment", "")
     if payment_id:
@@ -1508,8 +1642,30 @@ def communications(request, branch):
     if request.method == "POST":
         try:
             action = request.POST.get("action", "send_compose")
-            if action in ("send", "queue", "retry"):
-                item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch)
+            if action == "delete":
+                if not (request.user.is_superuser or request.user.has_perm("core.manage_company")):
+                    raise PermissionDenied("Company management permission is required to delete communication history.")
+                item = get_object_or_404(
+                    Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True
+                )
+                item.archived_at = timezone.now()
+                item.archived_by = request.user
+                item.save(update_fields=["archived_at", "archived_by"])
+                s.audit(
+                    request.user, branch, "communication.archived", item.pk,
+                    {
+                        "channel": item.channel,
+                        "status": item.status,
+                        "recipient": item.recipient,
+                        "source_key": item.source_key or "",
+                    },
+                    category="communications",
+                    entity_type="message",
+                    entity_id=str(item.pk),
+                )
+                messages.success(request, "Message removed from Communication history. Delivery and audit evidence were preserved.")
+            elif action in ("send", "queue", "retry"):
+                item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True)
                 sent = send_message_now(request.user, branch, item.pk, action == "retry")
                 if sent.status == "accepted":
                     messages.success(request, "SMS sent to Arkesel. Delivery confirmation is being tracked.")
@@ -1653,7 +1809,7 @@ def communications(request, branch):
     communication_policy = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
     debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
     rows = list(
-        Message.objects.filter(branch=branch).select_related(
+        Message.objects.filter(branch=branch, archived_at__isnull=True).select_related(
             "party", "management_contact", "created_by", "submitted_by"
         ).order_by("-created_at")[:120]
     )
@@ -1720,8 +1876,9 @@ def communication_status(request, branch):
     if not ids:
         return JsonResponse({"messages": []})
     rows = list(
-        Message.objects.filter(branch=branch, pk__in=ids, channel="sms")
-        .prefetch_related("delivery_attempts")
+        Message.objects.filter(
+            branch=branch, pk__in=ids, channel="sms", archived_at__isnull=True
+        ).prefetch_related("delivery_attempts")
     )
     payload = []
     for row in rows:

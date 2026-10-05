@@ -34,10 +34,51 @@
     <div class="sale-search-help"><span>Type a product or scan a barcode</span><kbd>/</kbd></div>
   </div>
 
+  {% if purchase %}
+  <section class="purchase-product-source" aria-label="Choose product source">
+    <div class="purchase-source-head">
+      <div><p class="eyebrow">PRODUCT SOURCE</p><h3>Existing product or new product?</h3><p class="muted">Existing products receive stock immediately. New products are created only when this purchase posts successfully.</p></div>
+      <div class="purchase-source-switch" role="group" aria-label="Product source">
+        <button type="button" class="active" data-purchase-source="existing">Existing product</button>
+        <button type="button" data-purchase-source="new">New product</button>
+      </div>
+    </div>
+    <div class="purchase-new-builder hidden" id="purchase-new-builder">
+      <div class="purchase-new-grid">
+        <label>Product name<input id="purchase-new-name" maxlength="150" autocomplete="off" placeholder="e.g. Heavy duty oil filter"></label>
+        <label>SKU<input id="purchase-new-sku" maxlength="40" autocomplete="off" placeholder="Unique stock code"></label>
+        <label>Barcode <small>Optional</small><input id="purchase-new-barcode" maxlength="80" autocomplete="off"></label>
+        <label>Category<input id="purchase-new-category" maxlength="80" autocomplete="off" placeholder="e.g. Filters"></label>
+        <label>Base unit<input id="purchase-new-base-unit" maxlength="24" value="piece"></label>
+        <label>Pack name<input id="purchase-new-pack-name" maxlength="24" value="carton"></label>
+        <label>Units per pack<input id="purchase-new-pack-size" type="number" min="1" max="1000000" step="1" value="1" inputmode="numeric"></label>
+        <label>Reorder level<input id="purchase-new-reorder" type="number" min="0" max="1000000000" step="1" value="10" inputmode="numeric"></label>
+      </div>
+      <div class="purchase-new-commercial">
+        <div><p class="eyebrow">THIS PURCHASE</p><h4>Quantity and supplier price</h4></div>
+        <div class="purchase-new-grid compact">
+          <label>Buying as<select id="purchase-new-mode"><option value="retail_unit">Base units</option><option value="retail_pack">Full packs</option></select></label>
+          <label>Quantity<input id="purchase-new-quantity" type="number" min="1" max="1000000" step="1" value="1" inputmode="numeric"></label>
+          <label>Purchase price per selected unit · {{ company.currency }}<input id="purchase-new-cost" type="number" min="0" step=".01" inputmode="decimal" placeholder="0.00"></label>
+        </div>
+      </div>
+      <details class="purchase-selling-prices">
+        <summary>Set selling prices now <small>Optional</small></summary>
+        <div class="purchase-new-grid">
+          <label>Retail / base unit<input id="purchase-new-retail-unit" type="number" min="0" step=".01" inputmode="decimal"></label>
+          <label>Retail / pack<input id="purchase-new-retail-pack" type="number" min="0" step=".01" inputmode="decimal"></label>
+          <label>Wholesale / base unit<input id="purchase-new-wholesale-unit" type="number" min="0" step=".01" inputmode="decimal"></label>
+          <label>Wholesale / pack<input id="purchase-new-wholesale-pack" type="number" min="0" step=".01" inputmode="decimal"></label>
+        </div>
+      </details>
+      <button class="button" type="button" id="purchase-add-new-product">＋ Add new product to this purchase</button>
+    </div>
+  </section>
+  {% endif %}
   <div id="catalog-status" class="catalog-status counter-empty-state">
     <span class="catalog-empty-icon">⌕</span>
-    <h3>Find a product</h3>
-    <p>Search, choose the item, and add it to this sale.</p>
+    <h3>{% if purchase %}Find an existing product{% else %}Find a product{% endif %}</h3>
+    <p>{% if purchase %}Search an existing product, or choose New product above.{% else %}Search, choose the item, and add it to this sale.{% endif %}</p>
   </div>
   <div class="product-grid search-results-grid counter-results" id="catalog"></div>
 

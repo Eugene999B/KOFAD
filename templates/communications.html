@@ -164,7 +164,7 @@
 
 <section class="panel comms-history-panel">
   <div class="section-heading">
-    <div><p class="eyebrow">HISTORY</p><h2>Recent messages</h2><p class="muted">Sent means Arkesel accepted the SMS. Delivered appears only after delivery to the handset is confirmed.</p></div>
+    <div><p class="eyebrow">HISTORY</p><h2>Recent messages</h2><p class="muted">Sent means Arkesel accepted the SMS. Delivered appears only after delivery to the handset is confirmed. Deleting removes the item from this workspace while protected delivery/audit evidence remains.</p></div>
     <div class="comms-history-filter" role="group" aria-label="Message history channel">
       <button type="button" class="active" data-history-channel="all">All</button>
       <button type="button" data-history-channel="sms">SMS</button>
@@ -191,6 +191,9 @@
             {% if row.status == "draft" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="send">Send SMS</button></form>
             {% elif row.status == "failed" or row.status == "undelivered" or row.status == "expired" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="retry">Retry</button></form>
             {% endif %}
+          {% endif %}
+          {% if perms.core.manage_company %}
+          <form method="post" class="comms-delete-form" onsubmit="return confirm('Remove this message from Communication history? Delivery and audit evidence will still be preserved.');">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button danger" name="action" value="delete">Delete</button></form>
           {% endif %}
         </td>
       </tr>

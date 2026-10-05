@@ -32,7 +32,7 @@
 </div>
 {% endif %}
 
-<section class="debt-workspace">
+<section class="debt-workspace{% if selected %} has-selection{% endif %}">
   <div class="debt-account-pane">
     <div class="debt-toolbar">
       <form method="get" class="debt-search-form">
@@ -72,6 +72,7 @@
 
   <aside class="debt-detail-pane">
     {% if selected %}
+    <a class="debt-mobile-back" href="/debts/?q={{ q|urlencode }}&status={{ status }}">← Back to customer accounts</a>
     <header class="debt-customer-header">
       <div class="debt-avatar large">{{ selected.party.name|first|upper }}</div>
       <div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ selected.party.name }}</h2><p>{{ selected.party.phone }}{% if selected.party.address %} · {{ selected.party.address }}{% endif %}</p></div>
@@ -127,7 +128,7 @@
     {% endif %}
 
     <section class="debt-section">
-      <div class="section-heading"><div><h3>Open receipts</h3><p class="muted">Each receipt remains separate even when one payment settles several of them.</p></div><a href="{% url 'statement_export' selected.party.pk 'pdf' %}">PDF statement ↗</a></div>
+      <div class="section-heading"><div><h3>Receipts still owing</h3><p class="muted">See what is due, what has already been paid, and what remains.</p></div><a href="{% url 'statement_export' selected.party.pk 'pdf' %}">PDF statement ↗</a></div>
       <div class="debt-invoice-list">
         {% for row in selected.invoice_rows %}
         <article class="debt-invoice-row {{ row.status }}" data-reference="{{ row.invoice.reference }}" data-outstanding="{{ row.outstanding }}">
@@ -148,7 +149,7 @@
       </div>
     </section>
     {% else %}
-    <div class="debt-detail-empty"><span>◎</span><h2>Select a customer account</h2><p>Open receipts, aging, payment history and collection actions will appear here.</p></div>
+    <div class="debt-detail-empty"><span>◎</span><h2>Choose a customer</h2><p>Select one account from the list to see the balance, due receipts and payment history.</p></div>
     {% endif %}
   </aside>
 </section>

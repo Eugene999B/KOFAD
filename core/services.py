@@ -311,6 +311,49 @@ def payments(document, rows, direction, enforce_enabled=True):
     return total
 
 
+def _new_purchase_product(data):
+    if not isinstance(data, dict):
+        raise ValidationError("New product details are invalid.")
+    name = str(data.get("name", "")).strip()
+    sku = str(data.get("sku", "")).strip().upper()
+    if len(name) < 2 or len(name) > 150:
+        raise ValidationError("Enter a product name between 2 and 150 characters.")
+    if not (2 <= len(sku) <= 40) or not all(ch.isalnum() or ch in "._/-" for ch in sku):
+        raise ValidationError("Enter a valid SKU using letters, numbers, dot, dash, slash or underscore.")
+    if Product.objects.filter(sku__iexact=sku).exists():
+        raise ValidationError(f"SKU {sku} already exists. Search and choose the existing product instead.")
+    try:
+        pack_size = int(data.get("pack_size", 1))
+        reorder_level = int(data.get("reorder_level", 10))
+    except (TypeError, ValueError):
+        raise ValidationError("Pack size and reorder level must be whole numbers.")
+    if not 1 <= pack_size <= 1000000:
+        raise ValidationError("Units per pack must be between 1 and 1,000,000.")
+    if not 0 <= reorder_level <= 1000000000:
+        raise ValidationError("Reorder level is outside the supported range.")
+
+    def optional_price(key):
+        value = data.get(key)
+        return None if value in (None, "") else money(value)
+
+    return Product.objects.create(
+        name=name,
+        sku=sku,
+        barcode=str(data.get("barcode", "")).strip()[:80],
+        category=str(data.get("category", "")).strip()[:80],
+        base_unit=str(data.get("base_unit", "piece")).strip()[:24] or "piece",
+        pack_name=str(data.get("pack_name", "carton")).strip()[:24] or "carton",
+        pack_size=pack_size,
+        cost=ZERO,
+        retail_unit=optional_price("retail_unit"),
+        retail_pack=optional_price("retail_pack"),
+        wholesale_unit=optional_price("wholesale_unit"),
+        wholesale_pack=optional_price("wholesale_pack"),
+        reorder_level=reorder_level,
+        active=True,
+    )
+
+
 @transaction.atomic
 def post_trade(user, branch, payload, key, kind="sale"):
     if kind not in ("sale", "purchase"):
@@ -365,12 +408,20 @@ def post_trade(user, branch, payload, key, kind="sale"):
     )
     total = ZERO
 
+    created_products = []
     for row in rows:
         if not isinstance(row, dict):
             raise ValidationError("Invalid line item.")
-        product = Product.objects.filter(pk=row.get("product"), active=True).first()
+        new_product_data = row.get("new_product")
+        if new_product_data and kind != "purchase":
+            raise ValidationError("New products can only be created through purchasing.")
+        product = _new_purchase_product(new_product_data) if new_product_data else Product.objects.filter(
+            pk=row.get("product"), active=True
+        ).first()
         if not product:
             raise ValidationError("A product is missing or archived.")
+        if new_product_data:
+            created_products.append(product.sku)
         qty = units(row.get("quantity"))
         mode = row.get("mode", "retail_unit")
         if mode not in ("retail_unit", "retail_pack", "wholesale_unit", "wholesale_pack"):
@@ -441,10 +492,23 @@ def post_trade(user, branch, payload, key, kind="sale"):
         if qty * factor > 1000000000:
             raise ValidationError("Base-unit quantity exceeds the supported posting limit.")
         line_total = money(price * qty)
+        purchase_base_cost = product.cost
+        stock_before = 0
+        if kind == "purchase":
+            purchase_base_cost = (price / Decimal(factor)).quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
+            stock_before = Stock.objects.filter(branch=branch, product=product).values_list("quantity", flat=True).first() or 0
         Line.objects.create(document=doc, product=product, description=product.name,
             mode=mode, quantity=qty, factor=factor, list_price=list_price, unit_price=price,
-            discount_percent=discount, unit_cost=product.cost, total=line_total)
-        stock_move(user, branch, product, qty * factor * (-1 if kind == "sale" else 1), doc.reference, kind)
+            discount_percent=discount, unit_cost=purchase_base_cost, total=line_total)
+        base_units = qty * factor
+        stock_move(user, branch, product, base_units * (-1 if kind == "sale" else 1), doc.reference, kind)
+        if kind == "purchase":
+            denominator = stock_before + base_units
+            weighted = (
+                (product.cost * stock_before) + (purchase_base_cost * base_units)
+            ) / Decimal(denominator)
+            product.cost = weighted.quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
+            product.save(update_fields=["cost"])
         total += line_total
 
     total = money(total)
@@ -510,6 +574,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
         "override_reason": override_reason if overrides or credit_override else "",
         "external_reference": external_reference if kind == "purchase" else "",
         "document_date": str(document_date) if kind == "purchase" else "",
+        "new_products_created": created_products if kind == "purchase" else [],
     })
     if kind == "sale":
         from . import automations
@@ -593,6 +658,18 @@ def post_return(user, branch, payload, key):
     return doc
 
 
+EXPENSE_FUNDING_SOURCES = {
+    "today_sales_receipts": "Today's sales receipts",
+    "petty_cash": "Petty cash",
+    "prior_business_funds": "Prior business funds",
+    "owner_manager_funds": "Owner / manager funds",
+    "bank_account": "Business bank account",
+    "momo_wallet": "Business MoMo wallet",
+    "unpaid_credit": "Unpaid / on credit",
+    "other": "Other source",
+}
+
+
 @transaction.atomic
 def post_expense(user, branch, payload, key):
     permit(user, branch, "operate_finance")
@@ -609,6 +686,31 @@ def post_expense(user, branch, payload, key):
         raise ValidationError("Choose a valid expense category.")
     if amount <= 0 or len(note) < 5:
         raise ValidationError("Provide a positive amount and a meaningful expense description.")
+
+    funding_source = str(payload.get("funding_source", "today_sales_receipts")).strip().lower()
+    if funding_source not in EXPENSE_FUNDING_SOURCES:
+        raise ValidationError("Choose a valid source of funds for this expense.")
+    raw_affects = payload.get("affects_daily_closing", "1")
+    affects_daily_closing = str(raw_affects).lower() in {"1", "true", "yes", "on"}
+    funding_note = str(payload.get("funding_note", "")).strip()[:500]
+    method = str(payload.get("method", "cash")).strip().lower()
+
+    if funding_source == "today_sales_receipts" and not affects_daily_closing:
+        raise ValidationError("Today's sales receipts must reduce the matching Daily Closing channel.")
+    if funding_source != "today_sales_receipts" and affects_daily_closing:
+        raise ValidationError("Only an expense paid from today's sales receipts may reduce Daily Closing.")
+    if funding_source == "unpaid_credit" and affects_daily_closing:
+        raise ValidationError("An unpaid expense cannot reduce Daily Closing.")
+    if funding_source == "other" and len(funding_note) < 8:
+        raise ValidationError("Describe the other funding source using at least eight characters.")
+
+    if funding_source == "petty_cash":
+        method = "cash"
+    elif funding_source == "bank_account":
+        method = "bank"
+    elif funding_source == "momo_wallet":
+        method = "momo"
+
     company = company_policy()
     elevated = bool(company.expense_manager_threshold and amount > company.expense_manager_threshold)
     if elevated and not user.has_perm("core.approve_operations"):
@@ -616,13 +718,38 @@ def post_expense(user, branch, payload, key):
             f"A manager with approval authority must post expenses above "
             f"{company.currency} {company.expense_manager_threshold}."
         )
-    doc = Document.objects.create(branch=branch, kind="expense", reference=reference("expense", branch),
-        total=amount, paid=amount, note=note, expense_category=category, created_by=user)
-    payments(doc, [{"method": payload.get("method"), "amount": amount}], -1)
+
+    paid = ZERO if funding_source == "unpaid_credit" else amount
+    doc = Document.objects.create(
+        branch=branch,
+        kind="expense",
+        reference=reference("expense", branch),
+        total=amount,
+        paid=paid,
+        note=note,
+        expense_category=category,
+        expense_funding_source=funding_source,
+        expense_affects_daily_closing=affects_daily_closing,
+        expense_funding_note=funding_note,
+        created_by=user,
+    )
+
+    # Owner-funded expenses and unpaid credit do not move a KOFAD cash/bank channel.
+    if funding_source not in {"owner_manager_funds", "unpaid_credit"}:
+        payments(doc, [{"method": method, "amount": amount}], -1)
+
     request.document = doc
     request.save(update_fields=["document"])
     audit(user, branch, "expense.posted", doc.reference, {
-        "amount": str(amount), "note": note, "category": category, "manager_threshold": elevated,
+        "amount": str(amount),
+        "note": note,
+        "category": category,
+        "manager_threshold": elevated,
+        "funding_source": funding_source,
+        "funding_source_label": EXPENSE_FUNDING_SOURCES[funding_source],
+        "affects_daily_closing": affects_daily_closing,
+        "payment_method": method if funding_source not in {"owner_manager_funds", "unpaid_credit"} else "",
+        "funding_note": funding_note,
     })
     return doc
 
@@ -683,7 +810,10 @@ def advance_operation(user, operation_id, action, quantity=None, note=""):
 
 
 def channel_totals(branch, day):
-    rows = Payment.objects.filter(document__branch=branch, document__created_at__date=day)
+    rows = Payment.objects.filter(document__branch=branch, document__created_at__date=day).exclude(
+        document__kind="expense",
+        document__expense_affects_daily_closing=False,
+    )
     totals = {method: ZERO for method, _ in Payment.METHODS}
     for row in rows:
         totals[row.method] += row.amount * row.direction
@@ -734,6 +864,8 @@ def closing_summary(branch, day):
         document__branch=branch, document__created_at__date=day
     ).select_related("document")
     for payment in payment_rows:
+        if payment.document.kind == "expense" and not payment.document.expense_affects_daily_closing:
+            continue
         label = source_codes.get(payment.document.kind)
         if label:
             breakdown[label][payment.method] += payment.amount * payment.direction
@@ -749,6 +881,8 @@ def closing_summary(branch, day):
         "supplier_returns_total": total(supplier_returns),
         "supplier_debt_payments": total(supplier_payments),
         "expenses_total": total(expenses),
+        "expenses_closing_deducted": total(expenses.filter(expense_affects_daily_closing=True)),
+        "expenses_accounting_only": total(expenses.filter(expense_affects_daily_closing=False)),
         "inventory_losses": total(losses),
         "sale_count": sales.count(),
         "credit_sale_count": sales.filter(total__gt=F("paid")).count(),

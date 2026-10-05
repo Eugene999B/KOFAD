@@ -56,8 +56,19 @@
     scope.querySelectorAll(".table-wrap > table").forEach(prepareTable);
   };
 
+  const openRow = event => {
+    const row = event.target.closest?.("[data-row-href]");
+    if (!row) return;
+    if (event.type === "click" && event.target.closest("a,button,input,select,textarea,label")) return;
+    if (event.type === "keydown" && !["Enter"," "].includes(event.key)) return;
+    if (event.type === "keydown") event.preventDefault();
+    window.location.href = row.dataset.rowHref;
+  };
+
   const start = () => {
     prepareAll(document);
+    document.addEventListener("click", openRow);
+    document.addEventListener("keydown", openRow);
 
     const observer = new MutationObserver(records => {
       records.forEach(record => {

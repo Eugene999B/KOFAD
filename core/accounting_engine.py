@@ -134,8 +134,13 @@ def _document_entries(branch, first, last):
                 continue
             code = EXPENSE_ACCOUNT.get(doc.expense_category or "other", "6990")
             _row(rows, day, ref, "Expense", note, code, debit=doc.total)
-            for cash_code, amount in cash.items():
-                _row(rows, day, ref, "Expense", note, cash_code, credit=amount)
+            if doc.expense_funding_source == "owner_manager_funds":
+                _row(rows, day, ref, "Expense", "Owner / manager funded expense", "3000", credit=doc.total)
+            elif doc.expense_funding_source == "unpaid_credit":
+                _row(rows, day, ref, "Expense", "Expense payable / unpaid credit", "2400", credit=doc.total)
+            else:
+                for cash_code, amount in cash.items():
+                    _row(rows, day, ref, "Expense", note, cash_code, credit=amount)
 
         elif doc.kind == "collection":
             if hasattr(doc, "correction") and doc.correction.status == "approved":
@@ -159,8 +164,13 @@ def _document_entries(branch, first, last):
         elif doc.kind == "reversal" and doc.original:
             original = doc.original
             if original.kind == "expense":
-                for code, amount in cash.items():
-                    _row(rows, day, ref, "Expense reversal", note, code, debit=amount)
+                if original.expense_funding_source == "owner_manager_funds":
+                    _row(rows, day, ref, "Expense reversal", "Reverse owner-funded expense", "3000", debit=doc.total)
+                elif original.expense_funding_source == "unpaid_credit":
+                    _row(rows, day, ref, "Expense reversal", "Reverse unpaid expense", "2400", debit=doc.total)
+                else:
+                    for code, amount in cash.items():
+                        _row(rows, day, ref, "Expense reversal", note, code, debit=amount)
                 _row(rows, day, ref, "Expense reversal", note, EXPENSE_ACCOUNT.get(original.expense_category or "other", "6990"), credit=doc.total)
             elif original.kind == "collection":
                 _row(rows, day, ref, "Collection reversal", note, "1100", debit=doc.total)

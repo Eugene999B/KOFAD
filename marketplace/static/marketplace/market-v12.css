@@ -431,3 +431,7 @@ html[data-theme="dark"] .premium-access-card .account-known-phone{
 }
 html[data-theme="dark"] .premium-access-card .simple-access-links a,
 html[data-theme="dark"] .premium-access-card .resend-form button{color:#9bc2c3!important}
+
+.shop-pagination{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin:28px 0 6px;padding:16px 18px;border:1px solid var(--market-line);border-radius:18px;background:var(--market-card)}
+.shop-pagination>a{justify-self:start;display:inline-flex;align-items:center;min-height:42px;padding:0 14px;border:1px solid var(--market-line);border-radius:12px;color:var(--market-accent);font-weight:800;text-decoration:none}.shop-pagination>a:last-child{justify-self:end}.shop-pagination p{margin:0;text-align:center}.shop-pagination p strong,.shop-pagination p small{display:block}.shop-pagination p small{margin-top:3px;color:var(--market-muted);font-size:.75rem}
+@media(max-width:620px){.shop-pagination{grid-template-columns:1fr 1fr}.shop-pagination p{grid-column:1/-1;grid-row:1}.shop-pagination>a{grid-row:2;width:100%;justify-content:center}.shop-pagination>a:last-child{justify-self:stretch}.shop-pagination>span{display:none}}

@@ -1,8 +1,84 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'finance.js' %}"></script>{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/accounting/">Accounting intelligence</a><a class="button secondary" href="/debts/">Customer debt desk</a><a class="button secondary" href="/exports/?dataset=expenses">⇩ Expenses</a><a class="button secondary" href="/exports/?dataset=payments">⇩ Payments</a></div>{% endblock %}
 {% block content %}
-<section class="hero-panel"><div><p class="eyebrow">DAY-TO-DAY FINANCE</p><h2>Record money going out and settle open accounts.</h2><p>Expenses remain the fast operational page. Deeper profitability, cost, cash and payroll analysis lives in Accounting intelligence.</p></div><a class="text-link" href="/accounting/">Open accounting →</a></section>
-<div class="two-column"><section class="panel"><h2>Record an expense</h2><form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="action" value="expense"><label for="expense-category">Expense category</label><select id="expense-category" name="category" required>{% for value,label in expense_categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><label for="expense-note">Description</label><textarea id="expense-note" name="note" required minlength="5" placeholder="What was paid for? Add enough detail for audit review."></textarea><label for="expense-amount">Amount · {{ company.currency }}</label><input id="expense-amount" name="amount" type="number" min=".01" step=".01" required><label for="expense-method">Payment channel</label><select id="expense-method" name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><button class="button">Post expense</button></form></section>
-<section class="panel"><h2>Settle an invoice</h2><form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><label for="action">Payment type</label><select id="action" name="action"><option value="collection">Customer debt payment received</option><option value="supplier_payment">Supplier payment made</option></select><label for="invoice">Outstanding invoice</label><select id="invoice" name="invoice" required><option value="">Choose invoice</option>{% for row in outstanding %}<option value="{{ row.doc.pk }}">{{ row.doc.get_kind_display }} · {{ row.doc.reference }} · {{ row.doc.party }} · {{ row.balance }}</option>{% endfor %}</select><label for="amount">Amount</label><input id="amount" name="amount" type="number" min=".01" step=".01" required><label for="method">Channel</label><select id="method" name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select><label for="reference">Bank / provider reference</label><input id="reference" name="reference" maxlength="100"><button class="button">Record payment</button></form></section></div>
-<section class="panel"><div class="section-heading"><h2>Recent expenses & payments</h2><a class="text-link" href="/accounting/">Analyse costs →</a></div><div class="table-wrap"><table><thead><tr><th>Reference</th><th>Type</th><th>Category</th><th>Date</th><th class="number">Amount</th></tr></thead><tbody>{% for row in recent %}<tr><td><a href="/documents/{{ row.pk }}/">{{ row.reference }}</a></td><td>{{ row.get_kind_display }}</td><td>{% if row.kind == 'expense' %}{{ row.expense_category|default:"other"|title }}{% else %}—{% endif %}</td><td>{{ row.created_at }}</td><td class="number">{{ row.total }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No expenses or payments yet.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="hero-panel finance-hero"><div><p class="eyebrow">DAY-TO-DAY FINANCE</p><h2>Record money going out without confusing profit with today’s cash.</h2><p>Every expense goes to Accounting. You also decide whether it should reduce today’s Cash, MoMo, Bank or Card expectation in Daily Closing.</p></div><a class="text-link" href="/accounting/">Open accounting →</a></section>
+
+<div class="two-column finance-workspace">
+<section class="panel expense-entry-panel">
+  <div class="section-heading"><div><p class="eyebrow">EXPENSE</p><h2>Record an expense</h2><p class="muted">First say what was paid for, then where the money actually came from.</p></div></div>
+  <form method="post" data-expense-form>{% csrf_token %}
+    <input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="action" value="expense">
+    <div class="expense-form-grid">
+      <label>Expense category<select id="expense-category" name="category" required>{% for value,label in expense_categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+      <label>Amount · {{ company.currency }}<input id="expense-amount" name="amount" type="number" min=".01" step=".01" required inputmode="decimal"></label>
+    </div>
+    <label>Description<textarea id="expense-note" name="note" required minlength="5" placeholder="What was paid for? Add enough detail for audit review."></textarea></label>
+
+    <section class="expense-funding-card">
+      <div><p class="eyebrow">SOURCE OF FUNDS</p><h3>Where did this money come from?</h3><p class="muted">This determines cash-control treatment. It does not remove the expense from Accounting.</p></div>
+      <div class="expense-form-grid">
+        <div class="expense-field">
+          <label for="expense-funding-source">Funding source</label>
+          <select id="expense-funding-source" name="funding_source">
+            <option value="today_sales_receipts">Today’s sales receipts</option>
+            <option value="petty_cash">Petty cash</option>
+            <option value="prior_business_funds">Prior business funds</option>
+            <option value="owner_manager_funds">Owner / manager funds</option>
+            <option value="bank_account">Business bank account</option>
+            <option value="momo_wallet">Business MoMo wallet</option>
+            <option value="unpaid_credit">Unpaid / on credit</option>
+            <option value="other">Other source</option>
+          </select>
+        </div>
+        <div class="expense-field" data-expense-method-wrap>
+          <label for="expense-method">Payment channel</label>
+          <select id="expense-method" name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+        </div>
+        <div class="expense-field">
+          <label for="expense-closing-treatment">Daily Closing treatment</label>
+          <select id="expense-closing-treatment" name="affects_daily_closing">
+            <option value="1">Deduct from today’s expected settlement</option>
+            <option value="0">Accounting only · do not reduce today’s settlement</option>
+          </select>
+        </div>
+      </div>
+      <label class="hidden" data-expense-funding-note>Funding / closing note
+        <textarea name="funding_note" maxlength="500" placeholder="Explain the source of funds."></textarea>
+      </label>
+      <div class="expense-treatment-preview" data-expense-treatment-preview aria-live="polite"></div>
+    </section>
+    <button class="button wide">Post expense</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-heading"><div><p class="eyebrow">SETTLEMENT</p><h2>Settle an invoice</h2><p class="muted">Receive customer debt or pay a supplier balance.</p></div></div>
+  <form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}">
+    <label for="action">Payment type</label><select id="action" name="action"><option value="collection">Customer debt payment received</option><option value="supplier_payment">Supplier payment made</option></select>
+    <label for="invoice">Outstanding invoice</label><select id="invoice" name="invoice" required><option value="">Choose invoice</option>{% for row in outstanding %}<option value="{{ row.doc.pk }}">{{ row.doc.get_kind_display }} · {{ row.doc.reference }} · {{ row.doc.party }} · {{ row.balance }}</option>{% endfor %}</select>
+    <label for="amount">Amount</label><input id="amount" name="amount" type="number" min=".01" step=".01" required inputmode="decimal">
+    <label for="method">Channel</label><select id="method" name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+    <label for="reference">Bank / provider reference</label><input id="reference" name="reference" maxlength="100">
+    <button class="button">Record payment</button>
+  </form>
+</section>
+</div>
+
+<section class="panel">
+  <div class="section-heading"><div><h2>Recent expenses & payments</h2><p class="muted">Funding and closing treatment stay attached to each expense for audit clarity.</p></div><a class="text-link" href="/accounting/">Analyse costs →</a></div>
+  <div class="table-wrap"><table><thead><tr><th>Reference</th><th>Type</th><th>Category</th><th>Funding / closing</th><th>Date</th><th class="number">Amount</th></tr></thead><tbody>
+  {% for row in recent %}<tr data-row-href="/documents/{{ row.pk }}/" tabindex="0">
+    <td><a href="/documents/{{ row.pk }}/">{{ row.reference }}</a></td>
+    <td>{{ row.get_kind_display }}</td>
+    <td>{% if row.kind == 'expense' %}{{ row.expense_category|default:"other"|title }}{% else %}—{% endif %}</td>
+    <td>{% if row.kind == 'expense' %}
+      <strong>{{ row.expense_funding_label }}</strong>
+      <small>{% if row.expense_affects_daily_closing %}Deducts from Daily Closing{% else %}Accounting only{% endif %}</small>
+      {% else %}—{% endif %}
+    </td>
+    <td>{{ row.created_at }}</td><td class="number">{{ row.total }}</td>
+  </tr>{% empty %}<tr><td colspan="6" class="empty">No expenses or payments yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
 {% endblock %}

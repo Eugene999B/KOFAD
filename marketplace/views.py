@@ -6,8 +6,10 @@ from functools import wraps
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Case, Count, DecimalField, F, IntegerField, Max, Min, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -15,7 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from core.identity import normalize_ghana_phone
-from core.models import Company, Product
+from core.models import Company, Product, Stock
 from core.views import problem, protected
 
 from .forms import (
@@ -28,7 +30,7 @@ from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
     DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
-    RecentView, WishlistItem,
+    RecentView, StockReservation, WishlistItem,
 )
 from . import services
 
@@ -69,7 +71,10 @@ def _market_context(request, **extra):
 
 def _decorate_listings(listings, branch):
     for listing in listings:
-        listing.available_units = services.available_units(branch, listing.product) if branch else 0
+        if hasattr(listing, "stock_available"):
+            listing.available_units = max(int(listing.stock_available or 0), 0)
+        else:
+            listing.available_units = services.available_units(branch, listing.product) if branch else 0
         listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
         listing.market_price_value = listing.market_price
     return listings
@@ -230,7 +235,45 @@ def market(request):
     except InvalidOperation:
         price_min = price_max = None
 
-    rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product")
+    try:
+        branch = services.market_branch()
+    except ValidationError:
+        branch = None
+
+    price_field = DecimalField(max_digits=14, decimal_places=2)
+    rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product").annotate(
+        market_price_sort=Coalesce(
+            Case(
+                When(price_source="retail_unit", then=F("product__retail_unit")),
+                When(price_source="retail_pack", then=F("product__retail_pack")),
+                When(price_source="wholesale_unit", then=F("product__wholesale_unit")),
+                When(price_source="wholesale_pack", then=F("product__wholesale_pack")),
+                default=Value(Decimal("0.00")),
+                output_field=price_field,
+            ),
+            Value(Decimal("0.00")),
+            output_field=price_field,
+        )
+    )
+    if branch:
+        stock_q = Stock.objects.filter(
+            branch=branch, product_id=OuterRef("product_id")
+        ).values("quantity")[:1]
+        reserved_q = StockReservation.objects.filter(
+            branch=branch,
+            product_id=OuterRef("product_id"),
+            active=True,
+            expires_at__gt=timezone.now(),
+        ).values("product_id").annotate(total=Sum("units")).values("total")[:1]
+        rows = rows.annotate(
+            stock_available=Greatest(
+                Coalesce(Subquery(stock_q, output_field=IntegerField()), Value(0)),
+                Value(0),
+            ) - Coalesce(Subquery(reserved_q, output_field=IntegerField()), Value(0))
+        )
+    else:
+        rows = rows.annotate(stock_available=Value(0, output_field=IntegerField()))
+
     if query:
         terms = [term for term in query.replace(",", " ").split() if term][:8]
         for term in terms:
@@ -243,29 +286,40 @@ def market(request):
         rows = rows.filter(product__category=category)
     if featured_only:
         rows = rows.filter(featured=True)
-
-    branch = None
-    try:
-        branch = services.market_branch()
-    except ValidationError:
-        pass
-    listings = _decorate_listings(list(rows.order_by("-featured", "sort_order", "product__name")[:220]), branch)
-    if in_stock:
-        listings = [listing for listing in listings if listing.available_sell_qty > 0]
     if price_min is not None:
-        listings = [listing for listing in listings if listing.market_price_value >= price_min]
+        rows = rows.filter(market_price_sort__gte=price_min)
     if price_max is not None:
-        listings = [listing for listing in listings if listing.market_price_value <= price_max]
+        rows = rows.filter(market_price_sort__lte=price_max)
+    if in_stock:
+        rows = rows.filter(
+            Q(
+                price_source__in=["retail_unit", "wholesale_unit"],
+                stock_available__gt=0,
+            )
+            | Q(
+                price_source__in=["retail_pack", "wholesale_pack"],
+                stock_available__gte=F("product__pack_size"),
+            )
+        )
+
     if sort == "price_low":
-        listings.sort(key=lambda listing: (listing.market_price_value, listing.display_name.lower()))
+        rows = rows.order_by("market_price_sort", "product__name")
     elif sort == "price_high":
-        listings.sort(key=lambda listing: (-listing.market_price_value, listing.display_name.lower()))
+        rows = rows.order_by("-market_price_sort", "product__name")
     elif sort == "name":
-        listings.sort(key=lambda listing: listing.display_name.lower())
+        rows = rows.order_by("product__name")
+    else:
+        sort = "featured"
+        rows = rows.order_by("-featured", "sort_order", "product__name")
+
+    price_range = rows.aggregate(low=Min("market_price_sort"), high=Max("market_price_sort"))
+    paginator = Paginator(rows, 48)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    listings = _decorate_listings(list(page_obj.object_list), branch)
 
     wishlist_ids = set(
         WishlistItem.objects.filter(customer=customer).values_list("listing_id", flat=True)
-    ) if customer else set()
+    )
     for listing in listings:
         listing.in_wishlist = listing.pk in wishlist_ids
 
@@ -273,15 +327,15 @@ def market(request):
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
     )
-    prices = [listing.market_price_value for listing in listings]
     return render(request, "marketplace/market.html", _market_context(
         request, title="KOFAD Market", listings=listings, q=query,
         selected_category=category, categories=categories,
         selected_sort=sort, in_stock=in_stock, featured_only=featured_only,
         price_min=price_min_raw, price_max=price_max_raw,
-        visible_price_low=min(prices) if prices else None,
-        visible_price_high=max(prices) if prices else None,
+        visible_price_low=price_range["low"],
+        visible_price_high=price_range["high"],
         total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
+        page_obj=page_obj,
     ))
 
 
@@ -1469,55 +1523,142 @@ def market_analytics(request, branch):
 
 @protected("change_product|manage_company")
 def market_catalog_admin(request, branch):
-    from core.models import Stock
     query = request.GET.get("q", "").strip()[:100]
     state = request.GET.get("state", "all")
+    if state not in {"all", "published", "hidden", "incomplete"}:
+        state = "all"
+
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "")
+            product = get_object_or_404(Product, pk=request.POST.get("product"))
+            listing = MarketListing.objects.filter(product=product).first()
+            if action == "hide":
+                if not listing:
+                    raise ValidationError("This product is already hidden from Market.")
+                listing.enabled = False
+                listing.featured = False
+                listing.save(update_fields=["enabled", "featured"])
+                messages.success(request, f"{product.name} is now hidden from customers.")
+            elif action == "publish":
+                if not product.active:
+                    raise ValidationError("Activate the product before publishing it to Market.")
+                if not listing:
+                    raise ValidationError("Open Edit product first to add Market details and a product photo.")
+                if not (listing.image_data or listing.image_url):
+                    raise ValidationError("Add a Market product photo before publishing.")
+                if listing.market_price <= 0:
+                    raise ValidationError("Choose a configured selling price before publishing.")
+                listing.enabled = True
+                listing.save(update_fields=["enabled"])
+                messages.success(request, f"{listing.display_name} is now visible in KOFAD Market.")
+            elif action == "feature":
+                if not listing or not listing.enabled:
+                    raise ValidationError("Publish the product before featuring it.")
+                listing.featured = not listing.featured
+                listing.save(update_fields=["featured"])
+                messages.success(
+                    request,
+                    f"{listing.display_name} is {'featured' if listing.featured else 'no longer featured'}."
+                )
+            else:
+                raise ValidationError("Choose a valid Market Catalog action.")
+            from core import services as core_services
+            core_services.audit(
+                request.user, branch, "market.catalog_state_changed", product.sku,
+                {
+                    "action": action,
+                    "enabled": bool(listing and listing.enabled),
+                    "featured": bool(listing and listing.featured),
+                },
+                category="market",
+                entity_type="product",
+                entity_id=str(product.pk),
+            )
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+        suffix = f"?state={state}"
+        if query:
+            from urllib.parse import quote
+            suffix += f"&q={quote(query)}"
+        return redirect("/market-catalog/" + suffix)
+
     products = Product.objects.all().order_by("category", "name")
     if query:
         products = products.filter(
             Q(name__icontains=query) | Q(sku__icontains=query) | Q(category__icontains=query)
         )
+    if state == "published":
+        products = products.filter(market_listing__enabled=True)
+    elif state == "hidden":
+        products = products.filter(Q(market_listing__isnull=True) | Q(market_listing__enabled=False))
+    elif state == "incomplete":
+        products = products.filter(
+            Q(market_listing__isnull=True)
+            | Q(market_listing__enabled=False)
+            | Q(market_listing__description="")
+            | (
+                Q(market_listing__image_data__isnull=True)
+                & Q(market_listing__image_url="")
+            )
+        ).distinct()
+
+    paginator = Paginator(products, 60)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    page_products = list(page_obj.object_list)
+    product_ids = [product.pk for product in page_products]
     listing_map = {
         row.product_id: row
-        for row in MarketListing.objects.filter(product_id__in=products.values("pk")).select_related("product")
+        for row in MarketListing.objects.filter(product_id__in=product_ids).select_related("product")
     }
     stock_map = dict(
-        Stock.objects.filter(branch=branch, product_id__in=products.values("pk"))
+        Stock.objects.filter(branch=branch, product_id__in=product_ids)
         .values_list("product_id", "quantity")
     )
     rows = []
-    for product in products[:400]:
+    for product in page_products:
         listing = listing_map.get(product.pk)
         photo = bool(listing and (listing.image_data or listing.image_url))
         description = bool(listing and listing.description.strip())
-        published = bool(listing and listing.enabled)
-        ready = bool(published and photo and description and listing.market_price > 0)
-        row = {
+        published = bool(listing and listing.enabled and product.active)
+        priced = bool(listing and listing.market_price > 0)
+        ready = bool(published and photo and description and priced)
+        reasons = []
+        if not product.active:
+            reasons.append("Product archived")
+        if not listing:
+            reasons.append("Market setup missing")
+        else:
+            if not listing.enabled:
+                reasons.append("Not published")
+            if not photo:
+                reasons.append("Photo missing")
+            if not description:
+                reasons.append("Description missing")
+            if not priced:
+                reasons.append("Selling price unavailable")
+        rows.append({
             "product": product,
             "listing": listing,
             "photo": photo,
             "description": description,
+            "priced": priced,
             "published": published,
             "ready": ready,
             "stock": stock_map.get(product.pk, 0),
+            "visibility_reason": " · ".join(reasons),
             "photo_source": (
                 "Business upload" if listing and listing.image_data
                 else "Curated" if listing and listing.image_url else "Missing"
             ),
-        }
-        if state == "published" and not published:
-            continue
-        if state == "hidden" and published:
-            continue
-        if state == "incomplete" and (not published or ready):
-            continue
-        rows.append(row)
+        })
 
     all_listings = MarketListing.objects.select_related("product")
     summary = {
         "products": Product.objects.count(),
-        "published": all_listings.filter(enabled=True).count(),
-        "featured": all_listings.filter(enabled=True, featured=True).count(),
+        "published": all_listings.filter(enabled=True, product__active=True).count(),
+        "hidden": Product.objects.filter(Q(market_listing__isnull=True) | Q(market_listing__enabled=False)).count(),
+        "featured": all_listings.filter(enabled=True, product__active=True, featured=True).count(),
         "photos": sum(1 for listing in all_listings if listing.image_data or listing.image_url),
     }
     return render(request, "marketplace/catalog_admin.html", {
@@ -1526,6 +1667,7 @@ def market_catalog_admin(request, branch):
         "summary": summary,
         "q": query,
         "selected_state": state,
+        "page_obj": page_obj,
     })
 
 
@@ -1737,6 +1879,32 @@ def staff_inbox(request, branch, conversation_id=None):
                 else:
                     messages.error(request, "Accept this chat before closing it.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
+
+            if action == "delete":
+                if not can_manage:
+                    messages.error(request, "Company management permission is required to delete a conversation.")
+                    return redirect("staff_market_thread", conversation_id=conversation.pk)
+                if conversation.status != "closed":
+                    messages.error(request, "Close the conversation first. Closing clears its message content before the record can be removed.")
+                    return redirect("staff_market_thread", conversation_id=conversation.pk)
+                from core import services as core_services
+                core_services.audit(
+                    request.user, branch, "market.support_conversation_deleted", conversation.pk,
+                    {
+                        "subject": conversation.subject,
+                        "customer": conversation.public_name or (
+                            conversation.customer.full_name if conversation.customer else ""
+                        ),
+                        "order": conversation.order.public_reference if conversation.order else "",
+                        "closed_reason": conversation.closed_reason,
+                    },
+                    category="communications",
+                    entity_type="support_conversation",
+                    entity_id=str(conversation.pk),
+                )
+                conversation.delete()
+                messages.success(request, "Closed conversation removed from Customer Inbox.")
+                return redirect("staff_market_inbox")
 
             if conversation.status == "closed":
                 messages.error(request, "This chat has ended. Closed chats cannot be reopened.")

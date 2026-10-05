@@ -73,9 +73,6 @@ def save_count(user, branch, count_id, values, note="", submit=False):
         line.reason = reason
         if submit and line.counted is None:
             raise ValidationError("Enter every quantity, including zero, before submitting.")
-        # Blind entry: require an observation for every line so validation never reveals expected stock.
-        if submit and len(reason) < 5:
-            raise ValidationError("Record an observation of at least five characters for every product.")
     if len(str(note)) > 2000:
         raise ValidationError("Keep the count note within 2,000 characters.")
     StockCountLine.objects.bulk_update(lines, ["counted", "reason"])
@@ -121,8 +118,10 @@ def review_count(user, branch, count_id, action, note="", owner_direct=False):
             if any(line.counted is None for line in lines):
                 raise ValidationError("The submitted count is incomplete.")
             for line in lines:
-                s.stock_move(user, branch, line.product, line.variance, str(count.pk),
-                    "Approved physical count: " + line.reason)
+                s.stock_move(
+                    user, branch, line.product, line.variance, str(count.pk),
+                    "Approved physical count variance" + (f": {line.reason}" if line.reason else "")
+                )
             count.status = "approved"
         else:
             count.status = "rejected"

@@ -254,6 +254,9 @@ class Document(models.Model):
     external_reference = models.CharField(max_length=120, blank=True, default="")
     payable_category = models.CharField(max_length=40, blank=True, default="")
     expense_category = models.CharField(max_length=40, blank=True, default="")
+    expense_funding_source = models.CharField(max_length=40, blank=True, default="today_sales_receipts")
+    expense_affects_daily_closing = models.BooleanField(default=True)
+    expense_funding_note = models.CharField(max_length=500, blank=True, default="")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
@@ -279,6 +282,20 @@ class Document(models.Model):
     @property
     def balance(self):
         return self.total - self.paid
+
+    @property
+    def expense_funding_label(self):
+        return {
+            "today_sales_receipts": "Today's sales receipts",
+            "petty_cash": "Petty cash",
+            "prior_business_funds": "Prior business funds",
+            "owner_manager_funds": "Owner / manager funds",
+            "bank_account": "Business bank account",
+            "momo_wallet": "Business MoMo wallet",
+            "unpaid_credit": "Unpaid / on credit",
+            "other": "Other source",
+        }.get(self.expense_funding_source or "", "Other source")
+
     def __str__(self):
         return self.reference
 
@@ -437,6 +454,10 @@ class Message(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
     source_key = models.CharField(max_length=150, null=True, blank=True)
     last_error = models.CharField(max_length=240, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.SET_NULL
+    )
     class Meta:
         ordering = ["-created_at"]
         permissions = [("send_messages", "Send and retry customer SMS")]
