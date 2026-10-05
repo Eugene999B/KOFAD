@@ -302,6 +302,19 @@ with sync_playwright() as p:
     admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
+    assert float(admin_page.locator(".sidebar nav a").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+
+    approval = admin_page.locator("#approval-attention")
+    approval.evaluate("el => { el.hidden = false; }")
+    before = approval.bounding_box()
+    admin_page.mouse.move(before["x"] + 20, before["y"] + 20)
+    admin_page.mouse.down()
+    admin_page.mouse.move(before["x"] - 120, before["y"] - 90, steps=8)
+    admin_page.mouse.up()
+    after = approval.bounding_box()
+    assert abs(after["x"] - before["x"]) > 40 or abs(after["y"] - before["y"]) > 40
+    assert admin_page.evaluate("Boolean(localStorage.getItem(\'kofad-approval-position-v1\'))")
+    assert approval.evaluate("el => getComputedStyle(el).animationName") == "none"
 
     admin_page.goto(f"http://127.0.0.1:8000/online-inbox/{browser_support.pk}/?status=waiting")
     assert "support-workspace-page" in (admin_page.get_attribute("body", "class") or "")
