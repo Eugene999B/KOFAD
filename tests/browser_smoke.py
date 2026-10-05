@@ -354,7 +354,7 @@ with sync_playwright() as p:
     assert admin_page.locator("tbody td").first.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
     admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
     admin_page.reload()
-    dark_input = admin_page.locator("input").first
+    dark_input = admin_page.locator("input:visible").first
     dark_input.wait_for()
     assert dark_input.evaluate("el => getComputedStyle(el).backgroundColor") != "rgb(255, 255, 255)"
     assert dark_input.evaluate("el => getComputedStyle(el).color") != "rgb(0, 0, 0)"
@@ -487,7 +487,7 @@ with sync_playwright() as p:
     market_page.reload()
     sort_select = market_page.locator(".shop-sort select")
     assert sort_select.evaluate("el => getComputedStyle(el).backgroundColor") != "rgb(255, 255, 255)"
-    assert sort_select.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    assert sort_select.evaluate("el => getComputedStyle(el).color") != "rgb(0, 0, 0)"
     market_page.screenshot(path=str(out / "market-dark-readable.png"), full_page=True)
     market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
     market_page.reload()
