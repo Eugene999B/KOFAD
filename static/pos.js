@@ -823,8 +823,12 @@
   function updateConsentAvailability() {
     if (!customerConsent) return;
     const available = hasAttachedCustomer();
-    customerConsent.disabled = !available;
-    if (available && !smsPreferenceExplicit) customerConsent.checked = true;
+    // Keep the receipt-SMS choice user-controlled at all times. It starts ON,
+    // but cashiers must be able to turn it OFF before or after attaching a
+    // customer. The backend still sends only when a valid recipient exists.
+    customerConsent.disabled = false;
+    customerConsent.closest("#customer-consent-wrap")?.classList.toggle("no-recipient", !available);
+    if (!smsPreferenceExplicit) customerConsent.checked = true;
   }
 
   customerConsent?.addEventListener("change", () => {
