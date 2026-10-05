@@ -462,7 +462,14 @@ with sync_playwright() as p:
         osm_tile_requests.append(route.request)
         route.fulfill(status=200, content_type="image/png", body=transparent_png)
 
+    hero_photo_requests = []
+
+    def serve_hero_photo(route):
+        hero_photo_requests.append(route.request)
+        route.fulfill(status=200, content_type="image/png", body=transparent_png)
+
     market_page.route("https://tile.openstreetmap.org/**", serve_osm_tile)
+    market_page.route("https://images.pexels.com/**", serve_hero_photo)
 
     market_page.goto("http://127.0.0.1:8000/")
     assert market_page.locator(".commerce-global-search").count() == 0
@@ -475,7 +482,24 @@ with sync_playwright() as p:
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
+    mobile_hero_background = market_page.locator(".home-hero-v9").evaluate(
+        "el => getComputedStyle(el).backgroundImage"
+    )
+    assert "images.pexels.com/photos/11835349/" in mobile_hero_background
+    assert "kofad-market-hero.svg" not in mobile_hero_background
+    assert hero_photo_requests, "Homepage hero did not request the photographic retail background"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
+
+    market_page.set_viewport_size({"width":1440,"height":1000})
+    market_page.goto("http://127.0.0.1:8000/")
+    desktop_hero_background = market_page.locator(".home-hero-v9").evaluate(
+        "el => getComputedStyle(el).backgroundImage"
+    )
+    assert "images.pexels.com/photos/11835349/" in desktop_hero_background
+    assert "kofad-market-hero.svg" not in desktop_hero_background
+    market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
+    market_page.set_viewport_size({"width":390,"height":844})
+    market_page.goto("http://127.0.0.1:8000/")
 
     # Enter Market from the public site, then move within Market. Back inside the
     # same authenticated zone must navigate normally without a logout prompt.
