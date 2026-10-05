@@ -73,11 +73,9 @@ def health(request):
 
 
 def csrf_failure(request, reason=""):
-    """Recover stale sign-in forms without weakening CSRF on business actions."""
+    """Recover a stale staff sign-in form without weakening CSRF elsewhere."""
     if request.path == "/login/":
         return redirect("login")
-    if request.path in {"/market/access/", "/market/account/login/"}:
-        return redirect("market_access")
     return render(request, "403.html", status=403)
 
 
