@@ -1409,3 +1409,94 @@ class CustomerPhoneOnboardingTests(MarketFixtures):
         self.assertEqual(customer.full_name, "New Market Customer")
         self.assertTrue(customer.check_password("Strong-new-market-password-842!"))
         self.assertEqual(self.client.session["market_customer_id"], customer.pk)
+
+
+class MarketCatalogScaleAndDeletionTests(MarketFixtures):
+    def staff_session(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+
+    def customer_session(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    def test_customer_market_paginates_beyond_old_catalog_cutoff(self):
+        products = [
+            Product(
+                name=f"Scale product {index:03d}",
+                sku=f"SCALE-{index:03d}",
+                category="Scale test",
+                base_unit="piece",
+                pack_name="piece",
+                pack_size=1,
+                cost=Decimal("1.00"),
+                retail_unit=Decimal("2.00"),
+                active=True,
+            )
+            for index in range(225)
+        ]
+        Product.objects.bulk_create(products)
+        created = list(Product.objects.filter(sku__startswith="SCALE-").order_by("sku"))
+        MarketListing.objects.bulk_create([
+            MarketListing(
+                product=product,
+                enabled=True,
+                title=product.name,
+                description="Published scale-test product.",
+                price_source="retail_unit",
+                image_data=b"x",
+                image_thumb=b"x",
+            )
+            for product in created
+        ])
+        self.customer_session()
+        first = self.client.get("/market/")
+        self.assertEqual(first.status_code, 200)
+        self.assertContains(first, "48 products in this view")
+        self.assertContains(first, "Page 1")
+        last_page = self.client.get("/market/?page=5")
+        self.assertEqual(last_page.status_code, 200)
+        self.assertContains(last_page, "Scale product 224")
+
+    def test_catalog_studio_can_publish_hide_and_feature_ready_listing(self):
+        self.staff_session()
+        self.listing.enabled = False
+        self.listing.featured = False
+        self.listing.save(update_fields=["enabled", "featured"])
+
+        response = self.client.post("/market-catalog/", {
+            "action": "publish",
+            "product": self.product.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.listing.refresh_from_db()
+        self.assertTrue(self.listing.enabled)
+
+        self.client.post("/market-catalog/", {"action": "feature", "product": self.product.pk})
+        self.listing.refresh_from_db()
+        self.assertTrue(self.listing.featured)
+
+        self.client.post("/market-catalog/", {"action": "hide", "product": self.product.pk})
+        self.listing.refresh_from_db()
+        self.assertFalse(self.listing.enabled)
+        self.assertFalse(self.listing.featured)
+
+    def test_manager_can_delete_closed_customer_inbox_record_after_content_is_cleared(self):
+        self.staff_session()
+        thread = Conversation.objects.create(
+            customer=self.customer,
+            public_name=self.customer.full_name,
+            public_phone=self.customer.phone,
+            subject="Closed support thread",
+            status="closed",
+            closed_at=timezone.now(),
+            closed_reason="staff_closed",
+        )
+        response = self.client.post(f"/online-inbox/{thread.pk}/", {"action": "delete"})
+        self.assertRedirects(response, "/online-inbox/", fetch_redirect_response=False)
+        self.assertFalse(Conversation.objects.filter(pk=thread.pk).exists())
