@@ -307,22 +307,24 @@ with sync_playwright() as p:
 
     admin_page.set_viewport_size({"width":390,"height":844})
     approval = admin_page.locator("#approval-attention")
-    approval.evaluate("el => { el.hidden = false; }")
-    handle = approval.locator(".approval-drag-handle")
-    handle.wait_for(state="visible")
+    approval.evaluate("el => { el.hidden = false; el.classList.add('has-approvals'); }")
+    assert approval.locator(".approval-drag-handle").count() == 0
     before = approval.bounding_box()
-    handle_box = handle.bounding_box()
+    assert before["width"] < 100, "Approval control is too wide on mobile"
+    assert before["height"] <= 50, "Approval control is too tall on mobile"
     admin_page.mouse.move(
-        handle_box["x"] + handle_box["width"] / 2,
-        handle_box["y"] + handle_box["height"] / 2,
+        before["x"] + before["width"] / 2,
+        before["y"] + before["height"] / 2,
     )
     admin_page.mouse.down()
-    admin_page.mouse.move(handle_box["x"] - 120, handle_box["y"] - 90, steps=8)
+    admin_page.mouse.move(before["x"] - 120, before["y"] - 90, steps=8)
     admin_page.mouse.up()
     after = approval.bounding_box()
     assert abs(after["x"] - before["x"]) > 40 or abs(after["y"] - before["y"]) > 40
-    assert admin_page.evaluate("Boolean(localStorage.getItem(\'kofad-approval-position-v1\'))")
-    assert approval.evaluate("el => getComputedStyle(el).animationName") == "none"
+    assert abs(after["width"] - before["width"]) < 1
+    assert abs(after["height"] - before["height"]) < 1
+    assert admin_page.evaluate("Boolean(localStorage.getItem(\'kofad-approval-position-v2\'))")
+    assert approval.evaluate("el => getComputedStyle(el).animationName") != "none"
 
     admin_page.goto(f"http://127.0.0.1:8000/online-inbox/{browser_support.pk}/?status=waiting")
     assert "support-workspace-page" in (admin_page.get_attribute("body", "class") or "")
@@ -363,6 +365,24 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "sales-history-dark-readable.png"), full_page=True)
     admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
     admin_page.reload()
+
+    admin_page.goto("http://127.0.0.1:8000/settings/backup/")
+    reset_button = admin_page.get_by_role("button", name="Reset KOFAD to fresh start", exact=True)
+    restore_button = admin_page.get_by_role("button", name="Restore full system", exact=True)
+    assert reset_button.is_disabled()
+    assert restore_button.is_disabled()
+    with admin_page.expect_download(timeout=30000) as backup_download:
+        admin_page.locator("[data-backup-download]").click()
+    download = backup_download.value
+    assert download.suggested_filename.endswith(".kofad.json")
+    admin_page.wait_for_function(
+        "() => !document.querySelector('[data-requires-recent-backup]').disabled",
+        timeout=30000,
+    )
+    assert not reset_button.is_disabled()
+    assert not restore_button.is_disabled()
+    assert admin_page.locator("[data-backup-ready-badge]").is_visible()
+    assert admin_page.locator("[data-backup-state]").get_by_text("Safety backup confirmed.", exact=True).count() == 1
 
     admin_page.goto("http://127.0.0.1:8000/administration/")
     admin_sidebar = admin_page.locator(".sidebar")
