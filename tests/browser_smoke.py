@@ -261,6 +261,32 @@ with sync_playwright() as p:
     assert mobile_box["height"] <= 844 * .9
     page.screenshot(path=str(out / "debt-payment-sheet-mobile.png"), full_page=True)
     mobile_dialog.get_by_role("button", name="Cancel", exact=True).click()
+    page.goto("http://127.0.0.1:8000/debts/")
+    assert page.locator(".debt-account-pane").is_visible()
+    assert not page.locator(".debt-detail-pane").is_visible()
+    page.locator(".debt-account-card").first.click()
+    assert page.locator(".debt-detail-pane").is_visible()
+    assert not page.locator(".debt-account-pane").is_visible()
+    assert page.get_by_text("Back to customer accounts", exact=False).is_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Debt desk overflows"
+    page.screenshot(path=str(out / "debt-account-mobile-focused.png"), full_page=True)
+
+    page.goto("http://127.0.0.1:8000/purchasing/")
+    page.get_by_role("button", name="New product", exact=True).click()
+    assert page.locator("#purchase-new-builder").is_visible()
+    assert page.get_by_label("Product name", exact=True).is_visible()
+    assert page.get_by_label("Purchase price per selected unit", exact=False).is_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Purchasing new-product builder overflows"
+    page.screenshot(path=str(out / "purchasing-new-product-mobile.png"), full_page=True)
+
+    page.goto("http://127.0.0.1:8000/finance/")
+    page.get_by_label("Funding source", exact=True).select_option("prior_business_funds")
+    assert page.get_by_label("Daily Closing treatment", exact=True).input_value() == "0"
+    assert page.get_by_text("Accounting only for Daily Closing.", exact=True).is_visible()
+    page.get_by_label("Funding source", exact=True).select_option("today_sales_receipts")
+    assert page.get_by_label("Daily Closing treatment", exact=True).input_value() == "1"
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Finance funding controls overflow"
+    page.screenshot(path=str(out / "expense-funding-mobile.png"), full_page=True)
 
     for name,path in [("dashboard","/workspace/"),("pos","/sales/new/"),("inventory","/inventory/")]:
         page.goto("http://127.0.0.1:8000"+path)
@@ -356,6 +382,11 @@ with sync_playwright() as p:
     admin_page.locator("tbody td").first.wait_for()
     assert float(admin_page.locator("tbody td").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
     assert admin_page.locator("tbody td").first.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    sale_history_row = admin_page.locator("tbody tr[data-row-href]").first
+    sale_target = sale_history_row.get_attribute("data-row-href")
+    sale_history_row.locator("td").nth(1).click()
+    admin_page.wait_for_url("http://127.0.0.1:8000" + sale_target)
+    admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
     admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
     admin_page.reload()
     dark_input = admin_page.locator("input:visible").first
@@ -459,22 +490,28 @@ with sync_playwright() as p:
     page.goto("http://127.0.0.1:8000/stock-counts/")
     page.get_by_role("button",name="Start blind count",exact=True).click()
     count_url = page.url
-    assert page.get_by_role("columnheader",name="System at start").count() == 0
+    assert page.get_by_text("System", exact=True).count() == 0
+    assert page.locator('input[name^="reason_"]').count() == 0
     for field in page.locator('input[name^="quantity_"]').all():
         field.fill("100")
-    for field in page.locator('input[name^="reason_"]').all():
-        field.fill("Physical shelf verified")
     page.get_by_role("button",name="Save progress",exact=True).click()
     page.screenshot(path=str(out / "count-desktop.png"),full_page=True)
     page.set_viewport_size({"width":390,"height":844})
     page.screenshot(path=str(out / "count-mobile.png"),full_page=True)
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Count sheet overflows"
-    page.get_by_role("button",name="Submit count",exact=True).click()
-    page.get_by_role("columnheader",name="System at start",exact=True).wait_for()
+    page.get_by_role("button",name="Submit & compare with system",exact=True).click()
+    page.locator(".count-result-row").first.wait_for()
+    assert page.get_by_text("Physical", exact=True).count() >= 1
+    assert page.get_by_text("System", exact=True).count() >= 1
+    assert page.get_by_text("Variance", exact=True).count() >= 1
+    assert page.get_by_role("link", name="Excel", exact=True).is_visible()
+    with page.expect_download() as count_export:
+        page.get_by_role("link", name="Excel", exact=True).click()
+    assert count_export.value.suggested_filename.endswith(".xlsx")
     admin_page.goto(count_url)
     admin_page.get_by_label("Review note",exact=True).fill("Independent physical recount verified")
-    admin_page.get_by_role("button",name="Approve and post variances",exact=True).click()
-    assert admin_page.locator(".pill").filter(has_text="approved").count() == 1
+    admin_page.get_by_role("button",name="Approve differences & update stock",exact=True).click()
+    assert admin_page.locator(".pill").filter(has_text="Approved").count() >= 1
     admin_page.screenshot(path=str(out / "count-approved.png"),full_page=True)
     page.set_viewport_size({"width":1440,"height":1000})
     page.goto("http://127.0.0.1:8000/operations/")
