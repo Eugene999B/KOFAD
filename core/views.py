@@ -1505,8 +1505,30 @@ def communications(request, branch):
     if request.method == "POST":
         try:
             action = request.POST.get("action", "send_compose")
-            if action in ("send", "queue", "retry"):
-                item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch)
+            if action == "delete":
+                if not (request.user.is_superuser or request.user.has_perm("core.manage_company")):
+                    raise PermissionDenied("Company management permission is required to delete communication history.")
+                item = get_object_or_404(
+                    Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True
+                )
+                item.archived_at = timezone.now()
+                item.archived_by = request.user
+                item.save(update_fields=["archived_at", "archived_by"])
+                s.audit(
+                    request.user, branch, "communication.archived", item.pk,
+                    {
+                        "channel": item.channel,
+                        "status": item.status,
+                        "recipient": item.recipient,
+                        "source_key": item.source_key or "",
+                    },
+                    category="communications",
+                    entity_type="message",
+                    entity_id=str(item.pk),
+                )
+                messages.success(request, "Message removed from Communication history. Delivery and audit evidence were preserved.")
+            elif action in ("send", "queue", "retry"):
+                item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True)
                 sent = send_message_now(request.user, branch, item.pk, action == "retry")
                 if sent.status == "accepted":
                     messages.success(request, "SMS sent to Arkesel. Delivery confirmation is being tracked.")
@@ -1650,7 +1672,7 @@ def communications(request, branch):
     communication_policy = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
     debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
     rows = list(
-        Message.objects.filter(branch=branch).select_related(
+        Message.objects.filter(branch=branch, archived_at__isnull=True).select_related(
             "party", "management_contact", "created_by", "submitted_by"
         ).order_by("-created_at")[:120]
     )
@@ -1717,8 +1739,9 @@ def communication_status(request, branch):
     if not ids:
         return JsonResponse({"messages": []})
     rows = list(
-        Message.objects.filter(branch=branch, pk__in=ids, channel="sms")
-        .prefetch_related("delivery_attempts")
+        Message.objects.filter(
+            branch=branch, pk__in=ids, channel="sms", archived_at__isnull=True
+        ).prefetch_related("delivery_attempts")
     )
     payload = []
     for row in rows:
