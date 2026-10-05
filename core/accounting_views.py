@@ -113,6 +113,49 @@ def accounting(request, branch):
         "requested_by", "reviewed_by"
     ).prefetch_related("lines")[:100]
     sources = sorted({row["source"] for row in engine.ledger(branch, first, last)})
+
+    cumulative = {row["code"]: row for row in report["cumulative_trial_balance"]}
+    period = {row["code"]: row for row in report["trial_balance"]}
+
+    def debit_balance(code):
+        row = cumulative.get(code)
+        return (row["debit"] - row["credit"]) if row else 0
+
+    def credit_balance(code):
+        row = cumulative.get(code)
+        return (row["credit"] - row["debit"]) if row else 0
+
+    def period_debit(code):
+        row = period.get(code)
+        return (row["debit"] - row["credit"]) if row else 0
+
+    cash_equivalents = sum((debit_balance(code) for code in ("1000", "1010", "1020", "1030")), 0)
+    receivables = debit_balance("1100")
+    inventory_assets = debit_balance("1200") + debit_balance("1210")
+    trade_payables = credit_balance("2000")
+    cogs = period_debit("5000")
+    gross_profit = report["revenue"] - cogs
+    gross_margin = (gross_profit * 100 / report["revenue"]) if report["revenue"] else 0
+    operating_expenses = report["expenses"] - cogs
+    control_checks = []
+    for code, label in (
+        ("inventory", "Inventory"),
+        ("receivables", "Customer receivables"),
+        ("payables", "Supplier payables"),
+    ):
+        control = (report.get("subledger_controls") or {}).get(code)
+        if control:
+            control_checks.append({
+                "code": code,
+                "label": label,
+                "operational": control["operational"],
+                "ledger": control["ledger"],
+                "difference": control["difference"],
+                "ok": control["difference"] == 0,
+            })
+    control_ok_count = sum(1 for item in control_checks if item["ok"])
+    equation_ok = report["balance_check"] == 0
+
     return render(request, "accounting.html", {
         "title": "Accounting Intelligence",
         "start": start, "end": end, "first": first, "last": last,
@@ -121,6 +164,17 @@ def accounting(request, branch):
         "accounts": sorted(engine.ACCOUNTS.items()),
         "selected_account": account, "selected_source": source, "sources": sources, "q": q,
         "journals": journals, "today": timezone.localdate(),
+        "cash_equivalents": cash_equivalents,
+        "receivables": receivables,
+        "inventory_assets": inventory_assets,
+        "trade_payables": trade_payables,
+        "cogs": cogs,
+        "gross_profit": gross_profit,
+        "gross_margin": gross_margin,
+        "operating_expenses": operating_expenses,
+        "control_checks": control_checks,
+        "control_ok_count": control_ok_count,
+        "equation_ok": equation_ok,
         "can_journal": request.user.has_perm("core.operate_finance") or request.user.has_perm("core.manage_company") or request.user.is_superuser,
         "owner_direct": request.user.has_perm("core.manage_company") or request.user.is_superuser,
     })
