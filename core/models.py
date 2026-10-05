@@ -454,6 +454,8 @@ class Message(models.Model):
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
     source_key = models.CharField(max_length=150, null=True, blank=True)
     last_error = models.CharField(max_length=240, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
     class Meta:
         ordering = ["-created_at"]
         permissions = [("send_messages", "Send and retry customer SMS")]
