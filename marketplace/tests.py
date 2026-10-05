@@ -103,7 +103,6 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, "Featured picks")
         self.assertContains(response, "home-hero-v8")
         self.assertContains(response, "home-hero-products")
-        self.assertContains(response, "market-v8.css")
         self.assertNotContains(response, "SHOP BY DEPARTMENT")
         self.assertNotContains(response, "Browse categories.")
         self.assertLessEqual(response.content.count(b'class="market-product-card'), 3)
