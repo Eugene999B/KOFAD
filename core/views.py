@@ -834,9 +834,6 @@ def debts(request, branch):
                 snapshot = debt_service.customer_account_snapshot(party)
                 if snapshot["outstanding"] > 0:
                     selected = {"party": party, **snapshot}
-    if selected is None and rows:
-        selected = rows[0]
-
     payment_doc = None
     payment_id = request.GET.get("payment", "")
     if payment_id:
