@@ -136,6 +136,8 @@ with sync_playwright() as p:
         except Exception:
             time.sleep(1)
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
+    assert float(page.locator(".premium-login-form label").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+    assert float(page.locator(".premium-login-form input").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
     assert page.get_by_text("Private setup key", exact=True).count() == 0
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
     assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
