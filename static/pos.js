@@ -376,6 +376,9 @@
   }
 
   function clearCatalogAfterAdd() {
+    clearTimeout(searchTimer);
+    searchTimer = null;
+    searchSerial += 1;
     catalog = [];
     openComposerId = null;
     if (productQuery) {
