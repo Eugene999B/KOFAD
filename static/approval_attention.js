@@ -4,16 +4,14 @@
   const badges = [...document.querySelectorAll("[data-approval-count]")];
   if (!launcher && !badges.length) return;
 
-  const POSITION_KEY = "kofad-approval-position-v1";
+  const POSITION_KEY = "kofad-approval-position-v2";
   let previous = null;
-  let dragged = false;
   let dragState = null;
+  let moved = false;
+  let suppressClick = false;
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-  // Mobile CSS intentionally anchors the approval control above the bottom dock
-  // with !important. Once the user drags it, release those anchors with the same
-  // priority and freeze the control's measured box so moving can never resize it.
   const pinLauncher = (x, y, width, height) => {
     if (!launcher) return;
     launcher.style.setProperty("left", x + "px", "important");
@@ -27,14 +25,8 @@
     launcher.style.setProperty("box-sizing", "border-box", "important");
   };
 
-  const resetLauncherGeometry = () => {
-    if (!launcher) return;
-    ["left", "top", "right", "bottom", "width", "height", "min-width", "max-width", "box-sizing"]
-      .forEach(name => launcher.style.removeProperty(name));
-  };
-
   const applySavedPosition = () => {
-    if (!launcher) return;
+    if (!launcher || launcher.hidden) return;
     try {
       const saved = JSON.parse(localStorage.getItem(POSITION_KEY) || "null");
       if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return;
@@ -54,10 +46,8 @@
   };
 
   if (launcher) {
-    const dragHandle = launcher.querySelector(".approval-drag-handle");
-
     const beginDrag = event => {
-      if (!dragHandle || event.button !== undefined && event.button !== 0) return;
+      if (event.button !== undefined && event.button !== 0) return;
       const rect = launcher.getBoundingClientRect();
       dragState = {
         pointerId: event.pointerId,
@@ -68,65 +58,54 @@
         width: rect.width,
         height: rect.height,
       };
-      dragged = false;
-      pinLauncher(rect.left, rect.top, rect.width, rect.height);
-      event.preventDefault();
+      moved = false;
+      launcher.classList.add("is-drag-ready");
     };
 
     const moveDrag = event => {
       if (!dragState || event.pointerId !== dragState.pointerId) return;
       const dx = event.clientX - dragState.startX;
       const dy = event.clientY - dragState.startY;
-      if (!dragged && Math.hypot(dx, dy) < 5) return;
-      dragged = true;
+      if (!moved && Math.hypot(dx, dy) < 7) return;
+      moved = true;
+      launcher.classList.remove("is-drag-ready");
       launcher.classList.add("is-dragging");
-      const x = clamp(
-        dragState.left + dx,
-        8,
-        Math.max(8, window.innerWidth - dragState.width - 8),
-      );
-      const y = clamp(
-        dragState.top + dy,
-        8,
-        Math.max(8, window.innerHeight - dragState.height - 8),
-      );
+      const x = clamp(dragState.left + dx, 8, Math.max(8, window.innerWidth - dragState.width - 8));
+      const y = clamp(dragState.top + dy, 8, Math.max(8, window.innerHeight - dragState.height - 8));
       pinLauncher(x, y, dragState.width, dragState.height);
       event.preventDefault();
     };
 
     const finishDrag = event => {
       if (!dragState || event.pointerId !== dragState.pointerId) return;
-      if (dragged) {
+      if (moved) {
         moveDrag(event);
         savePosition();
+        suppressClick = true;
+        window.setTimeout(() => { suppressClick = false; }, 0);
       }
       dragState = null;
-      launcher.classList.remove("is-dragging");
+      launcher.classList.remove("is-drag-ready", "is-dragging");
     };
 
-    dragHandle?.addEventListener("pointerdown", beginDrag);
-    document.addEventListener("pointermove", moveDrag, {passive: false});
+    launcher.addEventListener("pointerdown", beginDrag);
+    document.addEventListener("pointermove", moveDrag, {passive:false});
     document.addEventListener("pointerup", finishDrag);
     document.addEventListener("pointercancel", finishDrag);
-
-    dragHandle?.addEventListener("click", event => {
+    launcher.addEventListener("click", event => {
+      if (!suppressClick) return;
       event.preventDefault();
       event.stopPropagation();
-    });
-    dragHandle?.addEventListener("dblclick", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      try { localStorage.removeItem(POSITION_KEY); } catch (_) {}
-      resetLauncherGeometry();
-    });
+    }, true);
     window.addEventListener("resize", applySavedPosition);
   }
 
   async function refresh() {
     try {
       const response = await fetch("/api/approvals/summary/", {
-        headers: {"X-Requested-With": "XMLHttpRequest"},
-        credentials: "same-origin",
+        headers: {"X-Requested-With":"XMLHttpRequest"},
+        credentials:"same-origin",
+        cache:"no-store",
       });
       if (!response.ok) return;
       const data = await response.json();
