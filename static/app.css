@@ -1631,7 +1631,7 @@ html[data-theme="dark"] .comms-one-customer-row em{color:#d79a79}
 
 
 /* ==========================================================================
-   KOPEX heritage identity · October 2026
+   KOFAD heritage identity · October 2026
    Restores the original navy / teal / gold emblem and carries those colours
    through the refined workspace without changing KOFAD's internal product name.
    ========================================================================== */
@@ -1807,7 +1807,7 @@ html[data-theme="dark"] .premium-empty-state strong{color:#EEF5F8}
 
 
 /* ==========================================================================
-   KOPEX unified dark theme · October 2026
+   KOFAD unified dark theme · October 2026
    Remove the retired graphite/brown surface palette from dark mode. Keep the
    heritage navy/teal system dominant, with gold reserved for brand highlights.
    ========================================================================== */
@@ -2047,7 +2047,7 @@ html[data-theme="dark"] .market-photo-preview{background:#0a2133;border-color:#3
 
 
 /* ==========================================================================
-   KOPEX unified light theme · October 2026
+   KOFAD unified light theme · October 2026
    Retire the graphite/copper skin from light mode. The public Market and
    private workspace now share the same navy / teal / restrained-gold identity.
    ========================================================================== */
@@ -2122,7 +2122,7 @@ html[data-theme="light"] .button.secondary{
 }
 html[data-theme="light"] .button.secondary:hover{background:#EDF5F7;border-color:#B8CFDA}
 
-/* All primary workspace hero surfaces use KOPEX navy/teal. */
+/* All primary workspace hero surfaces use KOFAD navy/teal. */
 html[data-theme="light"] .overview-intro,
 html[data-theme="light"] .hero-panel,
 html[data-theme="light"] .debt-hero,
@@ -2239,7 +2239,7 @@ html[data-theme="light"] .comms-template-row button:hover{background:#EDF7F7;bor
 html[data-theme="light"] .comms-help-icon{background:#123650;color:#fff}
 html[data-theme="light"] .comms-send-bar{border-color:#D7E4EB;box-shadow:0 10px 30px rgba(16,43,70,.07)}
 
-/* Staff login remains a KOPEX gateway in light mode too. */
+/* Staff login remains a KOFAD gateway in light mode too. */
 html[data-theme="light"] .login-page{background:#F3F6FA}
 html[data-theme="light"] .login-header .brand{color:#172F47}
 html[data-theme="light"] .login-card>.muted{color:#657C8E}
@@ -2381,7 +2381,7 @@ html[data-theme="light"] .switch-row{border-color:#DCE7ED}
 
 
 /* ==========================================================================
-   KOPEX definitive dark theme · October 2026
+   KOFAD definitive dark theme · October 2026
    Final cascade layer: keep every workspace control and reading surface
    legible even when older page-specific rules use hard-coded light colours.
    ========================================================================== */
