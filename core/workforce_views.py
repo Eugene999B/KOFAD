@@ -123,7 +123,7 @@ def _draw_logo(pdf, x, y, size):
             pass
     pdf.setFillColor(NAVY)
     pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawCentredString(x + size / 2, y + size / 2 - 2, "KOPEX")
+    pdf.drawCentredString(x + size / 2, y + size / 2 - 2, "KOFAD")
 
 
 def _draw_qr(pdf, value, x, y, size):
@@ -497,12 +497,12 @@ def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
     _draw_logo(pdf, x + 5 * mm * scale, y + height - 12.2 * mm * scale, 9.4 * mm * scale)
     pdf.setFillColor(colors.white)
     pdf.setFont("Helvetica-Bold", 10 * scale)
-    pdf.drawString(x + 17 * mm * scale, y + height - 7.0 * mm * scale, "KOPEX")
+    pdf.drawString(x + 17 * mm * scale, y + height - 7.0 * mm * scale, "KOFAD")
     pdf.setFillColor(GOLD)
     pdf.setFont("Helvetica-Bold", 5.4 * scale)
     pdf.drawString(x + 17 * mm * scale, y + height - 10.2 * mm * scale, "IMPEX · OFFICIAL STAFF IDENTIFICATION")
     legal_name = str(company.name or "").strip()
-    if legal_name and "KOPEX" not in legal_name.upper():
+    if legal_name and "KOFAD" not in legal_name.upper():
         pdf.setFillColor(colors.HexColor("#C7D7E1"))
         pdf.setFont("Helvetica", 3.8 * scale)
         pdf.drawRightString(x + width - 4 * mm * scale, y + height - 10.1 * mm * scale, legal_name[:42])
@@ -571,7 +571,7 @@ def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
     _draw_logo(pdf, x + 5 * mm * scale, y + height - 10.1 * mm * scale, 7.8 * mm * scale)
     pdf.setFillColor(colors.white)
     pdf.setFont("Helvetica-Bold", 8.1 * scale)
-    pdf.drawString(x + 15.3 * mm * scale, y + height - 6.6 * mm * scale, "KOPEX IMPEX")
+    pdf.drawString(x + 15.3 * mm * scale, y + height - 6.6 * mm * scale, "KOFAD IMPEX ENTERPRISE")
     pdf.setFillColor(GOLD)
     pdf.setFont("Helvetica-Bold", 4.2 * scale)
     pdf.drawString(x + 15.3 * mm * scale, y + height - 9.5 * mm * scale, "SECURE WORKFORCE CREDENTIAL")
@@ -625,7 +625,7 @@ def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
     disclaimer = "Company property. Not a national identity document. Alteration, transfer or unauthorized duplication is prohibited."
     pdf.drawCentredString(x + width / 2, y + 5.6 * mm * scale, disclaimer)
     found = "IF FOUND: " + " · ".join(filter(None, [str(company.phone or "").strip(), str(company.address or "").strip().replace("\n", " ")]))
-    _fit_text(pdf, found or "IF FOUND: Return to KOPEX IMPEX", x + 5 * mm * scale, y + 2.6 * mm * scale, width - 10 * mm * scale, 3.3 * scale, 2.8 * scale, font="Helvetica-Bold", color=NAVY)
+    _fit_text(pdf, found or "IF FOUND: Return to KOFAD IMPEX ENTERPRISE", x + 5 * mm * scale, y + 2.6 * mm * scale, width - 10 * mm * scale, 3.3 * scale, 2.8 * scale, font="Helvetica-Bold", color=NAVY)
 
     pdf.setStrokeColor(NAVY)
     pdf.setLineWidth(.65 * scale)
@@ -655,8 +655,8 @@ def worker_id_card(request, branch, pk):
     output = io.BytesIO()
     width, height = 85.60 * mm, 53.98 * mm
     pdf = canvas.Canvas(output, pagesize=(width, height))
-    pdf.setTitle(f"KOPEX Staff ID Card - {worker.full_name}")
-    pdf.setAuthor("KOPEX IMPEX workforce system")
+    pdf.setTitle(f"KOFAD Staff ID Card - {worker.full_name}")
+    pdf.setAuthor("KOFAD IMPEX ENTERPRISE workforce system")
 
     _draw_card_front(pdf, worker, company, width, height)
     pdf.showPage()
@@ -667,7 +667,7 @@ def worker_id_card(request, branch, pk):
         "layout": "CR80", "serial": _card_serial(worker), "qr_verification": True,
     })
     response = HttpResponse(output.getvalue(), content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="kopex-id-{worker.employee_code}.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="kofad-id-{worker.employee_code}.pdf"'
     return response
 
 
@@ -682,11 +682,11 @@ def worker_id_card_sheet(request, branch, pk):
     start_x = (page_width - (card_width * 2 + gap)) / 2
     card_y = page_height - 104 * mm
     pdf = canvas.Canvas(output, pagesize=A4)
-    pdf.setTitle(f"KOPEX Staff ID Print Sheet - {worker.full_name}")
+    pdf.setTitle(f"KOFAD Staff ID Print Sheet - {worker.full_name}")
 
     pdf.setFillColor(NAVY)
     pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(18 * mm, page_height - 20 * mm, "KOPEX")
+    pdf.drawString(18 * mm, page_height - 20 * mm, "KOFAD")
     pdf.setFillColor(TEAL)
     pdf.setFont("Helvetica-Bold", 8)
     pdf.drawString(18 * mm, page_height - 26 * mm, "IMPEX · STAFF ID CARD PRINT SHEET")
@@ -727,14 +727,14 @@ def worker_id_card_sheet(request, branch, pk):
 
     pdf.setFillColor(MUTED)
     pdf.setFont("Helvetica", 7)
-    pdf.drawCentredString(page_width / 2, 14 * mm, "KOPEX IMPEX · Controlled workforce credential · Print at 100% scale")
+    pdf.drawCentredString(page_width / 2, 14 * mm, "KOFAD IMPEX ENTERPRISE · Controlled workforce credential · Print at 100% scale")
     pdf.save()
 
     audit(request.user, branch, "worker.id_card.downloaded", worker.employee_code, {
         "layout": "A4 print sheet", "serial": _card_serial(worker), "qr_verification": True,
     })
     response = HttpResponse(output.getvalue(), content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="kopex-id-print-sheet-{worker.employee_code}.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="kofad-id-print-sheet-{worker.employee_code}.pdf"'
     return response
 
 
@@ -747,7 +747,7 @@ def worker_profile_pdf(request, branch, pk):
     page_width, page_height = A4
     pdf = canvas.Canvas(output, pagesize=A4)
     pdf.setTitle(f"Worker Profile - {worker.full_name}")
-    pdf.setAuthor("KOPEX IMPEX workforce system")
+    pdf.setAuthor("KOFAD IMPEX ENTERPRISE workforce system")
 
     def header(page_label="WORKER PROFILE"):
         pdf.setFillColor(NAVY_DARK)
@@ -755,7 +755,7 @@ def worker_profile_pdf(request, branch, pk):
         _draw_logo(pdf, 15 * mm, page_height - 29 * mm, 18 * mm)
         pdf.setFillColor(colors.white)
         pdf.setFont("Helvetica-Bold", 20)
-        pdf.drawString(39 * mm, page_height - 18 * mm, "KOPEX")
+        pdf.drawString(39 * mm, page_height - 18 * mm, "KOFAD")
         pdf.setFillColor(GOLD)
         pdf.setFont("Helvetica-Bold", 8)
         pdf.drawString(39 * mm, page_height - 24 * mm, f"IMPEX · {page_label}")
@@ -854,14 +854,14 @@ def worker_profile_pdf(request, branch, pk):
 
     pdf.setFillColor(MUTED)
     pdf.setFont("Helvetica", 6)
-    pdf.drawCentredString(page_width / 2, 12 * mm, "Confidential personnel record · Generated from KOPEX IMPEX workforce controls")
+    pdf.drawCentredString(page_width / 2, 12 * mm, "Confidential personnel record · Generated from KOFAD IMPEX ENTERPRISE workforce controls")
     pdf.save()
 
     audit(request.user, branch, "worker.profile_pdf.downloaded", worker.employee_code, {
         "documents": len(documents),
     })
     response = HttpResponse(output.getvalue(), content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="kopex-worker-profile-{worker.employee_code}.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="kofad-worker-profile-{worker.employee_code}.pdf"'
     return response
 
 
