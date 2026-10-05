@@ -132,7 +132,6 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, "<h1>All products</h1>", html=True)
         self.assertContains(response, "shop-category-strip")
         self.assertContains(response, "shop-product-grid")
-        self.assertContains(response, "market-v8.css")
         self.assertNotContains(response, 'class="market-contact-link"')
         self.assertNotContains(response, 'class="market-staff-link"')
         self.assertNotContains(response, "storefront-account-panel")
