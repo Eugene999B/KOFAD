@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import math
+import re
 import secrets
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -427,7 +428,7 @@ def _otp_digest(phone, purpose, code):
 def _submit_customer_otp_sms(phone, code):
     if not settings.SMS_ENABLED or not settings.ARKESEL_API_KEY:
         raise ValidationError("Customer phone verification is temporarily unavailable.")
-    body = f"KOFAD verification code: {code}. It expires in 5 minutes. Do not share this code."
+    body = f"KOFAD verification code: {code}. It expires in 10 minutes. Do not share this code."
     try:
         provider = get_provider(settings.SMS_PROVIDER)
         provider.validate()
@@ -487,13 +488,16 @@ def send_otp(phone, purpose="register"):
 
     code = f"{secrets.randbelow(1000000):06d}"
     _submit_customer_otp_sms(phone, code)
+    # Start the full validity window after the provider has accepted the SMS.
+    # This avoids subtracting provider/network latency from the customer's time.
+    issued_at = timezone.now()
 
     with transaction.atomic():
         row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
         row.send_count += 1
         row.attempts = 0
-        row.last_sent_at = now
-        row.expires_at = now + timedelta(minutes=5)
+        row.last_sent_at = issued_at
+        row.expires_at = issued_at + timedelta(minutes=10)
         row.verified_at = None
         row.code_digest = _otp_digest(phone, purpose, code)
         row.save(update_fields=[
@@ -505,8 +509,9 @@ def send_otp(phone, purpose="register"):
 
 def verify_otp(phone, code, purpose="register"):
     phone = normalize_ghana_phone(phone)
-    code = str(code or "").strip()
-    if not code.isdigit() or len(code) != 6:
+    # Accept codes copied from SMS clients that insert a space or dash.
+    code = re.sub(r"\D", "", str(code or ""))
+    if len(code) != 6:
         raise ValidationError("Enter the six-digit verification code.")
     now = timezone.now()
 
