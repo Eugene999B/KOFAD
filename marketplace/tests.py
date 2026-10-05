@@ -586,7 +586,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         company.delivery_max_distance_km = Decimal("50")
         company.delivery_origin_latitude = Decimal("5.603700")
         company.delivery_origin_longitude = Decimal("-0.186900")
-        company.delivery_origin_label = "KOPEX Main Shop"
+        company.delivery_origin_label = "KOFAD Main Shop"
         company.save()
         google_route.return_value = {
             "distance_km": Decimal("0.10"),
@@ -705,7 +705,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             "delivery_rate_per_km": "1.00",
             "delivery_minimum_fee": "0",
             "delivery_max_distance_km": "100",
-            "delivery_origin_label": "KOPEX Main Shop",
+            "delivery_origin_label": "KOFAD Main Shop",
             "delivery_origin_latitude": "5.603717",
             "delivery_origin_longitude": "-0.186964",
         })
@@ -1500,3 +1500,44 @@ class MarketCatalogScaleAndDeletionTests(MarketFixtures):
         response = self.client.post(f"/online-inbox/{thread.pk}/", {"action": "delete"})
         self.assertRedirects(response, "/online-inbox/", fetch_redirect_response=False)
         self.assertFalse(Conversation.objects.filter(pk=thread.pk).exists())
+
+
+class MarketOtpReliabilityTests(MarketFixtures):
+    def test_verify_otp_accepts_code_pasted_with_spacing(self):
+        phone = "+233245551111"
+        code = "123456"
+        OtpThrottle.objects.create(
+            phone=phone,
+            purpose="reset",
+            expires_at=timezone.now() + timedelta(minutes=10),
+            code_digest=services._otp_digest(phone, "reset", code),
+        )
+        self.assertEqual(services.verify_otp(phone, "123 456", "reset"), phone)
+        row = OtpThrottle.objects.get(phone=phone, purpose="reset")
+        self.assertIsNotNone(row.verified_at)
+        self.assertEqual(row.code_digest, "")
+
+    @patch("marketplace.views.services.verify_otp")
+    def test_duplicate_reset_verification_redirects_to_finish_without_reusing_code(self, verify_otp):
+        session = self.client.session
+        session["market_reset_phone"] = self.customer.phone
+        session["market_reset_verified_phone"] = self.customer.phone
+        session.save()
+        response = self.client.post("/market/account/password-reset/verify/", {"code": "123456"})
+        self.assertRedirects(
+            response,
+            "/market/account/password-reset/finish/",
+            fetch_redirect_response=False,
+        )
+        verify_otp.assert_not_called()
+
+    @patch("marketplace.views.services.verify_otp")
+    def test_duplicate_registration_verification_redirects_to_finish_without_reusing_code(self, verify_otp):
+        phone = "+233245552222"
+        session = self.client.session
+        session["market_pending_phone"] = phone
+        session["market_verified_phone"] = phone
+        session.save()
+        response = self.client.post("/market/account/verify/", {"code": "123456"})
+        self.assertRedirects(response, "/market/account/finish/", fetch_redirect_response=False)
+        verify_otp.assert_not_called()
