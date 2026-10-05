@@ -1,4 +1,5 @@
 import hashlib
+import re
 import secrets
 import uuid
 from datetime import timedelta
@@ -131,7 +132,10 @@ def forgot_password(request):
                         sent = result.status in ("accepted", "delivered")
                     except Exception:
                         sent = False
-                    PasswordRecovery.objects.filter(pk=challenge.pk).update(sent=sent)
+                    update = {"sent": sent}
+                    if sent:
+                        update["expires_at"] = timezone.now() + timedelta(minutes=10)
+                    PasswordRecovery.objects.filter(pk=challenge.pk).update(**update)
                     audit(None, None, "password.recovery_requested", user.pk, {"accepted":sent})
         return redirect("reset_password")
     return render(request, "forgot_password.html", {"sms_ready":ready})
@@ -158,8 +162,10 @@ def reset_password(request):
             if valid:
                 challenge.attempts += 1
                 challenge.save(update_fields=["attempts"])
-                code = request.POST.get("code", "")
-                valid = len(code) == 6 and code.isascii() and code.isdigit() and constant_time_compare(challenge.code_digest, digest(str(challenge.pk)+":"+code))
+                code = re.sub(r"\D", "", request.POST.get("code", ""))
+                valid = len(code) == 6 and constant_time_compare(
+                    challenge.code_digest, digest(str(challenge.pk)+":"+code)
+                )
             if valid:
                 form = SetPasswordForm(user, request.POST)
                 if form.is_valid():
