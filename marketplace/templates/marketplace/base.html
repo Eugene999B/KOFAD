@@ -52,7 +52,7 @@
 {% else %}
 <a href="/market/access/" class="shop-shell-account shop-shell-signin"><span><small>Hello, sign in</small><strong>Account</strong></span></a>
 {% endif %}
-<a href="/market/cart/" class="shop-shell-cart" aria-label="Cart with {{ market_cart_count }} items"><span aria-hidden="true">⌑</span><strong>Cart</strong><b>{{ market_cart_count }}</b></a>
+{% if market_customer %}<a href="/market/cart/" class="shop-shell-cart" aria-label="Cart with {{ market_cart_count }} items"><span aria-hidden="true">⌑</span><strong>Cart</strong><b>{{ market_cart_count }}</b></a>{% endif %}
 <button type="button" class="shop-shell-theme" data-theme-toggle aria-label="Switch theme"><span data-theme-icon>☾</span></button>
 </nav>
 </div>
