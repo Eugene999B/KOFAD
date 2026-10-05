@@ -1,10 +1,11 @@
 {% extends "marketplace/base.html" %}{% block content %}
-<section class="simple-customer-access">
-<div class="simple-access-card">
-<div class="access-card-mark">K</div>
+<section class="simple-customer-access premium-market-access">
+<div class="simple-access-card premium-access-card">
+{% include "marketplace/_auth_logo.html" %}
 <h1>Sign in</h1>
 <p>Enter your password to continue.</p>
-<form method="post">{% csrf_token %}{{ form.non_field_errors }}
+{% include "marketplace/_auth_messages.html" %}
+<form method="post" class="premium-auth-form">{% csrf_token %}{{ form.non_field_errors }}
 {% if locked_phone %}
 <div class="account-known-phone"><span>MOBILE NUMBER</span><strong>{{ locked_phone }}</strong><a href="/market/access/">Change</a></div>
 <input type="hidden" name="phone" value="{{ locked_phone }}">{{ form.phone.errors }}
@@ -12,7 +13,7 @@
 <label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label>
 {% endif %}
 <label>Password{{ form.password }}{{ form.password.errors }}</label>
-<button class="market-button primary wide">Sign in <span>→</span></button>
+<button class="market-button primary wide" type="submit">Sign in <span>→</span></button>
 </form>
 <div class="simple-access-links"><a href="/market/account/password-reset/">Forgot password?</a><a href="/market/access/">Use another number</a></div>
 </div>
