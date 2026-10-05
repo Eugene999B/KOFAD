@@ -1161,7 +1161,7 @@ class ExecutiveWorkspaceAndCommunicationArchiveTests(Fixtures, TestCase):
         accounting = self.client.get("/accounting/")
         self.assertEqual(accounting.status_code, 200)
         self.assertContains(accounting, "Cash & equivalents")
-        self.assertContains(accounting, "Working capital")
+        self.assertContains(accounting, "Money tied up in the business")
         self.assertContains(accounting, "Does Accounting agree with operations?")
 
     def test_manager_delete_archives_message_without_destroying_delivery_evidence(self):
