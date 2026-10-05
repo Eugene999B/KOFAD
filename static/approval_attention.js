@@ -54,7 +54,6 @@
       launcher.style.top = rect.top + "px";
       launcher.style.right = "auto";
       launcher.style.bottom = "auto";
-      dragHandle.setPointerCapture?.(event.pointerId);
       event.preventDefault();
     };
 
@@ -86,15 +85,14 @@
         moveDrag(event);
         savePosition();
       }
-      dragHandle?.releasePointerCapture?.(event.pointerId);
       dragState = null;
       launcher.classList.remove("is-dragging");
     };
 
     dragHandle?.addEventListener("pointerdown", beginDrag);
-    dragHandle?.addEventListener("pointermove", moveDrag);
-    dragHandle?.addEventListener("pointerup", finishDrag);
-    dragHandle?.addEventListener("pointercancel", finishDrag);
+    document.addEventListener("pointermove", moveDrag, {passive: false});
+    document.addEventListener("pointerup", finishDrag);
+    document.addEventListener("pointercancel", finishDrag);
 
     dragHandle?.addEventListener("click", event => {
       event.preventDefault();
