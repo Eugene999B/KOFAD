@@ -157,7 +157,7 @@ class CountTests(Fixtures, TestCase):
         self.authenticate_client(self.reviewer)
         response = self.client.post(f"/stock-counts/{count.pk}/", {"action": "approve", "review_note": "Recount verified"})
         self.assertEqual(response.status_code, 302)
-        self.assertContains(self.client.get(f"/stock-counts/{count.pk}/"), "approved")
+        self.assertContains(self.client.get(f"/stock-counts/{count.pk}/"), "Approved")
 
 
 class CountConcurrencyTests(Fixtures, TransactionTestCase):
