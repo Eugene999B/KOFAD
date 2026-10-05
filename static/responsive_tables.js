@@ -17,6 +17,10 @@
   const prepareTable = table => {
     if (!table || table.dataset.mobilePrepared === "true") return;
     if (table.closest(excludedAncestorSelector)) return;
+    // Dense editable/approval sheets need their column geometry because users
+    // enter values across a row. Keep those horizontally scrollable instead of
+    // turning them into cards.
+    if (table.querySelector("input, select, textarea, button")) return;
 
     const headers = [...table.querySelectorAll("thead th")].map(cell =>
       cleanHeader(cell.textContent)
