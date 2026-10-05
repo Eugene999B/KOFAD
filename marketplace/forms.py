@@ -380,7 +380,7 @@ class DeliveryPolicyForm(forms.ModelForm):
         help_texts = {
             "delivery_max_distance_km": "Use 0 for no distance limit.",
             "delivery_minimum_fee": "Use 0 if there is no minimum charge.",
-            "delivery_origin_label": "Example: KOPEX IMPEX Main Shop.",
+            "delivery_origin_label": "Example: KOFAD IMPEX ENTERPRISE Main Shop.",
         }
         widgets = {
             "delivery_origin_latitude": forms.HiddenInput(),
