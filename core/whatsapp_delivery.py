@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import requests
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -163,11 +163,14 @@ def queue_whatsapp(user, branch, message_id, *, automatic=False, retry=False):
         if not _recipient_is_current(message):
             raise ValidationError("This recipient has changed or is no longer eligible.")
         validate_current_context(message)
+        if message.provider == "whatsapp-link":
+            raise ValidationError("This item is a manual WhatsApp share. Compose a new Cloud message to send directly.")
         message.status = "queued"
         message.provider = "whatsapp-cloud"
+        message.sandbox = False
         message.submitted_by = user
         message.last_error = ""
-        message.save(update_fields=["status", "provider", "submitted_by", "last_error"])
+        message.save(update_fields=["status", "provider", "sandbox", "submitted_by", "last_error"])
         audit(user, branch, "whatsapp.queued", message.pk, {})
         return message
 
@@ -183,7 +186,7 @@ def process_whatsapp_queue():
     actor = message.submitted_by or message.created_by
     try:
         send_whatsapp(actor, message.branch, message.pk, automatic=not message.manual_override)
-    except ValidationError as exc:
+    except (ValidationError, PermissionDenied) as exc:
         Message.objects.filter(pk=message.pk, status="queued").update(
             status="failed", last_error=str(exc)[:240])
     return 1

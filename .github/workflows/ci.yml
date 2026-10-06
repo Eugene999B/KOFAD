@@ -37,7 +37,6 @@ jobs:
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
       - run: python manage.py collectstatic --noinput
-      - run: python manage.py test --noinput
       - run: pip-audit -r requirements.lock
       - run: playwright install --with-deps chromium
       - run: python manage.py bootstrap_admin --confirm-initial-setup
@@ -54,6 +53,7 @@ jobs:
           python tests/render_document_evidence.py
           for file in test-results/documents/*.pdf; do pdftoppm -r 110 -png "$file" "${file%.pdf}"; done
       - run: python tests/browser_smoke.py
+      - run: python manage.py test --noinput
       - name: Verify production container
         run: |
           docker build -t kofad-verify .

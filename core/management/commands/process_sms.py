@@ -34,9 +34,12 @@ class Command(BaseCommand):
             if now - last_delivery_sync >= 5:
                 try:
                     delivery_updates += sync_delivery_reports()
-                    process_whatsapp_queue()
                 except Exception as exc:
                     self.stderr.write(f"SMS delivery-status check failed safely: {exc}")
+                try:
+                    process_whatsapp_queue()
+                except Exception as exc:
+                    self.stderr.write(f"WhatsApp queue check failed safely: {exc}")
                 last_delivery_sync = now
 
             # These records are only stale after five minutes. Avoid querying

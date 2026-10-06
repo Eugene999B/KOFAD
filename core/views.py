@@ -625,7 +625,7 @@ def send_transaction_message_api(request, pk):
         )
     except PermissionDenied:
         return JsonResponse({"error": "Message-sending permission is required."}, status=403)
-    except (ValidationError, ValueError) as exc:
+    except (ValidationError, ValueError, TypeError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 
 
