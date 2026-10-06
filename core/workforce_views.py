@@ -679,7 +679,7 @@ def worker_profile_pdf(request, branch, pk):
     text = ParagraphStyle("Personnel", fontName=regular, fontSize=9, leading=13, textColor=INK)
     label = ParagraphStyle("PersonnelLabel", parent=text, fontName=bold, fontSize=7, leading=10, textColor=MUTED)
     title = ParagraphStyle("PersonnelName", parent=text, fontName=bold, fontSize=19, leading=23)
-    section = ParagraphStyle("PersonnelSection", parent=text, fontName=bold, fontSize=11, leading=15, spaceBefore=16, spaceAfter=8)
+    section = ParagraphStyle("PersonnelSection", parent=text, fontName=bold, fontSize=11, leading=15, spaceBefore=16, spaceAfter=8, keepWithNext=True)
     def para(value, style=text):
         return Paragraph(escape(str(value or "Not recorded")).replace("\n", "<br/>"), style)
     def chrome(pdf, doc):
