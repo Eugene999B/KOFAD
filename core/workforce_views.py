@@ -98,7 +98,7 @@ def _card_dates(worker):
 
 
 def _card_serial(worker):
-    return f"KPX-{worker.employee_code}-{worker.card_token.hex[:6].upper()}"
+    return f"KFD-{worker.employee_code}-{worker.card_token.hex[:6].upper()}"
 
 
 def _logo_reader():
@@ -109,21 +109,10 @@ def _logo_reader():
 
 
 def _draw_logo(pdf, x, y, size):
+    from .brand_art import draw_mark
     pdf.setFillColor(colors.white)
-    pdf.roundRect(x, y, size, size, 2.2 * mm, fill=1, stroke=0)
-    logo = _logo_reader()
-    if logo:
-        try:
-            pdf.drawImage(
-                logo, x + 1 * mm, y + 1 * mm, size - 2 * mm, size - 2 * mm,
-                preserveAspectRatio=True, anchor="c", mask="auto",
-            )
-            return
-        except Exception:
-            pass
-    pdf.setFillColor(NAVY)
-    pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawCentredString(x + size / 2, y + size / 2 - 2, "KOFAD")
+    pdf.roundRect(x, y, size, size, 1.5 * mm, fill=1, stroke=0)
+    draw_mark(pdf, x + size * .1, y + size * .1, size * .8)
 
 
 def _draw_qr(pdf, value, x, y, size):
@@ -141,6 +130,9 @@ def _draw_qr(pdf, value, x, y, size):
 
 
 def _fit_text(pdf, text, x, y, width, preferred=9, minimum=5, font="Helvetica-Bold", color=INK):
+    from .brand_art import print_fonts
+    regular, bold = print_fonts()
+    font = bold if font == "Helvetica-Bold" else regular if font == "Helvetica" else font
     value = str(text or "—")
     size = preferred
     pdf.setFont(font, size)
@@ -466,170 +458,104 @@ def worker_card_verify(request, token):
 
 
 def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
-    issue, expiry = _card_dates(worker)
-    serial = _card_serial(worker)
+    from .brand_art import print_fonts
+    regular, bold = print_fonts()
     scale = width / (85.60 * mm)
-
     pdf.saveState()
-    pdf.setFillColor(colors.white)
-    pdf.roundRect(x, y, width, height, 2.1 * mm * scale, fill=1, stroke=0)
+    pdf.translate(x, y)
+    pdf.scale(scale, scale)
+    width, height = 85.60 * mm, 53.98 * mm
+    copper = colors.HexColor("#B66B45")
+    pdf.setFillColor(colors.HexColor("#FBF9F4"))
+    pdf.rect(0, 0, width, height, fill=1, stroke=0)
     pdf.setFillColor(NAVY_DARK)
-    pdf.roundRect(x, y + height - 14.5 * mm * scale, width, 14.5 * mm * scale, 2.1 * mm * scale, fill=1, stroke=0)
-    pdf.setFillColor(TEAL)
-    pdf.rect(x, y + height - 15.4 * mm * scale, width, .9 * mm * scale, fill=1, stroke=0)
-    pdf.setFillColor(GOLD)
-    pdf.rect(x, y, 2.2 * mm * scale, height, fill=1, stroke=0)
-
-    # Subtle security lines, deliberately quiet enough to keep the portrait readable.
-    pdf.saveState()
-    pdf.setStrokeColor(colors.HexColor("#DDE9EE"))
-    pdf.setLineWidth(.22)
-    for index in range(9):
-        yy = y + (5 + index * 4.1) * mm * scale
-        pdf.bezier(
-            x + 32 * mm * scale, yy,
-            x + 46 * mm * scale, yy + 4 * mm * scale,
-            x + 64 * mm * scale, yy - 4 * mm * scale,
-            x + width - 4 * mm * scale, yy,
-        )
-    pdf.restoreState()
-
-    _draw_logo(pdf, x + 5 * mm * scale, y + height - 12.2 * mm * scale, 9.4 * mm * scale)
+    pdf.rect(0, height - 14 * mm, width, 14 * mm, fill=1, stroke=0)
+    pdf.rect(0, 0, width, 8 * mm, fill=1, stroke=0)
+    pdf.setFillColor(copper)
+    pdf.rect(0, height - 14.6 * mm, width, .6 * mm, fill=1, stroke=0)
+    _draw_logo(pdf, 4.5 * mm, height - 12 * mm, 10 * mm)
     pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 10 * scale)
-    pdf.drawString(x + 17 * mm * scale, y + height - 7.0 * mm * scale, "KOFAD")
-    pdf.setFillColor(GOLD)
-    pdf.setFont("Helvetica-Bold", 5.4 * scale)
-    pdf.drawString(x + 17 * mm * scale, y + height - 10.2 * mm * scale, "IMPEX · OFFICIAL STAFF IDENTIFICATION")
-    legal_name = str(company.name or "").strip()
-    if legal_name and "KOFAD" not in legal_name.upper():
-        pdf.setFillColor(colors.HexColor("#C7D7E1"))
-        pdf.setFont("Helvetica", 3.8 * scale)
-        pdf.drawRightString(x + width - 4 * mm * scale, y + height - 10.1 * mm * scale, legal_name[:42])
+    pdf.setFont(bold, 11)
+    pdf.drawString(17 * mm, height - 7 * mm, "KOFAD")
+    pdf.setFont(regular, 5.8)
+    pdf.drawString(17 * mm, height - 10.5 * mm, "IMPEX ENTERPRISE")
+    pdf.setFont(regular, 5)
+    pdf.drawRightString(width - 4.5 * mm, height - 8 * mm, "STAFF ID")
+    _draw_worker_photo(pdf, worker, 5 * mm, 10.5 * mm, 23 * mm, 27.5 * mm, radius=1 * mm)
 
-    _draw_worker_photo(
-        pdf, worker, x + 6 * mm * scale, y + 7.2 * mm * scale,
-        24.2 * mm * scale, 30.3 * mm * scale, radius=1.8 * mm * scale,
-    )
-
-    text_x = x + 34 * mm * scale
-    text_w = width - 39 * mm * scale
-    pdf.setFillColor(TEAL)
-    pdf.roundRect(text_x, y + 33.0 * mm * scale, 25 * mm * scale, 5.2 * mm * scale, 2.6 * mm * scale, fill=1, stroke=0)
+    tx, tw = 32 * mm, 49 * mm
+    words = worker.full_name.upper().split()
+    lines, current = [], ""
+    for word in words:
+        candidate = (current + " " + word).strip()
+        if pdf.stringWidth(candidate, bold, 8.5) > tw and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    if len(lines) > 2:
+        lines = [lines[0], " ".join(lines[1:])]
+    for index, line in enumerate(lines):
+        _fit_text(pdf, line, tx, (35 - index * 4) * mm, tw, 8.5, 6.5)
+    _fit_text(pdf, worker.job_title, tx, 25 * mm, tw, 6.8, 5.5, color=NAVY)
+    _fit_text(pdf, worker.department or "Operations", tx, 21 * mm, tw, 6, 5.2, font="Helvetica", color=MUTED)
+    _fit_text(pdf, worker.branch.name, tx, 17 * mm, tw, 6, 5.2, font="Helvetica", color=MUTED)
+    pdf.setFillColor(colors.HexColor("#E5EEE9") if worker.status == "active" else colors.HexColor("#F6E5DD"))
+    pdf.roundRect(tx, 10.4 * mm, tw, 4.7 * mm, 1.4 * mm, fill=1, stroke=0)
+    _fit_text(pdf, worker.get_status_display().upper(), tx + 2 * mm, 12 * mm, tw - 4 * mm, 5.7, 5.2, color=NAVY)
     pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 5.4 * scale)
-    pdf.drawCentredString(text_x + 12.5 * mm * scale, y + 34.75 * mm * scale, worker.employee_code[:22])
-
-    _fit_text(pdf, worker.full_name.upper(), text_x, y + 27.8 * mm * scale, text_w, 10.2 * scale, 6.2 * scale, color=NAVY_DARK)
-    _fit_text(pdf, worker.job_title.upper(), text_x, y + 23.1 * mm * scale, text_w, 6.1 * scale, 4.4 * scale, color=TEAL)
-    _fit_text(pdf, worker.department or "Operations", text_x, y + 19.2 * mm * scale, text_w, 5.2 * scale, 4.0 * scale, font="Helvetica", color=MUTED)
-
-    labels = [
-        ("LOCATION", worker.branch.name),
-        ("ISSUED", issue.strftime("%d %b %Y")),
-        ("VALID UNTIL", expiry.strftime("%d %b %Y") if expiry else "Employment duration"),
-    ]
-    base_y = 14.5 * mm * scale
-    col_width = text_w / 3
-    for index, (label, value) in enumerate(labels):
-        xx = text_x + index * col_width
-        pdf.setFillColor(MUTED)
-        pdf.setFont("Helvetica-Bold", 3.5 * scale)
-        pdf.drawString(xx, y + base_y, label)
-        _fit_text(pdf, value, xx, y + base_y - 3.0 * mm * scale, col_width - 1.5 * mm * scale, 4.7 * scale, 3.4 * scale, color=INK)
-
-    pdf.setFillColor(PAPER)
-    pdf.roundRect(text_x, y + 4.0 * mm * scale, text_w, 4.3 * mm * scale, 2.1 * mm * scale, fill=1, stroke=0)
-    status_color = TEAL if worker.status == "active" else colors.HexColor("#A34B43")
-    pdf.setFillColor(status_color)
-    pdf.setFont("Helvetica-Bold", 4.2 * scale)
-    pdf.drawString(text_x + 2.0 * mm * scale, y + 5.35 * mm * scale, worker.get_status_display().upper())
-    pdf.setFillColor(MUTED)
-    pdf.setFont("Helvetica", 3.6 * scale)
-    pdf.drawRightString(x + width - 4.2 * mm * scale, y + 5.35 * mm * scale, f"CARD {serial}"[:48])
-
-    pdf.setStrokeColor(NAVY)
-    pdf.setLineWidth(.65 * scale)
-    pdf.roundRect(x, y, width, height, 2.1 * mm * scale, fill=0, stroke=1)
+    pdf.setFont(regular, 5)
+    pdf.drawString(5 * mm, 3 * mm, "EMPLOYEE")
+    pdf.setFont(bold, 7)
+    pdf.drawRightString(width - 5 * mm, 2.8 * mm, worker.employee_code)
+    pdf.setStrokeColor(LINE)
+    pdf.setLineWidth(.5)
+    pdf.rect(0, 0, width, height, fill=0, stroke=1)
     pdf.restoreState()
 
 
 def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
+    from .brand_art import print_fonts
+    regular, bold = print_fonts()
     issue, expiry = _card_dates(worker)
-    serial = _card_serial(worker)
-    verify_url = _verification_url(request, worker)
     scale = width / (85.60 * mm)
-
     pdf.saveState()
-    pdf.setFillColor(PAPER)
-    pdf.roundRect(x, y, width, height, 2.1 * mm * scale, fill=1, stroke=0)
+    pdf.translate(x, y)
+    pdf.scale(scale, scale)
+    width, height = 85.60 * mm, 53.98 * mm
+    pdf.setFillColor(colors.white)
+    pdf.rect(0, 0, width, height, fill=1, stroke=0)
     pdf.setFillColor(NAVY_DARK)
-    pdf.roundRect(x, y + height - 12 * mm * scale, width, 12 * mm * scale, 2.1 * mm * scale, fill=1, stroke=0)
-    pdf.setFillColor(GOLD)
-    pdf.rect(x, y + height - 12.8 * mm * scale, width, .8 * mm * scale, fill=1, stroke=0)
-
-    _draw_logo(pdf, x + 5 * mm * scale, y + height - 10.1 * mm * scale, 7.8 * mm * scale)
+    pdf.rect(0, height - 10 * mm, width, 10 * mm, fill=1, stroke=0)
     pdf.setFillColor(colors.white)
-    pdf.setFont("Helvetica-Bold", 8.1 * scale)
-    pdf.drawString(x + 15.3 * mm * scale, y + height - 6.6 * mm * scale, "KOFAD IMPEX ENTERPRISE")
-    pdf.setFillColor(GOLD)
-    pdf.setFont("Helvetica-Bold", 4.2 * scale)
-    pdf.drawString(x + 15.3 * mm * scale, y + height - 9.5 * mm * scale, "SECURE WORKFORCE CREDENTIAL")
-
-    qr_size = 22 * mm * scale
-    qr_x = x + width - qr_size - 5 * mm * scale
-    qr_y = y + 16.5 * mm * scale
-    pdf.setFillColor(colors.white)
-    pdf.roundRect(qr_x - 1.6 * mm * scale, qr_y - 1.6 * mm * scale, qr_size + 3.2 * mm * scale, qr_size + 3.2 * mm * scale, 2 * mm * scale, fill=1, stroke=0)
-    _draw_qr(pdf, verify_url, qr_x, qr_y, qr_size)
-    pdf.setFillColor(TEAL)
-    pdf.setFont("Helvetica-Bold", 3.8 * scale)
-    pdf.drawCentredString(qr_x + qr_size / 2, y + 12.4 * mm * scale, "SCAN TO VERIFY")
-
-    left_x = x + 5.5 * mm * scale
-    left_w = width - qr_size - 14 * mm * scale
-    pdf.setFillColor(colors.white)
-    pdf.roundRect(left_x, y + 25.0 * mm * scale, left_w, 12.3 * mm * scale, 1.6 * mm * scale, fill=1, stroke=0)
+    pdf.setFont(bold, 7)
+    pdf.drawString(5 * mm, height - 6.2 * mm, "KOFAD IMPEX ENTERPRISE")
+    _draw_qr(pdf, _verification_url(request, worker), 56 * mm, 16.8 * mm, 24 * mm)
     pdf.setFillColor(NAVY)
-    pdf.setFont("Helvetica-Bold", 4.4 * scale)
-    pdf.drawString(left_x + 2 * mm * scale, y + 34.2 * mm * scale, "EMERGENCY CONTACT")
-    _fit_text(pdf, worker.emergency_name or "Not recorded", left_x + 2 * mm * scale, y + 30.6 * mm * scale, left_w - 4 * mm * scale, 5.3 * scale, 4 * scale, color=INK)
-    emergency_detail = " · ".join(filter(None, [worker.emergency_relationship, worker.emergency_phone])) or "No emergency details recorded"
-    _fit_text(pdf, emergency_detail, left_x + 2 * mm * scale, y + 27.1 * mm * scale, left_w - 4 * mm * scale, 4.3 * scale, 3.4 * scale, font="Helvetica", color=MUTED)
-
-    pdf.setFillColor(colors.white)
-    pdf.roundRect(left_x, y + 13.0 * mm * scale, left_w, 9.4 * mm * scale, 1.6 * mm * scale, fill=1, stroke=0)
-    pdf.setFillColor(NAVY)
-    pdf.setFont("Helvetica-Bold", 4.2 * scale)
-    pdf.drawString(left_x + 2 * mm * scale, y + 19.3 * mm * scale, "CREDENTIAL")
-    _fit_text(pdf, f"Serial: {serial}", left_x + 2 * mm * scale, y + 16.5 * mm * scale, left_w - 4 * mm * scale, 4.0 * scale, 3.2 * scale, font="Helvetica", color=INK)
-    validity = f"Issued {issue:%d %b %Y}" + (f" · Expires {expiry:%d %b %Y}" if expiry else "")
-    _fit_text(pdf, validity, left_x + 2 * mm * scale, y + 13.8 * mm * scale, left_w - 4 * mm * scale, 3.7 * scale, 3.0 * scale, font="Helvetica", color=MUTED)
-
-    # Machine-readable visual security bars derived from the unique token.
-    token = worker.card_token.hex
-    bar_x = left_x
-    bar_y = y + 9.2 * mm * scale
-    bar_w = left_w
-    gap = bar_w / 32
-    for index in range(32):
-        code = int(token[index], 16)
-        pdf.setStrokeColor(GOLD if index % 7 == 0 else NAVY)
-        pdf.setLineWidth((.20 + (code % 3) * .11) * mm * scale)
-        height_bar = (1.8 + (code % 5) * .45) * mm * scale
-        xx = bar_x + index * gap
-        pdf.line(xx, bar_y, xx, bar_y + height_bar)
-
-    pdf.setFillColor(MUTED)
-    pdf.setFont("Helvetica", 3.25 * scale)
-    disclaimer = "Company property. Not a national identity document. Alteration, transfer or unauthorized duplication is prohibited."
-    pdf.drawCentredString(x + width / 2, y + 5.6 * mm * scale, disclaimer)
-    found = "IF FOUND: " + " · ".join(filter(None, [str(company.phone or "").strip(), str(company.address or "").strip().replace("\n", " ")]))
-    _fit_text(pdf, found or "IF FOUND: Return to KOFAD IMPEX ENTERPRISE", x + 5 * mm * scale, y + 2.6 * mm * scale, width - 10 * mm * scale, 3.3 * scale, 2.8 * scale, font="Helvetica-Bold", color=NAVY)
-
-    pdf.setStrokeColor(NAVY)
-    pdf.setLineWidth(.65 * scale)
-    pdf.roundRect(x, y, width, height, 2.1 * mm * scale, fill=0, stroke=1)
+    pdf.setFont(bold, 5.3)
+    pdf.drawCentredString(68 * mm, 13.5 * mm, "VERIFY STAFF STATUS")
+    pairs = [
+        ("CARD SERIAL", _card_serial(worker)),
+        ("ISSUED / VALID UNTIL", issue.strftime("%d %b %Y") + " / " + (expiry.strftime("%d %b %Y") if expiry else "While employed")),
+        ("EMERGENCY CONTACT", worker.emergency_name or "Contact the company"),
+        ("EMERGENCY PHONE", worker.emergency_phone or company.phone or "See company contact"),
+    ]
+    for index, (label, value) in enumerate(pairs):
+        yy = (38.5 - index * 7.1) * mm
+        pdf.setFillColor(MUTED)
+        pdf.setFont(bold, 4.7)
+        pdf.drawString(5 * mm, yy, label)
+        _fit_text(pdf, value, 5 * mm, yy - 3 * mm, 47 * mm, 6.1, 5, font="Helvetica")
+    pdf.setStrokeColor(LINE)
+    pdf.line(5 * mm, 10.5 * mm, width - 5 * mm, 10.5 * mm)
+    _fit_text(pdf, "Company property. Return this card when employment ends.", 5 * mm, 7.5 * mm, width - 10 * mm, 5, 4.8, font="Helvetica", color=MUTED)
+    contact = "IF FOUND: " + (company.phone or "Return to KOFAD IMPEX ENTERPRISE")
+    _fit_text(pdf, contact, 5 * mm, 4 * mm, width - 10 * mm, 5.5, 5, color=NAVY)
+    pdf.setStrokeColor(LINE)
+    pdf.setLineWidth(.5)
+    pdf.rect(0, 0, width, height, fill=0, stroke=1)
     pdf.restoreState()
 
 
@@ -740,126 +666,102 @@ def worker_id_card_sheet(request, branch, pk):
 
 @protected("manage_company")
 def worker_profile_pdf(request, branch, pk):
+    from xml.sax.saxutils import escape
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Image as PdfImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from .brand_art import print_fonts
+
     worker = get_object_or_404(Worker.objects.select_related("branch"), pk=pk, branch=branch)
     company = Company.objects.first() or Company()
     documents = list(worker.documents.exclude(category="photo").order_by("-created_at"))
+    regular, bold = print_fonts()
     output = io.BytesIO()
-    page_width, page_height = A4
-    pdf = canvas.Canvas(output, pagesize=A4)
-    pdf.setTitle(f"Worker Profile - {worker.full_name}")
-    pdf.setAuthor("KOFAD IMPEX ENTERPRISE workforce system")
-
-    def header(page_label="WORKER PROFILE"):
+    text = ParagraphStyle("Personnel", fontName=regular, fontSize=9, leading=13, textColor=INK)
+    label = ParagraphStyle("PersonnelLabel", parent=text, fontName=bold, fontSize=7, leading=10, textColor=MUTED)
+    title = ParagraphStyle("PersonnelName", parent=text, fontName=bold, fontSize=19, leading=23)
+    section = ParagraphStyle("PersonnelSection", parent=text, fontName=bold, fontSize=11, leading=15, spaceBefore=16, spaceAfter=8)
+    def para(value, style=text):
+        return Paragraph(escape(str(value or "Not recorded")).replace("\\n", "<br/>"), style)
+    def chrome(pdf, doc):
+        pdf.saveState()
         pdf.setFillColor(NAVY_DARK)
-        pdf.rect(0, page_height - 38 * mm, page_width, 38 * mm, fill=1, stroke=0)
-        _draw_logo(pdf, 15 * mm, page_height - 29 * mm, 18 * mm)
+        pdf.rect(0, A4[1] - 29 * mm, A4[0], 29 * mm, fill=1, stroke=0)
+        _draw_logo(pdf, 16 * mm, A4[1] - 23 * mm, 17 * mm)
         pdf.setFillColor(colors.white)
-        pdf.setFont("Helvetica-Bold", 20)
-        pdf.drawString(39 * mm, page_height - 18 * mm, "KOFAD")
-        pdf.setFillColor(GOLD)
-        pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(39 * mm, page_height - 24 * mm, f"IMPEX · {page_label}")
-        pdf.setFillColor(colors.HexColor("#C9D9E4"))
-        pdf.setFont("Helvetica", 7)
-        pdf.drawRightString(page_width - 15 * mm, page_height - 20 * mm, company.name[:52])
-
-    def label_value(label, value, x, y, width=76 * mm):
+        pdf.setFont(bold, 13)
+        pdf.drawString(39 * mm, A4[1] - 13 * mm, "KOFAD IMPEX ENTERPRISE")
+        pdf.setFont(regular, 8)
+        pdf.drawString(39 * mm, A4[1] - 20 * mm, "CONFIDENTIAL PERSONNEL RECORD")
+        pdf.setStrokeColor(LINE)
+        pdf.line(16 * mm, 16 * mm, A4[0] - 16 * mm, 16 * mm)
+        pdf.setFont(regular, 7)
         pdf.setFillColor(MUTED)
-        pdf.setFont("Helvetica-Bold", 6)
-        pdf.drawString(x, y, label.upper())
-        _fit_text(pdf, value or "—", x, y - 4 * mm, width, 8, 6, font="Helvetica", color=INK)
+        pdf.drawString(16 * mm, 11 * mm, worker.employee_code + " | " + timezone.localdate().isoformat())
+        pdf.drawRightString(A4[0] - 16 * mm, 11 * mm, f"Page {doc.page}")
+        pdf.restoreState()
 
-    header()
-    _draw_worker_photo(pdf, worker, 16 * mm, page_height - 86 * mm, 34 * mm, 42 * mm, radius=2 * mm)
-    pdf.setFillColor(NAVY)
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(58 * mm, page_height - 54 * mm, worker.full_name[:50])
-    pdf.setFillColor(TEAL)
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(58 * mm, page_height - 62 * mm, worker.job_title[:60])
-    pdf.setFillColor(MUTED)
-    pdf.setFont("Helvetica", 8)
-    pdf.drawString(58 * mm, page_height - 69 * mm, f"{worker.department or 'Operations'} · {worker.branch.name}")
-    pdf.setFillColor(PAPER)
-    pdf.roundRect(58 * mm, page_height - 82 * mm, 52 * mm, 7 * mm, 3.5 * mm, fill=1, stroke=0)
-    pdf.setFillColor(NAVY)
-    pdf.setFont("Helvetica-Bold", 7)
-    pdf.drawString(61 * mm, page_height - 79.3 * mm, f"{worker.employee_code} · {worker.get_status_display().upper()}")
-
-    section_y = page_height - 103 * mm
-    sections = [
+    identity = [para(worker.full_name, title), Spacer(1, 6), para(worker.job_title),
+                para((worker.department or "Operations") + " | " + worker.branch.name),
+                Spacer(1, 6), para(worker.employee_code + " | " + worker.get_status_display(), label)]
+    photo = worker.documents.filter(category="photo", is_current=True).first()
+    if photo:
+        portrait = PdfImage(io.BytesIO(bytes(photo.file_data)), width=28 * mm, height=35 * mm)
+    else:
+        portrait = para("STAFF\nPHOTOGRAPH", label)
+    intro = Table([[portrait, identity]], colWidths=[36 * mm, 142 * mm])
+    intro.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"), ("LEFTPADDING",(0,0),(-1,-1),0)]))
+    story = [intro]
+    groups = [
         ("Employment", [
-            ("Joined", worker.hire_date.strftime("%d %b %Y")),
-            ("Employment type", worker.get_employment_type_display()),
-            ("Contract", f"{worker.contract_start:%d %b %Y}" if worker.contract_start else "Open / not specified"),
-            ("Contract end", f"{worker.contract_end:%d %b %Y}" if worker.contract_end else "Open"),
+            ("Joined", worker.hire_date.strftime("%d %b %Y")), ("Employment type", worker.get_employment_type_display()),
+            ("Contract start", worker.contract_start), ("Contract end", worker.contract_end),
+            ("Card issued", _card_dates(worker)[0]), ("Card expires", _card_dates(worker)[1] or "While employed"),
         ]),
         ("Contact & emergency", [
-            ("Phone", worker.phone), ("Email", worker.email or "—"),
-            ("Digital address", worker.digital_address or "—"),
-            ("Emergency", " · ".join(filter(None, [worker.emergency_name, worker.emergency_relationship, worker.emergency_phone])) or "—"),
+            ("Phone", worker.phone), ("Email", worker.email),
+            ("Residential address", worker.residential_address), ("Digital address", worker.digital_address),
+            ("Emergency contact", worker.emergency_name), ("Relationship", worker.emergency_relationship),
+            ("Emergency phone", worker.emergency_phone), ("Blood group", worker.blood_group),
         ]),
-        ("Statutory & credential", [
-            ("Ghana Card", worker.ghana_card_number or "—"), ("SSNIT", worker.ssnit_number or "—"),
-            ("Tax ID", worker.tax_id or "—"), ("Blood group", worker.blood_group or "—"),
+        ("Statutory records", [
+            ("Ghana Card", worker.ghana_card_number), ("SSNIT", worker.ssnit_number), ("Tax ID", worker.tax_id),
         ]),
     ]
-    for title, rows in sections:
-        pdf.setFillColor(NAVY)
-        pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(16 * mm, section_y, title.upper())
-        pdf.setStrokeColor(TEAL)
-        pdf.setLineWidth(1.4)
-        pdf.line(16 * mm, section_y - 2 * mm, page_width - 16 * mm, section_y - 2 * mm)
-        section_y -= 10 * mm
-        for idx, (label, value) in enumerate(rows):
-            col = idx % 2
-            row = idx // 2
-            label_value(label, value, 16 * mm + col * 90 * mm, section_y - row * 13 * mm, 80 * mm)
-        section_y -= 31 * mm
-
-    pdf.setFillColor(NAVY)
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(16 * mm, section_y, "PRIVATE DOCUMENT REGISTER")
-    pdf.setStrokeColor(GOLD)
-    pdf.line(16 * mm, section_y - 2 * mm, page_width - 16 * mm, section_y - 2 * mm)
-    section_y -= 8 * mm
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.setFillColor(MUTED)
-    pdf.drawString(16 * mm, section_y, "DOCUMENT")
-    pdf.drawString(93 * mm, section_y, "CATEGORY")
-    pdf.drawString(126 * mm, section_y, "NUMBER")
-    pdf.drawRightString(page_width - 16 * mm, section_y, "EXPIRY")
-    section_y -= 5 * mm
-
-    for index, document in enumerate(documents):
-        if section_y < 25 * mm:
-            pdf.showPage()
-            header("WORKER PROFILE · DOCUMENTS")
-            section_y = page_height - 50 * mm
-        pdf.setFillColor(INK)
-        pdf.setFont("Helvetica", 7)
-        _fit_text(pdf, document.title, 16 * mm, section_y, 72 * mm, 7, 5.5, font="Helvetica", color=INK)
-        pdf.drawString(93 * mm, section_y, document.get_category_display()[:22])
-        pdf.drawString(126 * mm, section_y, (document.document_number or "—")[:22])
-        pdf.drawRightString(page_width - 16 * mm, section_y, document.expiry_date.strftime("%d %b %Y") if document.expiry_date else "—")
-        pdf.setStrokeColor(LINE)
-        pdf.line(16 * mm, section_y - 2.2 * mm, page_width - 16 * mm, section_y - 2.2 * mm)
-        section_y -= 6.5 * mm
-
-    if not documents:
-        pdf.setFillColor(MUTED)
-        pdf.setFont("Helvetica-Oblique", 7)
-        pdf.drawString(16 * mm, section_y, "No private documents are currently recorded.")
-
-    pdf.setFillColor(MUTED)
-    pdf.setFont("Helvetica", 6)
-    pdf.drawCentredString(page_width / 2, 12 * mm, "Confidential personnel record · Generated from KOFAD IMPEX ENTERPRISE workforce controls")
-    pdf.save()
-
-    audit(request.user, branch, "worker.profile_pdf.downloaded", worker.employee_code, {
-        "documents": len(documents),
-    })
+    for heading, values in groups:
+        story.append(para(heading, section))
+        cells = []
+        for index in range(0, len(values), 2):
+            pair = values[index:index + 2]
+            row = [[para(key, label), Spacer(1, 3), para(value)] for key, value in pair]
+            if len(row) == 1:
+                row.append("")
+            cells.append(row)
+        table = Table(cells, colWidths=[89 * mm, 89 * mm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),PAPER), ("VALIGN",(0,0),(-1,-1),"TOP"),
+            ("BOX",(0,0),(-1,-1),.4,LINE), ("INNERGRID",(0,0),(-1,-1),.3,colors.white),
+            ("LEFTPADDING",(0,0),(-1,-1),10), ("RIGHTPADDING",(0,0),(-1,-1),10),
+            ("TOPPADDING",(0,0),(-1,-1),9), ("BOTTOMPADDING",(0,0),(-1,-1),9),
+        ]))
+        story.append(table)
+    story.append(para("Private document register", section))
+    cells = [[para(value, label) for value in ("Document", "Category", "Number", "Expiry")]]
+    cells.extend([[para(item.title), para(item.get_category_display()), para(item.document_number),
+                   para(item.expiry_date or "No expiry")] for item in documents])
+    if documents:
+        table = Table(cells, colWidths=[65 * mm, 39 * mm, 42 * mm, 32 * mm], repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),PAPER), ("VALIGN",(0,0),(-1,-1),"TOP"),
+            ("LINEBELOW",(0,0),(-1,-1),.4,LINE), ("TOPPADDING",(0,0),(-1,-1),7),
+            ("BOTTOMPADDING",(0,0),(-1,-1),7),
+        ]))
+        story.append(table)
+    else:
+        story.append(para("No private documents are currently recorded."))
+    SimpleDocTemplate(output, pagesize=A4, leftMargin=16*mm, rightMargin=16*mm,
+                      topMargin=38*mm, bottomMargin=23*mm, title="Worker Profile - " + worker.full_name,
+                      author=company.name).build(story, onFirstPage=chrome, onLaterPages=chrome)
+    audit(request.user, branch, "worker.profile_pdf.downloaded", worker.employee_code, {"documents": len(documents)})
     response = HttpResponse(output.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="kofad-worker-profile-{worker.employee_code}.pdf"'
     return response
@@ -909,6 +811,8 @@ def workers_export(request, branch, format):
         ("ssnit_number", "SSNIT number"), ("ghana_card", "Ghana Card"),
     ]
     audit(request.user, branch, "workers.exported", format, {"rows": len(rows), "status": status})
+    from .export_views import select_columns
+    columns = select_columns("workers", columns)
     return export(
         rows, format, f"Workforce register · {branch.name}", shell(request)["company"], columns,
         filename="kofad-workforce-register", sheet_name="Workforce",

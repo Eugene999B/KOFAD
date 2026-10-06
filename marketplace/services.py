@@ -468,9 +468,13 @@ def _submit_customer_otp_sms(phone, code):
 
 def send_otp(phone, purpose="register"):
     phone = normalize_ghana_phone(phone)
-    now = timezone.now()
+    if not settings.CUSTOMER_OTP_ENABLED:
+        raise ValidationError("Customer phone verification is temporarily unavailable.")
+    # Persist the throttle identity even when a provider rejects the first send.
+    OtpThrottle.objects.get_or_create(phone=phone, purpose=purpose)
     with transaction.atomic():
-        row, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=phone, purpose=purpose)
+        row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
+        now = timezone.now()
         if row.blocked_until and row.blocked_until > now:
             raise ValidationError("Too many verification attempts. Try again later.")
         if row.last_sent_at and row.last_sent_at < now - timedelta(hours=24):
@@ -479,21 +483,12 @@ def send_otp(phone, purpose="register"):
         if row.last_sent_at and row.last_sent_at > now - timedelta(seconds=60):
             raise ValidationError("Please wait one minute before requesting another code.")
         if row.send_count >= 8:
-            row.blocked_until = now + timedelta(hours=1)
-            row.save(update_fields=["blocked_until"])
-            raise ValidationError("Too many codes were requested. Try again in one hour.")
-
-    if not settings.CUSTOMER_OTP_ENABLED:
-        raise ValidationError("Customer phone verification is temporarily unavailable.")
-
-    code = f"{secrets.randbelow(1000000):06d}"
-    _submit_customer_otp_sms(phone, code)
-    # Start the full validity window after the provider has accepted the SMS.
-    # This avoids subtracting provider/network latency from the customer's time.
-    issued_at = timezone.now()
-
-    with transaction.atomic():
-        row = OtpThrottle.objects.select_for_update().get(phone=phone, purpose=purpose)
+            raise ValidationError("Daily verification-code limit reached. Try again later.")
+        # Hold only this phone/purpose lock during the bounded provider call.
+        # Concurrent resend requests cannot deliver two different usable codes.
+        code = f"{secrets.randbelow(1000000):06d}"
+        _submit_customer_otp_sms(phone, code)
+        issued_at = timezone.now()
         row.send_count += 1
         row.attempts = 0
         row.last_sent_at = issued_at

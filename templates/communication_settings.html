@@ -1,30 +1,28 @@
 {% extends "base.html" %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/communications/">Open outbox</a><a class="button secondary" href="/settings/">← Settings</a></div>{% endblock %}
 {% block content %}
-<section class="hero-panel settings-hero"><div><p class="eyebrow">COMMUNICATION CONTROL</p><h2>Who gets what message, and when.</h2><p>Choose whether each automatic event stays off, becomes a reviewable draft, or sends immediately through Arkesel.</p></div><span class="pill">{% if sms_enabled %}{% if sms_sandbox %}SMS sandbox{% else %}SMS live{% endif %}{% else %}SMS disabled{% endif %}</span></section>
+<section class="hero-panel settings-hero"><div><p class="eyebrow">COMMUNICATION CONTROL</p><h2>Who gets what message, and when.</h2><p>Choose the messages SMS and WhatsApp deliver automatically, with separate controls for each channel.</p></div><span class="pill">{% if sms_enabled %}{% if sms_sandbox %}SMS sandbox{% else %}SMS live{% endif %}{% else %}SMS disabled{% endif %}</span></section>
 
-<div class="automation-catalog">
-<article><span>SALE</span><div><strong>Customer sale receipt</strong><small>Recipient: opted-in customer · Template: Sale receipt</small></div><b>{{ item.get_sale_receipt_mode_display }}</b></article>
-<article><span>PAY</span><div><strong>Debt payment confirmation</strong><small>Recipient: opted-in customer · Template: Payment confirmation</small></div><b>{{ item.get_payment_confirmation_mode_display }}</b></article>
-<article><span>CLOSE</span><div><strong>Daily closing summary</strong><small>Recipient: management contacts marked for closing</small></div><b>{{ item.get_daily_closing_mode_display }}</b></article>
-<article><span>STOCK</span><div><strong>Daily low-stock summary</strong><small>Recipient: management contacts marked for stock alerts</small></div><b>{{ item.get_low_stock_mode_display }}</b></article>
-<article><span>DEBT</span><div><strong>Debt reminders</strong><small>Controlled separately by Debt Settings because overdue policy and anti-spam rules matter.</small></div><a href="/settings/debt/">Debt settings →</a></article>
-</div>
-
-<form method="post" class="panel policy-workspace">{% csrf_token %}<input type="hidden" name="action" value="save_policy">
-<div class="section-heading"><div><p class="eyebrow">AUTOMATIC EVENTS</p><h2>Delivery behaviour</h2><p class="muted">“Prepare drafts” keeps the message for review. “Send SMS immediately” submits it straight to Arkesel and tracks delivery automatically.</p></div></div>
+<form method="post" class="panel policy-workspace">
+{% csrf_token %}<input type="hidden" name="action" value="save_policy"><input type="hidden" name="automation_switches" value="1">
 {{ form.non_field_errors }}
-<div class="two-column">
-<label>{{ form.sale_receipt_mode.label }}{{ form.sale_receipt_mode }}<small>{{ form.sale_receipt_mode.help_text }}</small>{{ form.sale_receipt_mode.errors }}</label>
-<label>{{ form.payment_confirmation_mode.label }}{{ form.payment_confirmation_mode }}<small>{{ form.payment_confirmation_mode.help_text }}</small>{{ form.payment_confirmation_mode.errors }}</label>
-<label>{{ form.daily_closing_mode.label }}{{ form.daily_closing_mode }}<small>{{ form.daily_closing_mode.help_text }}</small>{{ form.daily_closing_mode.errors }}</label>
-<label>{{ form.low_stock_mode.label }}{{ form.low_stock_mode }}<small>{{ form.low_stock_mode.help_text }}</small>{{ form.low_stock_mode.errors }}</label>
-</div>
-<label>{{ form.low_stock_time.label }}{{ form.low_stock_time }}<small>{{ form.low_stock_time.help_text }}</small>{{ form.low_stock_time.errors }}</label>
+<div class="section-heading"><div><p class="eyebrow">CHANNEL PREFERENCES</p><h2>Automatic messages</h2><p class="muted">Turn on the events each channel should deliver. Checkout choices take priority for an individual sale. Customer messages require consent.</p></div></div>
+<div class="channel-settings-grid">
+<section class="channel-settings"><p class="eyebrow">ARKESEL SMS</p><h3>Text messages</h3>
+{% for field in sms_switches %}<label class="message-switch" for="{{ field.id_for_label }}-enabled"><span>{{ field.label }}<small>{{ field.help_text }}</small>{{ field.errors }}</span><input id="{{ field.id_for_label }}-enabled" name="{{ field.html_name }}-enabled" type="checkbox" role="switch" {% if field.value == "send" %}checked{% endif %}></label>{% endfor %}
+<p><a href="/settings/debt/">Debt reminders & frequency settings →</a></p>
+</section>
+<section class="channel-settings"><p class="eyebrow">WHATSAPP BUSINESS</p><h3>WhatsApp notifications</h3>
+<p class="muted">{% if whatsapp_enabled and whatsapp_configured %}Cloud API configured. Delivery is confirmed through Meta callbacks.{% else %}Cloud delivery needs Meta credentials in Railway. Manual “Open WhatsApp” sharing remains available in Communications.{% endif %}</p>
+{% for field in whatsapp_switches %}<label class="message-switch" for="{{ field.id_for_label }}-enabled"><span>{{ field.label }}{{ field.errors }}</span><input id="{{ field.id_for_label }}-enabled" name="{{ field.html_name }}-enabled" type="checkbox" role="switch" {% if field.value == "send" %}checked{% endif %}></label>{% endfor %}
+<label>{{ form.whatsapp_template_name.label }}{{ form.whatsapp_template_name }}<small>{{ form.whatsapp_template_name.help_text }}</small>{{ form.whatsapp_template_name.errors }}</label>
+<label>{{ form.whatsapp_template_language.label }}{{ form.whatsapp_template_language }}{{ form.whatsapp_template_language.errors }}</label>
+</section></div>
+<details class="settings-add-contact"><summary>Notification schedule & wording</summary>
+<label>{{ form.low_stock_time.label }}{{ form.low_stock_time }}{{ form.low_stock_time.errors }}</label>
 <label>{{ form.closing_template.label }}{{ form.closing_template }}<small>{{ form.closing_template.help_text }}</small>{{ form.closing_template.errors }}</label>
 <label>{{ form.low_stock_template.label }}{{ form.low_stock_template }}<small>{{ form.low_stock_template.help_text }}</small>{{ form.low_stock_template.errors }}</label>
-<button class="button">Save communication settings</button>
-</form>
+</details><button class="button">Save communication settings</button></form>
 
 <section class="panel">
 <div class="section-heading"><div><p class="eyebrow">MANAGEMENT RECIPIENTS</p><h2>Daily closing & management numbers</h2><p class="muted">Add one or several numbers. For each number, choose whether it receives Daily Closing, Low Stock and System alerts. These are separate from public business numbers printed on receipts.</p></div></div>

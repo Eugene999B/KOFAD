@@ -1,0 +1,9 @@
+{% if perms.core.operate_sales and row.party %}
+<form class="receipt-channel-form" data-receipt-channels data-document="{{ row.pk }}">
+{% csrf_token %}
+<label><input type="checkbox" name="sms"> SMS</label>
+<label><input type="checkbox" name="whatsapp"> WhatsApp</label>
+<button type="submit" class="button secondary">Send receipt</button>
+<span class="receipt-channel-status" role="status" aria-live="polite"></span>
+</form>
+{% endif %}

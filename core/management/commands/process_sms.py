@@ -5,6 +5,7 @@ from django.db import close_old_connections
 
 from core.automations import run_scheduled_automations
 from core.sms.service import recover_stale, sync_delivery_reports
+from core.whatsapp_delivery import recover_stale_whatsapp
 
 
 class Command(BaseCommand):
@@ -41,6 +42,7 @@ class Command(BaseCommand):
             # for them every second while preserving five-second receipt polling.
             if last_recovery is None or now - last_recovery >= 30:
                 recover_stale()
+                recover_stale_whatsapp()
                 last_recovery = now
 
             if not options["loop"]:

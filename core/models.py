@@ -149,6 +149,14 @@ class DebtSettings(models.Model):
 class CommunicationSettings(models.Model):
     DELIVERY = DebtSettings.DELIVERY
 
+    whatsapp_sale_receipt_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    whatsapp_payment_confirmation_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    whatsapp_daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    whatsapp_low_stock_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    whatsapp_debt_reminder_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    whatsapp_template_name = models.CharField(max_length=120, blank=True)
+    whatsapp_template_language = models.CharField(max_length=12, default="en")
+
     sale_receipt_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     payment_confirmation_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
     daily_closing_mode = models.CharField(max_length=8, choices=DELIVERY, default="send")

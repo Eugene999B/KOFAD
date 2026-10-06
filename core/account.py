@@ -121,6 +121,13 @@ def forgot_password(request):
                         phone = current_access.recovery_phone
                         if not phone or not user.is_active:
                             return redirect("reset_password")
+                        recent = PasswordRecovery.objects.filter(
+                            user=user, used=False, phone=phone,
+                            created_at__gte=timezone.now() - timedelta(seconds=60),
+                        ).order_by("-created_at").first()
+                        if recent:
+                            request.session["recovery_id"] = str(recent.pk)
+                            return redirect("reset_password")
                         PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
                         challenge = PasswordRecovery.objects.create(id=challenge_id, user=user, phone=phone,
                             code_digest=digest(str(challenge_id)+":"+code), password_stamp=digest(user.password),
@@ -129,7 +136,7 @@ def forgot_password(request):
                         result = get_provider(settings.SMS_PROVIDER).submit(phone,
                             f"KOFAD password reset code: {code}. Expires in 10 minutes. Do not share this code.",
                             settings.SMS_SENDER_ID, "", False)
-                        sent = result.status in ("accepted", "delivered")
+                        sent = result.status in ("accepted", "delivered", "unknown")
                     except Exception:
                         sent = False
                     update = {"sent": sent}

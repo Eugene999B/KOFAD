@@ -44,6 +44,207 @@ DATASETS = {
 }
 
 
+# Each register presents the fields needed for that business task.
+EXPORT_COLUMNS = {
+    "customers": [
+        "name",
+        "phone",
+        "outstanding"
+    ],
+    "suppliers": [
+        "name",
+        "phone",
+        "outstanding"
+    ],
+    "market_customers": [
+        "name",
+        "phone",
+        "created",
+        "orders",
+        "paid_spend",
+        "status"
+    ],
+    "sales": [
+        "reference",
+        "business_date",
+        "contact",
+        "type",
+        "total",
+        "paid",
+        "balance",
+        "staff"
+    ],
+    "purchases": [
+        "reference",
+        "business_date",
+        "contact",
+        "supplier_reference",
+        "total",
+        "paid",
+        "balance"
+    ],
+    "expenses": [
+        "reference",
+        "business_date",
+        "staff",
+        "total",
+        "funding_source",
+        "daily_closing",
+        "note"
+    ],
+    "payments": [
+        "reference",
+        "date",
+        "contact",
+        "type",
+        "total",
+        "staff"
+    ],
+    "transactions": [
+        "reference",
+        "date",
+        "type",
+        "contact",
+        "total",
+        "paid",
+        "balance",
+        "staff"
+    ],
+    "inventory": [
+        "sku",
+        "product",
+        "pack",
+        "quantity",
+        "quarantine",
+        "cost",
+        "value",
+        "reorder",
+        "status"
+    ],
+    "workers": [
+        "employee_code",
+        "name",
+        "job_title",
+        "department",
+        "phone",
+        "hire_date",
+        "status"
+    ],
+    "staff": [
+        "username",
+        "name",
+        "role",
+        "active",
+        "last_login"
+    ],
+    "debts": [
+        "customer",
+        "phone",
+        "outstanding",
+        "overdue",
+        "open_receipts",
+        "next_due",
+        "next_reference"
+    ],
+    "creditors": [
+        "creditor",
+        "phone",
+        "outstanding",
+        "overdue",
+        "due_7",
+        "open_bills",
+        "next_due"
+    ],
+    "market_catalog": [
+        "sku",
+        "market_title",
+        "category",
+        "published",
+        "selling_unit",
+        "market_price",
+        "photo"
+    ],
+    "online_orders": [
+        "reference",
+        "created",
+        "customer",
+        "fulfilment",
+        "status",
+        "payment_status",
+        "delivery_fee",
+        "total"
+    ],
+    "online_returns": [
+        "order",
+        "created",
+        "customer",
+        "resolution",
+        "status",
+        "value",
+        "refund_amount",
+        "reason"
+    ],
+    "delivery_tracking": [
+        "order",
+        "created",
+        "customer",
+        "driver",
+        "driver_phone",
+        "status",
+        "eta",
+        "note"
+    ],
+    "customer_support": [
+        "updated",
+        "customer",
+        "phone",
+        "subject",
+        "order",
+        "status",
+        "assigned_to"
+    ],
+    "customer_returns": [
+        "sale",
+        "date",
+        "customer",
+        "value",
+        "refund_method",
+        "status",
+        "posted",
+        "reason"
+    ],
+    "supplier_returns": [
+        "purchase",
+        "date",
+        "supplier",
+        "product",
+        "quantity",
+        "amount",
+        "status",
+        "reason"
+    ],
+    "payroll": [
+        "period",
+        "employee_code",
+        "worker",
+        "gross",
+        "employee_ssnit",
+        "tax",
+        "net",
+        "paid",
+        "outstanding"
+    ]
+}
+
+
+def select_columns(dataset, columns):
+    chosen = EXPORT_COLUMNS.get(dataset)
+    if not chosen:
+        return columns
+    labels = dict(columns)
+    return [(key, labels[key]) for key in chosen if key in labels]
+
+
 def _branch(request):
     branch = shell(request)["current_branch"]
     if not branch:
@@ -76,11 +277,8 @@ def _rows(request, dataset, branch, first, last):
             rows.append({
                 "name": party.name,
                 "phone": party.phone,
-                "email": party.email,
-                "address": party.address,
                 "credit_limit": party.credit_limit,
                 "outstanding": s.party_debt(party),
-                "messages": "Allowed" if party.consent else "Not allowed",
             })
         return rows, [
             ("name", "Name"), ("phone", "Phone"), ("email", "Email"), ("address", "Address"),
@@ -156,8 +354,6 @@ def _rows(request, dataset, branch, first, last):
                 "last_login": customer.last_login_at,
                 "orders": customer.orders.count(),
                 "paid_spend": paid_spend,
-                "support_threads": customer.conversations.count(),
-                "addresses": customer.addresses.count(),
                 "status": "Active" if customer.active else "Disabled",
             })
         return rows, [
@@ -721,6 +917,7 @@ def download(request, format):
             raise PermissionDenied("You do not have permission to export this information.")
         first, last, start, end = _dates(request)
         rows, columns = _rows(request, dataset, branch, first, last)
+        columns = select_columns(dataset, columns)
         s.audit(request.user, branch, "export.downloaded", dataset, {
             "format": format, "start": start, "end": end, "rows": len(rows),
         })
@@ -734,8 +931,15 @@ def download(request, format):
                 "Location": branch.name,
                 "Date range": "Current snapshot" if not date_suffix else f"{start} to {end}",
                 "Generated": timezone.localtime().strftime("%d %b %Y %H:%M"),
+                "Currency": company.currency,
+                "Prepared by": request.user.get_full_name() or request.user.username,
             },
-            summary={"Rows exported": len(rows)},
+            summary={
+                "Records": len(rows),
+                **({"Outstanding (" + company.currency + ")": sum(
+                    (row.get("outstanding", Decimal("0")) for row in rows), Decimal("0")
+                )} if dataset in {"customers", "suppliers", "creditors", "debts"} else {}),
+            },
             notes=["Generated directly from KOFAD with the current user's permission and location scope."],
         )
     except ValidationError as exc:

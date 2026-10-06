@@ -19,7 +19,6 @@
   let selectedCustomer = null;
   let selectedSupplier = null;
   let newCustomerMode = false;
-  let smsPreferenceExplicit = false;
   let restoredState = null;
   let hydrating = true;
   let selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
@@ -73,6 +72,7 @@
   const creditFields = document.querySelector("#credit-fields");
   const dueDate = document.querySelector("#due-date");
   const customerConsent = document.querySelector("#customer-consent");
+  const customerWhatsApp = document.querySelector("#customer-whatsapp");
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
@@ -190,6 +190,7 @@
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
         customerConsent: Boolean(customerConsent?.checked),
+        customerWhatsApp: Boolean(customerWhatsApp?.checked),
         purchaseReference: purchaseReference?.value || "",
         purchaseDocumentDate: purchaseDocumentDate?.value || "",
         purchaseNote: purchaseNote?.value || "",
@@ -823,14 +824,14 @@
     // customer. The backend still sends only when a valid recipient exists.
     customerConsent.disabled = false;
     customerConsent.closest("#customer-consent-wrap")?.classList.toggle("no-recipient", !available);
-    if (!smsPreferenceExplicit) customerConsent.checked = true;
+    // A customer lookup must never overwrite the cashier\u0027s choice.
   }
 
   customerConsent?.addEventListener("change", () => {
-    smsPreferenceExplicit = true;
     changed();
     persist();
   });
+  customerWhatsApp?.addEventListener("change", () => { changed(); persist(); });
   customerName?.addEventListener("input", updateConsentAvailability);
   customerPhone?.addEventListener("input", updateConsentAvailability);
 
@@ -1103,7 +1104,11 @@
       })),
       party,
       ...(!purchase && !party && newName ? {customer_name: newName, customer_phone: newPhone} : {}),
-      ...(!purchase ? {customer_consent: Boolean((party || newName) && customerConsent?.checked)} : {}),
+      ...(!purchase ? {
+        customer_consent: Boolean((party || newName) && (customerConsent?.checked || customerWhatsApp?.checked)),
+        send_sms: Boolean((party || newName) && customerConsent?.checked),
+        send_whatsapp: Boolean((party || newName) && customerWhatsApp?.checked)
+      } : {}),
       due_date: dueDate?.value || "",
       ...(purchase ? {external_reference: purchaseReference?.value.trim() || "", document_date: purchaseDocumentDate?.value || "", note: purchaseNote?.value.trim() || ""} : {}),
       override_reason: document.querySelector("#override-reason")?.value || "",
@@ -1116,6 +1121,7 @@
 
   function setSuccessStatus(message, tone = "subtle") {
     if (!successMessageStatus) return;
+    message = [message, successMessageStatus.dataset.whatsappResult].filter(Boolean).join(" ");
     successMessageStatus.textContent = message || "";
     successMessageStatus.classList.toggle("hidden", !message);
     successMessageStatus.classList.toggle("error", tone === "error");
@@ -1177,6 +1183,9 @@
         ? "Send SMS"
         : "SMS unavailable";
     }
+    if (result.whatsapp_requested && successMessageStatus) {
+      successMessageStatus.dataset.whatsappResult = result.whatsapp_message || "WhatsApp receipt requested.";
+    } else if (successMessageStatus) { delete successMessageStatus.dataset.whatsappResult; }
     if (result.sms_requested) {
       setSuccessStatus(
         result.sms_message || (result.sms_status === "delivered" ? "Receipt SMS delivered." : ""),
@@ -1209,8 +1218,8 @@
     if (customerSearch) customerSearch.value = "";
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
-    smsPreferenceExplicit = false;
     if (customerConsent) customerConsent.checked = true;
+    if (customerWhatsApp) customerWhatsApp.checked = false;
     if (paymentPlan) paymentPlan.value = "full";
     if (dueDate) dueDate.value = "";
     selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
@@ -1294,6 +1303,7 @@
         customer_name: customerName?.value.trim() || "",
         customer_phone: customerPhone?.value || "",
         customer_consent: Boolean(customerConsent?.checked),
+        send_whatsapp: Boolean(customerWhatsApp?.checked),
         payment_plan: paymentPlan?.value || "full",
         due_date: dueDate?.value || ""
       };
@@ -1339,13 +1349,12 @@
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
+      if (customerWhatsApp) customerWhatsApp.checked = saved.send_whatsapp === true;
       if (customerConsent) {
         if (Object.prototype.hasOwnProperty.call(saved, "customer_consent")) {
-          smsPreferenceExplicit = true;
-          customerConsent.checked = Boolean(saved.customer_consent);
+                customerConsent.checked = Boolean(saved.customer_consent);
         } else {
-          smsPreferenceExplicit = false;
-          customerConsent.checked = true;
+                customerConsent.checked = true;
         }
       }
       applyPaymentPlan();
@@ -1371,13 +1380,12 @@
     if (customerPhone && restoredState.customerPhone) customerPhone.value = restoredState.customerPhone;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
+    if (customerWhatsApp) customerWhatsApp.checked = restoredState.customerWhatsApp === true;
     if (customerConsent) {
       if (Object.prototype.hasOwnProperty.call(restoredState, "customerConsent")) {
-        smsPreferenceExplicit = true;
-        customerConsent.checked = Boolean(restoredState.customerConsent);
+            customerConsent.checked = Boolean(restoredState.customerConsent);
       } else {
-        smsPreferenceExplicit = false;
-        customerConsent.checked = true;
+            customerConsent.checked = true;
       }
     }
     if (purchaseReference) purchaseReference.value = restoredState.purchaseReference || "";
@@ -1402,10 +1410,10 @@
       customerPhone.value = pendingBody.customer_phone || "";
     }
     if (customerConsent && Object.prototype.hasOwnProperty.call(pendingBody, "customer_consent")) {
-      smsPreferenceExplicit = true;
-      customerConsent.checked = Boolean(pendingBody.customer_consent);
+        customerConsent.checked = Boolean(pendingBody.send_sms ?? pendingBody.customer_consent);
       updateConsentAvailability();
     }
+    if (customerWhatsApp) customerWhatsApp.checked = pendingBody.send_whatsapp === true;
     if (dueDate) dueDate.value = pendingBody.due_date || "";
     if (purchaseReference) purchaseReference.value = pendingBody.external_reference || "";
     if (purchaseDocumentDate) purchaseDocumentDate.value = pendingBody.document_date || purchaseDocumentDate.value;

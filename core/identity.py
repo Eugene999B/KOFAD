@@ -35,7 +35,7 @@ def customer_by_phone(branch, value):
 
 def resolve_sale_customer(user, branch, payload, audit):
     """Select an existing customer or create/reuse one directly from checkout."""
-    consent_requested = payload.get("customer_consent") is True
+    consent_requested = any(payload.get(key) is True for key in ("customer_consent", "send_sms", "send_whatsapp"))
 
     if payload.get("party"):
         party = Party.objects.filter(pk=payload["party"], branch=branch, kind="customer").first()

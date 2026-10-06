@@ -11,6 +11,7 @@
 </div>
 {% endblock %}
 {% block content %}
+{% if doc.kind == "sale" %}<section class="panel"><h2>Receipt delivery</h2>{% include "_receipt_channels.html" with row=doc %}</section>{% endif %}
 <article class="panel receipt document-receipt">
 <header class="receipt-header">
 <div class="brand receipt-brand">{% include "brand.html" %}</div>

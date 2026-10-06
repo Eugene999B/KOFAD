@@ -207,6 +207,8 @@ class CommunicationSettingsForm(forms.ModelForm):
             "sale_receipt_mode", "payment_confirmation_mode",
             "daily_closing_mode", "low_stock_mode", "low_stock_time",
             "closing_template", "low_stock_template",
+            "whatsapp_sale_receipt_mode", "whatsapp_payment_confirmation_mode", "whatsapp_daily_closing_mode", "whatsapp_low_stock_mode", "whatsapp_debt_reminder_mode",
+            "whatsapp_template_name", "whatsapp_template_language",
         ]
         labels = {
             "sale_receipt_mode": "After a completed sale",
@@ -232,8 +234,37 @@ class CommunicationSettingsForm(forms.ModelForm):
             "low_stock_template": "Placeholders: {company}, {low_count}, {out_count}, {location}.",
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = {"sale_receipt": "Sale receipts", "payment_confirmation": "Payment confirmations",
+                  "daily_closing": "Daily closing", "low_stock": "Low-stock alerts", "debt_reminder": "Debt reminders"}
+        for key, label in labels.items():
+            self.fields["whatsapp_" + key + "_mode"].required = False
+            self.fields["whatsapp_" + key + "_mode"].label = label
+            self.fields["whatsapp_" + key + "_mode"].choices = [
+                ("off", "Off"), ("draft", "Prepare drafts"), ("send", "Send automatically")]
+        self.fields["whatsapp_template_name"].label = "Approved WhatsApp notification template"
+        self.fields["whatsapp_template_name"].help_text = "Meta-approved template with one body text parameter for the notification."
+        self.fields["whatsapp_template_language"].label = "Approved template language"
+        self.fields["whatsapp_template_language"].required = False
+
     def clean(self):
         data = super().clean()
+        for key in ("sale_receipt", "payment_confirmation", "daily_closing", "low_stock", "debt_reminder"):
+            data["whatsapp_" + key + "_mode"] = data.get("whatsapp_" + key + "_mode") or "off"
+        data["whatsapp_template_language"] = data.get("whatsapp_template_language") or "en"
+        template = (data.get("whatsapp_template_name") or "").strip()
+        language = (data.get("whatsapp_template_language") or "").strip()
+        if template and not re.fullmatch(r"[a-z0-9_]+", template):
+            self.add_error("whatsapp_template_name", "Use the exact lowercase template name from WhatsApp Manager.")
+        if language and not re.fullmatch(r"[a-z]{2,3}(?:_[A-Z]{2})?", language):
+            self.add_error("whatsapp_template_language", "Use a language code such as en or en_US.")
+        if any(data.get("whatsapp_" + key + "_mode") == "send" for key in
+               ("sale_receipt", "payment_confirmation", "daily_closing", "low_stock", "debt_reminder")):
+            from .whatsapp_delivery import configuration_error
+            error = configuration_error(template_name=template)
+            if error:
+                self.add_error(None, error)
         allowed = {
             "closing_template": {"company","date","currency","sales_total","expected_cash","counted_cash","cash_variance","debt_collections","expenses","staff","location"},
             "low_stock_template": {"company","low_count","out_count","location"},

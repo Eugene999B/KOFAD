@@ -65,11 +65,21 @@ def _render(body, data):
 
 def _apply_mode(message, mode, actor=None):
     if message and mode == "send":
-        send_automatic(message, actor)
+        if message.channel == "whatsapp":
+            from .whatsapp_delivery import configuration_error, send_whatsapp
+            if not configuration_error():
+                try:
+                    return send_whatsapp(_actor(actor), message.branch, message.pk, automatic=True)
+                except Exception as exc:
+                    _record_automation_failure(message.branch, actor, "whatsapp", message.pk, exc)
+                    message.last_error = str(exc)[:240]
+                    message.save(update_fields=["last_error"])
+        else:
+            send_automatic(message, actor)
     return message
 
 
-def prepare_document_automation(document, code, mode, actor=None):
+def prepare_document_automation(document, code, mode, actor=None, channel="sms"):
     if mode == "off" or not document.party_id or not document.party.consent:
         return None
     if code not in {"receipt", "payment"}:
@@ -77,7 +87,8 @@ def prepare_document_automation(document, code, mode, actor=None):
     body = render_for_document(document, code)
     message = create_automatic_customer_draft(
         _actor(actor), document.branch, document.party, body,
-        source_key=f"auto:{code}:{document.pk}",
+        source_key=f"auto:{code}:{document.pk}" + (":whatsapp" if channel == "whatsapp" else ""),
+        channel=channel,
     )
     return _apply_mode(message, mode, actor)
 
@@ -85,17 +96,17 @@ def prepare_document_automation(document, code, mode, actor=None):
 def prepare_sale_receipt(document, actor=None):
     if document.kind != "sale":
         return None
-    return prepare_document_automation(
-        document, "receipt", _communication_policy().sale_receipt_mode, actor
-    )
+    policy = _communication_policy()
+    prepare_document_automation(document, "receipt", policy.whatsapp_sale_receipt_mode, actor, "whatsapp")
+    return prepare_document_automation(document, "receipt", policy.sale_receipt_mode, actor)
 
 
 def prepare_payment_confirmation(document, actor=None):
     if document.kind != "collection":
         return None
-    return prepare_document_automation(
-        document, "payment", _communication_policy().payment_confirmation_mode, actor
-    )
+    policy = _communication_policy()
+    prepare_document_automation(document, "payment", policy.whatsapp_payment_confirmation_mode, actor, "whatsapp")
+    return prepare_document_automation(document, "payment", policy.payment_confirmation_mode, actor)
 
 
 def management_contacts(branch, field):
@@ -107,7 +118,7 @@ def management_contacts(branch, field):
 
 def prepare_closing_notifications(closing, actor=None):
     policy = _communication_policy()
-    if policy.daily_closing_mode == "off":
+    if policy.daily_closing_mode == "off" and policy.whatsapp_daily_closing_mode == "off":
         return []
     company = _company()
     summary = closing.summary or {}
@@ -131,13 +142,21 @@ def prepare_closing_notifications(closing, actor=None):
     sender = _actor(actor)
     created = []
     for contact in management_contacts(closing.branch, "receive_closing").distinct():
-        message = create_internal_draft(
-            sender, closing.branch, contact, body,
-            source_key=f"auto:closing:{closing.pk}:{contact.pk}",
-        )
-        created.append(message)
-    if created and policy.daily_closing_mode == "send" and settings.SMS_ENABLED:
-        return send_messages_now(sender, closing.branch, [message.pk for message in created], automatic=True)
+        for channel, mode in (("sms", policy.daily_closing_mode), ("whatsapp", policy.whatsapp_daily_closing_mode)):
+            if mode == "off":
+                continue
+            message = create_internal_draft(
+                sender, closing.branch, contact, body, channel=channel,
+                source_key=f"auto:closing:{closing.pk}:{contact.pk}" + (":whatsapp" if channel == "whatsapp" else ""),
+            )
+            if channel == "whatsapp":
+                _apply_mode(message, mode, sender)
+            created.append(message)
+    sms = [message.pk for message in created if message.channel == "sms"]
+    if sms and policy.daily_closing_mode == "send" and settings.SMS_ENABLED:
+        send_messages_now(sender, closing.branch, sms, automatic=True)
+        for message in created:
+            message.refresh_from_db()
     return created
 
 
@@ -200,10 +219,11 @@ def render_debt_account_message(party, today=None):
     })
 
 
-def _debt_frequency_allows(branch, party, policy, now, snapshot):
+def _debt_frequency_allows(branch, party, policy, now, snapshot, channel="sms"):
     history = Message.objects.filter(
         branch=branch,
         party=party,
+        channel=channel,
         source_key__startswith=f"auto:debt:{party.pk}:",
     ).order_by("-created_at")
     last = history.first()
@@ -224,7 +244,8 @@ def _debt_frequency_allows(branch, party, policy, now, snapshot):
 
 def run_debt_reminders(now=None):
     policy = _debt_policy()
-    if policy.delivery_mode == "off":
+    whatsapp_mode = _communication_policy().whatsapp_debt_reminder_mode
+    if policy.delivery_mode == "off" and whatsapp_mode == "off":
         return 0
     now = now or timezone.localtime()
     today = now.date()
@@ -242,22 +263,23 @@ def run_debt_reminders(now=None):
             snapshot = debt_service.customer_account_snapshot(party)
             if not _debt_eligible(snapshot, policy, today):
                 continue
-            if not _debt_frequency_allows(branch, party, policy, now, snapshot):
-                continue
             body = render_debt_account_message(party, today)
             stage = _debt_stage(snapshot, policy, today)
             if not body or not stage:
                 continue
-            source_key = f"auto:debt:{party.pk}:{stage}:{today.isoformat()}"
-            message = create_automatic_customer_draft(actor, branch, party, body, source_key=source_key)
-            _apply_mode(message, policy.delivery_mode, actor)
-            created += 1
+            for channel, mode in (("sms", policy.delivery_mode), ("whatsapp", whatsapp_mode)):
+                if mode == "off" or not _debt_frequency_allows(branch, party, policy, now, snapshot, channel):
+                    continue
+                source_key = f"auto:debt:{party.pk}:{stage}:{today.isoformat()}" + (":whatsapp" if channel == "whatsapp" else "")
+                message = create_automatic_customer_draft(actor, branch, party, body, source_key=source_key, channel=channel)
+                _apply_mode(message, mode, actor)
+                created += 1
     return created
 
 
 def run_low_stock_summary(now=None):
     policy = _communication_policy()
-    if policy.low_stock_mode == "off":
+    if policy.low_stock_mode == "off" and policy.whatsapp_low_stock_mode == "off":
         return 0
     now = now or timezone.localtime()
     today = now.date()
@@ -286,10 +308,16 @@ def run_low_stock_summary(now=None):
         })
         messages_for_branch = []
         for contact in management_contacts(branch, "receive_low_stock").distinct():
-            source_key = f"auto:lowstock:{branch.pk}:{contact.pk}:{today.isoformat()}"
-            message = create_internal_draft(actor, branch, contact, body, source_key=source_key)
-            messages_for_branch.append(message)
-            created += 1
+            for channel, mode in (("sms", policy.low_stock_mode), ("whatsapp", policy.whatsapp_low_stock_mode)):
+                if mode == "off":
+                    continue
+                source_key = f"auto:lowstock:{branch.pk}:{contact.pk}:{today.isoformat()}" + (":whatsapp" if channel == "whatsapp" else "")
+                message = create_internal_draft(actor, branch, contact, body, source_key=source_key, channel=channel)
+                if channel == "whatsapp":
+                    _apply_mode(message, mode, actor)
+                else:
+                    messages_for_branch.append(message)
+                created += 1
         if messages_for_branch and policy.low_stock_mode == "send" and settings.SMS_ENABLED:
             send_messages_now(actor, branch, [message.pk for message in messages_for_branch], automatic=True)
     return created

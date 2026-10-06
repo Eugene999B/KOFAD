@@ -459,7 +459,7 @@ def _receipt_sms_result(user, branch, doc):
 
     body = render_for_document(doc, "receipt")
     item = Message.objects.filter(
-        branch=branch, party=doc.party
+        branch=branch, party=doc.party, channel="sms"
     ).filter(
         Q(source_key=f"auto:receipt:{doc.pk}")
         | Q(source_key=f"document:receipt:{doc.pk}")
@@ -500,6 +500,24 @@ def _receipt_sms_result(user, branch, doc):
     return sent, message
 
 
+def _receipt_whatsapp_result(user, branch, doc):
+    from .sms.service import create_draft
+    from .sms.templates import render_for_document
+    from .whatsapp_delivery import send_whatsapp
+    if not doc.party_id or not doc.party.consent:
+        raise ValidationError("Choose a customer with messaging consent before sending a receipt.")
+    item = Message.objects.filter(branch=branch, channel="whatsapp", source_key=f"auto:receipt:{doc.pk}:whatsapp").first()
+    if item is None:
+        item = create_draft(user, branch, doc.party, render_for_document(doc, "receipt"),
+                            channel="whatsapp", source_key=f"document:receipt:{doc.pk}:whatsapp")
+    sent = send_whatsapp(user, branch, item.pk, automatic=True, retry=item.status == "failed")
+    label = {"accepted": "Receipt accepted by WhatsApp; delivery confirmation is pending.",
+             "delivered": "WhatsApp receipt delivered.", "read": "WhatsApp receipt read.",
+             "sending": "WhatsApp receipt submission is in progress.",
+             "sent": "WhatsApp receipt sent."}
+    return sent, label.get(sent.status, sent.last_error or "WhatsApp delivery is not confirmed.")
+
+
 @login_required
 @require_POST
 def complete_trade(request):
@@ -535,7 +553,7 @@ def complete_trade(request):
             else "SMS delivery is not enabled for this deployment."
         )
 
-        sms_requested = bool(doc.kind == "sale" and data.get("customer_consent") is True)
+        sms_requested = bool(doc.kind == "sale" and data.get("send_sms", data.get("customer_consent")) is True)
         sms_status = ""
         sms_message = ""
         if sms_requested:
@@ -550,7 +568,18 @@ def complete_trade(request):
                 sms_status = "failed"
                 sms_message = sms_reason
 
+        whatsapp_requested = doc.kind == "sale" and data.get("send_whatsapp") is True
+        whatsapp_status, whatsapp_message = "", ""
+        if whatsapp_requested:
+            try:
+                sent, whatsapp_message = _receipt_whatsapp_result(request.user, branch, doc)
+                whatsapp_status = sent.status
+            except (ValidationError, ValueError) as exc:
+                whatsapp_status, whatsapp_message = "failed", problem(exc)
         return JsonResponse({
+            "whatsapp_requested": whatsapp_requested,
+            "whatsapp_status": whatsapp_status,
+            "whatsapp_message": whatsapp_message,
             "url": f"/documents/{doc.pk}/",
             "document_id": str(doc.pk),
             "reference": doc.reference,
@@ -580,8 +609,14 @@ def send_transaction_message_api(request, pk):
     if not request.user.has_perm("core.operate_sales"):
         raise PermissionDenied
     try:
-        sent, message = _receipt_sms_result(request.user, branch, doc)
-        ok = sent.status in {"accepted", "delivered", "simulated", "sending"}
+        data = json.loads(request.body or "{}")
+        if not isinstance(data, dict):
+            raise ValidationError("Expected a message request object.")
+        channel = data.get("channel", "sms")
+        if channel not in {"sms", "whatsapp"}:
+            raise ValidationError("Choose SMS or WhatsApp.")
+        sent, message = (_receipt_whatsapp_result if channel == "whatsapp" else _receipt_sms_result)(request.user, branch, doc)
+        ok = sent.status in {"accepted", "delivered", "read", "sent", "simulated", "sending"}
         if sent.status == "unknown":
             return JsonResponse({"error": message, "status": sent.status}, status=409)
         return JsonResponse(
@@ -1536,7 +1571,13 @@ def debt_settings(request, branch):
 @protected("manage_company")
 def communication_settings(request, branch):
     item = CommunicationSettings.objects.first() or CommunicationSettings.objects.create()
-    form = CommunicationSettingsForm(request.POST or None, instance=item, prefix="policy")
+    data = request.POST.copy() if request.method == "POST" else None
+    if data is not None and data.get("automation_switches") == "1":
+        for field in ("sale_receipt_mode", "payment_confirmation_mode", "daily_closing_mode", "low_stock_mode",
+                      "whatsapp_sale_receipt_mode", "whatsapp_payment_confirmation_mode", "whatsapp_daily_closing_mode",
+                      "whatsapp_low_stock_mode", "whatsapp_debt_reminder_mode"):
+            data["policy-" + field] = "send" if data.get("policy-" + field + "-enabled") == "on" else "off"
+    form = CommunicationSettingsForm(data or None, instance=item, prefix="policy")
     contact_form = ManagementContactForm(request.POST or None, prefix="contact")
     action = request.POST.get("action") if request.method == "POST" else ""
 
@@ -1584,7 +1625,12 @@ def communication_settings(request, branch):
         row.code: row for row in MessageTemplate.objects.filter(code__in=["receipt", "payment", "debt"])
     }
     return render(request, "communication_settings.html", {
-        "title": "Communication settings",
+        "title": "SMS & WhatsApp settings",
+        "sms_switches": [form[name] for name in ("sale_receipt_mode", "payment_confirmation_mode", "daily_closing_mode", "low_stock_mode")],
+        "whatsapp_switches": [form[name] for name in ("whatsapp_sale_receipt_mode", "whatsapp_payment_confirmation_mode",
+            "whatsapp_daily_closing_mode", "whatsapp_low_stock_mode", "whatsapp_debt_reminder_mode")],
+        "whatsapp_enabled": settings.WHATSAPP_ENABLED,
+        "whatsapp_configured": bool(settings.WHATSAPP_ACCESS_TOKEN and settings.WHATSAPP_PHONE_NUMBER_ID and settings.WHATSAPP_APP_SECRET),
         "form": form,
         "contact_form": contact_form,
         "item": item,
@@ -1764,7 +1810,7 @@ def communications(request, branch):
                         phone=phone,
                         label=label,
                     )
-                    if channel == "whatsapp":
+                    if channel == "whatsapp" and not settings.WHATSAPP_ENABLED:
                         item.provider = "whatsapp-link"
                         item.status = "ready"
                         item.save(update_fields=["provider", "status"])
@@ -1791,6 +1837,14 @@ def communications(request, branch):
                             f"{failed + unknown} SMS message{'' if failed + unknown == 1 else 's'} not confirmed. "
                             + (first_problem or "Check Recent messages for the provider result.")
                         )
+                elif settings.WHATSAPP_ENABLED:
+                    from .whatsapp_delivery import send_whatsapp
+                    results = [send_whatsapp(request.user, branch, item.pk) for item in prepared]
+                    accepted = sum(item.status in {"accepted", "sent", "delivered", "read"} for item in results)
+                    messages.success(request, f"{accepted} WhatsApp message(s) accepted. See delivery status below.")
+                    for item in results:
+                        if item.last_error:
+                            messages.error(request, item.last_error)
                 else:
                     messages.success(
                         request,
@@ -1828,7 +1882,7 @@ def communications(request, branch):
     for row in rows:
         row.whatsapp_url = ""
         row.status_label = status_labels.get(row.status, row.status.replace("_", " ").title())
-        if row.channel == "whatsapp" and row.recipient:
+        if row.channel == "whatsapp" and row.recipient and row.provider == "whatsapp-link":
             digits = "".join(ch for ch in row.recipient if ch.isdigit())
             row.whatsapp_url = f"https://wa.me/{digits}?text={quote(row.body)}"
 

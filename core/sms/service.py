@@ -92,7 +92,12 @@ def _create_draft_record(user, branch, body, channel="sms", source_key=None, par
     if channel not in ("sms", "whatsapp"):
         raise ValidationError("Unknown channel.")
     body = body.strip()
-    encoding, segments = estimate(body)
+    if channel == "whatsapp":
+        if not body or len(body) > 4096:
+            raise ValidationError("WhatsApp messages must contain 1 to 4,096 characters.")
+        encoding, segments = "unicode", 1
+    else:
+        encoding, segments = estimate(body)
     if party:
         if party.branch_id != branch.pk or not party.consent:
             raise ValidationError("Choose an opted-in contact at this location.")
@@ -139,16 +144,16 @@ def create_draft(user, branch, party, body, channel="sms", source_key=None):
 
 
 @transaction.atomic
-def create_automatic_customer_draft(user, branch, party, body, source_key=None):
+def create_automatic_customer_draft(user, branch, party, body, source_key=None, channel="sms"):
     lock_branch(branch)
-    return _create_draft_record(user, branch, body, "sms", source_key, party=party)
+    return _create_draft_record(user, branch, body, channel, source_key, party=party)
 
 
 @transaction.atomic
-def create_internal_draft(user, branch, management_contact, body, source_key=None):
+def create_internal_draft(user, branch, management_contact, body, source_key=None, channel="sms"):
     lock_branch(branch)
     return _create_draft_record(
-        user, branch, body, "sms", source_key, management_contact=management_contact
+        user, branch, body, channel, source_key, management_contact=management_contact
     )
 
 
@@ -164,7 +169,12 @@ def create_direct_draft(user, branch, body, *, channel="sms", source_key=None, p
     lock_branch(branch)
 
     body = str(body or "").strip()
-    encoding, segments = estimate(body)
+    if channel == "whatsapp":
+        if not body or len(body) > 4096:
+            raise ValidationError("WhatsApp messages must contain 1 to 4,096 characters.")
+        encoding, segments = "unicode", 1
+    else:
+        encoding, segments = estimate(body)
     if party:
         if party.branch_id != branch.pk or party.kind != "customer":
             raise ValidationError("Choose a customer from the current location.")

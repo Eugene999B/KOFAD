@@ -576,7 +576,7 @@ def post_trade(user, branch, payload, key, kind="sale"):
         "document_date": str(document_date) if kind == "purchase" else "",
         "new_products_created": created_products if kind == "purchase" else [],
     })
-    if kind == "sale":
+    if kind == "sale" and not any(key in payload for key in ("customer_consent", "send_sms", "send_whatsapp")):
         from . import automations
         transaction.on_commit(
             lambda document_id=doc.pk, actor_id=user.pk:
