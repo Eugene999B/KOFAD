@@ -1,4 +1,7 @@
 from datetime import date
+from decimal import Decimal
+
+from django.core.paginator import Paginator
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -42,6 +45,19 @@ def _range(request):
     return first, last, start, end
 
 
+def _filtered_ledger(request, rows):
+    query = request.GET.get("q", "").strip()[:100].casefold()
+    account = request.GET.get("account", "").strip()[:20]
+    source = request.GET.get("source", "").strip()[:80]
+    return [
+        row for row in rows
+        if (not account or row["account_code"] == account)
+        and (not source or row["source"] == source)
+        and (not query or query in " ".join(str(row[key]) for key in
+             ("reference", "description", "account", "account_code", "source")).casefold())
+    ]
+
+
 def _journal_lines(request):
     rows = []
     for index in range(1, 9):
@@ -60,7 +76,11 @@ def _journal_lines(request):
 
 @protected("view_reports|operate_finance|manage_company")
 def accounting(request, branch):
-    first, last, start, end = _range(request)
+    try:
+        first, last, start, end = _range(request)
+    except ValidationError as exc:
+        messages.error(request, problem(exc))
+        return redirect("/accounting/")
     view = request.GET.get("view", "overview")
     if view not in {"overview", "trial", "ledger", "pnl", "balance", "cashflow", "journals"}:
         view = "overview"
@@ -87,19 +107,13 @@ def accounting(request, branch):
     q = request.GET.get("q", "").strip()[:100]
     account = request.GET.get("account", "").strip()[:20]
     source = request.GET.get("source", "").strip()[:80]
-    if q:
-        lowered = q.casefold()
-        ledger_rows = [
-            row for row in ledger_rows
-            if lowered in " ".join([
-                str(row["reference"]), str(row["description"]), str(row["account"]),
-                str(row["account_code"]), str(row["source"]),
-            ]).casefold()
-        ]
-    if account:
-        ledger_rows = [row for row in ledger_rows if row["account_code"] == account]
-    if source:
-        ledger_rows = [row for row in ledger_rows if row["source"] == source]
+    sources = sorted({row["source"] for row in ledger_rows})
+    ledger_rows = _filtered_ledger(request, ledger_rows)
+    ledger_debits = sum((row["debit"] for row in ledger_rows), Decimal("0"))
+    ledger_credits = sum((row["credit"] for row in ledger_rows), Decimal("0"))
+    page_obj = Paginator(ledger_rows, 100).get_page(request.GET.get("page"))
+    parameters = request.GET.copy()
+    parameters.pop("page", None)
 
     pnl_rows = []
     balance_rows = report["balance_sheet"]
@@ -112,7 +126,6 @@ def accounting(request, branch):
     journals = ManualJournal.objects.filter(branch=branch).select_related(
         "requested_by", "reviewed_by"
     ).prefetch_related("lines")[:100]
-    sources = sorted({row["source"] for row in engine.ledger(branch, first, last)})
 
     cumulative = {row["code"]: row for row in report["cumulative_trial_balance"]}
     period = {row["code"]: row for row in report["trial_balance"]}
@@ -159,7 +172,9 @@ def accounting(request, branch):
     return render(request, "accounting.html", {
         "title": "Accounting Intelligence",
         "start": start, "end": end, "first": first, "last": last,
-        "view": view, "report": report, "ledger_rows": ledger_rows[:2000],
+        "view": view, "report": report, "ledger_rows": page_obj.object_list,
+        "ledger_page": page_obj, "ledger_query": parameters.urlencode(),
+        "ledger_debits": ledger_debits, "ledger_credits": ledger_credits,
         "pnl_rows": pnl_rows, "balance_rows": balance_rows,
         "accounts": sorted(engine.ACCOUNTS.items()),
         "selected_account": account, "selected_source": source, "sources": sources, "q": q,
@@ -182,12 +197,16 @@ def accounting(request, branch):
 
 @protected("view_reports|operate_finance|manage_company")
 def accounting_export(request, branch, format):
-    first, last, start, end = _range(request)
+    try:
+        first, last, start, end = _range(request)
+    except ValidationError as exc:
+        messages.error(request, problem(exc))
+        return redirect("/accounting/")
     view = request.GET.get("view", "trial")
     report = engine.statements(branch, first, last)
 
     if view == "ledger":
-        rows = engine.ledger(branch, first, last)
+        rows = _filtered_ledger(request, engine.ledger(branch, first, last))
         columns = [
             ("date", "Date"), ("reference", "Reference"), ("source", "Source"),
             ("description", "Description"), ("account_code", "Account code"),
@@ -233,7 +252,10 @@ def accounting_export(request, branch, format):
     return export(
         rows, format, f"{title} · {start} to {end}", shell(request)["company"], columns,
         filename=f"kofad-{view}-{start}-{end}", sheet_name=sheet[:31],
-        metadata={"Location": branch.name, "From": first, "To": last, "Accounting view": title},
+        metadata={"Location": branch.name, "From": first, "To": last, "Accounting view": title,
+                  "Account filter": request.GET.get("account", "")[:20] or "All",
+                  "Source filter": request.GET.get("source", "")[:80] or "All",
+                  "Search": request.GET.get("q", "")[:100] or "None"},
         summary={
             "Revenue": report["revenue"], "Expenses": report["expenses"], "Profit / (loss)": report["profit"],
             "Assets": report["assets"], "Liabilities": report["liabilities"], "Equity": report["equity"],

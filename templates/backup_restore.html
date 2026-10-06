@@ -16,7 +16,7 @@
     <div>
       <p class="eyebrow">1 · BACKUP</p>
       <h2>Download a signed full-system backup</h2>
-      <p class="muted">The file is checksummed and cryptographically signed. Keep it private because it contains customer, staff, financial, Marketplace and database-stored document/photo information. Active browser sessions and temporary one-time security codes are intentionally not restored.</p>
+      <p class="muted">The file captures a consistent database snapshot and is checksummed and cryptographically signed. Keep it private because it contains customer, staff, financial, Marketplace and database-stored document/photo information. Active browser sessions and temporary one-time security codes are intentionally not restored. Railway variables, API credentials and the deployed source code are managed separately; retain the installation signing secret and matching release for disaster recovery.</p>
     </div>
     <span class="pill status-good" data-backup-ready-badge {% if not recent_backup %}hidden{% endif %}>Safety backup ready</span>
   </div>

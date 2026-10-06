@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
+from django.db import OperationalError
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -110,7 +111,12 @@ def backup_restore(request):
 @system_administrator
 @require_GET
 def download_backup(request):
-    raw = maintenance.backup_bytes(request.user)
+    try:
+        raw = maintenance.backup_bytes(request.user)
+    except OperationalError:
+        logger.exception("Could not obtain a consistent backup snapshot.")
+        messages.error(request, "The database is busy. No partial backup was downloaded. Please try again shortly.")
+        return redirect("backup_restore")
     maintenance.mark_backup_downloaded(request.session)
     stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     response = HttpResponse(raw, content_type="application/json")

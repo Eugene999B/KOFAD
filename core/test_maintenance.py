@@ -104,6 +104,15 @@ class MaintenanceServiceTests(TransactionTestCase):
         })
         self.assertEqual(maintenance.backup_model_labels(), expected)
 
+    def test_signed_backup_with_malformed_records_fails_cleanly(self):
+        import hashlib
+        bundle = maintenance.create_backup(self.user)
+        bundle["fixture"] = json.dumps([None])
+        bundle["fixture_sha256"] = hashlib.sha256(bundle["fixture"].encode()).hexdigest()
+        bundle["signature"] = maintenance._sign(bundle)
+        with self.assertRaisesMessage(maintenance.BackupError, "malformed records"):
+            maintenance.validate_backup(bundle)
+
     def test_signed_backup_rejects_tampering(self):
         bundle = maintenance.create_backup(self.user)
         maintenance.validate_backup(bundle)

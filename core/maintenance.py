@@ -121,7 +121,15 @@ def _serialize_fixture():
 
 
 def create_backup(actor=None):
-    fixture = _serialize_fixture()
+    # A single snapshot prevents sales and payments changing between model reads.
+    with transaction.atomic():
+        if connection.vendor == "postgresql":
+            tables = ", ".join(connection.ops.quote_name(name) for name in _table_names_for_restore())
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout = '10s'")
+                cursor.execute(f"LOCK TABLE {tables} IN SHARE MODE")
+        fixture = _serialize_fixture()
+        migrations = current_migrations()
     records = json.loads(fixture)
     counts = Counter(row["model"] for row in records)
     bundle = {
@@ -130,7 +138,7 @@ def create_backup(actor=None):
         "created_at": timezone.now().astimezone(dt_timezone.utc).isoformat(),
         "created_by": getattr(actor, "username", "") if actor else "",
         "database_engine": connection.vendor,
-        "migrations": current_migrations(),
+        "migrations": migrations,
         "record_count": len(records),
         "model_counts": dict(sorted(counts.items())),
         "fixture_sha256": hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
@@ -181,15 +189,20 @@ def validate_backup(bundle):
         raise BackupError("Backup fixture is corrupt.") from exc
     if not isinstance(records, list):
         raise BackupError("Backup fixture must contain a record list.")
+    if any(not isinstance(row, dict) or not isinstance(row.get("fields"), dict) or "pk" not in row for row in records):
+        raise BackupError("Backup contains malformed records.")
     allowed = backup_model_labels()
     unexpected = sorted({str(row.get("model", "")) for row in records if row.get("model") not in allowed})
     if unexpected:
         raise BackupError("Backup contains unsupported model data: " + ", ".join(unexpected[:5]))
-    if len(records) != int(bundle.get("record_count", -1)):
+    if not isinstance(bundle.get("record_count"), int) or len(records) != bundle["record_count"]:
         raise BackupError("Backup record count does not match its manifest.")
 
     actual_counts = Counter(row["model"] for row in records)
-    expected_counts = {str(k): int(v) for k, v in (bundle.get("model_counts") or {}).items()}
+    manifest = bundle.get("model_counts")
+    if not isinstance(manifest, dict) or any(not isinstance(v, int) or v < 0 for v in manifest.values()):
+        raise BackupError("Backup model counts are malformed.")
+    expected_counts = manifest
     if dict(actual_counts) != expected_counts:
         raise BackupError("Backup model counts do not match its manifest.")
 
