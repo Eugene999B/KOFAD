@@ -1333,9 +1333,9 @@ def closings(request, branch):
                     selected_day,
                     {method: request.POST.get(method, 0) for method, _ in Payment.METHODS},
                     request.POST.get("note", ""),
-                    request.POST.get("opening_cash", 0),
-                    request.POST.get("cash_in", 0),
-                    request.POST.get("cash_out", 0),
+                    request.POST.get("opening_cash") or 0,
+                    request.POST.get("cash_in") or 0,
+                    request.POST.get("cash_out") or 0,
                     owner_direct=owner_direct,
                 )
                 messages.success(

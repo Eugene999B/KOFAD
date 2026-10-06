@@ -764,19 +764,41 @@ with sync_playwright() as p:
     assert market_state["authenticated"] is False
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/")
-    assert market_page.locator("body.market-gateway-page").count() == 1
-    assert market_page.locator(".market-entry").is_visible()
-    assert market_page.get_by_role("link", name="Sign in to explore", exact=False).is_visible()
-    assert market_page.locator(".market-entry-tile").count() >= 1
-    assert market_page.locator(".shop-shell-search").count() == 0
-    assert market_page.locator(".shop-shell-cart").count() == 0
-    market_page.screenshot(path=str(out / "market-gateway-mobile.png"), full_page=True)
+    assert market_page.locator(".shop-product-grid").is_visible()
+    assert market_page.locator(".shop-shell-search").is_visible()
+    assert market_page.locator(".shop-shell-signin").is_visible()
+    assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    market_page.screenshot(path=str(out / "market-public-mobile.png"), full_page=True)
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/market/")
-    assert market_page.locator(".market-entry").is_visible()
-    market_page.screenshot(path=str(out / "market-gateway-desktop.png"), full_page=True)
+    assert market_page.locator(".shop-product-grid").is_visible()
+    market_page.screenshot(path=str(out / "market-public-desktop.png"), full_page=True)
     market_page.close()
 
+    # App links must open the dialler/mail app without ending the staff session.
+    admin_page.goto("http://127.0.0.1:8000/workspace/")
+    for app_href in ("tel:+233245550090", "mailto:fixture@example.test"):
+        cancelled = admin_page.evaluate("""href => {
+            const link = document.createElement("a");
+            link.href = href;
+            link.textContent = "Contact fixture";
+            document.body.appendChild(link);
+            const event = new MouseEvent("click", {bubbles: true, cancelable: true});
+            // Observe the application's decision, then suppress the OS app launch.
+            let guarded = false;
+            window.addEventListener("click", event => {
+                guarded = event.defaultPrevented;
+                event.preventDefault();
+            }, {once: true});
+            link.dispatchEvent(event);
+            link.remove();
+            return guarded;
+        }""", app_href)
+        assert cancelled is False
+        assert admin_page.locator("[data-session-leave-dialog]:visible").count() == 0
+    admin_page.reload()
+    assert "/login/" not in admin_page.url
+    
     # Executive and accounting workspaces remain readable across narrow phones
     # and dark theme. Market Catalog Studio must expose real customer visibility.
     for width in (320, 390):

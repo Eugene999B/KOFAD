@@ -27,11 +27,11 @@
 <section class="panel" id="closing-workspace" data-net-cash="{{ summary.channel_net.cash }}">
 <div class="section-heading"><div><h2>Count and close {{ selected_day }}</h2><p class="muted">Count independently. Do not copy the expected values without checking the real cash, MoMo, bank and card evidence.</p></div></div>
 <form method="post">{% csrf_token %}<input type="hidden" name="date" value="{{ selected_day }}">
-<div class="three-column closing-cash-controls">
-<label>Opening cash float<input id="opening-cash" name="opening_cash" type="number" min="0" step=".01" value="0" required><small>Cash already in the drawer before today's trading.</small></label>
-<label>Other cash in<input id="closing-cash-in" name="cash_in" type="number" min="0" step=".01" value="0" required><small>Cash added outside recorded sales/collections.</small></label>
-<label>Other cash out<input id="closing-cash-out" name="cash_out" type="number" min="0" step=".01" value="0" required><small>Cash removed outside recorded expenses/payments.</small></label>
-</div>
+<details class="closing-optional"><summary>Cash adjustments <small>Optional · opening float, other cash in / out</small></summary><div class="three-column closing-cash-controls">
+<label>Opening cash float<input id="opening-cash" name="opening_cash" type="number" min="0" step=".01" placeholder="0.00"><small>Cash already in the drawer before today's trading.</small></label>
+<label>Other cash in<input id="closing-cash-in" name="cash_in" type="number" min="0" step=".01" placeholder="0.00"><small>Cash added outside recorded sales/collections.</small></label>
+<label>Other cash out<input id="closing-cash-out" name="cash_out" type="number" min="0" step=".01" placeholder="0.00"><small>Cash removed outside recorded expenses/payments.</small></label>
+</div></details>
 <div class="notice"><strong>Expected cash after adjustments: {{ company.currency }} <span id="expected-closing-cash">{{ summary.channel_net.cash|floatformat:2 }}</span></strong><br><small>Opening float + net recorded cash + other cash in − other cash out.</small></div>
 
 <div class="payment-grid">
@@ -40,6 +40,24 @@
 <small>{% if value == "cash" %}Physical cash actually counted.{% else %}Confirmed provider / bank total for this day.{% endif %}</small>
 </label>{% endfor %}
 </div>
+<details class="closing-optional" data-denomination-counter><summary>Cash denomination counter <small>Optional · notes and coins</small></summary>
+<p class="muted">Enter the number of each note or coin. Apply the total only when your count is complete. You can still enter the cash total manually.</p>
+<div class="payment-grid">
+<label>GH₵ 200.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="20000" aria-label="Number of GH₵ 200.00 notes or coins"></label>
+<label>GH₵ 100.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="10000" aria-label="Number of GH₵ 100.00 notes or coins"></label>
+<label>GH₵ 50.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="5000" aria-label="Number of GH₵ 50.00 notes or coins"></label>
+<label>GH₵ 20.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="2000" aria-label="Number of GH₵ 20.00 notes or coins"></label>
+<label>GH₵ 10.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="1000" aria-label="Number of GH₵ 10.00 notes or coins"></label>
+<label>GH₵ 5.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="500" aria-label="Number of GH₵ 5.00 notes or coins"></label>
+<label>GH₵ 2.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="200" aria-label="Number of GH₵ 2.00 notes or coins"></label>
+<label>GH₵ 1.00<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="100" aria-label="Number of GH₵ 1.00 notes or coins"></label>
+<label>GH₵ 0.50<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="50" aria-label="Number of GH₵ 0.50 notes or coins"></label>
+<label>GH₵ 0.20<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="20" aria-label="Number of GH₵ 0.20 notes or coins"></label>
+<label>GH₵ 0.10<input type="number" min="0" max="1000000" step="1" inputmode="numeric" placeholder="0" data-denomination="10" aria-label="Number of GH₵ 0.10 notes or coins"></label>
+</div><p aria-live="polite">Counted cash: <strong data-denomination-total>0.00</strong></p>
+<button class="button secondary" type="button" data-apply-denominations>Use this cash count</button>
+<p class="hint" data-denomination-status aria-live="polite"></p></details>
+
 <label for="closing-note">Variance / control note</label><textarea id="closing-note" name="note" maxlength="2000" placeholder="Explain shortages, overages, cash movements or anything management should know."></textarea>
 <p class="hint">Submitting locks further financial posting for this date. A different authorized colleague must verify the closing.</p>
 <button class="button">Submit and lock day</button>

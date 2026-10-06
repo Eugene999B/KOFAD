@@ -125,16 +125,13 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, 'href="/login/"')
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
-    def test_market_guest_sees_visual_gateway_and_customer_sees_catalog(self):
+    def test_guests_and_customers_can_browse_the_catalog(self):
         guest = self.client.get("/market/")
         self.assertEqual(guest.status_code, 200)
-        self.assertContains(guest, 'class="market-entry"')
-        self.assertContains(guest, "Sign in to explore")
-        self.assertContains(guest, 'class="market-auth-header"')
-        self.assertNotContains(guest, 'class="shop-shell-header"')
-        self.assertNotContains(guest, 'aria-label="Search KOFAD Market"')
-        self.assertNotContains(guest, 'class="shop-shell-cart"')
-        self.assertNotContains(guest, "<h1>All products</h1>", html=True)
+        self.assertContains(guest, 'class="shop-shell-header"')
+        self.assertContains(guest, 'aria-label="Search KOFAD Market"')
+        self.assertContains(guest, "<h1>All products</h1>", html=True)
+        self.assertContains(guest, "/market/access/")
 
         session = self.client.session
         session["market_customer_id"] = self.customer.pk
@@ -148,9 +145,9 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(signed_in, "shop-product-grid")
 
 
-    def test_market_search_appears_only_after_customer_sign_in(self):
+    def test_market_search_is_available_before_and_after_sign_in(self):
         guest = self.client.get("/market/")
-        self.assertNotContains(guest, 'aria-label="Search KOFAD Market"')
+        self.assertContains(guest, 'aria-label="Search KOFAD Market"')
         session = self.client.session
         session["market_customer_id"] = self.customer.pk
         session.save()

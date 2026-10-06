@@ -29,10 +29,10 @@
 <link rel="stylesheet" href="{% static 'marketplace/market-v12.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/support-v4.css' %}">
 </head>
-<body class="market-body market-v2{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}{% if not market_customer and request.path == '/market/' %} market-gateway-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
+<body class="market-body market-v2{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
 <a class="market-skip" href="#main">Skip to content</a>
 {% if '/market/' in request.path %}
-{% if market_auth_page or not market_customer and request.path == '/market/' %}
+{% if market_auth_page %}
 <header class="market-auth-header">
 <a class="market-auth-brand" href="/market/" aria-label="KOFAD Market home">
 <span class="market-auth-brand-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span>
@@ -44,9 +44,9 @@
 <header class="shop-shell-header">
 <div class="shop-shell-main{% if not market_customer %} guest{% endif %}">
 <a class="shop-shell-brand" href="/market/" aria-label="KOFAD Market home"><span class="shop-shell-brand-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></span><span><strong>KOFAD Market</strong><small>KOFAD IMPEX ENTERPRISE</small></span></a>
-{% if market_customer %}<form method="get" action="/market/" class="shop-shell-search" data-market-search>
+<form method="get" action="/market/" class="shop-shell-search" data-market-search>
 <span aria-hidden="true">⌕</span><input type="search" name="q" value="{{ q|default:'' }}" placeholder="Search products, categories or SKU" autocomplete="off" aria-label="Search KOFAD Market" data-market-search-input><button type="submit">Search</button><div class="market-search-suggestions" data-market-suggestions hidden></div>
-</form>{% endif %}
+</form>
 <nav class="shop-shell-actions" aria-label="Market account navigation">
 {% if market_customer %}
 <a href="/market/account/" class="shop-shell-account {% if request.path == '/market/account/' %}active{% endif %}"><span class="shop-shell-avatar">{{ market_customer.full_name|first|upper }}</span><span><small>Hello, {% if market_customer.full_name %}{{ market_customer.full_name|truncatechars:18 }}{% else %}{{ market_customer.phone }}{% endif %}</small><strong>Account</strong></span></a>
@@ -73,12 +73,12 @@
 <a href="/#contact" class="market-contact-link">Contact</a>
 <a href="/market/messages/" class="market-message-link">Message</a>
 <a href="/login/" class="market-staff-link">Staff login</a>
-{% if market_customer %}<a href="/market/account/" class="public-account-link"><span class="market-nav-avatar">{{ market_customer.full_name|first|upper }}</span><b>Account</b></a>{% else %}<a href="/market/access/" class="public-account-link"><b>Sign in</b></a>{% endif %}
+{% if market_customer %}<a href="/market/account/" class="public-account-link"><span class="market-nav-avatar">{{ market_customer.full_name|first|upper }}</span><b>Account</b></a>{% else %}<a href="/market/" class="public-account-link"><b>Sign in</b></a>{% endif %}
 <button type="button" class="public-theme-toggle" data-theme-toggle aria-label="Switch theme"><span data-theme-icon>☾</span><span data-theme-label>Dark</span></button>
 </nav>
 <div class="public-mobile-actions">
 <a href="/market/" class="public-mobile-market">Market <span>→</span></a>
-{% if market_customer %}<a href="/market/account/" class="public-mobile-account">{{ market_customer.full_name|first|upper }}</a>{% else %}<a href="/market/access/" class="public-mobile-account">Sign in</a>{% endif %}
+{% if market_customer %}<a href="/market/account/" class="public-mobile-account">{{ market_customer.full_name|first|upper }}</a>{% else %}<a href="/market/" class="public-mobile-account">Sign in</a>{% endif %}
 <details class="public-mobile-menu"><summary aria-label="Open menu">Menu</summary><div><a href="/#contact">Contact</a><a href="/market/messages/">Message</a><a href="/login/">Staff login</a><button type="button" data-theme-toggle><span data-theme-icon>☾</span><span data-theme-label>Dark mode</span></button></div></details>
 </div>
 </div>

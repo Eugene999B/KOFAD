@@ -23,6 +23,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const isSameZone = href => {
     let url;
     try { url = new URL(href, window.location.href); } catch (_) { return true; }
+    // Phone, email and other app links do not navigate away from this page.
+    if (!["http:", "https:"].includes(url.protocol)) return true;
     if (url.origin !== window.location.origin) return false;
     if (zone === "market") return url.pathname.startsWith("/market/");
     return (

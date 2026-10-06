@@ -45,7 +45,7 @@ DOCUMENT_TYPES = {
 
 NAVY = colors.HexColor("#102B46")
 NAVY_DARK = colors.HexColor("#0A2034")
-TEAL = colors.HexColor("#B66B45")
+TEAL = colors.HexColor("#138C94")
 GOLD = colors.HexColor("#E9AC32")
 INK = colors.HexColor("#172F47")
 MUTED = colors.HexColor("#64798B")
@@ -465,11 +465,26 @@ def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
     pdf.translate(x, y)
     pdf.scale(scale, scale)
     width, height = 85.60 * mm, 53.98 * mm
-    copper = colors.HexColor("#B66B45")
-    pdf.setFillColor(colors.HexColor("#FBF9F4"))
+    copper = GOLD
+    pdf.setFillColor(colors.HexColor("#F6F8FA"))
     pdf.rect(0, 0, width, height, fill=1, stroke=0)
+    # The official emblem forms a quiet security watermark, below all text.
+    from .brand_art import draw_mark
+    pdf.saveState()
+    pdf.setFillAlpha(.065)
+    draw_mark(pdf, 48 * mm, 9 * mm, 35 * mm)
+    pdf.restoreState()
     pdf.setFillColor(NAVY_DARK)
     pdf.rect(0, height - 14 * mm, width, 14 * mm, fill=1, stroke=0)
+    pdf.setFillColor(NAVY)
+    corner = pdf.beginPath()
+    corner.moveTo(61 * mm, height)
+    corner.lineTo(width, height)
+    corner.lineTo(width, height - 14 * mm)
+    corner.lineTo(73 * mm, height - 14 * mm)
+    corner.close()
+    pdf.drawPath(corner, fill=1, stroke=0)
+    pdf.setFillColor(NAVY_DARK)
     pdf.rect(0, 0, width, 8 * mm, fill=1, stroke=0)
     pdf.setFillColor(copper)
     pdf.rect(0, height - 14.6 * mm, width, .6 * mm, fill=1, stroke=0)
@@ -479,8 +494,12 @@ def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
     pdf.drawString(17 * mm, height - 7 * mm, "KOFAD")
     pdf.setFont(regular, 5.8)
     pdf.drawString(17 * mm, height - 10.5 * mm, "IMPEX ENTERPRISE")
-    pdf.setFont(regular, 5)
-    pdf.drawRightString(width - 4.5 * mm, height - 8 * mm, "STAFF ID")
+    pdf.setFont(bold, 5)
+    pdf.drawRightString(width - 4.5 * mm, height - 7 * mm, "STAFF")
+    pdf.setFont(regular, 4.2)
+    pdf.drawRightString(width - 4.5 * mm, height - 10 * mm, "IDENTITY CARD")
+    pdf.setFillColor(colors.white)
+    pdf.roundRect(4.2 * mm, 9.7 * mm, 24.6 * mm, 29.1 * mm, 1.4 * mm, fill=1, stroke=0)
     _draw_worker_photo(pdf, worker, 5 * mm, 10.5 * mm, 23 * mm, 27.5 * mm, radius=1 * mm)
 
     tx, tw = 32 * mm, 49 * mm

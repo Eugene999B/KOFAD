@@ -201,27 +201,6 @@ def home(request):
 
 def market(request):
     customer = services.customer_from_session(request)
-    if not customer:
-        branch = None
-        try:
-            branch = services.market_branch()
-        except ValidationError:
-            pass
-        previews = _decorate_listings(
-            list(
-                MarketListing.objects.filter(enabled=True, product__active=True)
-                .select_related("product")
-                .order_by("-featured", "sort_order", "product__name")[:4]
-            ),
-            branch,
-        )
-        return render(request, "marketplace/market_gateway.html", _market_context(
-            request,
-            title="Explore KOFAD Market",
-            gateway_listings=previews,
-            market_gateway=True,
-        ))
-
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:80]
     sort = request.GET.get("sort", "featured")
@@ -232,6 +211,8 @@ def market(request):
     try:
         price_min = Decimal(price_min_raw) if price_min_raw else None
         price_max = Decimal(price_max_raw) if price_max_raw else None
+        if any(value is not None and (not value.is_finite() or value < 0 or value > Decimal("999999999999.99")) for value in (price_min, price_max)):
+            raise InvalidOperation
     except InvalidOperation:
         price_min = price_max = None
 
