@@ -16,7 +16,7 @@ from .models import CommunicationSettings, Company, Message, WhatsAppWebhookEven
 from .sms.service import create_draft
 from .tests import Fixtures
 from .whatsapp import _reconcile_status
-from .whatsapp_delivery import send_whatsapp
+from .whatsapp_delivery import process_whatsapp_queue, queue_whatsapp, send_whatsapp
 
 
 class ChannelAndExportTests(Fixtures, TestCase):
@@ -30,7 +30,7 @@ class ChannelAndExportTests(Fixtures, TestCase):
     @override_settings(SMS_ENABLED=True)
     @patch("core.sms.providers.Arkesel.submit_many")
     def test_explicit_off_prevents_automatic_receipt_and_repeat(self, submit):
-        CommunicationSettings.objects.create(sale_receipt_mode="send", whatsapp_sale_receipt_mode="send")
+        CommunicationSettings.objects.update_or_create(pk=1, defaults={"sale_receipt_mode": "send", "whatsapp_sale_receipt_mode": "send"})
         payload = {"party": self.customer.pk, "customer_consent": False,
                    "send_sms": False, "send_whatsapp": False,
                    "items": [{"product": self.product.pk, "mode": "retail_unit", "quantity": 1}],
@@ -90,7 +90,7 @@ class WhatsAppDeliveryTests(Fixtures, TestCase):
         self.customer.phone = "+233241234567"
         self.customer.consent = True
         self.customer.save()
-        CommunicationSettings.objects.create(whatsapp_template_name="kofad_notification", whatsapp_template_language="en")
+        CommunicationSettings.objects.update_or_create(pk=1, defaults={"whatsapp_template_name": "kofad_notification", "whatsapp_template_language": "en"})
         self.message = create_draft(self.user, self.branch, self.customer, "Your receipt is ready.", channel="whatsapp")
 
     @patch("core.whatsapp_delivery.requests.post")
@@ -129,3 +129,16 @@ class WhatsAppDeliveryTests(Fixtures, TestCase):
             phone_number_id="12345", payload={"timestamp": str(int(timezone.now().timestamp()))})
         send_whatsapp(self.user, self.branch, self.message.pk)
         self.assertEqual(post.call_args.kwargs["json"]["type"], "text")
+
+    @patch("core.whatsapp_delivery.requests.post")
+    def test_queue_is_durable_and_worker_submits_once(self, post):
+        post.return_value = Mock(status_code=200, ok=True, json=lambda: {"messages": [{"id": "wamid.queued"}]})
+        for _ in range(2):
+            result = queue_whatsapp(self.user, self.branch, self.message.pk, automatic=True)
+            self.assertEqual(result.status, "queued")
+        post.assert_not_called()
+        self.assertEqual(process_whatsapp_queue(), 1)
+        self.assertEqual(process_whatsapp_queue(), 0)
+        self.message.refresh_from_db()
+        self.assertEqual(self.message.status, "accepted")
+        post.assert_called_once()

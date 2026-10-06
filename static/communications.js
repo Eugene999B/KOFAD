@@ -154,6 +154,7 @@
 
   const SMS_STATUS_LABELS = {
     draft: "Ready to send",
+    queued: "Queued",
     sending: "Sending…",
     accepted: "Sent",
     delivered: "Delivered",

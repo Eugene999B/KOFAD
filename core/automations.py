@@ -66,10 +66,10 @@ def _render(body, data):
 def _apply_mode(message, mode, actor=None):
     if message and mode == "send":
         if message.channel == "whatsapp":
-            from .whatsapp_delivery import configuration_error, send_whatsapp
+            from .whatsapp_delivery import configuration_error, queue_whatsapp
             if not configuration_error():
                 try:
-                    return send_whatsapp(_actor(actor), message.branch, message.pk, automatic=True)
+                    return queue_whatsapp(_actor(actor), message.branch, message.pk, automatic=True)
                 except Exception as exc:
                     _record_automation_failure(message.branch, actor, "whatsapp", message.pk, exc)
                     message.last_error = str(exc)[:240]

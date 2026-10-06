@@ -16,6 +16,7 @@ class CommunicationWorkerScheduleTests(SimpleTestCase):
             patch(module + "sync_delivery_reports", return_value=0) as sync,
             patch(module + "recover_stale") as recover,
             patch(module + "recover_stale_whatsapp") as recover_whatsapp,
+            patch(module + "process_whatsapp_queue"),
         ):
             with self.assertRaises(InterruptedError):
                 Command().handle(loop=True)
@@ -33,6 +34,7 @@ class CommunicationWorkerScheduleTests(SimpleTestCase):
             patch(module + "sync_delivery_reports", return_value=0),
             patch(module + "recover_stale") as recover,
             patch(module + "recover_stale_whatsapp") as recover_whatsapp,
+            patch(module + "process_whatsapp_queue"),
         ):
             Command().handle(loop=False)
         recover.assert_called_once()

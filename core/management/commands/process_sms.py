@@ -5,7 +5,7 @@ from django.db import close_old_connections
 
 from core.automations import run_scheduled_automations
 from core.sms.service import recover_stale, sync_delivery_reports
-from core.whatsapp_delivery import recover_stale_whatsapp
+from core.whatsapp_delivery import process_whatsapp_queue, recover_stale_whatsapp
 
 
 class Command(BaseCommand):
@@ -34,6 +34,7 @@ class Command(BaseCommand):
             if now - last_delivery_sync >= 5:
                 try:
                     delivery_updates += sync_delivery_reports()
+                    process_whatsapp_queue()
                 except Exception as exc:
                     self.stderr.write(f"SMS delivery-status check failed safely: {exc}")
                 last_delivery_sync = now

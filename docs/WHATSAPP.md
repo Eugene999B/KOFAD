@@ -9,7 +9,7 @@ Set these secrets in Railway on both the web and messaging-worker services:
 - WHATSAPP_ACCESS_TOKEN: a system-user access token authorized for the business phone
 - WHATSAPP_PHONE_NUMBER_ID: the numeric Meta phone-number ID
 - WHATSAPP_APP_SECRET: the Meta application secret used to verify callbacks
-- WHATSAPP_VERIFY_TOKEN: a private webhook verification value
+- WHATSAPP_WEBHOOK_VERIFY_TOKEN: a private webhook verification value
 - WHATSAPP_PUBLIC_ORIGIN: the public HTTPS site origin
 - WHATSAPP_GRAPH_VERSION: a currently supported Graph API version
 
@@ -23,7 +23,7 @@ Each channel has independent event switches for sales, payment confirmations, cl
 
 Manual WhatsApp messages use free-form text only within 24 hours of a verified inbound customer message; otherwise an approved template is required. Without Cloud credentials, Communications can still prepare manual WhatsApp chat links, which are never claimed as delivered.
 
-Provider acceptance is not delivery. Signed Meta callbacks advance accepted → sent → delivered → read. Network timeouts and interrupted submissions are marked unknown and are not automatically retried, to avoid duplicate customer messages. Check delivery before attempting another send. Customers require consent for automatic notifications; management alerts use the configured active management contacts.
+Submissions are queued durably and processed by the messaging worker, so checkout and closing do not wait for Meta. Provider acceptance is not delivery. Signed Meta callbacks advance accepted → sent → delivered → read. Network timeouts and interrupted submissions are marked unknown and are not automatically retried, to avoid duplicate customer messages. Check delivery before attempting another send. Customers require consent for automatic notifications; management alerts use the configured active management contacts.
 
 ## Verification
 

@@ -503,15 +503,15 @@ def _receipt_sms_result(user, branch, doc):
 def _receipt_whatsapp_result(user, branch, doc):
     from .sms.service import create_draft
     from .sms.templates import render_for_document
-    from .whatsapp_delivery import send_whatsapp
+    from .whatsapp_delivery import queue_whatsapp
     if not doc.party_id or not doc.party.consent:
         raise ValidationError("Choose a customer with messaging consent before sending a receipt.")
     item = Message.objects.filter(branch=branch, channel="whatsapp", source_key=f"auto:receipt:{doc.pk}:whatsapp").first()
     if item is None:
         item = create_draft(user, branch, doc.party, render_for_document(doc, "receipt"),
                             channel="whatsapp", source_key=f"document:receipt:{doc.pk}:whatsapp")
-    sent = send_whatsapp(user, branch, item.pk, automatic=True, retry=item.status == "failed")
-    label = {"accepted": "Receipt accepted by WhatsApp; delivery confirmation is pending.",
+    sent = queue_whatsapp(user, branch, item.pk, automatic=True, retry=item.status == "failed")
+    label = {"queued": "WhatsApp receipt queued for delivery.", "accepted": "Receipt accepted by WhatsApp; delivery confirmation is pending.",
              "delivered": "WhatsApp receipt delivered.", "read": "WhatsApp receipt read.",
              "sending": "WhatsApp receipt submission is in progress.",
              "sent": "WhatsApp receipt sent."}
@@ -616,7 +616,7 @@ def send_transaction_message_api(request, pk):
         if channel not in {"sms", "whatsapp"}:
             raise ValidationError("Choose SMS or WhatsApp.")
         sent, message = (_receipt_whatsapp_result if channel == "whatsapp" else _receipt_sms_result)(request.user, branch, doc)
-        ok = sent.status in {"accepted", "delivered", "read", "sent", "simulated", "sending"}
+        ok = sent.status in {"queued", "accepted", "delivered", "read", "sent", "simulated", "sending"}
         if sent.status == "unknown":
             return JsonResponse({"error": message, "status": sent.status}, status=409)
         return JsonResponse(
@@ -1689,7 +1689,7 @@ def communications(request, branch):
     from django.conf import settings
     from .sms.service import create_draft, create_direct_draft, normalize_phone, send_message_now, send_messages_now
 
-    from .whatsapp_delivery import configuration_error, send_whatsapp
+    from .whatsapp_delivery import configuration_error, queue_whatsapp
     whatsapp_cloud_ready = not configuration_error()
     redirect_suffix = ""
     if request.method == "POST":
@@ -1720,7 +1720,7 @@ def communications(request, branch):
             elif action in ("send", "queue", "retry"):
                 item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True)
                 if item.channel == "whatsapp":
-                    sent = send_whatsapp(request.user, branch, item.pk, retry=action == "retry")
+                    sent = queue_whatsapp(request.user, branch, item.pk, retry=action == "retry")
                     messages.info(request, "WhatsApp: " + sent.status + (". " + sent.last_error if sent.last_error else ""))
                     return redirect("communications")
                 sent = send_message_now(request.user, branch, item.pk, action == "retry")
@@ -1849,10 +1849,9 @@ def communications(request, branch):
                             + (first_problem or "Check Recent messages for the provider result.")
                         )
                 elif whatsapp_cloud_ready:
-                    from .whatsapp_delivery import send_whatsapp
-                    results = [send_whatsapp(request.user, branch, item.pk) for item in prepared]
-                    accepted = sum(item.status in {"accepted", "sent", "delivered", "read"} for item in results)
-                    messages.success(request, f"{accepted} WhatsApp message(s) accepted. See delivery status below.")
+                    results = [queue_whatsapp(request.user, branch, item.pk) for item in prepared]
+                    accepted = sum(item.status in {"queued", "accepted", "sent", "delivered", "read"} for item in results)
+                    messages.success(request, f"{accepted} WhatsApp message(s) queued or already submitted. See delivery status below.")
                     for item in results:
                         if item.last_error:
                             messages.error(request, item.last_error)
