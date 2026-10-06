@@ -552,9 +552,17 @@ def customer_from_session(request):
             clear_customer_session(request)
             return None
     customer = CustomerAccount.objects.filter(pk=pk, active=True).first()
-    if not customer:
+    stamp = request.session.get("market_credential_stamp")
+    if not customer or (stamp and not hmac.compare_digest(stamp, customer_credential_stamp(customer))):
         clear_customer_session(request)
+        return None
+    if not stamp:
+        request.session["market_credential_stamp"] = customer_credential_stamp(customer)
     return customer
+
+
+def customer_credential_stamp(customer):
+    return hmac.new(settings.SECRET_KEY.encode(), (customer.phone + ":" + customer.password_hash).encode(), hashlib.sha256).hexdigest()
 
 
 def set_customer_session(request, customer):
@@ -569,6 +577,7 @@ def set_customer_session(request, customer):
             request.session[key] = value
     request.session.cycle_key()
     request.session["market_customer_id"] = customer.pk
+    request.session["market_credential_stamp"] = customer_credential_stamp(customer)
     request.session["market_session_expires_at"] = (
         timezone.now().timestamp() + settings.MARKET_SESSION_SECONDS
     )
@@ -579,6 +588,8 @@ def set_customer_session(request, customer):
 
 def clear_customer_session(request):
     request.session.pop("market_customer_id", None)
+    request.session.pop("market_credential_stamp", None)
+    request.session.pop("market_change_phone", None)
     request.session.pop("market_session_expires_at", None)
     request.session.pop("market_pending_phone", None)
     request.session.pop("market_verified_phone", None)

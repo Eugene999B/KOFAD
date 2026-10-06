@@ -132,7 +132,10 @@ document.addEventListener("DOMContentLoaded", () => {
       accuracyNode.textContent = "GPS accuracy ±" + Math.max(1, Math.round(accuracy)) + " m";
     };
 
+    let reverseSequence = 0;
     const reverseLookup = async () => {
+      const sequence = ++reverseSequence;
+      const requestedLat = latitude, requestedLng = longitude;
       const url = mapEl.dataset.reverseUrl;
       if (!url || latitude === null || longitude === null) return;
       try {
@@ -141,6 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
           headers: {"Accept": "application/json"},
         });
         const payload = await response.json();
+        if (sequence !== reverseSequence || requestedLat !== latitude || requestedLng !== longitude) return;
         if (response.ok && payload.label) {
           updateResult(payload.label);
           if (addressInput) addressInput.value = payload.label;
@@ -148,7 +152,10 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (_) {}
     };
 
+    let quoteSequence = 0;
     const refreshQuote = async () => {
+      const sequence = ++quoteSequence;
+      const requestedLat = latitude, requestedLng = longitude;
       const url = mapEl.dataset.quoteUrl;
       if (!url || latitude === null || longitude === null) return;
       if (quoteNode) quoteNode.innerHTML = "<span>Calculating delivery…</span>";
@@ -158,6 +165,8 @@ document.addEventListener("DOMContentLoaded", () => {
           headers: {"Accept": "application/json"},
         });
         const payload = await response.json();
+        if (sequence !== quoteSequence || requestedLat !== latitude || requestedLng !== longitude) return;
+        if (document.querySelector("[data-checkout-form] select[name='fulfilment']")?.value === "pickup") return;
         if (!response.ok) {
           if (quoteNode) quoteNode.innerHTML = "<strong>Delivery unavailable</strong><span>" +
             escapeHtml(payload.error || "Choose another location.") + "</span>";
@@ -172,6 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (feeNode) feeNode.textContent = "GHS " + fee.toFixed(2);
         if (totalNode && subtotal !== null) totalNode.textContent = "GHS " + (subtotal + fee).toFixed(2);
       } catch (_) {
+        if (sequence !== quoteSequence) return;
         if (quoteNode) quoteNode.innerHTML = "<strong>Could not calculate delivery</strong><span>Try again or choose pickup.</span>";
       }
     };
@@ -412,7 +422,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const input = searchBox.querySelector("input");
       const button = searchBox.querySelector("button");
       const results = shell.querySelector("[data-location-search-results]");
+      let searchController;
+      let searchSequence = 0;
+      results?.setAttribute("aria-live", "polite");
       const runSearch = async () => {
+        searchController?.abort();
+        const sequence = ++searchSequence;
+        searchController = new AbortController();
         const query = input?.value.trim() || "";
         if (query.length < 3) {
           if (results) results.innerHTML = "<p>Enter at least 3 characters.</p>";
@@ -423,9 +439,11 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           const response = await fetch((mapEl.dataset.searchUrl || "/market/location/search/") + "?q=" + encodeURIComponent(query), {
             credentials:"same-origin",
+            signal: searchController.signal,
             headers:{"Accept":"application/json"},
           });
           const payload = await response.json();
+          if (sequence !== searchSequence) return;
           if (!response.ok || !(payload.results || []).length) {
             if (results) results.innerHTML = "<p>" + escapeHtml(payload.error || "No matching location found.") + "</p>";
             return;
@@ -443,15 +461,27 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             results.appendChild(choice);
           });
-        } catch (_) {
+        } catch (error) {
+          if (error.name === "AbortError" || sequence !== searchSequence) return;
           if (results) results.innerHTML = "<p>Location search is temporarily unavailable.</p>";
         } finally {
-          button.disabled = false;
+          if (sequence === searchSequence) button.disabled = false;
         }
       };
+      results?.addEventListener("keydown", event => {
+        const choices = [...results.querySelectorAll("button")];
+        const index = choices.indexOf(document.activeElement);
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          choices[(index + (event.key === "ArrowDown" ? 1 : -1) + choices.length) % choices.length]?.focus();
+        }
+        if (event.key === "Escape") { results.replaceChildren(); input?.focus(); }
+      });
       button?.addEventListener("click",runSearch);
       input?.addEventListener("keydown",event=>{
         if(event.key==="Enter"){event.preventDefault();runSearch();}
+        if(event.key==="ArrowDown"){event.preventDefault();results?.querySelector("button")?.focus();}
+        if(event.key==="Escape"){searchController?.abort();searchSequence++;results?.replaceChildren();if(button) button.disabled=false;}
       });
     }
 
@@ -505,6 +535,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const fulfilment = document.querySelector("[data-checkout-form] select[name='fulfilment']");
     fulfilment?.addEventListener("change",()=>{
       if(fulfilment.value==="pickup"){
+        quoteSequence++;
         if(feeNode) feeNode.textContent="GHS 0.00";
         if(totalNode&&subtotal!==null) totalNode.textContent="GHS "+subtotal.toFixed(2);
       }else if(latitude!==null&&longitude!==null){

@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, DecimalField, F, IntegerField, Max, Min, OuterRef, Q, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, JsonResponse
@@ -619,14 +619,54 @@ def customer_login(request):
 
 @market_customer_required
 def customer_security(request, customer):
-    form = CustomerPasswordChangeForm(request.POST or None, customer=customer)
+    action = request.POST.get("action", "password")
+    if request.method == "POST" and action == "phone_cancel":
+        request.session.pop("market_change_phone", None)
+        return redirect("market_security")
+    if request.method == "POST" and action in {"phone_start", "phone_verify"}:
+        try:
+            password = request.POST.get("current_password", "")
+            if not customer.check_password(password):
+                raise ValidationError("Your current password is incorrect.")
+            if action == "phone_start":
+                phone = normalize_ghana_phone(request.POST.get("new_phone", ""))
+                if phone == customer.phone:
+                    raise ValidationError("Enter a different phone number.")
+                if CustomerAccount.objects.filter(phone=phone).exists():
+                    raise ValidationError("That phone number is already linked to an account.")
+                services.send_otp(phone, "change_phone")
+                request.session["market_change_phone"] = {"phone": phone, "expires": timezone.now().timestamp() + 600}
+                messages.success(request, "Verification code sent to your new number.")
+            else:
+                pending = request.session.get("market_change_phone") or {}
+                if pending.get("expires", 0) <= timezone.now().timestamp():
+                    raise ValidationError("Request a new phone-change code.")
+                phone = pending["phone"]
+                services.verify_otp(phone, request.POST.get("code"), "change_phone")
+                with transaction.atomic():
+                    locked = CustomerAccount.objects.select_for_update().get(pk=customer.pk)
+                    if not locked.check_password(password):
+                        raise ValidationError("Your password changed. Start again.")
+                    locked.phone = phone
+                    locked.verified_at = timezone.now()
+                    locked.save(update_fields=["phone", "verified_at"])
+                    from core.services import audit
+                    audit(None, None, "market.customer_phone_changed", customer.pk)
+                services.set_customer_session(request, locked)
+                request.session.pop("market_change_phone", None)
+                messages.success(request, "Phone updated. Use the new number when you next sign in.")
+        except (ValidationError, IntegrityError) as exc:
+            messages.error(request, "That phone number is already linked to an account." if isinstance(exc, IntegrityError) else problem(exc))
+        return redirect("market_security")
+    form = CustomerPasswordChangeForm(request.POST if request.method == "POST" and action == "password" else None, customer=customer)
     if request.method == "POST" and form.is_valid():
         customer.set_password(form.cleaned_data["password"])
         customer.save(update_fields=["password_hash"])
+        services.set_customer_session(request, customer)
         messages.success(request, "Your customer password has been changed securely.")
         return redirect("market_account")
     return render(request, "marketplace/security.html", _market_context(
-        request, title="Account security", form=form,
+        request, title="Account security", form=form, pending_phone=(request.session.get("market_change_phone") or {}).get("phone"),
     ))
 
 

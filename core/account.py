@@ -38,6 +38,12 @@ def sms_ready():
         return False
 
 
+class ProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email"]
+
+
 class RecoveryPhoneForm(forms.Form):
     recovery_phone = forms.CharField(max_length=40, required=False, label="Recovery phone number",
         help_text="Use the number belonging to this account, for example +233241234567. Leave blank to disable SMS recovery.",
@@ -63,13 +69,20 @@ class RecoveryPhoneForm(forms.Form):
 @sensitive_post_parameters("current_password")
 def account(request):
     access = request.user.access
-    form = RecoveryPhoneForm(request.user, request.POST or None, initial={"recovery_phone":access.recovery_phone})
+    action = request.POST.get("action", "recovery")
+    profile_form = ProfileForm(request.POST if request.method == "POST" and action == "profile" else None, instance=request.user)
+    if request.method == "POST" and action == "profile" and profile_form.is_valid():
+        profile_form.save()
+        audit(request.user, None, "account.profile_updated", request.user.pk)
+        messages.success(request, "Your profile was updated.")
+        return redirect("account")
+    form = RecoveryPhoneForm(request.user, request.POST if request.method == "POST" and action == "recovery" else None, initial={"recovery_phone":access.recovery_phone})
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
             current = User.objects.select_for_update().get(pk=request.user.pk)
             if not current.check_password(form.cleaned_data["current_password"]):
                 form.add_error("current_password", "Your password changed. Enter the current password.")
-                return render(request, "account.html", {"title":"My account", "form":form, "sms_ready":sms_ready()})
+                return render(request, "account.html", {"title":"My account", "form":form, "sms_ready":sms_ready(), "profile_form":profile_form})
             locked = Access.objects.select_for_update().get(pk=access.pk)
             locked.recovery_phone = form.cleaned_data["recovery_phone"]
             locked.save(update_fields=["recovery_phone"])
@@ -77,7 +90,7 @@ def account(request):
             audit(request.user, None, "account.recovery_phone_updated", request.user.pk)
         messages.success(request, "Recovery phone saved.")
         return redirect("account")
-    return render(request, "account.html", {"title":"My account", "form":form, "sms_ready":sms_ready()})
+    return render(request, "account.html", {"title":"My account", "form":form, "sms_ready":sms_ready(), "profile_form":profile_form})
 
 
 def consume_budget(username):

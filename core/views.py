@@ -15,6 +15,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
 from django.db.models import F, Q, Sum
+from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -300,13 +301,17 @@ def dashboard(request):
             "tone": "success",
         })
 
-    week = []
-    for offset in reversed(range(7)):
-        day = today - timedelta(days=offset)
-        sale_value = docs.filter(kind="sale", created_at__date=day).aggregate(t=Sum("total"))["t"] or Decimal("0")
-        return_value = docs.filter(kind="return", created_at__date=day).aggregate(t=Sum("total"))["t"] or Decimal("0")
-        value = sale_value - return_value
-        week.append({"day": day.strftime("%a"), "amount": value})
+    daily = {}
+    for item in docs.filter(kind__in=["sale", "return"], created_at__date__gte=today - timedelta(days=13),
+                            created_at__date__lte=today).annotate(day=TruncDate("created_at")).values("day", "kind").annotate(total=Sum("total")):
+        daily[item["day"]] = daily.get(item["day"], Decimal("0")) + item["total"] * (1 if item["kind"] == "sale" else -1)
+    week = [{"day": (today - timedelta(days=offset)).strftime("%a"),
+             "amount": daily.get(today - timedelta(days=offset), Decimal("0"))}
+            for offset in reversed(range(7))]
+    week_total = sum((row["amount"] for row in week), Decimal("0"))
+    previous_week_total = sum((daily.get(today - timedelta(days=offset), Decimal("0")) for offset in range(7, 14)), Decimal("0"))
+    week_change = week_total - previous_week_total
+    week_change_percent = (week_change * 100 / abs(previous_week_total)) if previous_week_total else None
     maximum = max([max(d["amount"], Decimal("0")) for d in week] + [Decimal("1")])
     for day in week:
         day["height"] = round(float(max(day["amount"], Decimal("0")) / maximum) * 110) if day["amount"] > 0 else 2
@@ -328,6 +333,8 @@ def dashboard(request):
         "returns_value": returns_value,
         "revenue": revenue,
         "month_net_sales": month_net_sales,
+        "week_total": week_total, "week_change": week_change,
+        "previous_week_total": previous_week_total, "week_change_percent": week_change_percent,
         "expenses": expenses,
         "customer_inflow": customer_inflow,
         "debt": debt,

@@ -437,7 +437,7 @@ class ConversationAttachment(models.Model):
 
 
 class OtpThrottle(models.Model):
-    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login")]
+    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login"), ("change_phone", "Change phone")]
     phone = models.CharField(max_length=20)
     purpose = models.CharField(max_length=12, choices=PURPOSES)
     send_count = models.PositiveIntegerField(default=0)

@@ -25,6 +25,7 @@
   <article><small>Expenses today</small><strong><span>{{ company.currency }}</span> {{ expenses|floatformat:2 }}</strong><p>Accounting expenses after approved reversals</p></article>
 </div>
 
+<section class="panel"><div class="section-heading"><div><p class="eyebrow">TRADING DIRECTION</p><h2>Seven days in context</h2><p class="muted">Net sales after returns, compared with the preceding seven days.</p></div></div><div class="metric-grid"><article class="metric-card"><small>Last seven days</small><strong>{{ company.currency }} {{ week_total|floatformat:2 }}</strong></article><article class="metric-card"><small>Previous seven days</small><strong>{{ company.currency }} {{ previous_week_total|floatformat:2 }}</strong></article><article class="metric-card"><small>Change</small><strong>{{ company.currency }} {{ week_change|floatformat:2 }}</strong><small>{% if week_change_percent != None %}{{ week_change_percent|floatformat:1 }}%{% else %}No prior sales baseline{% endif %}</small></article></div></section>
 <div class="executive-quick-actions">
   {% if perms.core.operate_sales %}<a href="/sales/new/"><span>＋</span><div><strong>New sale</strong><small>Sell & issue receipt</small></div></a>{% endif %}
   {% if perms.core.operate_inventory %}<a href="/purchasing/"><span>↙</span><div><strong>Purchase stock</strong><small>Existing or new product</small></div></a><a href="/stock-counts/"><span>✓</span><div><strong>Blind count</strong><small>Verify physical stock</small></div></a>{% endif %}
@@ -55,7 +56,7 @@
     <div class="section-heading"><div><p class="eyebrow">CONTROL HEALTH</p><h2>Operational pulse</h2></div><span class="pill">{{ control_label }}</span></div>
     <div class="control-score-row"><strong>{{ control_score }}%</strong><div><span style="width:{{ control_score }}%"></span></div></div>
     <div class="control-factor-list">{% for factor in control_factors %}<div><span>{{ factor.label }}</span><b>{{ factor.value }}%</b><em><i style="width:{{ factor.value }}%"></i></em></div>{% endfor %}</div>
-    <p class="hint">A management indicator, not an audited financial ratio. Open Accounting for ledger reconciliation.</p>
+    <p class="hint">Equal weighting of stock above reorder level, receivables not overdue, payables not overdue, and approval backlog (15 points deducted per item). This prioritises review; it is not a financial forecast.</p>
   </section>
 </div>
 

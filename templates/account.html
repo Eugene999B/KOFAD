@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
 <div class="two-column">
-<section class="panel"><p class="eyebrow">ACCOUNT</p><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p class="muted">{{ request.user.username }}</p><a class="button secondary" href="/account/password/">Change password</a></section>
+<section class="panel"><p class="eyebrow">ACCOUNT</p><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p class="muted">{{ request.user.username }}</p><a class="button secondary" href="/account/password/">Change password</a><hr><form method="post">{% csrf_token %}<input type="hidden" name="action" value="profile">{{ profile_form.as_p }}<button class="button secondary">Save profile</button></form></section>
 <section class="panel"><p class="eyebrow">RECOVERY</p><h2>Recovery phone</h2>{% if sms_ready %}<p class="pill">SMS available</p>{% endif %}<form method="post">{% csrf_token %}{{ form.as_p }}<button class="button">Save recovery phone</button></form></section>
 </div>
 {% if perms.core.manage_company %}<section class="panel"><div class="section-heading"><div><p class="eyebrow">STAFF</p><h2>Account recovery</h2></div><a class="button secondary" href="/administration/users/">Manage staff</a></div></section>{% endif %}
