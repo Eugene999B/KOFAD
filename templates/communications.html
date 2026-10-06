@@ -36,7 +36,7 @@
 
 <div class="comms-workspace">
   <section class="panel comms-composer">
-    <form method="post" id="comms-compose">
+    <form method="post" id="comms-compose" data-whatsapp-cloud="{{ whatsapp_cloud_ready|yesno:'true,false' }}">
       {% csrf_token %}
       <input type="hidden" name="action" value="send_compose">
       <input type="hidden" name="key" value="{{ key }}">
@@ -145,7 +145,7 @@
     <p id="comms-help-copy">Press send once. KOFAD submits the SMS to Arkesel immediately, then updates Sent / Delivered / Failed automatically.</p>
     <div class="comms-help-rule"></div>
     <strong>WhatsApp</strong>
-    <p>For WhatsApp, KOFAD prepares the chat and message, then opens WhatsApp Web or the app. Nothing is falsely marked as sent before you press Send inside WhatsApp.</p>
+    <p>{% if whatsapp_cloud_ready %}WhatsApp Business delivers directly. Outside a 24-hour customer conversation, an approved notification template is required. Delivery and read confirmations appear below.{% else %}KOFAD prepares a WhatsApp chat. Press Send inside WhatsApp to deliver it. Automatic delivery becomes available after the business account is connected.{% endif %}</p>
   </aside>
 </div>
 
@@ -176,17 +176,19 @@
       <thead><tr><th>Recipient</th><th>Message</th><th>Channel / status</th><th>Time</th><th></th></tr></thead>
       <tbody>
       {% for row in rows %}
-      <tr data-history-row="{{ row.channel }}"{% if row.channel == "sms" %} data-message-id="{{ row.pk }}"{% endif %}>
+      <tr data-history-row="{{ row.channel }}" data-message-id="{{ row.pk }}">
         <td>
           <strong>{% if row.party %}{{ row.party.name }}{% elif row.management_contact %}{{ row.management_contact.name }}{% elif row.recipient_name %}{{ row.recipient_name }}{% else %}Direct number{% endif %}</strong>
           <small>{{ row.recipient }}</small>
         </td>
         <td><span class="message-body-preview">{{ row.body }}</span></td>
-        <td><span class="pill">{{ row.channel|upper }}</span><small{% if row.channel == "sms" %} data-sms-status="{{ row.pk }}"{% endif %}>{{ row.status_label }}</small>{% if row.channel == "sms" %}<small class="comms-status-error{% if not row.last_error %} hidden{% endif %}" data-sms-error="{{ row.pk }}">{{ row.last_error }}</small>{% endif %}</td>
+        <td><span class="pill">{{ row.channel|upper }}</span><small data-sms-status="{{ row.pk }}">{{ row.status_label }}</small><small class="comms-status-error{% if not row.last_error %} hidden{% endif %}" data-sms-error="{{ row.pk }}">{{ row.last_error }}</small></td>
         <td>{{ row.created_at|date:"d M, H:i" }}</td>
         <td class="comms-row-action">
           {% if row.channel == "whatsapp" and row.whatsapp_url %}
           <a class="button secondary comms-whatsapp-button" href="{{ row.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp</a>
+          {% elif perms.core.send_messages and row.channel == "whatsapp" %}
+            {% if row.status == "draft" or row.status == "failed" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="{% if row.status == 'failed' %}retry{% else %}send{% endif %}">Send WhatsApp</button></form>{% endif %}
           {% elif perms.core.send_messages and row.channel == "sms" %}
             {% if row.status == "draft" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="send">Send SMS</button></form>
             {% elif row.status == "failed" or row.status == "undelivered" or row.status == "expired" %}<form method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="button secondary" name="action" value="retry">Retry</button></form>

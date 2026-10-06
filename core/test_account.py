@@ -86,6 +86,7 @@ class AccountRecoveryTests(TestCase):
 
     def test_resend_invalidates_previous_challenge(self):
         first = self.request_code()
+        PasswordRecovery.objects.filter(pk=first.pk).update(created_at=timezone.now() - timedelta(seconds=61))
         self.request_code()
         first.refresh_from_db()
         self.assertTrue(first.used)
@@ -93,6 +94,7 @@ class AccountRecoveryTests(TestCase):
     def test_three_requests_per_account_per_hour(self):
         for _ in range(4):
             self.request_code()
+            PasswordRecovery.objects.filter(user=self.user).update(created_at=timezone.now() - timedelta(seconds=61))
         self.assertEqual(self.provider.submit.call_count, 3)
 
     def test_changed_phone_or_password_invalidates_code(self):
@@ -105,7 +107,7 @@ class AccountRecoveryTests(TestCase):
         self.assertContains(self.reset(), "invalid, expired or unavailable")
 
     def test_provider_failure_never_allows_password_reset(self):
-        self.provider.submit.return_value = Submission("unknown")
+        self.provider.submit.return_value = Submission("failed")
         self.request_code()
         self.assertContains(self.reset(), "invalid, expired or unavailable")
 
@@ -144,3 +146,15 @@ class AccountRecoveryTests(TestCase):
         challenge.refresh_from_db()
         self.assertEqual(access.recovery_phone, "+233241234568")
         self.assertTrue(challenge.used)
+
+    def test_uncertain_provider_response_does_not_reject_a_received_code(self):
+        self.provider.submit.return_value = Submission("unknown")
+        self.request_code()
+        self.assertRedirects(self.reset(), "/login/")
+
+    def test_double_request_reuses_challenge_without_sending_a_second_code(self):
+        first = self.request_code()
+        second = self.request_code()
+        self.assertEqual(first.pk, second.pk)
+        self.provider.submit.assert_called_once()
+        self.assertRedirects(self.reset("123-456"), "/login/")

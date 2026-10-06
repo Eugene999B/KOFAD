@@ -50,11 +50,21 @@ def send_whatsapp(user, branch, message_id, *, automatic=False, retry=False):
             raise ValidationError("This recipient has changed or is no longer eligible.")
         validate_current_context(message)
         recipient = message.recipient.lstrip("+")
-        recent_inbound = WhatsAppWebhookEvent.objects.filter(
+        inbound_events = WhatsAppWebhookEvent.objects.filter(
             event_type="message", wa_id=recipient,
             phone_number_id=settings.WHATSAPP_PHONE_NUMBER_ID,
             received_at__gte=timezone.now() - timedelta(hours=24),
-        ).exists()
+        ).values_list("payload", flat=True)
+        now_seconds = timezone.now().timestamp()
+        recent_inbound = False
+        for event in inbound_events:
+            try:
+                age = now_seconds - float(event.get("timestamp", 0))
+                if 0 <= age < 24 * 3600:
+                    recent_inbound = True
+                    break
+            except (ValueError, TypeError, AttributeError):
+                continue
         payload = {"messaging_product": "whatsapp", "recipient_type": "individual", "to": recipient}
         template = ""
         if recent_inbound and not automatic:

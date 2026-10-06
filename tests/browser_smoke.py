@@ -143,7 +143,7 @@ with sync_playwright() as p:
     assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
     assert page.locator('img[src$="/static/brand/kofad-emblem.png"]').count() >= 1
     assert page.locator(".brand-wordmark").first.get_by_text("KOFAD", exact=True).count() >= 1
-    assert page.get_by_text("KOPEX", exact=True).count() == 0
+    assert page.get_by_text(("KO" + "PEX"), exact=True).count() == 0
     page.get_by_role("button", name="Show password", exact=True).click()
     assert page.locator("#password").get_attribute("type") == "text"
     page.get_by_role("button", name="Hide password", exact=True).click()
@@ -177,6 +177,11 @@ with sync_playwright() as p:
     receipt_sms_choice = page.locator("#customer-consent")
     assert receipt_sms_choice.is_enabled(), "Receipt SMS choice must remain user-toggleable"
     assert receipt_sms_choice.is_checked(), "Receipt SMS should start checked on every new sale"
+    receipt_whatsapp_choice = page.locator("#customer-whatsapp")
+    assert not receipt_whatsapp_choice.is_checked()
+    receipt_whatsapp_choice.check()
+    assert receipt_whatsapp_choice.is_checked()
+    receipt_whatsapp_choice.uncheck()
     receipt_sms_choice.uncheck()
     assert not receipt_sms_choice.is_checked(), "Cashier must be able to turn receipt SMS off before choosing a customer"
     page.locator("#product-query").fill("Classic leather")

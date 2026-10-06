@@ -681,7 +681,7 @@ def worker_profile_pdf(request, branch, pk):
     title = ParagraphStyle("PersonnelName", parent=text, fontName=bold, fontSize=19, leading=23)
     section = ParagraphStyle("PersonnelSection", parent=text, fontName=bold, fontSize=11, leading=15, spaceBefore=16, spaceAfter=8)
     def para(value, style=text):
-        return Paragraph(escape(str(value or "Not recorded")).replace("\\n", "<br/>"), style)
+        return Paragraph(escape(str(value or "Not recorded")).replace("\n", "<br/>"), style)
     def chrome(pdf, doc):
         pdf.saveState()
         pdf.setFillColor(NAVY_DARK)

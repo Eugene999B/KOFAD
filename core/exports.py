@@ -336,7 +336,7 @@ def export(
                 values = [record[index] for index in group]
                 if len(groups) > 1:
                     values = [str(row_number)] + values
-                cells.append([Paragraph(escape(value).replace("\\n", "<br/>"), body_style) for value in values])
+                cells.append([Paragraph(escape(value).replace("\n", "<br/>"), body_style) for value in values])
             weights = []
             for index in group:
                 key = columns[index][0]

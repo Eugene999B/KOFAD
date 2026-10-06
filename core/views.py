@@ -1684,6 +1684,8 @@ def communications(request, branch):
     from django.conf import settings
     from .sms.service import create_draft, create_direct_draft, normalize_phone, send_message_now, send_messages_now
 
+    from .whatsapp_delivery import configuration_error, send_whatsapp
+    whatsapp_cloud_ready = not configuration_error()
     redirect_suffix = ""
     if request.method == "POST":
         try:
@@ -1712,6 +1714,10 @@ def communications(request, branch):
                 messages.success(request, "Message removed from Communication history. Delivery and audit evidence were preserved.")
             elif action in ("send", "queue", "retry"):
                 item = get_object_or_404(Message, pk=request.POST.get("id"), branch=branch, archived_at__isnull=True)
+                if item.channel == "whatsapp":
+                    sent = send_whatsapp(request.user, branch, item.pk, retry=action == "retry")
+                    messages.info(request, "WhatsApp: " + sent.status + (". " + sent.last_error if sent.last_error else ""))
+                    return redirect("communications")
                 sent = send_message_now(request.user, branch, item.pk, action == "retry")
                 if sent.status == "accepted":
                     messages.success(request, "SMS sent to Arkesel. Delivery confirmation is being tracked.")
@@ -1810,7 +1816,7 @@ def communications(request, branch):
                         phone=phone,
                         label=label,
                     )
-                    if channel == "whatsapp" and not settings.WHATSAPP_ENABLED:
+                    if channel == "whatsapp" and not whatsapp_cloud_ready:
                         item.provider = "whatsapp-link"
                         item.status = "ready"
                         item.save(update_fields=["provider", "status"])
@@ -1837,7 +1843,7 @@ def communications(request, branch):
                             f"{failed + unknown} SMS message{'' if failed + unknown == 1 else 's'} not confirmed. "
                             + (first_problem or "Check Recent messages for the provider result.")
                         )
-                elif settings.WHATSAPP_ENABLED:
+                elif whatsapp_cloud_ready:
                     from .whatsapp_delivery import send_whatsapp
                     results = [send_whatsapp(request.user, branch, item.pk) for item in prepared]
                     accepted = sum(item.status in {"accepted", "sent", "delivered", "read"} for item in results)
@@ -1915,6 +1921,7 @@ def communications(request, branch):
         "rows": rows,
         "whatsapp_launch": whatsapp_launch,
         "whatsapp_batch": whatsapp_batch,
+        "whatsapp_cloud_ready": whatsapp_cloud_ready,
         "communication_policy": communication_policy,
         "debt_policy": debt_policy,
         "sms_enabled": settings.SMS_ENABLED,
@@ -1931,12 +1938,13 @@ def communication_status(request, branch):
         return JsonResponse({"messages": []})
     rows = list(
         Message.objects.filter(
-            branch=branch, pk__in=ids, channel="sms", archived_at__isnull=True
-        ).prefetch_related("delivery_attempts")
+            branch=branch, pk__in=ids, archived_at__isnull=True
+        ).prefetch_related("delivery_attempts", "whatsapp_attempts")
     )
     payload = []
     for row in rows:
-        latest = max(row.delivery_attempts.all(), key=lambda attempt: attempt.number, default=None)
+        attempts = row.whatsapp_attempts if row.channel == "whatsapp" else row.delivery_attempts
+        latest = max(attempts.all(), key=lambda attempt: attempt.number, default=None)
         payload.append({
             "id": row.pk,
             "status": row.status,

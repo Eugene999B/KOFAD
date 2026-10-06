@@ -47,6 +47,12 @@ jobs:
         env:
           DEMO_PASSWORD: isolated-demo-browser-password
       - run: python manage.py runserver 0.0.0.0:8000 --noreload > /tmp/kofad-server.log 2>&1 &
+      - name: Render business document evidence
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils fonts-dejavu-core
+          python tests/render_document_evidence.py
+          for file in test-results/documents/*.pdf; do pdftoppm -r 110 -png "$file" "${file%.pdf}"; done
       - run: python tests/browser_smoke.py
       - name: Verify production container
         run: |

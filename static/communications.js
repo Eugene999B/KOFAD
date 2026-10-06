@@ -58,8 +58,9 @@
       sendHint.textContent = "SMS is sent directly to Arkesel.";
     } else {
       body.maxLength = 1000;
-      sendButton.textContent = "Prepare WhatsApp →";
-      sendHint.textContent = "KOFAD prepares the chat and opens WhatsApp with your message ready.";
+      const cloud = form.dataset.whatsappCloud === "true";
+      sendButton.textContent = cloud ? "Send WhatsApp →" : "Prepare WhatsApp →";
+      sendHint.textContent = cloud ? "Sent through WhatsApp Business. An approved template is used outside an active customer conversation." : "KOFAD prepares the chat and opens WhatsApp with your message ready.";
     }
     updateCharCount();
   }
@@ -156,6 +157,9 @@
     sending: "Sending…",
     accepted: "Sent",
     delivered: "Delivered",
+    read: "Read",
+    sent: "Sent",
+    ready: "Ready to open",
     undelivered: "Not delivered",
     expired: "Expired",
     failed: "Failed",
@@ -164,7 +168,7 @@
   };
 
   async function refreshSmsStatuses() {
-    const rows = [...document.querySelectorAll('[data-history-row="sms"][data-message-id]')];
+    const rows = [...document.querySelectorAll('[data-history-row][data-message-id]')];
     if (!rows.length || document.hidden) return;
     const ids = rows.map(row => row.dataset.messageId).filter(Boolean);
     if (!ids.length) return;

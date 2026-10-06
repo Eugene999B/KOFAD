@@ -31,7 +31,7 @@ The repository now contains a Django/PostgreSQL implementation of the core opera
 - Custom roles, location access, privileged TOTP, session revocation and audit evidence.
 - Original identity, a distinct login experience, personalized post-login welcome transition, consistent responsive desktop/mobile workspaces and light/dark themes.
 
-**Status:** pre-production implementation. The entire master plan is not complete. Manager authority thresholds for expenses, discounts, price reductions and credit overrides are now configurable and server-enforced. Tax handling, independent two-person override approval queues, WhatsApp delivery, advanced catalog features and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
+**Status:** pre-production implementation. The entire master plan is not complete. Manager authority thresholds for expenses, discounts, price reductions and credit overrides are now configurable and server-enforced. Tax handling, independent two-person override approval queues, WhatsApp business-account activation, advanced catalog features and operational recovery work remain. Read the [acceptance matrix](docs/ACCEPTANCE.md) before using real money or business data.
 
 ## Verification
 
