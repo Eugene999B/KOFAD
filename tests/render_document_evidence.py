@@ -19,7 +19,7 @@ if not settings.DEBUG or not os.environ.get("GITHUB_ACTIONS"):
     raise RuntimeError("Document evidence is restricted to isolated GitHub Actions.")
 out = Path("test-results/documents")
 out.mkdir(parents=True, exist_ok=True)
-admin = User.objects.get(username="admin")
+admin = User.objects.get(username__iexact="admin")
 branch = Branch.objects.get(code="main")
 admin.access.branches.add(branch)
 worker, _ = Worker.objects.get_or_create(employee_code="KFD-EVIDENCE-001", defaults={

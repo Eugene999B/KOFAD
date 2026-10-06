@@ -236,8 +236,10 @@ def export(
                     run.font.size = Pt(8)
             for index, record in enumerate(group_records):
                 cells = table.add_row().cells
-                for cell, value in zip(cells, record):
+                for column_index, (cell, value) in enumerate(zip(cells, record)):
                     cell.text = value
+                    if isinstance(raw[index][group[column_index]], (int, float, Decimal)):
+                        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     if index % 2:
                         shade_word(cell, "FAF8F4")
                     for paragraph in cell.paragraphs:
@@ -269,6 +271,7 @@ def export(
         page_size = landscape(A4) if len(headers) > 6 else portrait(A4)
         styles = getSampleStyleSheet()
         body_style = ParagraphStyle("KofadBody", parent=styles["BodyText"], fontName=regular, fontSize=8.3, leading=11.5)
+        number_style = ParagraphStyle("KofadNumber", parent=body_style, alignment=2)
         head_style = ParagraphStyle("KofadHead", parent=body_style, fontName=bold, textColor=colors.white, leading=11)
         small_style = ParagraphStyle("KofadSmall", parent=body_style, fontSize=8, leading=11, textColor=colors.HexColor("#526271"))
         title_style = ParagraphStyle("KofadTitle", parent=styles["Heading1"], fontName=bold, fontSize=20, leading=25, textColor=colors.HexColor("#171717"))
@@ -336,7 +339,12 @@ def export(
                 values = [record[index] for index in group]
                 if len(groups) > 1:
                     values = [str(row_number)] + values
-                cells.append([Paragraph(escape(value).replace("\n", "<br/>"), body_style) for value in values])
+                raw_values = [raw[row_number - 1][index] for index in group]
+                if len(groups) > 1:
+                    raw_values = [row_number] + raw_values
+                cells.append([Paragraph(escape(value).replace("\n", "<br/>"),
+                    number_style if isinstance(raw_value, (int, float, Decimal)) else body_style)
+                    for value, raw_value in zip(values, raw_values)])
             weights = []
             for index in group:
                 key = columns[index][0]

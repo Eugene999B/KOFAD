@@ -45,7 +45,7 @@ DOCUMENT_TYPES = {
 
 NAVY = colors.HexColor("#102B46")
 NAVY_DARK = colors.HexColor("#0A2034")
-TEAL = colors.HexColor("#138C94")
+TEAL = colors.HexColor("#B66B45")
 GOLD = colors.HexColor("#E9AC32")
 INK = colors.HexColor("#172F47")
 MUTED = colors.HexColor("#64798B")

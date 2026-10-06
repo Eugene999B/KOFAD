@@ -172,7 +172,7 @@ def reset_password(request):
                 raw_code = request.POST.get("code", "").strip()
                 code = re.sub(r"[\s-]", "", raw_code)
                 valid = bool(
-                    re.fullmatch(r"\d(?:[\s-]?\d){5}", raw_code)
+                    re.fullmatch(r"[0-9]{6}", code)
                     and constant_time_compare(
                         challenge.code_digest, digest(str(challenge.pk)+":"+code)
                     )

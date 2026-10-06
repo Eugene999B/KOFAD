@@ -61,7 +61,7 @@ class AccountRecoveryTests(TestCase):
 
     def test_code_copied_with_sms_spacing_is_accepted(self):
         self.request_code()
-        self.assertRedirects(self.reset("123 456"), "/login/")
+        self.assertRedirects(self.reset(" 123  - 456 "), "/login/")
 
     def test_only_five_attempts_and_no_prefix_match(self):
         challenge = self.request_code()

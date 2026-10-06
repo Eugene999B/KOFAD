@@ -507,9 +507,9 @@ def verify_otp(phone, code, purpose="register"):
     # Accept common SMS formatting such as "123 456" or "123-456",
     # but reject letters, extra digits and other ambiguous input.
     raw_code = str(code or "").strip()
-    if not re.fullmatch(r"\d(?:[\s-]?\d){5}", raw_code):
-        raise ValidationError("Enter the six-digit verification code.")
     code = re.sub(r"[\s-]", "", raw_code)
+    if not re.fullmatch(r"[0-9]{6}", code):
+        raise ValidationError("Enter the six-digit verification code.")
     now = timezone.now()
 
     with transaction.atomic():
