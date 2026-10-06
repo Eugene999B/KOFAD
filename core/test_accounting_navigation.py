@@ -26,10 +26,10 @@ class AccountingNavigationTests(TestCase):
         today = timezone.localdate()
         rows = [
             {"date": today, "reference": "SALE-ONE", "source": "Sale",
-             "description": "Counter sale", "account_code": "1000", "account": "Cash",
+             "description": "Counter sale", "account_code": "1000", "account": "Cash", "account_type": "asset",
              "debit": Decimal("25"), "credit": Decimal("0")},
             {"date": today, "reference": "SALE-TWO", "source": "Sale",
-             "description": "Counter sale", "account_code": "4000", "account": "Revenue",
+             "description": "Counter sale", "account_code": "4000", "account": "Revenue", "account_type": "revenue",
              "debit": Decimal("0"), "credit": Decimal("25")},
         ]
         query = {"view": "ledger", "account": "1000", "source": "Sale", "q": "sale-one"}
@@ -42,7 +42,7 @@ class AccountingNavigationTests(TestCase):
 
     def test_ledger_does_not_drop_entries_beyond_two_thousand(self):
         row = {"date": date(2026, 1, 1), "reference": "LAST-ENTRY", "source": "Sale",
-               "description": "Sale", "account_code": "1000", "account": "Cash",
+               "description": "Sale", "account_code": "1000", "account": "Cash", "account_type": "asset",
                "debit": Decimal("1"), "credit": Decimal("0")}
         with patch("core.accounting_views.engine.ledger", return_value=[row] * 2001):
             response = self.client.get("/accounting/", {"view": "ledger", "page": 21})
