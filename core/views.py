@@ -1587,6 +1587,10 @@ def communication_settings(request, branch):
                 with transaction.atomic():
                     before = {field: str(getattr(item, field)) for field in form.fields}
                     obj = form.save()
+                    if request.POST.get("automation_switches") == "1":
+                        debt_policy = DebtSettings.objects.first() or DebtSettings.objects.create()
+                        debt_policy.delivery_mode = "send" if request.POST.get("sms-debt-enabled") == "on" else "off"
+                        debt_policy.save(update_fields=["delivery_mode"])
                     s.audit(request.user, branch, "settings.communications.updated", obj.pk, {
                         "before": before,
                         "after": {field: str(form.cleaned_data.get(field)) for field in form.fields},
@@ -1626,6 +1630,7 @@ def communication_settings(request, branch):
     }
     return render(request, "communication_settings.html", {
         "title": "SMS & WhatsApp settings",
+        "sms_debt_mode": (DebtSettings.objects.first() or DebtSettings()).delivery_mode,
         "sms_switches": [form[name] for name in ("sale_receipt_mode", "payment_confirmation_mode", "daily_closing_mode", "low_stock_mode")],
         "whatsapp_switches": [form[name] for name in ("whatsapp_sale_receipt_mode", "whatsapp_payment_confirmation_mode",
             "whatsapp_daily_closing_mode", "whatsapp_low_stock_mode", "whatsapp_debt_reminder_mode")],

@@ -345,6 +345,25 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
     assert float(admin_page.locator(".sidebar nav a").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
 
+    admin_page.goto("http://127.0.0.1:8000/settings/communications/")
+    assert admin_page.locator('[role="switch"]').count() == 10
+    closing_switch = admin_page.locator("#id_policy-daily_closing_mode-enabled")
+    closing_switch.check()
+    assert closing_switch.is_checked()
+    closing_switch.uncheck()
+    assert not closing_switch.is_checked()
+    admin_page.screenshot(path=str(out / "channel-settings-desktop.png"), full_page=True)
+    admin_page.set_viewport_size({"width":390,"height":844})
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "channel settings overflow"
+    admin_page.screenshot(path=str(out / "channel-settings-mobile.png"), full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
+    receipt_form = admin_page.locator("[data-receipt-channels]").first
+    receipt_form.locator('input[name="whatsapp"]').check()
+    assert receipt_form.locator('input[name="whatsapp"]').is_checked()
+    assert "/documents/?" in admin_page.url, "Receipt choice must not open transaction row"
+    receipt_form.locator('input[name="whatsapp"]').uncheck()
+    admin_page.screenshot(path=str(out / "sales-history-mobile.png"), full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/workspace/")
     admin_page.set_viewport_size({"width":390,"height":844})
     approval = admin_page.locator("#approval-attention")
     approval.evaluate("el => { el.hidden = false; el.classList.add('has-approvals'); }")

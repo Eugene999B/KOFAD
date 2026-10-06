@@ -110,7 +110,7 @@ def send_whatsapp(user, branch, message_id, *, automatic=False, retry=False):
             detail = str(error.get("message") or "WhatsApp rejected this message.")[:240]
         else:
             detail = "WhatsApp returned an uncertain result. Check delivery before retrying."
-    except (requests.RequestException, ValueError, KeyError, TypeError):
+    except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError):
         detail = "WhatsApp delivery could not be confirmed. Check delivery before retrying."
     with transaction.atomic():
         attempt = WhatsAppAttempt.objects.select_for_update().get(pk=attempt.pk)
