@@ -43,7 +43,7 @@ class HubtelContractTests(SimpleTestCase):
         get.return_value = Mock(status_code=200)
         for body in ([], {}, {"responseCode": "0000", "data": []},
                      {"responseCode": "0000", "data": {"clientReference": "wrong", "status": "Paid"}},
-                     {"responseCode": "0000", "data": {"clientReference": "ref1", "status": "Success"}}):
+                     {"responseCode": "0000", "data": {"clientReference": "ref1", "status": "Mystery"}}):
             get.return_value.json.return_value = body
             with self.assertRaises(services.PaymentVerificationUnavailable):
                 hubtel.verify("ref1")
