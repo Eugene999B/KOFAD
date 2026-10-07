@@ -81,3 +81,16 @@ The web service stores DJANGO_SECRET_KEY privately. DATABASE_URL references Post
 KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
 
 Public login: https://kofad-web-production.up.railway.app/login/ . The initial admin/admin account opens the workspace directly. Change password and the recovery phone are available under My account.
+
+
+## Official domain
+
+The public origin is https://kofadimpex.com. Railway manages DNS and TLS for the purchased root domain and `*.kofadimpex.com` on the existing web service. This uses two custom domain slots on Hobby and needs no additional hosting service.
+
+- `www.kofadimpex.com` redirects to the main website.
+- `market.kofadimpex.com` opens the public Market on the main origin.
+- `staff.kofadimpex.com` opens the staff workspace/sign-in on the main origin.
+
+Shortcuts redirect onto one origin so account cookies remain host-only. Unlisted wildcard hosts are rejected by Django's explicit allowed-host list. The database and message worker remain private. APIs and provider webhooks use their existing paths under the main domain; they do not require another public service or subdomain.
+
+Set `DJANGO_ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` to the explicit main, www, market, staff and existing Railway hostnames. Set `SMS_PUBLIC_ORIGIN` and `WHATSAPP_PUBLIC_ORIGIN` to `https://kofadimpex.com` on web and SMS worker. Preserve the existing Railway domain for compatibility with saved callbacks.
