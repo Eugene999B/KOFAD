@@ -1576,6 +1576,10 @@
   if (restoredState) {
     if (customerName && restoredState.customerName) customerName.value = restoredState.customerName;
     if (customerPhone && restoredState.customerPhone) customerPhone.value = restoredState.customerPhone;
+    if (customerEmail && restoredState.customerEmail) customerEmail.value = restoredState.customerEmail;
+    if (paystackMomoProvider && restoredState.paystackMomoProvider) paystackMomoProvider.value = restoredState.paystackMomoProvider;
+    if (paystackMomoPhone && restoredState.paystackMomoPhone) paystackMomoPhone.value = restoredState.paystackMomoPhone;
+    if (paystackMomoEmail && restoredState.paystackMomoEmail) paystackMomoEmail.value = restoredState.paystackMomoEmail;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
     if (customerWhatsApp) customerWhatsApp.checked = restoredState.customerWhatsApp === true;
@@ -1606,6 +1610,7 @@
       beginNewCustomer();
       customerName.value = pendingBody.customer_name;
       customerPhone.value = pendingBody.customer_phone || "";
+      if (customerEmail) customerEmail.value = pendingBody.customer_email || "";
     }
     if (customerConsent && Object.prototype.hasOwnProperty.call(pendingBody, "customer_consent")) {
         customerConsent.checked = Boolean(pendingBody.send_sms ?? pendingBody.customer_consent);
