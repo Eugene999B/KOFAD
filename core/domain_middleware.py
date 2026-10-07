@@ -1,4 +1,6 @@
 """Keep company, customer and staff traffic on separate browser origins."""
+import re
+
 from django.http import HttpResponse, HttpResponseRedirect
 
 ROOT = "kofadimpex.com"
@@ -27,7 +29,11 @@ class OfficialDomainMiddleware:
         staff_map = host == STAFF and request.method in {"GET", "HEAD"} and path.startswith(
             ("/market/location/", "/market/delivery/quote/")
         )
-        if shared or staff_map:
+        public_image = request.method in {"GET", "HEAD"} and bool(re.fullmatch(
+            r"/market/(?:products/[0-9]+/image|gallery/[0-9]+/image)/(?:thumb|full)/", path
+        ))
+        staff_support = host == STAFF and path.startswith(("/market/support/", "/market/returns/attachments/"))
+        if shared or staff_map or public_image or staff_support:
             return self.get_response(request)
         target_path = request.get_full_path()
         if path == "/" and host in {MARKET, STAFF}:

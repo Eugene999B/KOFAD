@@ -47,3 +47,10 @@ class OfficialDomainTests(SimpleTestCase):
         for host, path in (("testserver", "/login/"),
                            ("staff.kofadimpex.com", "/market/location/search/?q=Accra")):
             self.assertEqual(self.middleware(self.factory.get(path, HTTP_HOST=host)).content, b"served")
+
+    def test_staff_shared_tools_use_staff_authentication_on_staff_host(self):
+        for path in ("/market/products/1/image/thumb/", "/market/gallery/1/image/full/",
+                     "/market/support/conversations/1/typing/", "/market/returns/attachments/1/"):
+            method = self.factory.post if path.endswith("/typing/") else self.factory.get
+            response = self.middleware(method(path, HTTP_HOST="staff.kofadimpex.com"))
+            self.assertEqual(response.content, b"served")

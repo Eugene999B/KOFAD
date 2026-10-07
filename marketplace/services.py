@@ -811,9 +811,13 @@ def initialize_paystack(order, callback_url):
     return attempt
 
 
+class PaymentVerificationUnavailable(ValidationError):
+    """Temporary provider failure; webhook delivery must be retried."""
+
+
 def verify_paystack(reference):
     safe_reference = str(reference or "").strip()
-    if not safe_reference or len(safe_reference) > 100:
+    if not re.fullmatch(r"[A-Za-z0-9._=-]{1,100}", safe_reference):
         raise ValidationError("Invalid payment reference.")
     try:
         response = requests.get(
@@ -824,10 +828,15 @@ def verify_paystack(reference):
         )
         data = response.json()
     except (requests.RequestException, ValueError) as exc:
-        raise ValidationError("We could not verify the payment yet. Please refresh shortly.") from exc
-    if not 200 <= response.status_code < 300 or not data.get("status"):
-        raise ValidationError("We could not verify the payment yet. Please try again shortly.")
-    return data.get("data") or {}
+        raise PaymentVerificationUnavailable("We could not verify the payment yet. Please refresh shortly.") from exc
+    if not 200 <= response.status_code < 300 or not isinstance(data, dict) or data.get("status") is not True:
+        raise PaymentVerificationUnavailable("We could not verify the payment yet. Please try again shortly.")
+    verified = data.get("data")
+    if not isinstance(verified, dict):
+        raise PaymentVerificationUnavailable("The payment provider returned an incomplete verification.")
+    if verified.get("reference") != safe_reference:
+        raise ValidationError("The verified payment reference does not match this payment.")
+    return verified
 
 
 def _system_actor():

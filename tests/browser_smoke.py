@@ -549,7 +549,7 @@ with sync_playwright() as p:
     admin_page.goto(count_url)
     admin_page.get_by_label("Review note",exact=True).fill("Independent physical recount verified")
     admin_page.get_by_role("button",name="Approve differences & update stock",exact=True).click()
-    assert admin_page.locator(".pill").filter(has_text="Approved").count() >= 1
+    admin_page.locator(".pill").filter(has_text="Approved").first.wait_for(state="visible")
     admin_page.screenshot(path=str(out / "count-approved.png"),full_page=True)
     page.set_viewport_size({"width":1440,"height":1000})
     page.goto("http://127.0.0.1:8000/operations/")
