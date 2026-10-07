@@ -1638,8 +1638,18 @@
     const reason = document.querySelector("#override-reason");
     if (reason) reason.value = pendingBody.override_reason || "";
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
-    document.querySelector("#complete").disabled = false;
     openPayment();
-    fail("A checkout was interrupted. Review the unchanged checkout and click Complete Sale & Generate Receipt to recover the original result.");
+    if (momoReference) {
+      syncPaystackMomoPanel();
+      setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
+      pollMomoPayment({immediate: true});
+    } else {
+      document.querySelector("#complete").disabled = false;
+      fail("A checkout was interrupted. Review the unchanged checkout and click Complete Sale & Generate Receipt to recover the original result.");
+    }
+  } else if (momoReference) {
+    setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
+    lockCheckoutForMomo(true);
+    pollMomoPayment({immediate: true});
   }
 })();
