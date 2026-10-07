@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.core.cache import cache
+from django.utils.html import escape
 from django.test import Client, TestCase, override_settings
 
 from .models import Conversation
@@ -19,7 +20,7 @@ class PublicSiteTests(TestCase):
             slug = "returns-policy" if slug == "returns" else slug
             response = self.client.get("/" + slug + "/")
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, page["title"])
+            self.assertContains(response, escape(page["title"]))
             self.assertContains(response, "/privacy/")
         self.assertContains(self.client.get("/"), "/about/")
         self.assertContains(self.client.get("/market/access/"), "/returns-policy/")

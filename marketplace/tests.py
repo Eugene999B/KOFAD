@@ -102,7 +102,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, "Shop the Market")
         self.assertContains(response, "Featured picks")
         self.assertContains(response, "home-hero-v9")
-        self.assertContains(response, "Retail or wholesale.")
+        self.assertContains(response, "Everyday essentials.")
         self.assertContains(response, "Wholesale quantities")
         self.assertNotContains(response, "home-hero-products")
         self.assertNotContains(response, "SHOP BY DEPARTMENT")
