@@ -178,9 +178,11 @@ def verify(reference):
     safe_status = str(data.get("status", "")).strip() if isinstance(data, dict) else ""
     safe_amount = data.get("amount") if isinstance(data, dict) else None
     logger.info(
-        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s ref_suffix=%s",
+        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s data_keys=%s message=%s ref_suffix=%s",
         response.status_code, response_code, safe_status[:24], safe_amount,
         bool(data.get("transactionId")) if isinstance(data, dict) else False,
+        ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else type(data).__name__,
+        str(body.get("message", ""))[:160] if isinstance(body, dict) else "",
         str(reference)[-6:],
     )
 
