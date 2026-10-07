@@ -1388,6 +1388,8 @@
     lastCompletedSale = null;
     pendingBody = null;
     heldId = null;
+    momoReference = null;
+    clearTimeout(momoPollTimer);
     requestKey = crypto.randomUUID();
     cart.splice(0, cart.length);
     selectedCustomer = null;
@@ -1402,6 +1404,11 @@
     if (customerSearch) customerSearch.value = "";
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
+    if (customerEmail) customerEmail.value = "";
+    if (paystackMomoPhone) paystackMomoPhone.value = "";
+    if (paystackMomoEmail) paystackMomoEmail.value = "";
+    if (paystackMomoProvider) paystackMomoProvider.value = "mtn";
+    setMomoStatus("When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.");
     if (customerConsent) customerConsent.checked = true;
     if (customerWhatsApp) customerWhatsApp.checked = false;
     if (paymentPlan) paymentPlan.value = "full";
@@ -1448,6 +1455,12 @@
     try {
       if (!pendingBody) pendingBody = buildCheckoutBody();
       persist();
+
+      if (!purchase && directMomoSelected() && paystackMomoReady) {
+        await startPaystackMomo();
+        return;
+      }
+
       root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
       button.disabled = false;
       const result = await api("/api/trades/", pendingBody, requestKey);
@@ -1469,9 +1482,10 @@
         applyPaymentPlan();
         persist();
       }
-      fail(error.message + (pendingBody ? " Retry this unchanged request to recover the same transaction. Editing is locked until its outcome is known." : ""));
+      const locked = Boolean(pendingBody || momoReference);
+      fail(error.message + (locked ? " Do not start another payment until this request is resolved." : ""));
     } finally {
-      if (!completed) button.disabled = false;
+      if (!completed && !momoReference) button.disabled = false;
     }
   });
 
