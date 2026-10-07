@@ -4,7 +4,7 @@
 <nav class="company-breadcrumb" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">/</span><span>{{ page.title }}</span></nav>
 <header class="company-page-hero"><p class="company-kicker">{{ page.eyebrow }}</p><h1>{{ page.title }}</h1><p>{{ page.intro }}</p>{% if page_slug == 'terms' or page_slug == 'privacy' or page_slug == 'returns' or page_slug == 'delivery' %}<small>Effective 7 October 2026 · Version {{ policy_version }}</small>{% endif %}</header>
 <div class="company-page-layout">
-<aside class="company-guide"><nav aria-label="Company and customer help">{% for key, item in public_pages.items %}<a href="/{{ key }}/"{% if page_slug == key %} aria-current="page"{% endif %}>{{ item.title }}<span aria-hidden="true">↗</span></a>{% endfor %}<a href="/market/">Browse the Market <span aria-hidden="true">→</span></a></nav></aside>
+<aside class="company-guide"><nav aria-label="Company and customer help">{% for key, item in public_pages.items %}<a href="/{% if key == 'returns' %}returns-policy{% else %}{{ key }}{% endif %}/"{% if page_slug == key %} aria-current="page"{% endif %}>{{ item.title }}<span aria-hidden="true">↗</span></a>{% endfor %}<a href="/market/">Browse the Market <span aria-hidden="true">→</span></a></nav></aside>
 <div class="company-prose">
 {% if page_slug == 'faq' %}{% for heading, paragraphs in page.sections %}<details class="company-faq"><summary>{{ heading }}</summary>{% for paragraph in paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</details>{% endfor %}
 {% else %}{% for heading, paragraphs in page.sections %}<section><h2>{{ heading }}</h2>{% for paragraph in paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</section>{% endfor %}{% endif %}

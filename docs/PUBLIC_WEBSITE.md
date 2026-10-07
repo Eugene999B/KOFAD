@@ -2,7 +2,7 @@
 
 Policy version: 2026-10-07. The owner authorised initial operating policies on 7 October 2026.
 
-Public pages: /about/, /faq/, /contact/, /delivery/, /returns/, /terms/, /privacy/.
+Public pages: /about/, /faq/, /contact/, /delivery/, /returns-policy/, /terms/, /privacy/.
 Production canonical host: https://kofadimpex.com. All pages are accessible without an account.
 Links from a signed-in Market account open a separate tab to preserve the shopping session.
 

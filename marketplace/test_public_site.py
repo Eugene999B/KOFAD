@@ -16,12 +16,13 @@ class PublicSiteTests(TestCase):
 
     def test_every_information_page_is_public_and_linked(self):
         for slug, page in PAGES.items():
+            slug = "returns-policy" if slug == "returns" else slug
             response = self.client.get("/" + slug + "/")
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, page["title"])
             self.assertContains(response, "/privacy/")
         self.assertContains(self.client.get("/"), "/about/")
-        self.assertContains(self.client.get("/market/access/"), "/returns/")
+        self.assertContains(self.client.get("/market/access/"), "/returns-policy/")
 
     @patch("marketplace.services.send_transactional_sms")
     def test_feedback_reaches_staff_inbox_without_sending_sms(self, send):
@@ -58,6 +59,7 @@ class PublicSiteTests(TestCase):
     @override_settings(ALLOWED_HOSTS=["kofadimpex.com", "market.kofadimpex.com", "staff.kofadimpex.com"])
     def test_policy_routes_stay_public_and_wrong_host_posts_do_not_forward(self):
         for slug in PAGES:
+            slug = "returns-policy" if slug == "returns" else slug
             response = self.client.get("/" + slug + "/", HTTP_HOST="kofadimpex.com")
             self.assertEqual(response.status_code, 200)
             response = self.client.get("/" + slug + "/", HTTP_HOST="market.kofadimpex.com")
@@ -65,3 +67,11 @@ class PublicSiteTests(TestCase):
         response = self.client.post("/contact/", self.data, HTTP_HOST="market.kofadimpex.com")
         self.assertEqual(response.status_code, 409)
         self.assertFalse(Conversation.objects.exists())
+
+    @override_settings(ALLOWED_HOSTS=["staff.kofadimpex.com"])
+    def test_staff_returns_route_is_not_replaced_by_public_policy(self):
+        from django.urls import resolve
+        self.assertEqual(resolve("/returns/").url_name, "returns")
+        response = self.client.get("/returns/", HTTP_HOST="staff.kofadimpex.com")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])
