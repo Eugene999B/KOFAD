@@ -24,7 +24,7 @@ PERMISSION_HELP = {
     "operate_finance": ("Finance", "Record expenses, customer collections, supplier payments and daily closing."),
     "approve_operations": ("Approvals", "Review controlled returns, inventory verification, accounting, payroll, corrections and closing verification."),
     "view_reports": ("Reports", "View business reports, cost/profit information and audit evidence."),
-    "manage_company": ("Administration", "Manage company settings, staff accounts, roles and system configuration."),
+    "manage_company": ("Company settings", "Manage business configuration. Only the system administrator can change staff access and roles."),
     "send_messages": ("Communications", "Queue and retry approved customer SMS messages."),
     "add_product": ("Products · create", "Create new products."),
     "change_product": ("Products · edit", "Edit product setup and selling prices."),
