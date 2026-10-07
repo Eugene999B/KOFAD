@@ -86,6 +86,48 @@ class HubtelContractTests(SimpleTestCase):
         self.assertEqual(result["transactionId"], "txn1")
 
     @patch("marketplace.hubtel.requests.get")
+    def test_live_sales_api_shape_maps_success_to_paid(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000",
+            "Data": [{
+                "ClientReference": "ref1",
+                "InvoiceStatus": "Success",
+                "TransactionStatus": "Success",
+                "TransactionId": "txn-live-1",
+                "TransactionAmount": 1.00,
+                "CurrencyCode": "GHS",
+                "PaymentMethod": "MOBILE-MONEY",
+            }],
+        }
+        result = hubtel.verify("ref1")
+        self.assertEqual(result["status"], "Paid")
+        self.assertEqual(result["amount"], 1.00)
+        self.assertEqual(result["transactionId"], "txn-live-1")
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_live_sales_api_shape_does_not_settle_partial_or_nonfinal_status(self, get):
+        get.return_value = Mock(status_code=200)
+        for invoice_status, transaction_status in [
+            ("Pending", "Pending"),
+            ("Success", "Pending"),
+            ("Pending", "Success"),
+        ]:
+            get.return_value.json.return_value = {
+                "ResponseCode": "0000",
+                "Data": [{
+                    "ClientReference": "ref1",
+                    "InvoiceStatus": invoice_status,
+                    "TransactionStatus": transaction_status,
+                    "TransactionId": "txn-live-1",
+                    "TransactionAmount": 1.00,
+                    "CurrencyCode": "GHS",
+                }],
+            }
+            with self.assertRaises(services.PaymentVerificationUnavailable):
+                hubtel.verify("ref1")
+
+    @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
         for reference in ("../path", "x?y=1", "", "x" * 33):
             with self.assertRaises(ValidationError):
