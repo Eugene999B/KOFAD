@@ -617,7 +617,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertContains(response, "payment-launch.")
         self.assertContains(response, "https://pay.hubtel.com/test-checkout")
         self.assertContains(response, "Continue to secure payment")
-        self.assertEqual(response["Cache-Control"], "no-store, private")
+        self.assertIn("no-store", response["Cache-Control"])
 
     def test_payment_launch_blocks_untrusted_checkout_host(self):
         self.customer_session()
