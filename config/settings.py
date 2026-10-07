@@ -120,3 +120,10 @@ GOOGLE_MAPS_SERVER_KEY = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "")
 GOOGLE_MAPS_BROWSER_KEY = os.environ.get("GOOGLE_MAPS_BROWSER_KEY", "")
 GOOGLE_MAPS_MAP_ID = os.environ.get("GOOGLE_MAPS_MAP_ID", "")
 GOOGLE_MAPS_TIMEOUT_SECONDS = int(os.environ.get("GOOGLE_MAPS_TIMEOUT_SECONDS", "12"))
+
+# Hubtel Online Checkout only. Direct MoMo/transfer APIs are outside our approved scope.
+HUBTEL_API_ID = os.environ.get("HUBTEL_API_ID", "").strip()
+HUBTEL_API_KEY = os.environ.get("HUBTEL_API_KEY", "").strip()
+HUBTEL_COLLECTION_ACCOUNT = os.environ.get("HUBTEL_COLLECTION_ACCOUNT", "").strip()
+HUBTEL_TIMEOUT_SECONDS = int(os.environ.get("HUBTEL_TIMEOUT_SECONDS", "10"))
+HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"

@@ -24,6 +24,7 @@ class OfficialDomainMiddleware:
             or path.startswith("/sms/callback/") or path == "/sms/delivery/"
             or path == "/whatsapp/webhook/"
             or path == "/market/payments/paystack/webhook/"
+            or path == "/market/payments/hubtel/callback/"
         )
         # Staff delivery tools use these public, read-only location endpoints.
         staff_map = host == STAFF and request.method in {"GET", "HEAD"} and path.startswith(

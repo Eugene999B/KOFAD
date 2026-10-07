@@ -920,7 +920,7 @@ def post_order_to_ledger(order, actor=None):
         total=order.total, paid=order.total, document_date=timezone.localdate(),
         note=(
             f"Online Market order {order.public_reference}. "
-            f"Paystack paid at {order.paid_at.isoformat() if order.paid_at else 'verified time unavailable'}."
+            f"Online payment verified at {order.paid_at.isoformat() if order.paid_at else 'verified time unavailable'}."
         ),
         created_by=actor,
         external_reference=order.payment_reference,
@@ -954,7 +954,7 @@ def post_order_to_ledger(order, actor=None):
     order.reservations.update(active=False)
     core_services.audit(actor, branch, "sale.online_posted", order.public_reference, {
         "document": doc.reference,
-        "paystack_reference": order.payment_reference,
+        "payment_reference": order.payment_reference,
         "amount": str(order.total),
         "channel": order.payment_channel,
     })
@@ -962,10 +962,12 @@ def post_order_to_ledger(order, actor=None):
 
 
 @transaction.atomic
-def finalize_payment(reference, provider_data):
+def finalize_payment(reference, provider_data, expected_provider="paystack"):
     attempt = MarketPaymentAttempt.objects.select_for_update().select_related("order").filter(reference=reference).first()
     if not attempt:
         raise ValidationError("This payment reference does not belong to a KOFAD order.")
+    if attempt.provider != expected_provider:
+        raise ValidationError("Payment provider does not match the saved attempt.")
     order = OnlineOrder.objects.select_for_update().get(pk=attempt.order_id)
     if order.payment_status == "paid":
         return order
@@ -1161,6 +1163,8 @@ def _apply_refund_provider_state(item, data, message=""):
 
 
 def initiate_paystack_refund(item):
+    if MarketPaymentAttempt.objects.filter(order=item.order, reference=item.order.payment_reference, provider="hubtel").exists():
+        raise ValidationError("Hubtel refund requires staff reconciliation through Hubtel. Do not submit it to Paystack.")
     item = MarketReturnRequest.objects.select_related(
         "order", "core_return_request"
     ).prefetch_related("lines__order_line").get(pk=item.pk)
@@ -1246,6 +1250,8 @@ def initiate_paystack_refund(item):
 
 
 def refresh_paystack_refund(item):
+    if MarketPaymentAttempt.objects.filter(order=item.order, reference=item.order.payment_reference, provider="hubtel").exists():
+        raise ValidationError("Hubtel refund requires staff reconciliation through Hubtel. Do not submit it to Paystack.")
     item = MarketReturnRequest.objects.select_related("order").get(pk=item.pk)
     if not item.provider_refund_id:
         raise ValidationError("No Paystack refund has been initiated for this return.")

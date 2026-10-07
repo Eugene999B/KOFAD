@@ -2,6 +2,9 @@ from django.urls import path
 from . import views, public_views
 
 urlpatterns = [
+    path("market/payments/hubtel/callback/", views.hubtel_callback, name="hubtel_callback"),
+    path("market/payments/hubtel/return/", views.hubtel_return, name="hubtel_return"),
+    path("market/orders/<uuid:pk>/check-payment/", views.order_payment_check, name="market_payment_check"),
     path("about/", public_views.public_page, {"slug": "about"}, name="public_about"),
     path("faq/", public_views.public_page, {"slug": "faq"}, name="public_faq"),
     path("delivery/", public_views.public_page, {"slug": "delivery"}, name="public_delivery"),

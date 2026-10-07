@@ -18,12 +18,21 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         delivery_updates = 0
         last_automation = 0.0
+        last_payment_check = 0.0
         last_delivery_sync = 0.0
         last_recovery = None
 
         while True:
             close_old_connections()
             now = time.monotonic()
+
+            if now - last_payment_check >= 60:
+                try:
+                    from marketplace.hubtel import reconcile_due
+                    reconcile_due()
+                except Exception:
+                    self.stderr.write("Hubtel reconciliation check failed; will retry.")
+                last_payment_check = now
 
             if now - last_automation >= 60:
                 try:

@@ -32,7 +32,7 @@ from .models import (
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
-from . import services
+from . import services, hubtel
 
 
 def _market_context(request, **extra):
@@ -829,7 +829,7 @@ def checkout(request, customer):
             request.session["market_cart"] = {}
             request.session.modified = True
             try:
-                attempt = services.initialize_paystack(
+                attempt = hubtel.initialize_payment(
                     order,
                     request.build_absolute_uri("/market/payment/return/"),
                 )
@@ -862,7 +862,7 @@ def order_pay(request, customer, pk):
     if order.payment_status == "paid":
         return redirect("market_order", pk=order.pk)
     try:
-        attempt = services.initialize_paystack(
+        attempt = hubtel.initialize_payment(
             order,
             request.build_absolute_uri("/market/payment/return/"),
         )
@@ -881,6 +881,8 @@ def payment_return(request):
     if not attempt:
         messages.error(request, "KOFAD could not match that payment to an order.")
         return redirect("market")
+    if attempt.provider != "paystack":
+        return redirect("/market/payments/hubtel/return/?reference=" + attempt.reference)
     try:
         data = services.verify_paystack(reference)
         order = services.finalize_payment(reference, data)
@@ -985,6 +987,9 @@ def customer_order_cancel(request, customer, pk):
         order = get_object_or_404(OnlineOrder.objects.select_for_update(), pk=pk, customer=customer)
         if order.status != "awaiting_payment" or order.payment_status == "paid":
             messages.error(request, "This order can no longer be cancelled from your account.")
+            return redirect("market_order", pk=order.pk)
+        if order.payment_attempts.filter(provider="hubtel", status__in=["initializing", "submission_unknown", "pending", "attention"]).exists():
+            messages.error(request, "This payment must be reconciled before cancelling. If debited, do not pay again.")
             return redirect("market_order", pk=order.pk)
         order.status = "cancelled"
         order.payment_status = "unpaid"
@@ -1722,6 +1727,19 @@ def market_settings(request, branch):
     )
 
     if request.method == "POST":
+        if action == "payment":
+            from .models import PaymentConfiguration
+            provider = request.POST.get("provider")
+            if provider not in {"paystack", "hubtel"}:
+                messages.error(request, "Choose Paystack or Hubtel.")
+            else:
+                PaymentConfiguration.objects.update_or_create(pk=1, defaults={"provider": provider})
+                from core import services as core_services
+                core_services.audit(request.user, branch, "market.payment_provider_saved", "1", {"provider": provider})
+                messages.success(request, "Payment provider saved. Existing payments retain their original provider.")
+                if not hubtel.ready(provider):
+                    messages.warning(request, "This provider still needs credentials or checkout activation before accepting payments.")
+            return redirect("market_settings")
         if action == "toggle":
             zone = get_object_or_404(DeliveryZone, pk=request.POST.get("zone"))
             zone.active = not zone.active
@@ -1759,6 +1777,10 @@ def market_settings(request, branch):
 
     return render(request, "marketplace/settings.html", {
         "title": "Market & Delivery",
+        "payment_provider": hubtel.selected_provider(),
+        "hubtel_configured": hubtel.configured(),
+        "hubtel_ready": hubtel.ready("hubtel"),
+        "paystack_ready": hubtel.ready("paystack"),
         "form": form,
         "policy_form": policy_form,
         "selected_zone": selected,
@@ -1980,3 +2002,56 @@ def staff_inbox(request, branch, conversation_id=None):
         "closed_count": Conversation.objects.filter(status="closed").count(),
     })
 
+
+
+@csrf_exempt
+@require_POST
+def hubtel_callback(request):
+    if len(request.body) > 65536:
+        return HttpResponse(status=413)
+    try:
+        body = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return HttpResponse(status=400)
+    if not isinstance(body, dict) or not isinstance(body.get("Data"), dict):
+        return HttpResponse(status=400)
+    reference = body["Data"].get("ClientReference")
+    if not isinstance(reference, str) or len(reference) > 32:
+        return HttpResponse(status=400)
+    attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
+    if attempt and attempt.status != "success":
+        # Expedite the first check only. Repeated callbacks cannot defeat the persisted lease.
+        MarketPaymentAttempt.objects.filter(pk=attempt.pk, check_count=0).update(next_check_at=timezone.now())
+        return HttpResponse(status=202)
+    return HttpResponse(status=200)
+
+
+def hubtel_return(request):
+    reference = request.GET.get("reference", "")
+    attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
+    if not attempt:
+        return redirect("market")
+    try:
+        hubtel.reconcile(reference)
+    except ValidationError:
+        pass
+    customer = services.customer_from_session(request)
+    if customer and customer.pk == attempt.order.customer_id:
+        return redirect("market_order", pk=attempt.order_id)
+    return render(request, "marketplace/hubtel_result.html", _market_context(request, title="Payment status"))
+
+
+@market_customer_required
+@require_POST
+def order_payment_check(request, customer, pk):
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    attempt = order.payment_attempts.filter(provider="hubtel").first()
+    if not attempt:
+        messages.info(request, "No Hubtel payment is waiting for confirmation.")
+    else:
+        try:
+            hubtel.reconcile(attempt.reference)
+            messages.success(request, "Payment confirmed.")
+        except ValidationError as exc:
+            messages.info(request, problem(exc))
+    return redirect("market_order", pk=order.pk)

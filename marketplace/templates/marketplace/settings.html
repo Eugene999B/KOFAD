@@ -8,6 +8,17 @@
 {% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/market/" target="_blank" rel="noopener">Open Market ↗</a><a class="button secondary" href="/online-orders/">Online Orders</a></div>{% endblock %}
 {% block content %}
+<section class="panel"><p class="eyebrow">ONLINE PAYMENTS</p><h2>Payment provider</h2>
+<p>Choose the checkout for new payments. Payments already started stay with their original provider.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="payment">
+<label for="payment-provider">Provider</label><select id="payment-provider" name="provider">
+<option value="paystack" {% if payment_provider == 'paystack' %}selected{% endif %}>Paystack</option>
+<option value="hubtel" {% if payment_provider == 'hubtel' %}selected{% endif %}>Hubtel Online Checkout</option>
+</select><button class="button">Save payment provider</button></form>
+<p>Paystack: {% if paystack_ready %}configured{% else %}credentials needed{% endif %}.
+Hubtel: {% if hubtel_ready %}checkout enabled{% elif hubtel_configured %}credentials saved; awaiting payment testing and activation{% else %}credentials needed{% endif %}.</p>
+<p class="hint">API secrets are stored securely in Railway. Hubtel supports hosted checkout under our agreed integration scope. Refunds need staff reconciliation through Hubtel until its refund process is approved.</p></section>
+
 <div class="market-settings-layout">
 <div>
 <section class="panel"><div class="section-heading"><div><p class="eyebrow">DELIVERY PRICING</p><h2>Delivery rules</h2></div></div>

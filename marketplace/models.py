@@ -264,6 +264,9 @@ class MarketPaymentAttempt(models.Model):
     access_code = models.CharField(max_length=120, blank=True)
     authorization_url = models.URLField(blank=True)
     provider_message = models.CharField(max_length=240, blank=True)
+    next_check_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    check_count = models.PositiveIntegerField(default=0)
+    verification_summary = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     verified_at = models.DateTimeField(null=True, blank=True)
 
@@ -450,3 +453,12 @@ class OtpThrottle(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["phone", "purpose"], name="one_market_otp_throttle")]
+
+
+class PaymentConfiguration(models.Model):
+    """One company-wide checkout provider; secrets stay in environment variables."""
+    provider = models.CharField(max_length=24, choices=[("paystack", "Paystack"), ("hubtel", "Hubtel")], default="paystack")
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        return super().save(*args, **kwargs)
