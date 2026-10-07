@@ -1184,6 +1184,125 @@
     };
   }
 
+  function setMomoStatus(message, tone = "subtle") {
+    if (!paystackMomoStatus) return;
+    paystackMomoStatus.textContent = message || "";
+    paystackMomoStatus.classList.toggle("error", tone === "error");
+  }
+
+  function lockCheckoutForMomo(locked) {
+    root.querySelectorAll("input,select,textarea,button").forEach(control => {
+      control.disabled = locked;
+    });
+    if (!locked) applyPaymentPlan();
+  }
+
+  async function fetchMomoStatus() {
+    if (!momoReference) return null;
+    const response = await fetch(
+      "/api/pos/paystack-momo/" + encodeURIComponent(momoReference) + "/status/",
+      {credentials: "same-origin", cache: "no-store", headers: {"Accept": "application/json"}}
+    );
+    const contentType = response.headers.get("Content-Type") || "";
+    if (!contentType.includes("application/json")) throw new Error("Sign in again to check this payment.");
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not check the MoMo payment.");
+    return result;
+  }
+
+  async function pollMomoPayment({immediate = false} = {}) {
+    clearTimeout(momoPollTimer);
+    if (!momoReference) return;
+    if (!immediate) {
+      momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), 5000);
+      return;
+    }
+    try {
+      const result = await fetchMomoStatus();
+      if (!result || !momoReference) return;
+      setMomoStatus(result.message || result.display_text || "Checking payment…");
+      if (result.paid && result.sale) {
+        completed = true;
+        momoReference = null;
+        pendingBody = null;
+        clearStored();
+        lockCheckoutForMomo(false);
+        showSaleSuccess(result.sale);
+        return;
+      }
+      if (result.failed) {
+        const message = result.message || "The MoMo request was not successful.";
+        momoReference = null;
+        pendingBody = null;
+        requestKey = crypto.randomUUID();
+        lockCheckoutForMomo(false);
+        persist();
+        setMomoStatus(message, "error");
+        fail(message);
+        return;
+      }
+      persist();
+      momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), result.status === "not_confirmed" ? 10000 : 5000);
+    } catch (error) {
+      setMomoStatus(error.message + " KOFAD will keep checking in the background.", "error");
+      momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), 10000);
+    }
+  }
+
+  async function startPaystackMomo() {
+    if (!directMomoSelected() || !paystackMomoReady) return false;
+    if (!pendingBody) pendingBody = buildCheckoutBody();
+    const phone = paystackMomoPhone?.value.trim() || selectedCustomer?.phone || customerPhone?.value.trim() || "";
+    const email = paystackMomoEmail?.value.trim() || selectedCustomer?.email || customerEmail?.value.trim() || "";
+    const provider = paystackMomoProvider?.value || "mtn";
+    if (!phone) throw new Error("Enter the customer's Mobile Money number.");
+    if (!email || !email.includes("@")) throw new Error("Enter the customer's email for the Paystack payment request.");
+
+    setMomoStatus("Sending Mobile Money approval request…");
+    lockCheckoutForMomo(true);
+    try {
+      const result = await api("/api/pos/paystack-momo/start/", {
+        sale: pendingBody,
+        phone,
+        email,
+        provider,
+        request_key: requestKey
+      }, requestKey);
+      momoReference = result.reference || momoReference;
+      if (!momoReference) throw new Error("Paystack did not return a payment reference.");
+      setMomoStatus(result.message || result.display_text || "Approve the payment on the customer's phone.");
+      persist();
+      if (result.paid && result.sale) {
+        completed = true;
+        momoReference = null;
+        pendingBody = null;
+        clearStored();
+        lockCheckoutForMomo(false);
+        showSaleSuccess(result.sale);
+        return true;
+      }
+      if (result.failed) {
+        const message = result.message || "The MoMo request was not successful.";
+        momoReference = null;
+        pendingBody = null;
+        requestKey = crypto.randomUUID();
+        lockCheckoutForMomo(false);
+        persist();
+        throw new Error(message);
+      }
+      pollMomoPayment();
+      return true;
+    } catch (error) {
+      if (!momoReference) {
+        pendingBody = null;
+        requestKey = crypto.randomUUID();
+        lockCheckoutForMomo(false);
+        persist();
+      }
+      throw error;
+    }
+  }
+
   function setSuccessStatus(message, tone = "subtle") {
     if (!successMessageStatus) return;
     message = [message, successMessageStatus.dataset.whatsappResult].filter(Boolean).join(" ");
