@@ -97,6 +97,21 @@ class SmsTests(Fixtures,TestCase):
         self.assertFalse(sent.sandbox)
         self.assertFalse(submit_many.call_args.args[4])
 
+    @override_settings(SMS_SANDBOX=True)
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_counter_sale_receipt_is_live_even_when_general_sms_is_sandboxed(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "receipt-provider-1", 200, recipient="+233241234567")
+        ]
+        message = create_draft(
+            self.user, self.branch, self.customer, "KOFAD: Receipt ready.",
+            source_key="document:receipt:test-sale",
+        )
+        sent = send_message_now(self.user, self.branch, message.pk, automatic=True)
+        self.assertEqual(sent.status, "accepted")
+        self.assertFalse(sent.sandbox)
+        self.assertFalse(submit_many.call_args.args[4])
+
     @patch("core.sms.providers.Arkesel.submit_many")
     def test_cashier_sale_receipt_sms_does_not_require_general_messaging_permission(self, submit_many):
         submit_many.return_value = [
