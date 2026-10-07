@@ -72,6 +72,20 @@ class HubtelContractTests(SimpleTestCase):
             hubtel.verify("ref1")
 
     @patch("marketplace.hubtel.requests.get")
+    def test_public_status_list_selects_exact_client_reference(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000",
+            "Data": [
+                {"ClientReference": "other", "Status": "Paid", "Amount": 9, "TransactionId": "txn-other"},
+                {"ClientReference": "ref1", "Status": "Paid", "Amount": 200, "TransactionId": "txn1"},
+            ],
+        }
+        result = hubtel.verify("ref1")
+        self.assertEqual(result["status"], "Paid")
+        self.assertEqual(result["transactionId"], "txn1")
+
+    @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
         for reference in ("../path", "x?y=1", "", "x" * 33):
             with self.assertRaises(ValidationError):
