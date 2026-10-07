@@ -196,7 +196,7 @@ def verify(reference):
         "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s data_shape=%s message=%s ref_suffix=%s",
         response.status_code, response_code, safe_status[:24], safe_amount,
         bool(data.get("transactionId")) if isinstance(data, dict) else False,
-        data_shape,
+        data_shape[:1200] if isinstance(data_shape, str) else data_shape,
         str(body.get("message", ""))[:160] if isinstance(body, dict) else "",
         str(reference)[-6:],
     )
