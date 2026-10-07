@@ -3,7 +3,7 @@ import json
 import secrets
 import uuid
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.conf import settings
@@ -544,7 +544,9 @@ def complete_trade(request):
                     continue
                 try:
                     momo_amount = Decimal(str(payment.get("amount", "0")))
-                except (ValueError, TypeError):
+                except (InvalidOperation, ValueError, TypeError):
+                    raise ValidationError("Invalid Mobile Money payment amount.")
+                if not momo_amount.is_finite() or momo_amount < 0:
                     raise ValidationError("Invalid Mobile Money payment amount.")
                 if momo_amount > 0:
                     from . import pos_paystack
