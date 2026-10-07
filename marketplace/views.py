@@ -906,6 +906,8 @@ def paystack_webhook(request):
         event = json.loads(request.body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return HttpResponse(status=400)
+    if not isinstance(event, dict) or not isinstance(event.get("data", {}), dict):
+        return HttpResponse(status=400)
     event_name = str(event.get("event", ""))
     data = event.get("data") or {}
     if event_name == "charge.success":
@@ -914,6 +916,8 @@ def paystack_webhook(request):
             try:
                 verified = services.verify_paystack(reference)
                 services.finalize_payment(reference, verified)
+            except services.PaymentVerificationUnavailable:
+                return HttpResponse(status=503)
             except ValidationError:
                 return HttpResponse(status=200)
     elif event_name in {
