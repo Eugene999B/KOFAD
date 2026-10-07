@@ -86,6 +86,45 @@ class HubtelContractTests(SimpleTestCase):
         self.assertEqual(result["transactionId"], "txn1")
 
     @patch("marketplace.hubtel.requests.get")
+    def test_live_checkout_transaction_fields_map_to_paid_and_gross_amount(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000",
+            "Data": [{
+                "ClientReference": "ref1",
+                "InvoiceStatus": "Success",
+                "TransactionStatus": "Success",
+                "TransactionId": "txn-live-1",
+                "TransactionAmount": 1.00,
+                "AmountAfterFees": 0.98,
+                "CurrencyCode": "GHS",
+                "PaymentMethod": "MOBILE-MONEY",
+            }],
+        }
+        result = hubtel.verify("ref1")
+        self.assertEqual(result["status"], "Paid")
+        self.assertEqual(result["amount"], 1.00)
+        self.assertEqual(result["transactionId"], "txn-live-1")
+        self.assertEqual(result["paymentMethod"], "MOBILE-MONEY")
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_live_checkout_pending_status_never_becomes_paid(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000",
+            "Data": [{
+                "ClientReference": "ref1",
+                "InvoiceStatus": "Pending",
+                "TransactionStatus": "Pending",
+                "TransactionId": "txn-live-2",
+                "TransactionAmount": 1.00,
+                "CurrencyCode": "GHS",
+            }],
+        }
+        with self.assertRaises(services.PaymentVerificationUnavailable):
+            hubtel.verify("ref1")
+
+    @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
         for reference in ("../path", "x?y=1", "", "x" * 33):
             with self.assertRaises(ValidationError):
