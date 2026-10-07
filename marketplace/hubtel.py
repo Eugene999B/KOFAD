@@ -158,6 +158,49 @@ def _normalise_keys(payload):
     return normalised
 
 
+def _status_candidates(raw_data):
+    """Flatten the safe response shapes used by Hubtel status endpoints."""
+    if isinstance(raw_data, list):
+        return [_normalise_keys(item) for item in raw_data if isinstance(item, dict)]
+    if not isinstance(raw_data, dict):
+        return []
+    data = _normalise_keys(raw_data)
+    if any(key in data for key in ("clientReference", "status", "transactionId", "amount")):
+        return [data]
+    for key in ("transactions", "items", "records", "results", "result"):
+        nested = data.get(key)
+        if isinstance(nested, list):
+            return [_normalise_keys(item) for item in nested if isinstance(item, dict)]
+        if isinstance(nested, dict):
+            return [_normalise_keys(nested)]
+    return []
+
+
+def _status_data(body, reference):
+    if not isinstance(body, dict):
+        return None
+    candidates = _status_candidates(body.get("data"))
+    matching = [
+        item for item in candidates
+        if str(item.get("clientReference", "")).strip() == reference
+    ]
+    if len(matching) == 1:
+        return matching[0]
+    if len(matching) > 1:
+        fingerprints = {
+            (
+                str(item.get("status", "")).strip().lower(),
+                str(item.get("transactionId", "")).strip(),
+                str(item.get("amount", "")).strip(),
+            )
+            for item in matching
+        }
+        if len(fingerprints) == 1:
+            return matching[0]
+        raise services.PaymentVerificationUnavailable("Hubtel returned conflicting payment records.")
+    return None
+
+
 def verify(reference):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,32}", str(reference or "")):
         raise ValidationError("Invalid payment reference.")
@@ -173,24 +216,27 @@ def verify(reference):
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
 
     body = _normalise_keys(body)
-    data = _normalise_keys(body.get("data")) if isinstance(body, dict) else None
     response_code = str(body.get("responseCode", "")).strip() if isinstance(body, dict) else ""
+    raw_data = body.get("data") if isinstance(body, dict) else None
+    data = _status_data(body, reference)
     safe_status = str(data.get("status", "")).strip() if isinstance(data, dict) else ""
     safe_amount = data.get("amount") if isinstance(data, dict) else None
+    shape = type(raw_data).__name__
+    shape_count = len(raw_data) if isinstance(raw_data, (list, dict)) else 0
+    shape_keys = sorted(str(key)[:40] for key in raw_data.keys())[:20] if isinstance(raw_data, dict) else []
     logger.info(
-        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s ref_suffix=%s",
-        response.status_code, response_code, safe_status[:24], safe_amount,
+        "Hubtel status check http=%s code=%s data_shape=%s count=%s keys=%s status=%s amount=%s transaction=%s ref_suffix=%s",
+        response.status_code, response_code, shape, shape_count, ",".join(shape_keys),
+        safe_status[:24], safe_amount,
         bool(data.get("transactionId")) if isinstance(data, dict) else False,
         str(reference)[-6:],
     )
 
     if not 200 <= response.status_code < 300 or not isinstance(body, dict) or response_code != "0000":
         raise services.PaymentVerificationUnavailable("Hubtel has not confirmed this payment yet.")
-    if not isinstance(data, dict) or str(data.get("clientReference", "")).strip() != reference:
+    if not isinstance(data, dict):
         raise services.PaymentVerificationUnavailable("Payment verification did not match the saved reference.")
 
-    # The Online Checkout status contract documents Paid, Unpaid and Refunded.
-    # Normalise whitespace/case only; never treat a generic callback 'Success' as proof of payment.
     status_key = str(data.get("status", "")).strip().lower()
     status_map = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}
     if status_key not in status_map:
