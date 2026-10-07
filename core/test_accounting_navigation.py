@@ -16,6 +16,11 @@ class AccountingNavigationTests(TestCase):
         self.branch = Branch.objects.create(name="Main", code="main")
         Company.objects.create()
         self.client.force_login(self.owner)
+        self.owner.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.owner.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
 
     def test_invalid_date_range_returns_a_useful_page_instead_of_server_error(self):
         for url in ("/accounting/", "/accounting/export/csv/"):

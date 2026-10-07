@@ -17,7 +17,8 @@ INSTALLED_APPS = [
     "marketplace.apps.MarketplaceConfig",
 ]
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware", "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.middleware.security.SecurityMiddleware", "core.domain_middleware.OfficialDomainMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware", "django.contrib.auth.middleware.AuthenticationMiddleware",
     "core.middleware.AccessMiddleware", "django.contrib.messages.middleware.MessageMiddleware",
@@ -64,7 +65,9 @@ CSRF_COOKIE_SECURE = not DEBUG
 STAFF_SESSION_SECONDS = int(os.environ.get("STAFF_SESSION_SECONDS", "43200"))  # 12 hours
 MARKET_SESSION_SECONDS = int(os.environ.get("MARKET_SESSION_SECONDS", "7200"))  # 2 hours
 SESSION_COOKIE_AGE = max(STAFF_SESSION_SECONDS, MARKET_SESSION_SECONDS)
-SESSION_SAVE_EVERY_REQUEST = True
+# Fixed staff/customer deadlines are enforced separately. Read-only polling must
+# not overwrite session changes made by concurrent requests (e.g. backup readiness).
+SESSION_SAVE_EVERY_REQUEST = False
 SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "1" if not DEBUG else "0") == "1"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
