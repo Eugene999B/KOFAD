@@ -213,6 +213,8 @@ def verify(reference):
         raise services.PaymentVerificationUnavailable("Hubtel has not confirmed this payment yet.")
     if not isinstance(data, dict):
         raise services.PaymentVerificationUnavailable("Hubtel has not returned a matching transaction yet.")
+    if str(data.get("clientReference", "")).strip() != reference:
+        raise services.PaymentVerificationUnavailable("Payment verification did not match the saved reference.")
 
     # Hubtel's public status endpoint currently returns the Sales-API transaction shape
     # (TransactionStatus/InvoiceStatus/TransactionAmount) even for Online Checkout.
