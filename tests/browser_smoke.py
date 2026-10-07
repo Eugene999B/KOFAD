@@ -711,6 +711,9 @@ with sync_playwright() as p:
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
     assert market_page.locator("[data-location-map]").count() == 1
+    assert not market_page.locator("[data-location-map]").is_visible()
+    market_page.locator("[data-map-details] summary").click()
+    assert market_page.locator("[data-location-map]").is_visible()
     market_page.wait_for_timeout(250)
     assert market_page.get_by_text("Open map fallback", exact=True).count() >= 1
     assert osm_tile_requests, "Checkout map did not request canonical OpenStreetMap tiles"
@@ -727,6 +730,17 @@ with sync_playwright() as p:
     assert fulfilment_select.input_value() == "delivery"
     assert market_page.locator("[data-delivery-fields]").get_attribute("hidden") is None
     assert market_page.locator("[data-capture-location]").is_visible()
+    fulfilment_select.select_option("pickup")
+    assert not market_page.locator("[data-delivery-fields]").is_visible()
+    assert market_page.locator("[data-pickup-fields]").is_visible()
+    assert market_page.locator("#id_address_line").is_disabled()
+    assert market_page.locator("[data-delivery-fee]").inner_text() == "GHS 0.00"
+    assert market_page.locator("[data-checkout-total]").inner_text() == market_page.locator("[data-checkout-subtotal]").inner_text()
+    assert market_page.locator(".shop-signout button").is_visible()
+    market_page.screenshot(path=str(out / "market-pickup-mobile.png"), full_page=True)
+    fulfilment_select.select_option("delivery")
+    assert market_page.locator("[data-delivery-fields]").is_visible()
+    assert market_page.locator("#id_address_line").is_enabled()
     market_page.goto(f"http://127.0.0.1:8000/market/orders/{browser_market_order.pk}/")
     assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=False).count() >= 1
     assert market_page.get_by_text(browser_payment_reference, exact=False).count() == 0
@@ -840,12 +854,14 @@ with sync_playwright() as p:
             "/accounting/?view=overview",
             "/market-catalog/",
             "/communications/",
+            "/settings/online-payments/",
         ):
             admin_page.goto("http://127.0.0.1:8000" + staff_path)
             assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width) + staff_path
 
     admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.goto("http://127.0.0.1:8000/workspace/")
+    assert admin_page.locator(".top-right form[action=\"/logout/\"] button").is_visible()
     assert admin_page.locator(".executive-kpis").is_visible()
     assert admin_page.get_by_text("Operational control pulse", exact=True).is_visible()
     admin_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
