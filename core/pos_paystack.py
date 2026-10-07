@@ -138,8 +138,7 @@ def _customer_email(branch, payload, supplied):
         validate_email(email)
     except ValidationError as exc:
         raise ValidationError("Enter the customer's email before requesting a Paystack MoMo payment.") from exc
-    if not party:
-        payload["customer_email"] = email
+    payload["customer_email"] = email
     return email
 
 
@@ -158,6 +157,7 @@ def _response_state(held):
         "waiting": state.get("status") in PENDING_STATES,
         "paid": state.get("status") == "success",
         "failed": state.get("status") in TERMINAL_FAILURES,
+        "attention": state.get("status") == "attention",
         "expires_at": state.get("expires_at"),
     }
     if document:
