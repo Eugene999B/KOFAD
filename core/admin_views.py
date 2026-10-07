@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -106,12 +106,16 @@ def users(request, branch):
 
 @company_admin
 def user_edit(request, branch, pk=None):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only a system administrator can change staff access.")
     user = get_object_or_404(User, pk=pk) if pk else None
     creating = user is None
     active_branches = list(Branch.objects.filter(active=True).order_by("name"))
     selected_branches = set(user.access.branches.values_list("pk", flat=True)) if user else ({branch.pk} if len(active_branches) == 1 else set())
     selected_role = _assigned_role(user).pk if user and not user.is_superuser and _assigned_role(user) else ""
 
+    permissions = list(_role_permissions())
+    extra_permissions = set(user.user_permissions.values_list("pk", flat=True)) if user else set()
     values = {
         "username": user.username if user else "",
         "first_name": user.first_name if user else "",
@@ -132,7 +136,14 @@ def user_edit(request, branch, pk=None):
             "active": request.POST.get("active") == "on",
             "branches": {int(x) for x in request.POST.getlist("branches") if x.isdigit()},
         })
+        extra_raw = request.POST.getlist("extra_permissions")
+        extra_permissions = {int(value) for value in extra_raw if value.isdigit()}
         errors = []
+        if len(extra_permissions) != len(extra_raw) or not extra_permissions.issubset({p.pk for p in permissions}):
+            errors.append("Choose valid additional permissions.")
+        valid_branches = {b.pk for b in active_branches}
+        if not values["branches"].issubset(valid_branches):
+            errors.append("Choose valid active locations.")
         if not values["username"]:
             errors.append("Username is required.")
         duplicate = User.objects.filter(username__iexact=values["username"])
@@ -143,7 +154,7 @@ def user_edit(request, branch, pk=None):
 
         role = None
         if not (user and user.is_superuser):
-            role = Group.objects.filter(pk=values["role"]).first()
+            role = Group.objects.filter(pk=values["role"]).first() if values["role"].isdigit() else None
             if not role:
                 errors.append("Choose a staff role.")
 
@@ -181,6 +192,7 @@ def user_edit(request, branch, pk=None):
                         "active": user.is_active,
                         "role": _assigned_role(user).name if _assigned_role(user) else "",
                         "recovery_phone": user.access.recovery_phone,
+                        "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                     }
                 if creating:
                     user = User.objects.create_user(username=values["username"], password=password)
@@ -204,12 +216,14 @@ def user_edit(request, branch, pk=None):
                     else:
                         access.branches.set(Branch.objects.filter(active=True, pk__in=values["branches"]))
                     user.groups.set([role])
+                    user.user_permissions.set(Permission.objects.filter(pk__in=extra_permissions))
                 after = {
                     "username": user.username,
                     "name": user.get_full_name(),
                     "active": user.is_active,
                     "role": "System administrator" if user.is_superuser else role.name,
                     "recovery_phone": phone,
+                    "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                 }
                 s.audit(request.user, branch, "staff.created" if creating else "staff.updated", user.pk, {
                     "before": before, "after": after, "password_reset": bool(password and not creating)
@@ -225,6 +239,9 @@ def user_edit(request, branch, pk=None):
         "active_branches": active_branches,
         "values": values,
         "single_branch": len(active_branches) == 1,
+        "extra_choices": [{"id": p.pk, "label": PERMISSION_HELP.get(p.codename, (p.name, ""))[0],
+                           "help": PERMISSION_HELP.get(p.codename, (p.name, ""))[1],
+                           "checked": p.pk in extra_permissions} for p in permissions],
     })
 
 
@@ -243,6 +260,8 @@ def roles(request, branch):
 
 @company_admin
 def role_edit(request, branch, pk=None):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only a system administrator can change roles.")
     role = get_object_or_404(Group, pk=pk) if pk else None
     creating = role is None
     permissions = list(_role_permissions())
