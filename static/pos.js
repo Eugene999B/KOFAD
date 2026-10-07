@@ -1241,6 +1241,13 @@
         fail(message);
         return;
       }
+      if (result.attention) {
+        const message = result.message || "This payment needs manager review. Do not request another payment.";
+        setMomoStatus(message, "error");
+        persist();
+        fail(message);
+        return;
+      }
       persist();
       momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), result.status === "not_confirmed" ? 10000 : 5000);
     } catch (error) {
