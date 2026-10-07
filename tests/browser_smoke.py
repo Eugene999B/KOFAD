@@ -618,7 +618,7 @@ with sync_playwright() as p:
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
     assert market_page.locator(".home-hero-v9").count() == 1
     assert market_page.locator(".home-hero-products").count() == 0
-    assert market_page.get_by_text("Retail or wholesale.", exact=False).count() >= 1
+    assert market_page.get_by_text("Everyday essentials.", exact=False).count() >= 1
     assert market_page.get_by_text("Wholesale quantities", exact=True).count() == 1
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
