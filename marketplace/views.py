@@ -2032,6 +2032,15 @@ def hubtel_callback(request):
     if not isinstance(reference, str) or len(reference) > 32:
         return HttpResponse(status=400)
     attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
+    if attempt:
+        from .models import OrderEvent
+        # Retain a redacted notification for UAT/audit. It is explicitly unverified evidence.
+        safe = {key: str(body["Data"].get(key, ""))[:120] for key in
+                ("ClientReference", "CheckoutId", "SalesInvoiceId", "Status", "Amount")}
+        OrderEvent.objects.get_or_create(
+            order=attempt.order, status="hubtel_callback", title="Hubtel callback received (unverified)",
+            note=json.dumps(safe, sort_keys=True), customer_visible=False,
+        )
     if attempt and attempt.status != "success":
         # Expedite the first check only. Repeated callbacks cannot defeat the persisted lease.
         MarketPaymentAttempt.objects.filter(pk=attempt.pk, check_count=0).update(next_check_at=timezone.now())

@@ -145,6 +145,9 @@ class HubtelPaymentTests(MarketFixtures):
         attempt.order.refresh_from_db()
         self.assertNotEqual(attempt.order.payment_status, "paid")
         self.assertIsNone(attempt.order.sale_document_id)
+        event = attempt.order.events.get(status="hubtel_callback")
+        self.assertFalse(event.customer_visible)
+        self.assertIn("unverified", event.title)
 
     def test_paystack_data_cannot_settle_hubtel_attempt(self):
         attempt = self.pending()
