@@ -786,6 +786,13 @@ with sync_playwright() as p:
             assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), public_path + str(width)
         market_page.screenshot(path=str(out / ("company-contact-" + str(width) + ".png")), full_page=True)
     market_page.goto("http://127.0.0.1:8000/faq/")
+    market_page.get_by_label("Search help", exact=True).fill("payment")
+    assert market_page.locator("[data-help-answer]:visible").count() > 0
+    assert market_page.locator("[data-help-answer]:visible").count() < market_page.locator("[data-help-answer]").count()
+    market_page.get_by_label("Search help", exact=True).fill("zzznomatch")
+    assert market_page.locator("[data-help-empty]").is_visible()
+    market_page.get_by_role("button", name="Clear", exact=True).click()
+    assert market_page.locator("[data-help-answer]:visible").count() == market_page.locator("[data-help-answer]").count()
     market_page.locator(".company-faq summary").first.click()
     assert market_page.locator(".company-faq").first.get_attribute("open") is not None
     market_page.set_viewport_size({"width": 390, "height": 844})
@@ -793,6 +800,11 @@ with sync_playwright() as p:
     market_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
     assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     market_page.screenshot(path=str(out / "company-returns-dark-mobile.png"), full_page=True)
+    for width in (390, 1440):
+        market_page.set_viewport_size({"width": width, "height": 900})
+        for public_name in ("about", "faq"):
+            market_page.goto("http://127.0.0.1:8000/" + public_name + "/")
+            market_page.screenshot(path=str(out / (public_name + "-" + str(width) + ".png")), full_page=True)
     market_page.close()
 
     # App links must open the dialler/mail app without ending the staff session.

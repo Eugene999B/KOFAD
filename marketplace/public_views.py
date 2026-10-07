@@ -43,7 +43,11 @@ def public_page(request, slug):
     if slug not in PAGES:
         raise Http404
     page = PAGES[slug]
-    form = FeedbackForm(request.POST if request.method == "POST" else None) if slug == "contact" else None
+    topics = {"wholesale": "Wholesale enquiry", "product": "Product enquiry", "order": "Order support"}
+    form = FeedbackForm(
+        request.POST if request.method == "POST" else None,
+        initial={"topic": topics.get(request.GET.get("topic"), "Product enquiry")},
+    ) if slug == "contact" else None
     status = 200
     if request.method == "POST":
         if form is None:
@@ -75,7 +79,10 @@ def public_page(request, slug):
                 return redirect("public_contact")
         else:
             status = 400
-    return render(request, "marketplace/public_page.html", _market_context(
+    template = {"about": "marketplace/about.html", "faq": "marketplace/help.html"}.get(
+        slug, "marketplace/public_page.html"
+    )
+    return render(request, template, _market_context(
         request, title=page["title"], page=page, page_slug=slug, feedback_form=form,
         policy_version=POLICY_VERSION, public_pages=PAGES,
         delivery_zones=DeliveryZone.objects.filter(active=True) if slug == "delivery" else [],

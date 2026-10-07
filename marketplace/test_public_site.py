@@ -76,3 +76,15 @@ class PublicSiteTests(TestCase):
         response = self.client.get("/returns/", HTTP_HOST="staff.kofadimpex.com")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response["Location"])
+
+    def test_about_and_help_have_distinct_templates_and_purpose(self):
+        about = self.client.get("/about/")
+        help_page = self.client.get("/faq/")
+        self.assertTemplateUsed(about, "marketplace/about.html")
+        self.assertTemplateUsed(help_page, "marketplace/help.html")
+        self.assertContains(about, "For business purchasing")
+        self.assertNotContains(about, "data-help-search")
+        self.assertContains(help_page, "data-help-search")
+        self.assertContains(help_page, "Track an order")
+        self.assertEqual(self.client.get("/contact/?topic=wholesale").context["feedback_form"].initial["topic"],
+                         "Wholesale enquiry")
