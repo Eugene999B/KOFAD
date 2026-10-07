@@ -183,7 +183,8 @@ def verify(reference):
         if len(matches) > 1:
             raise services.PaymentVerificationUnavailable("Hubtel returned duplicate payment records.")
         data = matches[0] if matches else None
-        data_shape = "list:" + str(len(raw_data))
+        matched_keys = ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else ""
+        data_shape = "list:" + str(len(raw_data)) + (":" + matched_keys if matched_keys else "")
     else:
         data = _normalise_keys(raw_data)
         data_shape = ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else type(data).__name__
