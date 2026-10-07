@@ -32,6 +32,11 @@ class Command(BaseCommand):
                     reconcile_due()
                 except Exception:
                     self.stderr.write("Hubtel reconciliation check failed; will retry.")
+                try:
+                    from core.pos_paystack import reconcile_due as reconcile_pos_paystack
+                    reconcile_pos_paystack()
+                except Exception:
+                    self.stderr.write("Paystack POS reconciliation check failed; will retry.")
                 last_payment_check = now
 
             if now - last_automation >= 60:
