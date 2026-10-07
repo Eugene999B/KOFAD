@@ -183,7 +183,8 @@ def verify(reference):
         if len(matches) > 1:
             raise services.PaymentVerificationUnavailable("Hubtel returned duplicate payment records.")
         data = matches[0] if matches else None
-        data_shape = "list:" + str(len(raw_data))
+        matched_keys = ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else ""
+        data_shape = "list:" + str(len(raw_data)) + (":" + matched_keys if matched_keys else "")
     else:
         data = _normalise_keys(raw_data)
         data_shape = ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else type(data).__name__
@@ -192,10 +193,18 @@ def verify(reference):
     safe_status = str(data.get("status", "")).strip() if isinstance(data, dict) else ""
     safe_amount = data.get("amount") if isinstance(data, dict) else None
     logger.info(
-        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s data_shape=%s message=%s ref_suffix=%s",
-        response.status_code, response_code, safe_status[:24], safe_amount,
+        "Hubtel status check http=%s code=%s status=%s transaction_status=%s invoice_status=%s "
+        "amount=%s transaction_amount=%s currency=%s method=%s transaction=%s data_shape=%s "
+        "message=%s ref_suffix=%s",
+        response.status_code, response_code, safe_status[:24],
+        str(data.get("transactionStatus", ""))[:24] if isinstance(data, dict) else "",
+        str(data.get("invoiceStatus", ""))[:24] if isinstance(data, dict) else "",
+        safe_amount,
+        data.get("transactionAmount") if isinstance(data, dict) else None,
+        str(data.get("currencyCode", ""))[:8] if isinstance(data, dict) else "",
+        str(data.get("paymentMethod", ""))[:32] if isinstance(data, dict) else "",
         bool(data.get("transactionId")) if isinstance(data, dict) else False,
-        data_shape,
+        data_shape[:1200] if isinstance(data_shape, str) else data_shape,
         str(body.get("message", ""))[:160] if isinstance(body, dict) else "",
         str(reference)[-6:],
     )
@@ -204,14 +213,33 @@ def verify(reference):
         raise services.PaymentVerificationUnavailable("Hubtel has not confirmed this payment yet.")
     if not isinstance(data, dict):
         raise services.PaymentVerificationUnavailable("Hubtel has not returned a matching transaction yet.")
+    if str(data.get("clientReference", "")).strip() != reference:
+        raise services.PaymentVerificationUnavailable("Payment verification did not match the saved reference.")
 
-    # The Online Checkout status contract documents Paid, Unpaid and Refunded.
-    # Normalise whitespace/case only; never treat a generic callback 'Success' as proof of payment.
-    status_key = str(data.get("status", "")).strip().lower()
-    status_map = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}
-    if status_key not in status_map:
-        raise services.PaymentVerificationUnavailable("Hubtel returned an unrecognised payment status.")
-    data["status"] = status_map[status_key]
+    # Hubtel's public status endpoint currently returns the Sales-API transaction shape
+    # (TransactionStatus/InvoiceStatus/TransactionAmount) even for Online Checkout.
+    # Only this independently queried endpoint can convert Success into Paid; callbacks remain
+    # untrusted evidence and never settle an order by themselves.
+    direct_status = str(data.get("status", "")).strip().lower()
+    transaction_status = str(data.get("transactionStatus", "")).strip().lower()
+    invoice_status = str(data.get("invoiceStatus", "")).strip().lower()
+
+    status = ""
+    if direct_status in {"paid", "unpaid", "refunded"}:
+        status = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}[direct_status]
+    elif transaction_status == "success" and invoice_status in {"success", "paid"}:
+        status = "Paid"
+    elif transaction_status in {"failed", "failure", "declined", "cancelled", "canceled"}:
+        status = "Unpaid"
+    elif invoice_status in {"refunded", "refund"}:
+        status = "Refunded"
+    else:
+        raise services.PaymentVerificationUnavailable("Hubtel has not returned a final payment status yet.")
+
+    if data.get("amount") in {None, ""} and data.get("transactionAmount") not in {None, ""}:
+        data["amount"] = data.get("transactionAmount")
+
+    data["status"] = status
     data["clientReference"] = str(data.get("clientReference", "")).strip()
     return data
 
