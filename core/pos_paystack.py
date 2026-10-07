@@ -6,6 +6,7 @@ Pending requests are stored as system HeldSale records so background reconciliat
 browser closure and app restarts without a new database table.
 """
 import copy
+import hashlib
 import logging
 import re
 import uuid
@@ -21,7 +22,7 @@ from django.utils import timezone
 
 from . import services
 from .identity import normalize_ghana_phone
-from .models import Document, HeldSale, Message, Party
+from .models import Document, HeldSale, Idempotency, Message, Party
 
 CHARGE_URL = "https://api.paystack.co/charge"
 VERIFY_URL = "https://api.paystack.co/transaction/verify/"
@@ -208,6 +209,8 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         return _response_state(existing)
 
     payload = copy.deepcopy(sale_payload)
+    if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
+        raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
     email = _customer_email(branch, payload, email)
     paid_amount = _payment_amount(payload)
     total = _preview_total(user, branch, payload)
@@ -233,12 +236,29 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         "check_count": 0,
         "document_id": "",
     }
-    held = HeldSale.objects.create(
-        branch=branch,
-        user=user,
-        label=_label(reference),
-        cart={"sale_payload": payload, "payment_request": state},
-    )
+    # Claim this payment reference with a separate unique database idempotency key.
+    # This prevents two simultaneous cashier/browser requests from creating duplicate charges.
+    claim_key = uuid.uuid5(uuid.NAMESPACE_URL, "kofad-pos-paystack:" + reference)
+    fingerprint = hashlib.sha256(reference.encode()).hexdigest()
+    with transaction.atomic():
+        claim, created = Idempotency.objects.get_or_create(
+            branch=branch,
+            key=claim_key,
+            defaults={"fingerprint": fingerprint},
+        )
+        if claim.fingerprint != fingerprint:
+            raise ValidationError("This payment request conflicts with an existing request.")
+        existing = _held(reference, lock=True)
+        if existing:
+            return _response_state(existing)
+        if not created:
+            raise ProviderPending("This payment request is already being prepared. Please check its status.")
+        held = HeldSale.objects.create(
+            branch=branch,
+            user=user,
+            label=_label(reference),
+            cart={"sale_payload": payload, "payment_request": state},
+        )
 
     request_body = {
         "email": email,
