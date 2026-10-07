@@ -1,0 +1,98 @@
+"""Public customer information. Policy version approved for launch on 7 October 2026."""
+POLICY_VERSION = "2026-10-07"
+PAGES = {
+    "about": {
+        "title": "About KOFAD",
+        "eyebrow": "OUR BUSINESS",
+        "intro": "Retail essentials. Wholesale quantities. One team to help you order.",
+        "sections": [
+            ("Who we are", ["KOFAD IMPEX ENTERPRISE serves retail and wholesale customers through KOFAD Market. Browse the current catalogue for the products, pack sizes, prices and availability we offer."]),
+            ("What you can buy", ["Our online catalogue is for physical goods. Each listing identifies the item and selling unit, so you can distinguish a single item from a pack or carton. Product availability and pricing are checked again when you place an order."]),
+            ("Retail and wholesale", ["Buy the quantity you need from the published catalogue. For bulk supply, repeat purchasing or a product you cannot find, contact our team before placing an order so we can confirm availability and the applicable quotation."]),
+            ("From order to handover", ["Browse without an account, sign in to order, choose an available delivery or pickup option, and follow progress in your account. Keep your order reference for support, collection and any return request."]),
+            ("Special sourcing and trade enquiries", ["Enquiries about goods outside the catalogue are handled directly by our team. Availability, lead times, transport arrangements and any import or export responsibilities must be agreed in a written quotation before payment. Customs clearance and cargo insurance are not offered for purchase through this online catalogue."]),
+        ],
+    },
+    "faq": {
+        "title": "Frequently asked questions",
+        "eyebrow": "HELP BEFORE & AFTER YOU ORDER",
+        "intro": "Clear answers for shopping, payments, delivery and account support.",
+        "sections": [
+            ("Can I browse without signing in?", ["Yes. Prices, product information and the catalogue are public. Sign in or create an account when you are ready to order or contact account support."]),
+            ("Are prices for one item or a carton?", ["Check the selling unit on the product page and cart. A pack or carton contains the number of base units stated in the listing. All shop prices and order totals are shown in Ghana cedis (GHS)."]),
+            ("How do I pay?", ["Use the payment options available at checkout. Online payment is available only when the provider connection is active. If it is unavailable, contact KOFAD; do not send money to an unverified number or account."]),
+            ("I was debited but my order is not marked paid. What now?", ["Do not immediately pay again. Check your order page, keep the transaction reference and contact support if confirmation is delayed. A payment is confirmed only after verification, not from a screenshot or debit notification alone."]),
+            ("Where do you deliver and how much does it cost?", ["Delivery depends on your location and the options offered at checkout. The delivery charge is shown before you pay. Contact us before ordering if your area is unavailable or you need a particular date."]),
+            ("When can I collect my order?", ["Wait until your order says it is ready for pickup. Bring your order reference and the collection code if one is provided. Confirm the collection location with our team."]),
+            ("Can I cancel or return an order?", ["You can cancel an unpaid order from its order page. Contact support promptly for a paid order. Standard return requests should be made within seven calendar days of receiving the goods; see our returns policy for condition requirements, exceptions and refunds."]),
+            ("How do I get help or share feedback?", ["Use the contact and feedback form, call our published business number, or sign in to customer support for order-linked conversations. Never include your password, OTP, card PIN or mobile-money PIN."]),
+        ],
+    },
+    "delivery": {
+        "title": "Delivery & collection",
+        "eyebrow": "KNOW WHAT TO EXPECT",
+        "intro": "See your fulfilment option and delivery charge before you pay.",
+        "sections": [
+            ("Service area", ["We fulfil orders within the delivery coverage available at checkout in Ghana. Coverage depends on the dispatch location and delivery settings; nationwide or international delivery is not automatically included. For a location that is not offered, request a quotation before paying."]),
+            ("Charges and delivery estimates", ["Checkout shows the applicable delivery fee and order total. Standard stocked orders have a planning estimate of 1–3 business days after payment confirmation for supported local routes and 3–7 business days for other agreed destinations. These are estimates, not guaranteed dates. Special orders, large quantities, holidays and access restrictions may need additional time; contact us before ordering if timing is critical."]),
+            ("Your delivery details", ["Provide a reachable telephone number, recipient name and complete address, including a landmark or GhanaPost GPS address where available. Map pins assist the delivery team but do not replace written directions. Contact support promptly if the details change."]),
+            ("Tracking and handover", ["Follow the order status in your account. Keep any handover code private until the goods are present and you are ready to receive them. Inspect the number of packages and visible condition at delivery and report a problem promptly."]),
+            ("Missed or delayed delivery", ["If the recipient cannot be reached or the address cannot be accessed, contact our team to arrange the next step. Any proposed redelivery charge must be communicated and agreed before redelivery. For a delay, missing parcel or failed delivery, contact us with the order reference so we can investigate and agree a revised delivery or appropriate resolution."]),
+            ("Collection", ["Choose pickup when it is available, then wait for the ready-for-pickup status before travelling. Confirm the collection address and arrangements with KOFAD. Bring your order reference and any collection code."]),
+        ],
+    },
+    "returns": {
+        "title": "Returns, cancellations & refunds",
+        "eyebrow": "AFTER-SALES CARE",
+        "intro": "Tell us what went wrong. We will review the order and explain the next step.",
+        "sections": [
+            ("Standard return window", ["Request a standard return within seven calendar days after delivery or collection. Include your order reference, item, quantity and reason. Keep proof of purchase and, where useful, clear photographs. Later requests involving faults, incorrect goods or applicable legal rights will still be reviewed; this policy does not remove rights provided by law."]),
+            ("Condition of goods", ["For a change-of-mind return, goods should be unused, complete and in their original packaging where reasonably possible. Opened hygiene-sensitive goods, perishables and goods made or specially sourced to your specification are not eligible for a change-of-mind return. These exclusions do not prevent a claim for goods that are faulty, damaged on arrival or incorrectly supplied. Any product-specific restriction should be confirmed before purchase."]),
+            ("Damaged, faulty or incorrect goods", ["Report visible damage or an incorrect delivery as soon as possible, ideally within 48 hours, so we can investigate promptly. This reporting target is not a waiver of your legal rights. Stop using an unsafe or faulty item and retain the goods and packaging while we arrange review."]),
+            ("How to request a return", ["Sign in, open the delivered or collected order and select the return option, or use our contact form with your order reference. We aim to acknowledge enquiries within two business days and give an initial decision within three business days after receiving the information needed. Do not send goods back without return instructions."]),
+            ("Return transport and review", ["KOFAD will arrange or agree reasonable return transport costs for goods confirmed as faulty, damaged on arrival or incorrectly supplied. For an approved change-of-mind return, the customer is responsible for the agreed return transport cost. We explain the proposed resolution and any deductions before processing; inspection may be necessary."]),
+            ("Cancellation", ["Cancel an unpaid order from your account. For a paid order, contact us immediately. If fulfilment has started, we may need to handle the request as a return. We will explain any unavoidable, reasonable costs before agreeing a resolution. A cancellation request is not a confirmation that the payment has been refunded."]),
+            ("Refunds", ["Approved refunds are made to the original payment method where supported, after any required return inspection. We aim to initiate the refund within five business days of final approval. The payment provider or bank controls the time until funds appear; allow an estimated 5–10 business days after initiation and contact us if it takes longer. We provide the refund status or reference when available. A refund request or pending refund is not reported as completed until confirmed."]),
+            ("Escalation", ["If the response does not resolve your concern, contact KOFAD and ask for a management review, quoting the order and previous correspondence. Applicable consumer rights continue to apply. Business days exclude weekends and public holidays in Ghana."]),
+        ],
+    },
+    "terms": {
+        "title": "Terms of service",
+        "eyebrow": "SHOPPING WITH KOFAD",
+        "intro": "The terms for using this website and ordering physical goods from KOFAD IMPEX ENTERPRISE.",
+        "sections": [
+            ("Who these terms cover", ["These terms apply to KOFAD Market and orders placed through this website. Contact details are available on our contact page. A separately agreed written quotation may set additional terms for a special or wholesale order; confirm these before payment."]),
+            ("Accounts and responsible use", ["Provide accurate contact and delivery details and keep your password and verification codes private. Only place orders you are authorised to make. Do not misuse the website, attempt unauthorised access, submit fraudulent payment evidence or send unlawful or abusive content."]),
+            ("Products, availability and pricing", ["Read the product description, selling unit and quantity before ordering. Prices are in GHS. The checkout summary shows the item charges, delivery charge and total payable. Availability may change while you browse. If a material price, description or supply issue is discovered, we will contact you to agree a correction, alternative or cancellation and any applicable refund."]),
+            ("Orders and payment", ["An order reference records your request. A paid status means payment has been verified; it does not mean delivery is complete. Fulfilment progress is shown separately. Use only the payment methods offered by KOFAD. Never disclose a payment PIN or OTP to staff."]),
+            ("Delivery, returns and cancellation", ["Our delivery and returns policies explain fulfilment, standard return eligibility, cancellation requests and refunds. Please read them before placing an order. Keep your order reference for any enquiry."]),
+            ("Website content and interruptions", ["Product photographs help identify goods; check the description and confirm any essential specification with us. We may correct content and maintain the service. If an interruption affects an order or payment, contact support before repeating payment."]),
+            ("Fair resolution and applicable law", ["These terms are governed by the laws of Ghana. Contact us first so we can attempt to resolve a complaint. Nothing in these terms excludes rights or responsibilities that cannot lawfully be excluded."]),
+            ("Policy updates", ["The version date is shown on these pages. Changes apply prospectively and do not remove the terms or rights applicable to an existing order. Keep a copy of the policy applicable when you purchase."]),
+        ],
+    },
+    "privacy": {
+        "title": "Privacy notice",
+        "eyebrow": "YOUR INFORMATION",
+        "intro": "How KOFAD IMPEX ENTERPRISE uses information when you browse, contact us or place an order.",
+        "sections": [
+            ("Information we collect", ["Account and order information can include your name, telephone number, email, delivery address, order history, payment reference and support messages. If you choose map-based location assistance, your selected coordinates are used for delivery planning. Security and service logs may include technical request information."]),
+            ("Why it is used", ["We use this information to create and protect accounts, verify access, process orders and refunds, arrange fulfilment, provide customer support, maintain transaction records and prevent fraud. Information supplied in the feedback form is used to respond to that enquiry."]),
+            ("Service providers", ["Where needed for the requested service, information is shared with payment processors, messaging providers, hosting providers and delivery personnel. Payment details are handled by the selected payment provider; do not send full card details or payment PINs in a support message. If an optional map service is used, it may receive your search or selected location under its own privacy terms. Service providers may process information outside Ghana."]),
+            ("Cookies and browser storage", ["The site uses session and security cookies to support sign-in, shopping and safe form submissions. Browser storage remembers preferences such as your theme. These functional technologies are needed for the features you use; blocking them may prevent sign-in or checkout."]),
+            ("Messages", ["Order, delivery, account-security and support communications use the contact details you provide and the channels available for your account. Optional promotional communications should be distinguishable from service messages. Contact us to object to direct marketing or update your communication preferences."]),
+            ("Retention and protection", ["Access to business records is restricted by staff permissions. Passwords are stored as hashes. Transaction and audit records may need to be retained for accounting, dispute resolution and legal obligations. Support chat history may be cleared when a conversation closes, so keep important correspondence. Contact us about the retention or deletion of your information; some records cannot be deleted while required for those purposes."]),
+            ("Your choices and rights", ["You can update available profile details in your account and contact us to request access, correction or deletion of personal information, or raise an objection to its use, subject to applicable law. We may need to verify your identity before acting. You may also raise a privacy concern with Ghana’s Data Protection Commission at dpc.gov.gh."]),
+            ("Contact", ["Use the contact page and select Privacy request. Explain the request without sending passwords, verification codes, identity documents or sensitive financial information through the public form. We will explain any verification needed through an appropriate channel."]),
+        ],
+    },
+    "contact": {
+        "title": "Contact & customer feedback",
+        "eyebrow": "LET’S TALK",
+        "intro": "Ask about a product, share feedback or get help with an order. Your message goes to KOFAD’s customer care team.",
+        "sections": [
+            ("A useful message gets a better answer", ["Include your order reference when relevant, the item involved and what you would like us to help with. We aim to acknowledge enquiries within two business days. For an urgent delivery issue, call the published business number."]),
+            ("Your feedback stays private", ["Feedback is sent to our team, not published as a customer review. We do not display invented ratings or testimonials. Do not include passwords, OTPs, card details or mobile-money PINs."]),
+        ],
+    },
+}

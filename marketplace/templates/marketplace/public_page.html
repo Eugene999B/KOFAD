@@ -1,0 +1,27 @@
+{% extends "marketplace/base.html" %}
+{% block content %}
+<div class="company-page">
+<nav class="company-breadcrumb" aria-label="Breadcrumb"><a href="/">Home</a><span aria-hidden="true">/</span><span>{{ page.title }}</span></nav>
+<header class="company-page-hero"><p class="company-kicker">{{ page.eyebrow }}</p><h1>{{ page.title }}</h1><p>{{ page.intro }}</p>{% if page_slug == 'terms' or page_slug == 'privacy' or page_slug == 'returns' or page_slug == 'delivery' %}<small>Effective 7 October 2026 · Version {{ policy_version }}</small>{% endif %}</header>
+<div class="company-page-layout">
+<aside class="company-guide"><nav aria-label="Company and customer help">{% for key, item in public_pages.items %}<a href="/{{ key }}/"{% if page_slug == key %} aria-current="page"{% endif %}>{{ item.title }}<span aria-hidden="true">↗</span></a>{% endfor %}<a href="/market/">Browse the Market <span aria-hidden="true">→</span></a></nav></aside>
+<div class="company-prose">
+{% if page_slug == 'faq' %}{% for heading, paragraphs in page.sections %}<details class="company-faq"><summary>{{ heading }}</summary>{% for paragraph in paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</details>{% endfor %}
+{% else %}{% for heading, paragraphs in page.sections %}<section><h2>{{ heading }}</h2>{% for paragraph in paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</section>{% endfor %}{% endif %}
+{% if page_slug == 'delivery' %}<section class="company-note"><h2>Current delivery options</h2>{% if company.delivery_enabled %}<p>Delivery is enabled. Your exact eligibility and fee are calculated at checkout.</p>{% if delivery_zones %}<ul>{% for zone in delivery_zones %}<li><strong>{{ zone.name }}</strong>{% if zone.eta_text %} — {{ zone.eta_text }}{% endif %}</li>{% endfor %}</ul>{% endif %}{% else %}<p>Online delivery is currently unavailable. Check the Market for pickup options or contact the team.</p>{% endif %}</section>{% endif %}
+{% if page_slug == 'contact' %}
+<div class="company-contact-grid">
+{% if company.phone %}<a href="tel:{{ company.phone }}"><small>CALL US</small><strong>{{ company.phone }}</strong></a>{% endif %}
+{% if company.secondary_phone %}<a href="tel:{{ company.secondary_phone }}"><small>ALTERNATIVE NUMBER</small><strong>{{ company.secondary_phone }}</strong></a>{% endif %}
+{% if company.email %}<a href="mailto:{{ company.email }}"><small>EMAIL</small><strong>{{ company.email }}</strong></a>{% endif %}
+{% if company.whatsapp_phone %}<a href="https://wa.me/{{ company.whatsapp_phone|cut:'+' }}" rel="noopener" target="_blank"><small>WHATSAPP</small><strong>{{ company.whatsapp_phone }}</strong></a>{% endif %}
+{% if company.address %}<div><small>BUSINESS ADDRESS</small><strong>{{ company.address|linebreaksbr }}</strong></div>{% endif %}
+</div>
+<section class="company-feedback"><h2>Send an enquiry or feedback</h2><p>Already have an account? <a href="/market/messages/">Open customer support</a> to keep your conversation linked to your order.</p>
+<form method="post" action="/contact/">{% csrf_token %}{{ feedback_form.non_field_errors }}{{ feedback_form.website }}
+{% for field in feedback_form.visible_fields %}<div class="company-field{% if field.name == 'consent' %} company-check{% endif %}">{% if field.name == 'consent' %}{{ field }}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}{{ field.errors }}</div>{% endfor %}
+<p class="company-fineprint">See our <a href="/privacy/">privacy notice</a>. This form does not subscribe you to marketing.</p><button type="submit" class="company-button">Send message <span aria-hidden="true">→</span></button></form></section>
+{% endif %}
+{% if page_slug != 'contact' %}<section class="company-note"><h2>Need a hand?</h2><p>Our team can help with product questions, an existing order or a policy enquiry.</p><a class="company-button" href="/contact/">Contact KOFAD <span aria-hidden="true">→</span></a></section>{% endif %}
+</div></div></div>
+{% endblock %}

@@ -51,7 +51,7 @@
 </div>
 <div class="support-typing-indicator support-typing-v3" data-typing-indicator hidden><span></span><span></span><span></span><b>Customer is typing…</b></div>
 
-{% if conversation.assigned_to == request.user %}
+{% if not conversation.customer_id %}<div class="support-accept-panel"><div><strong>Website enquiry · contact by phone</strong><span>This visitor has no signed-in chat account. Reply using their supplied number; a message here would not reach them.</span></div><a class="button" href="tel:{{ conversation.public_phone }}">Call {{ conversation.public_phone }}</a></div>{% elif conversation.assigned_to == request.user %}
 <form method="post" enctype="multipart/form-data" class="staff-reply support-compose support-compose-v3" data-support-compose>{% csrf_token %}<div class="support-compose-field">{{ support_form.message }}{{ support_form.message.errors }}</div><div class="support-compose-actions"><label class="support-attach-button">＋<span>Attach</span>{{ support_form.attachment }}</label><button class="button" name="action" value="reply">Send</button></div>{{ support_form.attachment.errors }}</form>
 {% elif not conversation.assigned_to %}
 <div class="support-accept-panel"><div><strong>This customer is waiting.</strong><span>Accept the conversation to connect your name and unlock replies.</span></div><form method="post">{% csrf_token %}<button name="action" value="accept">Accept chat</button></form></div>

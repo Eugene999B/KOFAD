@@ -775,6 +775,22 @@ with sync_playwright() as p:
     market_page.goto("http://127.0.0.1:8000/market/")
     assert market_page.locator(".shop-product-grid").is_visible()
     market_page.screenshot(path=str(out / "market-public-desktop.png"), full_page=True)
+    # Company pages remain public, readable and operable on small phones.
+    for width in (320, 390, 1440):
+        market_page.set_viewport_size({"width": width, "height": 900})
+        for public_path in ("/about/", "/faq/", "/delivery/", "/returns/", "/terms/", "/privacy/", "/contact/"):
+            market_page.goto("http://127.0.0.1:8000" + public_path)
+            assert market_page.locator("h1").is_visible()
+            assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), public_path + str(width)
+        market_page.screenshot(path=str(out / ("company-contact-" + str(width) + ".png")), full_page=True)
+    market_page.goto("http://127.0.0.1:8000/faq/")
+    market_page.locator(".company-faq summary").first.click()
+    assert market_page.locator(".company-faq").first.get_attribute("open") is not None
+    market_page.set_viewport_size({"width": 390, "height": 844})
+    market_page.goto("http://127.0.0.1:8000/returns/")
+    market_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
+    assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    market_page.screenshot(path=str(out / "company-returns-dark-mobile.png"), full_page=True)
     market_page.close()
 
     # App links must open the dialler/mail app without ending the staff session.

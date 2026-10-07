@@ -1,7 +1,14 @@
 from django.urls import path
-from . import views
+from . import views, public_views
 
 urlpatterns = [
+    path("about/", public_views.public_page, {"slug": "about"}, name="public_about"),
+    path("faq/", public_views.public_page, {"slug": "faq"}, name="public_faq"),
+    path("delivery/", public_views.public_page, {"slug": "delivery"}, name="public_delivery"),
+    path("returns/", public_views.public_page, {"slug": "returns"}, name="public_returns"),
+    path("terms/", public_views.public_page, {"slug": "terms"}, name="public_terms"),
+    path("privacy/", public_views.public_page, {"slug": "privacy"}, name="public_privacy"),
+    path("contact/", public_views.public_page, {"slug": "contact"}, name="public_contact"),
     path("", views.home, name="public_home"),
     path("market/", views.market, name="market"),
     path("market/search/suggestions/", views.market_search_suggestions, name="market_search_suggestions"),
