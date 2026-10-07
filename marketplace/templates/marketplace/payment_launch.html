@@ -1,0 +1,17 @@
+{% extends "marketplace/base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'marketplace/payment-launch.js' %}"></script>{% endblock %}
+{% block content %}
+<section class="order-v2-page">
+  <div class="order-action-card payment-required-v2"
+       data-payment-launch
+       data-checkout-url="{{ checkout_url }}">
+    <p class="market-eyebrow">SECURE PAYMENT</p>
+    <h1>Opening payment…</h1>
+    <p data-payment-launch-message>We are taking you to the secure payment page now.</p>
+    <a class="market-button primary wide" href="{{ checkout_url }}" rel="noopener">
+      Continue to secure payment <span>→</span>
+    </a>
+    <small>Your KOFAD order {{ order.customer_reference }} is already saved. If the payment page does not open automatically, tap the button above.</small>
+  </div>
+</section>
+{% endblock %}
