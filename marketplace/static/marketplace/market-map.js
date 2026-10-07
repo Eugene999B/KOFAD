@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const number = value => {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   };
