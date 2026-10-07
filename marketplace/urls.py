@@ -44,6 +44,7 @@ urlpatterns = [
     path("market/orders/", views.customer_orders, name="market_orders"),
     path("market/orders/<uuid:pk>/", views.customer_order, name="market_order"),
     path("market/orders/<uuid:pk>/pay/", views.order_pay, name="market_order_pay"),
+    path("market/orders/<uuid:pk>/payment/launch/", views.payment_launch, name="market_payment_launch"),
     path("market/orders/<uuid:pk>/cancel/", views.customer_order_cancel, name="market_order_cancel"),
     path("market/orders/<uuid:pk>/reorder/", views.reorder_order, name="market_order_reorder"),
     path("market/orders/<uuid:pk>/return/", views.customer_return_request, name="market_return_request"),
