@@ -49,6 +49,29 @@ class HubtelContractTests(SimpleTestCase):
                 hubtel.verify("ref1")
 
     @patch("marketplace.hubtel.requests.get")
+    def test_status_whitespace_and_case_are_normalised_without_accepting_generic_success(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000", "Data": {
+                "ClientReference": "ref1", "Status": " paid ",
+                "Amount": "1.00", "TransactionId": "txn1",
+            }
+        }
+        self.assertEqual(hubtel.verify("ref1")["status"], "Paid")
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_generic_success_is_not_treated_as_paid(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000", "Data": {
+                "ClientReference": "ref1", "Status": "Success",
+                "Amount": "1.00", "TransactionId": "txn1",
+            }
+        }
+        with self.assertRaises(services.PaymentVerificationUnavailable):
+            hubtel.verify("ref1")
+
+    @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
         for reference in ("../path", "x?y=1", "", "x" * 33):
             with self.assertRaises(ValidationError):
@@ -141,13 +164,35 @@ class HubtelPaymentTests(MarketFixtures):
         response = self.client.post("/market/payments/hubtel/callback/", {
             "ResponseCode": "0000", "Data": {"ClientReference": attempt.reference, "Status": "Success", "Amount": 200}
         }, content_type="application/json")
-        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.status_code, 200)
         attempt.order.refresh_from_db()
         self.assertNotEqual(attempt.order.payment_status, "paid")
         self.assertIsNone(attempt.order.sale_document_id)
         event = attempt.order.events.get(status="hubtel_callback")
         self.assertFalse(event.customer_visible)
         self.assertIn("unverified", event.title)
+
+    def test_callback_requeues_verification_even_after_an_earlier_check(self):
+        attempt = self.pending()
+        attempt.check_count = 4
+        attempt.next_check_at = timezone.now() + timedelta(minutes=5)
+        attempt.save(update_fields=["check_count", "next_check_at"])
+        response = self.client.post("/market/payments/hubtel/callback/", {
+            "responseCode": "0000", "data": {
+                "clientReference": attempt.reference, "status": "Paid", "amount": 200
+            }
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        attempt.refresh_from_db()
+        self.assertLessEqual(attempt.next_check_at, timezone.now())
+        self.assertIn("verification queued", attempt.provider_message)
+
+    def test_retry_schedule_stays_fast_while_customer_may_be_waiting(self):
+        attempt = self.pending()
+        attempt.created_at = timezone.now() - timedelta(minutes=2)
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=10))
+        attempt.created_at = timezone.now() - timedelta(minutes=10)
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=30))
 
     def test_paystack_data_cannot_settle_hubtel_attempt(self):
         attempt = self.pending()

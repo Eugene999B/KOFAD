@@ -26,7 +26,7 @@ class Command(BaseCommand):
             close_old_connections()
             now = time.monotonic()
 
-            if now - last_payment_check >= 60:
+            if now - last_payment_check >= 5:
                 try:
                     from marketplace.hubtel import reconcile_due
                     reconcile_due()
@@ -56,8 +56,8 @@ class Command(BaseCommand):
                     self.stderr.write(f"WhatsApp queue check failed safely: {exc}")
                 last_delivery_sync = now
 
-            # These records are only stale after five minutes. Avoid querying
-            # for them every second while preserving five-second receipt polling.
+            # Payment checks and receipt delivery both run independently of any customer browser.
+            # Stale-message recovery remains less frequent because those records need time to age.
             if last_recovery is None or now - last_recovery >= 30:
                 recover_stale()
                 recover_stale_whatsapp()

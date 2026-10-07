@@ -1832,8 +1832,9 @@ def staff_order(request, branch, pk):
         attempt = order.payment_attempts.filter(provider="hubtel").first()
         if attempt:
             # An authorised staff member may recheck a quarantined result, never mark it paid manually.
-            MarketPaymentAttempt.objects.filter(pk=attempt.pk, next_check_at__isnull=True).exclude(status="success").update(
-                next_check_at=timezone.now()
+            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+                next_check_at=timezone.now(),
+                provider_message="Staff requested an immediate Hubtel verification.",
             )
             try:
                 hubtel.reconcile(attempt.reference)
@@ -2026,31 +2027,45 @@ def staff_inbox(request, branch, conversation_id=None):
 @csrf_exempt
 @require_POST
 def hubtel_callback(request):
+    """Acknowledge Hubtel quickly, then let the server verify through the agreed status endpoint."""
     if len(request.body) > 65536:
         return HttpResponse(status=413)
     try:
         body = json.loads(request.body)
     except (ValueError, UnicodeDecodeError):
         return HttpResponse(status=400)
-    if not isinstance(body, dict) or not isinstance(body.get("Data"), dict):
+    if not isinstance(body, dict):
         return HttpResponse(status=400)
-    reference = body["Data"].get("ClientReference")
-    if not isinstance(reference, str) or len(reference) > 32:
+    data = body.get("Data") if isinstance(body.get("Data"), dict) else body.get("data")
+    if not isinstance(data, dict):
+        return HttpResponse(status=400)
+    reference = data.get("ClientReference", data.get("clientReference"))
+    if not isinstance(reference, str) or not reference or len(reference) > 32:
         return HttpResponse(status=400)
     attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
     if attempt:
         from .models import OrderEvent
-        # Retain a redacted notification for UAT/audit. It is explicitly unverified evidence.
-        safe = {key: str(body["Data"].get(key, ""))[:120] for key in
-                ("ClientReference", "CheckoutId", "SalesInvoiceId", "Status", "Amount")}
+        # Keep callback data only as redacted evidence; a callback never marks an order paid.
+        def callback_value(pascal, camel):
+            return data.get(pascal, data.get(camel, ""))
+        safe = {
+            "ClientReference": str(reference)[:120],
+            "CheckoutId": str(callback_value("CheckoutId", "checkoutId"))[:120],
+            "SalesInvoiceId": str(callback_value("SalesInvoiceId", "salesInvoiceId"))[:120],
+            "Status": str(callback_value("Status", "status"))[:120],
+            "Amount": str(callback_value("Amount", "amount"))[:120],
+        }
         OrderEvent.objects.get_or_create(
             order=attempt.order, status="hubtel_callback", title="Hubtel callback received (unverified)",
             defaults={"note": json.dumps(safe, sort_keys=True), "customer_visible": False},
         )
-    if attempt and attempt.status != "success":
-        # Expedite the first check only. Repeated callbacks cannot defeat the persisted lease.
-        MarketPaymentAttempt.objects.filter(pk=attempt.pk, check_count=0).update(next_check_at=timezone.now())
-        return HttpResponse(status=202)
+        if attempt.status != "success":
+            # Every valid callback is a reason to re-check immediately, even if an earlier poll was still unpaid.
+            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+                next_check_at=timezone.now(),
+                provider_message="Hubtel callback received; final status verification queued.",
+            )
+    # Hubtel expects a prompt 200 acknowledgement. Verification happens independently in the worker.
     return HttpResponse(status=200)
 
 
@@ -2059,7 +2074,7 @@ def hubtel_return(request):
     attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
     if not attempt:
         return redirect("market")
-    MarketPaymentAttempt.objects.filter(pk=attempt.pk, check_count=0).update(next_check_at=timezone.now())
+    MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(next_check_at=timezone.now())
     try:
         hubtel.reconcile(reference)
     except ValidationError:
