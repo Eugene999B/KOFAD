@@ -92,7 +92,7 @@ PAGES = {
         "intro": "Ask about a product, share feedback or get help with an order. Your message goes to KOFAD’s customer care team.",
         "sections": [
             ("A useful message gets a better answer", ["Include your order reference when relevant, the item involved and what you would like us to help with. We aim to acknowledge enquiries within two business days. For an urgent delivery issue, call the published business number."]),
-            ("Your feedback stays private", ["Feedback is sent to our team, not published as a customer review. We do not display invented ratings or testimonials. Do not include passwords, OTPs, card details or mobile-money PINs."]),
+            ("Your feedback stays private", ["Feedback is sent to our team, not published as a customer review. Do not include passwords, OTPs, card details or mobile-money PINs."]),
         ],
     },
 }

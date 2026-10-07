@@ -639,6 +639,8 @@ with sync_playwright() as p:
 
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
+    hero_mark = market_page.locator(".home-hero-v9-mark img")
+    assert hero_mark.evaluate("el => el.getBoundingClientRect().width") <= 40
     desktop_hero_background = market_page.locator(".home-hero-v9").evaluate(
         "el => getComputedStyle(el).backgroundImage"
     )
