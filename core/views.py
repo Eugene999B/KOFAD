@@ -433,7 +433,7 @@ def trade_screen(request, branch, kind):
         "key": str(uuid.uuid4()),
         "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
-        "held": HeldSale.objects.filter(branch=branch, user=request.user),
+        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith="Paystack MoMo "),
         "purchase": kind == "purchase",
         "today": timezone.localdate(),
         "payment_methods": payment_methods,
@@ -448,6 +448,12 @@ def trade_screen(request, branch, kind):
         "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
+        ),
+        "paystack_pos_momo_ready": (
+            kind == "sale" and __import__("core.pos_paystack", fromlist=["ready"]).ready()
+        ),
+        "paystack_pos_momo_configured": (
+            kind == "sale" and __import__("core.pos_paystack", fromlist=["configured"]).configured()
         ),
     })
 
@@ -636,6 +642,44 @@ def send_transaction_message_api(request, pk):
         return JsonResponse({"error": problem(exc)}, status=400)
 
 
+@login_required
+@require_POST
+def pos_paystack_momo_start(request):
+    branch = branch_for(request)
+    s.permit(request.user, branch, "operate_sales")
+    try:
+        data = json.loads(request.body or "{}")
+        if not isinstance(data, dict):
+            raise ValidationError("Expected a payment request object.")
+        from . import pos_paystack
+        result = pos_paystack.start(
+            request.user,
+            branch,
+            data.get("sale"),
+            request.headers.get("Idempotency-Key") or data.get("request_key"),
+            data.get("phone"),
+            data.get("provider"),
+            data.get("email"),
+        )
+        return JsonResponse(result)
+    except (ValidationError, ValueError, TypeError, KeyError) as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+@login_required
+def pos_paystack_momo_status(request, reference):
+    branch = branch_for(request)
+    s.permit(request.user, branch, "operate_sales")
+    try:
+        from . import pos_paystack
+        result = pos_paystack.status_for_staff(request.user, branch, reference)
+        response = JsonResponse(result)
+        response["Cache-Control"] = "no-store, private"
+        return response
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc)}, status=404)
+
+
 @protected("operate_sales")
 @require_POST
 def hold(request, branch):
@@ -652,6 +696,8 @@ def hold(request, branch):
 @protected("operate_sales")
 def held(request, branch, pk):
     item = get_object_or_404(HeldSale, pk=pk, branch=branch, user=request.user)
+    if item.label.startswith("Paystack MoMo "):
+        raise Http404
     if request.method == "POST":
         item.delete()
         return JsonResponse({"ok": True})
@@ -933,6 +979,7 @@ def customer_search(request, branch):
             "id": party.pk,
             "name": party.name,
             "phone": party.phone,
+            "email": party.email,
             "consent": party.consent,
             "outstanding": str(s.party_debt(party)),
             "purchase_count": sales.count(),

@@ -23,6 +23,8 @@
   let hydrating = true;
   let selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
   let lastCompletedSale = null;
+  let momoReference = null;
+  let momoPollTimer = null;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
   try {
@@ -36,6 +38,7 @@
       requestKey = restoredState.requestKey || requestKey;
       pendingBody = restoredState.pendingBody || null;
       heldId = restoredState.heldId || null;
+      momoReference = restoredState.momoReference || null;
       selectedCustomer = restoredState.selectedCustomer || null;
       selectedSupplier = restoredState.selectedSupplier || null;
       newCustomerMode = Boolean(restoredState.newCustomerMode);
@@ -58,6 +61,7 @@
   const clearCustomerButton = document.querySelector("#clear-customer");
   const customerName = document.querySelector("#customer-name");
   const customerPhone = document.querySelector("#customer-phone");
+  const customerEmail = document.querySelector("#customer-email");
   const supplierSearch = document.querySelector("#supplier-search");
   const supplierResults = document.querySelector("#supplier-results");
   const selectedSupplierBox = document.querySelector("#selected-supplier");
@@ -73,6 +77,14 @@
   const dueDate = document.querySelector("#due-date");
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
+  const paystackMomoPanel = document.querySelector("#paystack-momo-panel");
+  const paystackMomoProvider = document.querySelector("#paystack-momo-provider");
+  const paystackMomoPhone = document.querySelector("#paystack-momo-phone");
+  const paystackMomoEmail = document.querySelector("#paystack-momo-email");
+  const paystackMomoStatus = document.querySelector("#paystack-momo-status");
+  const completeButton = document.querySelector("#complete");
+  const completeSaleHint = document.querySelector("#complete-sale-hint");
+  const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
@@ -184,9 +196,13 @@
   function persist() {
     try {
       sessionStorage.setItem(storageKey, JSON.stringify({
-        cart, requestKey, pendingBody, heldId, selectedCustomer, selectedSupplier, newCustomerMode,
+        cart, requestKey, pendingBody, heldId, momoReference, selectedCustomer, selectedSupplier, newCustomerMode,
         customerName: customerName?.value || "",
         customerPhone: customerPhone?.value || "",
+        customerEmail: customerEmail?.value || "",
+        paystackMomoProvider: paystackMomoProvider?.value || "",
+        paystackMomoPhone: paystackMomoPhone?.value || "",
+        paystackMomoEmail: paystackMomoEmail?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
         customerConsent: Boolean(customerConsent?.checked),
@@ -687,6 +703,8 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
+    if (paystackMomoPhone && customer.phone) paystackMomoPhone.value = customer.phone;
+    if (paystackMomoEmail && customer.email) paystackMomoEmail.value = customer.email;
     changed();
     updateConsentAvailability();
     persist();
@@ -702,6 +720,7 @@
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
+    if (customerEmail) customerEmail.value = "";
     changed();
     updateConsentAvailability();
     persist();
@@ -833,7 +852,18 @@
   });
   customerWhatsApp?.addEventListener("change", () => { changed(); persist(); });
   customerName?.addEventListener("input", updateConsentAvailability);
-  customerPhone?.addEventListener("input", updateConsentAvailability);
+  customerPhone?.addEventListener("input", () => {
+    updateConsentAvailability();
+    if (paystackMomoPhone && !momoReference) paystackMomoPhone.value = customerPhone.value;
+    persist();
+  });
+  customerEmail?.addEventListener("input", () => {
+    if (paystackMomoEmail && !momoReference) paystackMomoEmail.value = customerEmail.value;
+    persist();
+  });
+  paystackMomoProvider?.addEventListener("change", persist);
+  paystackMomoPhone?.addEventListener("input", persist);
+  paystackMomoEmail?.addEventListener("input", persist);
 
   function zeroPaymentInputs() {
     paymentMethods.forEach(method => {
@@ -848,6 +878,35 @@
     const input = document.querySelector("#pay-" + selectedPaymentMethod);
     if (input) input.value = singlePaymentValue.value || "0";
     renderCheckoutSummary();
+  }
+
+  function directMomoSelected() {
+    return !purchase
+      && selectedPaymentMethod === "momo"
+      && (paymentPlan?.value || "full") === "full";
+  }
+
+  function syncPaystackMomoPanel() {
+    const active = directMomoSelected();
+    paystackMomoPanel?.classList.toggle("hidden", !active);
+    if (active) {
+      if (paystackMomoPhone && !paystackMomoPhone.value) {
+        paystackMomoPhone.value = selectedCustomer?.phone || customerPhone?.value || "";
+      }
+      if (paystackMomoEmail && !paystackMomoEmail.value) {
+        paystackMomoEmail.value = selectedCustomer?.email || customerEmail?.value || "";
+      }
+    }
+    if (completeButton && !purchase) {
+      completeButton.textContent = active && paystackMomoReady
+        ? "Send MoMo Approval Request"
+        : "Complete Sale & Generate Receipt";
+    }
+    if (completeSaleHint && !purchase) {
+      completeSaleHint.textContent = active && paystackMomoReady
+        ? "KOFAD will wait for Paystack to verify the payment before posting stock, recording the sale or issuing the receipt."
+        : "One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.";
+    }
   }
 
   function selectPaymentMethod(method, {preserveAmount = false} = {}) {
@@ -869,6 +928,7 @@
       }
       syncSinglePayment();
     }
+    syncPaystackMomoPanel();
     persist();
   }
 
@@ -895,6 +955,7 @@
     }
     updateConsentAvailability();
     renderCheckoutSummary();
+    syncPaystackMomoPanel();
     persist();
   }
 
@@ -1103,7 +1164,11 @@
         ...(!purchase && allowDiscounts ? {discount: discount || "0"} : {})
       })),
       party,
-      ...(!purchase && !party && newName ? {customer_name: newName, customer_phone: newPhone} : {}),
+      ...(!purchase && !party && newName ? {
+        customer_name: newName,
+        customer_phone: newPhone,
+        customer_email: customerEmail?.value.trim() || ""
+      } : {}),
       ...(!purchase ? {
         customer_consent: Boolean((party || newName) && (customerConsent?.checked || customerWhatsApp?.checked)),
         send_sms: Boolean((party || newName) && customerConsent?.checked),
@@ -1117,6 +1182,132 @@
         amount: document.querySelector("#pay-" + method)?.value || "0"
       }))
     };
+  }
+
+  function setMomoStatus(message, tone = "subtle") {
+    if (!paystackMomoStatus) return;
+    paystackMomoStatus.textContent = message || "";
+    paystackMomoStatus.classList.toggle("error", tone === "error");
+  }
+
+  function lockCheckoutForMomo(locked) {
+    root.querySelectorAll("input,select,textarea,button").forEach(control => {
+      control.disabled = locked;
+    });
+    if (!locked) applyPaymentPlan();
+  }
+
+  async function fetchMomoStatus() {
+    if (!momoReference) return null;
+    const response = await fetch(
+      "/api/pos/paystack-momo/" + encodeURIComponent(momoReference) + "/status/",
+      {credentials: "same-origin", cache: "no-store", headers: {"Accept": "application/json"}}
+    );
+    const contentType = response.headers.get("Content-Type") || "";
+    if (!contentType.includes("application/json")) throw new Error("Sign in again to check this payment.");
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not check the MoMo payment.");
+    return result;
+  }
+
+  async function pollMomoPayment({immediate = false} = {}) {
+    clearTimeout(momoPollTimer);
+    if (!momoReference) return;
+    if (!immediate) {
+      momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), 5000);
+      return;
+    }
+    try {
+      const result = await fetchMomoStatus();
+      if (!result || !momoReference) return;
+      setMomoStatus(result.message || result.display_text || "Checking payment…");
+      if (result.paid && result.sale) {
+        completed = true;
+        momoReference = null;
+        pendingBody = null;
+        clearStored();
+        lockCheckoutForMomo(false);
+        showSaleSuccess(result.sale);
+        return;
+      }
+      if (result.failed) {
+        const message = result.message || "The MoMo request was not successful.";
+        momoReference = null;
+        pendingBody = null;
+        requestKey = crypto.randomUUID();
+        lockCheckoutForMomo(false);
+        persist();
+        setMomoStatus(message, "error");
+        fail(message);
+        return;
+      }
+      if (result.attention) {
+        const message = result.message || "This payment needs manager review. Do not request another payment.";
+        setMomoStatus(message, "error");
+        persist();
+        fail(message);
+        return;
+      }
+      persist();
+      momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), result.status === "not_confirmed" ? 10000 : 5000);
+    } catch (error) {
+      setMomoStatus(error.message + " KOFAD will keep checking in the background.", "error");
+      momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), 10000);
+    }
+  }
+
+  async function startPaystackMomo() {
+    if (!directMomoSelected() || !paystackMomoReady) return false;
+    if (!pendingBody) pendingBody = buildCheckoutBody();
+    const phone = paystackMomoPhone?.value.trim() || selectedCustomer?.phone || customerPhone?.value.trim() || "";
+    const email = paystackMomoEmail?.value.trim() || selectedCustomer?.email || customerEmail?.value.trim() || "";
+    const provider = paystackMomoProvider?.value || "mtn";
+    if (!phone) throw new Error("Enter the customer's Mobile Money number.");
+    if (!email || !email.includes("@")) throw new Error("Enter the customer's email for the Paystack payment request.");
+
+    setMomoStatus("Sending Mobile Money approval request…");
+    lockCheckoutForMomo(true);
+    try {
+      const result = await api("/api/pos/paystack-momo/start/", {
+        sale: pendingBody,
+        phone,
+        email,
+        provider,
+        request_key: requestKey
+      }, requestKey);
+      momoReference = result.reference || momoReference;
+      if (!momoReference) throw new Error("Paystack did not return a payment reference.");
+      setMomoStatus(result.message || result.display_text || "Approve the payment on the customer's phone.");
+      persist();
+      if (result.paid && result.sale) {
+        completed = true;
+        momoReference = null;
+        pendingBody = null;
+        clearStored();
+        lockCheckoutForMomo(false);
+        showSaleSuccess(result.sale);
+        return true;
+      }
+      if (result.failed) {
+        const message = result.message || "The MoMo request was not successful.";
+        momoReference = null;
+        pendingBody = null;
+        requestKey = crypto.randomUUID();
+        lockCheckoutForMomo(false);
+        persist();
+        throw new Error(message);
+      }
+      pollMomoPayment();
+      return true;
+    } catch (error) {
+      if (!momoReference) {
+        pendingBody = null;
+        requestKey = crypto.randomUUID();
+        lockCheckoutForMomo(false);
+        persist();
+      }
+      throw error;
+    }
   }
 
   function setSuccessStatus(message, tone = "subtle") {
@@ -1204,6 +1395,8 @@
     lastCompletedSale = null;
     pendingBody = null;
     heldId = null;
+    momoReference = null;
+    clearTimeout(momoPollTimer);
     requestKey = crypto.randomUUID();
     cart.splice(0, cart.length);
     selectedCustomer = null;
@@ -1218,6 +1411,11 @@
     if (customerSearch) customerSearch.value = "";
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
+    if (customerEmail) customerEmail.value = "";
+    if (paystackMomoPhone) paystackMomoPhone.value = "";
+    if (paystackMomoEmail) paystackMomoEmail.value = "";
+    if (paystackMomoProvider) paystackMomoProvider.value = "mtn";
+    setMomoStatus("When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.");
     if (customerConsent) customerConsent.checked = true;
     if (customerWhatsApp) customerWhatsApp.checked = false;
     if (paymentPlan) paymentPlan.value = "full";
@@ -1264,6 +1462,12 @@
     try {
       if (!pendingBody) pendingBody = buildCheckoutBody();
       persist();
+
+      if (!purchase && directMomoSelected() && paystackMomoReady) {
+        await startPaystackMomo();
+        return;
+      }
+
       root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
       button.disabled = false;
       const result = await api("/api/trades/", pendingBody, requestKey);
@@ -1285,9 +1489,10 @@
         applyPaymentPlan();
         persist();
       }
-      fail(error.message + (pendingBody ? " Retry this unchanged request to recover the same transaction. Editing is locked until its outcome is known." : ""));
+      const locked = Boolean(pendingBody || momoReference);
+      fail(error.message + (locked ? " Do not start another payment until this request is resolved." : ""));
     } finally {
-      if (!completed) button.disabled = false;
+      if (!completed && !momoReference) button.disabled = false;
     }
   });
 
@@ -1302,6 +1507,7 @@
         customer: selectedCustomer,
         customer_name: customerName?.value.trim() || "",
         customer_phone: customerPhone?.value || "",
+        customer_email: customerEmail?.value.trim() || "",
         customer_consent: Boolean(customerConsent?.checked),
         send_whatsapp: Boolean(customerWhatsApp?.checked),
         payment_plan: paymentPlan?.value || "full",
@@ -1346,6 +1552,7 @@
         beginNewCustomer();
         if (customerName) customerName.value = saved.customer_name || "";
         if (customerPhone) customerPhone.value = saved.customer_phone || "";
+        if (customerEmail) customerEmail.value = saved.customer_email || "";
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
@@ -1378,6 +1585,10 @@
   if (restoredState) {
     if (customerName && restoredState.customerName) customerName.value = restoredState.customerName;
     if (customerPhone && restoredState.customerPhone) customerPhone.value = restoredState.customerPhone;
+    if (customerEmail && restoredState.customerEmail) customerEmail.value = restoredState.customerEmail;
+    if (paystackMomoProvider && restoredState.paystackMomoProvider) paystackMomoProvider.value = restoredState.paystackMomoProvider;
+    if (paystackMomoPhone && restoredState.paystackMomoPhone) paystackMomoPhone.value = restoredState.paystackMomoPhone;
+    if (paystackMomoEmail && restoredState.paystackMomoEmail) paystackMomoEmail.value = restoredState.paystackMomoEmail;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
     if (customerWhatsApp) customerWhatsApp.checked = restoredState.customerWhatsApp === true;
@@ -1408,6 +1619,7 @@
       beginNewCustomer();
       customerName.value = pendingBody.customer_name;
       customerPhone.value = pendingBody.customer_phone || "";
+      if (customerEmail) customerEmail.value = pendingBody.customer_email || "";
     }
     if (customerConsent && Object.prototype.hasOwnProperty.call(pendingBody, "customer_consent")) {
         customerConsent.checked = Boolean(pendingBody.send_sms ?? pendingBody.customer_consent);
@@ -1435,8 +1647,18 @@
     const reason = document.querySelector("#override-reason");
     if (reason) reason.value = pendingBody.override_reason || "";
     root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
-    document.querySelector("#complete").disabled = false;
     openPayment();
-    fail("A checkout was interrupted. Review the unchanged checkout and click Complete Sale & Generate Receipt to recover the original result.");
+    if (momoReference) {
+      syncPaystackMomoPanel();
+      setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
+      pollMomoPayment({immediate: true});
+    } else {
+      document.querySelector("#complete").disabled = false;
+      fail("A checkout was interrupted. Review the unchanged checkout and click Complete Sale & Generate Receipt to recover the original result.");
+    }
+  } else if (momoReference) {
+    setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
+    lockCheckoutForMomo(true);
+    pollMomoPayment({immediate: true});
   }
 })();
