@@ -1500,6 +1500,7 @@
         customer: selectedCustomer,
         customer_name: customerName?.value.trim() || "",
         customer_phone: customerPhone?.value || "",
+        customer_email: customerEmail?.value.trim() || "",
         customer_consent: Boolean(customerConsent?.checked),
         send_whatsapp: Boolean(customerWhatsApp?.checked),
         payment_plan: paymentPlan?.value || "full",
@@ -1544,6 +1545,7 @@
         beginNewCustomer();
         if (customerName) customerName.value = saved.customer_name || "";
         if (customerPhone) customerPhone.value = saved.customer_phone || "";
+        if (customerEmail) customerEmail.value = saved.customer_email || "";
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
