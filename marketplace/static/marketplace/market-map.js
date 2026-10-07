@@ -543,6 +543,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    shell.querySelector("[data-map-details]")?.addEventListener("toggle", () => {
+      if (provider === "leaflet" && map) map.invalidateSize();
+      if (provider === "google" && map) {
+        google.maps.event.trigger(map, "resize");
+        if (latitude !== null && longitude !== null) map.setCenter({lat:latitude,lng:longitude});
+      }
+    });
     syncLinks();
     (async () => {
       if (googleKey) {
@@ -555,7 +562,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         initLeaflet();
       }
-      if(latitude!==null&&longitude!==null&&mapEl.dataset.quoteUrl) refreshQuote();
+      if(latitude!==null&&longitude!==null&&mapEl.dataset.quoteUrl && fulfilment?.value !== "pickup") refreshQuote();
     })();
   });
 

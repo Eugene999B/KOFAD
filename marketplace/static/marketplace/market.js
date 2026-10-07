@@ -31,7 +31,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const deliveryFields = document.querySelector("[data-delivery-fields]");
   const syncFulfilment = () => {
     if (!fulfilment || !deliveryFields) return;
-    deliveryFields.hidden = fulfilment.value !== "delivery";
+    const pickup = fulfilment.value === "pickup";
+    deliveryFields.hidden = pickup;
+    document.querySelector("[data-pickup-fields]")?.toggleAttribute("hidden", !pickup);
+    deliveryFields.querySelectorAll("input, select, textarea, button").forEach(field => { field.disabled = pickup; });
+    if (pickup) {
+      const subtotal = Number(document.querySelector("[data-checkout-subtotal]")?.dataset.checkoutSubtotal);
+      const fee = document.querySelector("[data-delivery-fee]");
+      const total = document.querySelector("[data-checkout-total]");
+      if (fee) fee.textContent = "GHS 0.00";
+      if (total && Number.isFinite(subtotal)) total.textContent = "GHS " + subtotal.toFixed(2);
+    }
+    window.dispatchEvent(new Event("resize"));
   };
   fulfilment?.addEventListener("change", syncFulfilment);
   syncFulfilment();

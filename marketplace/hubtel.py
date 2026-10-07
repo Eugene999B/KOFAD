@@ -37,6 +37,15 @@ def ready(provider=None):
     return bool(settings.PAYSTACK_SECRET_KEY)
 
 
+def availability_notice():
+    provider = selected_provider()
+    if provider == "hubtel" and configured() and not settings.HUBTEL_CHECKOUT_ENABLED:
+        return "Hubtel is connected. Checkout will open after payment testing and activation."
+    if not ready(provider):
+        return ("Hubtel" if provider == "hubtel" else "Paystack") + " is not available for new payments yet."
+    return ""
+
+
 def headers():
     if not configured():
         raise ValidationError("Hubtel payment is not configured yet. Please contact KOFAD.")

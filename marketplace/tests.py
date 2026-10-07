@@ -569,6 +569,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertNotContains(response, attempt.reference)
         self.assertNotContains(response, "mobile_money")
 
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
     @patch("marketplace.views.services.initialize_paystack")
     def test_checkout_make_payment_goes_directly_to_secure_payment(self, initialize_payment):
         self.customer_session()

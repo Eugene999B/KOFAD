@@ -2,6 +2,7 @@ from django.urls import path
 from . import views, public_views
 
 urlpatterns = [
+    path("settings/online-payments/", views.online_payments, name="online_payments"),
     path("market/payments/hubtel/callback/", views.hubtel_callback, name="hubtel_callback"),
     path("market/payments/hubtel/return/", views.hubtel_return, name="hubtel_return"),
     path("market/orders/<uuid:pk>/check-payment/", views.order_payment_check, name="market_payment_check"),

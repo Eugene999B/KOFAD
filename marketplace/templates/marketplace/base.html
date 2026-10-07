@@ -29,6 +29,7 @@
 <link rel="stylesheet" href="{% static 'marketplace/market-v12.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/support-v4.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/company-site.css' %}">
+<link rel="stylesheet" href="{% static 'marketplace/checkout-flow.css' %}">
 </head>
 <body class="market-body market-v2{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
 <a class="market-skip" href="#main">Skip to content</a>
@@ -61,7 +62,7 @@
 </div>
 <div class="shop-shell-subnav">
 <a href="/market/" class="{% if request.path == '/market/' %}active{% endif %}">Shop</a>
-{% if market_customer %}<a href="/market/orders/">Orders</a><a href="/market/account/wishlist/">Saved{% if market_wishlist_count %}<b>{{ market_wishlist_count }}</b>{% endif %}</a><a href="/market/messages/">Support{% if market_unread_count %}<b>{{ market_unread_count }}</b>{% endif %}</a>{% else %}<span>Browse freely. Sign in only when you are ready to order.</span>{% endif %}
+{% if market_customer %}<form method="post" action="/market/account/logout/" class="shop-signout">{% csrf_token %}<button type="submit">Sign out</button></form><a href="/market/orders/">Orders</a><a href="/market/account/wishlist/">Saved{% if market_wishlist_count %}<b>{{ market_wishlist_count }}</b>{% endif %}</a><a href="/market/messages/">Support{% if market_unread_count %}<b>{{ market_unread_count }}</b>{% endif %}</a>{% else %}<span>Browse freely. Sign in only when you are ready to order.</span>{% endif %}
 </div>
 </header>
 {% endif %}

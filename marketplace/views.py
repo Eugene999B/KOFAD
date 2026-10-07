@@ -813,7 +813,10 @@ def checkout(request, customer):
     if not has_delivery:
         initial["fulfilment"] = "pickup"
     form = CheckoutForm(request.POST or None, initial=initial, delivery_enabled=has_delivery)
-    if request.method == "POST" and form.is_valid():
+    payment_ready = hubtel.ready()
+    if request.method == "POST" and not payment_ready:
+        form.add_error(None, hubtel.availability_notice() + " Your cart has been kept.")
+    if request.method == "POST" and payment_ready and form.is_valid():
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
             if order.fulfilment == "delivery":
@@ -841,9 +844,9 @@ def checkout(request, customer):
             messages.error(request, problem(exc))
     subtotal = sum((row["total"] for row in rows), Decimal("0"))
     initial_quote = None
-    if has_delivery:
+    if has_delivery and form["fulfilment"].value() != "pickup":
         try:
-            initial_quote = services.delivery_quote(initial.get("latitude"), initial.get("longitude"))
+            initial_quote = services.delivery_quote(form["latitude"].value(), form["longitude"].value())
         except ValidationError:
             initial_quote = None
     return render(request, "marketplace/checkout.html", _market_context(
@@ -851,7 +854,8 @@ def checkout(request, customer):
         zones=DeliveryZone.objects.filter(active=True), delivery_quote=initial_quote,
         delivery_fee_preview=initial_quote["fee"] if initial_quote else Decimal("0"),
         checkout_total=subtotal + (initial_quote["fee"] if initial_quote else Decimal("0")),
-        delivery_company=company,
+        delivery_company=company, payment_ready=payment_ready,
+        payment_notice=hubtel.availability_notice(),
     ))
 
 
@@ -2078,3 +2082,44 @@ def order_payment_check(request, customer, pk):
         except ValidationError as exc:
             messages.info(request, problem(exc))
     return redirect("market_order", pk=order.pk)
+
+
+@protected("manage_company")
+def online_payments(request, branch):
+    from .models import PaymentConfiguration
+    from core import services as core_services
+    if request.method == "POST":
+        provider = request.POST.get("provider")
+        if provider not in {"hubtel", "paystack"}:
+            messages.error(request, "Choose Hubtel or Paystack.")
+        else:
+            PaymentConfiguration.objects.update_or_create(pk=1, defaults={"provider": provider})
+            core_services.audit(request.user, branch, "market.payment_provider_saved", "1", {"provider": provider})
+            messages.success(request, "Provider saved for new payments. Existing payments keep their original provider.")
+            if not hubtel.ready(provider):
+                messages.warning(request, "This provider is not accepting new payments yet. Check its status below.")
+        return redirect("online_payments")
+    rows = MarketPaymentAttempt.objects.filter(order__branch=branch).select_related("order")
+    provider_filter = request.GET.get("provider", "")
+    state = request.GET.get("state", "")
+    query = request.GET.get("q", "").strip()[:100]
+    if provider_filter in {"hubtel", "paystack"}:
+        rows = rows.filter(provider=provider_filter)
+    if state == "confirmed":
+        rows = rows.filter(status="success")
+    elif state == "attention":
+        rows = rows.filter(status__in=["attention", "submission_unknown"])
+    elif state == "pending":
+        rows = rows.exclude(status__in=["success", "failed", "refunded", "attention", "submission_unknown"])
+    if query:
+        rows = rows.filter(Q(reference__icontains=query) | Q(order__public_reference__icontains=query))
+    page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
+    return render(request, "marketplace/online_payments.html", {
+        "title": "Online payments",
+        "payment_provider": hubtel.selected_provider(),
+        "hubtel_configured": hubtel.configured(), "hubtel_ready": hubtel.ready("hubtel"),
+        "paystack_ready": hubtel.ready("paystack"),
+        "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
+        "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
+        "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
+    })

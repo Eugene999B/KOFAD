@@ -1,0 +1,20 @@
+/* Fulfilment visibility must override section and map layout rules. */
+[data-delivery-fields][hidden],[data-pickup-fields][hidden]{display:none!important}
+.shop-signout{display:inline-flex;margin:0;flex:none}
+.shop-signout button{background:transparent;color:inherit;border:1px solid currentColor;border-radius:8px;min-height:36px;padding:5px 12px;font:inherit;cursor:pointer}
+.checkout-payment-notice,.pickup-note{padding:20px;border:1px solid #9abbbf;border-radius:14px;background:var(--market-surface,#eff7f6);color:var(--market-ink,#163c46)}
+.checkout-payment-notice p{margin:8px 0;line-height:1.6}
+.delivery-map-details{margin:12px 0;border:1px solid #adc3c8;border-radius:12px;overflow:hidden}
+.delivery-map-details summary{cursor:pointer;padding:15px;font-weight:700;display:flex;justify-content:space-between;gap:10px}
+.delivery-map-details .kofad-map{height:300px;min-height:240px;border-radius:0}
+.commerce-checkout-form .kofad-map-shell{padding:16px;border:1px solid #b5c9cc;border-radius:14px}
+.commerce-checkout-form .map-provider-badge{display:none}
+.commerce-checkout-form .kofad-location-search{display:flex;gap:8px;margin-bottom:10px}
+.commerce-checkout-form .kofad-location-search input{min-width:0;flex:1}
+.commerce-checkout-form .kofad-map-actions{margin:8px 0;display:flex;gap:10px;flex-wrap:wrap}
+.commerce-checkout-form .location-result-row{margin:14px 0}
+.commerce-checkout-form .location-result.success{padding:14px;border-left:3px solid #168f91;background:#e8f4f1;border-radius:6px;color:#163c46}
+.commerce-checkout-form .checkout-grid{margin:14px 0}
+.commerce-checkout-form button:disabled{opacity:.55;cursor:not-allowed}
+html[data-theme="dark"] .checkout-payment-notice,html[data-theme="dark"] .pickup-note{background:#102f3c;color:#e5f2f4;border-color:#3b6875}
+@media(max-width:600px){.commerce-checkout-form .kofad-location-search{flex-direction:column}.commerce-checkout-form .kofad-location-search button{min-height:44px}.commerce-checkout-form .kofad-map-shell{padding:12px}.delivery-map-details .kofad-map{height:260px}.shop-shell-subnav{overflow-x:auto}.shop-signout button{min-height:40px;white-space:nowrap}}

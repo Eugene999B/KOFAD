@@ -10,7 +10,7 @@
   .topbar{height:64px;padding:0 14px;gap:10px;position:sticky;top:0;z-index:50}
   .branch-form{min-width:0;flex:1}.branch-form select{max-width:150px;min-width:0}.branch-form button{padding:6px}
   .single-location{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .top-right{gap:5px}.top-right>form{display:none}.top-user-card{padding:4px!important}.top-user-card>span:last-child{display:none!important}.mode-toggle{width:42px;height:42px;padding:0!important}.mode-toggle [data-theme-label]{display:none}
+  .top-right{gap:5px}.top-right>form{display:block;flex:none}.top-right>form button{min-height:42px;padding:6px;font-size:11px}.top-user-card{padding:4px!important}.top-user-card>span:last-child{display:none!important}.mode-toggle{width:42px;height:42px;padding:0!important}.mode-toggle [data-theme-label]{display:none}
   main{padding:20px 14px 98px!important;max-width:100%!important;overflow-x:hidden}
   .page-heading{align-items:flex-start!important;gap:12px;margin-bottom:18px!important}.page-heading h1{font-size:24px!important;line-height:1.15}.page-heading .eyebrow{font-size:9px}.page-heading>.actions{max-width:54%;justify-content:flex-end;flex-wrap:wrap}.page-heading>.actions .button{min-height:39px;padding:8px 11px;font-size:10px}
   .overview-intro,.hero-panel{padding:18px!important;border-radius:16px!important}.overview-intro h2,.hero-panel h2{font-size:21px!important}.overview-intro p:last-child,.hero-panel p{font-size:11px!important;line-height:1.55}
