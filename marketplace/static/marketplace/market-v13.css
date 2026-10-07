@@ -100,6 +100,33 @@
   padding:5px 8px 5px 6px!important;
   gap:8px!important;
 }
+.shop-shell-cart{
+  position:relative!important;
+  padding:5px 9px!important;
+  gap:7px!important;
+  color:var(--kofad-ink)!important;
+}
+.shop-shell-cart>span{
+  color:#163b52!important;
+}
+.shop-shell-cart>.shop-cart-count{
+  position:absolute!important;
+  top:2px!important;
+  right:2px!important;
+  min-width:16px!important;
+  height:16px!important;
+  padding:0 4px!important;
+  border:2px solid #fff!important;
+  border-radius:999px!important;
+  display:grid!important;
+  place-items:center!important;
+  background:#138c94!important;
+  color:#fff!important;
+  font-size:7px!important;
+  font-weight:900!important;
+  line-height:1!important;
+  box-shadow:0 3px 9px rgba(19,140,148,.22)!important;
+}
 .shop-shell-avatar{
   width:34px!important;
   height:34px!important;
@@ -386,6 +413,9 @@ html[data-theme="dark"] .shop-shell-subnav a.active{color:#75ddd6!important}
 html[data-theme="dark"] .shop-shell-account:hover,
 html[data-theme="dark"] .shop-shell-orders:hover,
 html[data-theme="dark"] .shop-shell-cart:hover{background:#121d25!important;border-color:#2a3944!important}
+html[data-theme="dark"] .shop-shell-cart{color:#dce9ee!important}
+html[data-theme="dark"] .shop-shell-cart>span{color:#cbe6e6!important}
+html[data-theme="dark"] .shop-shell-cart>.shop-cart-count{border-color:#0e151b!important;background:#59c7c3!important;color:#071f33!important}
 html[data-theme="dark"] .shop-account-menu[open]>summary{background:#102521!important;border-color:#31544f!important}
 html[data-theme="dark"] .shop-account-popover{background:#0e171e!important;border-color:#2b3943!important;box-shadow:0 24px 70px rgba(0,0,0,.42)!important}
 html[data-theme="dark"] .shop-account-popover:before{background:#0e171e;border-color:#2b3943}
@@ -439,7 +469,15 @@ html[data-theme="dark"] .order-v2-payment{background:#102521!important;border-co
   }
   .shop-shell-cart>strong{display:none!important}
   .shop-shell-cart>span{font-size:19px!important}
-  .shop-shell-cart>b{position:static!important;font-size:8px!important}
+  .shop-shell-cart>.shop-cart-count{
+    top:-1px!important;
+    right:-1px!important;
+    min-width:15px!important;
+    height:15px!important;
+    padding:0 4px!important;
+    border-width:2px!important;
+    font-size:7px!important;
+  }
   .shop-shell-theme{
     width:40px!important;
     height:40px!important;
