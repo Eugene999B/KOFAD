@@ -1832,8 +1832,9 @@ def staff_order(request, branch, pk):
         attempt = order.payment_attempts.filter(provider="hubtel").first()
         if attempt:
             # An authorised staff member may recheck a quarantined result, never mark it paid manually.
-            MarketPaymentAttempt.objects.filter(pk=attempt.pk, next_check_at__isnull=True).exclude(status="success").update(
-                next_check_at=timezone.now()
+            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+                next_check_at=timezone.now(),
+                provider_message="Staff requested an immediate Hubtel verification.",
             )
             try:
                 hubtel.reconcile(attempt.reference)
