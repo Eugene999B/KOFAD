@@ -459,6 +459,13 @@ class PaymentConfiguration(models.Model):
     """One company-wide checkout provider; secrets stay in environment variables."""
     provider = models.CharField(max_length=24, choices=[("paystack", "Paystack"), ("hubtel", "Hubtel")], default="paystack")
 
+    bank_account_name = models.CharField(max_length=140, blank=True)
+    bank_account_number = models.CharField(max_length=40, blank=True)
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_branch = models.CharField(max_length=100, blank=True)
+    bank_branch_code = models.CharField(max_length=20, blank=True)
+    receiving_momo = models.CharField(max_length=20, blank=True)
+
     def save(self, *args, **kwargs):
         self.pk = 1
         return super().save(*args, **kwargs)

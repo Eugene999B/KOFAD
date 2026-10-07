@@ -815,7 +815,7 @@ def checkout(request, customer):
     form = CheckoutForm(request.POST or None, initial=initial, delivery_enabled=has_delivery)
     payment_ready = hubtel.ready()
     if request.method == "POST" and not payment_ready:
-        form.add_error(None, hubtel.availability_notice() + " Your cart has been kept.")
+        form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
     if request.method == "POST" and payment_ready and form.is_valid():
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
@@ -855,7 +855,7 @@ def checkout(request, customer):
         delivery_fee_preview=initial_quote["fee"] if initial_quote else Decimal("0"),
         checkout_total=subtotal + (initial_quote["fee"] if initial_quote else Decimal("0")),
         delivery_company=company, payment_ready=payment_ready,
-        payment_notice=hubtel.availability_notice(),
+        payment_notice="Online payment is awaiting final testing and activation.",
     ))
 
 
@@ -2088,7 +2088,19 @@ def order_payment_check(request, customer, pk):
 def online_payments(request, branch):
     from .models import PaymentConfiguration
     from core import services as core_services
-    if request.method == "POST":
+    from .forms import ReceivingAccountForm
+    configuration = PaymentConfiguration.objects.filter(pk=1).first() or PaymentConfiguration(provider=hubtel.selected_provider())
+    account_form = ReceivingAccountForm(
+        request.POST if request.method == "POST" and request.POST.get("action") == "receiving_accounts" else None,
+        instance=configuration,
+    )
+    if request.method == "POST" and request.POST.get("action") == "receiving_accounts":
+        if account_form.is_valid():
+            account_form.save()
+            core_services.audit(request.user, branch, "market.receiving_accounts_saved", "1", {"fields": account_form.changed_data})
+            messages.success(request, "Receiving details saved for owner reference. Provider payout settings have not changed.")
+            return redirect("online_payments")
+    elif request.method == "POST":
         provider = request.POST.get("provider")
         if provider not in {"hubtel", "paystack"}:
             messages.error(request, "Choose Hubtel or Paystack.")
@@ -2115,7 +2127,7 @@ def online_payments(request, branch):
         rows = rows.filter(Q(reference__icontains=query) | Q(order__public_reference__icontains=query))
     page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
     return render(request, "marketplace/online_payments.html", {
-        "title": "Online payments",
+        "title": "Online payments", "account_form": account_form,
         "payment_provider": hubtel.selected_provider(),
         "hubtel_configured": hubtel.configured(), "hubtel_ready": hubtel.ready("hubtel"),
         "paystack_ready": hubtel.ready("paystack"),

@@ -422,3 +422,23 @@ class DeliveryZoneForm(forms.ModelForm):
             "eta_text": "Example: Same day, 1–2 business days, or Call to confirm.",
             "sort_order": "Lower numbers appear first at checkout.",
         }
+
+
+class ReceivingAccountForm(forms.ModelForm):
+    class Meta:
+        from .models import PaymentConfiguration
+        model = PaymentConfiguration
+        fields = ["bank_account_name", "bank_account_number", "bank_name",
+                  "bank_branch", "bank_branch_code", "receiving_momo"]
+        labels = {
+            "bank_account_name": "Account name", "bank_account_number": "Bank account number",
+            "bank_name": "Bank", "bank_branch": "Bank branch",
+            "bank_branch_code": "Branch code", "receiving_momo": "Receiving MoMo number",
+        }
+        widgets = {"bank_account_number": forms.TextInput(attrs={"inputmode": "numeric"}),
+                   "bank_branch_code": forms.TextInput(attrs={"inputmode": "numeric"}),
+                   "receiving_momo": forms.TextInput(attrs={"inputmode": "tel"})}
+
+    def clean_receiving_momo(self):
+        value = self.cleaned_data.get("receiving_momo", "").strip()
+        return normalize_ghana_phone(value) if value else ""

@@ -36,7 +36,7 @@ class CheckoutControlsTests(MarketFixtures):
         self.customer_session()
         response = self.client.post("/market/checkout/", self.pickup_data())
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Hubtel is connected.")
+        self.assertContains(response, "Online checkout is awaiting activation.")
         self.assertContains(response, "Your cart has been kept.")
         self.assertFalse(OnlineOrder.objects.exists())
         self.assertEqual(self.client.session["market_cart"], {str(self.listing.pk): 1})
@@ -91,3 +91,17 @@ class CheckoutControlsTests(MarketFixtures):
         response = self.client.get("/settings/online-payments/")
         self.assertContains(response, "visible-payment")
         self.assertNotContains(response, "private-other-payment")
+
+    def test_receiving_details_are_saved_without_changing_provider(self):
+        self.staff_session()
+        PaymentConfiguration.objects.create(provider="hubtel")
+        response = self.client.post("/settings/online-payments/", {
+            "action": "receiving_accounts", "bank_account_name": "Example business",
+            "bank_account_number": "0001234567", "bank_name": "Example bank",
+            "bank_branch": "Main", "bank_branch_code": "001", "receiving_momo": "0241234567",
+        })
+        self.assertEqual(response.status_code, 302)
+        config = PaymentConfiguration.objects.get(pk=1)
+        self.assertEqual(config.provider, "hubtel")
+        self.assertEqual(config.bank_account_number, "0001234567")
+        self.assertEqual(config.receiving_momo, "+233241234567")
