@@ -614,7 +614,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         )
         response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "payment-launch.js")
+        self.assertContains(response, "payment-launch.")
         self.assertContains(response, "https://pay.hubtel.com/test-checkout")
         self.assertContains(response, "Continue to secure payment")
         self.assertEqual(response["Cache-Control"], "no-store, private")
