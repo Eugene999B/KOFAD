@@ -669,6 +669,8 @@ with sync_playwright() as p:
     market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'light\')")
     market_page.reload()
     market_page.locator(".shop-shell-account").click()
+    market_page.locator(".shop-account-popover").wait_for(state="visible")
+    market_page.get_by_role("link", name="Account overview", exact=True).click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/account/")
     market_page.locator(".shop-shell-orders").click()
     market_page.wait_for_url("http://127.0.0.1:8000/market/orders/")
