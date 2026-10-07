@@ -23,6 +23,8 @@
   let hydrating = true;
   let selectedPaymentMethod = paymentMethods.includes("cash") ? "cash" : (paymentMethods[0] || "");
   let lastCompletedSale = null;
+  let momoReference = null;
+  let momoPollTimer = null;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
   try {
@@ -36,6 +38,7 @@
       requestKey = restoredState.requestKey || requestKey;
       pendingBody = restoredState.pendingBody || null;
       heldId = restoredState.heldId || null;
+      momoReference = restoredState.momoReference || null;
       selectedCustomer = restoredState.selectedCustomer || null;
       selectedSupplier = restoredState.selectedSupplier || null;
       newCustomerMode = Boolean(restoredState.newCustomerMode);
@@ -58,6 +61,7 @@
   const clearCustomerButton = document.querySelector("#clear-customer");
   const customerName = document.querySelector("#customer-name");
   const customerPhone = document.querySelector("#customer-phone");
+  const customerEmail = document.querySelector("#customer-email");
   const supplierSearch = document.querySelector("#supplier-search");
   const supplierResults = document.querySelector("#supplier-results");
   const selectedSupplierBox = document.querySelector("#selected-supplier");
@@ -73,6 +77,14 @@
   const dueDate = document.querySelector("#due-date");
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
+  const paystackMomoPanel = document.querySelector("#paystack-momo-panel");
+  const paystackMomoProvider = document.querySelector("#paystack-momo-provider");
+  const paystackMomoPhone = document.querySelector("#paystack-momo-phone");
+  const paystackMomoEmail = document.querySelector("#paystack-momo-email");
+  const paystackMomoStatus = document.querySelector("#paystack-momo-status");
+  const completeButton = document.querySelector("#complete");
+  const completeSaleHint = document.querySelector("#complete-sale-hint");
+  const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
@@ -184,9 +196,13 @@
   function persist() {
     try {
       sessionStorage.setItem(storageKey, JSON.stringify({
-        cart, requestKey, pendingBody, heldId, selectedCustomer, selectedSupplier, newCustomerMode,
+        cart, requestKey, pendingBody, heldId, momoReference, selectedCustomer, selectedSupplier, newCustomerMode,
         customerName: customerName?.value || "",
         customerPhone: customerPhone?.value || "",
+        customerEmail: customerEmail?.value || "",
+        paystackMomoProvider: paystackMomoProvider?.value || "",
+        paystackMomoPhone: paystackMomoPhone?.value || "",
+        paystackMomoEmail: paystackMomoEmail?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
         customerConsent: Boolean(customerConsent?.checked),
@@ -687,6 +703,8 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
+    if (paystackMomoPhone && customer.phone) paystackMomoPhone.value = customer.phone;
+    if (paystackMomoEmail && customer.email) paystackMomoEmail.value = customer.email;
     changed();
     updateConsentAvailability();
     persist();
@@ -702,6 +720,7 @@
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
+    if (customerEmail) customerEmail.value = "";
     changed();
     updateConsentAvailability();
     persist();
@@ -1103,7 +1122,11 @@
         ...(!purchase && allowDiscounts ? {discount: discount || "0"} : {})
       })),
       party,
-      ...(!purchase && !party && newName ? {customer_name: newName, customer_phone: newPhone} : {}),
+      ...(!purchase && !party && newName ? {
+        customer_name: newName,
+        customer_phone: newPhone,
+        customer_email: customerEmail?.value.trim() || ""
+      } : {}),
       ...(!purchase ? {
         customer_consent: Boolean((party || newName) && (customerConsent?.checked || customerWhatsApp?.checked)),
         send_sms: Boolean((party || newName) && customerConsent?.checked),
