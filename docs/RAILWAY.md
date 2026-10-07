@@ -83,16 +83,17 @@ KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was create
 Public login: https://kofad-web-production.up.railway.app/login/ . The initial admin/admin account opens the workspace directly. Change password and the recovery phone are available under My account.
 
 
-## Official domain
+## Official domains
 
-The public origin is https://kofadimpex.com. Railway manages DNS and TLS for the purchased root domain and `*.kofadimpex.com` on the existing web service. This uses two custom domain slots on Hobby and needs no additional hosting service.
+- https://kofadimpex.com — company homepage and public staff-card verification.
+- https://market.kofadimpex.com/market/ — customer shopping and account.
+- https://staff.kofadimpex.com/workspace/ — authenticated staff operations.
+- www redirects to the company homepage.
 
-- `www.kofadimpex.com` redirects to the main website.
-- `market.kofadimpex.com` opens the public Market on the main origin.
-- `staff.kofadimpex.com` opens the staff workspace/sign-in on the main origin.
+Railway manages root and wildcard DNS/TLS on the existing web service. Unknown hosts remain rejected by the explicit allowlist. No extra services are needed.
 
-Shortcuts redirect onto one origin so account cookies remain host-only. Unlisted wildcard hosts are rejected by Django's explicit allowed-host list. The database and message worker remain private. APIs and provider webhooks use their existing paths under the main domain; they do not require another public service or subdomain.
+Canonical routing keeps the customer and staff pages on separate origins. Wrong-host writes are rejected instead of forwarding submitted credentials or transactions. Production uses a Secure, HttpOnly, host-only __Host-kofad_session cookie. Do not configure a parent-domain cookie or sibling CSRF trusted origins. Existing users must sign in once again after the cookie-name change.
 
-Include `healthcheck.railway.app` in `DJANGO_ALLOWED_HOSTS` for Railway's internal readiness probe.
+This separates browser origins, not application infrastructure: the app and database remain shared, and role/branch checks still govern every staff operation. Saved signed SMS/WhatsApp/Paystack webhook URLs remain valid; provider authentication still applies.
 
-Set `DJANGO_ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` to the explicit main, www, market, staff and existing Railway hostnames. Set `SMS_PUBLIC_ORIGIN` and `WHATSAPP_PUBLIC_ORIGIN` to `https://kofadimpex.com` on web and SMS worker. Preserve the existing Railway domain for compatibility with saved callbacks.
+Include healthcheck.railway.app in DJANGO_ALLOWED_HOSTS. Leave CSRF_TRUSTED_ORIGINS empty for this same-origin form deployment. Preserve the Railway hostname for old links and callbacks. SMS_PUBLIC_ORIGIN and WHATSAPP_PUBLIC_ORIGIN remain https://kofadimpex.com; customer/staff links route to the proper origin.
