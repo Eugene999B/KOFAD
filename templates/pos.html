@@ -18,7 +18,9 @@
  data-allow-discounts="{{ allow_discounts|yesno:"true,false" }}"
  data-allow-price-overrides="{{ allow_price_overrides|yesno:"true,false" }}"
  data-max-discount="{{ max_discount }}"
- data-max-price-reduction="{{ max_price_reduction }}">
+ data-max-price-reduction="{{ max_price_reduction }}"
+ data-paystack-pos-momo-ready="{{ paystack_pos_momo_ready|yesno:"true,false" }}"
+ data-paystack-pos-momo-configured="{{ paystack_pos_momo_configured|yesno:"true,false" }}">
 
 <div id="pos-error" class="notice error hidden" role="alert"></div>
 
@@ -139,6 +141,7 @@
       <div id="new-customer-fields" class="new-customer-fields hidden counter-new-customer">
         <input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer name">
         <div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
+        <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email · required for Paystack MoMo">
       </div>
       <label class="checkout-consent compact-consent" id="customer-consent-wrap">
         <input id="customer-consent" type="checkbox" checked>
@@ -188,6 +191,35 @@
         </div>
       </fieldset>
 
+      {% if not purchase %}
+      <section id="paystack-momo-panel" class="notice subtle hidden" aria-live="polite">
+        <div>
+          <strong>Direct Mobile Money approval</strong>
+          {% if paystack_pos_momo_ready %}
+          <p>Paystack will send the approval request to the customer's phone. KOFAD will complete the sale only after Paystack independently confirms the payment.</p>
+          <div class="two-column">
+            <label>Network
+              <select id="paystack-momo-provider">
+                <option value="mtn">MTN MoMo</option>
+                <option value="atl">AT Money</option>
+                <option value="vod">Telecel Cash</option>
+              </select>
+            </label>
+            <label>MoMo number
+              <input id="paystack-momo-phone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="0551234567">
+            </label>
+          </div>
+          <label>Customer email
+            <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
+          </label>
+          <p id="paystack-momo-status" class="hint">When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.</p>
+          {% else %}
+          <p>Direct MoMo approval is prepared but not active yet. It will become available after Paystack live access is enabled for KOFAD.</p>
+          {% endif %}
+        </div>
+      </section>
+      {% endif %}
+
       <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
         <label for="due-date">Due date <small>Required while a balance remains</small></label>
         <input id="due-date" type="date" max="9999-12-31">
@@ -213,7 +245,7 @@
         {% if not purchase %}<button class="button secondary" type="button" id="hold">Hold sale</button>{% endif %}
         <button class="button complete-sale-button" id="complete">{% if purchase %}Post purchase & receive stock{% else %}Complete Sale & Generate Receipt{% endif %}</button>
       </div>
-      <p class="hint chalin-submit-hint">One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.</p>
+      <p class="hint chalin-submit-hint" id="complete-sale-hint">One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.</p>
     </section>
   </form>
 </section>
