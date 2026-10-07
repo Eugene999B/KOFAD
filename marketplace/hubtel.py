@@ -93,7 +93,7 @@ def initialize(order):
         attempt = MarketPaymentAttempt.objects.create(
             order=order, provider="hubtel", reference=reference, amount=order.total,
             currency="GHS", status="initializing",
-            next_check_at=timezone.now() + timedelta(seconds=10),
+            next_check_at=timezone.now() + timedelta(seconds=40),
         )
         order.payment_status = "pending"
         order.payment_reference = reference
@@ -301,10 +301,11 @@ def reconcile(reference):
 def _retry_delay(attempt, now=None):
     now = now or timezone.now()
     age = now - attempt.created_at
-    if age < timedelta(minutes=5):
-        return timedelta(seconds=10)
     if age < timedelta(minutes=30):
-        return timedelta(seconds=30)
+        # Hubtel allows at most 10 status checks per transaction in 300 seconds.
+        # Keep routine polling comfortably below that limit; callbacks still trigger
+        # an immediate verification when the customer actually completes payment.
+        return timedelta(seconds=40)
     if age < timedelta(hours=2):
         return timedelta(minutes=2)
     return timedelta(minutes=5)
