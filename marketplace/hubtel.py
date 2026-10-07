@@ -137,9 +137,26 @@ def verify(reference):
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
+    if isinstance(body, dict):
+        # The public endpoint uses PascalCase; the published endpoint uses camelCase.
+        normalised = {}
+        for key, value in body.items():
+            name = key[:1].lower() + key[1:]
+            if name in normalised and normalised[name] != value:
+                raise services.PaymentVerificationUnavailable("Ambiguous payment response.")
+            normalised[name] = value
+        body = normalised
     if not 200 <= response.status_code < 300 or not isinstance(body, dict) or body.get("responseCode") != "0000":
         raise services.PaymentVerificationUnavailable("Hubtel has not confirmed this payment yet.")
     data = body.get("data")
+    if isinstance(data, dict):
+        normalised = {}
+        for key, value in data.items():
+            name = key[:1].lower() + key[1:]
+            if name in normalised and normalised[name] != value:
+                raise services.PaymentVerificationUnavailable("Ambiguous payment details.")
+            normalised[name] = value
+        data = normalised
     if not isinstance(data, dict) or data.get("clientReference") != reference:
         raise services.PaymentVerificationUnavailable("Payment verification did not match the saved reference.")
     # Public endpoint contract must match these documented fields; fail closed otherwise.
@@ -167,6 +184,7 @@ def reconcile(reference):
         summary = {key: data.get(key) for key in (
             "status", "clientReference", "transactionId", "currencyCode", "amount", "paymentMethod"
         )}
+        summary = {key: str(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(verification_summary=summary)
         if data["status"] != "Paid":
             raise services.PaymentVerificationUnavailable("Payment is not confirmed. If you were debited, do not pay again.")

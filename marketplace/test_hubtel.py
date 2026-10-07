@@ -28,6 +28,17 @@ class HubtelContractTests(SimpleTestCase):
         self.assertFalse(kwargs["allow_redirects"])
 
     @patch("marketplace.hubtel.requests.get")
+    def test_public_pascal_case_response(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {"ResponseCode": "0000", "Data": {
+            "ClientReference": "ref1", "Status": "Paid", "Amount": 200,
+            "TransactionId": "txn1", "CurrencyCode": "GHS",
+        }}
+        result = hubtel.verify("ref1")
+        self.assertEqual(result["clientReference"], "ref1")
+        self.assertEqual(result["amount"], 200)
+
+    @patch("marketplace.hubtel.requests.get")
     def test_mismatched_and_unknown_responses_fail_closed(self, get):
         get.return_value = Mock(status_code=200)
         for body in ([], {}, {"responseCode": "0000", "data": []},
