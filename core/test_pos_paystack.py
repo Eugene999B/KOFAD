@@ -1,3 +1,4 @@
+import json
 import uuid
 from decimal import Decimal
 from unittest.mock import Mock, patch
@@ -176,6 +177,33 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         held.refresh_from_db()
         self.assertEqual(held.cart["payment_request"]["status"], "success")
         self.assertTrue(held.cart["payment_request"]["document_id"])
+
+    @override_settings(PAYSTACK_SECRET_KEY="", PAYSTACK_POS_MOMO_ENABLED=False)
+    def test_normal_pos_endpoint_rejects_unverified_momo_sale(self):
+        self.authenticate_client()
+        response = self.client.post(
+            "/api/trades/",
+            data=json.dumps(self.payload()),
+            content_type="application/json",
+            HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Paystack activation", response.json()["error"])
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(Movement.objects.count(), 0)
+
+    def test_normal_pos_endpoint_rejects_momo_even_when_paystack_is_ready(self):
+        self.authenticate_client()
+        response = self.client.post(
+            "/api/trades/",
+            data=json.dumps(self.payload()),
+            content_type="application/json",
+            HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Paystack approval request", response.json()["error"])
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(Movement.objects.count(), 0)
 
     @patch("core.pos_paystack.requests.post")
     def test_direct_momo_rejects_split_or_partial_payment(self, post):
