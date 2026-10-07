@@ -265,7 +265,8 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         "amount": str(int(total * 100)),
         "currency": "GHS",
         "reference": reference,
-        "mobile_money": {"phone": phone, "provider": provider},
+        # Paystack's Ghana Mobile Money contract documents the local 0XXXXXXXXX format.
+        "mobile_money": {"phone": "0" + phone[4:], "provider": provider},
         "metadata": {
             "source": "kofad_pos",
             "branch_id": branch.pk,
