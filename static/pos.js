@@ -852,7 +852,18 @@
   });
   customerWhatsApp?.addEventListener("change", () => { changed(); persist(); });
   customerName?.addEventListener("input", updateConsentAvailability);
-  customerPhone?.addEventListener("input", updateConsentAvailability);
+  customerPhone?.addEventListener("input", () => {
+    updateConsentAvailability();
+    if (paystackMomoPhone && !momoReference) paystackMomoPhone.value = customerPhone.value;
+    persist();
+  });
+  customerEmail?.addEventListener("input", () => {
+    if (paystackMomoEmail && !momoReference) paystackMomoEmail.value = customerEmail.value;
+    persist();
+  });
+  paystackMomoProvider?.addEventListener("change", persist);
+  paystackMomoPhone?.addEventListener("input", persist);
+  paystackMomoEmail?.addEventListener("input", persist);
 
   function zeroPaymentInputs() {
     paymentMethods.forEach(method => {
@@ -867,6 +878,35 @@
     const input = document.querySelector("#pay-" + selectedPaymentMethod);
     if (input) input.value = singlePaymentValue.value || "0";
     renderCheckoutSummary();
+  }
+
+  function directMomoSelected() {
+    return !purchase
+      && selectedPaymentMethod === "momo"
+      && (paymentPlan?.value || "full") === "full";
+  }
+
+  function syncPaystackMomoPanel() {
+    const active = directMomoSelected();
+    paystackMomoPanel?.classList.toggle("hidden", !active);
+    if (active) {
+      if (paystackMomoPhone && !paystackMomoPhone.value) {
+        paystackMomoPhone.value = selectedCustomer?.phone || customerPhone?.value || "";
+      }
+      if (paystackMomoEmail && !paystackMomoEmail.value) {
+        paystackMomoEmail.value = selectedCustomer?.email || customerEmail?.value || "";
+      }
+    }
+    if (completeButton && !purchase) {
+      completeButton.textContent = active && paystackMomoReady
+        ? "Send MoMo Approval Request"
+        : "Complete Sale & Generate Receipt";
+    }
+    if (completeSaleHint && !purchase) {
+      completeSaleHint.textContent = active && paystackMomoReady
+        ? "KOFAD will wait for Paystack to verify the payment before posting stock, recording the sale or issuing the receipt."
+        : "One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.";
+    }
   }
 
   function selectPaymentMethod(method, {preserveAmount = false} = {}) {
@@ -888,6 +928,7 @@
       }
       syncSinglePayment();
     }
+    syncPaystackMomoPanel();
     persist();
   }
 
@@ -914,6 +955,7 @@
     }
     updateConsentAvailability();
     renderCheckoutSummary();
+    syncPaystackMomoPanel();
     persist();
   }
 
