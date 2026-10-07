@@ -170,8 +170,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const maximum = Math.max(0, sidebar.scrollHeight - sidebar.clientHeight);
         sidebar.scrollTop = Math.min(saved, maximum);
       };
-      requestAnimationFrame(() => requestAnimationFrame(apply));
-      window.setTimeout(apply, 90);
+      // Styles are ready at DOMContentLoaded. Delayed restores can overwrite
+      // a newer wheel/keyboard scroll or a link click on a fast page load.
+      apply();
     };
     restoreSidebarScroll();
     let sidebarScrollFrame = null;
@@ -186,7 +187,9 @@ document.addEventListener("DOMContentLoaded", () => {
       link.addEventListener("pointerdown", rememberSidebarScroll, {passive:true});
       link.addEventListener("click", rememberSidebarScroll);
     });
-    window.addEventListener("pageshow", restoreSidebarScroll);
+    window.addEventListener("pageshow", event => {
+      if (event.persisted) restoreSidebarScroll();
+    });
     window.addEventListener("pagehide", rememberSidebarScroll);
   }
   const mobile = matchMedia("(max-width:950px)");

@@ -502,6 +502,9 @@ with sync_playwright() as p:
     admin_sidebar = admin_page.locator(".sidebar")
     max_sidebar_scroll = admin_sidebar.evaluate("el => { el.scrollTop = el.scrollHeight; return el.scrollTop; }")
     assert max_sidebar_scroll > 50
+    # A late restore must not undo a scroll made immediately after navigation.
+    admin_page.wait_for_timeout(150)
+    assert admin_sidebar.evaluate("el => el.scrollTop") == max_sidebar_scroll
     admin_page.get_by_role("link",name="Workers",exact=True).click()
     admin_page.wait_for_url("http://127.0.0.1:8000/workers/")
     admin_page.wait_for_function("() => document.querySelector('.sidebar').scrollTop > 50", timeout=5000)
