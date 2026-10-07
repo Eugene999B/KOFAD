@@ -986,6 +986,7 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         order.save(update_fields=["ledger_status", "updated_at"])
         raise ValidationError("The verified payment amount does not match this order.")
 
+    was_cancelled = order.status == "cancelled"
     channel = str(provider_data.get("channel", ""))[:40]
     now = timezone.now()
     order.status = "paid"
@@ -1010,12 +1011,12 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     )
 
     branch_closed = Closing.objects.filter(branch=order.branch, date=timezone.localdate()).exists()
-    if branch_closed:
+    if branch_closed or was_cancelled:
         order.ledger_status = "attention"
         order.save(update_fields=["ledger_status", "updated_at"])
         OrderEvent.objects.create(
             order=order, status="paid", title="Awaiting ledger posting",
-            note="The shop day was already closed. KOFAD preserved the payment and stock hold for the next open business period.",
+            note=("Payment arrived after cancellation. Review with the customer before fulfilment." if was_cancelled else "The shop day was already closed. KOFAD preserved the payment and stock hold for the next open business period."),
             customer_visible=False,
         )
     else:
@@ -1033,7 +1034,7 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     queue_order_sms(
         order, "paid",
         f"KOFAD: Payment confirmed for {order.customer_reference}. "
-        f"Amount: GHS {order.total:.2f}. We are preparing your order. "
+        f"Amount: GHS {order.total:.2f}. Follow your order status in your account. "
         "Track it in your KOFAD Market account.",
     )
     return order

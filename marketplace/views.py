@@ -1822,6 +1822,19 @@ def staff_order(request, branch, pk):
         ),
         pk=pk,
     )
+    if request.method == "POST" and request.POST.get("form_type") == "payment_check":
+        attempt = order.payment_attempts.filter(provider="hubtel").first()
+        if attempt:
+            # An authorised staff member may recheck a quarantined result, never mark it paid manually.
+            MarketPaymentAttempt.objects.filter(pk=attempt.pk, next_check_at__isnull=True).exclude(status="success").update(
+                next_check_at=timezone.now()
+            )
+            try:
+                hubtel.reconcile(attempt.reference)
+                messages.success(request, "Hubtel payment verified.")
+            except ValidationError as exc:
+                messages.info(request, problem(exc))
+        return redirect("staff_online_order", pk=order.pk)
     form_type = request.POST.get("form_type", "workflow") if request.method == "POST" else "workflow"
     form = StaffOrderUpdateForm(request.POST if form_type == "workflow" else None)
     tracking_form = DeliveryTrackingForm(
@@ -2031,6 +2044,7 @@ def hubtel_return(request):
     attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
     if not attempt:
         return redirect("market")
+    MarketPaymentAttempt.objects.filter(pk=attempt.pk, check_count=0).update(next_check_at=timezone.now())
     try:
         hubtel.reconcile(reference)
     except ValidationError:
