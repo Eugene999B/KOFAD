@@ -2039,7 +2039,7 @@ def hubtel_callback(request):
                 ("ClientReference", "CheckoutId", "SalesInvoiceId", "Status", "Amount")}
         OrderEvent.objects.get_or_create(
             order=attempt.order, status="hubtel_callback", title="Hubtel callback received (unverified)",
-            note=json.dumps(safe, sort_keys=True), customer_visible=False,
+            defaults={"note": json.dumps(safe, sort_keys=True), "customer_visible": False},
         )
     if attempt and attempt.status != "success":
         # Expedite the first check only. Repeated callbacks cannot defeat the persisted lease.
