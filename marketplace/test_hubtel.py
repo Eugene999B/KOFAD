@@ -39,6 +39,34 @@ class HubtelContractTests(SimpleTestCase):
         self.assertEqual(result["amount"], 200)
 
     @patch("marketplace.hubtel.requests.get")
+    def test_public_status_accepts_single_matching_record_in_data_list(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000",
+            "Data": [{
+                "ClientReference": "ref1", "Status": "Paid", "Amount": "1.00",
+                "TransactionId": "txn-list-1", "PaymentMethod": "mobilemoney",
+            }],
+        }
+        result = hubtel.verify("ref1")
+        self.assertEqual(result["status"], "Paid")
+        self.assertEqual(result["transactionId"], "txn-list-1")
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_public_status_list_ignores_other_references_and_requires_exact_match(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "responseCode": "0000",
+            "data": [
+                {"clientReference": "other", "status": "Paid", "amount": 999, "transactionId": "bad"},
+                {"clientReference": "ref1", "status": "Paid", "amount": 1, "transactionId": "good"},
+            ],
+        }
+        self.assertEqual(hubtel.verify("ref1")["transactionId"], "good")
+        with self.assertRaises(services.PaymentVerificationUnavailable):
+            hubtel.verify("missing")
+
+    @patch("marketplace.hubtel.requests.get")
     def test_mismatched_and_unknown_responses_fail_closed(self, get):
         get.return_value = Mock(status_code=200)
         for body in ([], {}, {"responseCode": "0000", "data": []},
