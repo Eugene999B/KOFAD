@@ -749,6 +749,7 @@ def _paystack_headers():
 
 
 def initialize_paystack(order, callback_url):
+    headers = _paystack_headers()  # Fail before creating an attempt when unconfigured.
     order = refresh_order_reservations(order)
     recent = order.payment_attempts.filter(
         status="pending",
@@ -778,7 +779,7 @@ def initialize_paystack(order, callback_url):
     order.save(update_fields=["payment_status", "payment_reference", "updated_at"])
     try:
         response = requests.post(
-            PAYSTACK_INITIALIZE, headers=_paystack_headers(), json=payload,
+            PAYSTACK_INITIALIZE, headers=headers, json=payload,
             timeout=settings.PAYSTACK_TIMEOUT_SECONDS, allow_redirects=False,
         )
         data = response.json()
@@ -789,17 +790,27 @@ def initialize_paystack(order, callback_url):
         order.payment_status = "failed"
         order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("We could not start the payment. Your order is saved; please try again.") from exc
-    if not 200 <= response.status_code < 300 or not data.get("status"):
+    if not isinstance(data, dict):
+        data = {}
+    if not 200 <= response.status_code < 300 or data.get("status") is not True:
         attempt.status = "failed"
         attempt.provider_message = str(data.get("message", "Paystack rejected the payment initialization."))[:240]
         attempt.save(update_fields=["status", "provider_message"])
         order.payment_status = "failed"
         order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("We could not start the payment. Please try again.")
-    payload_data = data.get("data") or {}
+    payload_data = data.get("data")
+    if not isinstance(payload_data, dict):
+        payload_data = {}
     authorization_url = str(payload_data.get("authorization_url", ""))
     parsed = urlsplit(authorization_url)
-    if parsed.scheme != "https" or parsed.hostname != "checkout.paystack.com":
+    if (parsed.scheme != "https" or parsed.netloc != "checkout.paystack.com"
+            or not parsed.path.strip("/") or not payload_data.get("access_code")):
+        attempt.status = "failed"
+        attempt.provider_message = "Invalid secure checkout response."
+        attempt.save(update_fields=["status", "provider_message"])
+        order.payment_status = "failed"
+        order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("We could not open the secure payment page. Please try again.")
     attempt.status = "pending"
     attempt.access_code = str(payload_data.get("access_code", ""))[:120]

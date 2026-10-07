@@ -317,6 +317,35 @@ class MarketPaymentTests(MarketFixtures):
             status="pending",
         )
 
+    @override_settings(PAYSTACK_SECRET_KEY="")
+    @patch("marketplace.services.requests.post")
+    def test_missing_payment_key_does_not_create_a_stuck_attempt(self, post):
+        order = self.order()
+        before = order.payment_status
+        with self.assertRaises(ValidationError):
+            services.initialize_paystack(order, "https://example.test/market/payment/return/")
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, before)
+        self.assertFalse(order.payment_attempts.exists())
+        post.assert_not_called()
+
+    @override_settings(PAYSTACK_SECRET_KEY="paystack-secret-for-test")
+    @patch("marketplace.services.requests.post")
+    def test_invalid_checkout_responses_fail_cleanly(self, post):
+        order = self.order()
+        for body in (
+            [], {"status": True, "data": []},
+            {"status": True, "data": {"authorization_url": "https://checkout.paystack.com.evil.test/pay", "access_code": "x"}},
+            {"status": True, "data": {"authorization_url": "https://user@checkout.paystack.com/pay", "access_code": "x"}},
+        ):
+            post.return_value = Mock(status_code=200)
+            post.return_value.json.return_value = body
+            with self.assertRaises(ValidationError):
+                services.initialize_paystack(order, "https://example.test/market/payment/return/")
+            order.refresh_from_db()
+            self.assertEqual(order.payment_status, "failed")
+        self.assertFalse(order.payment_attempts.filter(status="initializing").exists())
+
     @override_settings(PAYSTACK_SECRET_KEY="paystack-secret-for-test")
     def test_paystack_signature_validation_uses_hmac_sha512(self):
         raw = b'{"event":"charge.success"}'
