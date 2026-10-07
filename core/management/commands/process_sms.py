@@ -6,6 +6,7 @@ from django.db import close_old_connections
 from core.automations import run_scheduled_automations
 from core.sms.service import recover_stale, sync_delivery_reports
 from core.whatsapp_delivery import process_whatsapp_queue, recover_stale_whatsapp
+from marketplace.notifications import process_order_sms
 
 
 class Command(BaseCommand):
@@ -32,6 +33,10 @@ class Command(BaseCommand):
                 last_automation = now
 
             if now - last_delivery_sync >= 5:
+                try:
+                    process_order_sms()
+                except Exception as exc:
+                    self.stderr.write(f"Order SMS outbox check failed safely: {exc}")
                 try:
                     delivery_updates += sync_delivery_reports()
                 except Exception as exc:

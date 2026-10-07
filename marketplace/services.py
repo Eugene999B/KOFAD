@@ -1016,9 +1016,11 @@ def finalize_payment(reference, provider_data):
                 note=str(exc), customer_visible=False,
             )
 
-    send_transactional_sms(
-        order.phone,
-        f"KOFAD: Payment confirmed for {order.customer_reference}. We are preparing your order. "
+    from .notifications import queue_order_sms
+    queue_order_sms(
+        order, "paid",
+        f"KOFAD: Payment confirmed for {order.customer_reference}. "
+        f"Amount: GHS {order.total:.2f}. We are preparing your order. "
         "Track it in your KOFAD Market account.",
     )
     return order
@@ -1106,7 +1108,8 @@ def advance_order(user, order, action, cleaned):
         extra = ""
         if target in {"ready_pickup", "out_for_delivery"}:
             extra = f" Your handover code is {handover_code(order)}."
-        send_transactional_sms(order.phone, f"KOFAD: {title} for {order.public_reference}.{extra}")
+        from .notifications import queue_order_sms
+        queue_order_sms(order, target, f"KOFAD: {title} for {order.customer_reference}.{extra}")
     return order
 
 
