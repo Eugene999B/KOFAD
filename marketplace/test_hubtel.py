@@ -246,9 +246,9 @@ class HubtelPaymentTests(MarketFixtures):
     def test_retry_schedule_stays_fast_while_customer_may_be_waiting(self):
         attempt = self.pending()
         attempt.created_at = timezone.now() - timedelta(minutes=2)
-        self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=10))
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=40))
         attempt.created_at = timezone.now() - timedelta(minutes=10)
-        self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=30))
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=40))
 
     def test_paystack_data_cannot_settle_hubtel_attempt(self):
         attempt = self.pending()
