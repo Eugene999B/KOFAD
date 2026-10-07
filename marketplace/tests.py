@@ -489,7 +489,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         session["branch"] = self.branch.pk
         session.save()
 
-    def test_market_login_sets_two_hour_session_window_and_top_signout(self):
+    def test_market_login_sets_two_hour_session_window_and_account_menu(self):
         before = timezone.now().timestamp()
         response = self.client.post("/market/account/login/", {
             "phone": self.customer.phone,
@@ -502,9 +502,12 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertEqual(settings.MARKET_SESSION_SECONDS, 2 * 60 * 60)
         page = self.client.get("/market/account/")
         self.assertContains(page, "shop-shell-header")
+        self.assertContains(page, "shop-account-menu")
+        self.assertContains(page, "shop-account-popover")
         self.assertContains(page, "account-v4-signout")
         self.assertContains(page, "Sign out")
         self.assertContains(page, 'action="/market/account/logout/"')
+        self.assertNotContains(page, "shop-signout")
 
     def test_expired_market_session_does_not_expire_staff_identity(self):
         self.staff_session()
