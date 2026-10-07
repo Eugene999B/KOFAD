@@ -173,23 +173,37 @@ def verify(reference):
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
 
     body = _normalise_keys(body)
-    data = _normalise_keys(body.get("data")) if isinstance(body, dict) else None
+    raw_data = body.get("data") if isinstance(body, dict) else None
+    if isinstance(raw_data, list):
+        candidates = [_normalise_keys(item) for item in raw_data if isinstance(item, dict)]
+        matches = [
+            item for item in candidates
+            if str(item.get("clientReference", "")).strip() == reference
+        ]
+        if len(matches) > 1:
+            raise services.PaymentVerificationUnavailable("Hubtel returned duplicate payment records.")
+        data = matches[0] if matches else None
+        data_shape = "list:" + str(len(raw_data))
+    else:
+        data = _normalise_keys(raw_data)
+        data_shape = ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else type(data).__name__
+
     response_code = str(body.get("responseCode", "")).strip() if isinstance(body, dict) else ""
     safe_status = str(data.get("status", "")).strip() if isinstance(data, dict) else ""
     safe_amount = data.get("amount") if isinstance(data, dict) else None
     logger.info(
-        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s data_keys=%s message=%s ref_suffix=%s",
+        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s data_shape=%s message=%s ref_suffix=%s",
         response.status_code, response_code, safe_status[:24], safe_amount,
         bool(data.get("transactionId")) if isinstance(data, dict) else False,
-        ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else type(data).__name__,
+        data_shape,
         str(body.get("message", ""))[:160] if isinstance(body, dict) else "",
         str(reference)[-6:],
     )
 
     if not 200 <= response.status_code < 300 or not isinstance(body, dict) or response_code != "0000":
         raise services.PaymentVerificationUnavailable("Hubtel has not confirmed this payment yet.")
-    if not isinstance(data, dict) or str(data.get("clientReference", "")).strip() != reference:
-        raise services.PaymentVerificationUnavailable("Payment verification did not match the saved reference.")
+    if not isinstance(data, dict):
+        raise services.PaymentVerificationUnavailable("Hubtel has not returned a matching transaction yet.")
 
     # The Online Checkout status contract documents Paid, Unpaid and Refunded.
     # Normalise whitespace/case only; never treat a generic callback 'Success' as proof of payment.
