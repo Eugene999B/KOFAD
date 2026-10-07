@@ -105,3 +105,26 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertEqual(config.provider, "hubtel")
         self.assertEqual(config.bank_account_number, "0001234567")
         self.assertEqual(config.receiving_momo, "+233241234567")
+
+    def test_customer_payment_progress_is_private_and_has_no_provider_button(self):
+        self.customer_session()
+        order = self.order()
+        MarketPaymentAttempt.objects.create(
+            order=order, provider="hubtel", reference="private-progress-reference",
+            amount=order.total, status="pending",
+        )
+        response = self.client.get(f"/market/orders/{order.pk}/")
+        self.assertContains(response, "Waiting for payment confirmation")
+        self.assertNotContains(response, "Check Hubtel payment")
+        self.assertNotContains(response, "private-progress-reference")
+        status = self.client.get(f"/market/orders/{order.pk}/payment-status/")
+        self.assertEqual(status.json(), {
+            "payment_status": order.payment_status, "order_status": order.status,
+            "waiting": True, "paid": False,
+        })
+        self.assertIn("no-store", status["Cache-Control"])
+        other = self.order()
+        from .models import CustomerAccount
+        other.customer = CustomerAccount.objects.create(phone="+233249999999", full_name="Other")
+        other.save(update_fields=["customer"])
+        self.assertEqual(self.client.get(f"/market/orders/{other.pk}/payment-status/").status_code, 404)

@@ -977,6 +977,8 @@ def customer_order(request, customer, pk):
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
+        payment_available=hubtel.ready(),
+        payment_waiting=order.payment_attempts.filter(provider="hubtel", status__in=["initializing", "submission_unknown", "pending", "attention"]).exists(),
         can_request_return=bool(returnable),
         returnable=returnable,
         delivery_updates=order.delivery_updates.filter(customer_visible=True),
@@ -2135,3 +2137,18 @@ def online_payments(request, branch):
         "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
     })
+
+
+@market_customer_required
+def customer_payment_status(request, customer, pk):
+    """Read our confirmed state only; the worker performs provider verification."""
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    waiting = order.payment_attempts.filter(
+        provider="hubtel", status__in=["initializing", "submission_unknown", "pending", "attention"]
+    ).exists()
+    response = JsonResponse({
+        "payment_status": order.payment_status, "order_status": order.status,
+        "waiting": waiting, "paid": order.payment_status == "paid",
+    })
+    response["Cache-Control"] = "no-store, private"
+    return response
