@@ -347,70 +347,96 @@ def _send_receipts(user_id, branch_id, document_id, send_sms, send_whatsapp):
             logger.exception("POS Paystack WhatsApp receipt failed document=%s", document_id)
 
 
-def finalize_verified(reference, verified):
+def _mark_attention(reference, message):
     with transaction.atomic():
         held = _held(reference, lock=True)
         if not held:
-            raise ValidationError("Unknown Paystack POS payment.")
+            return
         state = _state(held)
-        if state.get("status") == "success" and state.get("document_id"):
-            return Document.objects.select_related("party").get(pk=state["document_id"])
-
-        provider_status = str(verified.get("status", "")).strip().lower()
-        if provider_status != "success":
-            raise ProviderPending("The MoMo payment is not confirmed yet.")
-        try:
-            provider_amount = int(verified.get("amount"))
-            expected_amount = int(Decimal(str(state.get("amount"))) * 100)
-        except (TypeError, ValueError, InvalidOperation) as exc:
-            raise ValidationError("Paystack returned an invalid payment amount.") from exc
-        currency = str(verified.get("currency", "")).strip().upper()
-        channel = str(verified.get("channel", "")).strip().lower()
-        if provider_amount != expected_amount or currency != "GHS" or channel != "mobile_money":
-            state["status"] = "attention"
-            state["provider_status"] = provider_status
-            state["message"] = "Verified Paystack details do not match this sale. Manager review is required."
-            state["next_check_at"] = None
-            _save_state(held, state)
-            raise ValidationError(state["message"])
-
-        cart = held.cart if isinstance(held.cart, dict) else {}
-        payload = copy.deepcopy(cart.get("sale_payload"))
-        if not isinstance(payload, dict):
-            raise ValidationError("The saved sale payload is missing.")
-        for payment in payload.get("payments", []):
-            if isinstance(payment, dict) and payment.get("method") == "momo" and Decimal(str(payment.get("amount", "0"))) > 0:
-                payment["reference"] = reference
-
-        doc = services.post_trade(
-            held.user,
-            held.branch,
-            payload,
-            state.get("request_key"),
-            kind="sale",
-        )
-        state["status"] = "success"
-        state["provider_status"] = provider_status
-        state["message"] = "Payment verified by Paystack and sale posted."
-        state["verified_at"] = timezone.now().timestamp()
+        if state.get("status") == "success":
+            return
+        state["status"] = "attention"
+        state["message"] = str(message)[:240]
         state["next_check_at"] = None
-        state["document_id"] = str(doc.pk)
-        state["transaction_id"] = str(verified.get("id", ""))[:80]
         _save_state(held, state)
 
-        send_sms = payload.get("send_sms", payload.get("customer_consent")) is True
-        send_whatsapp = payload.get("send_whatsapp") is True
-        transaction.on_commit(
-            lambda: _send_receipts(
-                held.user_id, held.branch_id, doc.pk, send_sms, send_whatsapp
+
+def finalize_verified(reference, verified):
+    held = _held(reference)
+    if not held:
+        raise ValidationError("Unknown Paystack POS payment.")
+    state = _state(held)
+    if state.get("status") == "success" and state.get("document_id"):
+        return Document.objects.select_related("party").get(pk=state["document_id"])
+
+    provider_status = str(verified.get("status", "")).strip().lower()
+    if provider_status != "success":
+        raise ProviderPending("The MoMo payment is not confirmed yet.")
+    try:
+        provider_amount = int(verified.get("amount"))
+        expected_amount = int(Decimal(str(state.get("amount"))) * 100)
+    except (TypeError, ValueError, InvalidOperation) as exc:
+        _mark_attention(reference, "Paystack returned an invalid payment amount. Manager review is required.")
+        raise ValidationError("Paystack returned an invalid payment amount.") from exc
+    currency = str(verified.get("currency", "")).strip().upper()
+    channel = str(verified.get("channel", "")).strip().lower()
+    if provider_amount != expected_amount or currency != "GHS" or channel != "mobile_money":
+        message = "Verified Paystack details do not match this sale. Manager review is required."
+        _mark_attention(reference, message)
+        raise ValidationError(message)
+
+    try:
+        with transaction.atomic():
+            held = _held(reference, lock=True)
+            if not held:
+                raise ValidationError("Unknown Paystack POS payment.")
+            state = _state(held)
+            if state.get("status") == "success" and state.get("document_id"):
+                return Document.objects.select_related("party").get(pk=state["document_id"])
+
+            cart = held.cart if isinstance(held.cart, dict) else {}
+            payload = copy.deepcopy(cart.get("sale_payload"))
+            if not isinstance(payload, dict):
+                raise ValidationError("The saved sale payload is missing.")
+            for payment in payload.get("payments", []):
+                if isinstance(payment, dict) and payment.get("method") == "momo" and Decimal(str(payment.get("amount", "0"))) > 0:
+                    payment["reference"] = reference
+
+            doc = services.post_trade(
+                held.user,
+                held.branch,
+                payload,
+                state.get("request_key"),
+                kind="sale",
             )
+            state["status"] = "success"
+            state["provider_status"] = provider_status
+            state["message"] = "Payment verified by Paystack and sale posted."
+            state["verified_at"] = timezone.now().timestamp()
+            state["next_check_at"] = None
+            state["document_id"] = str(doc.pk)
+            state["transaction_id"] = str(verified.get("id", ""))[:80]
+            _save_state(held, state)
+
+            send_sms = payload.get("send_sms", payload.get("customer_consent")) is True
+            send_whatsapp = payload.get("send_whatsapp") is True
+            transaction.on_commit(
+                lambda: _send_receipts(
+                    held.user_id, held.branch_id, doc.pk, send_sms, send_whatsapp
+                )
+            )
+            services.audit(held.user, held.branch, "sale.paystack_momo_verified", doc.reference, {
+                "payment_reference": reference,
+                "amount": str(doc.total),
+                "network": state.get("network", ""),
+            })
+            return doc
+    except ValidationError:
+        _mark_attention(
+            reference,
+            "Payment was verified, but KOFAD could not post the sale automatically. Manager review is required.",
         )
-        services.audit(held.user, held.branch, "sale.paystack_momo_verified", doc.reference, {
-            "payment_reference": reference,
-            "amount": str(doc.total),
-            "network": state.get("network", ""),
-        })
-        return doc
+        raise
 
 
 def reconcile(reference, *, force=False):
