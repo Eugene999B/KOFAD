@@ -1,5 +1,6 @@
 """Server-only Hubtel Online Checkout, using the public status endpoint agreed with Hubtel."""
 import base64
+import logging
 import re
 import secrets
 from datetime import timedelta
@@ -19,6 +20,7 @@ from .models import MarketPaymentAttempt, OnlineOrder, OrderEvent, PaymentConfig
 INITIATE_URL = "https://payproxyapi.hubtel.com/items/initiate"
 STATUS_ORIGIN = "https://rmsc.hubtel.com/v1/merchantaccount/merchants/"
 PUBLIC_ORIGIN = "https://market.kofadimpex.com"
+logger = logging.getLogger(__name__)
 
 
 def configured():
@@ -91,7 +93,7 @@ def initialize(order):
         attempt = MarketPaymentAttempt.objects.create(
             order=order, provider="hubtel", reference=reference, amount=order.total,
             currency="GHS", status="initializing",
-            next_check_at=timezone.now() + timedelta(minutes=5),
+            next_check_at=timezone.now() + timedelta(seconds=10),
         )
         order.payment_status = "pending"
         order.payment_reference = reference
@@ -134,6 +136,19 @@ def initialize(order):
     return attempt
 
 
+def _normalise_keys(payload):
+    """Accept Hubtel's documented camelCase and observed PascalCase without weakening validation."""
+    if not isinstance(payload, dict):
+        return payload
+    normalised = {}
+    for key, value in payload.items():
+        name = str(key)[:1].lower() + str(key)[1:]
+        if name in normalised and normalised[name] != value:
+            raise services.PaymentVerificationUnavailable("Ambiguous Hubtel response.")
+        normalised[name] = value
+    return normalised
+
+
 def verify(reference):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,32}", str(reference or "")):
         raise ValidationError("Invalid payment reference.")
@@ -145,33 +160,34 @@ def verify(reference):
         )
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
+        logger.warning("Hubtel status request failed ref_suffix=%s", str(reference)[-6:])
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
-    if isinstance(body, dict):
-        # The public endpoint uses PascalCase; the published endpoint uses camelCase.
-        normalised = {}
-        for key, value in body.items():
-            name = key[:1].lower() + key[1:]
-            if name in normalised and normalised[name] != value:
-                raise services.PaymentVerificationUnavailable("Ambiguous payment response.")
-            normalised[name] = value
-        body = normalised
-    if not 200 <= response.status_code < 300 or not isinstance(body, dict) or body.get("responseCode") != "0000":
+
+    body = _normalise_keys(body)
+    data = _normalise_keys(body.get("data")) if isinstance(body, dict) else None
+    response_code = str(body.get("responseCode", "")).strip() if isinstance(body, dict) else ""
+    safe_status = str(data.get("status", "")).strip() if isinstance(data, dict) else ""
+    safe_amount = data.get("amount") if isinstance(data, dict) else None
+    logger.info(
+        "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s ref_suffix=%s",
+        response.status_code, response_code, safe_status[:24], safe_amount,
+        bool(data.get("transactionId")) if isinstance(data, dict) else False,
+        str(reference)[-6:],
+    )
+
+    if not 200 <= response.status_code < 300 or not isinstance(body, dict) or response_code != "0000":
         raise services.PaymentVerificationUnavailable("Hubtel has not confirmed this payment yet.")
-    data = body.get("data")
-    if isinstance(data, dict):
-        normalised = {}
-        for key, value in data.items():
-            name = key[:1].lower() + key[1:]
-            if name in normalised and normalised[name] != value:
-                raise services.PaymentVerificationUnavailable("Ambiguous payment details.")
-            normalised[name] = value
-        data = normalised
-    if not isinstance(data, dict) or data.get("clientReference") != reference:
+    if not isinstance(data, dict) or str(data.get("clientReference", "")).strip() != reference:
         raise services.PaymentVerificationUnavailable("Payment verification did not match the saved reference.")
-    # Public endpoint contract must match these documented fields; fail closed otherwise.
-    status = data.get("status")
-    if status not in {"Paid", "Unpaid", "Refunded"}:
+
+    # The Online Checkout status contract documents Paid, Unpaid and Refunded.
+    # Normalise whitespace/case only; never treat a generic callback 'Success' as proof of payment.
+    status_key = str(data.get("status", "")).strip().lower()
+    status_map = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}
+    if status_key not in status_map:
         raise services.PaymentVerificationUnavailable("Hubtel returned an unrecognised payment status.")
+    data["status"] = status_map[status_key]
+    data["clientReference"] = str(data.get("clientReference", "")).strip()
     return data
 
 
@@ -185,7 +201,7 @@ def reconcile(reference):
     now = timezone.now()
     claimed = MarketPaymentAttempt.objects.filter(pk=attempt.pk).filter(
         next_check_at__lte=now
-    ).update(next_check_at=now + timedelta(minutes=1), check_count=F("check_count") + 1)
+    ).update(next_check_at=now + timedelta(seconds=20), check_count=F("check_count") + 1)
     if not claimed:
         raise services.PaymentVerificationUnavailable("Payment is being checked. Please check again shortly.")
     try:
@@ -227,25 +243,45 @@ def reconcile(reference):
         raise
 
 
-def reconcile_due(limit=5):
+def _retry_delay(attempt, now=None):
+    now = now or timezone.now()
+    age = now - attempt.created_at
+    if age < timedelta(minutes=5):
+        return timedelta(seconds=10)
+    if age < timedelta(minutes=30):
+        return timedelta(seconds=30)
+    if age < timedelta(hours=2):
+        return timedelta(minutes=2)
+    return timedelta(minutes=5)
+
+
+def reconcile_due(limit=10):
+    """Verify pending payments independently of the customer's browser session."""
     if not configured():
         return 0
+    now = timezone.now()
     attempts = list(MarketPaymentAttempt.objects.filter(
         provider="hubtel", status__in=["initializing", "submission_unknown", "pending"],
-        next_check_at__lte=timezone.now(),
+        next_check_at__lte=now,
     ).order_by("next_check_at")[:limit])
     for attempt in attempts:
-        if attempt.check_count >= 60:
+        if now - attempt.created_at >= timedelta(hours=72):
             MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(
                 status="attention", next_check_at=None,
-                provider_message="Automatic checks exhausted. Staff reconciliation required."
+                provider_message="Hubtel has not supplied a final status after 72 hours; staff review required."
             )
             continue
         try:
             reconcile(attempt.reference)
-        except ValidationError:
-            # Keep uncertain payments pending; retain evidence for manual reconciliation.
+        except services.PaymentVerificationUnavailable:
+            # Provider is pending/unavailable: keep checking server-side even if the buyer closed the browser.
             MarketPaymentAttempt.objects.filter(pk=attempt.pk, status__in=[
                 "initializing", "submission_unknown", "pending"
-            ]).update(next_check_at=timezone.now() + timedelta(minutes=5))
+            ]).update(
+                next_check_at=timezone.now() + _retry_delay(attempt),
+                provider_message="Awaiting Hubtel final transaction status.",
+            )
+        except ValidationError:
+            # A verified mismatch is handled by reconcile() and must not be silently retried as a normal payment.
+            continue
     return len(attempts)
