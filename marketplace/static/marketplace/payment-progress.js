@@ -8,11 +8,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let stopped = false;
   const schedule = () => {
     clearTimeout(timer);
-    if (!stopped) timer = setTimeout(check, 15000);
+    if (!stopped) timer = setTimeout(check, 5000);
   };
   const check = async () => {
     if (stopped || inFlight) return;
-    if (Date.now() - started >= 5 * 60 * 1000) {
+    if (Date.now() - started >= 10 * 60 * 1000) {
       stopped = true;
       if (message) message.textContent = "Confirmation is taking longer than expected. We will keep checking in the background. If money was deducted, do not pay again; contact KOFAD for help.";
       return;
@@ -47,5 +47,5 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
   window.addEventListener("pagehide", () => { stopped = true; clearTimeout(timer); });
-  schedule();
+  check();
 });
