@@ -143,9 +143,11 @@ def _normalise_keys(payload):
     canonical = {
         "responsecode": "responseCode", "data": "data", "message": "message",
         "clientreference": "clientReference", "status": "status",
+        "invoicestatus": "invoiceStatus", "transactionstatus": "transactionStatus",
         "transactionid": "transactionId", "externaltransactionid": "externalTransactionId",
         "paymentmethod": "paymentMethod", "currencycode": "currencyCode",
-        "amount": "amount", "charges": "charges", "amountaftercharges": "amountAfterCharges",
+        "amount": "amount", "transactionamount": "transactionAmount",
+        "charges": "charges", "amountaftercharges": "amountAfterCharges",
         "isfulfilled": "isFulfilled", "date": "date",
     }
     normalised = {}
@@ -190,8 +192,13 @@ def verify(reference):
         data_shape = ",".join(sorted(str(key) for key in data.keys()))[:400] if isinstance(data, dict) else type(data).__name__
 
     response_code = str(body.get("responseCode", "")).strip() if isinstance(body, dict) else ""
-    safe_status = str(data.get("status", "")).strip() if isinstance(data, dict) else ""
-    safe_amount = data.get("amount") if isinstance(data, dict) else None
+    safe_status = str(
+        data.get("status") or data.get("transactionStatus") or data.get("invoiceStatus") or ""
+    ).strip() if isinstance(data, dict) else ""
+    safe_amount = (
+        data.get("amount") if data.get("amount") not in (None, "")
+        else data.get("transactionAmount")
+    ) if isinstance(data, dict) else None
     logger.info(
         "Hubtel status check http=%s code=%s status=%s amount=%s transaction=%s data_shape=%s message=%s ref_suffix=%s",
         response.status_code, response_code, safe_status[:24], safe_amount,
@@ -206,13 +213,22 @@ def verify(reference):
     if not isinstance(data, dict):
         raise services.PaymentVerificationUnavailable("Hubtel has not returned a matching transaction yet.")
 
-    # The Online Checkout status contract documents Paid, Unpaid and Refunded.
-    # Normalise whitespace/case only; never treat a generic callback 'Success' as proof of payment.
-    status_key = str(data.get("status", "")).strip().lower()
-    status_map = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}
+    # Hubtel's public Online Checkout status endpoint currently returns transactionStatus /
+    # invoiceStatus and transactionAmount for this merchant, while older examples use status /
+    # amount. These are authenticated status-query fields, not callback claims.
+    raw_status = data.get("status") or data.get("transactionStatus") or data.get("invoiceStatus")
+    status_key = str(raw_status or "").strip().lower().replace("_", "-")
+    status_map = {
+        "paid": "Paid", "success": "Paid", "successful": "Paid", "completed": "Paid",
+        "unpaid": "Unpaid", "failed": "Unpaid", "failure": "Unpaid",
+        "cancelled": "Unpaid", "canceled": "Unpaid", "declined": "Unpaid", "expired": "Unpaid",
+        "refunded": "Refunded",
+    }
     if status_key not in status_map:
-        raise services.PaymentVerificationUnavailable("Hubtel returned an unrecognised payment status.")
+        raise services.PaymentVerificationUnavailable("Hubtel has not returned a final payment status yet.")
     data["status"] = status_map[status_key]
+    if data.get("amount") in (None, "") and data.get("transactionAmount") not in (None, ""):
+        data["amount"] = data["transactionAmount"]
     data["clientReference"] = str(data.get("clientReference", "")).strip()
     return data
 
