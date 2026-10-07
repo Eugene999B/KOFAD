@@ -918,7 +918,15 @@ def paystack_webhook(request):
     data = event.get("data") or {}
     if event_name == "charge.success":
         reference = str(data.get("reference", ""))
-        if reference:
+        if reference.startswith("KFD-POS-"):
+            from core import pos_paystack
+            try:
+                pos_paystack.reconcile(reference, force=True)
+            except pos_paystack.ProviderPending:
+                return HttpResponse(status=503)
+            except ValidationError:
+                return HttpResponse(status=200)
+        elif reference:
             try:
                 verified = services.verify_paystack(reference)
                 services.finalize_payment(reference, verified)
