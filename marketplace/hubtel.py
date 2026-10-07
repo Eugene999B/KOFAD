@@ -137,12 +137,21 @@ def initialize(order):
 
 
 def _normalise_keys(payload):
-    """Accept Hubtel's documented camelCase and observed PascalCase without weakening validation."""
+    """Accept casing variations of Hubtel's documented fields without weakening validation."""
     if not isinstance(payload, dict):
         return payload
+    canonical = {
+        "responsecode": "responseCode", "data": "data", "message": "message",
+        "clientreference": "clientReference", "status": "status",
+        "transactionid": "transactionId", "externaltransactionid": "externalTransactionId",
+        "paymentmethod": "paymentMethod", "currencycode": "currencyCode",
+        "amount": "amount", "charges": "charges", "amountaftercharges": "amountAfterCharges",
+        "isfulfilled": "isFulfilled", "date": "date",
+    }
     normalised = {}
     for key, value in payload.items():
-        name = str(key)[:1].lower() + str(key)[1:]
+        raw = str(key)
+        name = canonical.get(raw.casefold(), raw[:1].lower() + raw[1:])
         if name in normalised and normalised[name] != value:
             raise services.PaymentVerificationUnavailable("Ambiguous Hubtel response.")
         normalised[name] = value
@@ -217,16 +226,18 @@ def reconcile(reference):
             amount = Decimal(str(data.get("amount")))
         except (InvalidOperation, ValueError, TypeError) as exc:
             raise ValidationError("Invalid verified payment amount.") from exc
-        currency = data.get("currencyCode")
+        currency = str(data.get("currencyCode") or "").strip().upper()
         if (not amount.is_finite() or amount != attempt.amount or amount <= 0
-                or currency not in {None, "", "GHS"} or not data.get("transactionId")):
+                or currency not in {"", "GHS"} or not data.get("transactionId")):
             raise ValidationError("Verified payment details do not match the saved order.")
         # Hubtel documents a nullable currencyCode. This account and all orders are GHS only.
+        method_key = re.sub(r"[^a-z]", "", str(data.get("paymentMethod", "")).lower())
+        channel = {"mobilemoney": "mobile_money", "bankcard": "card", "card": "card"}.get(
+            method_key, method_key or "bank"
+        )
         order = services.finalize_payment(reference, {
             "status": "success", "amount": int(amount * 100), "currency": "GHS",
-            "channel": {"mobilemoney": "mobile_money", "bankcard": "card"}.get(
-                str(data.get("paymentMethod", "")).lower(), str(data.get("paymentMethod", "")).lower()
-            ),
+            "channel": channel,
         }, expected_provider="hubtel")
         MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(next_check_at=None, provider_message="Verified by Hubtel status check.")
         return order
