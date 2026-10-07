@@ -738,7 +738,10 @@ with sync_playwright() as p:
     assert market_page.locator("#id_address_line").is_disabled()
     assert market_page.locator("[data-delivery-fee]").inner_text() == "GHS 0.00"
     assert market_page.locator("[data-checkout-total]").inner_text() == market_page.locator("[data-checkout-subtotal]").inner_text()
-    assert market_page.locator(".shop-signout button").is_visible()
+    assert market_page.locator(".shop-account-menu > summary").is_visible()
+    market_page.locator(".shop-account-menu > summary").click()
+    assert market_page.locator(".shop-account-signout button").is_visible()
+    market_page.keyboard.press("Escape")
     market_page.screenshot(path=str(out / "market-pickup-mobile.png"), full_page=True)
     fulfilment_select.select_option("delivery")
     assert market_page.locator("[data-delivery-fields]").is_visible()
