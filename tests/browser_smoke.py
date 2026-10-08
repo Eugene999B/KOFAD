@@ -24,6 +24,8 @@ from marketplace import services as market_services
 from marketplace.models import Conversation, CustomerAccount, MarketListing, MarketPaymentAttempt
 if not settings.DEBUG:
     raise RuntimeError("Browser fixtures are forbidden outside DEBUG environments.")
+staff_login_url = f"http://127.0.0.1:8000/{settings.STAFF_LOGIN_SLUG}/"
+staff_admin_url = f"http://127.0.0.1:8000/{settings.STAFF_LOGIN_SLUG}/technical-admin/"
 warehouse, _ = Branch.objects.get_or_create(code="browser-wh", defaults={"name": "Browser warehouse"})
 demo_user = User.objects.get(username="demo")
 demo_user.access.branches.add(warehouse)
@@ -132,7 +134,7 @@ with sync_playwright() as p:
     page.on("pageerror", lambda error: errors.append(str(error)))
     for attempt in range(30):
         try:
-            page.goto("http://127.0.0.1:8000/login/")
+            page.goto(staff_login_url)
             break
         except Exception:
             time.sleep(1)
@@ -161,7 +163,7 @@ with sync_playwright() as p:
     page.get_by_role("link",name="Forgot password?",exact=True).click()
     page.get_by_role("heading",name="Forgot your password?",exact=True).wait_for()
     assert page.get_by_text("SMS recovery is not available yet.",exact=False).is_visible()
-    page.goto("http://127.0.0.1:8000/login/")
+    page.goto(staff_login_url)
     page.get_by_label("Username or phone number", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
@@ -338,7 +340,7 @@ with sync_playwright() as p:
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width)+path
     page.set_viewport_size({"width":390,"height":844})
     admin_page = browser.new_page(viewport={"width":1280,"height":900})
-    admin_page.goto("http://127.0.0.1:8000/login/")
+    admin_page.goto(staff_login_url)
     admin_page.get_by_label("Username or phone number",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("admin")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
@@ -527,7 +529,7 @@ with sync_playwright() as p:
     admin_page.locator("#id_new_password2").fill("New-private-admin-passphrase-986!")
     admin_page.get_by_role("button",name="Change password",exact=True).click()
     admin_page.wait_for_url("http://127.0.0.1:8000/account/")
-    admin_page.goto("http://127.0.0.1:8000/admin/")
+    admin_page.goto(staff_admin_url)
     admin_page.get_by_role("heading",name="Access and configuration",exact=True).wait_for()
     admin_page.goto("http://127.0.0.1:8000/communications/")
     admin_page.screenshot(path=str(out / "communications-desktop.png"),full_page=True)
@@ -855,7 +857,7 @@ with sync_playwright() as p:
         assert cancelled is False
         assert admin_page.locator("[data-session-leave-dialog]:visible").count() == 0
     admin_page.reload()
-    assert "/login/" not in admin_page.url
+    assert settings.STAFF_LOGIN_PATH not in admin_page.url
     
     # Executive and accounting workspaces remain readable across narrow phones
     # and dark theme. Market Catalog Studio must expose real customer visibility.
@@ -906,7 +908,7 @@ with sync_playwright() as p:
 
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
-    admin_page.goto("http://127.0.0.1:8000/login/")
+    admin_page.goto(staff_login_url)
     assert admin_page.get_by_label("Username or phone number", exact=True).is_visible()
     staff_state = admin_page.request.get("http://127.0.0.1:8000/session/state/").json()
     assert staff_state["authenticated"] is False
