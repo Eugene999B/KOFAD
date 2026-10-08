@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load static %}
 {% block body_class %}staff-report-refined{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}">{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}">{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/reports/export/xlsx/?{{ query }}">Excel</a><a class="button secondary" href="/reports/export/pdf/?{{ query }}">PDF</a><a class="button secondary" href="/reports/export/docx/?{{ query }}">Word</a><a class="text-link" href="/reports/export/csv/?{{ query }}">CSV</a></div>{% endblock %}
 {% block content %}
 <section class="hero-panel intelligence-command">
