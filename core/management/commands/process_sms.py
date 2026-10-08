@@ -39,6 +39,11 @@ class Command(BaseCommand):
                 except Exception:
                     self.stderr.write("Paystack POS reconciliation check failed; will retry.")
                 try:
+                    from core.pos_hubtel import reconcile_due as reconcile_pos_hubtel
+                    reconcile_pos_hubtel()
+                except Exception:
+                    self.stderr.write("Hubtel POS reconciliation check failed; will retry.")
+                try:
                     from marketplace.paystack_reconciliation import reconcile_due as reconcile_market_paystack
                     reconcile_market_paystack()
                 except Exception:
