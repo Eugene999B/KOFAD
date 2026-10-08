@@ -8,6 +8,14 @@ document.addEventListener("DOMContentLoaded",()=>{
  "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1300&q=80",
  "https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&w=1300&q=80",
  "https://images.unsplash.com/photo-1534723452862-4c874018d66d?auto=format&fit=crop&w=1300&q=80"];
+ // Progressive category photos: broken remote hosts never replace the bundled image.
+ document.querySelectorAll(".kfd-category img[data-remote-photo]").forEach(node=>{
+   const probe=new Image();
+   probe.onload=()=>{node.src=probe.src;};
+   probe.onerror=()=>{}; // Keep the visible, bundled fallback.
+   probe.src=node.dataset.remotePhoto;
+   node.addEventListener("error",()=>{node.src=local;},{once:true});
+ });
  const bad=new Set();let at=0,timer,loading=false,paused=matchMedia("(prefers-reduced-motion: reduce)").matches;
  const label=()=>{if(c)c.textContent=String(at+1).padStart(2,"0")+" / "+String(photos.length).padStart(2,"0");if(bar)bar.style.width=(100*(at+1)/photos.length)+"%";};
  function show(index,tries=photos.length){if(loading||tries<=0)return;index=(index+photos.length)%photos.length;
