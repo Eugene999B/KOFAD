@@ -79,7 +79,7 @@ class PublicSiteTests(TestCase):
         self.assertIn(settings.LOGIN_URL, response["Location"])
 
     def test_robots_publish_sitemap_and_block_private_staff_gateway(self):
-        response = self.client.get("/robots.txt")
+        response = self.client.get("/robots.txt", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn("Allow: /", body)
