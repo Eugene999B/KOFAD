@@ -51,7 +51,7 @@ def _location(document, company):
 
 
 def _logo(max_width, max_height):
-    path = Path(settings.BASE_DIR) / "static" / "brand" / "kofad-emblem.png"
+    path = Path(settings.BASE_DIR) / "static" / "brand" / "kofad-official-logo.jpeg"
     if not path.exists():
         return None
     image = Image(str(path))
