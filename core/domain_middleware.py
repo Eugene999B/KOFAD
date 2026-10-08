@@ -20,7 +20,7 @@ class OfficialDomainMiddleware:
         path = request.path
         # Preserve signed provider endpoints and public assets on saved origins.
         shared = (
-            path == "/health/" or path.startswith("/static/")
+            path in {"/health/", "/robots.txt"} or path.startswith("/static/")
             or path.startswith("/sms/callback/") or path == "/sms/delivery/"
             or path == "/whatsapp/webhook/"
             or path == "/market/payments/paystack/webhook/"
@@ -45,7 +45,10 @@ class OfficialDomainMiddleware:
             target = ROOT
         elif target_path.startswith("/market/"):
             target = MARKET
-        elif path in {"/about/", "/faq/", "/delivery/", "/returns-policy/", "/terms/", "/privacy/", "/contact/"} or path.startswith("/verify/worker/"):
+        elif path in {
+            "/about/", "/faq/", "/delivery/", "/returns-policy/", "/terms/",
+            "/privacy/", "/contact/", "/robots.txt", "/sitemap.xml",
+        } or path.startswith("/verify/worker/"):
             target = ROOT
         else:
             target = STAFF
