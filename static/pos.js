@@ -1200,7 +1200,7 @@
     let safe = false;
     try {
       const parsed = new URL(url);
-      safe = momoGateway === "hubtel" && parsed.protocol === "https:"
+      safe = result?.provider === "hubtel" && parsed.protocol === "https:"
         && parsed.hostname === "pay.hubtel.com" && !parsed.username && !parsed.password;
     } catch (_) { /* A missing or malformed link is never rendered. */ }
     if (safe) link.href = url;
