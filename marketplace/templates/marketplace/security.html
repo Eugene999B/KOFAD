@@ -27,4 +27,17 @@
   </form>
   {% endif %}
 </section>
+<section class="experience-email-card">
+<p class="market-eyebrow">GOOGLE SIGN-IN</p><h2>Link your Google account</h2>
+<p class="helper">Keep using your verified phone number and password. Linking Google makes one-click sign-in available without changing your account history.</p>
+{% if google_identity %}<p class="verified">✓ Linked: {{ google_identity.email }}</p>
+<form method="post" action="{% url 'google_customer_unlink' %}">{% csrf_token %}
+<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
+<button class="market-button ghost">Disconnect Google</button></form>
+{% elif google_ready %}
+<form method="post" action="{% url 'google_customer_link' %}">{% csrf_token %}
+<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
+<button class="kofad-google-button" type="submit"><span class="kofad-google-mark" aria-hidden="true">G</span> Link Google account</button></form>
+{% else %}<p class="helper">Google sign-in will be available after Google Cloud authentication is activated.</p>{% endif %}
+</section>
 <a class="simple-access-back" href="/market/account/">← Back to account</a></div></section>{% endblock %}
