@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.core.exceptions import ValidationError
-from django.test import override_settings
+from django.test import override_settings\nfrom django.utils import timezone
 
 from core import email_identity
 from core.brevo_email import send_brevo
@@ -10,7 +10,7 @@ from .tests import MarketFixtures
 
 
 BREVO = override_settings(
-    KOFAD_EMAIL_ENABLED=True,
+    KOFAD_EMAIL_ENABLED=True,\n    KOFAD_EMAIL_NOTIFICATIONS_ENABLED=True,
     KOFAD_EMAIL_PROVIDER="brevo",
     KOFAD_BREVO_API_KEY="CI-do-not-send-live",
     KOFAD_BREVO_SECURITY_FROM_EMAIL="security@kofadimpex.com",
@@ -68,7 +68,7 @@ class BrevoEmailProviderTests(MarketFixtures):
         post.return_value = Mock(status_code=201)
         identity = email_identity.EmailIdentity.objects.create(
             kind="customer", owner_id=self.customer.pk,
-            email="buyer@gmail.com", verified_at=__import__("django.utils.timezone",fromlist=["now"]).now(),
+            email="buyer@gmail.com", verified_at=timezone.now(),
             notifications_enabled=True,
         )
         notice = email_identity.enqueue_notice(
