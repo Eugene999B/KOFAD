@@ -36,6 +36,7 @@ jobs:
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
+      - run: python scripts/prepare_logo.py
       - run: python manage.py collectstatic --noinput
       - run: pip-audit -r requirements.lock
       - run: playwright install --with-deps chromium

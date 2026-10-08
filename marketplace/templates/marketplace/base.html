@@ -9,7 +9,8 @@
 <meta property="og:type" content="website"><meta property="og:site_name" content="KOFAD IMPEX ENTERPRISE"><meta property="og:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta property="og:description" content="{{ seo_description }}"><meta property="og:url" content="{{ canonical_url }}"><meta property="og:image" content="{{ public_site_origin }}{% static 'brand/kofad-official-logo.svg' %}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta name="twitter:description" content="{{ seo_description }}"><meta name="twitter:image" content="{{ public_site_origin }}{% static 'brand/kofad-official-logo.svg' %}">{% else %}<meta name="robots" content="noindex,nofollow,noarchive">{% endif %}
 <title>{{ title|default:"KOFAD Market" }} · KOFAD IMPEX ENTERPRISE</title>
-<link rel="icon" href="{% static 'brand/kofad-official-logo.svg' %}" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="96x96" href="{% static 'brand/favicon-96.png' %}">
+<link rel="apple-touch-icon" href="{% static 'brand/favicon-96.png' %}">
 {% if request.path == '/' %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"KOFAD IMPEX ENTERPRISE","url":"{{ public_site_origin }}/","logo":"{{ public_site_origin }}{% static 'brand/kofad-official-logo.svg' %}","sameAs":[]}</script>{% endif %}
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'marketplace/market.css' %}">
@@ -38,8 +39,10 @@
 <link rel="stylesheet" href="{% static 'marketplace/checkout-flow.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/market-v13.css' %}">
 <link rel="stylesheet" href="{% static 'brand-system.css' %}">
+<link rel="stylesheet" href="{% static 'brand-transparent.css' %}">
+{% block after_styles %}{% endblock %}
 </head>
-<body class="market-body market-v2{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
+<body class="market-body market-v2{% if request.path == '/' %} is-kofad-home{% endif %}{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
 <a class="market-skip" href="#main">Skip to content</a>
 {% if '/market/' in request.path %}
 {% if market_auth_page %}

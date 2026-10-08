@@ -101,9 +101,9 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Shop the Market")
         self.assertContains(response, "Featured picks")
-        self.assertContains(response, "home-hero-v9")
-        self.assertContains(response, "Everyday essentials.")
-        self.assertContains(response, "Wholesale quantities")
+        self.assertContains(response, "kfd-hero")
+        self.assertContains(response, "Everything for today.")
+        self.assertContains(response, "Bulk and wholesale")
         self.assertNotContains(response, "home-hero-products")
         self.assertNotContains(response, "SHOP BY DEPARTMENT")
         self.assertNotContains(response, "Browse categories.")
@@ -532,16 +532,13 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertEqual(self.client.get("/workspace/").status_code, 200)
 
     @patch("marketplace.views.services.send_otp")
-    def test_unified_access_does_not_reveal_existing_accounts(self, send_otp):
+    def test_unified_access_routes_existing_accounts_to_password_without_sms(self, send_otp):
         send_otp.return_value = "+233241234567"
         response = self.client.post("/market/access/", {"phone": "0241234567"})
-        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
-        send_otp.assert_called_once()
-        args, kwargs = send_otp.call_args
-        self.assertEqual(args[:2], ("+233241234567", "login"))
-        self.assertIs(kwargs["request"], response.wsgi_request)
-        self.assertEqual(self.client.session["market_pending_phone"], "+233241234567")
-        self.assertNotIn("market_login_phone", self.client.session)
+        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
+        send_otp.assert_not_called()
+        self.assertEqual(self.client.session["market_login_phone"], "+233241234567")
+        self.assertNotIn("market_pending_phone", self.client.session)
 
     @patch("marketplace.views.services.send_otp")
     def test_unified_access_uses_same_challenge_for_new_number(self, send_otp):
@@ -549,7 +546,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         response = self.client.post("/market/access/", {"phone": "0245550001"})
         self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
         args, kwargs = send_otp.call_args
-        self.assertEqual(args[:2], ("+233245550001", "login"))
+        self.assertEqual(args[:2], ("+233245550001", "register"))
         self.assertIs(kwargs["request"], response.wsgi_request)
         self.assertEqual(self.client.session["market_pending_phone"], "+233245550001")
 
@@ -1457,15 +1454,13 @@ class CustomerOtpProviderTests(MarketFixtures):
 
 class CustomerPhoneOnboardingTests(MarketFixtures):
     @patch("marketplace.views.services.send_otp")
-    def test_existing_number_uses_same_private_phone_challenge(self, send_otp):
+    def test_existing_number_does_not_receive_sms(self, send_otp):
         send_otp.return_value = "+233241234567"
         response = self.client.post("/market/access/", {"phone": "0241234567"})
-        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
-        args, kwargs = send_otp.call_args
-        self.assertEqual(args[:2], ("+233241234567", "login"))
-        self.assertIs(kwargs["request"], response.wsgi_request)
-        self.assertEqual(self.client.session["market_pending_phone"], "+233241234567")
-        self.assertNotIn("market_login_phone", self.client.session)
+        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
+        send_otp.assert_not_called()
+        self.assertEqual(self.client.session["market_login_phone"], "+233241234567")
+        self.assertNotIn("market_pending_phone", self.client.session)
 
     @patch("marketplace.views.services.send_otp")
     def test_new_number_moves_to_otp_then_name_and_password(self, send_otp):

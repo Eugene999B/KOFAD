@@ -28,18 +28,18 @@ def print_fonts():
 
 @lru_cache(maxsize=1)
 def official_logo_bytes():
-    """Read the one canonical SVG asset and recover its embedded official JPEG."""
+    """Read the one canonical SVG asset and recover its embedded transparent PNG."""
     path = settings.BASE_DIR / "static" / "brand" / "kofad-official-logo.svg"
     source = path.read_text(encoding="utf-8")
-    match = re.search(r'data:image/jpeg;base64,([^"\']+)', source)
+    match = re.search(r'data:image/png;base64,([^"\']+)', source)
     if not match:
-        raise RuntimeError("Official KOFAD logo SVG does not contain its embedded image.")
+        raise RuntimeError("Official KOFAD logo SVG does not contain its transparent image.")
     try:
         raw = base64.b64decode(match.group(1), validate=True)
     except (ValueError, TypeError) as exc:
         raise RuntimeError("Official KOFAD logo image data is invalid.") from exc
-    if not (raw.startswith(b"\xff\xd8") and raw.endswith(b"\xff\xd9")):
-        raise RuntimeError("Official KOFAD logo image data is not a JPEG.")
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("Official KOFAD logo image data is not a PNG.")
     return raw
 
 
