@@ -51,7 +51,7 @@ INK = colors.HexColor("#172F47")
 MUTED = colors.HexColor("#64798B")
 PAPER = colors.HexColor("#F3F6FA")
 LINE = colors.HexColor("#D7E2EB")
-HERITAGE_LOGO = os.path.join(settings.BASE_DIR, "static", "brand", "kofad-emblem.png")
+HERITAGE_LOGO = os.path.join(settings.BASE_DIR, "static", "brand", "kofad-official-logo.jpeg")
 
 
 def _normalized_photo(uploaded):
