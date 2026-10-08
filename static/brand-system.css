@@ -9,6 +9,29 @@
   --kofad-brand-paper:#f7f8f8;
   --kofad-brand-line:#dfe4e6;
   --kofad-brand-muted:#71808a;
+
+  /* Remap legacy UI variables so old screens inherit the official identity. */
+  --paper:#f7f8f8;
+  --white:#ffffff;
+  --ink:#1f252a;
+  --muted:#71808a;
+  --line:#dfe4e6;
+  --green:#0f3b58;
+  --gold:#d1bb7f;
+  --teal:#0f3b58;
+  --soft:#f4f1e8;
+
+  --market-bg:#f7f8f8;
+  --market-surface:#ffffff;
+  --market-ink:#1f252a;
+  --market-muted:#71808a;
+  --market-line:#dfe4e6;
+  --market-navy:#102a3d;
+  --market-navy-2:#0f3b58;
+  --market-teal:#0f3b58;
+  --market-teal-2:#d1bb7f;
+  --market-gold:#d1bb7f;
+  --market-soft:#f4f1e8;
 }
 
 /* One official logo, used everywhere. */
@@ -47,6 +70,21 @@
 .market-auth-brand-mark{width:130px!important;height:71px!important;border-radius:12px!important}
 .market-brand-mark{width:136px!important;height:74px!important;border-radius:12px!important}
 .public-site-brand,.shop-shell-brand,.market-auth-brand{min-width:max-content!important}
+
+
+.market-body input:focus,
+.market-body select:focus,
+.market-body textarea:focus{
+  border-color:var(--kofad-brand-gold-strong)!important;
+  box-shadow:0 0 0 4px rgba(209,187,127,.18)!important;
+}
+.market-eyebrow,
+.market-section-head a,
+.product-card-actions>a,
+.catalog-side>a:hover,
+.catalog-side>a.active{
+  color:var(--kofad-brand-navy)!important;
+}
 
 /* Public customer shell: quiet, premium, one palette. */
 .public-site-header,
