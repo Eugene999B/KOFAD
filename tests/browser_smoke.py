@@ -340,7 +340,12 @@ with sync_playwright() as p:
     admin_page.get_by_label("Username or phone number",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("admin")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
-    admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
+    admin_page.wait_for_url("http://127.0.0.1:8000/account/password/")
+    admin_page.get_by_label("Old password",exact=False).fill("admin")
+    admin_page.get_by_label("New password",exact=True).fill("CI-admin-replaced-temporary-password-42!")
+    admin_page.get_by_label("New password confirmation",exact=False).fill("CI-admin-replaced-temporary-password-42!")
+    admin_page.get_by_role("button",name="Change password",exact=True).click()
+    admin_page.goto("http://127.0.0.1:8000/workspace/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
     assert float(admin_page.locator(".sidebar nav a").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
