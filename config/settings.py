@@ -178,3 +178,11 @@ KOFAD_STAFF_SITE_ORIGIN = os.environ.get(
 KOFAD_MARKET_SITE_ORIGIN = os.environ.get(
     "KOFAD_MARKET_SITE_ORIGIN", "https://market.kofadimpex.com"
 ).rstrip("/")
+
+
+# Railways Hobby does not permit SMTP. Use Gmail's HTTPS API for the
+# designated business sender, authorised by company management via OAuth.
+# This is independent of public/customer Google sign-in credentials.
+KOFAD_GMAIL_API_ENABLED = os.environ.get("KOFAD_GMAIL_API_ENABLED", "0") == "1"
+KOFAD_GMAIL_CLIENT_ID = os.environ.get("KOFAD_GMAIL_CLIENT_ID", "").strip()
+KOFAD_GMAIL_CLIENT_SECRET = os.environ.get("KOFAD_GMAIL_CLIENT_SECRET", "").strip()
