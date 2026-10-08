@@ -165,3 +165,16 @@ EMAIL_HOST_USER = os.environ.get("KOFAD_SMTP_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("KOFAD_SMTP_PASSWORD", "")
 EMAIL_TIMEOUT = 12
 DEFAULT_FROM_EMAIL = os.environ.get("KOFAD_FROM_EMAIL", "")
+
+
+# Google OIDC is separate from Gmail SMTP. Keep disabled until a Google Cloud
+# Web OAuth client has both canonical KOFAD callback URIs allowlisted.
+KOFAD_GOOGLE_OAUTH_ENABLED = os.environ.get("KOFAD_GOOGLE_OAUTH_ENABLED", "0") == "1"
+KOFAD_GOOGLE_CLIENT_ID = os.environ.get("KOFAD_GOOGLE_CLIENT_ID", "").strip()
+KOFAD_GOOGLE_CLIENT_SECRET = os.environ.get("KOFAD_GOOGLE_CLIENT_SECRET", "").strip()
+KOFAD_STAFF_SITE_ORIGIN = os.environ.get(
+    "KOFAD_STAFF_SITE_ORIGIN", "https://staff.kofadimpex.com"
+).rstrip("/")
+KOFAD_MARKET_SITE_ORIGIN = os.environ.get(
+    "KOFAD_MARKET_SITE_ORIGIN", "https://market.kofadimpex.com"
+).rstrip("/")
