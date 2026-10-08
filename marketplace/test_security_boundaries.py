@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 import requests
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from .tests import MarketFixtures
@@ -63,6 +64,28 @@ class CheckoutSecurityTests(MarketFixtures):
         request = RequestFactory().get("/")
         request.user, request.session = staff, {}
         self.assertEqual(views._conversation_access(request, conversation), "")
+
+    def test_staff_cannot_read_orderless_support_from_other_branch(self):
+        other = Branch.objects.create(name="Other support", code="other-support")
+        staff = User.objects.create_user("other-support-staff", password="long-test-password")
+        staff.user_permissions.add(Permission.objects.get(codename="operate_sales"))
+        staff.access.branches.add(other)
+        conversation = Conversation.objects.create(branch=self.branch, customer=self.customer)
+        request = RequestFactory().get("/")
+        request.user, request.session = staff, {}
+        self.assertEqual(views._conversation_access(request, conversation), "")
+
+    def test_support_documents_reject_active_or_legacy_binary_content(self):
+        with self.assertRaisesMessage(ValidationError, "Active or embedded PDF"):
+            services.prepare_support_attachment(SimpleUploadedFile(
+                "evidence.pdf",
+                b"%PDF-1.7\n1 0 obj<</JavaScript 2 0 R>>endobj\n%%EOF",
+                content_type="application/pdf",
+            ))
+        with self.assertRaisesMessage(ValidationError, "plain PDF, DOCX, XLSX"):
+            services.prepare_support_attachment(SimpleUploadedFile(
+                "legacy.doc", b"legacy-binary-office", content_type="application/msword"
+            ))
 
     def test_bot_dashboard_requires_management_permission(self):
         staff = User.objects.create_user("cashier-only", password="long-test-password")
