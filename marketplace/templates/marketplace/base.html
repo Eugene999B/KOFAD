@@ -33,6 +33,7 @@
 <link rel="stylesheet" href="{% static 'marketplace/company-site.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/checkout-flow.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/market-v13.css' %}">
+<link rel="stylesheet" href="{% static 'brand-transparent.css' %}">
 </head>
 <body class="market-body market-v2{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
 <a class="market-skip" href="#main">Skip to content</a>
