@@ -325,3 +325,20 @@ def callback(request, kind):
         else:
             messages.error(request, "Google could not verify this sign-in. Please try again.")
         return _redirect(kind)
+
+
+@never_cache
+@sensitive_post_parameters("current_password")
+def unlink(request, kind):
+    """Revoke a Google login binding; existing phone/password credentials stay."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    if kind not in {"staff", "customer"}:
+        return _redirect("staff")
+    owner = _current_owner(request, kind)
+    if owner is None or not owner.check_password(request.POST.get("current_password", "")):
+        messages.error(request, "Enter your current password to disconnect Google.")
+        return _redirect(kind, success=bool(owner))
+    GoogleIdentity.objects.filter(kind=kind, owner_id=owner.pk).delete()
+    messages.success(request, "Google sign-in disconnected. Your current phone and password still work.")
+    return _redirect(kind, success=True)
