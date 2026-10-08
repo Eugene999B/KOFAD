@@ -24,6 +24,7 @@ GMAIL_TEST = override_settings(
 class GmailApiIntegrationTests(MarketFixtures):
     def _login_staff(self):
         self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
         session = self.client.session
         session["access_version"] = self.staff.access.session_version
         session.save()
@@ -89,13 +90,12 @@ class GmailApiIntegrationTests(MarketFixtures):
     @patch("core.gmail_api.requests.post")
     def test_send_mail_uses_https_gmail_api_not_smtp(self, post):
         sender = self._sender()
-        post.side_effect = [
-            Mock(status_code=200),
-            Mock(status_code=200),
-        ]
-        post.side_effect[0].json.return_value = {
+        token_result = Mock(status_code=200)
+        send_result = Mock(status_code=200)
+        token_result.json.return_value = {
             "access_token": "this-is-an-access-token-valid-for-tests",
         }
+        post.side_effect = [token_result, send_result]
         self.assertEqual(gmail_api.send_gmail(
             subject="Receipt ready", body="Thanks for the order",
             recipient="customer@example.com",
