@@ -27,10 +27,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!["http:", "https:"].includes(url.protocol)) return true;
     if (url.origin !== window.location.origin) return false;
     if (zone === "market") return url.pathname.startsWith("/market/");
+    const loginPath = (() => {
+      try { return new URL(loginUrl, window.location.href).pathname; } catch (_) { return loginUrl; }
+    })();
     return (
       url.pathname !== "/" &&
       !url.pathname.startsWith("/market/") &&
-      !url.pathname.startsWith("/login/") &&
+      url.pathname !== loginPath &&
       !url.pathname.startsWith("/forgot-password/")
     );
   };
