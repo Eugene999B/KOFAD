@@ -416,14 +416,20 @@ def customer_access(request):
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
         try:
-            # Use the same phone-ownership challenge whether the account exists or not.
-            # This prevents the gateway from becoming an account-enumeration oracle.
-            services.send_otp(phone, "login", request=request)
+            # Returning customers authenticate with their password; do not charge
+            # the business for another SMS merely because they opened sign-in.
+            if CustomerAccount.objects.filter(phone=phone, active=True).exists():
+                request.session["market_login_phone"] = phone
+                request.session.pop("market_pending_phone", None)
+                request.session.pop("market_pending_otp_purpose", None)
+                request.session.pop("market_verified_phone", None)
+                return redirect("market_login")
+            services.send_otp(phone, "register", request=request)
             request.session.pop("market_login_phone", None)
             request.session.pop("market_verified_phone", None)
             request.session["market_pending_phone"] = phone
-            request.session["market_pending_otp_purpose"] = "login"
-            messages.success(request, "We sent a six-digit verification code to your phone.")
+            request.session["market_pending_otp_purpose"] = "register"
+            messages.success(request, "We sent a six-digit registration code to your phone.")
             return redirect("market_verify")
         except ValidationError as exc:
             messages.error(request, problem(exc))
