@@ -1,7 +1,25 @@
-{% extends "base.html" %}{% block content %}
+{% extends "base.html" %}{% load static %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}
+{% block content %}
+<section class="experience-identity-head">
+  <p class="eyebrow">MY WORKSPACE / IDENTITY & SECURITY</p>
+  <h2>Your account, your access.</h2>
+  <p>Manage your staff profile, verified sign-in methods and notification preferences in one place.</p>
+  <div class="experience-account-tags"><span>Staff account</span><span>Phone recovery {% if request.user.access.recovery_phone %}linked{% else %}not linked{% endif %}</span><span>Email {% if email_identity.verified_at %}verified{% else %}not verified{% endif %}</span></div>
+</section>
 <div class="two-column">
-<section class="panel"><p class="eyebrow">ACCOUNT</p><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p class="muted">{{ request.user.username }}</p><a class="button secondary" href="/account/password/">Change password</a><hr><form method="post">{% csrf_token %}<input type="hidden" name="action" value="profile">{{ profile_form.as_p }}<button class="button secondary">Save profile</button></form></section>
-<section class="panel"><p class="eyebrow">RECOVERY</p><h2>Recovery phone</h2>{% if sms_ready %}<p class="pill">SMS available</p>{% endif %}<form method="post">{% csrf_token %}{{ form.as_p }}<button class="button">Save recovery phone</button></form></section>
+<section class="panel"><p class="eyebrow">PROFILE</p><h2>{{ request.user.get_full_name|default:request.user.username }}</h2><p class="muted">@{{ request.user.username }}</p><a class="button secondary" href="/account/password/">Change password</a><hr><form method="post">{% csrf_token %}<input type="hidden" name="action" value="profile">{{ profile_form.as_p }}<button class="button secondary">Save profile</button></form><p class="hint">Changing contact email here does not automatically verify it for sign-in. Use email verification below.</p></section>
+<section class="panel"><p class="eyebrow">ACCOUNT RECOVERY</p><h2>Linked recovery phone</h2>{% if sms_ready %}<span class="pill">SMS available</span>{% endif %}<p class="muted">Your phone remains available for account access and recovery.</p><form method="post">{% csrf_token %}<input type="hidden" name="action" value="recovery">{{ form.as_p }}<button class="button">Save recovery phone</button></form></section>
 </div>
-{% if perms.core.manage_company %}<section class="panel"><div class="section-heading"><div><p class="eyebrow">STAFF</p><h2>Account recovery</h2></div><a class="button secondary" href="/administration/users/">Manage staff</a></div></section>{% endif %}
+<section class="panel experience-email-setup"><div class="section-heading"><div><p class="eyebrow">EMAIL SIGN-IN</p><h2>Link a verified email address</h2><p class="muted">Use your verified email or your existing username/phone with the same password and staff security checks.</p></div><span class="pill">{% if email_identity.verified_at %}Verified{% elif email_ready %}Ready to link{% else %}Awaiting email setup{% endif %}</span></div>
+{% if email_identity.verified_at %}<p class="experience-verified">✓ Verified: <strong>{{ email_identity.email }}</strong></p>{% endif %}
+{% if email_ready %}
+<div class="two-column">
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_start"><label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="name@example.com"></label><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="button secondary">Send verification code</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_verify"><label>Six-digit code from email<input name="email_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></label><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="button">Verify email</button></form>
+</div>
+{% else %}<p class="hint">Email verification will open after the administrator connects the approved email sender. Existing sign-in remains unchanged.</p>{% endif %}
+{% if email_identity.verified_at %}<hr><form method="post" class="experience-notification-choice">{% csrf_token %}<input type="hidden" name="action" value="email_notifications"><label><input type="checkbox" name="email_notifications" {% if email_identity.notifications_enabled %}checked{% endif %}> Receive important KOFAD email notifications</label><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="button secondary">Save email preference</button></form>{% endif %}
+</section>
+{% if perms.core.manage_company %}<section class="panel"><div class="section-heading"><div><p class="eyebrow">STAFF ADMINISTRATION</p><h2>Team access & recovery</h2></div><a class="button secondary" href="/administration/users/">Manage staff</a></div></section>{% endif %}
 {% endblock %}
