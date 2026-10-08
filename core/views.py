@@ -560,7 +560,7 @@ def trade_screen(request, branch, kind):
         "key": str(uuid.uuid4()),
         "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
-        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith=("Paystack MoMo ", "Hubtel MoMo ")),
+        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith="Paystack MoMo ").exclude(label__startswith="Hubtel MoMo "),
         "purchase": kind == "purchase",
         "today": timezone.localdate(),
         "payment_methods": payment_methods,
@@ -874,7 +874,7 @@ def hold(request, branch):
 @protected("operate_sales")
 def held(request, branch, pk):
     item = get_object_or_404(HeldSale, pk=pk, branch=branch, user=request.user)
-    if item.label.startswith("Paystack MoMo "):
+    if item.label.startswith(("Paystack MoMo ", "Hubtel MoMo ")):
         raise Http404
     if request.method == "POST":
         item.delete()
