@@ -392,7 +392,7 @@ def customer_access(request):
             request.session.pop("market_verified_phone", None)
             return redirect("market_login")
         try:
-            services.send_otp(phone, "register")
+            services.send_otp(phone, "register", request=request)
             request.session.pop("market_login_phone", None)
             request.session["market_pending_phone"] = phone
             messages.success(request, "We sent a six-digit verification code to your phone.")
@@ -466,7 +466,7 @@ def account_verify(request):
     if request.method == "POST":
         if request.POST.get("action") == "resend":
             try:
-                services.send_otp(phone, "register")
+                services.send_otp(phone, "register", request=request)
                 messages.success(request, "A new verification code was sent.")
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -521,7 +521,7 @@ def customer_password_reset_start(request):
                 # Do not disclose whether a number owns an account.
                 messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
                 return redirect("market_login")
-            services.send_otp(canonical, "reset")
+            services.send_otp(canonical, "reset", request=request)
             request.session["market_reset_phone"] = canonical
             request.session.pop("market_reset_verified_phone", None)
             messages.success(request, "Verification code sent by SMS.")
@@ -543,7 +543,7 @@ def customer_password_reset_verify(request):
     if request.method == "POST":
         if request.POST.get("action") == "resend":
             try:
-                services.send_otp(phone, "reset")
+                services.send_otp(phone, "reset", request=request)
                 messages.success(request, "A new verification code was sent.")
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -641,7 +641,7 @@ def customer_security(request, customer):
                     raise ValidationError("Enter a different phone number.")
                 if CustomerAccount.objects.filter(phone=phone).exists():
                     raise ValidationError("That phone number is already linked to an account.")
-                services.send_otp(phone, "change_phone")
+                services.send_otp(phone, "change_phone", request=request)
                 request.session["market_change_phone"] = {"phone": phone, "expires": timezone.now().timestamp() + 600}
                 messages.success(request, "Verification code sent to your new number.")
             else:
