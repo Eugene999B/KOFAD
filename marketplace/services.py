@@ -1086,7 +1086,10 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
 
     provider_status = str(provider_data.get("status", "")).lower()
     if provider_status != "success":
-        if provider_status in {"failed", "abandoned", "reversed"} and (
+        terminal_statuses = {"failed", "abandoned", "reversed"}
+        if expected_provider == "paystack" and (attempt.verification_summary or {}).get("flow") != "mobile_money":
+            terminal_statuses.discard("abandoned")
+        if provider_status in terminal_statuses and (
             (attempt.verification_summary or {}).get("flow") != "mobile_money"
             or (attempt.verification_summary or {}).get("charge_status") in {"failed", "abandoned", "reversed"}
         ):
