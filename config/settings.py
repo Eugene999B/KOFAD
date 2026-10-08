@@ -186,3 +186,14 @@ KOFAD_MARKET_SITE_ORIGIN = os.environ.get(
 KOFAD_GMAIL_API_ENABLED = os.environ.get("KOFAD_GMAIL_API_ENABLED", "0") == "1"
 KOFAD_GMAIL_CLIENT_ID = os.environ.get("KOFAD_GMAIL_CLIENT_ID", "").strip()
 KOFAD_GMAIL_CLIENT_SECRET = os.environ.get("KOFAD_GMAIL_CLIENT_SECRET", "").strip()
+
+
+# Provider-neutral KOFAD transactional email setup:
+# "gmail_api" for authorised company Gmail OAuth over HTTPS,
+# "brevo" for Brevo's larger free email allowance using HTTPS,
+# "smtp" for environments where SMTP is permitted.
+KOFAD_EMAIL_PROVIDER = os.environ.get("KOFAD_EMAIL_PROVIDER", "gmail_api").strip().lower()
+KOFAD_BREVO_API_KEY = os.environ.get("KOFAD_BREVO_API_KEY", "").strip()
+KOFAD_BREVO_SECURITY_FROM_EMAIL = os.environ.get("KOFAD_BREVO_SECURITY_FROM_EMAIL", "").strip()
+KOFAD_BREVO_TRANSACTION_FROM_EMAIL = os.environ.get("KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "").strip()
+KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", "").strip()
