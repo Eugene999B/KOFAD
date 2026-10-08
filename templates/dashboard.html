@@ -1,4 +1,6 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
+{% block body_class %}staff-dashboard-refined{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}">{% endblock %}
 {% block actions %}{% if perms.core.operate_sales %}<a class="button" href="/sales/new/">＋ New sale</a>{% endif %}{% endblock %}
 {% block content %}
 <section class="executive-hero">
@@ -16,7 +18,7 @@
   </div>
 </section>
 
-<div class="executive-kpis">
+<div class="executive-kpis" aria-label="Today's operating performance">
   <article class="primary"><small>Net sales today</small><strong><span>{{ company.currency }}</span> {{ revenue|floatformat:2 }}</strong><p>{{ sales_count }} sale{{ sales_count|pluralize }} · gross {{ gross_sales|floatformat:2 }} · returns {{ returns_value|floatformat:2 }}</p></article>
   <article class="success"><small>Customer money received</small><strong><span>{{ company.currency }}</span> {{ customer_inflow|floatformat:2 }}</strong><p>Sales + debt collections received today</p></article>
   <article class="{% if debt_overview.overdue %}danger{% endif %}"><small>Customer receivables</small><strong><span>{{ company.currency }}</span> {{ debt|floatformat:2 }}</strong><p>{{ debt_overview.customers_owing }} account{{ debt_overview.customers_owing|pluralize }} · {{ company.currency }} {{ debt_overview.overdue|floatformat:2 }} overdue</p></article>
