@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.test import override_settings
 from django.utils import timezone
 from .tests import MarketFixtures
-from .models import MarketPaymentAttempt, PaymentConfiguration
+from .models import MarketPaymentAttempt, PaymentConfiguration, CustomerAccount
 from . import paystack_momo, services
 from .forms import CheckoutPaymentForm
 from .paystack_reconciliation import reconcile_due
@@ -12,6 +12,12 @@ from .paystack_reconciliation import reconcile_due
 
 @override_settings(PAYSTACK_SECRET_KEY="test-key", PAYSTACK_CUSTOMER_MOMO_ENABLED=True)
 class CustomerMomoTests(MarketFixtures):
+    def setUp(self):
+        super().setUp()
+        charge_check = patch("core.paystack_challenges.charge_step", side_effect=ValidationError("Pending"))
+        charge_check.start()
+        self.addCleanup(charge_check.stop)
+
     def login_customer(self):
         session = self.client.session
         session["market_customer_id"] = self.customer.pk
@@ -193,3 +199,52 @@ class CustomerMomoTests(MarketFixtures):
         order.refresh_from_db()
         self.assertEqual(order.payment_status, "paid")
         self.assertEqual(get.call_count, 1)
+
+    @patch("marketplace.paystack_momo.requests.post")
+    def test_provider_otp_challenge_is_shown_without_saving_code(self, post):
+        self.response(post, "send_otp")
+        order = self.order()
+        attempt = paystack_momo.initialize(order, "0551234567", "mtn")
+        self.assertEqual(attempt.verification_summary["charge_status"], "send_otp")
+        self.login_customer()
+        response = self.client.get(f"/market/orders/{order.pk}/")
+        self.assertContains(response, 'name="otp"')
+        self.assertContains(response, "Never enter your Mobile Money PIN.")
+
+    @patch("marketplace.paystack_momo.requests.post")
+    @patch("core.paystack_challenges.charge_step")
+    def test_otp_submission_reuses_reference_and_does_not_mark_paid(self, step, post):
+        self.response(post, "send_otp")
+        order = self.order()
+        attempt = paystack_momo.initialize(order, "0551234567", "mtn")
+        step.return_value = {"status": "pay_offline", "reference": attempt.reference}
+        paystack_momo.submit_otp(order, "988776")
+        step.assert_called_once_with(attempt.reference, otp="988776")
+        order.refresh_from_db()
+        attempt.refresh_from_db()
+        self.assertNotEqual(order.payment_status, "paid")
+        self.assertNotIn("988776", str(attempt.verification_summary))
+        self.assertEqual(post.call_count, 1)
+
+    @patch("marketplace.paystack_momo.requests.post")
+    @patch("core.paystack_challenges.charge_step")
+    def test_otp_submission_rate_limit(self, step, post):
+        self.response(post, "send_otp")
+        order = self.order()
+        attempt = paystack_momo.initialize(order, "0551234567", "mtn")
+        step.return_value = {"status": "send_otp", "reference": attempt.reference}
+        paystack_momo.submit_otp(order, "988776")
+        with self.assertRaises(ValidationError):
+            paystack_momo.submit_otp(order, "988776")
+        self.assertEqual(step.call_count, 1)
+
+    @patch("core.paystack_challenges.charge_step")
+    def test_other_customer_cannot_submit_payment_code(self, step):
+        order = self.order()
+        session = self.client.session
+        other = CustomerAccount.objects.create(phone="+233551234568", full_name="Other", verified_at=timezone.now())
+        session["market_customer_id"] = other.pk
+        session.save()
+        response = self.client.post(f"/market/orders/{order.pk}/payment-otp/", {"otp": "988776"})
+        self.assertEqual(response.status_code, 404)
+        step.assert_not_called()

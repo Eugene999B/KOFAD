@@ -20,6 +20,7 @@
 {% else %}
 <h2>Payment is not open yet</h2><p>This order is saved. Online payments are awaiting final testing. You have not been charged by saving this order.</p>
 {% endif %}
+{% if payment_waiting and payment_attempt.verification_summary.charge_status == "send_otp" %}<form method="post" action="/market/orders/{{ order.pk }}/payment-otp/">{% csrf_token %}<label for="payment-otp">One-time payment code</label><input id="payment-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required><p>Use the code sent for this payment. Never enter your Mobile Money PIN.</p><button class="market-button primary wide">Verify payment code</button></form>{% endif %}
 {% if payment_available and not payment_waiting or payment_attempt.authorization_url %}<form method="post" action="/market/orders/{{ order.pk }}/pay/">{% csrf_token %}{% if not payment_waiting %}{% include "marketplace/payment_choices.html" %}{% endif %}<button class="market-button primary wide">{% if payment_waiting %}Continue payment{% else %}Pay GHS {{ order.total|floatformat:2 }}{% endif %} <span>→</span></button></form>{% endif %}
 {% if not payment_waiting %}<form method="post" action="/market/orders/{{ order.pk }}/cancel/" class="cancel-order-form">{% csrf_token %}<button>Cancel unpaid order</button></form>{% endif %}
 </section>

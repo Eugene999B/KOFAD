@@ -22,6 +22,13 @@ def reconcile_due(limit=5):
         if not claimed:
             continue
         try:
+            if (attempt.verification_summary or {}).get("flow") == "mobile_money":
+                from core.paystack_challenges import charge_step
+                from .paystack_momo import remember_challenge
+                try:
+                    remember_challenge(attempt, charge_step(attempt.reference))
+                except ValidationError:
+                    pass
             verified = services.verify_paystack(attempt.reference)
             state = verified.get("status")
             if state == "success":

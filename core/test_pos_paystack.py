@@ -216,3 +216,30 @@ class PosPaystackMomoTests(Fixtures, TestCase):
                 "0551234567", "mtn", "customer@example.test",
             )
         post.assert_not_called()
+
+    @patch("core.pos_paystack.requests.post")
+    @patch("core.paystack_challenges.charge_step")
+    def test_staff_otp_keeps_sale_unposted_until_independent_verification(self, step, post):
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        response = self.charge_response(reference)
+        response.json.return_value["data"]["status"] = "send_otp"
+        post.return_value = response
+        result = pos_paystack.start(self.user, self.branch, self.payload(), key,
+            "0551234567", "mtn", "customer@example.test")
+        self.assertTrue(result["needs_otp"])
+        step.return_value = {"status": "pay_offline", "reference": reference}
+        result = pos_paystack.submit_otp(self.user, self.branch, reference, "988776")
+        self.assertFalse(result["paid"])
+        self.assertEqual(Document.objects.count(), 0)
+        state = HeldSale.objects.get(label=pos_paystack.LABEL_PREFIX + reference).cart["payment_request"]
+        self.assertNotIn("988776", str(state))
+        self.assertEqual(post.call_count, 1)
+
+    @patch("core.pos_paystack.requests.post")
+    @patch("core.paystack_challenges.charge_step")
+    def test_staff_cannot_submit_code_for_unknown_payment(self, step, post):
+        with self.assertRaises(ValidationError):
+            pos_paystack.submit_otp(self.user, self.branch, "KFD-POS-unknown", "988776")
+        step.assert_not_called()
+        post.assert_not_called()
