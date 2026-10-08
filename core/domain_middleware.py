@@ -1,6 +1,7 @@
 """Keep company, customer and staff traffic on separate browser origins."""
 import re
 
+from django.conf import settings
 from django.http import HttpResponse, HttpResponseRedirect
 
 ROOT = "kofadimpex.com"
@@ -18,6 +19,11 @@ class OfficialDomainMiddleware:
         if host not in HOSTS:
             return self.get_response(request)
         path = request.path
+        if path == settings.STAFF_LOGIN_PATH and host != STAFF:
+            response = HttpResponse("Not found.", status=404, content_type="text/plain")
+            response["Cache-Control"] = "no-store"
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            return response
         # Preserve signed provider endpoints and public assets on saved origins.
         shared = (
             path == "/health/" or path.startswith("/static/")
