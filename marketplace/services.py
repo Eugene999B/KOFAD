@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from core import services as core_services
 from core.identity import normalize_ghana_phone
-from core.models import Branch, Closing, Company, Document, Line, Party, Payment, Product, Stock
+from core.models import Branch, Closing, Company, Document, Line, LoginAttempt, Party, Payment, Product, Stock
 from core.sms.providers import get_provider
 from .models import (
     CustomerAccount, DeliveryZone, DeliveryTrackingUpdate, MarketListing, MarketListingImage,
@@ -466,10 +466,39 @@ def _submit_customer_otp_sms(phone, code):
     return result
 
 
-def send_otp(phone, purpose="register"):
+def _consume_customer_otp_budget(request=None):
+    """Bound aggregate and browser-session OTP sends before any SMS provider call."""
+    now = timezone.now()
+    identities = [("global", max(int(settings.CUSTOMER_OTP_GLOBAL_HOURLY_LIMIT), 1))]
+    if request is not None:
+        if not request.session.session_key:
+            request.session.save()
+        identities.append((
+            "session:" + str(request.session.session_key),
+            max(int(settings.CUSTOMER_OTP_SESSION_HOURLY_LIMIT), 1),
+        ))
+    with transaction.atomic():
+        rows = []
+        for identity, limit in identities:
+            key = hashlib.sha256(("customer-otp-rate:" + identity).encode()).hexdigest()
+            LoginAttempt.objects.get_or_create(key=key)
+            row = LoginAttempt.objects.select_for_update().get(key=key)
+            if not row.blocked_until or row.blocked_until <= now:
+                row.failures = 0
+                row.blocked_until = now + timedelta(hours=1)
+            if row.failures >= limit:
+                raise ValidationError("Too many verification-code requests. Try again later.")
+            rows.append(row)
+        for row in rows:
+            row.failures += 1
+            row.save(update_fields=["failures", "blocked_until"])
+
+
+def send_otp(phone, purpose="register", request=None):
     phone = normalize_ghana_phone(phone)
     if not settings.CUSTOMER_OTP_ENABLED:
         raise ValidationError("Customer phone verification is temporarily unavailable.")
+    _consume_customer_otp_budget(request)
     # Persist the throttle identity even when a provider rejects the first send.
     OtpThrottle.objects.get_or_create(phone=phone, purpose=purpose)
     with transaction.atomic():
