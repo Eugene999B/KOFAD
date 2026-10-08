@@ -480,10 +480,12 @@ def account_verify(request):
             existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
             request.session.pop("market_pending_otp_purpose", None)
             if existing:
-                services.set_customer_session(request, existing)
+                # Phone ownership alone is not a password bypass. After the uniform
+                # challenge, an existing account must still present its password.
+                request.session["market_login_phone"] = phone
                 request.session.pop("market_pending_phone", None)
-                after = request.session.pop("market_after_login", None)
-                return redirect(after or "market")
+                request.session.pop("market_verified_phone", None)
+                return redirect("market_login")
             request.session["market_verified_phone"] = phone
             return redirect("market_finish")
         except ValidationError as exc:
