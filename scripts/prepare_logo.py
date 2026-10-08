@@ -51,6 +51,13 @@ def prepare_logo() -> None:
             opacity = 255 if mark_blue or mark_gold or score >= 255 else int(max(0, min(255, score)))
             alpha.putpixel((x, y), opacity)
     art.putalpha(alpha.filter(ImageFilter.GaussianBlur(0.35)))
+    # A square, stable Google-friendly PNG favicon uses the emblem from this
+    # same approved artwork, not an unrelated stock icon or substitute brand.
+    emblem = art.crop((45, 2, 172, 121))
+    emblem.thumbnail((92, 92), Image.Resampling.LANCZOS)
+    favicon = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
+    favicon.alpha_composite(emblem, ((96 - emblem.width) // 2, (96 - emblem.height) // 2))
+    favicon.save(ROOT / "static" / "brand" / "favicon-96.png", "PNG", optimize=True)
     buffer = BytesIO()
     art.save(buffer, format="PNG", optimize=True)
     converted = base64.b64encode(buffer.getvalue()).decode("ascii")
