@@ -30,6 +30,7 @@ from .forms import (
     ReceiptPolicyForm, SalesPolicyForm,
 )
 from .identity import normalize_ghana_phone, phone_variants
+from .security import matching_step, new_secret, requires_mfa
 from .models import (
     Access, Audit, Branch, Closing, CommunicationSettings, Company, Correction, DebtSettings,
     Document, HeldSale, Line, LoginAttempt, ManagementContact, Message, MessageTemplate,
@@ -142,12 +143,15 @@ def login_view(request):
                     )
                     request.session.set_expiry(settings.SESSION_COOKIE_AGE)
                     request.session.pop("enroll_secret", None)
+                    request.session.pop("mfa_verified_at", None)
                     attempt.failures = 0
                     attempt.save()
                     s.audit(user, None, "session.login", user.pk)
                     if access.force_password_change:
                         messages.info(request, "Change the temporary password before continuing.")
                         return redirect("password_change")
+                    if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
+                        return redirect("mfa")
                     return redirect("dashboard")
                 attempt.failures += 1
                 if attempt.failures >= 5:
@@ -158,9 +162,90 @@ def login_view(request):
 
 
 @login_required
+@sensitive_post_parameters("code")
 def mfa(request):
-    request.session.pop("enroll_secret", None)
-    return redirect("dashboard")
+    if not settings.PRIVILEGED_MFA_ENFORCED or not requires_mfa(request.user):
+        request.session.pop("enroll_secret", None)
+        request.session.pop("mfa_verified_at", None)
+        return redirect("dashboard")
+
+    access, _ = Access.objects.get_or_create(user=request.user)
+    if access.force_password_change:
+        return redirect("password_change")
+
+    enrolling = not bool(access.totp_secret)
+    if enrolling:
+        secret = str(request.session.get("enroll_secret") or "")
+        if not secret:
+            secret = new_secret()
+            request.session["enroll_secret"] = secret
+    else:
+        secret = access.totp_secret
+        request.session.pop("enroll_secret", None)
+
+    error = ""
+    key = hashlib.sha256(f"mfa:{request.user.pk}".encode()).hexdigest()
+    if request.method == "POST":
+        now = timezone.now()
+        code = str(request.POST.get("code") or "").strip().replace(" ", "").replace("-", "")
+        with transaction.atomic():
+            LoginAttempt.objects.get_or_create(key=key)
+            attempt = LoginAttempt.objects.select_for_update().get(key=key)
+            if attempt.blocked_until and attempt.blocked_until > now:
+                error = "Too many verification attempts. Wait 15 minutes and try again."
+            else:
+                if attempt.blocked_until:
+                    attempt.failures = 0
+                    attempt.blocked_until = None
+                step = matching_step(secret, code)
+                locked = Access.objects.select_for_update().get(pk=access.pk)
+                expected_secret = locked.totp_secret or secret
+                valid = bool(
+                    step is not None
+                    and secrets.compare_digest(expected_secret, secret)
+                    and step > locked.totp_last_step
+                )
+                if valid:
+                    was_enrolling = not bool(locked.totp_secret)
+                    if was_enrolling:
+                        locked.totp_secret = secret
+                    locked.totp_last_step = step
+                    locked.save(update_fields=["totp_secret", "totp_last_step"])
+                    attempt.failures = 0
+                    attempt.blocked_until = None
+                    attempt.save(update_fields=["failures", "blocked_until"])
+                    request.session["mfa_verified_at"] = now.timestamp()
+                    request.session.pop("enroll_secret", None)
+                    s.audit(
+                        request.user, None,
+                        "mfa.enrolled" if was_enrolling else "mfa.verified",
+                        request.user.pk,
+                    )
+                    return redirect("dashboard")
+                attempt.failures += 1
+                if attempt.failures >= 6:
+                    attempt.blocked_until = now + timedelta(minutes=15)
+                attempt.save(update_fields=["failures", "blocked_until"])
+                error = "That authenticator code is not valid."
+
+    account_name = request.user.get_full_name().strip() or request.user.username
+    uri = ""
+    display_secret = ""
+    if enrolling:
+        display_secret = " ".join(secret[index:index + 4] for index in range(0, len(secret), 4))
+        uri = (
+            "otpauth://totp/"
+            + quote(f"KOFAD:{account_name}", safe="")
+            + "?secret=" + quote(secret, safe="")
+            + "&issuer=KOFAD&algorithm=SHA1&digits=6&period=30"
+        )
+    return render(request, "mfa.html", {
+        "title": "Security verification",
+        "enrolling": enrolling,
+        "secret": display_secret,
+        "otpauth_uri": uri,
+        "error": error,
+    })
 
 
 @require_POST
@@ -2105,8 +2190,11 @@ def password_change(request):
                 update_session_auth_hash(request, user)
                 user.access.refresh_from_db()
                 request.session["access_version"] = user.access.session_version
+                request.session.pop("mfa_verified_at", None)
                 s.audit(user, None, "password.changed", user.pk)
                 messages.success(request, "Your password has been changed.")
+                if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
+                    return redirect("mfa")
                 return redirect("account")
     return render(request, "password_change.html", {"form":form, "title":"Change password"})
 
