@@ -48,9 +48,9 @@ def _public_indexable_path(path):
         return True
     if re.fullmatch(r"/market/products/\d+/", path):
         return True
-    if re.fullmatch(r"/market/products/\d+/image/(?:thumb|large)/", path):
+    if re.fullmatch(r"/market/products/\d+/image/(?:thumb|large|full)/", path):
         return True
-    if re.fullmatch(r"/market/gallery/\d+/image/(?:thumb|large)/", path):
+    if re.fullmatch(r"/market/gallery/\d+/image/(?:thumb|large|full)/", path):
         return True
     return False
 
