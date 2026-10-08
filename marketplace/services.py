@@ -549,11 +549,35 @@ def _consume_customer_otp_budget(request=None):
             row.save(update_fields=["failures", "blocked_until"])
 
 
+def _consume_phone_otp_hour(phone):
+    """At most two SMS sends per phone across registration, reset and phone change.
+
+    DB-backed and locked so the allowance survives service restarts and concurrent
+    browser sessions. Each hour begins with the first send, not the last resend.
+    """
+    identity = hashlib.sha256(("customer-otp-phone-v2:" + phone).encode()).hexdigest()
+    now = timezone.now()
+    with transaction.atomic():
+        LoginAttempt.objects.get_or_create(key=identity)
+        budget = LoginAttempt.objects.select_for_update().get(key=identity)
+        if not budget.blocked_until or budget.blocked_until <= now:
+            budget.failures = 0
+            budget.blocked_until = now + timedelta(hours=1)
+        if budget.failures >= 2:
+            raise ValidationError(
+                "Two verification SMS messages have already been requested. "
+                "Please try again one hour after your first request."
+            )
+        budget.failures += 1
+        budget.save(update_fields=["failures", "blocked_until"])
+
+
 def send_otp(phone, purpose="register", request=None):
     phone = normalize_ghana_phone(phone)
     if not settings.CUSTOMER_OTP_ENABLED:
         raise ValidationError("Customer phone verification is temporarily unavailable.")
     _consume_customer_otp_budget(request)
+    _consume_phone_otp_hour(phone)
     # Persist the throttle identity even when a provider rejects the first send.
     OtpThrottle.objects.get_or_create(phone=phone, purpose=purpose)
     with transaction.atomic():
