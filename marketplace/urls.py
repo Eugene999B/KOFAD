@@ -2,6 +2,8 @@ from django.urls import path
 from . import views, public_views
 
 urlpatterns = [
+    path("robots.txt", public_views.robots_txt, name="robots_txt"),
+    path("sitemap.xml", public_views.sitemap_xml, name="sitemap_xml"),
     path("market/orders/<uuid:pk>/payment-status/", views.customer_payment_status, name="customer_payment_status"),
     path("settings/online-payments/", views.online_payments, name="online_payments"),
     path("market/payments/hubtel/callback/", views.hubtel_callback, name="hubtel_callback"),
