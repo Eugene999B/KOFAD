@@ -22,7 +22,9 @@ def _host(request):
 def robots(request):
     host = _host(request)
     if host == COMPANY_HOST:
-        body = "User-agent: *\nAllow: /\nSitemap: https://kofadimpex.com/sitemap.xml\n"
+        body = ("User-agent: *\nAllow: /\nDisallow: /technical-admin/\n"
+                "Disallow: /workspace/\nDisallow: /settings/\n"
+                "Disallow: /api/\nSitemap: https://kofadimpex.com/sitemap.xml\n")
     elif host == MARKET_HOST:
         body = (
             "User-agent: *\nAllow: /market/\n"
