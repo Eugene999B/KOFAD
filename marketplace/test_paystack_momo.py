@@ -267,3 +267,72 @@ class CustomerMomoTests(MarketFixtures):
         self.assertEqual(order.payment_status, "pending")
         self.assertEqual(attempt.status, "pending")
         self.assertEqual(attempt.verification_summary["charge_status"], "send_otp")
+
+    @patch("marketplace.services.verify_paystack")
+    def test_unopened_hosted_checkout_keeps_original_payment_pending(self, verify):
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(order=order, provider="paystack",
+            reference="hosted-unopened", amount=order.total, status="pending",
+            authorization_url="https://checkout.paystack.com/original", next_check_at=timezone.now())
+        order.payment_reference = attempt.reference
+        order.payment_status = "pending"
+        order.save()
+        verify.return_value = {"status": "abandoned", "reference": attempt.reference}
+        reconcile_due()
+        attempt.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(attempt.status, "pending")
+        self.assertEqual(order.payment_status, "pending")
+        self.assertEqual(attempt.authorization_url, "https://checkout.paystack.com/original")
+        self.assertIsNone(order.sale_document_id)
+
+    @patch("marketplace.services.verify_paystack")
+    def test_recent_hosted_checkout_premature_failure_is_recovered(self, verify):
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(order=order, provider="paystack",
+            reference="hosted-recover", amount=order.total, status="failed",
+            provider_message="Provider confirmed unsuccessful payment.",
+            authorization_url="https://checkout.paystack.com/original")
+        order.payment_reference = attempt.reference
+        order.payment_status = "failed"
+        order.save()
+        verify.return_value = {"status": "abandoned", "reference": attempt.reference}
+        reconcile_due()
+        attempt.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(attempt.status, "pending")
+        self.assertEqual(order.payment_status, "pending")
+        self.assertIsNone(order.sale_document_id)
+
+    @patch("marketplace.services.verify_paystack")
+    def test_replaced_hosted_checkout_cannot_be_recovered(self, verify):
+        order = self.order()
+        MarketPaymentAttempt.objects.create(order=order, provider="paystack",
+            reference="hosted-replaced", amount=order.total, status="failed",
+            provider_message="Provider confirmed unsuccessful payment.",
+            authorization_url="https://checkout.paystack.com/original")
+        order.payment_reference = "newer-payment"
+        order.save()
+        reconcile_due()
+        verify.assert_not_called()
+
+    @patch("marketplace.services.verify_paystack")
+    def test_recovery_cannot_overwrite_concurrent_success(self, verify):
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(order=order, provider="paystack",
+            reference="hosted-race", amount=order.total, status="failed",
+            provider_message="Provider confirmed unsuccessful payment.",
+            authorization_url="https://checkout.paystack.com/original")
+        order.payment_reference = attempt.reference
+        order.payment_status = "failed"
+        order.save()
+        def provider_check(reference):
+            MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(status="success")
+            type(order).objects.filter(pk=order.pk).update(payment_status="paid", status="paid")
+            return {"status": "abandoned", "reference": reference}
+        verify.side_effect = provider_check
+        reconcile_due()
+        attempt.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(attempt.status, "success")
+        self.assertEqual(order.payment_status, "paid")
