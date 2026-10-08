@@ -18,7 +18,7 @@ INSTALLED_APPS = [
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "core.domain_middleware.OfficialDomainMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware", "core.middleware.RequestSizeLimitMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware", "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware", "django.contrib.auth.middleware.AuthenticationMiddleware",
     "core.middleware.AccessMiddleware", "django.contrib.messages.middleware.MessageMiddleware",
@@ -68,6 +68,8 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 STAFF_SESSION_SECONDS = int(os.environ.get("STAFF_SESSION_SECONDS", "43200"))  # 12 hours
 MARKET_SESSION_SECONDS = int(os.environ.get("MARKET_SESSION_SECONDS", "7200"))  # 2 hours
+PRIVILEGED_MFA_ENFORCED = os.environ.get("PRIVILEGED_MFA_ENFORCED", "0") == "1"
+MFA_SESSION_SECONDS = int(os.environ.get("MFA_SESSION_SECONDS", str(STAFF_SESSION_SECONDS)))
 SESSION_COOKIE_AGE = max(STAFF_SESSION_SECONDS, MARKET_SESSION_SECONDS)
 # Fixed staff/customer deadlines are enforced separately. Read-only polling must
 # not overwrite session changes made by concurrent requests (e.g. backup readiness).
@@ -107,11 +109,14 @@ WHATSAPP_BUSINESS_ACCOUNT_ID = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", ""
 WHATSAPP_GRAPH_VERSION = os.environ.get("WHATSAPP_GRAPH_VERSION", "v25.0")
 WHATSAPP_TIMEOUT_SECONDS = int(os.environ.get("WHATSAPP_TIMEOUT_SECONDS", "20"))
 WHATSAPP_WEBHOOK_MAX_BYTES = int(os.environ.get("WHATSAPP_WEBHOOK_MAX_BYTES", "524288"))
+WHATSAPP_WEBHOOK_RETENTION_DAYS = int(os.environ.get("WHATSAPP_WEBHOOK_RETENTION_DAYS", "30"))
 
 
 
 # Public KOFAD Market. Secrets remain server-side deployment variables.
 CUSTOMER_OTP_ENABLED = os.environ.get("CUSTOMER_OTP_ENABLED", "0") == "1"
+CUSTOMER_OTP_GLOBAL_HOURLY_LIMIT = int(os.environ.get("CUSTOMER_OTP_GLOBAL_HOURLY_LIMIT", "60"))
+CUSTOMER_OTP_SESSION_HOURLY_LIMIT = int(os.environ.get("CUSTOMER_OTP_SESSION_HOURLY_LIMIT", "6"))
 PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY", "")
 PAYSTACK_TIMEOUT_SECONDS = int(os.environ.get("PAYSTACK_TIMEOUT_SECONDS", "20"))
 PAYSTACK_POS_MOMO_ENABLED = os.environ.get("PAYSTACK_POS_MOMO_ENABLED", "0") == "1"
