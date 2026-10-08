@@ -90,6 +90,18 @@ def resolve_login_identifier(identifier):
     if len(username_matches) == 1:
         return username_matches[0], "user:" + username_matches[0].casefold()
 
+    if "@" in identifier:
+        from .email_identity import verified_identity
+        try:
+            identity = verified_identity("staff", identifier)
+        except ValidationError:
+            identity = None
+        if identity:
+            user = User.objects.filter(pk=identity.owner_id, is_active=True).first()
+            if user:
+                return user.username, "user:" + user.username.casefold()
+        return identifier, "email:" + identifier.casefold()
+
     try:
         canonical_phone = normalize_ghana_phone(identifier)
         variants = phone_variants(canonical_phone)

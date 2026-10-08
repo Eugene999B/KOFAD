@@ -32,7 +32,7 @@ from .forms import (
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence,
+    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence, EmailIdentity,
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
@@ -483,6 +483,9 @@ def customer_account(request, customer):
         conversations=customer.conversations.all()[:5],
         wishlist=customer.wishlist_items.select_related("listing__product")[:6],
         recent_views=customer.recent_views.select_related("listing__product")[:6],
+        email_identity=EmailIdentity.objects.filter(
+            kind="customer", owner_id=customer.pk,
+        ).first(),
         return_requests=customer.return_requests.select_related("order")[:5],
     ))
 
@@ -638,16 +641,31 @@ def customer_login(request):
     initial_phone = request.session.get("market_login_phone", "")
     form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
     if request.method == "POST" and form.is_valid():
-        phone = form.cleaned_data["phone"]
+        identifier = form.cleaned_data["phone"]
         now = timezone.now()
+        # Use a stable opaque throttle key for email attempts; never store an
+        # untrusted, arbitrarily long email inside the 20-char phone field.
+        if "@" in identifier:
+            import hashlib
+            throttle_phone = "email:" + hashlib.sha256(identifier.encode()).hexdigest()[:14]
+        else:
+            throttle_phone = identifier
         with transaction.atomic():
-            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=phone, purpose="login")
+            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=throttle_phone, purpose="login")
             if throttle.blocked_until and throttle.blocked_until > now:
                 messages.error(request, "Too many sign-in attempts. Try again in a few minutes.")
                 return render(request, "marketplace/login.html", _market_context(
                     request, title="Customer sign in", form=form,
                 ))
-            customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            if "@" in identifier:
+                from core.email_identity import verified_identity
+                identity = verified_identity("customer", identifier)
+                customer = (
+                    CustomerAccount.objects.filter(pk=identity.owner_id, active=True).first()
+                    if identity else None
+                )
+            else:
+                customer = CustomerAccount.objects.filter(phone=identifier, active=True).first()
             valid = bool(customer and customer.check_password(form.cleaned_data["password"]))
             if valid:
                 throttle.attempts = 0
@@ -671,7 +689,28 @@ def customer_login(request):
 
 @market_customer_required
 def customer_security(request, customer):
+    from core import email_identity
     action = request.POST.get("action", "password")
+    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
+        try:
+            if not customer.check_password(request.POST.get("current_password", "")):
+                raise ValidationError("Enter your current password to update email access.")
+            if action == "email_start":
+                email_identity.request_code("customer", customer.pk, request.POST.get("email"))
+                messages.success(request, "A six-digit verification code was sent to your email.")
+            elif action == "email_verify":
+                verified = email_identity.confirm_code("customer", customer.pk, request.POST.get("email_code"))
+                if not verified:
+                    raise ValidationError("The email code is incorrect.")
+                messages.success(request, "Email verified. You can now sign in with your email or phone.")
+            else:
+                email_identity.set_notifications(
+                    "customer", customer.pk, request.POST.get("email_notifications") == "on"
+                )
+                messages.success(request, "Email notification preference saved.")
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+        return redirect("market_security")
     if request.method == "POST" and action == "phone_cancel":
         request.session.pop("market_change_phone", None)
         return redirect("market_security")
@@ -719,6 +758,8 @@ def customer_security(request, customer):
         return redirect("market_account")
     return render(request, "marketplace/security.html", _market_context(
         request, title="Account security", form=form, pending_phone=(request.session.get("market_change_phone") or {}).get("phone"),
+        verified_email=email_identity.EmailIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
+        email_ready=email_identity.delivery_ready(),
     ))
 
 

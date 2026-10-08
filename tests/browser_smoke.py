@@ -164,7 +164,7 @@ with sync_playwright() as p:
     page.get_by_role("heading",name="Forgot your password?",exact=True).wait_for()
     assert page.get_by_text("SMS recovery is not available yet.",exact=False).is_visible()
     page.goto(staff_login_url)
-    page.get_by_label("Username or phone number", exact=True).fill("demo")
+    page.get_by_label("Username, mobile number or verified email", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
     page.wait_for_url("http://127.0.0.1:8000/workspace/")
@@ -341,7 +341,7 @@ with sync_playwright() as p:
     page.set_viewport_size({"width":390,"height":844})
     admin_page = browser.new_page(viewport={"width":1280,"height":900})
     admin_page.goto(staff_login_url)
-    admin_page.get_by_label("Username or phone number",exact=True).fill("admin")
+    admin_page.get_by_label("Username, mobile number or verified email",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("admin")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
     admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
@@ -899,7 +899,7 @@ with sync_playwright() as p:
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
     admin_page.goto(staff_login_url)
-    assert admin_page.get_by_label("Username or phone number", exact=True).is_visible()
+    assert admin_page.get_by_label("Username, mobile number or verified email", exact=True).is_visible()
     staff_state = admin_page.request.get("http://127.0.0.1:8000/session/state/").json()
     assert staff_state["authenticated"] is False
     assert not errors, errors

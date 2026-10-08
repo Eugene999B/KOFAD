@@ -252,11 +252,15 @@ class CustomerRegistrationForm(forms.Form):
 
 
 class CustomerLoginForm(forms.Form):
-    phone = forms.CharField(max_length=30, label="Phone number")
+    phone = forms.CharField(max_length=254, label="Mobile number or verified email")
     password = forms.CharField(widget=forms.PasswordInput, label="Password")
 
     def clean_phone(self):
-        return normalize_ghana_phone(self.cleaned_data["phone"])
+        identifier = self.cleaned_data["phone"].strip()
+        if "@" in identifier:
+            from core.email_identity import normalize_email
+            return normalize_email(identifier)
+        return normalize_ghana_phone(identifier)
 
 
 class CheckoutForm(forms.Form):

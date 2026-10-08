@@ -8,6 +8,59 @@ from django.db import models
 from django.utils import timezone
 
 
+
+
+class EmailIdentity(models.Model):
+    """Verified email login alias, never inferred from an editable profile field."""
+
+    kind = models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])
+    owner_id = models.PositiveBigIntegerField()
+    email = models.EmailField(blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    pending_email = models.EmailField(blank=True)
+    code_digest = models.CharField(max_length=64, blank=True)
+    requested_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    sends_window_start = models.DateTimeField(null=True, blank=True)
+    sends_in_window = models.PositiveSmallIntegerField(default=0)
+    code_attempts = models.PositiveSmallIntegerField(default=0)
+    notifications_enabled = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["kind", "owner_id"], name="unique_kofad_email_identity"),
+            models.UniqueConstraint(
+                fields=["kind", "email"],
+                condition=models.Q(verified_at__isnull=False),
+                name="unique_verified_email_per_account_type",
+            ),
+        ]
+
+
+class EmailNotice(models.Model):
+    """Durable, opt-in email outbox. A separate worker delivers after SMTP setup."""
+
+    event_key = models.CharField(max_length=160, unique=True)
+    email = models.EmailField()
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    status = models.CharField(
+        max_length=12, default="queued",
+        choices=[("queued", "Queued"), ("sending", "Sending"),
+                 ("sent", "Sent"), ("failed", "Failed")],
+        db_index=True,
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+
 class CustomerAccount(models.Model):
     phone = models.CharField(max_length=20, unique=True)
     full_name = models.CharField(max_length=140)
