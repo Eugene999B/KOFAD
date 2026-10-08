@@ -1,9 +1,9 @@
 from django.urls import path
-from . import views, public_views
+from . import views, public_views, seo
 
 urlpatterns = [
-    path("robots.txt", public_views.robots_txt, name="robots_txt"),
-    path("sitemap.xml", public_views.sitemap_xml, name="sitemap_xml"),
+    path("robots.txt", seo.robots, name="robots_txt"),
+    path("sitemap.xml", seo.sitemap, name="sitemap_xml"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),
     path("market/orders/<uuid:pk>/payment-status/", views.customer_payment_status, name="customer_payment_status"),
     path("settings/online-payments/", views.online_payments, name="online_payments"),
