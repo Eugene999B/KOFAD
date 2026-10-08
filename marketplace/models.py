@@ -389,6 +389,9 @@ class MarketReturnAttachment(models.Model):
 
 
 class Conversation(models.Model):
+    branch = models.ForeignKey(
+        "core.Branch", null=True, blank=True, related_name="market_conversations", on_delete=models.PROTECT
+    )
     customer = models.ForeignKey(CustomerAccount, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
     order = models.ForeignKey(OnlineOrder, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
     public_name = models.CharField(max_length=140, blank=True)
@@ -465,6 +468,7 @@ class PaymentConfiguration(models.Model):
     bank_branch = models.CharField(max_length=100, blank=True)
     bank_branch_code = models.CharField(max_length=20, blank=True)
     receiving_momo = models.CharField(max_length=20, blank=True)
+    receiving_momo_name = models.CharField(max_length=140, blank=True)
 
     def save(self, *args, **kwargs):
         self.pk = 1

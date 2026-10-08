@@ -24,3 +24,20 @@ def matching_step(secret, code):
         if hmac.compare_digest(f"{value:06}", code):
             return step
     return None
+
+
+PRIVILEGED_PERMISSIONS = (
+    "core.manage_company",
+    "core.operate_finance",
+    "core.approve_operations",
+)
+
+
+def requires_mfa(user):
+    """Return whether this staff account must complete MFA in hardened deployments."""
+    if not getattr(user, "is_authenticated", False) or not getattr(user, "is_active", False):
+        return False
+    return bool(
+        getattr(user, "is_superuser", False)
+        or any(user.has_perm(permission) for permission in PRIVILEGED_PERMISSIONS)
+    )

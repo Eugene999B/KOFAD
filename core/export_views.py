@@ -512,6 +512,7 @@ def _rows(request, dataset, branch, first, last):
         from marketplace.models import Conversation
         rows = []
         threads = Conversation.objects.filter(
+            Q(branch=branch) | Q(branch__isnull=True, order__branch=branch),
             updated_at__date__gte=first, updated_at__date__lte=last
         ).select_related("customer", "order", "assigned_to").prefetch_related(
             "messages", "messages__attachments"

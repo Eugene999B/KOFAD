@@ -12,6 +12,16 @@ from .services import send_otp, verify_otp
 
 @override_settings(CUSTOMER_OTP_ENABLED=True)
 class CustomerOtpConcurrencyTests(TransactionTestCase):
+    @override_settings(CUSTOMER_OTP_GLOBAL_HOURLY_LIMIT=2)
+    def test_global_budget_stops_rotating_phone_sms_abuse(self):
+        phones = ["+233241234561", "+233241234562", "+233241234563"]
+        with patch("marketplace.services._submit_customer_otp_sms") as submit:
+            send_otp(phones[0], "register")
+            send_otp(phones[1], "register")
+            with self.assertRaisesMessage(ValidationError, "Too many verification-code requests"):
+                send_otp(phones[2], "register")
+        self.assertEqual(submit.call_count, 2)
+
     def test_simultaneous_requests_send_only_one_usable_code(self):
         phone = "+233241234567"
         OtpThrottle.objects.create(phone=phone, purpose="register")

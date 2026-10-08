@@ -21,6 +21,7 @@ class Command(BaseCommand):
         last_payment_check = 0.0
         last_delivery_sync = 0.0
         last_recovery = None
+        last_security_cleanup = 0.0
 
         while True:
             close_old_connections()
@@ -50,6 +51,16 @@ class Command(BaseCommand):
                 except Exception as exc:
                     self.stderr.write(f"Communication automation check failed safely: {exc}")
                 last_automation = now
+
+            if now - last_security_cleanup >= 3600:
+                try:
+                    from core.whatsapp import purge_webhook_evidence
+                    from core.whatsapp_bot import purge_old_replies
+                    purge_webhook_evidence()
+                    purge_old_replies()
+                except Exception as exc:
+                    self.stderr.write(f"Security retention cleanup failed safely: {exc}")
+                last_security_cleanup = now
 
             if now - last_delivery_sync >= 5:
                 try:

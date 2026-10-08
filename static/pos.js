@@ -1463,9 +1463,18 @@
       if (!pendingBody) pendingBody = buildCheckoutBody();
       persist();
 
-      if (!purchase && directMomoSelected() && paystackMomoReady) {
-        await startPaystackMomo();
-        return;
+      if (!purchase) {
+        const momoAmount = cents(document.querySelector("#pay-momo")?.value || "0");
+        if (momoAmount > 0) {
+          if (!paystackMomoReady) {
+            throw new Error("Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now.");
+          }
+          if (!directMomoSelected()) {
+            throw new Error("Verified Mobile Money is currently available only as a full single-method payment. Remove split or part-payment amounts and try again.");
+          }
+          await startPaystackMomo();
+          return;
+        }
       }
 
       root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);

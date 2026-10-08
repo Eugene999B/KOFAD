@@ -12,6 +12,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils.crypto import salted_hmac
 
 from core.identity import normalize_ghana_phone
+from core.models import Branch
 from .models import Conversation, ConversationMessage, DeliveryZone
 from .public_content import PAGES, POLICY_VERSION
 from .views import _market_context
@@ -68,6 +69,7 @@ def public_page(request, slug):
             else:
                 with transaction.atomic():
                     conversation = Conversation.objects.create(
+                        branch=Branch.objects.filter(active=True).order_by("pk").first(),
                         public_name=form.cleaned_data["name"], public_phone=phone,
                         subject="Website · " + form.cleaned_data["topic"],
                     )

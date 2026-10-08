@@ -194,9 +194,11 @@ def reset_password(request):
                 form = SetPasswordForm(user, request.POST)
                 if form.is_valid():
                     form.save()
+                    Access.objects.filter(user=user).update(totp_secret="", totp_last_step=-1)
                     PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
                     LoginAttempt.objects.filter(key=hashlib.sha256(user.username.casefold().encode()).hexdigest()).update(failures=0, blocked_until=None)
                     audit(user, None, "password.recovered", user.pk)
+                    audit(user, None, "mfa.recovery_reset", user.pk)
                     request.session.pop("recovery_id", None)
                     messages.success(request, "Password reset. Sign in with your new password.")
                     return redirect("login")

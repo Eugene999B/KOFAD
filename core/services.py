@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 
@@ -126,6 +126,13 @@ def audit(user, branch, action, reference, detail=None, *, category=None, severi
     with transaction.atomic():
         if branch is not None:
             Branch.objects.select_for_update().get(pk=branch.pk)
+        elif connection.vendor == "postgresql":
+            # Serialize the global chain too; branch rows already provide this lock for branch-scoped events.
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ["kofad_global_audit_chain_v1"],
+                )
         previous = Audit.objects.filter(branch=branch).exclude(event_hash="").order_by("-created_at", "-pk").first()
         previous_hash = previous.event_hash if previous else ""
         event_id = uuid.uuid4()

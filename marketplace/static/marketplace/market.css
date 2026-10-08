@@ -39,3 +39,10 @@ html[data-theme="dark"] body.market-body{background:var(--market-bg);color:var(-
 .cancel-order-form{margin-top:10px}.cancel-order-form button{width:100%;border:0;background:transparent;color:#8e4b45;font-size:10px;font-weight:800;padding:8px;cursor:pointer}
 .message-order-context{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--market-line);border-radius:11px;background:#eef6f7}.message-order-context small{font-size:8px;letter-spacing:.1em;color:var(--market-muted)}.message-order-context strong{font-size:11px;color:#0f737a}
 html[data-theme="dark"] .message-order-context{background:#123247;border-color:#31576d}html[data-theme="dark"] .message-order-context strong{color:#78d2d5}
+
+/* Payment choices follow the checkout grid on narrow screens. */
+.checkout-payment-choice {padding:20px 0; border-top:1px solid #e4e8e3;}
+.checkout-payment-choice label {display:flex; flex-direction:column; gap:8px; margin-bottom:14px;}
+.checkout-payment-choice input,.checkout-payment-choice select {width:100%; min-height:48px; padding:12px; box-sizing:border-box;}
+.checkout-payment-choice [hidden] {display:none!important;}
+@media(max-width:640px){.checkout-payment-choice .checkout-grid{grid-template-columns:1fr;}.checkout-payment-choice{padding:16px 0;}}

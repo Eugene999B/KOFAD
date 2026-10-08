@@ -1,0 +1,21 @@
+{% extends "auth_base.html" %}
+{% block title %}Security verification{% endblock %}
+{% block content %}
+<p class="eyebrow">PRIVILEGED STAFF SECURITY</p>
+<h1>{% if enrolling %}Set up two-step verification{% else %}Enter your authenticator code{% endif %}</h1>
+{% if enrolling %}
+<p>Before this privileged account can use KOFAD, add the account to an authenticator app. Use the setup key below, then enter the current six-digit code.</p>
+<div class="notice"><strong>Setup key</strong><br><code style="word-break:break-all">{{ secret }}</code></div>
+<details><summary>Authenticator URI</summary><code style="word-break:break-all">{{ otpauth_uri }}</code></details>
+{% else %}
+<p>Enter the current six-digit code from the authenticator linked to this KOFAD account.</p>
+{% endif %}
+{% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" class="record-form">{% csrf_token %}
+<label for="code">Six-digit authenticator code</label>
+<input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required autofocus placeholder="123456">
+<div class="form-actions"><button class="button wide">{% if enrolling %}Finish security setup{% else %}Verify and continue{% endif %}</button></div>
+</form>
+<p class="hint">Lost access to your authenticator? Use staff password recovery from the sign-in page; a successful verified recovery resets MFA so you can enrol again.</p>
+<form method="post" action="/logout/">{% csrf_token %}<button class="button secondary wide" type="submit">Sign out</button></form>
+{% endblock %}
