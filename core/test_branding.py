@@ -32,8 +32,10 @@ class BrandingConsistencyTests(SimpleTestCase):
     def test_only_official_logo_asset_is_referenced(self):
         root = Path(settings.BASE_DIR)
         official = root / "static" / "brand" / "kofad-official-logo.svg"
-        legacy = root / "static" / "brand" / "kofad-emblem.png"
-        duplicate = root / "static" / "brand" / "kofad-official-logo.jpg"
+        legacy_name = "kofad-" + "emblem.png"
+        duplicate_name = "kofad-official-logo." + "jpg"
+        legacy = root / "static" / "brand" / legacy_name
+        duplicate = root / "static" / "brand" / duplicate_name
         self.assertTrue(official.exists(), "Official KOFAD logo asset is missing.")
         self.assertFalse(legacy.exists(), "Legacy KOFAD emblem must be removed.")
         self.assertFalse(duplicate.exists(), "A second KOFAD logo asset must not remain.")
@@ -50,7 +52,7 @@ class BrandingConsistencyTests(SimpleTestCase):
                 content = path.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            if "kofad-emblem.png" in content or "kofad-official-logo.jpg" in content:
+            if legacy_name in content or duplicate_name in content:
                 offenders.append(str(path.relative_to(root)))
         self.assertEqual(
             offenders,
