@@ -3,6 +3,7 @@ from django.conf import settings
 from django.urls import path
 from . import views as v
 from . import account as accounts
+from . import google_oauth as google
 from . import count_views
 from . import admin_views
 from . import export_views
@@ -12,6 +13,9 @@ from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     path("account/", accounts.account, name="account"),
+    path("auth/google/staff/login/", google.start, {"kind": "staff", "mode": "login"}, name="google_staff_login"),
+    path("auth/google/staff/link/", google.start, {"kind": "staff", "mode": "link"}, name="google_staff_link"),
+    path("auth/google/staff/callback/", google.callback, {"kind": "staff"}, name="google_staff_callback"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
     path("api/approvals/summary/", approval_views.approval_summary, name="approval_summary"),
