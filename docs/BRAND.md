@@ -9,7 +9,7 @@ KOFAD uses one approved official logo across every customer, staff and printed s
 - Champagne gold: #D1BB7F
 - Warm paper: #F7F4ED
 
-Do not redraw the logo, substitute a monogram, pair it with a competing wordmark, or introduce another KOFAD logo file. The official asset is used for the public website, Market, customer authentication, staff authentication, workspace navigation, browser icon, receipts, invoices, statements, workforce credentials and other generated documents.
+Do not redraw the logo, substitute a monogram, pair it with a competing wordmark, or introduce another KOFAD logo file. Present the official logo without a decorative white tile or opaque rectangular background. The official asset is used for the public website, Market, customer authentication, staff authentication, workspace navigation, browser icon, receipts, invoices, statements, workforce credentials and other generated documents.
 
 Printed records call `core.brand_art.draw_mark`, which embeds the same canonical asset. Web templates should reference the same file through Django static files.
 
