@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load static %}
 {% block body_class %}staff-dashboard-refined{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}">{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}">{% endblock %}
 {% block actions %}{% if perms.core.operate_sales %}<a class="button" href="/sales/new/">＋ New sale</a>{% endif %}{% endblock %}
 {% block content %}
 <section class="executive-hero">
