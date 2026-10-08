@@ -150,3 +150,18 @@ HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"
 WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"
 
 PAYSTACK_CUSTOMER_MOMO_ENABLED = os.environ.get("PAYSTACK_CUSTOMER_MOMO_ENABLED", "0") == "1"
+
+
+# Optional email verification and notifications. Disabled until merchant-domain
+# SMTP credentials and SPF/DKIM/DMARC are validated by the administrator.
+KOFAD_EMAIL_ENABLED = os.environ.get("KOFAD_EMAIL_ENABLED", "0") == "1"
+KOFAD_EMAIL_NOTIFICATIONS_ENABLED = os.environ.get("KOFAD_EMAIL_NOTIFICATIONS_ENABLED", "0") == "1"
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("KOFAD_SMTP_HOST", "")
+EMAIL_PORT = int(os.environ.get("KOFAD_SMTP_PORT", "587"))
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = os.environ.get("KOFAD_SMTP_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("KOFAD_SMTP_PASSWORD", "")
+EMAIL_TIMEOUT = 12
+DEFAULT_FROM_EMAIL = os.environ.get("KOFAD_FROM_EMAIL", "")
