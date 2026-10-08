@@ -27,7 +27,7 @@ def print_fonts():
 
 
 @lru_cache(maxsize=1)
-def _official_logo_bytes():
+def official_logo_bytes():
     """Read the one canonical SVG asset and recover its embedded official JPEG."""
     path = settings.BASE_DIR / "static" / "brand" / "kofad-official-logo.svg"
     source = path.read_text(encoding="utf-8")
@@ -46,7 +46,7 @@ def _official_logo_bytes():
 def draw_mark(pdf, x, y, size):
     """Embed the exact official KOFAD logo source on printed records."""
     pdf.drawImage(
-        ImageReader(BytesIO(_official_logo_bytes())),
+        ImageReader(BytesIO(official_logo_bytes())),
         x, y, width=size, height=size,
         preserveAspectRatio=True, anchor="c", mask="auto",
     )
