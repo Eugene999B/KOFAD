@@ -56,6 +56,22 @@ class GoogleIdentity(models.Model):
         ]
 
 
+
+class GmailSenderConnection(models.Model):
+    """Encrypted offline Gmail API consent for the designated business sender."""
+
+    email = models.EmailField()
+    google_subject = models.CharField(max_length=255)
+    encrypted_refresh_token = models.TextField(editable=False)
+    connected_by_id = models.PositiveBigIntegerField()
+    connected_at = models.DateTimeField(auto_now=True)
+    last_send_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Authorised business Gmail sender"
+
+
+
 class EmailNotice(models.Model):
     """Durable, opt-in email outbox. A separate worker delivers after SMTP setup."""
 
