@@ -44,6 +44,7 @@ class PublicSearchSurfaceTests(TestCase):
         market_body = market.content.decode()
         self.assertIn("Allow: /market/", market_body)
         self.assertIn("Disallow: /market/account/", market_body)
+        self.assertIn("Sitemap: https://market.kofadimpex.com/sitemap.xml", market_body)
 
     @override_settings(STAFF_LOGIN_SLUG="private-staff-test-gateway")
     def test_robots_does_not_publish_configured_staff_gateway(self):
@@ -58,13 +59,19 @@ class PublicSearchSurfaceTests(TestCase):
             'rel="canonical" href="https://market.kofadimpex.com/market/"',
         )
 
-    def test_sitemap_contains_only_public_company_routes(self):
-        response = self.client.get("/sitemap.xml")
+    def test_sitemaps_are_host_scoped_and_never_include_private_routes(self):
+        response = self.client.get("/sitemap.xml", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         for path in ("/", "/about/", "/contact/", "/faq/", "/delivery/"):
             self.assertIn(f"<loc>https://kofadimpex.com{path}</loc>", body)
-        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", body)
+        self.assertNotIn("market.kofadimpex.com", body)
         self.assertNotIn("/workspace/", body)
-        self.assertNotIn("/market/account/", body)
         self.assertNotIn(settings.LOGIN_URL, body)
+
+        market = self.client.get("/sitemap.xml", HTTP_HOST="market.kofadimpex.com")
+        self.assertEqual(market.status_code, 200)
+        market_body = market.content.decode()
+        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", market_body)
+        self.assertNotIn("<loc>https://kofadimpex.com/about/</loc>", market_body)
+        self.assertNotIn("/market/account/", market_body)
