@@ -68,8 +68,28 @@ class RecoveryPhoneForm(forms.Form):
 @login_required
 @sensitive_post_parameters("current_password")
 def account(request):
+    from . import email_identity
     access = request.user.access
     action = request.POST.get("action", "recovery")
+    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
+        try:
+            if not request.user.check_password(request.POST.get("current_password", "")):
+                raise ValidationError("Enter your current password to change email access.")
+            if action == "email_start":
+                email_identity.request_code("staff", request.user.pk, request.POST.get("email"))
+                messages.success(request, "Email verification code sent.")
+            elif action == "email_verify":
+                email_identity.confirm_code("staff", request.user.pk, request.POST.get("email_code"))
+                audit(request.user, None, "account.email_verified", request.user.pk)
+                messages.success(request, "Email verified. Email sign-in is now available.")
+            else:
+                email_identity.set_notifications(
+                    "staff", request.user.pk, request.POST.get("email_notifications") == "on"
+                )
+                messages.success(request, "Notification preference saved.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("account")
     profile_form = ProfileForm(request.POST if request.method == "POST" and action == "profile" else None, instance=request.user)
     if request.method == "POST" and action == "profile" and profile_form.is_valid():
         profile_form.save()
@@ -82,7 +102,14 @@ def account(request):
             current = User.objects.select_for_update().get(pk=request.user.pk)
             if not current.check_password(form.cleaned_data["current_password"]):
                 form.add_error("current_password", "Your password changed. Enter the current password.")
-                return render(request, "account.html", {"title":"My account", "form":form, "sms_ready":sms_ready(), "profile_form":profile_form})
+                return render(request, "account.html", {
+        "title": "My account", "form": form, "sms_ready": sms_ready(),
+        "profile_form": profile_form,
+        "email_identity": email_identity.EmailIdentity.objects.filter(
+            kind="staff", owner_id=request.user.pk
+        ).first(),
+        "email_ready": email_identity.delivery_ready(),
+    })
             locked = Access.objects.select_for_update().get(pk=access.pk)
             locked.recovery_phone = form.cleaned_data["recovery_phone"]
             locked.save(update_fields=["recovery_phone"])
