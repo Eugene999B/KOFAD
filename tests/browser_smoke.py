@@ -633,7 +633,7 @@ with sync_playwright() as p:
     assert market_page.locator("[data-kfd-rotator] [data-hero-image]").count() == 1
     assert market_page.get_by_text("Everything for today.", exact=False).count() >= 1
     assert market_page.locator(".kfd-category-grid .kfd-category").count() == 4
-    assert all("kofad-market-retail-hero" in img.get_attribute("src") for img in market_page.locator(".kfd-category-grid .kfd-category img").all())
+    assert all(img.evaluate("node => node.complete && node.naturalWidth > 0") for img in market_page.locator(".kfd-category-grid .kfd-category img").all())
     assert market_page.locator("[data-hero-image]").evaluate("img => img.naturalWidth > 0")
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
