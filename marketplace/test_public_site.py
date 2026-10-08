@@ -96,13 +96,17 @@ class PublicSiteTests(TestCase):
         self.assertNotContains(response, "Staff access")
 
     def test_sitemap_contains_public_pages_and_never_staff_routes(self):
-        response = self.client.get("/sitemap.xml")
+        response = self.client.get("/sitemap.xml", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn("<loc>https://kofadimpex.com/</loc>", body)
-        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", body)
+        self.assertNotIn("market.kofadimpex.com", body)
         self.assertNotIn(settings.STAFF_LOGIN_PATH, body)
         self.assertNotIn("/workspace/", body)
+
+        market = self.client.get("/sitemap.xml", HTTP_HOST="market.kofadimpex.com")
+        self.assertEqual(market.status_code, 200)
+        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", market.content.decode())
 
     def test_about_and_help_have_distinct_templates_and_purpose(self):
         about = self.client.get("/about/")
