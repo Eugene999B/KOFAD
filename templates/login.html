@@ -5,16 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#102B46">
 <meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex,nofollow,noarchive">
 <title>Sign in · KOFAD</title>
-<link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}">
-<link rel="apple-touch-icon" href="{% static 'brand/kofad-emblem.png' %}">
+<link rel="icon" type="image/jpeg" href="{% static 'brand/kofad-official-logo.jpg' %}">
+<link rel="apple-touch-icon" href="{% static 'brand/kofad-official-logo.jpg' %}">
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'app.css' %}">
 <link rel="stylesheet" href="{% static 'ui-v4.css' %}">
+<link rel="stylesheet" href="{% static 'brand-system.css' %}">
 <script defer src="{% static 'app.js' %}"></script>
 </head>
 <body class="login-page">
-<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOFAD</span></div>
+<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div><span>KOFAD</span></div>
 
 <header class="login-header premium-login-header">
 <a class="brand" href="/" aria-label="KOFAD IMPEX ENTERPRISE home">{% include "brand.html" %}</a>
@@ -39,7 +41,7 @@
 </div>
 
 <div class="login-story-bottom">
-<div class="login-emblem-orbit"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div class="login-emblem-orbit"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div>
 <div><strong>KOFAD IMPEX ENTERPRISE</strong><small>Sales · Stock · Customers · Finance</small></div>
 </div>
 </section>
@@ -47,7 +49,7 @@
 <main class="login-card premium-login-card" id="main">
 <div class="login-access-chip"><span>PRIVATE STAFF ACCESS</span><b>● LIVE</b></div>
 <div class="login-card-top">
-<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div>
 <div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KOFAD.</h2></div>
 </div>
 <p class="muted login-intro-copy">Your permissions decide exactly what you can see and do after sign-in.</p>
@@ -60,7 +62,7 @@
 <div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username or Ghana phone number"></div>
 
 <label for="password">Password</label>
-<div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="new-password" data-login-password required placeholder="Enter your password"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
+<div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="current-password" data-login-password required placeholder="Enter your password"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
 
 <div class="login-form-row"><span>Authorized staff only</span><a href="/forgot-password/">Forgot password?</a></div>
 <button class="button wide login-submit premium-login-submit">Sign in to workspace <span aria-hidden="true">→</span></button>
