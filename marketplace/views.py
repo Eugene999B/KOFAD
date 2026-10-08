@@ -2108,6 +2108,14 @@ def staff_inbox(request, branch, conversation_id=None):
                 messages.error(request, "Accept this chat before replying.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
 
+            if not conversation.customer_id:
+                messages.error(
+                    request,
+                    "This contact is not signed in to a verified KOFAD customer account. "
+                    "Do not disclose account, order or payment information here; ask them to sign in or use the supplied phone number.",
+                )
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+
             if support_form.is_valid():
                 try:
                     _save_conversation_message(
