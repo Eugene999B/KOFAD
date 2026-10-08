@@ -121,8 +121,9 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertNotContains(response, "Live stock · Secure checkout · Tracked fulfilment")
         self.assertNotContains(response, "commerce-global-search")
         self.assertContains(response, 'class="market-contact-link"')
-        self.assertContains(response, 'class="market-staff-link"')
-        self.assertContains(response, 'href="/login/"')
+        self.assertNotContains(response, 'class="market-staff-link"')
+        self.assertNotContains(response, "Staff login")
+        self.assertNotContains(response, "Staff access")
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
     def test_guests_and_customers_can_browse_the_catalog(self):
@@ -189,7 +190,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         session = self.client.session
         session["market_customer_id"] = self.customer.pk
         session.save()
-        response = self.client.post("/login/", {
+        response = self.client.post(settings.LOGIN_URL, {
             "username": self.staff.username,
             "password": "market-owner-password",
         })
@@ -204,7 +205,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertContains(response, "Enter your mobile number.")
         self.assertContains(response, 'class="market-auth-header"')
         self.assertContains(response, 'class="premium-access-logo"')
-        self.assertContains(response, "kofad-emblem")
+        self.assertContains(response, "kofad-official-logo")
         self.assertNotContains(response, 'aria-label="Search KOFAD Market"')
         self.assertNotContains(response, 'class="shop-shell-cart"')
         self.assertNotContains(response, 'class="shop-shell-footer"')
