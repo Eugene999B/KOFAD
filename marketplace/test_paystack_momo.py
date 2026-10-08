@@ -248,3 +248,22 @@ class CustomerMomoTests(MarketFixtures):
         response = self.client.post(f"/market/orders/{order.pk}/payment-otp/", {"otp": "988776"})
         self.assertEqual(response.status_code, 404)
         step.assert_not_called()
+
+    @patch("marketplace.services.verify_paystack")
+    @patch("core.paystack_challenges.charge_step")
+    def test_transaction_failure_cannot_fail_an_active_payment_challenge(self, step, verify):
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(order=order, provider="paystack",
+            reference="active-challenge", amount=order.total, status="pending",
+            next_check_at=timezone.now(), verification_summary={"flow": "mobile_money"})
+        order.payment_reference = attempt.reference
+        order.payment_status = "pending"
+        order.save()
+        step.return_value = {"status": "send_otp", "reference": attempt.reference}
+        verify.return_value = {"status": "failed", "reference": attempt.reference}
+        reconcile_due()
+        attempt.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, "pending")
+        self.assertEqual(attempt.status, "pending")
+        self.assertEqual(attempt.verification_summary["charge_status"], "send_otp")

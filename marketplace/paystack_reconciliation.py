@@ -21,19 +21,25 @@ def reconcile_due(limit=5):
         ).update(next_check_at=now + timedelta(minutes=1), check_count=F("check_count") + 1)
         if not claimed:
             continue
+        charge_status = None
+        direct_momo = (attempt.verification_summary or {}).get("flow") == "mobile_money"
         try:
             if (attempt.verification_summary or {}).get("flow") == "mobile_money":
                 from core.paystack_challenges import charge_step
                 from .paystack_momo import remember_challenge
                 try:
-                    remember_challenge(attempt, charge_step(attempt.reference))
+                    charge = charge_step(attempt.reference)
+                    charge_status = str(charge.get("status", ""))
+                    remember_challenge(attempt, charge)
                 except ValidationError:
                     pass
             verified = services.verify_paystack(attempt.reference)
             state = verified.get("status")
             if state == "success":
                 services.finalize_payment(attempt.reference, verified)
-            elif state in {"failed", "abandoned", "reversed"}:
+            elif state in {"failed", "abandoned", "reversed"} and (
+                not direct_momo or charge_status in {"failed", "abandoned", "reversed"}
+            ):
                 MarketPaymentAttempt.objects.filter(pk=attempt.pk, status__in=["initializing", "submission_unknown", "pending"]).update(
                     status="failed", next_check_at=None, provider_message="Provider confirmed unsuccessful payment.",
                 )

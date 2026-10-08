@@ -512,7 +512,7 @@ def reconcile(reference, *, force=False):
 
     try:
         from .paystack_challenges import charge_step, challenge_message
-        if state.get("charge_status") == "send_otp":
+        if state.get("status") in PENDING_STATES:
             try:
                 charge = charge_step(reference)
                 state["charge_status"] = str(charge.get("status", ""))
@@ -541,7 +541,7 @@ def reconcile(reference, *, force=False):
     if provider_status == "success":
         _save_state(held, state)
         return finalize_verified(reference, verified)
-    if provider_status in TERMINAL_FAILURES:
+    if provider_status in TERMINAL_FAILURES and state.get("charge_status") in TERMINAL_FAILURES:
         state["status"] = provider_status
         state["message"] = str(verified.get("gateway_response") or verified.get("message") or "The MoMo request was not successful.")[:240]
         state["next_check_at"] = None

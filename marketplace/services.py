@@ -1086,7 +1086,10 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
 
     provider_status = str(provider_data.get("status", "")).lower()
     if provider_status != "success":
-        if provider_status in {"failed", "abandoned", "reversed"}:
+        if provider_status in {"failed", "abandoned", "reversed"} and (
+            (attempt.verification_summary or {}).get("flow") != "mobile_money"
+            or (attempt.verification_summary or {}).get("charge_status") in {"failed", "abandoned", "reversed"}
+        ):
             attempt.status = "failed"
             attempt.next_check_at = None
             attempt.save(update_fields=["status", "next_check_at"])
@@ -1097,7 +1100,7 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
 
     direct_momo = attempt.verification_summary.get("flow") == "mobile_money"
     if expected_provider == "paystack" and (
-        (str(settings.PAYSTACK_SECRET_KEY).startswith("sk_live_") and provider_data.get("domain") == "test")
+        (str(settings.PAYSTACK_SECRET_KEY).startswith("sk_live_") and provider_data.get("domain") != "live")
         or (direct_momo and (provider_data.get("channel") != "mobile_money" or not provider_data.get("id")))
     ):
         attempt.status = "attention"

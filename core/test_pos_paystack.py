@@ -243,3 +243,23 @@ class PosPaystackMomoTests(Fixtures, TestCase):
             pos_paystack.submit_otp(self.user, self.branch, "KFD-POS-unknown", "988776")
         step.assert_not_called()
         post.assert_not_called()
+
+    @patch("core.pos_paystack.requests.post")
+    @patch("core.pos_paystack.verify")
+    @patch("core.paystack_challenges.charge_step")
+    def test_staff_active_code_challenge_is_not_prematurely_failed(self, step, verify, post):
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        response = self.charge_response(reference)
+        response.json.return_value["data"]["status"] = "send_otp"
+        post.return_value = response
+        pos_paystack.start(self.user, self.branch, self.payload(), key,
+            "0551234567", "mtn", "customer@example.test")
+        step.return_value = {"status": "send_otp", "reference": reference}
+        verify.return_value = {"status": "failed", "reference": reference}
+        with self.assertRaises(pos_paystack.ProviderPending):
+            pos_paystack.reconcile(reference, force=True)
+        state = HeldSale.objects.get(label=pos_paystack.LABEL_PREFIX + reference).cart["payment_request"]
+        self.assertEqual(state["status"], "pending")
+        self.assertEqual(state["charge_status"], "send_otp")
+        self.assertEqual(Document.objects.count(), 0)
