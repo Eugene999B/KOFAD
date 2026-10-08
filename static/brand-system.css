@@ -247,3 +247,33 @@ html[data-theme="dark"] .premium-access-card :is(input,select){background:#111a2
   .login-header{padding-left:14px!important;padding-right:14px!important}
   .login-header-meta{display:none!important}
 }
+
+/* Re-map legacy Market tokens to the approved brand palette. */
+:root{
+  --market-bg:#f5f6f5!important;
+  --market-surface:#ffffff!important;
+  --market-ink:#1f252a!important;
+  --market-muted:#71808a!important;
+  --market-line:#dfe4e6!important;
+  --market-navy:#102a3d!important;
+  --market-navy-2:#0f3b58!important;
+  --market-teal:#0f3b58!important;
+  --market-teal-2:#d1bb7f!important;
+  --market-gold:#d1bb7f!important;
+  --market-soft:#f3efe4!important;
+  --market-shadow:0 18px 50px rgba(16,42,61,.08)!important;
+}
+.market-body :is(input,select,textarea):focus{
+  border-color:var(--kofad-brand-gold-strong)!important;
+  box-shadow:0 0 0 4px rgba(209,187,127,.18)!important;
+}
+.market-eyebrow,
+.market-section-head a,
+.product-card-actions>a,
+.account-foot a,
+.resend-form button{color:var(--kofad-brand-navy)!important}
+.featured-badge,
+.market-search button,
+.cart-update-row button{background:var(--kofad-brand-navy)!important;color:#fff!important}
+.status-paid,.status-confirmed,.status-preparing{background:#eef2f3!important;color:var(--kofad-brand-navy)!important}
+.status-ready_pickup,.status-out_for_delivery{background:#f5efe0!important;color:#6c5726!important}
