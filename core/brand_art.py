@@ -20,7 +20,7 @@ def print_fonts():
 
 
 def draw_mark(pdf, x, y, size):
-    """Use the same official emblem as the homepage, without redrawing it."""
-    path = settings.BASE_DIR / "static" / "brand" / "kofad-emblem.png"
+    """Use the single official KOFAD logo asset on printed records."""
+    path = settings.BASE_DIR / "static" / "brand" / "kofad-official-logo.jpg"
     pdf.drawImage(ImageReader(str(path)), x, y, width=size, height=size,
                   preserveAspectRatio=True, anchor="c", mask="auto")
