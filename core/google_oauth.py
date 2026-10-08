@@ -62,7 +62,7 @@ def _parse_b64(value):
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
-def _validated_google_claims(jwt, nonce):
+def _validated_google_claims(jwt, nonce, client_id=None):
     """Verify RS256, kid, issuer, audience, nonce, expiry and verified email."""
     try:
         if len(jwt) > 12000 or jwt.count(".") != 2:
@@ -76,9 +76,10 @@ def _validated_google_claims(jwt, nonce):
             raise ValueError("Unsupported token algorithm")
         if claims.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
             raise ValueError("Invalid Google token issuer")
-        if claims.get("aud") != settings.KOFAD_GOOGLE_CLIENT_ID:
+        expected_client = client_id or settings.KOFAD_GOOGLE_CLIENT_ID
+        if claims.get("aud") != expected_client:
             raise ValueError("Invalid token audience")
-        if claims.get("azp") and claims["azp"] != settings.KOFAD_GOOGLE_CLIENT_ID:
+        if claims.get("azp") and claims["azp"] != expected_client:
             raise ValueError("Invalid authorized party")
         now = time.time()
         if float(claims.get("exp", 0)) <= now or float(claims.get("iat", 0)) > now + 90:
