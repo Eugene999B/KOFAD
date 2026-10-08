@@ -680,12 +680,18 @@ def complete_trade(request):
                     raise ValidationError("Invalid Mobile Money payment amount.")
                 if momo_amount > 0:
                     from . import pos_paystack
-                    if pos_paystack.ready():
+                    from marketplace.hubtel import selected_provider, ready as gateway_ready
+                    selected = selected_provider()
+                    is_ready = gateway_ready("hubtel") if selected == "hubtel" else pos_paystack.ready()
+                    if is_ready:
                         raise ValidationError(
-                            "Mobile Money sales must use the Paystack approval request so KOFAD can verify payment before posting the sale."
+                            "Mobile Money sales must use the " + (
+                                "Hubtel secure checkout" if selected == "hubtel" else "Paystack approval request"
+                            ) + " so KOFAD can independently verify payment before posting the sale."
                         )
                     raise ValidationError(
-                        "Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now."
+                        "Direct Mobile Money sales are awaiting " + selected.title()
+                        + " activation. Use another payment method for now."
                     )
         branch = branch_for(request)
         doc = s.post_trade(
