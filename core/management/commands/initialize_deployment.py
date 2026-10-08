@@ -1,9 +1,13 @@
 import os
 
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from django.db import connection
+from django.db import connection, transaction
+
+from core.models import Access
+from core.services import audit
 
 
 class Command(BaseCommand):
@@ -22,6 +26,34 @@ class Command(BaseCommand):
                     call_command("bootstrap_admin", confirm_initial_setup=True)
             if os.environ.get("KOFAD_OWNER_ADMIN_PHONE", "").strip():
                 call_command("provision_owner_admin", confirm_owner_admin=True)
+
+            rotation_password = os.environ.get("KOFAD_ADMIN_ROTATION_PASSWORD", "")
+            if rotation_password:
+                admin = User.objects.filter(username__iexact="ADMIN").first()
+                if admin:
+                    validate_password(rotation_password, user=admin)
+                    with transaction.atomic():
+                        admin = User.objects.select_for_update().get(pk=admin.pk)
+                        admin.set_password(rotation_password)
+                        admin.save(update_fields=["password"])
+                        access, _ = Access.objects.select_for_update().get_or_create(user=admin)
+                        access.force_password_change = True
+                        access.totp_secret = ""
+                        access.totp_last_step = -1
+                        access.save(update_fields=[
+                            "force_password_change", "totp_secret", "totp_last_step"
+                        ])
+                        audit(
+                            None, None, "admin.emergency_credential_rotated", admin.pk,
+                            {"force_password_change": True},
+                            category="security", severity="critical",
+                            entity_type="user", entity_id=str(admin.pk),
+                        )
+                    self.stdout.write(
+                        "ADMIN credential rotation applied; first sign-in must replace the temporary credential."
+                    )
+                else:
+                    self.stdout.write("ADMIN credential rotation requested, but no ADMIN account exists.")
             if os.environ.get("KOFAD_LOAD_SHOWCASE_DATA", "").strip() == "1":
                 call_command("load_showcase_data", confirm_live_showcase=True)
             # Existing showcase environments must keep pace with newly added KOFAD modules.
