@@ -73,13 +73,13 @@ body.is-kofad-home .public-market-link{color:#fff!important}
 
 /* October 8 corrective layout: restrained storefront, not a full-screen billboard. */
 body.is-kofad-home .kfd-hero{
-  height:clamp(320px,31vw,405px)!important;
-  min-height:320px!important;max-height:405px!important;
+  height:clamp(305px,27vw,365px)!important;
+  min-height:305px!important;max-height:365px!important;
 }
 body.is-kofad-home .kfd-hero-inner{width:min(1190px,calc(100% - 64px))}
 body.is-kofad-home .kfd-hero-copy{max-width:590px;padding:19px 0 34px}
 body.is-kofad-home .kfd-hero h1{
-  font-size:clamp(32px,3.6vw,46px)!important;line-height:1.105!important;
+  font-size:clamp(30px,3.3vw,42px)!important;line-height:1.105!important;
   letter-spacing:-.045em!important;max-width:580px
 }
 body.is-kofad-home .kfd-hero-copy>p:not(.kfd-eyebrow){
