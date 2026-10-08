@@ -1093,6 +1093,18 @@ def customer_orders(request, customer):
 
 
 @market_customer_required
+@require_POST
+def customer_payment_otp(request, customer, pk):
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    try:
+        paystack_momo.submit_otp(order, request.POST.get("otp", ""))
+        messages.info(request, "Code submitted. Payment is being verified; do not pay again.")
+    except ValidationError as exc:
+        messages.error(request, problem(exc))
+    return redirect("market_order", pk=order.pk)
+
+
+@market_customer_required
 def customer_order(request, customer, pk):
     order = get_object_or_404(
         OnlineOrder.objects.prefetch_related(
@@ -2321,6 +2333,7 @@ def customer_payment_status(request, customer, pk):
         "waiting": waiting, "paid": order.payment_status == "paid",
         "message": latest.provider_message if latest and latest.status != "success" else "",
         "attention": bool(latest and latest.status == "attention"),
+        "needs_otp": bool(latest and latest.status == "pending" and (latest.verification_summary or {}).get("charge_status") == "send_otp"),
     })
     response["Cache-Control"] = "no-store, private"
     return response

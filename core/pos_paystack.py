@@ -172,6 +172,7 @@ def _response_state(held):
         "failed": state.get("status") in TERMINAL_FAILURES,
         "attention": state.get("status") == "attention",
         "expires_at": state.get("expires_at"),
+        "needs_otp": state.get("charge_status") == "send_otp" and state.get("status") in PENDING_STATES,
     }
     if document:
         result["sale"] = result_for_document(document)
@@ -331,6 +332,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         return _response_state(held)
 
     state["provider_status"] = provider_status
+    state["charge_status"] = provider_status
     state["display_text"] = str(data.get("display_text", ""))[:240]
     state["message"] = state["display_text"] or "Approve the payment on the customer's phone."
     state["status"] = "pending" if provider_status not in TERMINAL_FAILURES else provider_status
@@ -423,7 +425,8 @@ def finalize_verified(reference, verified):
         raise ValidationError("Paystack returned an invalid payment amount.") from exc
     currency = str(verified.get("currency", "")).strip().upper()
     channel = str(verified.get("channel", "")).strip().lower()
-    if (not provider_amount.is_finite() or provider_amount != expected_amount
+    if ((settings.PAYSTACK_SECRET_KEY.startswith("sk_live_") and verified.get("domain") != "live")
+            or not provider_amount.is_finite() or provider_amount != expected_amount
             or verified.get("reference") != reference or not verified.get("id")
             or currency != "GHS" or channel != "mobile_money"):
         message = "Verified Paystack details do not match this sale. Manager review is required."
@@ -508,6 +511,15 @@ def reconcile(reference, *, force=False):
         _save_state(held, state)
 
     try:
+        from .paystack_challenges import charge_step, challenge_message
+        if state.get("status") in PENDING_STATES:
+            try:
+                charge = charge_step(reference)
+                state["charge_status"] = str(charge.get("status", ""))
+                state["display_text"] = challenge_message(charge)
+                _save_state(held, state)
+            except ValidationError:
+                pass
         verified = verify(reference)
     except ProviderPending:
         held.refresh_from_db()
@@ -529,7 +541,7 @@ def reconcile(reference, *, force=False):
     if provider_status == "success":
         _save_state(held, state)
         return finalize_verified(reference, verified)
-    if provider_status in TERMINAL_FAILURES:
+    if provider_status in TERMINAL_FAILURES and state.get("charge_status") in TERMINAL_FAILURES:
         state["status"] = provider_status
         state["message"] = str(verified.get("gateway_response") or verified.get("message") or "The MoMo request was not successful.")[:240]
         state["next_check_at"] = None
@@ -595,3 +607,33 @@ def reconcile_due(limit=20):
         except ValidationError:
             pass
     return len(due)
+
+
+def submit_otp(user, branch, reference, otp):
+    from .paystack_challenges import charge_step, challenge_message
+    services.permit(user, branch, "operate_sales")
+    with transaction.atomic():
+        held = HeldSale.objects.select_for_update().filter(
+            branch=branch, user=user, label=_label(reference)).first()
+        if not held:
+            raise ValidationError("This payment request could not be found.")
+        state = _state(held)
+        if state.get("status") not in PENDING_STATES or state.get("charge_status") != "send_otp":
+            raise ValidationError("This payment is not requesting a one-time code.")
+        now = timezone.now().timestamp()
+        if int(state.get("otp_attempts", 0)) >= 5 or float(state.get("otp_next_at", 0)) > now:
+            raise ValidationError("Please wait before trying another code, or contact KOFAD.")
+        state["otp_attempts"] = int(state.get("otp_attempts", 0)) + 1
+        state["otp_next_at"] = now + 30
+        _save_state(held, state)
+    data = charge_step(reference, otp=otp)
+    with transaction.atomic():
+        held = _held(reference, lock=True)
+        state = _state(held)
+        if state.get("status") in PENDING_STATES:
+            state["charge_status"] = str(data.get("status", ""))
+            state["display_text"] = challenge_message(data)
+            state["message"] = state["display_text"]
+            state["next_check_at"] = (timezone.now() + timedelta(seconds=10)).timestamp()
+            _save_state(held, state)
+    return _response_state(held)

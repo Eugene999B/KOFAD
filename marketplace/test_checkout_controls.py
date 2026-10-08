@@ -120,7 +120,7 @@ class CheckoutControlsTests(MarketFixtures):
         status = self.client.get(f"/market/orders/{order.pk}/payment-status/")
         self.assertEqual(status.json(), {
             "payment_status": order.payment_status, "order_status": order.status,
-            "waiting": True, "paid": False, "message": "", "attention": False,
+            "waiting": True, "paid": False, "message": "", "attention": False, "needs_otp": False,
         })
         self.assertIn("no-store", status["Cache-Control"])
         other = self.order()

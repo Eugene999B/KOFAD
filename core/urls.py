@@ -31,6 +31,7 @@ urlpatterns = [
     path("branch/", v.switch_branch, name="switch_branch"), path("workspace/", v.dashboard, name="dashboard"),
     path("sales/new/", v.pos, name="pos"), path("purchasing/", v.purchasing, name="purchasing"),
     path("api/trades/", v.complete_trade),
+    path("api/pos/paystack-momo/<str:reference>/otp/", v.pos_paystack_momo_otp, name="pos_paystack_momo_otp"),
     path("api/pos/paystack-momo/start/", v.pos_paystack_momo_start, name="pos_paystack_momo_start"),
     path("api/pos/paystack-momo/<str:reference>/status/", v.pos_paystack_momo_status, name="pos_paystack_momo_status"),
     path("api/documents/<uuid:pk>/send-sms/", v.send_transaction_message_api, name="send_transaction_message_api"),

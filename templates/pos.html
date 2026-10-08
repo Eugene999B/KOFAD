@@ -212,6 +212,13 @@
           <label>Customer email
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          <div id="paystack-momo-challenge" class="hidden">
+            <label>One-time payment code
+              <input id="paystack-momo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code sent for this payment">
+            </label>
+            <p class="hint">Only enter the code sent for this payment. Never ask for or enter the customer's MoMo PIN.</p>
+            <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
+          </div>
           <p id="paystack-momo-status" class="hint">When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.</p>
           {% else %}
           <p>Direct MoMo approval is prepared but not active yet. It will become available after Paystack live access is enabled for KOFAD.</p>

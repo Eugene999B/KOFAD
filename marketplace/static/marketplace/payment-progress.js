@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (!response.ok) return;
       const data = await response.json();
+      if (Boolean(data.needs_otp) !== Boolean(panel.querySelector("#payment-otp"))) { stopped = true; location.reload(); return; }
       if (message && data.message) message.textContent = data.message;
       if (data.attention) {
         stopped = true;

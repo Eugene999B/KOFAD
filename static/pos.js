@@ -1190,6 +1190,33 @@
     paystackMomoStatus.classList.toggle("error", tone === "error");
   }
 
+  function syncMomoChallenge(result) {
+    const panel = document.querySelector("#paystack-momo-challenge");
+    panel?.classList.toggle("hidden", !result?.needs_otp);
+    panel?.querySelectorAll("input,button").forEach(control => {control.disabled = !result?.needs_otp;});
+  }
+
+  document.querySelector("#paystack-momo-otp-submit")?.addEventListener("click", async () => {
+    const input = document.querySelector("#paystack-momo-otp");
+    const button = document.querySelector("#paystack-momo-otp-submit");
+    if (!momoReference || !/^[0-9]{4,8}$/.test(input?.value || "")) {
+      setMomoStatus("Enter the one-time payment code. Never enter a MoMo PIN.", "error");
+      return;
+    }
+    button.disabled = true;
+    try {
+      const result = await api("/api/pos/paystack-momo/" + encodeURIComponent(momoReference) + "/otp/", {otp: input.value});
+      input.value = "";
+      syncMomoChallenge(result);
+      setMomoStatus(result.message || "Code submitted. Waiting for verified payment.");
+      pollMomoPayment();
+    } catch (error) {
+      input.value = "";
+      setMomoStatus(error.message, "error");
+      button.disabled = false;
+    }
+  });
+
   function lockCheckoutForMomo(locked) {
     root.querySelectorAll("input,select,textarea,button").forEach(control => {
       control.disabled = locked;
@@ -1220,7 +1247,8 @@
     try {
       const result = await fetchMomoStatus();
       if (!result || !momoReference) return;
-      setMomoStatus(result.message || result.display_text || "Checking payment…");
+      setMomoStatus(result.display_text || result.message || "Checking payment…");
+      syncMomoChallenge(result);
       if (result.paid && result.sale) {
         completed = true;
         momoReference = null;

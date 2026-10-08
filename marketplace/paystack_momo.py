@@ -54,6 +54,7 @@ def initialize(order, phone, network):
         "mobile_money": {"phone": "0" + phone[4:], "provider": network},
         "metadata": {"source": "kofad_market", "order_reference": order.public_reference},
     }
+    provider_status = ""
     state = "submission_unknown"
     message = "Your payment request is being checked. If debited, do not pay again."
     try:
@@ -64,6 +65,7 @@ def initialize(order, phone, network):
         data = body.get("data") if isinstance(body, dict) else None
         if (200 <= response.status_code < 300 and isinstance(body, dict) and body.get("status") is True
                 and isinstance(data, dict) and data.get("reference") == attempt.reference):
+            provider_status = str(data.get("status", ""))
             state = "pending"
             message = str(data.get("display_text") or "Approve the Mobile Money request on your phone.")[:240]
     except (requests.RequestException, ValueError):
@@ -74,4 +76,48 @@ def initialize(order, phone, network):
         next_check_at=timezone.now() + timedelta(seconds=10),
     )
     attempt.refresh_from_db()
+    if provider_status:
+        remember_challenge(attempt, {"status": provider_status})
+        attempt.refresh_from_db()
     return attempt
+
+
+def remember_challenge(attempt, data):
+    from core.paystack_challenges import challenge_message
+    with transaction.atomic():
+        current = MarketPaymentAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if current.status not in ACTIVE_STATUSES or current.provider != "paystack":
+            return
+        summary = dict(current.verification_summary or {})
+        summary["charge_status"] = str(data.get("status", ""))
+        current.verification_summary = summary
+        if summary["charge_status"] == "send_otp" or summary["charge_status"].startswith("send_"):
+            current.provider_message = challenge_message(data)
+        if summary["charge_status"].startswith("send_") and summary["charge_status"] != "send_otp":
+            current.status = "attention"
+        current.save(update_fields=["verification_summary", "provider_message", "status"])
+
+
+def submit_otp(order, otp):
+    from core.paystack_challenges import charge_step
+    with transaction.atomic():
+        current_order = OnlineOrder.objects.select_for_update().get(pk=order.pk)
+        if current_order.payment_status in {"paid", "refunded"} or current_order.status != "awaiting_payment":
+            raise ValidationError("This payment cannot accept another code.")
+        attempt = current_order.payment_attempts.select_for_update().filter(
+            provider="paystack", reference=current_order.payment_reference, status="pending").first()
+        if not attempt:
+            raise ValidationError("No pending Mobile Money verification was found.")
+        summary = dict(attempt.verification_summary or {})
+        if summary.get("flow") != "mobile_money" or summary.get("charge_status") != "send_otp":
+            raise ValidationError("This payment is not requesting a one-time code.")
+        now = timezone.now().timestamp()
+        if int(summary.get("otp_attempts", 0)) >= 5 or float(summary.get("otp_next_at", 0)) > now:
+            raise ValidationError("Please wait before trying another code, or contact KOFAD.")
+        summary["otp_attempts"] = int(summary.get("otp_attempts", 0)) + 1
+        summary["otp_next_at"] = now + 30
+        attempt.verification_summary = summary
+        attempt.save(update_fields=["verification_summary"])
+    data = charge_step(attempt.reference, otp=otp)
+    remember_challenge(attempt, data)
+    MarketPaymentAttempt.objects.filter(pk=attempt.pk, status="pending").update(next_check_at=timezone.now())

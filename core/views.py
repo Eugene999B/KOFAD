@@ -810,6 +810,26 @@ def pos_paystack_momo_start(request):
 
 
 @login_required
+@require_POST
+def pos_paystack_momo_otp(request, reference):
+    branch = branch_for(request)
+    s.permit(request.user, branch, "operate_sales")
+    try:
+        if len(request.body) > 1024:
+            raise ValidationError("Invalid payment verification.")
+        data = json.loads(request.body or "{}")
+        if not isinstance(data, dict):
+            raise ValidationError("Invalid payment verification.")
+        from . import pos_paystack
+        result = pos_paystack.submit_otp(request.user, branch, reference, data.get("otp", ""))
+        response = JsonResponse(result)
+        response["Cache-Control"] = "no-store, private"
+        return response
+    except (ValidationError, ValueError, TypeError) as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+@login_required
 def pos_paystack_momo_status(request, reference):
     branch = branch_for(request)
     s.permit(request.user, branch, "operate_sales")
