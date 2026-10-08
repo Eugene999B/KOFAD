@@ -93,32 +93,44 @@ def public_page(request, slug):
 
 
 def robots_txt(request):
-    """Advertise only the public customer/company surface to crawlers."""
-    origin = settings.PUBLIC_SITE_ORIGIN
-    body = "\n".join([
-        "User-agent: *",
-        "Allow: /",
-        "Disallow: /market/account/",
-        "Disallow: /market/cart/",
-        "Disallow: /market/checkout/",
-        "Disallow: /market/orders/",
-        "Disallow: /market/messages/",
-        "Disallow: /market/payment/",
-        "Disallow: /market/payments/",
-        "Disallow: /market/location/",
-        "Disallow: /market/search/",
-        "Disallow: /technical-admin/",
-        "Disallow: /workspace/",
-        "Disallow: /settings/",
-        "Disallow: /online-orders/",
-        "Disallow: /online-returns/",
-        "Disallow: /online-inbox/",
-        "Disallow: /api/",
-        "",
-        f"Sitemap: {origin}/sitemap.xml",
-        "",
-    ])
-    response = HttpResponse(body, content_type="text/plain; charset=utf-8")
+    """Publish crawler policy without exposing the private staff gateway."""
+    host = request.get_host().split(":")[0].lower().rstrip(".")
+    if host == "staff.kofadimpex.com":
+        lines = ["User-agent: *", "Disallow: /", ""]
+    elif host == "market.kofadimpex.com":
+        lines = [
+            "User-agent: *",
+            "Allow: /market/",
+            "Allow: /market/products/",
+            "Disallow: /market/account/",
+            "Disallow: /market/cart/",
+            "Disallow: /market/checkout/",
+            "Disallow: /market/orders/",
+            "Disallow: /market/messages/",
+            "Disallow: /market/payment/",
+            "Disallow: /market/payments/",
+            "Disallow: /market/location/",
+            "Disallow: /market/search/",
+            "",
+            f"Sitemap: {settings.PUBLIC_SITE_ORIGIN}/sitemap.xml",
+            "",
+        ]
+    else:
+        lines = [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /technical-admin/",
+            "Disallow: /workspace/",
+            "Disallow: /settings/",
+            "Disallow: /online-orders/",
+            "Disallow: /online-returns/",
+            "Disallow: /online-inbox/",
+            "Disallow: /api/",
+            "",
+            f"Sitemap: {settings.PUBLIC_SITE_ORIGIN}/sitemap.xml",
+            "",
+        ]
+    response = HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
     response["Cache-Control"] = "public, max-age=3600"
     return response
 
@@ -145,9 +157,10 @@ def sitemap_xml(request):
     ]
     rows = []
     for path, priority, frequency in [*paths, *product_paths]:
+        item_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else origin
         rows.append(
             "  <url>"
-            f"<loc>{origin}{path}</loc>"
+            f"<loc>{item_origin}{path}</loc>"
             f"<changefreq>{frequency}</changefreq>"
             f"<priority>{priority}</priority>"
             "</url>"
