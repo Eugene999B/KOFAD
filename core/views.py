@@ -5,6 +5,7 @@ import uuid
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
+from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib import messages
