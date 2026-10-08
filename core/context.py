@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from .models import Branch, Company
 
 
@@ -26,4 +28,5 @@ def shell(request):
         "current_branch": current,
         "online_order_attention": online_order_attention,
         "market_unread": market_unread,
+        "staff_login_path": settings.STAFF_LOGIN_PATH,
     }
