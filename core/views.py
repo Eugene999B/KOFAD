@@ -119,20 +119,48 @@ def login_view(request):
     if request.method == "POST":
         identifier = request.POST.get("username", "").strip()[:150]
         canonical, lock_identity = resolve_login_identifier(identifier)
-        # Per-account lock avoids trusting spoofable forwarded IP headers and
-        # keeps alternate phone formats on the same lockout bucket.
-        key = hashlib.sha256(lock_identity.encode()).hexdigest()
+        account_key = hashlib.sha256(lock_identity.encode()).hexdigest()
+        if not request.session.session_key:
+            request.session.create()
+        source_key = hashlib.sha256(
+            ("login-source:" + str(request.session.session_key)).encode()
+        ).hexdigest()
+        now = timezone.now()
         with transaction.atomic():
-            LoginAttempt.objects.get_or_create(key=key)
-            attempt = LoginAttempt.objects.select_for_update().get(key=key)
-            if attempt.blocked_until and attempt.blocked_until > timezone.now():
+            # Lock in lexical order so simultaneous login attempts cannot deadlock.
+            for key in sorted({account_key, source_key}):
+                LoginAttempt.objects.get_or_create(key=key)
+            locked = {
+                row.key: row
+                for row in LoginAttempt.objects.select_for_update()
+                .filter(key__in=[account_key, source_key])
+                .order_by("key")
+            }
+            attempt = locked[account_key]
+            source = locked[source_key]
+
+            if source.blocked_until and source.blocked_until > now:
                 error = "Too many attempts. Please wait 15 minutes."
             else:
-                if attempt.blocked_until:
+                if source.blocked_until:
+                    source.failures = 0
+                    source.blocked_until = None
+                user = authenticate(
+                    request,
+                    username=canonical,
+                    password=request.POST.get("password", ""),
+                )
+                if user is not None:
+                    # A correct password from a fresh browser must recover from an
+                    # account-targeted lockout; an attacker must not be able to
+                    # deny the owner access simply by sending bad passwords.
                     attempt.failures = 0
                     attempt.blocked_until = None
-                user = authenticate(request, username=canonical, password=request.POST.get("password", ""))
-                if user is not None:
+                    source.failures = 0
+                    source.blocked_until = None
+                    attempt.save(update_fields=["failures", "blocked_until"])
+                    source.save(update_fields=["failures", "blocked_until"])
+
                     access, _ = Access.objects.get_or_create(user=user)
                     login(request, user)
                     from marketplace import services as market_services
@@ -144,8 +172,6 @@ def login_view(request):
                     request.session.set_expiry(settings.SESSION_COOKIE_AGE)
                     request.session.pop("enroll_secret", None)
                     request.session.pop("mfa_verified_at", None)
-                    attempt.failures = 0
-                    attempt.save()
                     s.audit(user, None, "session.login", user.pk)
                     if access.force_password_change:
                         messages.info(request, "Change the temporary password before continuing.")
@@ -153,11 +179,23 @@ def login_view(request):
                     if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
                         return redirect("mfa")
                     return redirect("dashboard")
-                attempt.failures += 1
-                if attempt.failures >= 5:
-                    attempt.blocked_until = timezone.now() + timedelta(minutes=15)
-                attempt.save()
-                error = "The username, phone number or password is incorrect."
+
+                source.failures += 1
+                if source.failures >= 5:
+                    source.blocked_until = now + timedelta(minutes=15)
+                source.save(update_fields=["failures", "blocked_until"])
+
+                if attempt.blocked_until and attempt.blocked_until > now:
+                    error = "Too many attempts. Please wait 15 minutes."
+                else:
+                    if attempt.blocked_until:
+                        attempt.failures = 0
+                        attempt.blocked_until = None
+                    attempt.failures += 1
+                    if attempt.failures >= 5:
+                        attempt.blocked_until = now + timedelta(minutes=15)
+                    attempt.save(update_fields=["failures", "blocked_until"])
+                    error = "The username, phone number or password is incorrect."
     return render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
 
 
