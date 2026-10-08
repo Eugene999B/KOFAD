@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.utils import timezone
 
@@ -119,7 +120,12 @@ def start(user, branch, sale_payload, request_key, phone, network, email):
     if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
         raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
     phone = normalize_ghana_phone(phone)
-    email = pos_paystack._customer_email(branch, payload, email)
+    # Unlike Paystack's charge API, Hubtel's hosted checkout does not require
+    # a shopper email address. Preserve it when supplied, but do not block sales.
+    email = str(email or "").strip().lower()
+    if email:
+        validate_email(email)
+        payload["customer_email"] = email
     amount = pos_paystack._payment_amount(payload)
     total = pos_paystack._preview_total(user, branch, payload)
     if total <= 0 or amount != total:
