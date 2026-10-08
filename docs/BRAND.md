@@ -2,7 +2,7 @@
 
 KOFAD uses one approved official logo across every customer, staff and printed surface.
 
-- Canonical asset: `static/brand/kofad-official-logo.jpg`
+- Canonical asset: `static/brand/kofad-official-logo.svg`
 - Primary navy: #0F3B58
 - Deep navy: #102A3D
 - Charcoal: #1F252A
