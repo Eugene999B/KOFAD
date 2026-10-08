@@ -577,7 +577,6 @@ def send_otp(phone, purpose="register", request=None):
     if not settings.CUSTOMER_OTP_ENABLED:
         raise ValidationError("Customer phone verification is temporarily unavailable.")
     _consume_customer_otp_budget(request)
-    _consume_phone_otp_hour(phone)
     # Persist the throttle identity even when a provider rejects the first send.
     OtpThrottle.objects.get_or_create(phone=phone, purpose=purpose)
     with transaction.atomic():
@@ -592,6 +591,7 @@ def send_otp(phone, purpose="register", request=None):
             raise ValidationError("Please wait one minute before requesting another code.")
         if row.send_count >= 8:
             raise ValidationError("Daily verification-code limit reached. Try again later.")
+        _consume_phone_otp_hour(phone)
         # Hold only this phone/purpose lock during the bounded provider call.
         # Concurrent resend requests cannot deliver two different usable codes.
         code = f"{secrets.randbelow(1000000):06d}"
