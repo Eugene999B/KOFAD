@@ -530,17 +530,26 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertIn("_auth_user_id", self.client.session)
         self.assertEqual(self.client.get("/workspace/").status_code, 200)
 
-    def test_unified_access_routes_existing_number_to_password_sign_in(self):
+    @patch("marketplace.views.services.send_otp")
+    def test_unified_access_does_not_reveal_existing_accounts(self, send_otp):
+        send_otp.return_value = "+233241234567"
         response = self.client.post("/market/access/", {"phone": "0241234567"})
-        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
-        self.assertEqual(self.client.session["market_login_phone"], "+233241234567")
+        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
+        send_otp.assert_called_once()
+        args, kwargs = send_otp.call_args
+        self.assertEqual(args[:2], ("+233241234567", "login"))
+        self.assertIs(kwargs["request"], response.wsgi_request)
+        self.assertEqual(self.client.session["market_pending_phone"], "+233241234567")
+        self.assertNotIn("market_login_phone", self.client.session)
 
     @patch("marketplace.views.services.send_otp")
-    def test_unified_access_starts_verified_creation_for_new_number(self, send_otp):
+    def test_unified_access_uses_same_challenge_for_new_number(self, send_otp):
         send_otp.return_value = "+233245550001"
         response = self.client.post("/market/access/", {"phone": "0245550001"})
         self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
-        send_otp.assert_called_once_with("+233245550001", "register")
+        args, kwargs = send_otp.call_args
+        self.assertEqual(args[:2], ("+233245550001", "login"))
+        self.assertIs(kwargs["request"], response.wsgi_request)
         self.assertEqual(self.client.session["market_pending_phone"], "+233245550001")
 
     def test_customer_account_dashboard_contains_history_summary(self):
