@@ -1335,6 +1335,7 @@
         phone,
         email,
         provider,
+        payment_gateway: momoGateway,
         request_key: requestKey
       }, requestKey);
       momoReference = result.reference || momoReference;
