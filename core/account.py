@@ -79,7 +79,9 @@ def account(request):
                 email_identity.request_code("staff", request.user.pk, request.POST.get("email"))
                 messages.success(request, "Email verification code sent.")
             elif action == "email_verify":
-                email_identity.confirm_code("staff", request.user.pk, request.POST.get("email_code"))
+                verified = email_identity.confirm_code("staff", request.user.pk, request.POST.get("email_code"))
+                if not verified:
+                    raise ValidationError("The email code is incorrect.")
                 audit(request.user, None, "account.email_verified", request.user.pk)
                 messages.success(request, "Email verified. Email sign-in is now available.")
             else:
