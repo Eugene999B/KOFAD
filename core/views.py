@@ -209,7 +209,11 @@ def login_view(request):
                         attempt.blocked_until = now + timedelta(minutes=15)
                     attempt.save(update_fields=["failures", "blocked_until"])
                     error = "The username, phone number or password is incorrect."
-    response = render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
+    from .google_oauth import enabled as google_enabled
+    response = render(request, "login.html", {
+        "error": error, "username": request.POST.get("username", ""),
+        "google_ready": google_enabled(),
+    })
     response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     response["Cache-Control"] = "no-store, private"
     return response

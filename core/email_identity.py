@@ -30,10 +30,29 @@ def normalize_email(value):
 
 
 def delivery_ready():
+    if not getattr(settings, "KOFAD_EMAIL_ENABLED", False):
+        return False
+    if getattr(settings, "KOFAD_GMAIL_API_ENABLED", False):
+        from .gmail_api import ready as gmail_ready
+        return gmail_ready()
     return bool(
-        getattr(settings, "KOFAD_EMAIL_ENABLED", False)
-        and settings.EMAIL_HOST and settings.EMAIL_HOST_USER
+        settings.EMAIL_HOST and settings.EMAIL_HOST_USER
         and settings.EMAIL_HOST_PASSWORD and settings.DEFAULT_FROM_EMAIL
+    )
+
+
+def _send_kofad_mail(subject, body, recipients):
+    # Railway Hobby forbids outbound SMTP. Gmail's HTTPS API works on this
+    # plan using a manager-authorised sender and no extra worker service.
+    if getattr(settings, "KOFAD_GMAIL_API_ENABLED", False):
+        from .gmail_api import send_gmail
+        return sum(
+            send_gmail(subject=subject, body=body, recipient=address)
+            for address in recipients
+        )
+    return send_mail(
+        subject, body, settings.DEFAULT_FROM_EMAIL, recipients,
+        fail_silently=False,
     )
 
 
@@ -84,13 +103,11 @@ def request_code(kind, owner_id, email):
         identity.code_attempts = 0
         identity.save()
     try:
-        send_mail(
+        _send_kofad_mail(
             "Verify your KOFAD email",
             f"Your KOFAD email verification code is {code}. It expires in 10 minutes. "
             "If you did not request it, ignore this message. Never share this code.",
-            settings.DEFAULT_FROM_EMAIL,
             [address],
-            fail_silently=False,
         )
     except Exception as exc:
         # Do not expose SMTP details or authentication secrets in the UI or logs.
@@ -222,8 +239,7 @@ def deliver_pending(limit=20):
             continue
         notice = EmailNotice.objects.get(pk=pk)
         try:
-            send_mail(notice.subject, notice.body, settings.DEFAULT_FROM_EMAIL,
-                      [notice.email], fail_silently=False)
+            _send_kofad_mail(notice.subject, notice.body, [notice.email])
         except Exception:
             # Retry only after a bounded delay; no credentials or email body in logs.
             EmailNotice.objects.filter(pk=pk).update(

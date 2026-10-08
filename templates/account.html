@@ -21,5 +21,29 @@
 {% else %}<p class="hint">Email verification will open after the administrator connects the approved email sender. Existing sign-in remains unchanged.</p>{% endif %}
 {% if email_identity.verified_at %}<hr><form method="post" class="experience-notification-choice">{% csrf_token %}<input type="hidden" name="action" value="email_notifications"><label><input type="checkbox" name="email_notifications" {% if email_identity.notifications_enabled %}checked{% endif %}> Receive important KOFAD email notifications</label><label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="button secondary">Save email preference</button></form>{% endif %}
 </section>
+<section class="panel experience-email-setup">
+<div class="section-heading"><div><p class="eyebrow">GOOGLE SIGN-IN</p><h2>Connect your Google account</h2><p class="muted">Keep your username, phone number and password. Google sign-in requires your existing account to be linked first.</p></div><span class="pill">{% if google_identity %}Linked{% elif google_ready %}Available{% else %}Awaiting Google setup{% endif %}</span></div>
+{% if google_identity %}<p class="experience-verified">✓ Linked Google account: <strong>{{ google_identity.email }}</strong></p>
+<form method="post" action="{% url 'google_staff_unlink' %}">{% csrf_token %}<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label><button class="button secondary">Disconnect Google</button></form>
+{% elif google_ready %}
+<form method="post" action="{% url 'google_staff_link' %}">{% csrf_token %}<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label><button class="kofad-google-button" type="submit"><span class="kofad-google-mark" aria-hidden="true">G</span> Connect Google account</button></form>
+{% else %}<p class="hint">The company administrator must complete Google's OAuth setup before linking becomes available.</p>{% endif %}
+</section>
+{% if perms.core.manage_company %}
+<section class="panel experience-email-setup">
+  <div class="section-heading"><div><p class="eyebrow">GMAIL DELIVERY · HTTPS API</p><h2>Business email sender</h2><p class="muted">Connect a company-controlled Gmail or Google Workspace mailbox to send verification codes and optional notifications without an extra Railway service.</p></div><span class="pill">{% if gmail_sender %}Connected{% elif gmail_setup_ready %}Ready to connect{% else %}Awaiting Google credentials{% endif %}</span></div>
+  {% if gmail_sender %}
+  <p class="experience-verified">✓ Gmail connected: <strong>{{ gmail_sender.email }}</strong></p>
+  <p class="hint">Last successful email: {{ gmail_sender.last_send_at|date:"j M Y, H:i"|default:"No email sent yet" }}</p>
+  <div class="two-column">
+    <form method="post" action="{% url 'gmail_sender_test' %}">{% csrf_token %}<label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="button">Send a test email to this Gmail</button></form>
+    <form method="post" action="{% url 'gmail_sender_disconnect' %}">{% csrf_token %}<label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="button secondary">Disconnect sender</button></form>
+  </div>
+  {% elif gmail_setup_ready %}
+  <form method="post" action="{% url 'gmail_sender_connect' %}">{% csrf_token %}<label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="kofad-google-button" type="submit"><span class="kofad-google-mark" aria-hidden="true">G</span> Connect business Gmail securely</button></form>
+  <p class="hint">The mailbox owner must approve Google's limited email-sending permission. KOFAD stores the authorization token encrypted and never needs your Gmail password.</p>
+  {% else %}<p class="hint">Google Cloud credentials are not configured yet. Current phone and password sign-in remain unchanged. Gmail sending is disabled.</p>{% endif %}
+</section>
+{% endif %}
 {% if perms.core.manage_company %}<section class="panel"><div class="section-heading"><div><p class="eyebrow">STAFF ADMINISTRATION</p><h2>Team access & recovery</h2></div><a class="button secondary" href="/administration/users/">Manage staff</a></div></section>{% endif %}
 {% endblock %}

@@ -68,7 +68,8 @@ class RecoveryPhoneForm(forms.Form):
 @login_required
 @sensitive_post_parameters("current_password")
 def account(request):
-    from . import email_identity
+    from . import email_identity, google_oauth, gmail_api
+    from marketplace.models import GoogleIdentity
     access = request.user.access
     action = request.POST.get("action", "recovery")
     if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
@@ -105,13 +106,19 @@ def account(request):
             if not current.check_password(form.cleaned_data["current_password"]):
                 form.add_error("current_password", "Your password changed. Enter the current password.")
                 return render(request, "account.html", {
-        "title": "My account", "form": form, "sms_ready": sms_ready(),
-        "profile_form": profile_form,
-        "email_identity": email_identity.EmailIdentity.objects.filter(
-            kind="staff", owner_id=request.user.pk
-        ).first(),
-        "email_ready": email_identity.delivery_ready(),
-    })
+                    "title": "My account", "form": form, "sms_ready": sms_ready(),
+                    "profile_form": profile_form,
+                    "email_identity": email_identity.EmailIdentity.objects.filter(
+                        kind="staff", owner_id=request.user.pk
+                    ).first(),
+                    "email_ready": email_identity.delivery_ready(),
+                    "google_ready": google_oauth.enabled(),
+                    "google_identity": GoogleIdentity.objects.filter(
+                        kind="staff", owner_id=request.user.pk
+                    ).first(),
+                    "gmail_setup_ready": gmail_api.configured(),
+                    "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
+                })
             locked = Access.objects.select_for_update().get(pk=access.pk)
             locked.recovery_phone = form.cleaned_data["recovery_phone"]
             locked.save(update_fields=["recovery_phone"])
@@ -119,7 +126,20 @@ def account(request):
             audit(request.user, None, "account.recovery_phone_updated", request.user.pk)
         messages.success(request, "Recovery phone saved.")
         return redirect("account")
-    return render(request, "account.html", {"title":"My account", "form":form, "sms_ready":sms_ready(), "profile_form":profile_form})
+    return render(request, "account.html", {
+        "title": "My account", "form": form, "sms_ready": sms_ready(),
+        "profile_form": profile_form,
+        "email_identity": email_identity.EmailIdentity.objects.filter(
+            kind="staff", owner_id=request.user.pk,
+        ).first(),
+        "email_ready": email_identity.delivery_ready(),
+        "google_ready": google_oauth.enabled(),
+        "google_identity": GoogleIdentity.objects.filter(
+            kind="staff", owner_id=request.user.pk,
+        ).first(),
+        "gmail_setup_ready": gmail_api.configured(),
+        "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
+    })
 
 
 def consume_budget(username):

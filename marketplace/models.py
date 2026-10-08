@@ -38,6 +38,40 @@ class EmailIdentity(models.Model):
         ]
 
 
+
+class GoogleIdentity(models.Model):
+    """Explicit Google account binding; immutable OIDC subject is the login key."""
+
+    kind = models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])
+    owner_id = models.PositiveBigIntegerField()
+    subject = models.CharField(max_length=255)
+    email = models.EmailField()
+    linked_at = models.DateTimeField(auto_now_add=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["kind", "owner_id"], name="kofad_google_one_owner"),
+            models.UniqueConstraint(fields=["kind", "subject"], name="kofad_google_unique_subject"),
+        ]
+
+
+
+class GmailSenderConnection(models.Model):
+    """Encrypted offline Gmail API consent for the designated business sender."""
+
+    email = models.EmailField()
+    google_subject = models.CharField(max_length=255)
+    encrypted_refresh_token = models.TextField(editable=False)
+    connected_by_id = models.PositiveBigIntegerField()
+    connected_at = models.DateTimeField(auto_now=True)
+    last_send_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Authorised business Gmail sender"
+
+
+
 class EmailNotice(models.Model):
     """Durable, opt-in email outbox. A separate worker delivers after SMTP setup."""
 

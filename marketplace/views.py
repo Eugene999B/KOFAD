@@ -83,6 +83,7 @@ def _market_context(request, **extra):
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
+        "google_ready": __import__("core.google_oauth", fromlist=["enabled"]).enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
@@ -760,6 +761,7 @@ def customer_security(request, customer):
         request, title="Account security", form=form, pending_phone=(request.session.get("market_change_phone") or {}).get("phone"),
         verified_email=email_identity.EmailIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
         email_ready=email_identity.delivery_ready(),
+        google_identity=__import__("marketplace.models", fromlist=["GoogleIdentity"]).GoogleIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
     ))
 
 

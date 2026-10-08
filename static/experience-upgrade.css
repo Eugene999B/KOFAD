@@ -91,3 +91,15 @@ html[data-theme=dark] .account-v4-page .account-v4-grid .account-v4-tile{border-
 @media(max-width:980px){.experience-decision-bar,.experience-insight-row{grid-template-columns:repeat(2,minmax(0,1fr))}.experience-customer-pulse{grid-template-columns:repeat(2,minmax(0,1fr))}.experience-intel-spotlight{grid-template-columns:1fr}}
 @media(max-width:640px){.experience-identity-head{padding:24px 20px;border-radius:18px}.experience-decision-bar,.experience-insight-row{grid-template-columns:1fr}.experience-customer-pulse{gap:9px}.experience-customer-pulse article{padding:13px}.experience-customer-pulse strong{font-size:20px}.experience-intel-spotlight{padding:17px}.login-page .premium-login-card,.login-page .premium-login-story{border-radius:18px}}
 @media(prefers-reduced-motion:reduce){.experience-decision-bar a,.staff-dashboard-refined .executive-kpis article,.staff-report-refined .intelligence-kpis article,.account-v4-page .account-v4-grid .account-v4-tile{transition:none}}
+
+/* Google account sign-in: deliberately understated and keyboard accessible. */
+.kofad-oauth-separator{display:flex;align-items:center;gap:12px;color:var(--muted,#718392);font-size:12px;margin:16px 0}
+.kofad-oauth-separator:before,.kofad-oauth-separator:after{content:"";flex:1;height:1px;background:var(--line,#dce6eb)}
+.kofad-google-button{box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:11px;width:100%;min-height:49px;padding:10px 18px;border:1px solid #c6d5e0;border-radius:14px;background:#fff;color:#1f2937!important;text-decoration:none!important;font:700 14px/1.3 inherit;cursor:pointer;transition:border .15s,box-shadow .15s,transform .15s}
+.kofad-google-button:hover{border-color:#4094a4;box-shadow:0 8px 20px rgba(10,67,83,.13);transform:translateY(-1px)}
+.kofad-google-button:focus-visible{outline:3px solid #14a8b6;outline-offset:3px}
+.kofad-google-mark{display:grid;place-items:center;font:800 23px/1 Arial,sans-serif;background:conic-gradient(#4285f4 0 120deg,#34a853 120deg 200deg,#fbbc05 200deg 270deg,#ea4335 270deg);background-clip:text;-webkit-background-clip:text;color:transparent}
+.kofad-google-hint{font-size:11px;line-height:1.5;color:var(--muted,#607686);text-align:center;margin:10px 0 15px}
+.experience-email-setup .kofad-google-button,.experience-email-card .kofad-google-button{max-width:390px}
+html[data-theme=dark] .kofad-google-button{background:#f6f9fb;color:#202c34!important}
+@media(prefers-reduced-motion:reduce){.kofad-google-button{transition:none}}

@@ -69,6 +69,13 @@
 <div class="login-form-row"><span>Authorized staff only</span><a href="/forgot-password/">Forgot password?</a></div>
 <button class="button wide login-submit premium-login-submit">Sign in to workspace <span aria-hidden="true">→</span></button>
 </form>
+{% if google_ready %}
+<div class="kofad-oauth-separator"><span>or continue with</span></div>
+<a class="kofad-google-button" href="{% url 'google_staff_login' %}">
+  <span class="kofad-google-mark" aria-hidden="true">G</span> Sign in with Google
+</a>
+<p class="kofad-google-hint">Only linked staff Google accounts can sign in. Staff security checks still apply.</p>
+{% endif %}
 
 <div class="login-assurance">
 <div><span>✓</span><p><strong>Permission scoped</strong><small>Only your assigned workspaces and locations.</small></p></div>
