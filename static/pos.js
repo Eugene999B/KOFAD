@@ -1325,7 +1325,7 @@
     const email = paystackMomoEmail?.value.trim() || selectedCustomer?.email || customerEmail?.value.trim() || "";
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
-    if (!email || !email.includes("@")) throw new Error("Enter the customer's email for the " + (momoGateway === "hubtel" ? "Hubtel checkout." : "Paystack payment request."));
+    if (momoGateway === "paystack" && (!email || !email.includes("@"))) throw new Error("Enter the customer's email for the Paystack payment request.");
 
     setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
     lockCheckoutForMomo(true);
