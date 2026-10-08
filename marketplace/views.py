@@ -109,8 +109,11 @@ def _conversation_access(request, conversation):
         or request.user.has_perm("core.operate_sales")
         or request.user.has_perm("core.manage_company")
     ):
-        if conversation.order_id and not request.user.is_superuser:
-            if not request.user.access.branches.filter(pk=conversation.order.branch_id, active=True).exists():
+        if not request.user.is_superuser:
+            branch_id = conversation.branch_id or (
+                conversation.order.branch_id if conversation.order_id else None
+            )
+            if not branch_id or not request.user.access.branches.filter(pk=branch_id, active=True).exists():
                 return ""
         return "staff"
     customer = services.customer_from_session(request)
@@ -1120,6 +1123,7 @@ def customer_messages(request, customer, conversation_id=None):
                     f"Order support · {order.public_reference}" if order else "Customer support"
                 )
                 conversation = Conversation.objects.create(
+                    branch=order.branch if order else services.market_branch(),
                     customer=customer, public_name=customer.full_name,
                     public_phone=customer.phone, order=order, subject=subject,
                 )
@@ -1956,7 +1960,9 @@ def staff_order(request, branch, pk):
 def staff_inbox(request, branch, conversation_id=None):
     _auto_close_stale_support()
     status = request.GET.get("status", "open")
-    base = Conversation.objects.filter(Q(order__isnull=True) | Q(order__branch=branch)).select_related(
+    scope = Q(branch=branch) | Q(branch__isnull=True, order__branch=branch)
+    scoped = Conversation.objects.filter(scope)
+    base = scoped.select_related(
         "customer", "order", "assigned_to"
     ).prefetch_related("messages__attachments")
     if status == "waiting":
@@ -1975,7 +1981,7 @@ def staff_inbox(request, branch, conversation_id=None):
     support_form = ConversationMessageForm(request.POST or None, request.FILES or None)
     if conversation_id:
         conversation = get_object_or_404(
-            Conversation.objects.filter(Q(order__isnull=True) | Q(order__branch=branch)).select_related(
+            scoped.select_related(
                 "customer", "order", "assigned_to"
             ).prefetch_related("messages__attachments"),
             pk=conversation_id,
@@ -2089,12 +2095,12 @@ def staff_inbox(request, branch, conversation_id=None):
         "support_form": support_form,
         "selected_status": status,
         "unread": ConversationMessage.objects.filter(
-            read_by_staff=False
+            conversation__in=scoped, read_by_staff=False
         ).exclude(sender_type="staff").count(),
-        "open_count": Conversation.objects.filter(status="open").count(),
-        "waiting_count": Conversation.objects.filter(status="open", assigned_to__isnull=True).count(),
-        "mine_count": Conversation.objects.filter(status="open", assigned_to=request.user).count(),
-        "closed_count": Conversation.objects.filter(status="closed").count(),
+        "open_count": scoped.filter(status="open").count(),
+        "waiting_count": scoped.filter(status="open", assigned_to__isnull=True).count(),
+        "mine_count": scoped.filter(status="open", assigned_to=request.user).count(),
+        "closed_count": scoped.filter(status="closed").count(),
     })
 
 
