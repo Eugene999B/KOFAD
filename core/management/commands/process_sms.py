@@ -37,6 +37,11 @@ class Command(BaseCommand):
                     reconcile_pos_paystack()
                 except Exception:
                     self.stderr.write("Paystack POS reconciliation check failed; will retry.")
+                try:
+                    from marketplace.paystack_reconciliation import reconcile_due as reconcile_market_paystack
+                    reconcile_market_paystack()
+                except Exception:
+                    self.stderr.write("Paystack checkout reconciliation failed safely; will retry.")
                 last_payment_check = now
 
             if now - last_automation >= 60:
@@ -59,6 +64,11 @@ class Command(BaseCommand):
                     process_whatsapp_queue()
                 except Exception as exc:
                     self.stderr.write(f"WhatsApp queue check failed safely: {exc}")
+                try:
+                    from core.whatsapp_bot import process_replies
+                    process_replies()
+                except Exception:
+                    self.stderr.write("WhatsApp assistant queue failed safely; will retry.")
                 last_delivery_sync = now
 
             # Payment checks and receipt delivery both run independently of any customer browser.

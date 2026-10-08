@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel"><p class="eyebrow">WHATSAPP BUSINESS</p><h2>KOFAD assistant</h2>
+<p>{% if bot_ready %}Configured and enabled. Check delivery results below.{% else %}Waiting for activation. Complete Meta verification, register the number and configure the credentials before enabling the assistant.{% endif %}</p>
+<p>The assistant helps customers find products, open orders and receipts, understand delivery and returns, and contact staff. Account and payment information requires website sign-in. It cannot approve payments, issue refunds or change permissions.</p>
+<div class="actions"><a class="button" href="/online-inbox/">Customer support inbox</a><a class="button secondary" href="/settings/communications/">Notification settings</a></div>
+<p>Commands: SHOP · SEARCH item · ORDERS · RECEIPTS · DELIVERY · RETURNS · ACCOUNT · PAYMENT · PRIVACY · STAFF · HUMAN · STOP · START.</p>
+<p>HUMAN routes enquiries to Customer Inbox. Accept a chat and reply there to queue a WhatsApp response. Replies expire after the customer’s 24-hour conversation window closes. Unknown deliveries are never automatically resent.</p>
+</section>
+<section class="panel"><h2>Recent replies</h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Recipient</th><th>Status</th><th>Details</th></tr></thead><tbody>
+{% for reply in page %}<tr><td>{{ reply.created_at }}</td><td>…{{ reply.contact.wa_id|slice:"-4:" }}</td><td>{{ reply.status }}</td><td>{{ reply.error|default:"—" }}{% if reply.contact.conversation_id %} <a href="/online-inbox/{{ reply.contact.conversation_id }}/">Support chat</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="4">No assistant replies yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %}
+<span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}</section>
+{% endblock %}

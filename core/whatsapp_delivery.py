@@ -96,7 +96,7 @@ def send_whatsapp(user, branch, message_id, *, automatic=False, retry=False):
         response = requests.post(
             f"https://graph.facebook.com/{settings.WHATSAPP_GRAPH_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages",
             headers={"Authorization": "Bearer " + settings.WHATSAPP_ACCESS_TOKEN},
-            json=payload, timeout=settings.WHATSAPP_TIMEOUT_SECONDS,
+            json=payload, timeout=settings.WHATSAPP_TIMEOUT_SECONDS, allow_redirects=False,
         )
         http_status = response.status_code
         result = response.json()

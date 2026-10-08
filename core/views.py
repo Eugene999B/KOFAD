@@ -685,8 +685,12 @@ def pos_paystack_momo_status(request, reference):
 def hold(request, branch):
     try:
         data = json.loads(request.body)
-        if len(request.body) > 60000 or not isinstance(data.get("items"), list):
+        if len(request.body) > 60000 or not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise ValidationError("Invalid held cart.")
+        if str(data.get("label", "")).startswith("Paystack MoMo ") or any(
+            key in data for key in ("payment_request", "sale_payload")
+        ):
+            raise ValidationError("Payment records cannot be created through held carts.")
         held = HeldSale.objects.create(branch=branch, user=request.user, label=str(data.get("label", "Held sale"))[:100], cart=data)
         return JsonResponse({"id": held.pk})
     except (ValueError, ValidationError, TypeError) as exc:

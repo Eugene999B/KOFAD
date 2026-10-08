@@ -21,7 +21,7 @@ def webhook(request):
             expected
             and mode == "subscribe"
             and supplied
-            and hmac.compare_digest(supplied, expected)
+            and hmac.compare_digest(supplied.encode(), expected.encode())
             and challenge
             and len(challenge) <= 2048
         ):

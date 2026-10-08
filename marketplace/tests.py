@@ -338,12 +338,14 @@ class MarketPaymentTests(MarketFixtures):
             {"status": True, "data": {"authorization_url": "https://checkout.paystack.com.evil.test/pay", "access_code": "x"}},
             {"status": True, "data": {"authorization_url": "https://user@checkout.paystack.com/pay", "access_code": "x"}},
         ):
+            order = self.order()
             post.return_value = Mock(status_code=200)
             post.return_value.json.return_value = body
             with self.assertRaises(ValidationError):
                 services.initialize_paystack(order, "https://example.test/market/payment/return/")
             order.refresh_from_db()
-            self.assertEqual(order.payment_status, "failed")
+            self.assertEqual(order.payment_status, "pending")
+            self.assertEqual(order.payment_attempts.get().status, "submission_unknown")
         self.assertFalse(order.payment_attempts.filter(status="initializing").exists())
 
     @override_settings(PAYSTACK_SECRET_KEY="paystack-secret-for-test")
@@ -367,6 +369,12 @@ class MarketPaymentTests(MarketFixtures):
             "data": {
                 "authorization_url": "https://checkout.paystack.com/test-access",
                 "access_code": "test-access",
+            },
+        }
+        response.json.side_effect = lambda: {
+            "status": True, "data": {
+                "authorization_url": "https://checkout.paystack.com/test-access",
+                "access_code": "test-access", "reference": post.call_args.kwargs["json"]["reference"],
             },
         }
         post.return_value = response

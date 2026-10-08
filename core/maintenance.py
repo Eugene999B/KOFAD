@@ -267,6 +267,11 @@ def restore_backup(bundle, actor_username=""):
             restored_models.append(model)
             seen.add(model)
     _reset_sequences(restored_models)
+    # Restoring an old outbox must not resend messages already delivered after the snapshot.
+    from .models import WhatsAppBotReply
+    WhatsAppBotReply.objects.filter(status__in=["queued", "sending"]).update(
+        status="unknown", error="Restored from backup; delivery requires manual review.",
+    )
 
     if not User.objects.filter(is_active=True, is_superuser=True).exists():
         raise BackupError("Restore would leave KOFAD without an active system administrator.")

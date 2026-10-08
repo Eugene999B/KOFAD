@@ -97,6 +97,9 @@ def _save_conversation_message(conversation, sender_type, body="", attachment=No
     Conversation.objects.filter(pk=conversation.pk).update(
         updated_at=timezone.now(), status="open"
     )
+    if sender_type == "staff":
+        from core.whatsapp_bot import queue_staff_reply
+        queue_staff_reply(message)
     return message
 
 
@@ -950,13 +953,15 @@ def payment_return(request):
     if customer and order.customer_id == customer.pk:
         return redirect("market_order", pk=order.pk)
     return render(request, "marketplace/payment_result.html", _market_context(
-        request, title="Payment result", order=order,
+        request, title="Payment result", order=None,
     ))
 
 
 @csrf_exempt
 @require_POST
 def paystack_webhook(request):
+    if len(request.body) > 65536:
+        return HttpResponse(status=413)
     signature = request.headers.get("x-paystack-signature", "")
     if not services.paystack_signature_valid(request.body, signature):
         return HttpResponse(status=401)
@@ -2059,7 +2064,8 @@ def staff_inbox(request, branch, conversation_id=None):
                 except ValidationError as exc:
                     support_form.add_error("attachment", problem(exc))
                 else:
-                    if conversation.public_phone:
+                    from core.models import WhatsAppBotContact
+                    if conversation.public_phone and not WhatsAppBotContact.objects.filter(conversation=conversation).exists():
                         services.send_transactional_sms(
                             conversation.public_phone,
                             f"KOFAD: {_staff_label(request.user)} replied to your support chat. "

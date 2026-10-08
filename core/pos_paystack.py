@@ -7,6 +7,7 @@ browser closure and app restarts without a new database table.
 """
 import copy
 import hashlib
+import json
 import logging
 import re
 import uuid
@@ -87,10 +88,21 @@ def _state(held):
 
 
 def _save_state(held, state):
-    cart = copy.deepcopy(held.cart if isinstance(held.cart, dict) else {})
-    cart["payment_request"] = state
-    held.cart = cart
-    held.save(update_fields=["cart"])
+    # A slow HTTP response must not overwrite a concurrent verified result.
+    with transaction.atomic():
+        current = HeldSale.objects.select_for_update().get(pk=held.pk)
+        saved = _state(current)
+        if saved.get("status") in {"success", "attention"} and state.get("status") != saved.get("status"):
+            held.cart = current.cart
+            return
+        if int(saved.get("check_count") or 0) > int(state.get("check_count") or 0):
+            held.cart = current.cart
+            return
+        cart = copy.deepcopy(current.cart if isinstance(current.cart, dict) else {})
+        cart["payment_request"] = state
+        current.cart = cart
+        current.save(update_fields=["cart"])
+        held.cart = cart
 
 
 def _preview_total(user, branch, payload):
@@ -204,8 +216,16 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     phone = normalize_ghana_phone(phone)
     reference = _reference_from_key(request_key)
 
+    services.permit(user, branch, "operate_sales")
     existing = _held(reference)
     if existing:
+        if existing.branch_id != branch.pk or existing.user_id != user.pk:
+            raise ValidationError("This payment request could not be found.")
+        candidate = copy.deepcopy(sale_payload)
+        candidate["customer_email"] = _customer_email(branch, candidate, email)
+        if (existing.cart.get("sale_payload") != candidate or _state(existing).get("phone") != phone
+                or _state(existing).get("network") != provider):
+            raise ValidationError("Use the original sale details for this payment request.")
         return _response_state(existing)
 
     payload = copy.deepcopy(sale_payload)
@@ -239,7 +259,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     # Claim this payment reference with a separate unique database idempotency key.
     # This prevents two simultaneous cashier/browser requests from creating duplicate charges.
     claim_key = uuid.uuid5(uuid.NAMESPACE_URL, "kofad-pos-paystack:" + reference)
-    fingerprint = hashlib.sha256(reference.encode()).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps({"sale": payload, "user": user.pk, "phone": phone, "network": provider}, sort_keys=True, default=str).encode()).hexdigest()
     with transaction.atomic():
         claim, created = Idempotency.objects.get_or_create(
             branch=branch,
@@ -250,6 +270,8 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
             raise ValidationError("This payment request conflicts with an existing request.")
         existing = _held(reference, lock=True)
         if existing:
+            if existing.branch_id != branch.pk or existing.user_id != user.pk:
+                raise ValidationError("This payment request could not be found.")
             return _response_state(existing)
         if not created:
             raise ProviderPending("This payment request is already being prepared. Please check its status.")
@@ -301,10 +323,10 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         or not isinstance(data, dict)
         or response_reference != reference
     ):
-        state["status"] = "failed"
-        state["provider_status"] = provider_status or "rejected"
+        state["status"] = "submission_unknown"
+        state["provider_status"] = provider_status or "unknown"
         state["message"] = str(body.get("message", "Paystack rejected the MoMo request."))[:240] if isinstance(body, dict) else "Paystack rejected the MoMo request."
-        state["next_check_at"] = None
+        state["next_check_at"] = (timezone.now() + timedelta(seconds=20)).timestamp()
         _save_state(held, state)
         return _response_state(held)
 
@@ -394,14 +416,16 @@ def finalize_verified(reference, verified):
     if provider_status != "success":
         raise ProviderPending("The MoMo payment is not confirmed yet.")
     try:
-        provider_amount = int(verified.get("amount"))
+        provider_amount = Decimal(str(verified.get("amount")))
         expected_amount = int(Decimal(str(state.get("amount"))) * 100)
     except (TypeError, ValueError, InvalidOperation) as exc:
         _mark_attention(reference, "Paystack returned an invalid payment amount. Manager review is required.")
         raise ValidationError("Paystack returned an invalid payment amount.") from exc
     currency = str(verified.get("currency", "")).strip().upper()
     channel = str(verified.get("channel", "")).strip().lower()
-    if provider_amount != expected_amount or currency != "GHS" or channel != "mobile_money":
+    if (not provider_amount.is_finite() or provider_amount != expected_amount
+            or verified.get("reference") != reference or not verified.get("id")
+            or currency != "GHS" or channel != "mobile_money"):
         message = "Verified Paystack details do not match this sale. Manager review is required."
         _mark_attention(reference, message)
         raise ValidationError(message)
@@ -430,6 +454,8 @@ def finalize_verified(reference, verified):
                 state.get("request_key"),
                 kind="sale",
             )
+            if doc.total != Decimal(str(state["amount"])) or doc.paid != doc.total:
+                raise ValidationError("Sale total changed after payment was requested.")
             state["status"] = "success"
             state["provider_status"] = provider_status
             state["message"] = "Payment verified by Paystack and sale posted."
@@ -461,23 +487,25 @@ def finalize_verified(reference, verified):
 
 
 def reconcile(reference, *, force=False):
-    held = _held(reference)
-    if not held:
-        raise ValidationError("Unknown Paystack POS payment.")
-    state = _state(held)
-    if state.get("status") == "success" and state.get("document_id"):
-        return Document.objects.select_related("party").get(pk=state["document_id"])
-    if state.get("status") in TERMINAL_FAILURES:
-        raise ValidationError(state.get("message") or "This MoMo request was not successful.")
-
-    now = timezone.now()
-    next_check = state.get("next_check_at")
-    if not force and isinstance(next_check, (int, float)) and next_check > now.timestamp():
-        raise ProviderPending("Payment is already being checked.")
-
-    state["check_count"] = int(state.get("check_count") or 0) + 1
-    state["next_check_at"] = (now + timedelta(seconds=10)).timestamp()
-    _save_state(held, state)
+    with transaction.atomic():
+        held = _held(reference, lock=True)
+        if not held:
+            raise ValidationError("Unknown Paystack POS payment.")
+        state = _state(held)
+        if state.get("status") == "success" and state.get("document_id"):
+            return Document.objects.select_related("party").get(pk=state["document_id"])
+        if state.get("status") in TERMINAL_FAILURES or state.get("status") == "attention":
+            raise ValidationError(state.get("message") or "This payment requires review.")
+        now = timezone.now()
+        next_check = state.get("next_check_at")
+        if not force and isinstance(next_check, (int, float)) and next_check > now.timestamp():
+            raise ProviderPending("Payment is already being checked.")
+        if float(state.get("lease_until") or 0) > now.timestamp():
+            raise ProviderPending("Payment is already being checked.")
+        state["check_count"] = int(state.get("check_count") or 0) + 1
+        state["lease_until"] = (now + timedelta(seconds=settings.PAYSTACK_TIMEOUT_SECONDS + 5)).timestamp()
+        state["next_check_at"] = state["lease_until"]
+        _save_state(held, state)
 
     try:
         verified = verify(reference)
@@ -537,7 +565,9 @@ def reconcile_due(limit=20):
     if not ready():
         return 0
     now_ts = timezone.now().timestamp()
-    rows = HeldSale.objects.filter(label__startswith=LABEL_PREFIX).order_by("created_at")[:100]
+    rows = HeldSale.objects.filter(
+        label__startswith=LABEL_PREFIX, cart__payment_request__status__in=PENDING_STATES,
+    ).order_by("created_at")[:100]
     due = []
     for held in rows:
         state = _state(held)

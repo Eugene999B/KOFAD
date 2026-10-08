@@ -1,3 +1,4 @@
+from . import whatsapp_bot_views
 from django.urls import path
 from . import views as v
 from . import account as accounts
@@ -8,6 +9,7 @@ from . import maintenance_views
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
+    path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     path("account/", accounts.account, name="account"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),

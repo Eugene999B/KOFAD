@@ -128,3 +128,6 @@ HUBTEL_API_KEY = os.environ.get("HUBTEL_API_KEY", "").strip()
 HUBTEL_COLLECTION_ACCOUNT = os.environ.get("HUBTEL_COLLECTION_ACCOUNT", "").strip()
 HUBTEL_TIMEOUT_SECONDS = int(os.environ.get("HUBTEL_TIMEOUT_SECONDS", "10"))
 HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"
+
+# Independent kill switch. Enable only after verified-number configuration and a delivery test.
+WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"
