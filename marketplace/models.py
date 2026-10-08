@@ -389,6 +389,9 @@ class MarketReturnAttachment(models.Model):
 
 
 class Conversation(models.Model):
+    branch = models.ForeignKey(
+        "core.Branch", null=True, blank=True, related_name="market_conversations", on_delete=models.PROTECT
+    )
     customer = models.ForeignKey(CustomerAccount, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
     order = models.ForeignKey(OnlineOrder, null=True, blank=True, related_name="conversations", on_delete=models.SET_NULL)
     public_name = models.CharField(max_length=140, blank=True)
