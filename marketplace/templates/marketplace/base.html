@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#071f33"><meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f3b58"><meta name="color-scheme" content="light dark">
 <meta name="description" content="{{ seo_description }}">
+{% if google_site_verification %}<meta name="google-site-verification" content="{{ google_site_verification }}">{% endif %}
 {% if seo_indexable %}<meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="{{ canonical_url }}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="KOFAD IMPEX ENTERPRISE"><meta property="og:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta property="og:description" content="{{ seo_description }}"><meta property="og:url" content="{{ canonical_url }}"><meta property="og:image" content="{{ public_site_origin }}{% static 'brand/kofad-official-logo.jpg' %}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta name="twitter:description" content="{{ seo_description }}"><meta name="twitter:image" content="{{ public_site_origin }}{% static 'brand/kofad-official-logo.jpg' %}">{% else %}<meta name="robots" content="noindex,nofollow,noarchive">{% endif %}
