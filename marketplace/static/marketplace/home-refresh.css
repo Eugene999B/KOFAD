@@ -62,3 +62,10 @@
 @media(max-width:900px){.kfd-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kfd-service-bar{padding:10px 16px}.kfd-service-bar article{padding:12px;gap:9px}.kfd-proof{grid-template-columns:1fr;margin-bottom:35px}}
 @media(max-width:640px){.kfd-hero{height:510px;max-height:510px}.kfd-hero-inner{width:calc(100% - 36px);align-items:center}.kfd-hero-copy{padding:30px 0 70px}.kfd-hero h1{font-size:clamp(35px,9.1vw,50px)}.kfd-hero::after{background:linear-gradient(90deg,rgba(3,24,39,.9),rgba(3,24,39,.65))}.kfd-hero-copy>p:not(.kfd-eyebrow){font-size:14px;line-height:1.56}.kfd-hero-meta{left:18px;right:18px;bottom:14px}.kfd-hero-meta .kfd-caption{display:none}.kfd-hero-controls{margin-left:auto}.kfd-service-bar{grid-template-columns:1fr;padding:8px 20px}.kfd-service-bar article{padding:10px 0}.kfd-service-bar article+article{border-left:0;border-top:1px solid #e8eff1}.kfd-service-bar .kfd-service-icon{width:32px;height:32px;flex-basis:32px;font-size:17px}.kfd-section{padding:38px 17px 5px}.kfd-section-top{align-items:start}.kfd-section-link{font-size:12px}.kfd-category-grid{gap:10px}.kfd-category img{height:112px}.kfd-category .kfd-category-body{padding:11px}.kfd-category strong{font-size:12px}.kfd-category small{font-size:10px}.kfd-category .arrow{display:none}.kfd-proof{padding:0 17px;margin:17px auto 30px}.kfd-proof article{padding:23px;min-height:166px}.kfd-proof .kfd-proof-icon{display:none}}
 @media(prefers-reduced-motion:reduce){.kfd-hero-image,.kfd-category,.kfd-cta{transition:none!important}}
+
+/* Public-site header legibility, contrasting with the light navigation bar. */
+body.is-kofad-home .public-desktop-nav>a:not(.public-market-link){color:#1c3a50!important;opacity:1!important;font-weight:750!important}
+body.is-kofad-home .public-desktop-nav>a:not(.public-market-link):hover{color:#0a6f83!important}
+body.is-kofad-home .public-site-header{background:#fff!important}
+body.is-kofad-home .public-site-brand img{object-fit:contain!important}
+body.is-kofad-home .public-market-link{color:#fff!important}
