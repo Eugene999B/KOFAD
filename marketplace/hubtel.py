@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from . import services
 from .models import MarketPaymentAttempt, OnlineOrder, OrderEvent, PaymentConfiguration
+from .hubtel_evidence import save_exchange
 
 INITIATE_URL = "https://payproxyapi.hubtel.com/items/initiate"
 STATUS_ORIGIN = "https://rmsc.hubtel.com/v1/merchantaccount/merchants/"
@@ -167,10 +168,30 @@ def verify(reference):
             params={"clientReference": reference}, headers=headers(),
             timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
-        body = response.json()
-    except (requests.RequestException, ValueError) as exc:
+    except requests.RequestException as exc:
         logger.warning("Hubtel status request failed ref_suffix=%s", str(reference)[-6:])
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
+
+    # Preserve the original HTTP response bytes BEFORE parsing or normalizing it.
+    # Even Hubtel's 400/429 responses are evidence for the merchant onboarding team.
+    raw_body = response.content if isinstance(response.content, bytes) else None
+    try:
+        body = response.json()
+    except ValueError as exc:
+        save_exchange(
+            reference=reference, direction="status_check",
+            raw_body=raw_body if raw_body is not None else b"",
+            http_status=response.status_code,
+        )
+        raise services.PaymentVerificationUnavailable("Hubtel returned an invalid status response.") from exc
+    if raw_body is None:
+        # Some test fakes supply json() without response.content.
+        import json
+        raw_body = json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    save_exchange(
+        reference=reference, direction="status_check",
+        raw_body=raw_body, http_status=response.status_code,
+    )
 
     body = _normalise_keys(body)
     raw_data = body.get("data") if isinstance(body, dict) else None
