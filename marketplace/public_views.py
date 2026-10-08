@@ -2,10 +2,11 @@
 from datetime import timedelta
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.core.cache import cache
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
@@ -13,7 +14,7 @@ from django.utils.crypto import salted_hmac
 
 from core.identity import normalize_ghana_phone
 from core.models import Branch
-from .models import Conversation, ConversationMessage, DeliveryZone
+from .models import Conversation, ConversationMessage, DeliveryZone, MarketListing
 from .public_content import PAGES, POLICY_VERSION
 from .views import _market_context
 
@@ -89,3 +90,87 @@ def public_page(request, slug):
         policy_version=POLICY_VERSION, public_pages=PAGES,
         delivery_zones=DeliveryZone.objects.filter(active=True) if slug == "delivery" else [],
     ), status=status)
+
+
+def robots_txt(request):
+    """Publish crawler policy without exposing the private staff gateway."""
+    host = request.get_host().split(":")[0].lower().rstrip(".")
+    if host == "staff.kofadimpex.com":
+        lines = ["User-agent: *", "Disallow: /", ""]
+    elif host == "market.kofadimpex.com":
+        lines = [
+            "User-agent: *",
+            "Allow: /market/",
+            "Allow: /market/products/",
+            "Disallow: /market/account/",
+            "Disallow: /market/cart/",
+            "Disallow: /market/checkout/",
+            "Disallow: /market/orders/",
+            "Disallow: /market/messages/",
+            "Disallow: /market/payment/",
+            "Disallow: /market/payments/",
+            "Disallow: /market/location/",
+            "Disallow: /market/search/",
+            "",
+            f"Sitemap: {settings.PUBLIC_SITE_ORIGIN}/sitemap.xml",
+            "",
+        ]
+    else:
+        lines = [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /technical-admin/",
+            "Disallow: /workspace/",
+            "Disallow: /settings/",
+            "Disallow: /online-orders/",
+            "Disallow: /online-returns/",
+            "Disallow: /online-inbox/",
+            "Disallow: /api/",
+            "",
+            f"Sitemap: {settings.PUBLIC_SITE_ORIGIN}/sitemap.xml",
+            "",
+        ]
+    response = HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
+    response["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
+def sitemap_xml(request):
+    """Small dynamic sitemap of KOFAD public pages and live product listings."""
+    origin = settings.PUBLIC_SITE_ORIGIN
+    paths = [
+        ("/", "1.0", "daily"),
+        ("/market/", "1.0", "daily"),
+        ("/about/", "0.8", "monthly"),
+        ("/contact/", "0.8", "monthly"),
+        ("/faq/", "0.7", "monthly"),
+        ("/delivery/", "0.7", "monthly"),
+        ("/returns-policy/", "0.6", "monthly"),
+        ("/terms/", "0.4", "yearly"),
+        ("/privacy/", "0.4", "yearly"),
+    ]
+    product_paths = [
+        (f"/market/products/{pk}/", "0.9", "daily")
+        for pk in MarketListing.objects.filter(
+            enabled=True, product__active=True
+        ).values_list("pk", flat=True).order_by("pk")
+    ]
+    rows = []
+    for path, priority, frequency in [*paths, *product_paths]:
+        item_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else origin
+        rows.append(
+            "  <url>"
+            f"<loc>{item_origin}{path}</loc>"
+            f"<changefreq>{frequency}</changefreq>"
+            f"<priority>{priority}</priority>"
+            "</url>"
+        )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(rows)
+        + "\n</urlset>\n"
+    )
+    response = HttpResponse(xml, content_type="application/xml; charset=utf-8")
+    response["Cache-Control"] = "public, max-age=1800"
+    return response
