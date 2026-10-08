@@ -225,3 +225,15 @@ def reconcile_reply(provider_id, status):
     if reply:
         reply.status = _transition(reply.status, status)
         reply.save(update_fields=["status", "updated_at"])
+
+
+
+def purge_old_replies():
+    """Retain opt-out contacts while expiring old assistant message bodies."""
+    cutoff = timezone.now() - timedelta(days=max(int(settings.WHATSAPP_BOT_REPLY_RETENTION_DAYS), 1))
+    deletable = WhatsAppBotReply.objects.filter(
+        created_at__lt=cutoff,
+        status__in=["sent", "delivered", "read", "failed", "expired", "suppressed", "rate_limited", "handoff"],
+    )
+    deleted, _ = deletable.delete()
+    return deleted
