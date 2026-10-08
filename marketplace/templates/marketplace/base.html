@@ -5,6 +5,7 @@
 <meta name="theme-color" content="#071f33"><meta name="color-scheme" content="light dark">
 <meta name="description" content="{{ page.intro|default:'KOFAD IMPEX ENTERPRISE — retail and wholesale shopping, delivery, collection and customer care.' }}">
 <title>{{ title|default:"KOFAD Market" }} · KOFAD IMPEX ENTERPRISE</title>
+{% if listing %}<link rel="canonical" href="https://market.kofadimpex.com/market/products/{{ listing.pk }}/">{% elif page_slug %}<link rel="canonical" href="https://kofadimpex.com{{ request.path }}">{% elif request.path == '/market/' %}<link rel="canonical" href="https://market.kofadimpex.com/market/">{% elif request.path == '/' %}<link rel="canonical" href="https://kofadimpex.com/">{% endif %}
 <link rel="icon" href="{% static 'brand/kofad-emblem.png' %}" type="image/png">
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'marketplace/market.css' %}">
