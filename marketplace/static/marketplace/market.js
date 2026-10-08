@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const mediaDark = window.matchMedia("(prefers-color-scheme: dark)");
   const getTheme = () => {
-    try { return localStorage.getItem("kofad-theme") || "light"; }
+    try { return (window.KofadPrivacy ? window.KofadPrivacy.getPreference("kofad-theme", "light") : (localStorage.getItem("kofad-theme") || "light")); }
     catch (_) { return "light"; }
   };
   const applyTheme = preference => {
@@ -23,7 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.querySelectorAll("[data-theme-toggle]").forEach(button => button.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    try { localStorage.setItem("kofad-theme", next); } catch (_) {}
+    try { window.KofadPrivacy?.setPreference("kofad-theme", next); } catch (_) {}
     applyTheme(next);
   }));
 

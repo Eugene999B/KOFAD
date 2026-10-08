@@ -138,6 +138,9 @@ with sync_playwright() as p:
             break
         except Exception:
             time.sleep(1)
+    # Existing workflow evidence follows a visitor who enabled preferences.
+    # Fresh essential-only and withdrawal flows are exercised by cookie_smoke.py.
+    page.locator("[data-cookie-accept]").click()
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
     assert float(page.locator(".premium-login-form label").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
     assert float(page.locator(".premium-login-form input").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
@@ -341,6 +344,7 @@ with sync_playwright() as p:
     page.set_viewport_size({"width":390,"height":844})
     admin_page = browser.new_page(viewport={"width":1280,"height":900})
     admin_page.goto(staff_login_url)
+    admin_page.locator("[data-cookie-accept]").click()
     admin_page.get_by_label("Username, mobile number or verified email",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("admin")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
@@ -626,6 +630,7 @@ with sync_playwright() as p:
     )
 
     market_page.goto("http://127.0.0.1:8000/")
+    market_page.locator("[data-cookie-accept]").click()
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0

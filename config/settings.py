@@ -31,7 +31,7 @@ TEMPLATES = [{
     "DIRS": [BASE_DIR / "templates"], "APP_DIRS": True,
     "OPTIONS": {"context_processors": [
         "django.template.context_processors.request", "django.contrib.auth.context_processors.auth",
-        "django.contrib.messages.context_processors.messages", "core.context.shell",
+        "django.contrib.messages.context_processors.messages", "core.context.shell", "core.cookie_preferences.context",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -197,3 +197,7 @@ KOFAD_BREVO_API_KEY = os.environ.get("KOFAD_BREVO_API_KEY", "").strip()
 KOFAD_BREVO_SECURITY_FROM_EMAIL = os.environ.get("KOFAD_BREVO_SECURITY_FROM_EMAIL", "").strip()
 KOFAD_BREVO_TRANSACTION_FROM_EMAIL = os.environ.get("KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "").strip()
 KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", "").strip()
+
+
+# Optional public-site analytics is loaded only after the visitor opts in.
+KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip()
