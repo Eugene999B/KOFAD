@@ -1209,6 +1209,8 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         f"Payment received for order {order.customer_reference}. "
         f"Amount: GHS {order.total:.2f}. View your receipt and delivery progress in your account.",
     ))
+    from core.email_identity import enqueue_staff_payment_alerts
+    transaction.on_commit(lambda: enqueue_staff_payment_alerts(order))
     return order
 
 
