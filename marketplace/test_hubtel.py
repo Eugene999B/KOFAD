@@ -1,19 +1,20 @@
+import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import requests
 from django.core.exceptions import ValidationError
-from django.test import SimpleTestCase, override_settings
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from . import hubtel, services
-from .models import MarketPaymentAttempt, PaymentConfiguration
+from .models import MarketPaymentAttempt, HubtelEvidence, PaymentConfiguration
 from .tests import MarketFixtures
 
 
 @override_settings(HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-key", HUBTEL_COLLECTION_ACCOUNT="12345")
-class HubtelContractTests(SimpleTestCase):
+class HubtelContractTests(TestCase):
     @patch("marketplace.hubtel.requests.get")
     def test_public_status_endpoint_and_basic_auth(self, get):
         get.return_value = Mock(status_code=200)
@@ -271,3 +272,90 @@ class HubtelPaymentTests(MarketFixtures):
             result = hubtel.initialize_payment(attempt.order, "https://example.test/return")
         self.assertEqual(result.pk, attempt.pk)
         paystack.assert_not_called()
+
+
+    def test_callback_saves_exact_original_json_encrypted_and_allows_download(self):
+        from .hubtel_evidence import decrypt_exchange
+        attempt = self.pending()
+        raw = (
+            '{"ResponseCode":"0000","Data":{"ClientReference":"'
+            + attempt.reference
+            + '","Status":"Success","Amount":200,"CheckoutId":"abc"}}'
+        ).encode("utf-8")
+        response = self.client.post(
+            "/market/payments/hubtel/callback/", raw,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        record = HubtelEvidence.objects.get(reference=attempt.reference, direction="callback")
+        self.assertEqual(decrypt_exchange(record), raw)
+        self.assertNotIn("CheckoutId", record.encrypted_body)
+        self.assertIsNone(attempt.order.sale_document_id)
+
+        url = f"/settings/online-payments/hubtel-evidence/download/{record.pk}/"
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.client.force_login(self.staff)
+        download = self.client.get(url)
+        self.assertEqual(download.status_code, 200)
+        self.assertEqual(download.content, raw)
+        self.assertIn("no-store", download["Cache-Control"])
+        index = self.client.get(
+            f"/settings/online-payments/hubtel-evidence/{attempt.pk}/"
+        )
+        self.assertEqual(index.status_code, 200)
+        self.assertContains(index, "Download original JSON")
+        self.assertNotContains(index, "CheckoutId")
+        self.assertNotContains(index, raw.decode("utf-8"))
+
+    def test_failed_callback_is_saved_and_does_not_mark_paid(self):
+        from .hubtel_evidence import decrypt_exchange
+        attempt = self.pending()
+        raw = json.dumps({"ResponseCode": "0000", "Data": {
+            "ClientReference": attempt.reference, "Status": "Failed", "Amount": 200,
+        }}).encode()
+        self.assertEqual(self.client.post(
+            "/market/payments/hubtel/callback/", raw, content_type="application/json"
+        ).status_code, 200)
+        evidence = HubtelEvidence.objects.get(reference=attempt.reference, direction="callback")
+        self.assertEqual(decrypt_exchange(evidence), raw)
+        attempt.order.refresh_from_db()
+        self.assertNotEqual(attempt.order.payment_status, "paid")
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_status_check_records_original_success_and_failed_response_bodies(self, get):
+        from .hubtel_evidence import decrypt_exchange
+        attempt = self.pending()
+        good = json.dumps({
+            "responseCode": "0000", "data": [{
+                "clientReference": attempt.reference,
+                "transactionStatus": "Success", "invoiceStatus": "Success",
+                "transactionAmount": 200, "currencyCode": "GHS",
+                "transactionId": "txn-confirmed",
+            }],
+        }, separators=(",", ":")).encode()
+        get.return_value = Mock(status_code=200, content=good)
+        get.return_value.json.return_value = json.loads(good)
+        self.assertEqual(hubtel.verify(attempt.reference)["status"], "Paid")
+        bad = b'{"responseCode":"4720","message":"Transaction not found","data":null}'
+        get.return_value = Mock(status_code=400, content=bad)
+        get.return_value.json.return_value = json.loads(bad)
+        with self.assertRaises(services.PaymentVerificationUnavailable):
+            hubtel.verify(attempt.reference)
+        records = list(HubtelEvidence.objects.filter(
+            reference=attempt.reference, direction="status_check"
+        ).order_by("pk"))
+        self.assertEqual(len(records), 2)
+        self.assertEqual([item.http_status for item in records], [200, 400])
+        self.assertEqual([decrypt_exchange(item) for item in records], [good, bad])
+
+    def test_repeated_callbacks_get_separate_evidence_entries(self):
+        attempt = self.pending()
+        body = {"Data": {"ClientReference": attempt.reference, "Status": "Failed"}}
+        for _ in range(2):
+            self.assertEqual(self.client.post(
+                "/market/payments/hubtel/callback/", body,
+                content_type="application/json",
+            ).status_code, 200)
+        self.assertEqual(HubtelEvidence.objects.filter(
+            reference=attempt.reference, direction="callback"
+        ).count(), 2)
