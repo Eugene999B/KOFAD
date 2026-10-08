@@ -174,6 +174,32 @@ def enqueue_notice(kind, owner_id, event_key, subject, body):
     return notice
 
 
+def enqueue_staff_payment_alerts(order):
+    """Alert only opted-in staff authorised to view this branch's reports."""
+    if not getattr(settings, "KOFAD_EMAIL_NOTIFICATIONS_ENABLED", False):
+        return 0
+    count = 0
+    identities = EmailIdentity.objects.filter(
+        kind="staff", verified_at__isnull=False, notifications_enabled=True,
+    ).only("owner_id")
+    for identity in identities:
+        user = User.objects.filter(pk=identity.owner_id, is_active=True).first()
+        if not user or not (user.is_superuser or (
+            user.has_perm("core.view_reports")
+            and user.access.branches.filter(pk=order.branch_id).exists()
+        )):
+            continue
+        if enqueue_notice(
+            "staff", user.pk, f"staff-order-paid:{user.pk}:{order.pk}",
+            "KOFAD online payment confirmed",
+            f"Verified online payment for {order.customer_reference}. "
+            f"Amount: GHS {order.total:.2f}. Review the order from your private staff dashboard.",
+        ):
+            count += 1
+    return count
+
+
+
 def deliver_pending(limit=20):
     """Run from dedicated email worker/cron, not inside a customer HTTP request."""
     if not delivery_ready() or not getattr(settings, "KOFAD_EMAIL_NOTIFICATIONS_ENABLED", False):
