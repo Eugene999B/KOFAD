@@ -14,7 +14,7 @@ from core.tests import Fixtures
 
 @override_settings(
     HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-secret",
-    HUBTEL_COLLECTION_ACCOUNT="test-account", HUBTEL_CHECKOUT_ENABLED=True,
+    HUBTEL_COLLECTION_ACCOUNT="123456", HUBTEL_CHECKOUT_ENABLED=True,
     HUBTEL_TIMEOUT_SECONDS=5, SMS_ENABLED=False,
 )
 class StaffHubtelPaymentTests(Fixtures, TestCase):
