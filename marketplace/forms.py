@@ -429,11 +429,12 @@ class ReceivingAccountForm(forms.ModelForm):
         from .models import PaymentConfiguration
         model = PaymentConfiguration
         fields = ["bank_account_name", "bank_account_number", "bank_name",
-                  "bank_branch", "bank_branch_code", "receiving_momo"]
+                  "bank_branch", "bank_branch_code", "receiving_momo", "receiving_momo_name"]
         labels = {
             "bank_account_name": "Account name", "bank_account_number": "Bank account number",
             "bank_name": "Bank", "bank_branch": "Bank branch",
             "bank_branch_code": "Branch code", "receiving_momo": "Receiving MoMo number",
+            "receiving_momo_name": "Receiving MoMo account name",
         }
         widgets = {"bank_account_number": forms.TextInput(attrs={"inputmode": "numeric"}),
                    "bank_branch_code": forms.TextInput(attrs={"inputmode": "numeric"}),
@@ -442,3 +443,35 @@ class ReceivingAccountForm(forms.ModelForm):
     def clean_receiving_momo(self):
         value = self.cleaned_data.get("receiving_momo", "").strip()
         return normalize_ghana_phone(value) if value else ""
+
+
+class CheckoutPaymentForm(forms.Form):
+    payment_method = forms.ChoiceField(
+        choices=[("momo", "Mobile Money prompt"), ("hosted", "Secure checkout (card or other methods)")],
+        required=False, initial="momo",
+    )
+    momo_phone = forms.CharField(required=False, max_length=30, label="Mobile Money number",
+        widget=forms.TextInput(attrs={"inputmode": "tel", "autocomplete": "tel"}))
+    momo_network = forms.ChoiceField(required=False, label="Mobile Money network",
+        choices=[("mtn", "MTN MoMo"), ("atl", "AT Money"), ("vod", "Telecel Cash")])
+
+    def __init__(self, *args, momo_available=False, **kwargs):
+        self.momo_available = momo_available
+        super().__init__(*args, **kwargs)
+        if not momo_available:
+            self.fields["payment_method"].choices = [("hosted", "Secure checkout")]
+            self.fields["payment_method"].initial = "hosted"
+
+    def clean(self):
+        cleaned = super().clean()
+        cleaned["payment_method"] = cleaned.get("payment_method") or "hosted"
+        if cleaned["payment_method"] == "momo":
+            if not self.momo_available:
+                raise ValidationError("Mobile Money prompts are not available. Use secure checkout.")
+            try:
+                cleaned["momo_phone"] = normalize_ghana_phone(cleaned.get("momo_phone", ""))
+            except ValidationError:
+                self.add_error("momo_phone", "Enter a valid Ghana Mobile Money number.")
+            if not cleaned.get("momo_network"):
+                self.add_error("momo_network", "Choose your Mobile Money network.")
+        return cleaned

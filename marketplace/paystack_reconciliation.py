@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models import F, Q
 from django.utils import timezone
-from .models import MarketPaymentAttempt
+from .models import MarketPaymentAttempt, OnlineOrder
 from . import services
 
 
@@ -27,9 +27,12 @@ def reconcile_due(limit=5):
             if state == "success":
                 services.finalize_payment(attempt.reference, verified)
             elif state in {"failed", "abandoned", "reversed"}:
-                MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+                MarketPaymentAttempt.objects.filter(pk=attempt.pk, status__in=["initializing", "submission_unknown", "pending"]).update(
                     status="failed", next_check_at=None, provider_message="Provider confirmed unsuccessful payment.",
                 )
+                OnlineOrder.objects.filter(pk=attempt.order_id, payment_reference=attempt.reference).exclude(
+                    payment_status__in=["paid", "refunded"],
+                ).update(payment_status="failed", updated_at=timezone.now())
         except services.PaymentVerificationUnavailable:
             pass
         except ValidationError:

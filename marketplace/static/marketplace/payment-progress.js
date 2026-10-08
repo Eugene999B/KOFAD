@@ -33,6 +33,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (!response.ok) return;
       const data = await response.json();
+      if (message && data.message) message.textContent = data.message;
+      if (data.attention) {
+        stopped = true;
+        if (message) message.textContent = "Your payment needs review. If money was deducted, do not pay again; contact KOFAD.";
+        return;
+      }
       if (data.paid || data.order_status === "cancelled" || !data.waiting) {
         stopped = true;
         location.reload();

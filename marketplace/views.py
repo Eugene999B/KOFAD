@@ -28,7 +28,7 @@ from .forms import (
     CheckoutForm, ConversationMessageForm, CustomerAccessForm, CustomerLoginForm,
     CustomerPasswordChangeForm, CustomerPasswordResetForm, CustomerProfileForm, CustomerRegistrationForm,
     DeliveryPolicyForm, DeliveryTrackingForm, DeliveryZoneForm, MarketGalleryForm, MarketReturnRequestForm,
-    StaffOrderUpdateForm,
+    StaffOrderUpdateForm, CheckoutPaymentForm,
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
@@ -36,7 +36,7 @@ from .models import (
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
-from . import services, hubtel
+from . import services, hubtel, paystack_momo
 
 
 def _market_context(request, **extra):
@@ -896,9 +896,12 @@ def checkout(request, customer):
         initial["fulfilment"] = "pickup"
     form = CheckoutForm(request.POST or None, initial=initial, delivery_enabled=has_delivery)
     payment_ready = hubtel.ready()
+    momo_available = hubtel.selected_provider() == "paystack" and paystack_momo.ready()
+    payment_form = CheckoutPaymentForm(request.POST or None,
+        initial={"momo_phone": customer.phone}, momo_available=momo_available)
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
-    if request.method == "POST" and payment_ready and form.is_valid():
+    if request.method == "POST" and payment_ready and form.is_valid() and payment_form.is_valid():
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
             if order.fulfilment == "delivery":
@@ -914,10 +917,11 @@ def checkout(request, customer):
             request.session["market_cart"] = {}
             request.session.modified = True
             try:
-                attempt = hubtel.initialize_payment(
-                    order,
-                    request.build_absolute_uri("/market/payment/return/"),
-                )
+                if payment_form.cleaned_data["payment_method"] == "momo":
+                    paystack_momo.initialize(order, payment_form.cleaned_data["momo_phone"],
+                                             payment_form.cleaned_data["momo_network"])
+                    return redirect("market_order", pk=order.pk)
+                hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
                 return redirect("market_payment_launch", pk=order.pk)
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -937,7 +941,8 @@ def checkout(request, customer):
         delivery_fee_preview=initial_quote["fee"] if initial_quote else Decimal("0"),
         checkout_total=subtotal + (initial_quote["fee"] if initial_quote else Decimal("0")),
         delivery_company=company, payment_ready=payment_ready,
-        payment_notice="Online payment is awaiting final testing and activation.",
+        payment_notice="Online payment is awaiting final testing and activation.", payment_form=payment_form,
+        momo_available=momo_available,
     ))
 
 
@@ -947,16 +952,26 @@ def order_pay(request, customer, pk):
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
     if order.payment_status == "paid":
         return redirect("market_order", pk=order.pk)
+    existing = order.payment_attempts.filter(status__in=paystack_momo.ACTIVE_STATUSES).first()
+    if existing and not existing.authorization_url:
+        messages.info(request, "Your original payment is being checked. Please do not pay again.")
+        return redirect("market_order", pk=order.pk)
+    if existing:
+        return redirect("market_payment_launch", pk=order.pk)
+    form = CheckoutPaymentForm(request.POST,
+        momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready())
+    if not form.is_valid():
+        messages.error(request, "Check your Mobile Money number and network, then try again.")
+        return redirect("market_order", pk=order.pk)
     try:
-        attempt = hubtel.initialize_payment(
-            order,
-            request.build_absolute_uri("/market/payment/return/"),
-        )
+        if form.cleaned_data["payment_method"] == "momo":
+            paystack_momo.initialize(order, form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"])
+            return redirect("market_order", pk=order.pk)
+        hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
         return redirect("market_payment_launch", pk=order.pk)
     except ValidationError as exc:
         messages.error(request, problem(exc))
         return redirect("market_order", pk=order.pk)
-
 
 @market_customer_required
 def payment_launch(request, customer, pk):
@@ -1121,7 +1136,11 @@ def customer_order(request, customer, pk):
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel.ready(),
-        payment_waiting=order.payment_attempts.filter(provider="hubtel", status__in=["initializing", "submission_unknown", "pending", "attention"]).exists(),
+        payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
+            momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
+        momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready(),
+        payment_attempt=order.payment_attempts.first(),
+        payment_waiting=order.payment_attempts.filter(status__in=["initializing", "submission_unknown", "pending", "attention"]).exists(),
         can_request_return=bool(returnable),
         returnable=returnable,
         delivery_updates=order.delivery_updates.filter(customer_visible=True),
@@ -1137,7 +1156,7 @@ def customer_order_cancel(request, customer, pk):
         if order.status != "awaiting_payment" or order.payment_status == "paid":
             messages.error(request, "This order can no longer be cancelled from your account.")
             return redirect("market_order", pk=order.pk)
-        if order.payment_attempts.filter(provider="hubtel", status__in=["initializing", "submission_unknown", "pending", "attention"]).exists():
+        if order.payment_attempts.filter(status__in=["initializing", "submission_unknown", "pending", "attention"]).exists():
             messages.error(request, "This payment must be reconciled before cancelling. If debited, do not pay again.")
             return redirect("market_order", pk=order.pk)
         order.status = "cancelled"
@@ -1973,16 +1992,22 @@ def staff_order(request, branch, pk):
         pk=pk,
     )
     if request.method == "POST" and request.POST.get("form_type") == "payment_check":
-        attempt = order.payment_attempts.filter(provider="hubtel").first()
+        attempts = order.payment_attempts.all()
+        reference = request.POST.get("payment_reference", "").strip()
+        attempt = attempts.filter(reference=reference).first() if reference else attempts.first()
         if attempt:
-            # An authorised staff member may recheck a quarantined result, never mark it paid manually.
             MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
                 next_check_at=timezone.now(),
-                provider_message="Staff requested an immediate Hubtel verification.",
+                provider_message="Staff requested an immediate provider verification.",
             )
             try:
-                hubtel.reconcile(attempt.reference)
-                messages.success(request, "Hubtel payment verified.")
+                if attempt.provider == "hubtel":
+                    hubtel.reconcile(attempt.reference)
+                elif attempt.provider == "paystack":
+                    services.finalize_payment(attempt.reference, services.verify_paystack(attempt.reference))
+                else:
+                    raise ValidationError("This payment provider is not supported.")
+                messages.success(request, "Payment verified.")
             except ValidationError as exc:
                 messages.info(request, problem(exc))
         return redirect("staff_online_order", pk=order.pk)
@@ -2313,12 +2338,15 @@ def online_payments(request, branch):
 def customer_payment_status(request, customer, pk):
     """Read our confirmed state only; the worker performs provider verification."""
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    latest = order.payment_attempts.first()
     waiting = order.payment_attempts.filter(
-        provider="hubtel", status__in=["initializing", "submission_unknown", "pending", "attention"]
+        status__in=["initializing", "submission_unknown", "pending", "attention"]
     ).exists()
     response = JsonResponse({
         "payment_status": order.payment_status, "order_status": order.status,
         "waiting": waiting, "paid": order.payment_status == "paid",
+        "message": latest.provider_message if latest and latest.status != "success" else "",
+        "attention": bool(latest and latest.status == "attention"),
     })
     response["Cache-Control"] = "no-store, private"
     return response

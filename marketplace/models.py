@@ -468,6 +468,7 @@ class PaymentConfiguration(models.Model):
     bank_branch = models.CharField(max_length=100, blank=True)
     bank_branch_code = models.CharField(max_length=20, blank=True)
     receiving_momo = models.CharField(max_length=20, blank=True)
+    receiving_momo_name = models.CharField(max_length=140, blank=True)
 
     def save(self, *args, **kwargs):
         self.pk = 1

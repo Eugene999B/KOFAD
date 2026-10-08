@@ -1084,13 +1084,27 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     if order.payment_status == "paid":
         return order
 
-    if str(provider_data.get("status", "")).lower() != "success":
-        attempt.status = str(provider_data.get("status", "failed"))[:24]
-        attempt.save(update_fields=["status"])
-        order.payment_status = "failed"
-        order.save(update_fields=["payment_status", "updated_at"])
+    provider_status = str(provider_data.get("status", "")).lower()
+    if provider_status != "success":
+        if provider_status in {"failed", "abandoned", "reversed"}:
+            attempt.status = "failed"
+            attempt.next_check_at = None
+            attempt.save(update_fields=["status", "next_check_at"])
+            if order.payment_reference == reference:
+                order.payment_status = "failed"
+                order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("The payment has not been completed.")
 
+    direct_momo = attempt.verification_summary.get("flow") == "mobile_money"
+    if expected_provider == "paystack" and (
+        (str(settings.PAYSTACK_SECRET_KEY).startswith("sk_live_") and provider_data.get("domain") == "test")
+        or (direct_momo and (provider_data.get("channel") != "mobile_money" or not provider_data.get("id")))
+    ):
+        attempt.status = "attention"
+        attempt.next_check_at = None
+        attempt.provider_message = "Verified payment details require manager review."
+        attempt.save(update_fields=["status", "next_check_at", "provider_message"])
+        raise ValidationError("Verified payment details do not match this request.")
     amount = provider_data.get("amount")
     currency = str(provider_data.get("currency", "")).upper()
     if amount != int(order.total * 100) or currency != "GHS":

@@ -1,4 +1,4 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block head %}<script defer src="{% static 'marketplace/payment-progress.js' %}"></script>{% endblock %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}{% block head %}<script defer src="{% static 'marketplace/payment-choice.js' %}"></script><script defer src="{% static 'marketplace/payment-progress.js' %}"></script>{% endblock %}{% block content %}
 <section class="order-v2-page">
 <nav class="commerce-breadcrumb"><a href="/market/account/">My KOFAD</a><span>›</span><a href="/market/orders/">Orders</a><span>›</span><strong>{{ order.customer_reference }}</strong></nav>
 <header class="order-v2-hero"><div><div class="order-v2-label"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><small>{{ order.created_at|date:"d M Y · H:i" }}</small></div><h1>{{ order.customer_reference }}</h1><p>{{ order.get_fulfilment_display }} · {{ order.lines.count }} item line{{ order.lines.count|pluralize }} · GHS {{ order.total|floatformat:2 }}</p></div><div class="order-v2-payment"><small>PAYMENT</small><strong>{{ order.get_payment_status_display }}</strong>{% if order.confirmed_reference %}<span class="payment-confirmation-id">Order ID · {{ order.confirmed_reference }}</span>{% endif %}</div></header>
@@ -14,13 +14,13 @@
 <section class="order-action-card payment-required-v2"{% if payment_waiting %} data-payment-progress data-status-url="/market/orders/{{ order.pk }}/payment-status/"{% endif %}>
 <p class="market-eyebrow">PAYMENT</p>
 {% if payment_waiting %}
-<h2>Waiting for payment confirmation</h2><p data-payment-progress-message role="status" aria-live="polite">Complete approval on the payment page or your phone. Your order will update automatically after payment is confirmed. If money has been deducted, please do not pay again.</p>
+<h2>Waiting for payment confirmation</h2><p data-payment-progress-message role="status" aria-live="polite">{% if payment_attempt.provider_message %}{{ payment_attempt.provider_message }}{% else %}Complete approval on the payment page or your phone.{% endif %} Your order will update automatically after payment is confirmed. If money has been deducted, please do not pay again.</p>
 {% elif payment_available %}
 <h2>Complete payment</h2><p>Continue to secure checkout, choose Mobile Money and approve the payment on your phone. Your order updates automatically after confirmation.</p>
 {% else %}
 <h2>Payment is not open yet</h2><p>This order is saved. Online payments are awaiting final testing. You have not been charged by saving this order.</p>
 {% endif %}
-{% if payment_available %}<form method="post" action="/market/orders/{{ order.pk }}/pay/">{% csrf_token %}<button class="market-button primary wide">{% if payment_waiting %}Continue payment{% else %}Pay GHS {{ order.total|floatformat:2 }}{% endif %} <span>→</span></button></form>{% endif %}
+{% if payment_available and not payment_waiting or payment_attempt.authorization_url %}<form method="post" action="/market/orders/{{ order.pk }}/pay/">{% csrf_token %}{% if not payment_waiting %}{% include "marketplace/payment_choices.html" %}{% endif %}<button class="market-button primary wide">{% if payment_waiting %}Continue payment{% else %}Pay GHS {{ order.total|floatformat:2 }}{% endif %} <span>→</span></button></form>{% endif %}
 {% if not payment_waiting %}<form method="post" action="/market/orders/{{ order.pk }}/cancel/" class="cancel-order-form">{% csrf_token %}<button>Cancel unpaid order</button></form>{% endif %}
 </section>
 {% elif order.payment_status == 'paid' %}<section class="payment-done-card order-payment-done"><span>✓</span><div><strong>Payment confirmed</strong>{% if order.confirmed_reference %}<small>{{ order.confirmed_reference }}</small>{% endif %}</div></section>{% endif %}
