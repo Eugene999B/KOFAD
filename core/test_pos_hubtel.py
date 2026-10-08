@@ -151,3 +151,51 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.assertEqual(result["status"], "submission_unknown")
         self.assertFalse(result["authorization_url"])
         self.assertEqual(Document.objects.count(), 0)
+
+    @patch("core.pos_hubtel.hubtel.headers", return_value={})
+    @patch("core.pos_hubtel.requests.post")
+    def test_staff_start_api_respects_shared_gateway(self, post, _):
+        self.authenticate_client()
+        key = uuid.uuid4()
+        post.return_value = self.initiate(key.hex)
+        response = self.client.post(
+            "/api/pos/paystack-momo/start/",
+            data=json.dumps({
+                "sale": self.payload(), "phone": "0551234567",
+                "provider": "mtn", "payment_gateway": "hubtel",
+                "email": "", "request_key": str(key),
+            }),
+            content_type="application/json",
+            HTTP_IDEMPOTENCY_KEY=str(key),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["provider"], "hubtel")
+        self.assertTrue(response.json()["authorization_url"].startswith("https://pay.hubtel.com/"))
+        self.assertFalse(response.json()["paid"])
+        self.assertEqual(Document.objects.count(), 0)
+
+    @patch("core.pos_hubtel.hubtel.headers", return_value={})
+    @patch("core.pos_hubtel.requests.post")
+    def test_existing_hubtel_checkout_remains_hubtel_after_settings_switch(self, post, _):
+        self.authenticate_client()
+        key = uuid.uuid4()
+        post.return_value = self.initiate(key.hex)
+        request = {
+            "sale": self.payload(), "phone": "0551234567",
+            "provider": "mtn", "payment_gateway": "hubtel",
+            "email": "", "request_key": str(key),
+        }
+        first = self.client.post(
+            "/api/pos/paystack-momo/start/", data=json.dumps(request),
+            content_type="application/json", HTTP_IDEMPOTENCY_KEY=str(key),
+        )
+        self.assertEqual(first.status_code, 200, first.content)
+        with patch("marketplace.hubtel.selected_provider", return_value="paystack"):
+            second = self.client.post(
+                "/api/pos/paystack-momo/start/", data=json.dumps(request),
+                content_type="application/json", HTTP_IDEMPOTENCY_KEY=str(key),
+            )
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertEqual(second.json()["reference"], key.hex)
+        self.assertEqual(second.json()["provider"], "hubtel")
+        self.assertEqual(post.call_count, 1)
