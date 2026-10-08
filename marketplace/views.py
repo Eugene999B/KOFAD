@@ -385,16 +385,14 @@ def customer_access(request):
     form = CustomerAccessForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
-        existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
-        if existing:
-            request.session["market_login_phone"] = phone
-            request.session.pop("market_pending_phone", None)
-            request.session.pop("market_verified_phone", None)
-            return redirect("market_login")
         try:
-            services.send_otp(phone, "register", request=request)
+            # Use the same phone-ownership challenge whether the account exists or not.
+            # This prevents the gateway from becoming an account-enumeration oracle.
+            services.send_otp(phone, "login", request=request)
             request.session.pop("market_login_phone", None)
+            request.session.pop("market_verified_phone", None)
             request.session["market_pending_phone"] = phone
+            request.session["market_pending_otp_purpose"] = "login"
             messages.success(request, "We sent a six-digit verification code to your phone.")
             return redirect("market_verify")
         except ValidationError as exc:
@@ -463,16 +461,24 @@ def account_verify(request):
     phone = request.session.get("market_pending_phone")
     if not phone:
         return redirect("market_access")
+    purpose = request.session.get("market_pending_otp_purpose") or "login"
     if request.method == "POST":
         if request.POST.get("action") == "resend":
             try:
-                services.send_otp(phone, "register", request=request)
+                services.send_otp(phone, purpose, request=request)
                 messages.success(request, "A new verification code was sent.")
             except ValidationError as exc:
                 messages.error(request, problem(exc))
             return redirect("market_verify")
         try:
-            services.verify_otp(phone, request.POST.get("code"), "register")
+            services.verify_otp(phone, request.POST.get("code"), purpose)
+            existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            request.session.pop("market_pending_otp_purpose", None)
+            if existing:
+                services.set_customer_session(request, existing)
+                request.session.pop("market_pending_phone", None)
+                after = request.session.pop("market_after_login", None)
+                return redirect(after or "market")
             request.session["market_verified_phone"] = phone
             return redirect("market_finish")
         except ValidationError as exc:
