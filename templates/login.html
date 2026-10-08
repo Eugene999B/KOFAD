@@ -9,6 +9,7 @@
 <title>Sign in · KOFAD</title>
 <link rel="icon" type="image/png" sizes="96x96" href="{% static 'brand/favicon-96.png' %}">
 <link rel="apple-touch-icon" href="{% static 'brand/favicon-96.png' %}">
+<link rel="stylesheet" href="{% static 'cookie-consent.css' %}"><script src="{% static 'cookie-consent.js' %}"></script>
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'app.css' %}">
 <link rel="stylesheet" href="{% static 'ui-v4.css' %}">
@@ -86,5 +87,5 @@
 </div>
 
 <footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Built for controlled, connected trading.</span></footer>
-</body>
+{% include "cookie_choices.html" %}</body>
 </html>
