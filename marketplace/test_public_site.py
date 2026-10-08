@@ -9,6 +9,7 @@ from .models import Conversation
 from .public_content import PAGES
 
 
+@override_settings(ALLOWED_HOSTS=["testserver", "kofadimpex.com", "market.kofadimpex.com", "staff.kofadimpex.com"])
 class PublicSiteTests(TestCase):
     def setUp(self):
         cache.clear()
