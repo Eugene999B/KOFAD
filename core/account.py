@@ -68,7 +68,7 @@ class RecoveryPhoneForm(forms.Form):
 @login_required
 @sensitive_post_parameters("current_password")
 def account(request):
-    from . import email_identity, google_oauth
+    from . import email_identity, google_oauth, gmail_api
     from marketplace.models import GoogleIdentity
     access = request.user.access
     action = request.POST.get("action", "recovery")
@@ -116,6 +116,8 @@ def account(request):
                     "google_identity": GoogleIdentity.objects.filter(
                         kind="staff", owner_id=request.user.pk
                     ).first(),
+                    "gmail_setup_ready": gmail_api.configured(),
+                    "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
                 })
             locked = Access.objects.select_for_update().get(pk=access.pk)
             locked.recovery_phone = form.cleaned_data["recovery_phone"]
@@ -135,6 +137,8 @@ def account(request):
         "google_identity": GoogleIdentity.objects.filter(
             kind="staff", owner_id=request.user.pk,
         ).first(),
+        "gmail_setup_ready": gmail_api.configured(),
+        "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
     })
 
 
