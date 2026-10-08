@@ -295,6 +295,11 @@ class HubtelPaymentTests(MarketFixtures):
         url = f"/settings/online-payments/hubtel-evidence/download/{record.pk}/"
         self.assertEqual(self.client.get(url).status_code, 302)
         self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
         download = self.client.get(url)
         self.assertEqual(download.status_code, 200)
         self.assertEqual(download.content, raw)
