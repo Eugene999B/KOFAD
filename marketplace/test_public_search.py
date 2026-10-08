@@ -25,25 +25,45 @@ class PublicSearchSurfaceTests(TestCase):
         self.assertEqual(customer["X-Robots-Tag"], "noindex, nofollow, noarchive")
 
     def test_robots_exposes_sitemap_without_revealing_private_staff_slug(self):
-        response = self.client.get("/robots.txt")
+        response = self.client.get("/robots.txt", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn("User-agent: *", body)
         self.assertIn("Sitemap: https://kofadimpex.com/sitemap.xml", body)
-        self.assertIn("Disallow: /market/account/", body)
         self.assertIn("Disallow: /technical-admin/", body)
+        self.assertNotIn(settings.STAFF_LOGIN_SLUG, body)
+
+        staff = self.client.get("/robots.txt", HTTP_HOST="staff.kofadimpex.com")
+        self.assertEqual(staff.status_code, 200)
+        self.assertIn("Disallow: /", staff.content.decode())
+        self.assertNotIn(settings.STAFF_LOGIN_SLUG, staff.content.decode())
+
+        market = self.client.get("/robots.txt", HTTP_HOST="market.kofadimpex.com")
+        self.assertEqual(market.status_code, 200)
+        market_body = market.content.decode()
+        self.assertIn("Allow: /market/", market_body)
+        self.assertIn("Disallow: /market/account/", market_body)
 
     @override_settings(STAFF_LOGIN_SLUG="private-staff-test-gateway")
     def test_robots_does_not_publish_configured_staff_gateway(self):
-        response = self.client.get("/robots.txt")
+        response = self.client.get("/robots.txt", HTTP_HOST="kofadimpex.com")
         self.assertNotContains(response, "private-staff-test-gateway")
+
+    def test_market_uses_its_real_host_as_canonical(self):
+        response = self.client.get("/market/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'rel="canonical" href="https://market.kofadimpex.com/market/"',
+        )
 
     def test_sitemap_contains_only_public_company_routes(self):
         response = self.client.get("/sitemap.xml")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
-        for path in ("/", "/market/", "/about/", "/contact/", "/faq/", "/delivery/"):
+        for path in ("/", "/about/", "/contact/", "/faq/", "/delivery/"):
             self.assertIn(f"<loc>https://kofadimpex.com{path}</loc>", body)
+        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", body)
         self.assertNotIn("/workspace/", body)
         self.assertNotIn("/market/account/", body)
         self.assertNotIn(settings.LOGIN_URL, body)
