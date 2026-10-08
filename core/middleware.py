@@ -72,6 +72,7 @@ class AccessMiddleware:
         geolocation_paths = ("/market/checkout/", "/market-settings/", "/online-orders/")
         google_map_page = bool(
             settings.GOOGLE_MAPS_BROWSER_KEY
+            and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED
             and request.path.startswith(geolocation_paths)
         )
         if google_map_page:
