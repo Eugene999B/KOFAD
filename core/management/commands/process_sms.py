@@ -51,6 +51,13 @@ class Command(BaseCommand):
                 last_payment_check = now
 
             if now - last_automation >= 60:
+                # Reuse the existing communications worker: no extra Railway
+                # service, cron deployment or container charges for email.
+                try:
+                    from core.email_identity import deliver_pending
+                    deliver_pending(limit=15)
+                except Exception:
+                    self.stderr.write("Email notification queue check failed safely; will retry.")
                 try:
                     run_scheduled_automations()
                 except Exception as exc:
