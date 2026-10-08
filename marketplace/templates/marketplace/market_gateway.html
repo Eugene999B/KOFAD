@@ -19,16 +19,16 @@
         {% elif listing.image_url %}
           <img src="{{ listing.image_url }}" alt="" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}" referrerpolicy="no-referrer">
         {% else %}
-          <div class="market-entry-placeholder"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+          <div class="market-entry-placeholder"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div>
         {% endif %}
       </figure>
       {% empty %}
-      <figure class="market-entry-tile tile-1"><div class="market-entry-placeholder"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div></figure>
-      <figure class="market-entry-tile tile-2"><div class="market-entry-placeholder"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div></figure>
-      <figure class="market-entry-tile tile-3"><div class="market-entry-placeholder"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div></figure>
+      <figure class="market-entry-tile tile-1"><div class="market-entry-placeholder"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div></figure>
+      <figure class="market-entry-tile tile-2"><div class="market-entry-placeholder"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div></figure>
+      <figure class="market-entry-tile tile-3"><div class="market-entry-placeholder"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div></figure>
       {% endfor %}
     </div>
-    <div class="market-entry-seal"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+    <div class="market-entry-seal"><img src="{% static 'brand/kofad-official-logo.jpg' %}" alt=""></div>
   </div>
 </section>
 {% endblock %}
