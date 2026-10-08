@@ -66,7 +66,7 @@ class CheckoutSecurityTests(MarketFixtures):
         self.assertEqual(views._conversation_access(request, conversation), "")
 
     def test_staff_cannot_read_orderless_support_from_other_branch(self):
-        other = Branch.objects.create(name="Other support", code="other-support")
+        other = Branch.objects.create(name="Other support", code="oth-sup")
         staff = User.objects.create_user("other-support-staff", password="long-test-password")
         staff.user_permissions.add(Permission.objects.get(codename="operate_sales"))
         staff.access.branches.add(other)
