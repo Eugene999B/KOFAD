@@ -59,3 +59,24 @@ class BrandingConsistencyTests(SimpleTestCase):
             [],
             "Legacy or duplicate KOFAD logo references remain in: " + ", ".join(offenders),
         )
+
+    def test_official_logo_keeps_emblem_and_both_text_lines_after_transparency(self):
+        """Regression: previous simple threshold destroyed the actual KOFAD lettering."""
+        from io import BytesIO
+        from PIL import Image
+        from core.brand_art import official_logo_bytes
+
+        image = Image.open(BytesIO(official_logo_bytes())).convert("RGBA")
+        self.assertGreaterEqual(image.width, 210)
+        self.assertGreaterEqual(image.height, 200)
+        self.assertLess(image.getpixel((0, 0))[3], 30)
+        alpha = image.getchannel("A")
+        def visible(rect):
+            crop = alpha.crop(rect)
+            return sum(1 for v in crop.getdata() if v >= 80)
+        self.assertGreater(visible((15, 6, 201, 132)), 6000, "Compass emblem was erased")
+        self.assertGreater(visible((0, 115, 219, 175)), 4000, "KOFAD name was erased")
+        self.assertGreater(visible((0, 175, 219, 211)), 1200, "IMPEX and tagline were erased")
+        favicon = Image.open(settings.BASE_DIR / "static" / "brand" / "favicon-96.png")
+        self.assertEqual(favicon.size, (96, 96))
+        self.assertEqual(favicon.mode, "RGBA")

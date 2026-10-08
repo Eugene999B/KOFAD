@@ -4,7 +4,7 @@
 {% block content %}
 <div class="kfd-home">
 <section class="kfd-hero" data-kfd-rotator aria-labelledby="kfd-hero-title">
-<img class="kfd-hero-image" data-hero-image src="https://images.pexels.com/photos/4483608/pexels-photo-4483608.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1600&amp;h=900&amp;fit=crop" width="1600" height="900" alt="Illustrative photograph of a warehouse with organized stock" fetchpriority="high" decoding="async">
+<img class="kfd-hero-image" data-hero-image src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" data-fallback="{% static 'marketplace/kofad-market-retail-hero.webp' %}" width="1600" height="900" alt="Illustrative photograph of a warehouse with organized stock" fetchpriority="high" decoding="async">
 <div class="kfd-hero-inner"><div class="kfd-hero-copy">
 <p class="kfd-eyebrow">KOFAD IMPEX ENTERPRISE · GLOBAL TRADE SOLUTIONS</p>
 <h1>Everything for today.<br><span>More for your business.</span></h1>
@@ -14,8 +14,8 @@
 <a class="kfd-cta secondary" href="/contact/?topic=wholesale">Wholesale enquiries <span aria-hidden="true">↗</span></a>
 </div>
 </div></div>
-<div class="kfd-hero-meta"><span class="kfd-caption" data-photo-caption>Real retail and logistics photography · Pexels</span><div class="kfd-hero-controls" aria-label="Photo slideshow controls">
-<button type="button" data-slide-prev aria-label="Previous photograph">‹</button><span class="kfd-hero-count" data-hero-count aria-live="off">01 / 25</span>
+<div class="kfd-hero-meta"><span class="kfd-caption" data-photo-caption>Retail and supply imagery</span><div class="kfd-hero-controls" aria-label="Photo slideshow controls">
+<button type="button" data-slide-prev aria-label="Previous photograph">‹</button><span class="kfd-hero-count" data-hero-count aria-live="off">01 / 06</span>
 <button type="button" data-slide-next aria-label="Next photograph">›</button>
 <button type="button" data-slide-pause aria-label="Pause photo slideshow">Ⅱ</button>
 </div></div>
@@ -29,10 +29,10 @@
 <section class="kfd-section" aria-labelledby="kfd-categories-title">
 <div class="kfd-section-top"><div><p class="kfd-eyebrow">DISCOVER THE MARKET</p><h2 id="kfd-categories-title">Find what you need, faster.</h2><p class="kfd-section-lead">Browse everyday categories or speak to our team about repeat and higher-volume purchases.</p></div><a class="kfd-section-link" href="/market/">Browse the Market →</a></div>
 <div class="kfd-category-grid">
-<a class="kfd-category" href="/market/?q=food"><img loading="lazy" src="https://images.pexels.com/photos/19138180/pexels-photo-19138180.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Fresh groceries on store shelves"><span class="kfd-category-body"><span><strong>Food &amp; beverages</strong><small>Everyday groceries</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
-<a class="kfd-category" href="/market/?q=cleaning"><img loading="lazy" src="https://images.pexels.com/photos/5951182/pexels-photo-5951182.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Organized household product shelves"><span class="kfd-category-body"><span><strong>Home &amp; cleaning</strong><small>Practical supplies</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
-<a class="kfd-category" href="/market/?q=personal"><img loading="lazy" src="https://images.pexels.com/photos/1366594/pexels-photo-1366594.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Products displayed on retail shelves"><span class="kfd-category-body"><span><strong>Personal &amp; daily care</strong><small>Everyday needs</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
-<a class="kfd-category" href="/contact/?topic=wholesale"><img loading="lazy" src="https://images.pexels.com/photos/4481326/pexels-photo-4481326.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Wholesale products on warehouse shelves"><span class="kfd-category-body"><span><strong>Wholesale supply</strong><small>Business restocking</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/market/?q=food"><img loading="lazy" src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" data-remote-photo="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&amp;fit=crop&amp;w=650&amp;q=76" alt="Retail grocery display"><span class="kfd-photo-tag">FOOD &amp; DRINK</span><span class="kfd-category-body"><span><strong>Food &amp; beverages</strong><small>Everyday groceries</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/market/?q=cleaning"><img loading="lazy" src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" data-remote-photo="https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&amp;fit=crop&amp;w=650&amp;q=76" alt="Shopping and household products"><span class="kfd-photo-tag">HOME ESSENTIALS</span><span class="kfd-category-body"><span><strong>Home &amp; cleaning</strong><small>Practical supplies</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/market/?q=personal"><img loading="lazy" src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" data-remote-photo="https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&amp;fit=crop&amp;w=650&amp;q=76" alt="Retail products and supplies"><span class="kfd-photo-tag">DAILY CARE</span><span class="kfd-category-body"><span><strong>Personal &amp; daily care</strong><small>Everyday needs</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/contact/?topic=wholesale"><img loading="lazy" src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" data-remote-photo="https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&amp;fit=crop&amp;w=650&amp;q=76" alt="Storage and wholesale stock"><span class="kfd-photo-tag">BULK &amp; TRADE</span><span class="kfd-category-body"><span><strong>Wholesale supply</strong><small>Business restocking</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
 </div></section>
 <section class="kfd-proof" aria-label="Shop and get support">
 <article><div><p class="kfd-eyebrow">SIMPLE ORDERING</p><h3>Choose the pack size that works.</h3><p>Find current products and review the available selling units before you place an order.</p><a href="/market/">Explore products →</a></div><span class="kfd-proof-icon" aria-hidden="true">▧</span></article>
@@ -55,6 +55,6 @@
 {% if company.address %}<div class="contact-method-card contact-method-static"><span>LOCATION</span><strong>{{ company.address }}</strong><small>Business address</small></div>{% endif %}
 </div>
 </section>
-<p class="kfd-photo-credit">Rotating imagery is illustrative, from <a href="https://www.pexels.com/" rel="noopener noreferrer" target="_blank">Pexels</a>; photographs do not depict KOFAD premises unless stated.</p>
+<p class="kfd-photo-credit">Images are illustrative retail and distribution scenes, not representations of KOFAD premises.</p>
 </div>
 {% endblock %}
