@@ -802,7 +802,22 @@ def pos_paystack_momo_start(request):
             raise ValidationError("Expected a payment request object.")
         from marketplace.hubtel import selected_provider
         from . import pos_paystack, pos_hubtel
-        processor = pos_hubtel if selected_provider() == "hubtel" else pos_paystack
+        key = request.headers.get("Idempotency-Key") or data.get("request_key")
+        paystack_reference = pos_paystack._reference_from_key(key)
+        hubtel_reference = pos_hubtel.reference_from_key(key)
+        # If the owner switched the payment gateway after this sale began, an
+        # existing payment must still be queried through its original provider.
+        original_paystack = pos_paystack._held(paystack_reference)
+        original_hubtel = pos_hubtel.held_for(hubtel_reference)
+        if original_paystack and original_hubtel:
+            raise ValidationError("Conflicting payment requests need management review.")
+        chosen = "paystack" if original_paystack else (
+            "hubtel" if original_hubtel else selected_provider()
+        )
+        requested = str(data.get("payment_gateway") or "").lower()
+        if not (original_paystack or original_hubtel) and requested and requested != chosen:
+            raise ValidationError("The payment provider was changed in Settings. Refresh this checkout before proceeding.")
+        processor = pos_hubtel if chosen == "hubtel" else pos_paystack
         result = processor.start(
             request.user,
             branch,
