@@ -251,7 +251,9 @@ def verify(reference):
     elif transaction_status == "success" and invoice_status in {"success", "paid"}:
         status = "Paid"
     elif transaction_status in {"failed", "failure", "declined", "cancelled", "canceled"}:
-        status = "Unpaid"
+        # A definite failed provider transaction is different from an unpaid/
+        # still-pending checkout; stop waiting only for this terminal result.
+        status = "Failed"
     elif invoice_status in {"refunded", "refund"}:
         status = "Refunded"
     else:
@@ -285,6 +287,26 @@ def reconcile(reference):
         )}
         summary = {key: str(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(verification_summary=summary)
+        if data["status"] == "Failed":
+            # Do not leave an independently verified Failed transaction Pending
+            # indefinitely. Preserve the existing independent raw JSON evidence.
+            with transaction.atomic():
+                current = MarketPaymentAttempt.objects.select_for_update().get(pk=attempt.pk)
+                order = OnlineOrder.objects.select_for_update().get(pk=current.order_id)
+                if current.status != "success" and order.payment_status != "paid":
+                    current.status = "failed"
+                    current.next_check_at = None
+                    current.provider_message = "Hubtel confirmed this transaction failed."
+                    current.save(update_fields=["status", "next_check_at", "provider_message"])
+                    if order.payment_reference == reference:
+                        order.payment_status = "failed"
+                        order.save(update_fields=["payment_status", "updated_at"])
+                    OrderEvent.objects.get_or_create(
+                        order=order, status="payment_failed",
+                        title="Hubtel payment unsuccessful",
+                        defaults={"note": "Hubtel independently confirmed the payment failed; no sale was posted."},
+                    )
+            raise services.PaymentVerificationUnavailable("Hubtel confirmed this transaction failed. No payment was recorded.")
         if data["status"] != "Paid":
             raise services.PaymentVerificationUnavailable("Payment is not confirmed. If you were debited, do not pay again.")
         try:
