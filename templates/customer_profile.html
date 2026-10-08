@@ -1,4 +1,6 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
+{% block body_class %}experience-customer-profile{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="{% url 'statement' party.pk %}">Statement</a><a class="button secondary" href="{% url 'statement_export' party.pk 'pdf' %}">PDF statement</a>{% if perms.core.change_party %}<a class="button secondary" href="/parties/{{ party.pk }}/">Edit customer</a>{% endif %}</div>{% endblock %}
 {% block content %}
 <section class="hero-panel"><div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ party.name }}</h2><p>{{ party.phone }}{% if party.address %} · {{ party.address }}{% endif %}</p></div><span class="pill">{% if account.outstanding %}Owes {{ company.currency }} {{ account.outstanding|floatformat:2 }}{% else %}Account clear{% endif %}</span></section>
