@@ -1,0 +1,17 @@
+/* Official KOFAD emblem: no decorative white tile, backdrop or crop.
+   Keep the original asset intact on every screen and generated record. */
+.brand-emblem,.heritage-emblem,.market-brand-mark,
+.login-emblem-orbit,.intro-mark,.premium-welcome-icon,
+.login-welcome-overlay .welcome-logo,.welcome-logo,
+.home-hero-v9-mark,.verify-emblem,.credential-verify-brand .verify-emblem{
+  background:transparent!important;background-image:none!important;
+  box-shadow:none!important;border:0!important;padding:0!important;
+}
+.brand-emblem img,.heritage-emblem img,.market-brand-mark img,
+.login-emblem-orbit img,.intro-mark img,.premium-welcome-icon img,
+.login-welcome-overlay .welcome-logo img,.welcome-logo img,
+.home-hero-v9-mark img,.verify-emblem img,.about-brand-panel img{
+  display:block;max-width:100%;max-height:100%;object-fit:contain;
+  background:transparent!important;box-shadow:none!important;
+  border:0!important;border-radius:0!important;mix-blend-mode:normal;
+}
