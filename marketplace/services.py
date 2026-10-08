@@ -811,6 +811,15 @@ def create_order(customer, cart, cleaned):
     if customer.email != order.email:
         customer.email = order.email
         customer.save(update_fields=["email"])
+    # Only verified, opted-in customer mailboxes are eligible. No messages
+    # are enqueued until the email integration is explicitly enabled.
+    from core.email_identity import enqueue_notice
+    transaction.on_commit(lambda: enqueue_notice(
+        "customer", customer.pk, f"order-created:{order.pk}",
+        "KOFAD order received",
+        f"Your order {order.public_reference} has been received. "
+        "You can follow payment and delivery updates in your KOFAD account.",
+    ))
     return order
 
 
@@ -1193,6 +1202,13 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         f"Amount: GHS {order.total:.2f}. Follow your order status in your account. "
         "Track it in your KOFAD Market account.",
     )
+    from core.email_identity import enqueue_notice
+    transaction.on_commit(lambda: enqueue_notice(
+        "customer", order.customer_id, f"order-paid:{order.pk}",
+        "KOFAD payment confirmed",
+        f"Payment received for order {order.customer_reference}. "
+        f"Amount: GHS {order.total:.2f}. View your receipt and delivery progress in your account.",
+    ))
     return order
 
 
