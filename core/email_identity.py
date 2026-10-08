@@ -3,7 +3,6 @@
 Identity is established only after a code reaches that mailbox, never from a
 self-reported contact address. Password and existing phone/MFA checks remain.
 """
-import hashlib
 import logging
 import secrets
 from datetime import timedelta
@@ -182,14 +181,17 @@ def deliver_pending(limit=20):
     now = timezone.now()
     delivered = 0
     keys = list(EmailNotice.objects.filter(
-        status__in=["queued", "failed"], next_attempt_at__lte=now, attempts__lt=5,
+        status__in=["queued", "failed", "sending"], next_attempt_at__lte=now, attempts__lt=5,
     ).order_by("created_at").values_list("pk", flat=True)[:limit])
     for pk in keys:
         with transaction.atomic():
             claimed = EmailNotice.objects.filter(
-                pk=pk, status__in=["queued", "failed"], next_attempt_at__lte=now,
+                pk=pk, status__in=["queued", "failed", "sending"], next_attempt_at__lte=now,
                 attempts__lt=5,
-            ).update(status="sending", attempts=models.F("attempts") + 1)
+            ).update(
+                status="sending", attempts=models.F("attempts") + 1,
+                next_attempt_at=now + timedelta(minutes=5),
+            )
         if not claimed:
             continue
         notice = EmailNotice.objects.get(pk=pk)
