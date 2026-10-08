@@ -1,11 +1,17 @@
 """Signed full-system backups, exact-schema restore, and guarded business-data reset."""
+import base64
 import hashlib
 import hmac
 import json
 import logging
+import os
 from collections import Counter
 from datetime import timezone as dt_timezone
 from itertools import chain
+
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 from django.apps import apps
 from django.conf import settings
@@ -25,6 +31,13 @@ from .models import Access, Audit, Branch, Company
 BACKUP_FORMAT = "kofad-full-system-backup"
 BACKUP_VERSION = 2
 MAX_BACKUP_BYTES = 100 * 1024 * 1024
+MAX_ENCRYPTED_BACKUP_BYTES = MAX_BACKUP_BYTES + 1024 * 1024
+ENCRYPTED_BACKUP_MAGIC = b"KOFAD-ENCRYPTED-BACKUP-V1\n"
+ENCRYPTED_BACKUP_FORMAT = "kofad-encrypted-backup"
+ENCRYPTED_BACKUP_VERSION = 1
+BACKUP_KDF_N = 2 ** 15
+BACKUP_KDF_R = 8
+BACKUP_KDF_P = 1
 RECENT_BACKUP_SECONDS = 30 * 60
 RESTORE_CONFIRMATION = "RESTORE KOFAD FULL BACKUP"
 RESET_CONFIRMATION = "RESET KOFAD BUSINESS DATA"
@@ -151,6 +164,106 @@ def create_backup(actor=None):
 def backup_bytes(actor=None):
     bundle = create_backup(actor)
     return json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+
+def validate_backup_passphrase(passphrase):
+    passphrase = str(passphrase or "")
+    if len(passphrase) < 16:
+        raise BackupError("Use a backup passphrase of at least 16 characters.")
+    if len(passphrase) > 1024:
+        raise BackupError("The backup passphrase is too long.")
+    return passphrase
+
+
+def _backup_key(passphrase, salt):
+    return Scrypt(
+        salt=salt,
+        length=32,
+        n=BACKUP_KDF_N,
+        r=BACKUP_KDF_R,
+        p=BACKUP_KDF_P,
+    ).derive(passphrase.encode("utf-8"))
+
+
+def encrypted_backup_bytes(actor=None, passphrase=""):
+    """Create a signed backup wrapped in passphrase-derived AES-256-GCM encryption."""
+    passphrase = validate_backup_passphrase(passphrase)
+    plaintext = backup_bytes(actor)
+    if len(plaintext) > MAX_BACKUP_BYTES:
+        raise BackupError("Backup content is larger than the supported 100 MB limit.")
+    salt = os.urandom(16)
+    nonce = os.urandom(12)
+    header = {
+        "format": ENCRYPTED_BACKUP_FORMAT,
+        "version": ENCRYPTED_BACKUP_VERSION,
+        "cipher": "AES-256-GCM",
+        "kdf": "scrypt",
+        "n": BACKUP_KDF_N,
+        "r": BACKUP_KDF_R,
+        "p": BACKUP_KDF_P,
+        "salt": base64.b64encode(salt).decode("ascii"),
+        "nonce": base64.b64encode(nonce).decode("ascii"),
+    }
+    aad = _canonical(header)
+    ciphertext = AESGCM(_backup_key(passphrase, salt)).encrypt(nonce, plaintext, aad)
+    encoded_header = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    output = ENCRYPTED_BACKUP_MAGIC + encoded_header + b"\n" + ciphertext
+    if len(output) > MAX_ENCRYPTED_BACKUP_BYTES:
+        raise BackupError("Encrypted backup is larger than the supported limit.")
+    return output
+
+
+def _decrypt_backup(raw, passphrase):
+    passphrase = validate_backup_passphrase(passphrase)
+    if len(raw) > MAX_ENCRYPTED_BACKUP_BYTES:
+        raise BackupError("Encrypted backup is larger than the supported limit.")
+    try:
+        remainder = raw[len(ENCRYPTED_BACKUP_MAGIC):]
+        encoded_header, ciphertext = remainder.split(b"\n", 1)
+        if not encoded_header or len(encoded_header) > 4096 or not ciphertext:
+            raise ValueError
+        header = json.loads(encoded_header.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BackupError("This encrypted KOFAD backup is malformed.") from exc
+    if not isinstance(header, dict):
+        raise BackupError("This encrypted KOFAD backup is malformed.")
+    expected = {
+        "format": ENCRYPTED_BACKUP_FORMAT,
+        "version": ENCRYPTED_BACKUP_VERSION,
+        "cipher": "AES-256-GCM",
+        "kdf": "scrypt",
+        "n": BACKUP_KDF_N,
+        "r": BACKUP_KDF_R,
+        "p": BACKUP_KDF_P,
+    }
+    if any(header.get(key) != value for key, value in expected.items()):
+        raise BackupError("Unsupported encrypted KOFAD backup settings.")
+    try:
+        salt = base64.b64decode(header.get("salt", ""), validate=True)
+        nonce = base64.b64decode(header.get("nonce", ""), validate=True)
+    except (ValueError, TypeError) as exc:
+        raise BackupError("This encrypted KOFAD backup is malformed.") from exc
+    if len(salt) != 16 or len(nonce) != 12:
+        raise BackupError("This encrypted KOFAD backup is malformed.")
+    try:
+        plaintext = AESGCM(_backup_key(passphrase, salt)).decrypt(
+            nonce, ciphertext, _canonical(header)
+        )
+    except InvalidTag as exc:
+        raise BackupError("Backup passphrase is incorrect or the encrypted file was altered.") from exc
+    if len(plaintext) > MAX_BACKUP_BYTES:
+        raise BackupError("Decrypted backup is larger than the supported limit.")
+    return plaintext
+
+
+def parse_uploaded_backup(raw, passphrase=""):
+    if not isinstance(raw, (bytes, bytearray)):
+        raise BackupError("Backup content is missing.")
+    raw = bytes(raw)
+    if raw.startswith(ENCRYPTED_BACKUP_MAGIC):
+        return parse_backup(_decrypt_backup(raw, passphrase))
+    # Legacy signed plaintext backups remain restorable so recovery is not broken.
+    return parse_backup(raw)
 
 
 def parse_backup(raw):
