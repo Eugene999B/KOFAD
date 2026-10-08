@@ -85,6 +85,7 @@
   const completeButton = document.querySelector("#complete");
   const completeSaleHint = document.querySelector("#complete-sale-hint");
   const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
+  const momoGateway = root.dataset.momoGateway === "hubtel" ? "hubtel" : "paystack";
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
@@ -899,12 +900,14 @@
     }
     if (completeButton && !purchase) {
       completeButton.textContent = active && paystackMomoReady
-        ? "Send MoMo Approval Request"
+        ? (momoGateway === "hubtel" ? "Create secure Hubtel checkout" : "Send MoMo Approval Request")
         : "Complete Sale & Generate Receipt";
     }
     if (completeSaleHint && !purchase) {
       completeSaleHint.textContent = active && paystackMomoReady
-        ? "KOFAD will wait for Paystack to verify the payment before posting stock, recording the sale or issuing the receipt."
+        ? (momoGateway === "hubtel"
+          ? "The customer pays on Hubtel's secure checkout. KOFAD waits for independently verified payment before posting the sale and issuing a receipt."
+          : "KOFAD waits for Paystack to verify the payment before posting stock, recording the sale or issuing the receipt.")
         : "One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.";
     }
   }
@@ -1190,10 +1193,33 @@
     paystackMomoStatus.classList.toggle("error", tone === "error");
   }
 
+  function syncHubtelCheckoutLink(result) {
+    const link = document.querySelector("#hubtel-momo-checkout-link");
+    if (!link) return;
+    const url = typeof result?.authorization_url === "string" ? result.authorization_url : "";
+    let safe = false;
+    try {
+      const parsed = new URL(url);
+      safe = result?.provider === "hubtel" && parsed.protocol === "https:"
+        && parsed.hostname === "pay.hubtel.com" && !parsed.username && !parsed.password;
+    } catch (_) { /* A missing or malformed link is never rendered. */ }
+    if (safe) link.href = url;
+    else link.removeAttribute("href");
+    link.classList.toggle("hidden", !safe);
+  }
+
   function syncMomoChallenge(result) {
     const panel = document.querySelector("#paystack-momo-challenge");
-    panel?.classList.toggle("hidden", !result?.needs_otp);
-    panel?.querySelectorAll("input,button").forEach(control => {control.disabled = !result?.needs_otp;});
+    if (!panel) return;
+    const needsCode = Boolean(momoReference && result?.needs_otp);
+    const newlyRequested = needsCode && panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !needsCode);
+    panel.querySelectorAll("input,button").forEach(control => { control.disabled = !needsCode; });
+    if (newlyRequested) {
+      setMomoStatus("Ask the customer for the one-time Paystack verification code sent for this payment. Never ask for their MoMo PIN.");
+      panel.querySelector("input")?.focus({preventScroll: true});
+      panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }
   }
 
   document.querySelector("#paystack-momo-otp-submit")?.addEventListener("click", async () => {
@@ -1219,9 +1245,15 @@
 
   function lockCheckoutForMomo(locked) {
     root.querySelectorAll("input,select,textarea,button").forEach(control => {
+      // Keep a provider-requested one-time code available while the sale is locked.
+      // No other cart or payment details can be changed until verification finishes.
+      if (control.closest("#paystack-momo-challenge")) return;
       control.disabled = locked;
     });
-    if (!locked) applyPaymentPlan();
+    if (!locked) {
+      syncMomoChallenge(null);
+      applyPaymentPlan();
+    }
   }
 
   async function fetchMomoStatus() {
@@ -1249,10 +1281,12 @@
       if (!result || !momoReference) return;
       setMomoStatus(result.display_text || result.message || "Checking payment…");
       syncMomoChallenge(result);
+      syncHubtelCheckoutLink(result);
       if (result.paid && result.sale) {
         completed = true;
         momoReference = null;
         pendingBody = null;
+        syncHubtelCheckoutLink(null);
         clearStored();
         lockCheckoutForMomo(false);
         showSaleSuccess(result.sale);
@@ -1291,9 +1325,9 @@
     const email = paystackMomoEmail?.value.trim() || selectedCustomer?.email || customerEmail?.value.trim() || "";
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
-    if (!email || !email.includes("@")) throw new Error("Enter the customer's email for the Paystack payment request.");
+    if (momoGateway === "paystack" && (!email || !email.includes("@"))) throw new Error("Enter the customer's email for the Paystack payment request.");
 
-    setMomoStatus("Sending Mobile Money approval request…");
+    setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
     lockCheckoutForMomo(true);
     try {
       const result = await api("/api/pos/paystack-momo/start/", {
@@ -1301,11 +1335,14 @@
         phone,
         email,
         provider,
+        payment_gateway: momoGateway,
         request_key: requestKey
       }, requestKey);
       momoReference = result.reference || momoReference;
-      if (!momoReference) throw new Error("Paystack did not return a payment reference.");
+      if (!momoReference) throw new Error("The payment provider did not return a payment reference.");
       setMomoStatus(result.message || result.display_text || "Approve the payment on the customer's phone.");
+      syncMomoChallenge(result);
+      syncHubtelCheckoutLink(result);
       persist();
       if (result.paid && result.sale) {
         completed = true;
@@ -1495,7 +1532,7 @@
         const momoAmount = cents(document.querySelector("#pay-momo")?.value || "0");
         if (momoAmount > 0) {
           if (!paystackMomoReady) {
-            throw new Error("Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now.");
+            throw new Error("Mobile Money payments through " + (momoGateway === "hubtel" ? "Hubtel" : "Paystack") + " are awaiting activation.");
           }
           if (!directMomoSelected()) {
             throw new Error("Verified Mobile Money is currently available only as a full single-method payment. Remove split or part-payment amounts and try again.");

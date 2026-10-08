@@ -10,7 +10,7 @@ KOFAD uses KOFAD's original trade emblem: a parcel with interwoven navy, gold an
 
 The official transparent emblem is `static/brand/kofad-emblem.png`. The shared `templates/brand.html` component pairs it with a concise **KOFAD / IMPEX ENTERPRISE** wordmark. The same emblem is used for sign-in, navigation, welcome, receipts, workforce credentials and browser icons.
 
-Keep the emblem aspect ratio unchanged. Use a clean white tile behind it on dark surfaces. Navy is the trust/control colour, teal is the interactive/verification colour, and gold is reserved for premium highlights and credential security accents.
+Keep the emblem aspect ratio unchanged. Do not add a white tile or rectangular background behind the emblem; use its image transparency with a clear-area margin on both light and dark surfaces. Navy is the trust/control colour, teal is the interactive/verification colour, and gold is reserved for premium highlights and credential security accents.
 
 The product internals and historical KOFAD references remain unchanged; this document describes the visible brand treatment only.
 

@@ -550,6 +550,9 @@ def trade_screen(request, branch, kind):
 
     company = s.company_policy()
     payment_methods = s.active_payment_methods(company)
+    from marketplace import hubtel as payment_gateway_settings
+    payment_gateway = payment_gateway_settings.selected_provider() if kind == "sale" else ""
+    paystack_pos = __import__("core.pos_paystack", fromlist=["ready"])
     return render(request, "pos.html", {
         "title": "New sale" if kind == "sale" else "Receive purchase",
         "catalog": catalog,
@@ -557,7 +560,7 @@ def trade_screen(request, branch, kind):
         "key": str(uuid.uuid4()),
         "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
-        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith="Paystack MoMo "),
+        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith="Paystack MoMo ").exclude(label__startswith="Hubtel MoMo "),
         "purchase": kind == "purchase",
         "today": timezone.localdate(),
         "payment_methods": payment_methods,
@@ -573,11 +576,14 @@ def trade_screen(request, branch, kind):
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
         ),
-        "paystack_pos_momo_ready": (
-            kind == "sale" and __import__("core.pos_paystack", fromlist=["ready"]).ready()
+        "pos_momo_gateway": payment_gateway,
+        "paystack_pos_momo_ready": kind == "sale" and (
+            payment_gateway_settings.ready("hubtel") if payment_gateway == "hubtel"
+            else paystack_pos.ready()
         ),
-        "paystack_pos_momo_configured": (
-            kind == "sale" and __import__("core.pos_paystack", fromlist=["configured"]).configured()
+        "paystack_pos_momo_configured": kind == "sale" and (
+            payment_gateway_settings.configured() if payment_gateway == "hubtel"
+            else paystack_pos.configured()
         ),
     })
 
@@ -674,12 +680,18 @@ def complete_trade(request):
                     raise ValidationError("Invalid Mobile Money payment amount.")
                 if momo_amount > 0:
                     from . import pos_paystack
-                    if pos_paystack.ready():
+                    from marketplace.hubtel import selected_provider, ready as gateway_ready
+                    selected = selected_provider()
+                    is_ready = gateway_ready("hubtel") if selected == "hubtel" else pos_paystack.ready()
+                    if is_ready:
                         raise ValidationError(
-                            "Mobile Money sales must use the Paystack approval request so KOFAD can verify payment before posting the sale."
+                            "Mobile Money sales must use the " + (
+                                "Hubtel secure checkout" if selected == "hubtel" else "Paystack approval request"
+                            ) + " so KOFAD can independently verify payment before posting the sale."
                         )
                     raise ValidationError(
-                        "Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now."
+                        "Direct Mobile Money sales are awaiting " + selected.title()
+                        + " activation. Use another payment method for now."
                     )
         branch = branch_for(request)
         doc = s.post_trade(
@@ -794,8 +806,25 @@ def pos_paystack_momo_start(request):
         data = json.loads(request.body or "{}")
         if not isinstance(data, dict):
             raise ValidationError("Expected a payment request object.")
-        from . import pos_paystack
-        result = pos_paystack.start(
+        from marketplace.hubtel import selected_provider
+        from . import pos_paystack, pos_hubtel
+        key = request.headers.get("Idempotency-Key") or data.get("request_key")
+        paystack_reference = pos_paystack._reference_from_key(key)
+        hubtel_reference = pos_hubtel.reference_from_key(key)
+        # If the owner switched the payment gateway after this sale began, an
+        # existing payment must still be queried through its original provider.
+        original_paystack = pos_paystack._held(paystack_reference)
+        original_hubtel = pos_hubtel.held_for(hubtel_reference)
+        if original_paystack and original_hubtel:
+            raise ValidationError("Conflicting payment requests need management review.")
+        chosen = "paystack" if original_paystack else (
+            "hubtel" if original_hubtel else selected_provider()
+        )
+        requested = str(data.get("payment_gateway") or "").lower()
+        if not (original_paystack or original_hubtel) and requested and requested != chosen:
+            raise ValidationError("The payment provider was changed in Settings. Refresh this checkout before proceeding.")
+        processor = pos_hubtel if chosen == "hubtel" else pos_paystack
+        result = processor.start(
             request.user,
             branch,
             data.get("sale"),
@@ -804,7 +833,9 @@ def pos_paystack_momo_start(request):
             data.get("provider"),
             data.get("email"),
         )
-        return JsonResponse(result)
+        response = JsonResponse(result)
+        response["Cache-Control"] = "no-store, private"
+        return response
     except (ValidationError, ValueError, TypeError, KeyError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 
@@ -834,8 +865,9 @@ def pos_paystack_momo_status(request, reference):
     branch = branch_for(request)
     s.permit(request.user, branch, "operate_sales")
     try:
-        from . import pos_paystack
-        result = pos_paystack.status_for_staff(request.user, branch, reference)
+        from . import pos_paystack, pos_hubtel
+        processor = pos_paystack if reference.startswith("KFD-POS-") else pos_hubtel
+        result = processor.status_for_staff(request.user, branch, reference)
         response = JsonResponse(result)
         response["Cache-Control"] = "no-store, private"
         return response
@@ -850,7 +882,7 @@ def hold(request, branch):
         data = json.loads(request.body)
         if len(request.body) > 60000 or not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise ValidationError("Invalid held cart.")
-        if str(data.get("label", "")).startswith("Paystack MoMo ") or any(
+        if str(data.get("label", "")).startswith(("Paystack MoMo ", "Hubtel MoMo ")) or any(
             key in data for key in ("payment_request", "sale_payload")
         ):
             raise ValidationError("Payment records cannot be created through held carts.")
@@ -863,7 +895,7 @@ def hold(request, branch):
 @protected("operate_sales")
 def held(request, branch, pk):
     item = get_object_or_404(HeldSale, pk=pk, branch=branch, user=request.user)
-    if item.label.startswith("Paystack MoMo "):
+    if item.label.startswith(("Paystack MoMo ", "Hubtel MoMo ")):
         raise Http404
     if request.method == "POST":
         item.delete()

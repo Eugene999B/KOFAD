@@ -19,6 +19,7 @@
  data-allow-price-overrides="{{ allow_price_overrides|yesno:"true,false" }}"
  data-max-discount="{{ max_discount }}"
  data-max-price-reduction="{{ max_price_reduction }}"
+ data-momo-gateway="{{ pos_momo_gateway }}"
  data-paystack-pos-momo-ready="{{ paystack_pos_momo_ready|yesno:"true,false" }}"
  data-paystack-pos-momo-configured="{{ paystack_pos_momo_configured|yesno:"true,false" }}">
 
@@ -194,11 +195,11 @@
       {% if not purchase %}
       <section id="paystack-momo-panel" class="notice subtle hidden" aria-live="polite">
         <div>
-          <strong>Direct Mobile Money approval</strong>
+          <strong>{% if pos_momo_gateway == "hubtel" %}Hubtel secure Mobile Money checkout{% else %}Paystack direct Mobile Money approval{% endif %}</strong>
           {% if paystack_pos_momo_ready %}
-          <p>Choose or enter the customer first. Paystack will send the approval request to their phone, and KOFAD will complete the sale only after Paystack independently confirms the payment.</p>
+          <p>{% if pos_momo_gateway == "hubtel" %}Create a secure Hubtel payment link for this sale. The customer completes approval on Hubtel; KOFAD records the sale only after independently verifying it.{% else %}Choose or enter the customer first. Paystack will send the approval request to their phone, and KOFAD will complete the sale only after Paystack independently confirms the payment.{% endif %}</p>
           <div class="two-column">
-            <label>Network
+            <label{% if pos_momo_gateway == "hubtel" %} class="hidden"{% endif %}>Network
               <select id="paystack-momo-provider">
                 <option value="mtn">MTN MoMo</option>
                 <option value="atl">AT Money</option>
@@ -212,6 +213,7 @@
           <label>Customer email
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          <a id="hubtel-momo-checkout-link" class="button hidden" target="_blank" rel="noopener noreferrer" href="#">Open secure Hubtel checkout ↗</a>
           <div id="paystack-momo-challenge" class="hidden">
             <label>One-time payment code
               <input id="paystack-momo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code sent for this payment">
@@ -219,9 +221,9 @@
             <p class="hint">Only enter the code sent for this payment. Never ask for or enter the customer's MoMo PIN.</p>
             <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
           </div>
-          <p id="paystack-momo-status" class="hint">When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.</p>
+          <p id="paystack-momo-status" class="hint" role="status">{% if pos_momo_gateway == "hubtel" %}When you continue, KOFAD will create a hosted Hubtel checkout and wait for independently confirmed payment.{% else %}When you continue, KOFAD will send the MoMo approval request and wait for verified payment.{% endif %}</p>
           {% else %}
-          <p>Direct MoMo approval is prepared but not active yet. It will become available after Paystack live access is enabled for KOFAD.</p>
+          <p>{{ pos_momo_gateway|title }} Mobile Money payment is not activated yet. Check gateway credentials and activation in Payment Settings.</p>
           {% endif %}
         </div>
       </section>
