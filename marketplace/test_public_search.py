@@ -59,12 +59,16 @@ class PublicSearchSurfaceTests(TestCase):
         )
 
     def test_sitemap_contains_only_public_company_routes(self):
-        response = self.client.get("/sitemap.xml")
+        response = self.client.get("/sitemap.xml", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         for path in ("/", "/about/", "/contact/", "/faq/", "/delivery/"):
             self.assertIn(f"<loc>https://kofadimpex.com{path}</loc>", body)
-        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", body)
+        self.assertNotIn("https://market.kofadimpex.com/", body)
+        market = self.client.get("/sitemap.xml", HTTP_HOST="market.kofadimpex.com")
+        self.assertEqual(market.status_code, 200)
+        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", market.content.decode())
+        self.assertNotIn("https://kofadimpex.com/about/", market.content.decode())
         self.assertNotIn("/workspace/", body)
         self.assertNotIn("/market/account/", body)
         self.assertNotIn(settings.LOGIN_URL, body)
