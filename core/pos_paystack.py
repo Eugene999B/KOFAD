@@ -163,6 +163,7 @@ def _response_state(held):
         document = Document.objects.select_related("party").filter(pk=document_id).first()
     result = {
         "reference": state.get("reference", ""),
+        "provider": "paystack",
         "status": state.get("status", "pending"),
         "provider_status": state.get("provider_status", ""),
         "message": state.get("message", ""),
