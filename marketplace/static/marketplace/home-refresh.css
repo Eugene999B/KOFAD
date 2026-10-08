@@ -69,3 +69,94 @@ body.is-kofad-home .public-desktop-nav>a:not(.public-market-link):hover{color:#0
 body.is-kofad-home .public-site-header{background:#fff!important}
 body.is-kofad-home .public-site-brand img{object-fit:contain!important}
 body.is-kofad-home .public-market-link{color:#fff!important}
+
+
+/* October 8 corrective layout: restrained storefront, not a full-screen billboard. */
+body.is-kofad-home .kfd-hero{
+  height:clamp(320px,31vw,405px)!important;
+  min-height:320px!important;max-height:405px!important;
+}
+body.is-kofad-home .kfd-hero-inner{width:min(1190px,calc(100% - 64px))}
+body.is-kofad-home .kfd-hero-copy{max-width:590px;padding:19px 0 34px}
+body.is-kofad-home .kfd-hero h1{
+  font-size:clamp(32px,3.6vw,46px)!important;line-height:1.105!important;
+  letter-spacing:-.045em!important;max-width:580px
+}
+body.is-kofad-home .kfd-hero-copy>p:not(.kfd-eyebrow){
+  font-size:14px!important;max-width:500px;line-height:1.58!important;
+  margin:14px 0 18px!important
+}
+body.is-kofad-home .kfd-hero .kfd-eyebrow{
+  font-size:10px!important;margin-bottom:10px!important;letter-spacing:.14em
+}
+body.is-kofad-home .kfd-cta{min-height:41px!important;padding:9px 15px!important;font-size:12px!important}
+body.is-kofad-home .kfd-hero-image{
+  object-fit:cover;object-position:center center;
+  image-rendering:auto;background:#14384a
+}
+body.is-kofad-home .kfd-hero::after{
+  background:linear-gradient(90deg,rgba(5,28,44,.89),rgba(5,28,44,.74) 36%,rgba(5,28,44,.20) 75%,rgba(5,28,44,.12))!important
+}
+body.is-kofad-home .kfd-hero-meta{left:max(32px,calc((100vw - 1190px)/2));right:max(32px,calc((100vw - 1190px)/2));bottom:14px}
+body.is-kofad-home .kfd-hero-controls button{width:30px;height:30px;font-size:16px}
+body.is-kofad-home .kfd-service-bar{
+  padding:8px max(20px,calc((100vw - 1190px)/2));min-height:64px
+}
+body.is-kofad-home .kfd-service-bar article{padding:7px 12px;gap:10px}
+body.is-kofad-home .kfd-service-bar .kfd-service-icon{width:32px;height:32px;flex-basis:32px;font-size:17px}
+body.is-kofad-home .kfd-service-bar strong{font-size:12px}
+body.is-kofad-home .kfd-service-bar p{font-size:11px}
+body.is-kofad-home .kfd-section{max-width:1250px;padding:27px 30px 6px!important}
+body.is-kofad-home .kfd-section-top{align-items:center;margin-bottom:16px!important}
+body.is-kofad-home .kfd-section h2{font-size:clamp(23px,2.5vw,31px)!important;line-height:1.17!important}
+body.is-kofad-home .kfd-section-lead{font-size:12px!important;line-height:1.55!important;margin:5px 0 0!important}
+body.is-kofad-home .kfd-category-grid{gap:12px!important}
+body.is-kofad-home .kfd-category{
+  border-radius:14px!important;border:1px solid #dce5e8!important;
+  box-shadow:0 6px 19px rgba(18,40,59,.06)
+}
+body.is-kofad-home .kfd-category img{
+  display:block;width:100%;height:125px!important;max-height:125px!important;
+  object-fit:cover;object-position:center center;background:linear-gradient(145deg,#eff4f2,#cedce0)
+}
+body.is-kofad-home .kfd-category:nth-child(2) img{object-position:75% 50%;filter:saturate(1.1)}
+body.is-kofad-home .kfd-category:nth-child(3) img{object-position:85% 45%;filter:saturate(.82)}
+body.is-kofad-home .kfd-category:nth-child(4) img{object-position:20% 65%;filter:saturate(.92)}
+body.is-kofad-home .kfd-category .kfd-category-body{padding:11px 13px!important}
+body.is-kofad-home .kfd-category strong{font-size:13px!important;color:#153448!important}
+body.is-kofad-home .kfd-category small{font-size:11px!important;margin-top:3px!important;color:#526d7b!important}
+body.is-kofad-home .kfd-proof{max-width:1250px;gap:14px;margin:16px auto 35px!important;padding:0 30px}
+body.is-kofad-home .kfd-proof article{
+  min-height:145px!important;padding:20px 23px!important;border-radius:15px!important
+}
+body.is-kofad-home .kfd-proof h3{
+  font-size:clamp(19px,1.8vw,24px)!important;margin:0 0 7px!important;
+  line-height:1.2!important
+}
+body.is-kofad-home .kfd-proof p{font-size:12px!important;line-height:1.48!important;margin:0 0 11px!important}
+body.is-kofad-home .kfd-proof article:last-child .kfd-eyebrow{color:#976b28!important}
+body.is-kofad-home .kfd-proof article:last-child h3{color:#193b4c!important}
+body.is-kofad-home .kfd-proof article:last-child p{color:#344b57!important}
+body.is-kofad-home .kfd-proof article:last-child a{color:#123d54!important}
+body.is-kofad-home .kfd-proof .kfd-proof-icon{width:60px;flex-basis:60px;height:60px;font-size:32px;border-radius:17px}
+body.is-kofad-home .public-site-brand .official-logo img{object-fit:contain!important}
+body.is-kofad-home .home-featured-v7{padding-top:10px!important}
+@media(max-width:700px){
+ body.is-kofad-home .kfd-hero{height:400px!important;min-height:400px!important;max-height:400px!important}
+ body.is-kofad-home .kfd-hero-inner{width:calc(100% - 35px)}
+ body.is-kofad-home .kfd-hero-copy{padding:22px 0 45px!important}
+ body.is-kofad-home .kfd-hero h1{font-size:clamp(27px,7vw,38px)!important}
+ body.is-kofad-home .kfd-hero-copy>p:not(.kfd-eyebrow){font-size:12px!important;margin:11px 0 15px!important}
+ body.is-kofad-home .kfd-hero-meta{left:17px;right:17px;bottom:12px}
+ body.is-kofad-home .kfd-service-bar{padding:6px 18px}
+ body.is-kofad-home .kfd-service-bar article{padding:7px 0}
+ body.is-kofad-home .kfd-section{padding:23px 15px 2px!important}
+ body.is-kofad-home .kfd-section-top{display:block}
+ body.is-kofad-home .kfd-section-link{display:inline-flex;margin-top:9px}
+ body.is-kofad-home .kfd-category-grid{gap:10px!important}
+ body.is-kofad-home .kfd-category img{height:106px!important}
+ body.is-kofad-home .kfd-category strong{font-size:12px!important}
+ body.is-kofad-home .kfd-category .kfd-category-body{padding:10px!important}
+ body.is-kofad-home .kfd-proof{padding:0 15px;margin:13px auto 25px!important}
+ body.is-kofad-home .kfd-proof article{min-height:115px!important;padding:18px!important}
+}
