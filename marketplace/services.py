@@ -6,6 +6,7 @@ import logging
 import math
 import re
 import secrets
+import zipfile
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlsplit
@@ -366,12 +367,65 @@ def save_gallery_image(listing, upload, *, alt_text="", sort_order=100):
 SUPPORT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 SUPPORT_DOCUMENT_TYPES = {
     ".pdf": "application/pdf",
-    ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".xls": "application/vnd.ms-excel",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".txt": "text/plain",
 }
+SUPPORT_OFFICE_MAX_UNCOMPRESSED = 40 * 1024 * 1024
+SUPPORT_OFFICE_MAX_ENTRIES = 500
+SUPPORT_OFFICE_BLOCKED_PARTS = (
+    "vbaproject.bin", "/embeddings/", "/externalLinks/", "/oleObject",
+    "/activex/", "/customui/", "macrosheets/",
+)
+
+
+def _validate_support_document(raw, extension):
+    if extension == ".pdf":
+        if not raw.startswith(b"%PDF-"):
+            raise ValidationError("That file is not a valid PDF.")
+        lowered = raw.lower()
+        blocked = (b"/javascript", b"/launch", b"/embeddedfile", b"/openaction", b"/richmedia", b"/xfa")
+        if any(token in lowered for token in blocked):
+            raise ValidationError("Active or embedded PDF content is not accepted. Save a plain PDF and try again.")
+        return
+
+    if extension == ".txt":
+        if b"\x00" in raw:
+            raise ValidationError("That text file is not a plain text document.")
+        try:
+            raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ValidationError("Save the text file as UTF-8 and try again.") from exc
+        return
+
+    expected_root = {".docx": "word/", ".xlsx": "xl/"}.get(extension)
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            infos = archive.infolist()
+            if not infos or len(infos) > SUPPORT_OFFICE_MAX_ENTRIES:
+                raise ValidationError("That Office document has an unsafe internal structure.")
+            total = 0
+            names = []
+            for info in infos:
+                if info.flag_bits & 0x1:
+                    raise ValidationError("Password-protected Office documents are not accepted.")
+                total += max(int(info.file_size or 0), 0)
+                if total > SUPPORT_OFFICE_MAX_UNCOMPRESSED or int(info.file_size or 0) > 20 * 1024 * 1024:
+                    raise ValidationError("That Office document expands beyond the safe upload limit.")
+                names.append(info.filename.replace("\\", "/").lower())
+            if archive.testzip() is not None:
+                raise ValidationError("That Office document is damaged.")
+            if "[content_types].xml" not in names or not any(name.startswith(expected_root) for name in names):
+                raise ValidationError("That file does not match its Office document type.")
+            if any(any(blocked.lower() in ("/" + name) for blocked in SUPPORT_OFFICE_BLOCKED_PARTS) for name in names):
+                raise ValidationError("Macros, embedded objects and active Office content are not accepted.")
+            for info, name in zip(infos, names):
+                if name.endswith(".rels"):
+                    relationship_xml = archive.read(info)
+                    if b'targetmode="external"' in relationship_xml.lower():
+                        raise ValidationError("Office documents with external links are not accepted.")
+    except zipfile.BadZipFile as exc:
+        raise ValidationError("That Office document is not a valid DOCX/XLSX file.") from exc
 
 
 def prepare_support_attachment(upload):
@@ -409,7 +463,8 @@ def prepare_support_attachment(upload):
 
     extension = next((ext for ext in SUPPORT_DOCUMENT_TYPES if lower.endswith(ext)), "")
     if not extension:
-        raise ValidationError("Attach an image, PDF, Word, Excel or text file.")
+        raise ValidationError("Attach an image, plain PDF, DOCX, XLSX or UTF-8 text file.")
+    _validate_support_document(raw, extension)
     mime = SUPPORT_DOCUMENT_TYPES[extension]
     return {
         "original_name": name,
