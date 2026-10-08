@@ -620,6 +620,10 @@ with sync_playwright() as p:
         "https://images.unsplash.com/**",
         lambda route: route.fulfill(status=200, content_type="image/png", body=transparent_png),
     )
+    market_page.route(
+        "https://images.pexels.com/**",
+        lambda route: route.fulfill(status=200, content_type="image/png", body=transparent_png),
+    )
 
     market_page.goto("http://127.0.0.1:8000/")
     assert market_page.locator(".commerce-global-search").count() == 0
