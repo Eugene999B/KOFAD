@@ -16,6 +16,7 @@ urlpatterns = [
     path("auth/google/staff/login/", google.start, {"kind": "staff", "mode": "login"}, name="google_staff_login"),
     path("auth/google/staff/link/", google.start, {"kind": "staff", "mode": "link"}, name="google_staff_link"),
     path("auth/google/staff/callback/", google.callback, {"kind": "staff"}, name="google_staff_callback"),
+    path("auth/google/staff/unlink/", google.unlink, {"kind": "staff"}, name="google_staff_unlink"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
     path("api/approvals/summary/", approval_views.approval_summary, name="approval_summary"),
