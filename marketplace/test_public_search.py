@@ -2,6 +2,7 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 
 
+@override_settings(ALLOWED_HOSTS=["testserver", "kofadimpex.com", "market.kofadimpex.com", "staff.kofadimpex.com"])
 class PublicSearchSurfaceTests(TestCase):
     def test_home_is_indexable_and_has_no_staff_login_link(self):
         response = self.client.get("/")
