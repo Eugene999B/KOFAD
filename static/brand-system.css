@@ -1,0 +1,249 @@
+/* KOFAD official brand system — generated from the approved logo asset */
+:root{
+  --kofad-brand-navy:#0f3b58;
+  --kofad-brand-navy-deep:#102a3d;
+  --kofad-brand-charcoal:#1f252a;
+  --kofad-brand-gold:#d1bb7f;
+  --kofad-brand-gold-strong:#b99a51;
+  --kofad-brand-ivory:#f7f4ed;
+  --kofad-brand-paper:#f7f8f8;
+  --kofad-brand-line:#dfe4e6;
+  --kofad-brand-muted:#71808a;
+}
+
+/* One official logo, used everywhere. */
+.brand-official-logo,
+.official-logo,
+.premium-access-logo,
+.welcome-icon,
+.intro-mark,
+.login-emblem-orbit{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:hidden!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.brand-official-logo{
+  width:148px!important;
+  height:81px!important;
+  border-radius:14px!important;
+}
+.brand-official-logo img,
+.official-logo img,
+.premium-access-logo img,
+.welcome-icon img,
+.intro-mark img,
+.login-emblem-orbit img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  object-position:center!important;
+  display:block!important;
+}
+.shop-shell-brand-mark{width:122px!important;height:66px!important;border-radius:12px!important}
+.market-auth-brand-mark{width:130px!important;height:71px!important;border-radius:12px!important}
+.market-brand-mark{width:136px!important;height:74px!important;border-radius:12px!important}
+.public-site-brand,.shop-shell-brand,.market-auth-brand{min-width:max-content!important}
+
+/* Public customer shell: quiet, premium, one palette. */
+.public-site-header,
+.shop-shell-header{
+  background:rgba(255,255,255,.97)!important;
+  border-color:var(--kofad-brand-line)!important;
+  box-shadow:0 8px 28px rgba(15,42,61,.055)!important;
+}
+.public-desktop-nav a,
+.shop-shell-subnav a{color:#536875!important}
+.public-desktop-nav a:hover,
+.shop-shell-subnav a:hover,
+.shop-shell-subnav a.active{color:var(--kofad-brand-navy)!important}
+.public-market-link,
+.shop-shell-search>button,
+.market-button.primary,
+.home-hero-v9-primary{
+  background:var(--kofad-brand-navy)!important;
+  border-color:var(--kofad-brand-navy)!important;
+  color:#fff!important;
+}
+.public-market-link:hover,
+.shop-shell-search>button:hover,
+.market-button.primary:hover,
+.home-hero-v9-primary:hover{background:#164d70!important;border-color:#164d70!important}
+.market-contact-link,
+.home-hero-v9-secondary{border-color:#c9d2d6!important;color:var(--kofad-brand-navy)!important}
+.shop-shell-subnav a.active{border-bottom-color:var(--kofad-brand-gold-strong)!important}
+.market-mobile-dock a.active{background:#f3efe4!important;color:var(--kofad-brand-navy)!important}
+.market-mobile-dock a.active b{background:#e8dfc6!important}
+.commerce-support-fab{background:var(--kofad-brand-navy)!important;color:#fff!important}
+.market-footer{background:#111d25!important}
+.footer-brand-row .market-brand-mark{width:150px!important;height:82px!important}
+
+/* Customer authentication. */
+.market-access-page{
+  background:
+    radial-gradient(circle at 8% 10%,rgba(209,187,127,.15),transparent 28rem),
+    radial-gradient(circle at 92% 90%,rgba(15,59,88,.08),transparent 30rem),
+    linear-gradient(180deg,#fafaf8,#f2f4f4)!important;
+}
+.market-auth-header{
+  background:rgba(255,255,255,.96)!important;
+  border-bottom:1px solid var(--kofad-brand-line)!important;
+}
+.premium-access-card{
+  background:rgba(255,255,255,.985)!important;
+  border:1px solid #dfe4e6!important;
+  box-shadow:0 28px 85px rgba(16,42,61,.12)!important;
+}
+.premium-access-card:after{
+  background:#f4efe1!important;
+  color:#6d592a!important;
+}
+.premium-access-card h1{color:var(--kofad-brand-charcoal)!important}
+.premium-access-card>p{color:var(--kofad-brand-muted)!important}
+.premium-access-card :is(input,select){
+  border-color:#d6dde0!important;
+  background:#fbfcfc!important;
+}
+.premium-access-card :is(input,select):focus{
+  border-color:var(--kofad-brand-gold-strong)!important;
+  box-shadow:0 0 0 4px rgba(209,187,127,.18)!important;
+  outline:0!important;
+}
+.premium-access-card .market-button{
+  background:linear-gradient(135deg,var(--kofad-brand-navy-deep),var(--kofad-brand-navy))!important;
+  border-color:var(--kofad-brand-navy)!important;
+  box-shadow:0 12px 26px rgba(15,59,88,.16)!important;
+}
+
+/* Private staff sign-in. */
+body.login-page{
+  min-height:100vh!important;
+  background:
+    radial-gradient(circle at 8% 8%,rgba(209,187,127,.13),transparent 34rem),
+    linear-gradient(135deg,#f7f4ed 0%,#f4f6f6 44%,#eef2f3 100%)!important;
+  color:var(--kofad-brand-charcoal)!important;
+}
+.login-header{
+  background:rgba(255,255,255,.94)!important;
+  border-bottom:1px solid #dde3e5!important;
+  box-shadow:0 8px 30px rgba(15,42,61,.055)!important;
+  backdrop-filter:blur(18px)!important;
+}
+.login-header .brand{color:var(--kofad-brand-charcoal)!important}
+.login-header-meta{color:#667681!important}
+.login-online-dot{background:var(--kofad-brand-gold-strong)!important;box-shadow:0 0 0 5px rgba(209,187,127,.18)!important}
+.premium-login-layout{
+  width:min(1180px,calc(100% - 40px))!important;
+  gap:0!important;
+  border-radius:30px!important;
+  overflow:hidden!important;
+  box-shadow:0 34px 100px rgba(14,37,54,.16)!important;
+}
+.premium-login-story{
+  background:
+    linear-gradient(145deg,rgba(15,59,88,.97),rgba(24,36,45,.99))!important;
+  color:#fff!important;
+}
+.premium-login-story .eyebrow{color:#d9c894!important}
+.premium-login-story h1{color:#fff!important}
+.premium-login-story h1 span{color:#e7d8ad!important}
+.premium-login-story .story-copy,
+.premium-login-story small{color:#c5d0d5!important}
+.login-command-map article{
+  border-color:rgba(255,255,255,.11)!important;
+  background:rgba(255,255,255,.045)!important;
+}
+.login-command-map article>b{color:#d9c894!important}
+.login-command-map article>span{color:#d9c894!important}
+.login-command-map article:hover{background:rgba(255,255,255,.075)!important}
+.login-card{
+  background:#fff!important;
+  border:0!important;
+}
+.login-access-chip{
+  background:#f5f0e3!important;
+  border-color:#e5d9b9!important;
+  color:#625126!important;
+}
+.login-access-chip b{color:#745f2b!important}
+.premium-welcome-icon{
+  width:104px!important;
+  height:57px!important;
+  border-radius:11px!important;
+}
+.login-card .eyebrow{color:#796533!important}
+.login-card h2{color:var(--kofad-brand-charcoal)!important}
+.login-input-shell{
+  border-color:#d5dde1!important;
+  background:#fafbfb!important;
+  box-shadow:none!important;
+}
+.login-input-shell:focus-within{
+  border-color:var(--kofad-brand-gold-strong)!important;
+  box-shadow:0 0 0 4px rgba(209,187,127,.18)!important;
+}
+.login-input-shell>span{color:#8a7640!important}
+.login-submit{
+  background:linear-gradient(135deg,var(--kofad-brand-navy-deep),var(--kofad-brand-navy))!important;
+  border-color:var(--kofad-brand-navy)!important;
+  box-shadow:0 13px 30px rgba(15,59,88,.18)!important;
+}
+.login-submit:hover{background:linear-gradient(135deg,#153d57,#195776)!important}
+.login-form-row a{color:var(--kofad-brand-navy)!important}
+.login-assurance>div>span{background:#f1ebdb!important;color:#77622d!important}
+.login-footer{color:#667681!important}
+.login-theme-toggle{border-color:#d7dfe2!important;background:#fff!important;color:var(--kofad-brand-navy)!important}
+.login-brand-intro{background:var(--kofad-brand-charcoal)!important}
+.login-brand-intro .intro-mark{width:176px!important;height:96px!important;border-radius:16px!important}
+
+/* Staff recovery/MFA pages use the same identity. */
+body.mfa-page{
+  background:
+    radial-gradient(circle at 12% 8%,rgba(209,187,127,.13),transparent 28rem),
+    linear-gradient(145deg,#f7f4ed,#eff3f4)!important;
+}
+body.mfa-page .panel.narrow{
+  border:1px solid #dce3e5!important;
+  border-radius:26px!important;
+  box-shadow:0 28px 80px rgba(15,42,61,.12)!important;
+}
+body.mfa-page .auth-brand{justify-content:center!important;margin-bottom:24px!important;color:var(--kofad-brand-charcoal)!important}
+
+/* Workspace brand accents. */
+.sidebar{background:#102a3d!important}
+.sidebar nav a.active{box-shadow:inset 3px 0 var(--kofad-brand-gold)!important;background:#183b52!important}
+.brand-emblem{display:none!important}
+.sidebar>.brand{justify-content:center!important}
+.topbar{border-color:#dfe4e6!important}
+.button{background:var(--kofad-brand-navy)!important;border-color:var(--kofad-brand-navy)!important}
+.button.secondary{background:#fff!important;color:var(--kofad-brand-navy)!important;border-color:#cfd9dd!important}
+.status-dot{background:var(--kofad-brand-gold)!important}
+
+html[data-theme="dark"] body.login-page,
+html[data-theme="dark"] .market-access-page,
+html[data-theme="dark"] body.mfa-page{background:#11181e!important}
+html[data-theme="dark"] .login-header,
+html[data-theme="dark"] .market-auth-header{background:rgba(18,25,31,.96)!important;border-color:#2c3941!important}
+html[data-theme="dark"] .login-card,
+html[data-theme="dark"] .premium-access-card,
+html[data-theme="dark"] body.mfa-page .panel.narrow{background:#162028!important;border-color:#31404a!important;color:#eef3f5!important}
+html[data-theme="dark"] .login-card h2,
+html[data-theme="dark"] .premium-access-card h1{color:#fff!important}
+html[data-theme="dark"] .login-input-shell,
+html[data-theme="dark"] .premium-access-card :is(input,select){background:#111a20!important;border-color:#364650!important;color:#fff!important}
+
+@media(max-width:720px){
+  .shop-shell-brand-mark{width:96px!important;height:52px!important}
+  .market-auth-brand-mark{width:108px!important;height:59px!important}
+  .market-brand-mark{width:106px!important;height:58px!important}
+  .public-site-brand{max-width:112px!important}
+  .premium-login-layout{width:calc(100% - 24px)!important;border-radius:22px!important}
+  .premium-login-story{display:none!important}
+  .login-card{padding:28px 22px!important}
+  .brand-official-logo{width:126px!important;height:69px!important}
+  .login-header{padding-left:14px!important;padding-right:14px!important}
+  .login-header-meta{display:none!important}
+}
