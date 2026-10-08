@@ -104,8 +104,6 @@ def mark_attention(reference, message):
 
 
 def start(user, branch, sale_payload, request_key, phone, network, email):
-    if hubtel.selected_provider() != "hubtel" or not hubtel.ready("hubtel"):
-        raise ValidationError("Hubtel is not enabled for new cashier payments.")
     services.permit(user, branch, "operate_sales")
     if not isinstance(sale_payload, dict) or sale_payload.get("kind", "sale") != "sale":
         raise ValidationError("Invalid sale request.")
@@ -115,6 +113,8 @@ def start(user, branch, sale_payload, request_key, phone, network, email):
         if saved.branch_id != branch.pk or saved.user_id != user.pk:
             raise ValidationError("This payment request could not be found.")
         return response_state(saved)
+    if hubtel.selected_provider() != "hubtel" or not hubtel.ready("hubtel"):
+        raise ValidationError("Hubtel is not enabled for new cashier payments.")
 
     payload = copy.deepcopy(sale_payload)
     if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
