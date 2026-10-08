@@ -32,7 +32,7 @@ def normalize_email(value):
 def delivery_ready():
     if not getattr(settings, "KOFAD_EMAIL_ENABLED", False):
         return False
-    provider = getattr(settings, "KOFAD_EMAIL_PROVIDER", "gmail_api")
+    provider = getattr(settings, "KOFAD_EMAIL_PROVIDER", "auto")\n    if provider == "auto":\n        provider = "gmail_api" if getattr(settings, "KOFAD_GMAIL_API_ENABLED", False) else "smtp"
     if provider == "brevo":
         from .brevo_email import ready as brevo_ready
         return brevo_ready()
@@ -49,7 +49,7 @@ def delivery_ready():
 
 def _send_kofad_mail(subject, body, recipients, *, purpose="security"):
     """Send one email to each recipient through the selected verified provider."""
-    provider = getattr(settings, "KOFAD_EMAIL_PROVIDER", "gmail_api")
+    provider = getattr(settings, "KOFAD_EMAIL_PROVIDER", "auto")\n    if provider == "auto":\n        provider = "gmail_api" if getattr(settings, "KOFAD_GMAIL_API_ENABLED", False) else "smtp"
     if provider == "brevo":
         from .brevo_email import send_brevo
         return sum(
