@@ -115,13 +115,17 @@ def confirm_code(kind, owner_id, code):
                 raise ValidationError("This code has expired. Request another.")
             if identity.code_attempts >= 5:
                 raise ValidationError("Too many incorrect codes. Request another.")
-            if not constant_time_compare(
+            matched = constant_time_compare(
                 identity.code_digest,
                 _digest(kind, owner_id, identity.pending_email, candidate),
-            ):
+            )
+            if not matched:
                 identity.code_attempts += 1
-                identity.save(update_fields=["code_attempts"])
-                raise ValidationError("That code is incorrect.")
+                if identity.code_attempts >= 5:
+                    identity.code_digest = ""
+                    identity.expires_at = now
+                identity.save(update_fields=["code_attempts", "code_digest", "expires_at"])
+                return None
             if EmailIdentity.objects.filter(
                 kind=kind, email=identity.pending_email, verified_at__isnull=False
             ).exclude(pk=identity.pk).exists():
