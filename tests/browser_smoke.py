@@ -638,13 +638,13 @@ with sync_playwright() as p:
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
-    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 405
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 365
     assert market_page.locator("[data-hero-count]").inner_text() == "01 / 06"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
 
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
-    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 405
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 365
     assert "kofad-market-retail-hero" in market_page.locator("[data-hero-image]").get_attribute("src")
     assert market_page.get_by_role("button", name="Next photograph").is_visible()
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
