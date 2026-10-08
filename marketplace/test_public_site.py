@@ -83,7 +83,7 @@ class PublicSiteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn("Allow: /", body)
-        self.assertIn(f"Disallow: /{settings.STAFF_LOGIN_SLUG}/", body)
+        self.assertNotIn(settings.STAFF_LOGIN_PATH, body)
         self.assertIn("Sitemap: https://kofadimpex.com/sitemap.xml", body)
         self.assertNotIn("Staff login", body)
 
