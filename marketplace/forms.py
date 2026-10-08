@@ -429,11 +429,12 @@ class ReceivingAccountForm(forms.ModelForm):
         from .models import PaymentConfiguration
         model = PaymentConfiguration
         fields = ["bank_account_name", "bank_account_number", "bank_name",
-                  "bank_branch", "bank_branch_code", "receiving_momo"]
+                  "bank_branch", "bank_branch_code", "receiving_momo", "receiving_momo_name"]
         labels = {
             "bank_account_name": "Account name", "bank_account_number": "Bank account number",
             "bank_name": "Bank", "bank_branch": "Bank branch",
             "bank_branch_code": "Branch code", "receiving_momo": "Receiving MoMo number",
+            "receiving_momo_name": "Receiving MoMo account name",
         }
         widgets = {"bank_account_number": forms.TextInput(attrs={"inputmode": "numeric"}),
                    "bank_branch_code": forms.TextInput(attrs={"inputmode": "numeric"}),

@@ -158,3 +158,16 @@ class CustomerMomoTests(MarketFixtures):
             services.finalize_payment(attempt.reference, {"status": "pending"})
         order.refresh_from_db()
         self.assertEqual(order.payment_status, "pending")
+
+    def test_receiving_account_name_is_preserved(self):
+        from .forms import ReceivingAccountForm
+        config = PaymentConfiguration.objects.create(provider="paystack")
+        form = ReceivingAccountForm({"bank_account_name": "KOFAD IMPEX ENTERPRISE",
+            "bank_account_number": "7011440002041", "bank_name": "GCB BANK",
+            "bank_branch": "SUNYANI MAIN", "bank_branch_code": "701",
+            "receiving_momo": "0538812780",
+            "receiving_momo_name": "KOFAD IMPEX ENTERPRISE/ERNEST AMOAH KOFFIE"}, instance=config)
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(saved.receiving_momo, "+233538812780")
+        self.assertEqual(saved.receiving_momo_name, "KOFAD IMPEX ENTERPRISE/ERNEST AMOAH KOFFIE")
