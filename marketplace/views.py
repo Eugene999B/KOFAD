@@ -483,6 +483,9 @@ def customer_account(request, customer):
         conversations=customer.conversations.all()[:5],
         wishlist=customer.wishlist_items.select_related("listing__product")[:6],
         recent_views=customer.recent_views.select_related("listing__product")[:6],
+        email_identity=__import__("marketplace.models", fromlist=["EmailIdentity"]).EmailIdentity.objects.filter(
+            kind="customer", owner_id=customer.pk,
+        ).first(),
         return_requests=customer.return_requests.select_related("order")[:5],
     ))
 
@@ -696,7 +699,9 @@ def customer_security(request, customer):
                 email_identity.request_code("customer", customer.pk, request.POST.get("email"))
                 messages.success(request, "A six-digit verification code was sent to your email.")
             elif action == "email_verify":
-                email_identity.confirm_code("customer", customer.pk, request.POST.get("email_code"))
+                verified = email_identity.confirm_code("customer", customer.pk, request.POST.get("email_code"))
+                if not verified:
+                    raise ValidationError("The email code is incorrect.")
                 messages.success(request, "Email verified. You can now sign in with your email or phone.")
             else:
                 email_identity.set_notifications(
