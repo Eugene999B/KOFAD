@@ -100,7 +100,7 @@ class PublicSiteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
         self.assertIn("<loc>https://kofadimpex.com/</loc>", body)
-        self.assertIn("<loc>https://kofadimpex.com/market/</loc>", body)
+        self.assertIn("<loc>https://market.kofadimpex.com/market/</loc>", body)
         self.assertNotIn(settings.STAFF_LOGIN_PATH, body)
         self.assertNotIn("/workspace/", body)
 
