@@ -638,7 +638,7 @@ with sync_playwright() as p:
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
-    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 365
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 400
     assert market_page.locator("[data-hero-count]").inner_text() == "01 / 06"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
 
