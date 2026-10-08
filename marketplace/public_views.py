@@ -112,7 +112,7 @@ def robots_txt(request):
             "Disallow: /market/location/",
             "Disallow: /market/search/",
             "",
-            f"Sitemap: {settings.PUBLIC_SITE_ORIGIN}/sitemap.xml",
+            f"Sitemap: {settings.MARKET_SITE_ORIGIN}/sitemap.xml",
             "",
         ]
     else:
@@ -136,31 +136,34 @@ def robots_txt(request):
 
 
 def sitemap_xml(request):
-    """Small dynamic sitemap of KOFAD public pages and live product listings."""
-    origin = settings.PUBLIC_SITE_ORIGIN
-    paths = [
-        ("/", "1.0", "daily"),
-        ("/market/", "1.0", "daily"),
-        ("/about/", "0.8", "monthly"),
-        ("/contact/", "0.8", "monthly"),
-        ("/faq/", "0.7", "monthly"),
-        ("/delivery/", "0.7", "monthly"),
-        ("/returns-policy/", "0.6", "monthly"),
-        ("/terms/", "0.4", "yearly"),
-        ("/privacy/", "0.4", "yearly"),
-    ]
-    product_paths = [
-        (f"/market/products/{pk}/", "0.9", "daily")
-        for pk in MarketListing.objects.filter(
-            enabled=True, product__active=True
-        ).values_list("pk", flat=True).order_by("pk")
-    ]
+    """Serve host-scoped sitemaps so each search property lists only its own URLs."""
+    host = request.get_host().split(":")[0].lower().rstrip(".")
+    if host == "market.kofadimpex.com":
+        origin = settings.MARKET_SITE_ORIGIN
+        paths = [("/market/", "1.0", "daily")]
+        paths.extend(
+            (f"/market/products/{pk}/", "0.9", "daily")
+            for pk in MarketListing.objects.filter(
+                enabled=True, product__active=True
+            ).values_list("pk", flat=True).order_by("pk")
+        )
+    else:
+        origin = settings.PUBLIC_SITE_ORIGIN
+        paths = [
+            ("/", "1.0", "daily"),
+            ("/about/", "0.8", "monthly"),
+            ("/contact/", "0.8", "monthly"),
+            ("/faq/", "0.7", "monthly"),
+            ("/delivery/", "0.7", "monthly"),
+            ("/returns-policy/", "0.6", "monthly"),
+            ("/terms/", "0.4", "yearly"),
+            ("/privacy/", "0.4", "yearly"),
+        ]
     rows = []
-    for path, priority, frequency in [*paths, *product_paths]:
-        item_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else origin
+    for path, priority, frequency in paths:
         rows.append(
             "  <url>"
-            f"<loc>{item_origin}{path}</loc>"
+            f"<loc>{origin}{path}</loc>"
             f"<changefreq>{frequency}</changefreq>"
             f"<priority>{priority}</priority>"
             "</url>"
