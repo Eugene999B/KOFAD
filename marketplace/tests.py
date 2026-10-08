@@ -338,12 +338,14 @@ class MarketPaymentTests(MarketFixtures):
             {"status": True, "data": {"authorization_url": "https://checkout.paystack.com.evil.test/pay", "access_code": "x"}},
             {"status": True, "data": {"authorization_url": "https://user@checkout.paystack.com/pay", "access_code": "x"}},
         ):
+            order = self.order()
             post.return_value = Mock(status_code=200)
             post.return_value.json.return_value = body
             with self.assertRaises(ValidationError):
                 services.initialize_paystack(order, "https://example.test/market/payment/return/")
             order.refresh_from_db()
-            self.assertEqual(order.payment_status, "failed")
+            self.assertEqual(order.payment_status, "pending")
+            self.assertEqual(order.payment_attempts.get().status, "submission_unknown")
         self.assertFalse(order.payment_attempts.filter(status="initializing").exists())
 
     @override_settings(PAYSTACK_SECRET_KEY="paystack-secret-for-test")
@@ -367,6 +369,12 @@ class MarketPaymentTests(MarketFixtures):
             "data": {
                 "authorization_url": "https://checkout.paystack.com/test-access",
                 "access_code": "test-access",
+            },
+        }
+        response.json.side_effect = lambda: {
+            "status": True, "data": {
+                "authorization_url": "https://checkout.paystack.com/test-access",
+                "access_code": "test-access", "reference": post.call_args.kwargs["json"]["reference"],
             },
         }
         post.return_value = response
@@ -489,7 +497,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         session["branch"] = self.branch.pk
         session.save()
 
-    def test_market_login_sets_two_hour_session_window_and_top_signout(self):
+    def test_market_login_sets_two_hour_session_window_and_account_menu(self):
         before = timezone.now().timestamp()
         response = self.client.post("/market/account/login/", {
             "phone": self.customer.phone,
@@ -502,9 +510,12 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertEqual(settings.MARKET_SESSION_SECONDS, 2 * 60 * 60)
         page = self.client.get("/market/account/")
         self.assertContains(page, "shop-shell-header")
+        self.assertContains(page, "shop-account-menu")
+        self.assertContains(page, "shop-account-popover")
         self.assertContains(page, "account-v4-signout")
         self.assertContains(page, "Sign out")
         self.assertContains(page, 'action="/market/account/logout/"')
+        self.assertNotContains(page, "shop-signout")
 
     def test_expired_market_session_does_not_expire_staff_identity(self):
         self.staff_session()
@@ -571,7 +582,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
 
     @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
     @patch("marketplace.views.services.initialize_paystack")
-    def test_checkout_make_payment_goes_directly_to_secure_payment(self, initialize_payment):
+    def test_checkout_make_payment_uses_same_origin_handoff(self, initialize_payment):
         self.customer_session()
         session = self.client.session
         session["market_cart"] = {str(self.listing.pk): 1}
@@ -594,15 +605,43 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             "longitude": "",
             "customer_note": "",
         })
+        order = OnlineOrder.objects.latest("created_at")
         self.assertRedirects(
             response,
-            "https://checkout.paystack.com/test-checkout",
+            f"/market/orders/{order.pk}/payment/launch/",
             fetch_redirect_response=False,
         )
-        order = OnlineOrder.objects.latest("created_at")
         initialize_payment.assert_called_once()
         self.assertEqual(initialize_payment.call_args.args[0].pk, order.pk)
         self.assertEqual(self.client.session["market_cart"], {})
+
+    def test_payment_launch_page_has_automatic_and_manual_hubtel_handoff(self):
+        self.customer_session()
+        order = self.order()
+        MarketPaymentAttempt.objects.create(
+            order=order, provider="hubtel", reference="launch-ref",
+            amount=order.total, currency="GHS", status="pending",
+            authorization_url="https://pay.hubtel.com/test-checkout",
+        )
+        response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "payment-launch.")
+        self.assertContains(response, "https://pay.hubtel.com/test-checkout")
+        self.assertContains(response, "Continue to secure payment")
+        self.assertIn("no-store", response["Cache-Control"])
+
+    def test_payment_launch_blocks_untrusted_checkout_host(self):
+        self.customer_session()
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(
+            order=order, provider="hubtel", reference="bad-launch-ref",
+            amount=order.total, currency="GHS", status="pending",
+            authorization_url="https://pay.hubtel.com.evil.example/checkout",
+        )
+        response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
+        self.assertRedirects(response, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, "attention")
 
     @patch("marketplace.services._google_route")
     def test_distance_delivery_price_is_proportional_and_saved_on_order(self, google_route):

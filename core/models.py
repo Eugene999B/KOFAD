@@ -1003,3 +1003,27 @@ class PayrollPayment(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class WhatsAppBotContact(models.Model):
+    wa_id = models.CharField(max_length=40)
+    phone_number_id = models.CharField(max_length=80)
+    opted_out = models.BooleanField(default=False)
+    handoff = models.BooleanField(default=False)
+    last_inbound_at = models.DateTimeField(null=True)
+    conversation = models.OneToOneField("marketplace.Conversation", null=True, blank=True, on_delete=models.SET_NULL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["wa_id", "phone_number_id"], name="wa_bot_contact_unique")]
+
+
+class WhatsAppBotReply(models.Model):
+    source_key = models.CharField(max_length=220, unique=True)
+    contact = models.ForeignKey(WhatsAppBotContact, on_delete=models.CASCADE)
+    body = models.TextField()
+    status = models.CharField(max_length=20, default="queued", db_index=True)
+    provider_id = models.CharField(max_length=180, blank=True, db_index=True)
+    error = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

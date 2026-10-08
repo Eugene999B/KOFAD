@@ -20,7 +20,7 @@ def signature_is_valid(raw_body, signature):
     if len(supplied) != 64:
         return False
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, supplied)
+    return hmac.compare_digest(expected.encode(), supplied.encode())
 
 
 def _fingerprint(entry_id, field, event_type, payload):
@@ -81,15 +81,24 @@ def _reconcile_status(provider_id, status, payload):
     )
 
 
+@transaction.atomic
 def ingest_webhook(payload):
     created = 0
     if not isinstance(payload, dict):
         return 0
-    for entry in payload.get("entry") or []:
+    entries = payload.get("entry")
+    if not isinstance(entries, list):
+        return 0
+    for entry in entries:
         if not isinstance(entry, dict):
             continue
         entry_id = str(entry.get("id") or "")[:80]
-        for change in entry.get("changes") or []:
+        if settings.WHATSAPP_BUSINESS_ACCOUNT_ID and entry_id != settings.WHATSAPP_BUSINESS_ACCOUNT_ID:
+            continue
+        changes = entry.get("changes")
+        if not isinstance(changes, list):
+            continue
+        for change in changes:
             if not isinstance(change, dict):
                 continue
             field = str(change.get("field") or "")[:40]
@@ -97,11 +106,16 @@ def ingest_webhook(payload):
             metadata = value.get("metadata") if isinstance(value.get("metadata"), dict) else {}
             phone_number_id = str(metadata.get("phone_number_id") or "")[:80]
 
-            for message in value.get("messages") or []:
+            if field != "messages":
+                continue
+            if settings.WHATSAPP_PHONE_NUMBER_ID and phone_number_id != settings.WHATSAPP_PHONE_NUMBER_ID:
+                continue
+            messages = value.get("messages")
+            for message in messages if isinstance(messages, list) else []:
                 if not isinstance(message, dict):
                     continue
                 fingerprint = _fingerprint(entry_id, field, "message", message)
-                _, was_created = WhatsAppWebhookEvent.objects.get_or_create(
+                event, was_created = WhatsAppWebhookEvent.objects.get_or_create(
                     fingerprint=fingerprint,
                     defaults={
                         "waba_id": entry_id,
@@ -113,8 +127,12 @@ def ingest_webhook(payload):
                     },
                 )
                 created += int(was_created)
+                if was_created:
+                    from .whatsapp_bot import receive
+                    receive(event)
 
-            for status in value.get("statuses") or []:
+            statuses = value.get("statuses")
+            for status in statuses if isinstance(statuses, list) else []:
                 if not isinstance(status, dict):
                     continue
                 provider_id = str(status.get("id") or "")[:180]
@@ -135,6 +153,8 @@ def ingest_webhook(payload):
                 if was_created:
                     created += 1
                     _reconcile_status(provider_id, state, status)
+                    from .whatsapp_bot import reconcile_reply
+                    reconcile_reply(provider_id, state)
 
             errors = value.get("errors") or []
             if errors:

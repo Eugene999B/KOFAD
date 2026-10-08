@@ -1,5 +1,6 @@
 {% extends "marketplace/base.html" %}{% block content %}
 <section class="payment-result commerce-payment-result">
-{% if order.payment_status == 'paid' %}<p class="market-eyebrow">PAYMENT CONFIRMED</p><h1>Thank you.</h1>
-{% else %}<p class="market-eyebrow">PAYMENT NOT CONFIRMED</p><h1>Check your payment status.</h1><p>If you were debited, do not pay again while confirmation is pending.</p>{% endif %}
-<a class="market-button primary" href="/market/access/">Sign in to view your order</a></section>{% endblock %}
+<p class="market-eyebrow">SECURE PAYMENT STATUS</p><h1>View your payment in your account.</h1>
+<p>If you were debited, do not pay again while confirmation is pending.</p>
+<a class="market-button primary" href="/market/access/">Sign in to view your order</a></section>
+{% endblock %}

@@ -114,6 +114,7 @@ WHATSAPP_WEBHOOK_MAX_BYTES = int(os.environ.get("WHATSAPP_WEBHOOK_MAX_BYTES", "5
 CUSTOMER_OTP_ENABLED = os.environ.get("CUSTOMER_OTP_ENABLED", "0") == "1"
 PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY", "")
 PAYSTACK_TIMEOUT_SECONDS = int(os.environ.get("PAYSTACK_TIMEOUT_SECONDS", "20"))
+PAYSTACK_POS_MOMO_ENABLED = os.environ.get("PAYSTACK_POS_MOMO_ENABLED", "0") == "1"
 MARKET_IMAGE_MAX_BYTES = int(os.environ.get("MARKET_IMAGE_MAX_BYTES", "26214400"))
 MARKET_RESERVATION_MINUTES = int(os.environ.get("MARKET_RESERVATION_MINUTES", "20"))
 GOOGLE_MAPS_SERVER_KEY = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "")
@@ -127,3 +128,6 @@ HUBTEL_API_KEY = os.environ.get("HUBTEL_API_KEY", "").strip()
 HUBTEL_COLLECTION_ACCOUNT = os.environ.get("HUBTEL_COLLECTION_ACCOUNT", "").strip()
 HUBTEL_TIMEOUT_SECONDS = int(os.environ.get("HUBTEL_TIMEOUT_SECONDS", "10"))
 HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"
+
+# Independent kill switch. Enable only after verified-number configuration and a delivery test.
+WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"

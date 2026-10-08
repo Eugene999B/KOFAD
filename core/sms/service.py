@@ -285,7 +285,17 @@ def _prepare_direct_attempt(user, message, retry=False):
     message.provider = provider
     message.sender = message.sender or settings.SMS_SENDER_ID
     if not retry:
-        message.sandbox = settings.SMS_SANDBOX
+        # Online-order lifecycle notices are transactional receipts/status updates that the
+        # customer explicitly expects. Keep general messaging in the configured sandbox,
+        # but never silently simulate these verified-order notices.
+        source_key = str(message.source_key or "")
+        transactional_notice = (
+            source_key.startswith("market-event:")
+            or source_key.startswith("document:receipt:")
+            or source_key.startswith("auto:receipt:")
+            or source_key.startswith("receipt:")
+        )
+        message.sandbox = False if transactional_notice else settings.SMS_SANDBOX
     message.attempts += 1
     message.status = "sending"
     message.submitted_by = user

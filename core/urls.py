@@ -1,3 +1,4 @@
+from . import whatsapp_bot_views
 from django.urls import path
 from . import views as v
 from . import account as accounts
@@ -8,6 +9,7 @@ from . import maintenance_views
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
+    path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     path("account/", accounts.account, name="account"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
@@ -29,6 +31,8 @@ urlpatterns = [
     path("branch/", v.switch_branch, name="switch_branch"), path("workspace/", v.dashboard, name="dashboard"),
     path("sales/new/", v.pos, name="pos"), path("purchasing/", v.purchasing, name="purchasing"),
     path("api/trades/", v.complete_trade),
+    path("api/pos/paystack-momo/start/", v.pos_paystack_momo_start, name="pos_paystack_momo_start"),
+    path("api/pos/paystack-momo/<str:reference>/status/", v.pos_paystack_momo_status, name="pos_paystack_momo_status"),
     path("api/documents/<uuid:pk>/send-sms/", v.send_transaction_message_api, name="send_transaction_message_api"),
     path("api/customers/", v.customer_search, name="customer_search"),
     path("api/suppliers/", creditor_views.supplier_search, name="supplier_search"), path("api/held/", v.hold),

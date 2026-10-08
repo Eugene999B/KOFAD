@@ -26,12 +26,22 @@ class Command(BaseCommand):
             close_old_connections()
             now = time.monotonic()
 
-            if now - last_payment_check >= 60:
+            if now - last_payment_check >= 5:
                 try:
                     from marketplace.hubtel import reconcile_due
                     reconcile_due()
                 except Exception:
                     self.stderr.write("Hubtel reconciliation check failed; will retry.")
+                try:
+                    from core.pos_paystack import reconcile_due as reconcile_pos_paystack
+                    reconcile_pos_paystack()
+                except Exception:
+                    self.stderr.write("Paystack POS reconciliation check failed; will retry.")
+                try:
+                    from marketplace.paystack_reconciliation import reconcile_due as reconcile_market_paystack
+                    reconcile_market_paystack()
+                except Exception:
+                    self.stderr.write("Paystack checkout reconciliation failed safely; will retry.")
                 last_payment_check = now
 
             if now - last_automation >= 60:
@@ -54,10 +64,15 @@ class Command(BaseCommand):
                     process_whatsapp_queue()
                 except Exception as exc:
                     self.stderr.write(f"WhatsApp queue check failed safely: {exc}")
+                try:
+                    from core.whatsapp_bot import process_replies
+                    process_replies()
+                except Exception:
+                    self.stderr.write("WhatsApp assistant queue failed safely; will retry.")
                 last_delivery_sync = now
 
-            # These records are only stale after five minutes. Avoid querying
-            # for them every second while preserving five-second receipt polling.
+            # Payment checks and receipt delivery both run independently of any customer browser.
+            # Stale-message recovery remains less frequent because those records need time to age.
             if last_recovery is None or now - last_recovery >= 30:
                 recover_stale()
                 recover_stale_whatsapp()

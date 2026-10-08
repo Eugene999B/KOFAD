@@ -1,6 +1,7 @@
 import re
 
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from .models import Party
 
@@ -37,14 +38,24 @@ def resolve_sale_customer(user, branch, payload, audit):
     """Select an existing customer or create/reuse one directly from checkout."""
     consent_requested = any(payload.get(key) is True for key in ("customer_consent", "send_sms", "send_whatsapp"))
 
+    submitted_email = str(payload.get("customer_email", "")).strip().lower()
+    if submitted_email:
+        validate_email(submitted_email)
+
     if payload.get("party"):
         party = Party.objects.filter(pk=payload["party"], branch=branch, kind="customer").first()
         if not party:
             raise ValidationError("Choose a valid customer at this location.")
+        updates = []
         if consent_requested and not party.consent:
             party.consent = True
-            party.save(update_fields=["consent"])
+            updates.append("consent")
             audit(user, branch, "customer.messaging_consent_enabled_at_checkout", party.pk)
+        if submitted_email and not party.email:
+            party.email = submitted_email
+            updates.append("email")
+        if updates:
+            party.save(update_fields=updates)
         return party
 
     name = str(payload.get("customer_name", "")).strip()
@@ -60,10 +71,16 @@ def resolve_sale_customer(user, branch, payload, audit):
     canonical = normalize_ghana_phone(phone)
     existing = customer_by_phone(branch, canonical)
     if existing:
+        updates = []
         if consent_requested and not existing.consent:
             existing.consent = True
-            existing.save(update_fields=["consent"])
+            updates.append("consent")
             audit(user, branch, "customer.messaging_consent_enabled_at_checkout", existing.pk)
+        if submitted_email and not existing.email:
+            existing.email = submitted_email
+            updates.append("email")
+        if updates:
+            existing.save(update_fields=updates)
         audit(user, branch, "customer.reused_at_checkout", existing.pk, {
             "submitted_name": name,
             "phone": canonical,
@@ -75,6 +92,7 @@ def resolve_sale_customer(user, branch, payload, audit):
         kind="customer",
         name=name,
         phone=canonical,
+        email=submitted_email,
         consent=consent_requested,
     )
     audit(user, branch, "customer.created_at_checkout", party.pk, {
