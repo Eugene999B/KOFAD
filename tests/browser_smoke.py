@@ -633,17 +633,19 @@ with sync_playwright() as p:
     assert market_page.locator("[data-kfd-rotator] [data-hero-image]").count() == 1
     assert market_page.get_by_text("Everything for today.", exact=False).count() >= 1
     assert market_page.locator(".kfd-category-grid .kfd-category").count() == 4
+    assert all("kofad-market-retail-hero" in img.get_attribute("src") for img in market_page.locator(".kfd-category-grid .kfd-category img").all())
+    assert market_page.locator("[data-hero-image]").evaluate("img => img.naturalWidth > 0")
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
-    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 615
-    assert market_page.locator("[data-hero-count]").inner_text() == "01 / 25"
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 405
+    assert market_page.locator("[data-hero-count]").inner_text() == "01 / 06"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
 
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
-    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 615
-    assert market_page.locator("[data-hero-image]").get_attribute("src").startswith("https://images.pexels.com/")
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 405
+    assert "kofad-market-retail-hero" in market_page.locator("[data-hero-image]").get_attribute("src")
     assert market_page.get_by_role("button", name="Next photograph").is_visible()
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
