@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -170,3 +171,11 @@ def ingest_webhook(payload):
                 )
                 created += int(was_created)
     return created
+
+
+
+def purge_webhook_evidence():
+    """Delete stale raw Meta payloads after normalized delivery/support state is retained."""
+    cutoff = timezone.now() - timedelta(days=max(int(settings.WHATSAPP_WEBHOOK_RETENTION_DAYS), 1))
+    deleted, _ = WhatsAppWebhookEvent.objects.filter(received_at__lt=cutoff).delete()
+    return deleted
