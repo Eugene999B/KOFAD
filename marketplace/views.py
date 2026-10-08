@@ -2263,9 +2263,12 @@ def hubtel_callback(request):
             order=attempt.order, status="hubtel_callback", title="Hubtel callback received (unverified)",
             defaults={"note": json.dumps(safe, sort_keys=True), "customer_visible": False},
         )
-        if attempt.status != "success":
-            # Every valid callback is a reason to re-check immediately, even if an earlier poll was still unpaid.
-            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+        if attempt.status not in {"success", "failed"}:
+            # Only unresolved attempts should be requeued; keep terminal failures
+            # closed while still preserving every subsequent callback as evidence.
+            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(
+                status__in=["success", "failed"]
+            ).update(
                 next_check_at=timezone.now(),
                 provider_message="Hubtel callback received; final status verification queued.",
             )
