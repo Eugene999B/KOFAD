@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.core.cache import cache
 from django.utils.html import escape
+from django.conf import settings
 from django.test import Client, TestCase, override_settings
 
 from .models import Conversation
@@ -75,7 +76,33 @@ class PublicSiteTests(TestCase):
         self.assertEqual(resolve("/returns/").url_name, "returns")
         response = self.client.get("/returns/", HTTP_HOST="staff.kofadimpex.com")
         self.assertEqual(response.status_code, 302)
-        self.assertIn("/login/", response["Location"])
+        self.assertIn(settings.LOGIN_URL, response["Location"])
+
+    def test_robots_publish_sitemap_and_block_private_staff_gateway(self):
+        response = self.client.get("/robots.txt")
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn("Allow: /", body)
+        self.assertIn(f"Disallow: /{settings.STAFF_LOGIN_SLUG}/", body)
+        self.assertIn("Sitemap: https://kofadimpex.com/sitemap.xml", body)
+        self.assertNotIn("Staff login", body)
+
+    def test_public_home_is_indexable_and_staff_gateway_is_not_linked(self):
+        response = self.client.get("/")
+        self.assertContains(response, 'name="robots" content="index,follow,max-image-preview:large"')
+        self.assertContains(response, '<link rel="canonical" href="https://kofadimpex.com/">')
+        self.assertNotContains(response, settings.STAFF_LOGIN_PATH)
+        self.assertNotContains(response, "Staff login")
+        self.assertNotContains(response, "Staff access")
+
+    def test_sitemap_contains_public_pages_and_never_staff_routes(self):
+        response = self.client.get("/sitemap.xml")
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        self.assertIn("<loc>https://kofadimpex.com/</loc>", body)
+        self.assertIn("<loc>https://kofadimpex.com/market/</loc>", body)
+        self.assertNotIn(settings.STAFF_LOGIN_PATH, body)
+        self.assertNotIn("/workspace/", body)
 
     def test_about_and_help_have_distinct_templates_and_purpose(self):
         about = self.client.get("/about/")
