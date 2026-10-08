@@ -90,6 +90,7 @@ def _market_context(request, **extra):
         "seo_description": seo_description,
         "canonical_url": canonical_url,
         "public_site_origin": settings.PUBLIC_SITE_ORIGIN,
+        "google_site_verification": settings.GOOGLE_SITE_VERIFICATION,
         **extra,
     }
     return context
