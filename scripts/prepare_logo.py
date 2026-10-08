@@ -55,8 +55,9 @@ def prepare_logo() -> None:
     art.save(buffer, format="PNG", optimize=True)
     converted = base64.b64encode(buffer.getvalue()).decode("ascii")
     result = JPEG.sub("data:image/png;base64," + converted, source, count=1)
-    result = result.replace('viewBox="0 0 512 279"', 'viewBox="0 0 212 204"')
-    result = result.replace('<image width="512" height="279"', '<image width="212" height="204"')
+    # Square canvas is suitable for Google Search favicons as well as receipts.
+    result = result.replace('viewBox="0 0 512 279"', 'viewBox="0 0 212 212"')
+    result = result.replace('<image width="512" height="279"', '<image x="0" y="4" width="212" height="204"')
     if result == source:
         raise RuntimeError("Official logo conversion unexpectedly made no changes.")
     OFFICIAL.write_text(result, "utf-8")
