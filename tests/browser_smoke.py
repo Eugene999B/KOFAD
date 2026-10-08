@@ -143,7 +143,8 @@ with sync_playwright() as p:
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
     assert any(href.endswith("/static/brand/kofad-official-logo.svg") for href in icon_hrefs)
     assert page.locator('img[src$="/static/brand/kofad-official-logo.svg"]').count() >= 1
-    assert page.locator(".brand-wordmark").first.get_by_text("KOFAD", exact=True).count() >= 1
+    assert page.locator(".brand-official-logo img").count() >= 1
+    assert page.locator(".brand-wordmark").count() == 0
     assert page.get_by_text(("KO" + "PEX"), exact=True).count() == 0
     page.get_by_role("button", name="Show password", exact=True).click()
     assert page.locator("#password").get_attribute("type") == "text"
