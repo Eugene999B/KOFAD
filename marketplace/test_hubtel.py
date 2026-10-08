@@ -128,6 +128,26 @@ class HubtelContractTests(TestCase):
             with self.assertRaises(services.PaymentVerificationUnavailable):
                 hubtel.verify("ref1")
 
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_live_sales_api_explicit_failure_is_terminal(self, get):
+        get.return_value = Mock(status_code=200)
+        get.return_value.json.return_value = {
+            "ResponseCode": "0000",
+            "Data": [{
+                "ClientReference": "ref1",
+                "InvoiceStatus": "Failed",
+                "TransactionStatus": "Failed",
+                "TransactionId": "txn-failed-1",
+                "TransactionAmount": 2.0,
+                "CurrencyCode": "GHS",
+                "PaymentMethod": "MOBILE-MONEY",
+            }],
+        }
+        result = hubtel.verify("ref1")
+        self.assertEqual(result["status"], "Failed")
+        self.assertEqual(result["transactionStatus"], "Failed")
+
     @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
         for reference in ("../path", "x?y=1", "", "x" * 33):
@@ -228,6 +248,48 @@ class HubtelPaymentTests(MarketFixtures):
         event = attempt.order.events.get(status="hubtel_callback")
         self.assertFalse(event.customer_visible)
         self.assertIn("unverified", event.title)
+
+
+    @patch("marketplace.hubtel.verify")
+    def test_verified_failed_transaction_stops_retries_and_updates_order(self, verify):
+        attempt = self.pending()
+        order = attempt.order
+        order.payment_reference = attempt.reference
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        verify.return_value = {
+            "status": "Failed", "clientReference": attempt.reference,
+            "transactionStatus": "Failed", "invoiceStatus": "Failed",
+            "currencyCode": "GHS", "amount": 200,
+        }
+        with self.assertRaises(services.PaymentVerificationUnavailable):
+            hubtel.reconcile(attempt.reference)
+        attempt.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(attempt.status, "failed")
+        self.assertIsNone(attempt.next_check_at)
+        self.assertEqual(order.payment_status, "failed")
+        self.assertIsNone(order.sale_document_id)
+        self.assertEqual(order.events.filter(status="payment_failed").count(), 1)
+        verify.reset_mock()
+        self.assertEqual(hubtel.reconcile_due(limit=10), 0)
+        verify.assert_not_called()
+
+        # A late callback remains downloadable evidence but cannot reopen it.
+        body = {"Data": {
+            "ClientReference": attempt.reference, "Status": "Failed", "Amount": 200,
+        }}
+        response = self.client.post(
+            "/market/payments/hubtel/callback/", body,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, "failed")
+        self.assertIsNone(attempt.next_check_at)
+        self.assertEqual(HubtelEvidence.objects.filter(
+            direction="callback", reference=attempt.reference,
+        ).count(), 1)
 
     def test_callback_requeues_verification_even_after_an_earlier_check(self):
         attempt = self.pending()
