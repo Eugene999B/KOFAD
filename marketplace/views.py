@@ -74,7 +74,8 @@ def _market_context(request, **extra):
         or (page.get("intro", "") if isinstance(page, dict) else "")
         or default_description
     ).strip()[:180]
-    canonical_url = settings.PUBLIC_SITE_ORIGIN + path if seo_indexable else ""
+    canonical_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else settings.PUBLIC_SITE_ORIGIN
+    canonical_url = canonical_origin + path if seo_indexable else ""
 
     context = {
         "market_customer": customer,
@@ -90,6 +91,7 @@ def _market_context(request, **extra):
         "seo_description": seo_description,
         "canonical_url": canonical_url,
         "public_site_origin": settings.PUBLIC_SITE_ORIGIN,
+        "market_site_origin": settings.MARKET_SITE_ORIGIN,
         "google_site_verification": settings.GOOGLE_SITE_VERIFICATION,
         **extra,
     }
