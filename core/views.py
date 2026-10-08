@@ -77,7 +77,7 @@ def health(request):
 
 def csrf_failure(request, reason=""):
     """Recover only stale duplicate staff login posts; keep normal CSRF strict."""
-    if request.path == "/login/" and request.user.is_authenticated:
+    if request.path == settings.STAFF_LOGIN_PATH and request.user.is_authenticated:
         return redirect("dashboard")
     return render(request, "403.html", status=403)
 
@@ -109,7 +109,7 @@ def resolve_login_identifier(identifier):
 @sensitive_post_parameters("password")
 def login_view(request):
     # The sign-in gateway is an explicit new staff session boundary. If an
-    # authenticated user intentionally revisits /login/, start fresh; stale
+    # authenticated user intentionally revisits the private sign-in route, start fresh; stale
     # duplicate login POSTs are recovered by csrf_failure before reaching here.
     if request.user.is_authenticated:
         logout(request)
@@ -197,7 +197,10 @@ def login_view(request):
                         attempt.blocked_until = now + timedelta(minutes=15)
                     attempt.save(update_fields=["failures", "blocked_until"])
                     error = "The username, phone number or password is incorrect."
-    return render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
+    response = render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
+    response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    response["Cache-Control"] = "no-store, private"
+    return response
 
 
 @login_required
