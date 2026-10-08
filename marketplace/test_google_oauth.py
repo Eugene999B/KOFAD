@@ -35,6 +35,9 @@ def b64(value):
 class GoogleOAuthContractTests(MarketFixtures):
     def _login_staff(self):
         self.client.force_login(self.staff)
+        # MarketFixtures assigns branch access via a signal which increments
+        # the DB session version without updating the related cached object.
+        self.staff.access.refresh_from_db()
         session = self.client.session
         session["access_version"] = self.staff.access.session_version
         session.save()
