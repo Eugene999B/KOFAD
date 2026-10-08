@@ -915,7 +915,7 @@ def checkout(request, customer):
         delivery_fee_preview=initial_quote["fee"] if initial_quote else Decimal("0"),
         checkout_total=subtotal + (initial_quote["fee"] if initial_quote else Decimal("0")),
         delivery_company=company, payment_ready=payment_ready,
-        payment_notice=hubtel.availability_notice(), payment_form=payment_form,
+        payment_notice="Online payment is awaiting final testing and activation.", payment_form=payment_form,
         momo_available=momo_available,
     ))
 
