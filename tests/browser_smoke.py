@@ -111,7 +111,7 @@ browser_customer_session["market_cart"] = {str(browser_listing.pk): 1}
 browser_customer_session.create()
 
 browser_support = Conversation.objects.create(
-    branch=branch,
+    branch=main_branch,
     customer=browser_market_customer,
     public_name=browser_market_customer.full_name,
     public_phone=browser_market_customer.phone,
