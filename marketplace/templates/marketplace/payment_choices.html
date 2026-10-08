@@ -1,0 +1,11 @@
+{% if momo_available %}
+<div class="checkout-payment-choice" data-payment-choice>
+<h3>Choose how to pay</h3>{{ payment_form.non_field_errors }}
+<label>Payment method{{ payment_form.payment_method }}{{ payment_form.payment_method.errors }}</label>
+<div class="checkout-grid" data-momo-fields>
+<label>Mobile Money number{{ payment_form.momo_phone }}{{ payment_form.momo_phone.errors }}</label>
+<label>Network{{ payment_form.momo_network }}{{ payment_form.momo_network.errors }}</label>
+</div>
+<p class="company-fineprint">For Mobile Money, approve the request on your phone. Your PIN stays on your phone. We confirm payment automatically.</p>
+</div>
+{% endif %}
