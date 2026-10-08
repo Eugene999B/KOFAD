@@ -625,38 +625,22 @@ with sync_playwright() as p:
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
-    assert market_page.locator(".home-hero-v9").count() == 1
-    assert market_page.locator(".home-hero-products").count() == 0
-    assert market_page.get_by_text("Everyday essentials.", exact=False).count() >= 1
-    assert market_page.get_by_text("Wholesale quantities", exact=True).count() == 1
+    assert market_page.locator(".kfd-hero").count() == 1
+    assert market_page.locator("[data-kfd-rotator] [data-hero-image]").count() == 1
+    assert market_page.get_by_text("Everything for today.", exact=False).count() >= 1
+    assert market_page.locator(".kfd-category-grid .kfd-category").count() == 4
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
-    mobile_hero_background = market_page.locator(".home-hero-v9").evaluate(
-        "el => getComputedStyle(el).backgroundImage"
-    )
-    assert "images.unsplash.com/photo-1768176136613-96a7bfc0049e" in mobile_hero_background
-    assert "w=1800" in mobile_hero_background
-    assert "kofad-market-retail-hero" in mobile_hero_background
-    assert "kofad-market-hero.svg" not in mobile_hero_background
-    hero_asset = market_page.request.get(
-        "http://127.0.0.1:8000/static/marketplace/kofad-market-retail-hero.webp"
-    )
-    assert hero_asset.ok, "Bundled homepage hero image is not being served"
-    assert hero_asset.headers.get("content-type", "").startswith("image/webp")
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 615
+    assert market_page.locator("[data-hero-count]").inner_text() == "01 / 25"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
 
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
-    hero_mark = market_page.locator(".home-hero-v9-mark img")
-    assert hero_mark.evaluate("el => el.getBoundingClientRect().width") <= 40
-    desktop_hero_background = market_page.locator(".home-hero-v9").evaluate(
-        "el => getComputedStyle(el).backgroundImage"
-    )
-    assert "images.unsplash.com/photo-1768176136613-96a7bfc0049e" in desktop_hero_background
-    assert "w=3000" in desktop_hero_background
-    assert "kofad-market-retail-hero" in desktop_hero_background
-    assert "kofad-market-hero.svg" not in desktop_hero_background
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 615
+    assert market_page.locator("[data-hero-image]").get_attribute("src").startswith("https://images.pexels.com/")
+    assert market_page.get_by_role("button", name="Next photograph").is_visible()
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/")
