@@ -274,6 +274,32 @@ class MarketPaymentAttempt(models.Model):
         ordering = ["-created_at"]
 
 
+
+
+class HubtelEvidence(models.Model):
+    """Encrypted byte-for-byte evidence of Hubtel HTTP callbacks/status responses."""
+
+    attempt = models.ForeignKey(
+        MarketPaymentAttempt, related_name="hubtel_evidence", null=True,
+        blank=True, on_delete=models.PROTECT,
+    )
+    reference = models.CharField(max_length=100, db_index=True)
+    direction = models.CharField(
+        max_length=16, choices=[("callback", "Callback"), ("status_check", "Status check")]
+    )
+    http_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    encrypted_body = models.TextField(editable=False)
+    body_sha256 = models.CharField(max_length=64, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [
+            models.Index(fields=["reference", "-created_at"], name="market_hubtel_ref_time_idx"),
+        ]
+
+
+
 class OrderEvent(models.Model):
     order = models.ForeignKey(OnlineOrder, related_name="events", on_delete=models.CASCADE)
     status = models.CharField(max_length=32)
