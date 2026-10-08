@@ -75,6 +75,27 @@ class CheckoutSecurityTests(MarketFixtures):
         request.user, request.session = staff, {}
         self.assertEqual(views._conversation_access(request, conversation), "")
 
+    def test_staff_post_cannot_reply_private_details_to_unverified_external_contact(self):
+        conversation = Conversation.objects.create(
+            branch=self.branch,
+            public_name="External WhatsApp contact",
+            public_phone="+233551234567",
+            subject="Unverified external support",
+            assigned_to=self.staff,
+        )
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+        response = self.client.post(
+            f"/online-inbox/{conversation.pk}/",
+            {"action": "reply", "message": "Private payment information"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(conversation.messages.filter(sender_type="staff").exists())
+
     def test_support_documents_reject_active_or_legacy_binary_content(self):
         with self.assertRaisesMessage(ValidationError, "Active or embedded PDF"):
             services.prepare_support_attachment(SimpleUploadedFile(
