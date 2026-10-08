@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from django.test import RequestFactory
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.contrib.auth.models import AnonymousUser
@@ -24,7 +24,7 @@ class CustomerAccountChangeTests(MarketFixtures):
             self.assertEqual(response.status_code, 302)
             self.client.post("/market/account/security/", {
                 "action": "phone_start", "new_phone": "0245550021", "current_password": "test-customer-password"})
-            send.assert_called_once_with("+233245550021", "change_phone")
+            send.assert_called_once_with("+233245550021", "change_phone", request=ANY)
         with patch("marketplace.services.verify_otp") as verify:
             self.client.post("/market/account/security/", {
                 "action": "phone_verify", "code": "123456", "current_password": "test-customer-password"})
