@@ -25,7 +25,10 @@ class CustomerSmsBudgetTests(TestCase):
         with self.assertRaisesMessage(ValidationError, "Two verification SMS"):
             services.send_otp(phone, "change_phone")
         self.assertEqual(sms.call_count, 2)
-        self.assertEqual(OtpThrottle.objects.filter(phone=phone).count(), 2)
+        # An attempted third request may leave a throttle record, but cannot
+        # send a third SMS or produce any usable verification code.
+        self.assertEqual(OtpThrottle.objects.filter(phone=phone).count(), 3)
+        self.assertFalse(OtpThrottle.objects.get(phone=phone, purpose="change_phone").code_digest)
 
     @patch("marketplace.services._submit_customer_otp_sms")
     def test_allowance_returns_one_hour_after_first_send(self, sms):
