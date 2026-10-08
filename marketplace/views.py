@@ -32,7 +32,7 @@ from .forms import (
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence,
+    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence, EmailIdentity,
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
@@ -483,7 +483,7 @@ def customer_account(request, customer):
         conversations=customer.conversations.all()[:5],
         wishlist=customer.wishlist_items.select_related("listing__product")[:6],
         recent_views=customer.recent_views.select_related("listing__product")[:6],
-        email_identity=__import__("marketplace.models", fromlist=["EmailIdentity"]).EmailIdentity.objects.filter(
+        email_identity=EmailIdentity.objects.filter(
             kind="customer", owner_id=customer.pk,
         ).first(),
         return_requests=customer.return_requests.select_related("order")[:5],
