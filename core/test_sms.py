@@ -279,21 +279,28 @@ class SmsTests(Fixtures,TestCase):
 
 class InitialAdminTests(TestCase):
     @patch.dict(os.environ,{"KOFAD_INITIAL_ADMIN_PASSWORD":"ADMIN"})
-    def test_initial_admin_direct_login_and_optional_password_change(self):
+    def test_initial_admin_must_replace_temporary_password(self):
         call_command("bootstrap_admin",confirm_initial_setup=True)
         user = User.objects.get(username="ADMIN")
         self.assertTrue(user.is_superuser)
         self.assertTrue(user.check_password("ADMIN"))
         self.assertFalse(user.access.must_change_password)
-        self.client.post("/login/",{"username":"ADMIN","password":"ADMIN"})
+        user.access.refresh_from_db()
+        self.assertTrue(user.access.force_password_change)
+
+        login_response = self.client.post("/login/",{"username":"ADMIN","password":"ADMIN"})
+        self.assertRedirects(login_response, "/account/password/", fetch_redirect_response=False)
         for path in ("/","/administration/","/sales/new/","/communications/"):
-            self.assertEqual(self.client.get(path).status_code,200)
+            self.assertRedirects(self.client.get(path), "/account/password/", fetch_redirect_response=False)
+
         result = self.client.post("/account/password/",{"old_password":"ADMIN",
             "new_password1":"A-unique-counter-password-1948!","new_password2":"A-unique-counter-password-1948!"})
         self.assertEqual(result.status_code,302)
         user.refresh_from_db()
+        user.access.refresh_from_db()
         self.assertFalse(user.check_password("ADMIN"))
         self.assertFalse(user.access.must_change_password)
+        self.assertFalse(user.access.force_password_change)
         self.assertEqual(self.client.get("/").status_code,200)
         with self.assertRaises(CommandError):
             call_command("bootstrap_admin",confirm_initial_setup=True)

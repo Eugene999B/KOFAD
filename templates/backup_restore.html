@@ -15,15 +15,25 @@
   <div class="section-heading">
     <div>
       <p class="eyebrow">1 · BACKUP</p>
-      <h2>Download a signed full-system backup</h2>
-      <p class="muted">The file captures a consistent database snapshot and is checksummed and cryptographically signed. Keep it private because it contains customer, staff, financial, Marketplace and database-stored document/photo information. Active browser sessions and temporary one-time security codes are intentionally not restored. Railway variables, API credentials and the deployed source code are managed separately; retain the installation signing secret and matching release for disaster recovery.</p>
+      <h2>Download an encrypted full-system backup</h2>
+      <p class="muted">The file captures a consistent database snapshot, is checksummed and signed, then protected with AES-256-GCM using a key derived from your backup passphrase. The passphrase is never stored by KOFAD. Active browser sessions and temporary one-time security codes are intentionally not restored. Keep the passphrase separately from the backup; losing it makes the encrypted file unrecoverable.</p>
     </div>
     <span class="pill status-good" data-backup-ready-badge {% if not recent_backup %}hidden{% endif %}>Safety backup ready</span>
   </div>
   <div class="notice">
     <strong>Before restore or reset:</strong> KOFAD requires a fresh backup download from this browser session within the previous 30 minutes.
   </div>
-  <a class="button" href="{% url 'backup_download' %}" download data-backup-download data-backup-status-url="{% url 'backup_status' %}">⇩ Download full KOFAD backup</a>
+  <form method="post" action="{% url 'backup_download' %}" class="stack-form" data-backup-download data-backup-status-url="{% url 'backup_status' %}">
+    {% csrf_token %}
+    <label for="backup-current-password">Administrator password</label>
+    <input id="backup-current-password" type="password" name="password" autocomplete="current-password" required>
+    <label for="backup-passphrase">Backup encryption passphrase</label>
+    <input id="backup-passphrase" type="password" name="backup_passphrase" autocomplete="new-password" minlength="16" required>
+    <label for="backup-passphrase-confirm">Confirm backup passphrase</label>
+    <input id="backup-passphrase-confirm" type="password" name="backup_passphrase_confirm" autocomplete="new-password" minlength="16" required>
+    <p class="hint">Use at least 16 characters. KOFAD cannot recover this passphrase for you.</p>
+    <button class="button" type="submit">⇩ Download encrypted KOFAD backup</button>
+  </form>
   <div class="maintenance-backup-state {% if recent_backup %}ready{% endif %}" data-backup-state aria-live="polite">
     {% if recent_backup %}
       <strong>Safety backup confirmed.</strong><span>Restore and reset are unlocked for this browser session for up to 30 minutes.</span>
@@ -45,7 +55,9 @@
     {% csrf_token %}
     <input type="hidden" name="action" value="validate">
     <label for="validate-file">KOFAD backup file</label>
-    <input id="validate-file" type="file" name="backup_file" accept=".json,.kofad.json,application/json" required>
+    <input id="validate-file" type="file" name="backup_file" accept=".enc,.json,.kofad.enc,.kofad.json,application/octet-stream,application/json" required>
+    <label for="validate-passphrase">Backup passphrase <small>Required for encrypted backups</small></label>
+    <input id="validate-passphrase" type="password" name="backup_passphrase" autocomplete="off">
     <button class="button secondary">Validate backup</button>
   </form>
   {% if validation %}
@@ -70,7 +82,9 @@
     {% csrf_token %}
     <input type="hidden" name="action" value="restore">
     <label for="restore-file">Backup file to restore</label>
-    <input id="restore-file" type="file" name="backup_file" accept=".json,.kofad.json,application/json" required>
+    <input id="restore-file" type="file" name="backup_file" accept=".enc,.json,.kofad.enc,.kofad.json,application/octet-stream,application/json" required>
+    <label for="restore-passphrase">Backup passphrase <small>Required for encrypted backups</small></label>
+    <input id="restore-passphrase" type="password" name="backup_passphrase" autocomplete="off">
     <label for="restore-password">Administrator password</label>
     <input id="restore-password" type="password" name="password" autocomplete="current-password" required>
     <label for="restore-confirm">Type exactly: <code>{{ restore_phrase }}</code></label>
@@ -112,6 +126,6 @@
 
 <section class="panel">
   <div class="section-heading"><div><p class="eyebrow">RECOVERY RULES</p><h2>What KOFAD protects</h2></div><span class="pill status-good">Server enforced</span></div>
-  <p>Backup files are never trusted by filename. KOFAD checks their signature, checksum, record manifest and migration schema on the server. Restore and reset require the signed-in system administrator’s current password, an exact typed phrase, an explicit acknowledgement and a fresh safety backup.</p>
+  <p>Backup files are never trusted by filename. New downloads are encrypted before leaving the server and KOFAD checks authenticated encryption, signature, checksum, record manifest and migration schema during recovery. Legacy signed plaintext backups remain restorable for compatibility. Restore and reset require the signed-in system administrator’s current password, an exact typed phrase, an explicit acknowledgement and a fresh safety backup.</p>
 </section>
 {% endblock %}

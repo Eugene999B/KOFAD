@@ -1,13 +1,13 @@
 (() => {
   "use strict";
 
-  const link = document.querySelector("[data-backup-download]");
+  const downloadForm = document.querySelector("[data-backup-download]");
   const statusNode = document.querySelector("[data-backup-state]");
   const badge = document.querySelector("[data-backup-ready-badge]");
   const guardedButtons = [...document.querySelectorAll("[data-requires-recent-backup]")];
-  if (!link || !statusNode || !guardedButtons.length) return;
+  if (!downloadForm || !statusNode || !guardedButtons.length) return;
 
-  const statusUrl = link.dataset.backupStatusUrl;
+  const statusUrl = downloadForm.dataset.backupStatusUrl;
   let expiryTimer = null;
   let polling = false;
 
@@ -86,8 +86,8 @@
     }
   };
 
-  link.addEventListener("click", () => {
-    window.setTimeout(pollUntilReady, 120);
+  downloadForm.addEventListener("submit", () => {
+    window.setTimeout(pollUntilReady, 250);
   });
 
   document.addEventListener("visibilitychange", () => {

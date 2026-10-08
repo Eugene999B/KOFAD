@@ -5,6 +5,7 @@ import uuid
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
+from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib import messages
@@ -30,6 +31,7 @@ from .forms import (
     ReceiptPolicyForm, SalesPolicyForm,
 )
 from .identity import normalize_ghana_phone, phone_variants
+from .security import matching_step, new_secret, requires_mfa
 from .models import (
     Access, Audit, Branch, Closing, CommunicationSettings, Company, Correction, DebtSettings,
     Document, HeldSale, Line, LoginAttempt, ManagementContact, Message, MessageTemplate,
@@ -118,20 +120,48 @@ def login_view(request):
     if request.method == "POST":
         identifier = request.POST.get("username", "").strip()[:150]
         canonical, lock_identity = resolve_login_identifier(identifier)
-        # Per-account lock avoids trusting spoofable forwarded IP headers and
-        # keeps alternate phone formats on the same lockout bucket.
-        key = hashlib.sha256(lock_identity.encode()).hexdigest()
+        account_key = hashlib.sha256(lock_identity.encode()).hexdigest()
+        if not request.session.session_key:
+            request.session.create()
+        source_key = hashlib.sha256(
+            ("login-source:" + str(request.session.session_key)).encode()
+        ).hexdigest()
+        now = timezone.now()
         with transaction.atomic():
-            LoginAttempt.objects.get_or_create(key=key)
-            attempt = LoginAttempt.objects.select_for_update().get(key=key)
-            if attempt.blocked_until and attempt.blocked_until > timezone.now():
+            # Lock in lexical order so simultaneous login attempts cannot deadlock.
+            for key in sorted({account_key, source_key}):
+                LoginAttempt.objects.get_or_create(key=key)
+            locked = {
+                row.key: row
+                for row in LoginAttempt.objects.select_for_update()
+                .filter(key__in=[account_key, source_key])
+                .order_by("key")
+            }
+            attempt = locked[account_key]
+            source = locked[source_key]
+
+            if source.blocked_until and source.blocked_until > now:
                 error = "Too many attempts. Please wait 15 minutes."
             else:
-                if attempt.blocked_until:
+                if source.blocked_until:
+                    source.failures = 0
+                    source.blocked_until = None
+                user = authenticate(
+                    request,
+                    username=canonical,
+                    password=request.POST.get("password", ""),
+                )
+                if user is not None:
+                    # A correct password from a fresh browser must recover from an
+                    # account-targeted lockout; an attacker must not be able to
+                    # deny the owner access simply by sending bad passwords.
                     attempt.failures = 0
                     attempt.blocked_until = None
-                user = authenticate(request, username=canonical, password=request.POST.get("password", ""))
-                if user is not None:
+                    source.failures = 0
+                    source.blocked_until = None
+                    attempt.save(update_fields=["failures", "blocked_until"])
+                    source.save(update_fields=["failures", "blocked_until"])
+
                     access, _ = Access.objects.get_or_create(user=user)
                     login(request, user)
                     from marketplace import services as market_services
@@ -142,25 +172,119 @@ def login_view(request):
                     )
                     request.session.set_expiry(settings.SESSION_COOKIE_AGE)
                     request.session.pop("enroll_secret", None)
-                    attempt.failures = 0
-                    attempt.save()
+                    request.session.pop("mfa_verified_at", None)
                     s.audit(user, None, "session.login", user.pk)
                     if access.force_password_change:
                         messages.info(request, "Change the temporary password before continuing.")
                         return redirect("password_change")
+                    if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
+                        return redirect("mfa")
                     return redirect("dashboard")
-                attempt.failures += 1
-                if attempt.failures >= 5:
-                    attempt.blocked_until = timezone.now() + timedelta(minutes=15)
-                attempt.save()
-                error = "The username, phone number or password is incorrect."
+
+                source.failures += 1
+                if source.failures >= 5:
+                    source.blocked_until = now + timedelta(minutes=15)
+                source.save(update_fields=["failures", "blocked_until"])
+
+                if attempt.blocked_until and attempt.blocked_until > now:
+                    error = "Too many attempts. Please wait 15 minutes."
+                else:
+                    if attempt.blocked_until:
+                        attempt.failures = 0
+                        attempt.blocked_until = None
+                    attempt.failures += 1
+                    if attempt.failures >= 5:
+                        attempt.blocked_until = now + timedelta(minutes=15)
+                    attempt.save(update_fields=["failures", "blocked_until"])
+                    error = "The username, phone number or password is incorrect."
     return render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
 
 
 @login_required
+@sensitive_post_parameters("code")
 def mfa(request):
-    request.session.pop("enroll_secret", None)
-    return redirect("dashboard")
+    if not settings.PRIVILEGED_MFA_ENFORCED or not requires_mfa(request.user):
+        request.session.pop("enroll_secret", None)
+        request.session.pop("mfa_verified_at", None)
+        return redirect("dashboard")
+
+    access, _ = Access.objects.get_or_create(user=request.user)
+    if access.force_password_change:
+        return redirect("password_change")
+
+    enrolling = not bool(access.totp_secret)
+    if enrolling:
+        secret = str(request.session.get("enroll_secret") or "")
+        if not secret:
+            secret = new_secret()
+            request.session["enroll_secret"] = secret
+    else:
+        secret = access.totp_secret
+        request.session.pop("enroll_secret", None)
+
+    error = ""
+    key = hashlib.sha256(f"mfa:{request.user.pk}".encode()).hexdigest()
+    if request.method == "POST":
+        now = timezone.now()
+        code = str(request.POST.get("code") or "").strip().replace(" ", "").replace("-", "")
+        with transaction.atomic():
+            LoginAttempt.objects.get_or_create(key=key)
+            attempt = LoginAttempt.objects.select_for_update().get(key=key)
+            if attempt.blocked_until and attempt.blocked_until > now:
+                error = "Too many verification attempts. Wait 15 minutes and try again."
+            else:
+                if attempt.blocked_until:
+                    attempt.failures = 0
+                    attempt.blocked_until = None
+                step = matching_step(secret, code)
+                locked = Access.objects.select_for_update().get(pk=access.pk)
+                expected_secret = locked.totp_secret or secret
+                valid = bool(
+                    step is not None
+                    and secrets.compare_digest(expected_secret, secret)
+                    and step > locked.totp_last_step
+                )
+                if valid:
+                    was_enrolling = not bool(locked.totp_secret)
+                    if was_enrolling:
+                        locked.totp_secret = secret
+                    locked.totp_last_step = step
+                    locked.save(update_fields=["totp_secret", "totp_last_step"])
+                    attempt.failures = 0
+                    attempt.blocked_until = None
+                    attempt.save(update_fields=["failures", "blocked_until"])
+                    request.session["mfa_verified_at"] = now.timestamp()
+                    request.session.pop("enroll_secret", None)
+                    s.audit(
+                        request.user, None,
+                        "mfa.enrolled" if was_enrolling else "mfa.verified",
+                        request.user.pk,
+                    )
+                    return redirect("dashboard")
+                attempt.failures += 1
+                if attempt.failures >= 6:
+                    attempt.blocked_until = now + timedelta(minutes=15)
+                attempt.save(update_fields=["failures", "blocked_until"])
+                error = "That authenticator code is not valid."
+
+    account_name = request.user.get_full_name().strip() or request.user.username
+    uri = ""
+    display_secret = ""
+    if enrolling:
+        display_secret = " ".join(secret[index:index + 4] for index in range(0, len(secret), 4))
+        uri = (
+            "otpauth://totp/"
+            + quote(f"KOFAD:{account_name}", safe="")
+            + "?secret=" + quote(secret, safe="")
+            + "&issuer=KOFAD&algorithm=SHA1&digits=6&period=30"
+        )
+    return render(request, "mfa.html", {
+        "title": "Security verification",
+        "enrolling": enrolling,
+        "secret": display_secret,
+        "otpauth_uri": uri,
+        "error": error,
+    })
 
 
 @require_POST
@@ -2105,8 +2229,11 @@ def password_change(request):
                 update_session_auth_hash(request, user)
                 user.access.refresh_from_db()
                 request.session["access_version"] = user.access.session_version
+                request.session.pop("mfa_verified_at", None)
                 s.audit(user, None, "password.changed", user.pk)
                 messages.success(request, "Your password has been changed.")
+                if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
+                    return redirect("mfa")
                 return redirect("account")
     return render(request, "password_change.html", {"form":form, "title":"Change password"})
 

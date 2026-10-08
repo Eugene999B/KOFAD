@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -14,6 +15,7 @@ from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -62,9 +64,9 @@ def _market_context(request, **extra):
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
-        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
-        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
         **extra,
     }
     return context
@@ -109,8 +111,11 @@ def _conversation_access(request, conversation):
         or request.user.has_perm("core.operate_sales")
         or request.user.has_perm("core.manage_company")
     ):
-        if conversation.order_id and not request.user.is_superuser:
-            if not request.user.access.branches.filter(pk=conversation.order.branch_id, active=True).exists():
+        if not request.user.is_superuser:
+            branch_id = conversation.branch_id or (
+                conversation.order.branch_id if conversation.order_id else None
+            )
+            if not branch_id or not request.user.access.branches.filter(pk=branch_id, active=True).exists():
                 return ""
         return "staff"
     customer = services.customer_from_session(request)
@@ -385,16 +390,14 @@ def customer_access(request):
     form = CustomerAccessForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
-        existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
-        if existing:
-            request.session["market_login_phone"] = phone
-            request.session.pop("market_pending_phone", None)
-            request.session.pop("market_verified_phone", None)
-            return redirect("market_login")
         try:
-            services.send_otp(phone, "register")
+            # Use the same phone-ownership challenge whether the account exists or not.
+            # This prevents the gateway from becoming an account-enumeration oracle.
+            services.send_otp(phone, "login", request=request)
             request.session.pop("market_login_phone", None)
+            request.session.pop("market_verified_phone", None)
             request.session["market_pending_phone"] = phone
+            request.session["market_pending_otp_purpose"] = "login"
             messages.success(request, "We sent a six-digit verification code to your phone.")
             return redirect("market_verify")
         except ValidationError as exc:
@@ -463,16 +466,26 @@ def account_verify(request):
     phone = request.session.get("market_pending_phone")
     if not phone:
         return redirect("market_access")
+    purpose = request.session.get("market_pending_otp_purpose") or "login"
     if request.method == "POST":
         if request.POST.get("action") == "resend":
             try:
-                services.send_otp(phone, "register")
+                services.send_otp(phone, purpose, request=request)
                 messages.success(request, "A new verification code was sent.")
             except ValidationError as exc:
                 messages.error(request, problem(exc))
             return redirect("market_verify")
         try:
-            services.verify_otp(phone, request.POST.get("code"), "register")
+            services.verify_otp(phone, request.POST.get("code"), purpose)
+            existing = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            request.session.pop("market_pending_otp_purpose", None)
+            if existing:
+                # Phone ownership alone is not a password bypass. After the uniform
+                # challenge, an existing account must still present its password.
+                request.session["market_login_phone"] = phone
+                request.session.pop("market_pending_phone", None)
+                request.session.pop("market_verified_phone", None)
+                return redirect("market_login")
             request.session["market_verified_phone"] = phone
             return redirect("market_finish")
         except ValidationError as exc:
@@ -521,7 +534,7 @@ def customer_password_reset_start(request):
                 # Do not disclose whether a number owns an account.
                 messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
                 return redirect("market_login")
-            services.send_otp(canonical, "reset")
+            services.send_otp(canonical, "reset", request=request)
             request.session["market_reset_phone"] = canonical
             request.session.pop("market_reset_verified_phone", None)
             messages.success(request, "Verification code sent by SMS.")
@@ -543,7 +556,7 @@ def customer_password_reset_verify(request):
     if request.method == "POST":
         if request.POST.get("action") == "resend":
             try:
-                services.send_otp(phone, "reset")
+                services.send_otp(phone, "reset", request=request)
                 messages.success(request, "A new verification code was sent.")
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -641,7 +654,7 @@ def customer_security(request, customer):
                     raise ValidationError("Enter a different phone number.")
                 if CustomerAccount.objects.filter(phone=phone).exists():
                     raise ValidationError("That phone number is already linked to an account.")
-                services.send_otp(phone, "change_phone")
+                services.send_otp(phone, "change_phone", request=request)
                 request.session["market_change_phone"] = {"phone": phone, "expires": timezone.now().timestamp() + 600}
                 messages.success(request, "Verification code sent to your new number.")
             else:
@@ -752,9 +765,41 @@ def _map_access_allowed(request):
     return bool(request.user.is_authenticated or services.customer_from_session(request))
 
 
+def _consume_map_lookup_budget(request):
+    """Bound paid server-side map lookups per browser and across the deployment."""
+    if not request.session.session_key:
+        request.session.save()
+    session_token = salted_hmac(
+        "kofad-map-budget", str(request.session.session_key), algorithm="sha256"
+    ).hexdigest()
+    minute = int(timezone.now().timestamp() // 60)
+
+    def consume(key, limit):
+        limit = max(int(limit), 1)
+        if cache.add(key, 1, timeout=70):
+            return True
+        try:
+            value = cache.incr(key)
+        except ValueError:
+            cache.set(key, 1, timeout=70)
+            value = 1
+        return value <= limit
+
+    if not consume(
+        f"kofad:map:global:{minute}", settings.MAP_LOOKUP_GLOBAL_MINUTE_LIMIT
+    ):
+        return False
+    return consume(
+        f"kofad:map:session:{session_token}:{minute}",
+        settings.MAP_LOOKUP_SESSION_MINUTE_LIMIT,
+    )
+
+
 def market_location_search(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to search locations."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
     try:
         rows = services.location_search(request.GET.get("q", ""))
         return JsonResponse({"results": rows})
@@ -765,6 +810,8 @@ def market_location_search(request):
 def market_location_reverse(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to use location services."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
     try:
         row = services.reverse_location(request.GET.get("lat"), request.GET.get("lng"))
         return JsonResponse(row)
@@ -775,6 +822,8 @@ def market_location_reverse(request):
 def market_delivery_quote(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to calculate delivery."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
     try:
         quote = services.delivery_quote(request.GET.get("lat"), request.GET.get("lng"))
         return JsonResponse({
@@ -1114,6 +1163,7 @@ def customer_messages(request, customer, conversation_id=None):
                     f"Order support · {order.public_reference}" if order else "Customer support"
                 )
                 conversation = Conversation.objects.create(
+                    branch=order.branch if order else services.market_branch(),
                     customer=customer, public_name=customer.full_name,
                     public_phone=customer.phone, order=order, subject=subject,
                 )
@@ -1860,9 +1910,9 @@ def market_settings(request, branch):
         "selected_zone": selected,
         "zones": DeliveryZone.objects.all(),
         "google_maps_ready": bool(settings.GOOGLE_MAPS_SERVER_KEY),
-        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
-        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
         "market_url": request.build_absolute_uri("/market/"),
         "company": company,
     })
@@ -1940,9 +1990,9 @@ def staff_order(request, branch, pk):
         "delivery_updates": order.delivery_updates.all(),
         "latest_delivery_location": order.delivery_updates.exclude(latitude__isnull=True).exclude(longitude__isnull=True).last(),
         "return_requests": order.return_requests.all(),
-        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
-        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
     })
 
 
@@ -1950,7 +2000,9 @@ def staff_order(request, branch, pk):
 def staff_inbox(request, branch, conversation_id=None):
     _auto_close_stale_support()
     status = request.GET.get("status", "open")
-    base = Conversation.objects.filter(Q(order__isnull=True) | Q(order__branch=branch)).select_related(
+    scope = Q(branch=branch) | Q(branch__isnull=True, order__branch=branch)
+    scoped = Conversation.objects.filter(scope)
+    base = scoped.select_related(
         "customer", "order", "assigned_to"
     ).prefetch_related("messages__attachments")
     if status == "waiting":
@@ -1969,7 +2021,7 @@ def staff_inbox(request, branch, conversation_id=None):
     support_form = ConversationMessageForm(request.POST or None, request.FILES or None)
     if conversation_id:
         conversation = get_object_or_404(
-            Conversation.objects.filter(Q(order__isnull=True) | Q(order__branch=branch)).select_related(
+            scoped.select_related(
                 "customer", "order", "assigned_to"
             ).prefetch_related("messages__attachments"),
             pk=conversation_id,
@@ -2056,6 +2108,14 @@ def staff_inbox(request, branch, conversation_id=None):
                 messages.error(request, "Accept this chat before replying.")
                 return redirect("staff_market_thread", conversation_id=conversation.pk)
 
+            if not conversation.customer_id:
+                messages.error(
+                    request,
+                    "This contact is not signed in to a verified KOFAD customer account. "
+                    "Do not disclose account, order or payment information here; ask them to sign in or use the supplied phone number.",
+                )
+                return redirect("staff_market_thread", conversation_id=conversation.pk)
+
             if support_form.is_valid():
                 try:
                     _save_conversation_message(
@@ -2083,12 +2143,12 @@ def staff_inbox(request, branch, conversation_id=None):
         "support_form": support_form,
         "selected_status": status,
         "unread": ConversationMessage.objects.filter(
-            read_by_staff=False
+            conversation__in=scoped, read_by_staff=False
         ).exclude(sender_type="staff").count(),
-        "open_count": Conversation.objects.filter(status="open").count(),
-        "waiting_count": Conversation.objects.filter(status="open", assigned_to__isnull=True).count(),
-        "mine_count": Conversation.objects.filter(status="open", assigned_to=request.user).count(),
-        "closed_count": Conversation.objects.filter(status="closed").count(),
+        "open_count": scoped.filter(status="open").count(),
+        "waiting_count": scoped.filter(status="open", assigned_to__isnull=True).count(),
+        "mine_count": scoped.filter(status="open", assigned_to=request.user).count(),
+        "closed_count": scoped.filter(status="closed").count(),
     })
 
 

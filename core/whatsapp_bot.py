@@ -118,8 +118,10 @@ def receive(event):
         body, status = "", "rate_limited"
     elif command == "human" or contact.handoff:
         from marketplace.models import Conversation, ConversationMessage
+        from core.models import Branch
         if not contact.conversation_id or contact.conversation.status != "open":
             contact.conversation = Conversation.objects.create(
+                branch=Branch.objects.filter(active=True).order_by("pk").first(),
                 public_name="WhatsApp customer", public_phone="+" + event.wa_id,
                 subject="WhatsApp support · verify identity before sharing account information",
             )
@@ -129,7 +131,11 @@ def receive(event):
             read_by_customer=True,
         )
         Conversation.objects.filter(pk=contact.conversation_id).update(updated_at=now)
-        body = "Your message is in the KOFAD support inbox. A team member will reply when available. Send START to return to the menu."
+        body = (
+            "Your message is in the KOFAD support inbox. For account, order or payment details, "
+            "sign in at " + MARKET + "/market/messages/ so KOFAD can verify your identity. "
+            "Send START to return to the menu."
+        )
         if contact.handoff:
             body, status = "", "handoff"
         contact.handoff = True
@@ -223,3 +229,15 @@ def reconcile_reply(provider_id, status):
     if reply:
         reply.status = _transition(reply.status, status)
         reply.save(update_fields=["status", "updated_at"])
+
+
+
+def purge_old_replies():
+    """Retain opt-out contacts while expiring old assistant message bodies."""
+    cutoff = timezone.now() - timedelta(days=max(int(settings.WHATSAPP_BOT_REPLY_RETENTION_DAYS), 1))
+    deletable = WhatsAppBotReply.objects.filter(
+        created_at__lt=cutoff,
+        status__in=["sent", "delivered", "read", "failed", "expired", "suppressed", "rate_limited", "handoff"],
+    )
+    deleted, _ = deletable.delete()
+    return deleted

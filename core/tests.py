@@ -11,7 +11,7 @@ from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.management import call_command
 from django.db import close_old_connections, connection, connections, transaction, DatabaseError
-from django.test import Client, TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from . import accounting_engine
@@ -345,6 +345,56 @@ class BusinessTests(Fixtures, TestCase):
             self.client.post("/login/",{"username":"owner","password":"wrong"})
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
         self.assertContains(response,"Too many attempts")
+
+    def test_account_targeted_lockout_does_not_block_correct_password_from_fresh_browser(self):
+        attacker = Client()
+        for _ in range(5):
+            attacker.post("/login/", {"username": "owner", "password": "wrong"})
+        fresh = Client()
+        response = fresh.post("/login/", {
+            "username": "owner",
+            "password": "test-password-long-enough",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/workspace/")
+
+    @override_settings(PRIVILEGED_MFA_ENFORCED=True)
+    @patch("core.views.matching_step", return_value=123456)
+    def test_privileged_login_requires_and_enrols_mfa(self, matching):
+        response = self.client.post("/login/", {
+            "username": "owner",
+            "password": "test-password-long-enough",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/mfa/")
+        self.assertEqual(self.client.get("/workspace/").url, "/mfa/")
+        setup = self.client.get("/mfa/")
+        self.assertEqual(setup.status_code, 200)
+        self.assertContains(setup, "Set up two-step verification")
+
+        verified = self.client.post("/mfa/", {"code": "123456"})
+        self.assertEqual(verified.status_code, 302)
+        self.assertEqual(verified.url, "/workspace/")
+        self.user.access.refresh_from_db()
+        self.assertTrue(self.user.access.totp_secret)
+        self.assertEqual(self.user.access.totp_last_step, 123456)
+        self.assertIn("mfa_verified_at", self.client.session)
+        self.assertEqual(self.client.get("/workspace/").status_code, 200)
+        matching.assert_called()
+
+    @override_settings(PRIVILEGED_MFA_ENFORCED=True)
+    @patch("core.views.matching_step", return_value=123456)
+    def test_mfa_code_step_cannot_be_replayed(self, _matching):
+        self.client.post("/login/", {
+            "username": "owner",
+            "password": "test-password-long-enough",
+        })
+        self.assertEqual(self.client.post("/mfa/", {"code": "123456"}).status_code, 302)
+        session = self.client.session
+        session.pop("mfa_verified_at", None)
+        session.save()
+        replay = self.client.post("/mfa/", {"code": "123456"})
+        self.assertContains(replay, "not valid")
 
     def test_staff_workspace_exposes_session_zone_and_state(self):
         self.authenticate_client()

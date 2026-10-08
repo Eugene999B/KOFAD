@@ -21,6 +21,8 @@ out = Path("test-results/documents")
 out.mkdir(parents=True, exist_ok=True)
 admin = User.objects.get(username__iexact="admin")
 branch = Branch.objects.get(code="main")
+admin.access.force_password_change = False
+admin.access.save(update_fields=["force_password_change"])
 admin.access.branches.add(branch)
 worker, _ = Worker.objects.get_or_create(employee_code="KFD-EVIDENCE-001", defaults={
     "branch": branch, "first_name": "Akosua", "last_name": "Mensah-Boateng", "other_names": "Abena",

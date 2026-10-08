@@ -111,6 +111,7 @@ browser_customer_session["market_cart"] = {str(browser_listing.pk): 1}
 browser_customer_session.create()
 
 browser_support = Conversation.objects.create(
+    branch=main_branch,
     customer=browser_market_customer,
     public_name=browser_market_customer.full_name,
     public_phone=browser_market_customer.phone,
@@ -485,10 +486,15 @@ with sync_playwright() as p:
     restore_button = admin_page.get_by_role("button", name="Restore full system", exact=True)
     assert reset_button.is_disabled()
     assert restore_button.is_disabled()
+    admin_page.locator("#backup-current-password").fill("admin")
+    admin_page.locator("#backup-passphrase").fill("CI-backup-passphrase-very-strong-42!")
+    admin_page.locator("#backup-passphrase-confirm").fill("CI-backup-passphrase-very-strong-42!")
     with admin_page.expect_download(timeout=30000) as backup_download:
-        admin_page.locator("[data-backup-download]").click()
+        admin_page.locator("[data-backup-download]").get_by_role(
+            "button", name="Download encrypted KOFAD backup", exact=False
+        ).click()
     download = backup_download.value
-    assert download.suggested_filename.endswith(".kofad.json")
+    assert download.suggested_filename.endswith(".kofad.enc")
     admin_page.wait_for_function(
         "() => !document.querySelector('[data-requires-recent-backup]').disabled",
         timeout=30000,

@@ -41,7 +41,7 @@ The application does not automate backup scheduling, off-platform storage, manif
 
 ## Account recovery
 
-See [account recovery](ACCOUNT_RECOVERY.md). Authenticator enrollment is no longer required.
+See [account recovery](ACCOUNT_RECOVERY.md). Privileged staff accounts require authenticator MFA when `PRIVILEGED_MFA_ENFORCED=1`; verified password recovery resets MFA so the owner can enrol a new authenticator.
 
 ## Monitoring and rollback
 
@@ -51,18 +51,15 @@ If a release fails, revert to the last verified application commit only when its
 
 ## Requested initial administrator
 
-The web service's deployment command is python manage.py initialize_deployment. It serializes migrations with a PostgreSQL advisory lock, applies committed migrations, and performs one-time setup only when KOFAD_INITIAL_ADMIN_PASSWORD is explicitly configured. Existing ADMIN credentials are never reset by a release.
+The web service's deployment command is `python manage.py initialize_deployment`. It serializes migrations with a PostgreSQL advisory lock, applies committed migrations, and performs one-time setup only when a private bootstrap credential is explicitly configured.
 
-For the first KOFAD deployment, set KOFAD_INITIAL_ADMIN_PASSWORD privately to the requested initial value admin. The deployment initializer invokes:
+For a new installation, generate a unique random temporary administrator credential outside the repository and provide it only through the deployment environment. The bootstrap creates `ADMIN` with full administrative access and **forces an immediate password change**. Remove the bootstrap variable after creation. Never commit, document or reuse an administrator password.
 
-python manage.py bootstrap_admin --confirm-initial-setup
+If an old bootstrap credential has ever appeared in source control or documentation, treat it as permanently compromised even after the text is removed. KOFAD supports a one-time deployment variable, `KOFAD_ADMIN_ROTATION_PASSWORD`, for an emergency ADMIN rotation; the deployment clears existing ADMIN MFA enrollment, revokes the credential through Django's normal password-change security path, and forces the temporary credential to be replaced at first sign-in. Remove that rotation variable immediately after the successful deployment.
 
-This creates username ADMIN with full administrative access. The account opens the workspace directly. Users can change passwords under My account. The command refuses to reset or elevate an existing ADMIN account. Remove the temporary deployment variable immediately after setup.
-
-The initial administrator signs in directly with the configured username and password. Password changes are available under My account. Usernames are case-insensitive. GitHub Actions proves this workflow in an isolated database; those CI accounts are destroyed with the test environment.
+GitHub Actions proves bootstrap behavior only against isolated CI databases; CI credentials are not production credentials.
 
 For Arkesel web/worker configuration, see SMS.md.
-
 
 ## Live KOFAD environment
 
@@ -72,15 +69,15 @@ Project: KOFAD (816fb38a-1d03-4508-ba65-07a8b9de12f1). Environment: production.
 - Worker: kofad-sms, same image source, start command python manage.py process_sms --loop, no public domain or HTTP healthcheck.
 - Database: Postgres, PostgreSQL 16, persistent 5 GB volume mounted at /var/lib/postgresql/data, private networking only.
 - Both application services run python manage.py initialize_deployment before release.
-- Both application services deploy from railway-release. GitHub's promotion workflow advances that branch only after Verify KOFAD succeeds for the current main commit. It does not execute artifacts or code from pull requests.
-- The Railway Wait for CI toggle could not be enabled through the connector; the release branch provides the verified-release gate instead.
-- The database Backups dashboard was checked on 2026-10-02. It reports backup creation and PITR require Pro; the workspace remains on Hobby at the owner's request. Although a next-backup timestamp appeared after an attempted schedule setting, no backup exists and backup protection is not verified. Do not rely on that timestamp. Independent encrypted off-platform backups and restore rehearsal remain outstanding.
+- Application services must be pinned to a specific verified release commit in Railway production. The `railway-release` branch remains a human-readable promotion pointer, but a direct branch push must not automatically change the running production commit.
+- GitHub's promotion workflow advances `railway-release` only after Verify KOFAD succeeds for the current main commit. GitHub Actions are pinned to immutable commit SHAs.
+- The database Backups dashboard was checked on 2026-10-02. It reports backup creation and PITR require Pro; the workspace remains on Hobby at the owner's request. Do not rely on Railway backup protection on Hobby. KOFAD's application backup download is encrypted with AES-256-GCM using a passphrase supplied by the administrator; store the encrypted file and its passphrase separately and rehearse restore. An automated off-platform schedule is still recommended.
 
 The web service stores DJANGO_SECRET_KEY privately. DATABASE_URL references Postgres.DATABASE_URL. The worker references web-service SMS variables so credentials have one configured source. SMS_ENABLED=0 and SMS_SANDBOX=1 until Arkesel credentials and the sender are verified.
 
 KOFAD_INITIAL_ADMIN_PASSWORD was removed after the first live account was created. No demo users, demo products, or demo transactions are seeded on Railway.
 
-Public login: https://kofad-web-production.up.railway.app/login/ . The initial admin/admin account opens the workspace directly. Change password and the recovery phone are available under My account.
+Staff access uses the official `staff.kofadimpex.com` origin. Do not publish or rely on Railway-generated service URLs as a second user-facing login path.
 
 
 ## Official domains
@@ -96,4 +93,4 @@ Canonical routing keeps the customer and staff pages on separate origins. Wrong-
 
 This separates browser origins, not application infrastructure: the app and database remain shared, and role/branch checks still govern every staff operation. Saved signed SMS/WhatsApp/Paystack webhook URLs remain valid; provider authentication still applies.
 
-Include healthcheck.railway.app in DJANGO_ALLOWED_HOSTS. Leave CSRF_TRUSTED_ORIGINS empty for this same-origin form deployment. Preserve the Railway hostname for old links and callbacks. SMS_PUBLIC_ORIGIN and WHATSAPP_PUBLIC_ORIGIN remain https://kofadimpex.com; customer/staff links route to the proper origin.
+Include healthcheck.railway.app in DJANGO_ALLOWED_HOSTS. Leave CSRF_TRUSTED_ORIGINS empty for this same-origin form deployment. Provider callbacks and customer/staff links must use the official KOFAD domains. SMS_PUBLIC_ORIGIN and WHATSAPP_PUBLIC_ORIGIN remain https://kofadimpex.com.

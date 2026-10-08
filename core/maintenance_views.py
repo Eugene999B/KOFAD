@@ -8,7 +8,8 @@ from django.http import HttpResponse, JsonResponse
 from django.db import OperationalError
 from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.http import require_GET, require_POST
 
 from . import maintenance
 
@@ -29,9 +30,11 @@ def _uploaded_backup(request):
     uploaded = request.FILES.get("backup_file")
     if not uploaded:
         raise maintenance.BackupError("Choose a KOFAD backup file.")
-    if uploaded.size > maintenance.MAX_BACKUP_BYTES:
-        raise maintenance.BackupError("Backup file is larger than the supported 100 MB limit.")
-    return maintenance.parse_backup(uploaded.read())
+    if uploaded.size > maintenance.MAX_ENCRYPTED_BACKUP_BYTES:
+        raise maintenance.BackupError("Backup file is larger than the supported limit.")
+    return maintenance.parse_uploaded_backup(
+        uploaded.read(), request.POST.get("backup_passphrase", "")
+    )
 
 
 def _password_ok(request):
@@ -40,6 +43,7 @@ def _password_ok(request):
 
 
 @system_administrator
+@sensitive_post_parameters("password", "backup_passphrase", "backup_passphrase_confirm")
 def backup_restore(request):
     validation = None
     if request.method == "POST":
@@ -109,18 +113,29 @@ def backup_restore(request):
 
 
 @system_administrator
-@require_GET
+@require_POST
+@sensitive_post_parameters("password", "backup_passphrase", "backup_passphrase_confirm")
 def download_backup(request):
+    if not _password_ok(request):
+        messages.error(request, "Your administrator password is incorrect.")
+        return redirect("backup_restore")
+    passphrase = request.POST.get("backup_passphrase", "")
+    if passphrase != request.POST.get("backup_passphrase_confirm", ""):
+        messages.error(request, "The two backup passphrases do not match.")
+        return redirect("backup_restore")
     try:
-        raw = maintenance.backup_bytes(request.user)
+        raw = maintenance.encrypted_backup_bytes(request.user, passphrase)
+    except maintenance.BackupError as exc:
+        messages.error(request, str(exc))
+        return redirect("backup_restore")
     except OperationalError:
         logger.exception("Could not obtain a consistent backup snapshot.")
         messages.error(request, "The database is busy. No partial backup was downloaded. Please try again shortly.")
         return redirect("backup_restore")
     maintenance.mark_backup_downloaded(request.session)
     stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
-    response = HttpResponse(raw, content_type="application/json")
-    response["Content-Disposition"] = f'attachment; filename="KOFAD-full-backup-{stamp}.kofad.json"'
+    response = HttpResponse(raw, content_type="application/octet-stream")
+    response["Content-Disposition"] = f'attachment; filename="KOFAD-full-backup-{stamp}.kofad.enc"'
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = "no-store"
     return response
