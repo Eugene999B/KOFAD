@@ -163,6 +163,7 @@ def _response_state(held):
         document = Document.objects.select_related("party").filter(pk=document_id).first()
     result = {
         "reference": state.get("reference", ""),
+        "provider": "paystack",
         "status": state.get("status", "pending"),
         "provider_status": state.get("provider_status", ""),
         "message": state.get("message", ""),
@@ -207,8 +208,6 @@ def result_for_document(doc):
 
 
 def start(user, branch, sale_payload, request_key, phone, provider, email):
-    if not ready():
-        raise ValidationError("Paystack direct MoMo is awaiting activation.")
     if not isinstance(sale_payload, dict) or sale_payload.get("kind", "sale") != "sale":
         raise ValidationError("Invalid sale request.")
     provider = str(provider or "").strip().lower()
@@ -229,6 +228,10 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
             raise ValidationError("Use the original sale details for this payment request.")
         return _response_state(existing)
 
+    # Switching or temporarily disabling a gateway must not hide an existing
+    # charged reference. New requests still require the POS gateway to be ready.
+    if not ready():
+        raise ValidationError("Paystack direct MoMo is awaiting activation.")
     payload = copy.deepcopy(sale_payload)
     if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
         raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
@@ -574,7 +577,9 @@ def status_for_staff(user, branch, reference):
 
 
 def reconcile_due(limit=20):
-    if not ready():
+    # Reconcile previously initiated payments even when new Paystack POS charges
+    # have been disabled in Settings.
+    if not configured():
         return 0
     now_ts = timezone.now().timestamp()
     rows = HeldSale.objects.filter(
