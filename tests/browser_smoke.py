@@ -143,7 +143,7 @@ with sync_playwright() as p:
     assert float(page.locator(".premium-login-form input").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
     assert page.get_by_text("Private setup key", exact=True).count() == 0
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
-    assert any(href.endswith("/static/brand/kofad-official-logo.svg") for href in icon_hrefs)
+    assert any("favicon-96" in href and ".png" in href for href in icon_hrefs)
     assert page.locator('img[src$="/static/brand/kofad-official-logo.svg"]').count() >= 1
     assert page.locator(".brand-official-logo img").count() >= 1
     assert page.locator(".brand-wordmark").count() == 0
