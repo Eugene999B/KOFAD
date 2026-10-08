@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="{% static 'ui-v4.css' %}">
 <link rel="stylesheet" href="{% static 'brand-system.css' %}">
 <link rel="stylesheet" href="{% static 'brand-transparent.css' %}">
+<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">
 <script defer src="{% static 'app.js' %}"></script>
 </head>
 <body class="login-page">
@@ -21,7 +22,7 @@
 
 <header class="login-header premium-login-header">
 <a class="brand" href="/" aria-label="KOFAD IMPEX ENTERPRISE home">{% include "brand.html" %}</a>
-<div class="login-header-actions"><button type="button" class="theme-toggle mode-toggle login-theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><span data-theme-icon aria-hidden="true">☾</span><span data-theme-label>Dark mode</span></button><div class="login-header-meta"><span class="login-online-dot"></span><span>Secure operations gateway</span></div></div>
+<div class="login-header-actions"><button type="button" class="theme-toggle mode-toggle login-theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><span data-theme-icon aria-hidden="true">☾</span><span data-theme-label>Dark mode</span></button><div class="login-header-meta"><span class="login-online-dot"></span><span>Private workspace · verified access</span></div></div>
 </header>
 
 <div class="login-layout premium-login-layout">
@@ -59,8 +60,8 @@
 {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
 <form method="post" class="premium-login-form">{% csrf_token %}
-<label for="username">Username or phone number</label>
-<div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username or Ghana phone number"></div>
+<label for="username">Username, mobile number or verified email</label>
+<div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username, phone or verified email"></div>
 
 <label for="password">Password</label>
 <div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="current-password" data-login-password required placeholder="Enter your password"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
