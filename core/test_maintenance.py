@@ -113,6 +113,24 @@ class MaintenanceServiceTests(TransactionTestCase):
         with self.assertRaisesMessage(maintenance.BackupError, "malformed records"):
             maintenance.validate_backup(bundle)
 
+    def test_encrypted_backup_requires_the_correct_passphrase(self):
+        raw = maintenance.encrypted_backup_bytes(
+            self.user, "correct-horse-battery-staple-1234"
+        )
+        restored = maintenance.parse_uploaded_backup(
+            raw, "correct-horse-battery-staple-1234"
+        )
+        self.assertEqual(restored["format"], maintenance.BACKUP_FORMAT)
+        with self.assertRaisesRegex(maintenance.BackupError, "incorrect|altered"):
+            maintenance.parse_uploaded_backup(raw, "wrong-but-long-passphrase-1234")
+
+        changed = bytearray(raw)
+        changed[-1] ^= 1
+        with self.assertRaisesRegex(maintenance.BackupError, "incorrect|altered"):
+            maintenance.parse_uploaded_backup(
+                bytes(changed), "correct-horse-battery-staple-1234"
+            )
+
     def test_signed_backup_rejects_tampering(self):
         bundle = maintenance.create_backup(self.user)
         maintenance.validate_backup(bundle)
@@ -277,11 +295,18 @@ class MaintenanceViewTests(TestCase):
         self.assertFalse(before.json()["recent"])
         self.assertEqual(before["Cache-Control"], "no-store")
 
-        response = self.client.get("/settings/backup/download/")
+        response = self.client.post("/settings/backup/download/", {
+            "password": "test-password-long-enough",
+            "backup_passphrase": "test-backup-passphrase-1234",
+            "backup_passphrase_confirm": "test-backup-passphrase-1234",
+        })
         self.assertEqual(response.status_code, 200)
         self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertIn(".kofad.enc", response["Content-Disposition"])
         self.assertEqual(response["Cache-Control"], "no-store")
-        parsed = maintenance.parse_backup(response.content)
+        parsed = maintenance.parse_uploaded_backup(
+            response.content, "test-backup-passphrase-1234"
+        )
         self.assertEqual(parsed["format"], maintenance.BACKUP_FORMAT)
         self.assertTrue(maintenance.recent_backup_downloaded(self.client.session))
 
@@ -330,7 +355,11 @@ class MaintenanceDestructiveViewTests(TransactionTestCase):
 
     def test_reset_view_completes_after_safety_backup(self):
         self._login()
-        backup = self.client.get("/settings/backup/download/")
+        backup = self.client.post("/settings/backup/download/", {
+            "password": "test-password-long-enough",
+            "backup_passphrase": "safety-backup-passphrase-1234",
+            "backup_passphrase_confirm": "safety-backup-passphrase-1234",
+        })
         self.assertEqual(backup.status_code, 200)
 
         response = self.client.post("/settings/backup/", {
@@ -359,7 +388,11 @@ class MaintenanceDestructiveViewTests(TransactionTestCase):
             cost="1",
         )
 
-        safety = self.client.get("/settings/backup/download/")
+        safety = self.client.post("/settings/backup/download/", {
+            "password": "test-password-long-enough",
+            "backup_passphrase": "safety-backup-passphrase-1234",
+            "backup_passphrase_confirm": "safety-backup-passphrase-1234",
+        })
         self.assertEqual(safety.status_code, 200)
         upload = SimpleUploadedFile(
             "original.kofad.json",
