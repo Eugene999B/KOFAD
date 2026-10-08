@@ -1192,8 +1192,16 @@
 
   function syncMomoChallenge(result) {
     const panel = document.querySelector("#paystack-momo-challenge");
-    panel?.classList.toggle("hidden", !result?.needs_otp);
-    panel?.querySelectorAll("input,button").forEach(control => {control.disabled = !result?.needs_otp;});
+    if (!panel) return;
+    const needsCode = Boolean(momoReference && result?.needs_otp);
+    const newlyRequested = needsCode && panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !needsCode);
+    panel.querySelectorAll("input,button").forEach(control => { control.disabled = !needsCode; });
+    if (newlyRequested) {
+      setMomoStatus("Ask the customer for the one-time Paystack verification code sent for this payment. Never ask for their MoMo PIN.");
+      panel.querySelector("input")?.focus({preventScroll: true});
+      panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }
   }
 
   document.querySelector("#paystack-momo-otp-submit")?.addEventListener("click", async () => {
@@ -1219,9 +1227,15 @@
 
   function lockCheckoutForMomo(locked) {
     root.querySelectorAll("input,select,textarea,button").forEach(control => {
+      // Keep a provider-requested one-time code available while the sale is locked.
+      // No other cart or payment details can be changed until verification finishes.
+      if (control.closest("#paystack-momo-challenge")) return;
       control.disabled = locked;
     });
-    if (!locked) applyPaymentPlan();
+    if (!locked) {
+      syncMomoChallenge(null);
+      applyPaymentPlan();
+    }
   }
 
   async function fetchMomoStatus() {
@@ -1306,6 +1320,7 @@
       momoReference = result.reference || momoReference;
       if (!momoReference) throw new Error("Paystack did not return a payment reference.");
       setMomoStatus(result.message || result.display_text || "Approve the payment on the customer's phone.");
+      syncMomoChallenge(result);
       persist();
       if (result.paid && result.sale) {
         completed = true;
