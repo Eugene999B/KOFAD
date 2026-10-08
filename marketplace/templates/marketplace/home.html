@@ -1,23 +1,43 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block content %}
-<section class="home-hero-v9">
-<div class="home-hero-v9-content">
-<div class="home-hero-v9-kicker"><span></span> KOFAD IMPEX ENTERPRISE · RETAIL + WHOLESALE</div>
-<h1>Everyday essentials.<br><em>Business quantities.</em></h1>
-<p>Shop single items or buy in quantity from KOFAD IMPEX ENTERPRISE. Browse current products and pack sizes, place your order, and arrange delivery or collection with our team.</p>
-<div class="home-hero-v9-actions">
-<a class="home-hero-v9-primary" href="/market/">Shop the Market <span>→</span></a>
-{% if market_customer %}<a class="home-hero-v9-secondary" href="/market/account/">My account</a>{% else %}<a class="home-hero-v9-secondary" href="/market/access/">Sign in / Create account</a>{% endif %}
+{% extends "marketplace/base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'marketplace/home-refresh.js' %}"></script>{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/home-refresh.css' %}">{% endblock %}
+{% block content %}
+<div class="kfd-home">
+<section class="kfd-hero" data-kfd-rotator aria-labelledby="kfd-hero-title">
+<img class="kfd-hero-image" data-hero-image src="https://images.pexels.com/photos/4483608/pexels-photo-4483608.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1600&amp;h=900&amp;fit=crop" width="1600" height="900" alt="Illustrative photograph of a warehouse with organized stock" fetchpriority="high" decoding="async">
+<div class="kfd-hero-inner"><div class="kfd-hero-copy">
+<p class="kfd-eyebrow">KOFAD IMPEX ENTERPRISE · GLOBAL TRADE SOLUTIONS</p>
+<h1>Everything for today.<br><span>More for your business.</span></h1>
+<p>Essentials for everyday shopping. Practical supplies for businesses buying in bulk. Explore products, compare pack sizes and arrange delivery or collection.</p>
+<div class="kfd-hero-cta">
+<a class="kfd-cta primary" href="/market/">Shop all products <span aria-hidden="true">→</span></a>
+<a class="kfd-cta secondary" href="/contact/?topic=wholesale">Wholesale enquiries <span aria-hidden="true">↗</span></a>
 </div>
-<div class="home-hero-v9-capabilities" aria-label="KOFAD Market capabilities">
-<div><b>01</b><span><strong>Retail shopping</strong><small>Buy what you need, when you need it.</small></span></div>
-<div><b>02</b><span><strong>Wholesale quantities</strong><small>Built for larger and repeat orders.</small></span></div>
-<div><b>03</b><span><strong>Delivery or pickup</strong><small>Choose the fulfilment that works for you.</small></span></div>
-</div>
-</div>
-<div class="home-hero-v9-mark official-home-logo" aria-hidden="true"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt=""></div>
+</div></div>
+<div class="kfd-hero-meta"><span class="kfd-caption" data-photo-caption>Real retail and logistics photography · Pexels</span><div class="kfd-hero-controls" aria-label="Photo slideshow controls">
+<button type="button" data-slide-prev aria-label="Previous photograph">‹</button><span class="kfd-hero-count" data-hero-count aria-live="off">01 / 25</span>
+<button type="button" data-slide-next aria-label="Next photograph">›</button>
+<button type="button" data-slide-pause aria-label="Pause photo slideshow">Ⅱ</button>
+</div></div>
+<div class="kfd-hero-progress" aria-hidden="true"><i data-hero-progress></i></div>
 </section>
-
-<section class="company-home-intro"><p class="company-kicker">KOFAD IMPEX ENTERPRISE</p><h2>From your next purchase to your next restock.</h2><div class="company-home-grid"><article><h3>Buy with the details in view.</h3><p>See the product, selling unit and price before adding it to your order. For larger quantities or special sourcing, speak with our team.</p><a href="/about/">Get to know KOFAD →</a></article><article><h3>Know the next step.</h3><p>Choose an available fulfilment option, review the delivery charge and follow your order through to handover.</p><a href="/delivery/">Delivery &amp; collection →</a></article><article><h3>Talk to a real team.</h3><p>Questions before buying or a problem afterwards? Send an enquiry, share feedback or ask us to review your order.</p><a href="/contact/">Contact customer care →</a></article></div></section>
+<section class="kfd-service-bar" aria-label="What you can do with KOFAD">
+<article><span class="kfd-service-icon" aria-hidden="true">◈</span><div><strong>Retail essentials</strong><p>Shop individual products and practical supplies.</p></div></article>
+<article><span class="kfd-service-icon" aria-hidden="true">▣</span><div><strong>Bulk and wholesale</strong><p>Get the quantities your business needs.</p></div></article>
+<article><span class="kfd-service-icon" aria-hidden="true">↗</span><div><strong>Delivery or collection</strong><p>Choose an available fulfilment option at checkout.</p></div></article>
+</section>
+<section class="kfd-section" aria-labelledby="kfd-categories-title">
+<div class="kfd-section-top"><div><p class="kfd-eyebrow">DISCOVER THE MARKET</p><h2 id="kfd-categories-title">Find what you need, faster.</h2><p class="kfd-section-lead">Browse everyday categories or speak to our team about repeat and higher-volume purchases.</p></div><a class="kfd-section-link" href="/market/">Browse the Market →</a></div>
+<div class="kfd-category-grid">
+<a class="kfd-category" href="/market/?q=food"><img loading="lazy" src="https://images.pexels.com/photos/19138180/pexels-photo-19138180.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Fresh groceries on store shelves"><span class="kfd-category-body"><span><strong>Food &amp; beverages</strong><small>Everyday groceries</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/market/?q=cleaning"><img loading="lazy" src="https://images.pexels.com/photos/5951182/pexels-photo-5951182.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Organized household product shelves"><span class="kfd-category-body"><span><strong>Home &amp; cleaning</strong><small>Practical supplies</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/market/?q=personal"><img loading="lazy" src="https://images.pexels.com/photos/1366594/pexels-photo-1366594.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Products displayed on retail shelves"><span class="kfd-category-body"><span><strong>Personal &amp; daily care</strong><small>Everyday needs</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+<a class="kfd-category" href="/contact/?topic=wholesale"><img loading="lazy" src="https://images.pexels.com/photos/4481326/pexels-photo-4481326.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=640" alt="Wholesale products on warehouse shelves"><span class="kfd-category-body"><span><strong>Wholesale supply</strong><small>Business restocking</small></span><span class="arrow" aria-hidden="true">→</span></span></a>
+</div></section>
+<section class="kfd-proof" aria-label="Shop and get support">
+<article><div><p class="kfd-eyebrow">SIMPLE ORDERING</p><h3>Choose the pack size that works.</h3><p>Find current products and review the available selling units before you place an order.</p><a href="/market/">Explore products →</a></div><span class="kfd-proof-icon" aria-hidden="true">▧</span></article>
+<article><div><p class="kfd-eyebrow">HERE TO HELP</p><h3>Questions? Talk to our team.</h3><p>Ask about a product, wholesale quantities, delivery options or an order already placed.</p><a href="/contact/">Contact KOFAD →</a></div><span class="kfd-proof-icon" aria-hidden="true">☏</span></article>
+</section>
 {% if listings %}<section class="home-featured-v7 home-featured-v9">
 <header class="home-featured-head"><div><span>CURATED FROM THE MARKET</span><h2>Featured picks</h2><p>A quick look at products currently available in KOFAD.</p></div><a href="/market/" aria-label="Shop all products">Shop all <b>→</b></a></header>
 <div class="market-grid commerce-product-grid home-featured-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
@@ -35,4 +55,6 @@
 {% if company.address %}<div class="contact-method-card contact-method-static"><span>LOCATION</span><strong>{{ company.address }}</strong><small>Business address</small></div>{% endif %}
 </div>
 </section>
+<p class="kfd-photo-credit">Rotating imagery is illustrative, from <a href="https://www.pexels.com/" rel="noopener noreferrer" target="_blank">Pexels</a>; photographs do not depict KOFAD premises unless stated.</p>
+</div>
 {% endblock %}
