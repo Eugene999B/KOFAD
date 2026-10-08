@@ -160,3 +160,17 @@ body.is-kofad-home .home-featured-v7{padding-top:10px!important}
  body.is-kofad-home .kfd-proof{padding:0 15px;margin:13px auto 25px!important}
  body.is-kofad-home .kfd-proof article{min-height:115px!important;padding:18px!important}
 }
+
+
+body.is-kofad-home .kfd-category .kfd-photo-tag{
+ position:absolute;top:12px;left:12px;z-index:1;
+ padding:6px 9px;border-radius:7px;background:rgba(10,40,59,.88);
+ border:1px solid rgba(255,255,255,.24);
+ backdrop-filter:blur(6px);color:#fff;font-size:9px;line-height:1.15;
+ font-weight:800;letter-spacing:.07em
+}
+body.is-kofad-home .kfd-category:nth-child(2) .kfd-photo-tag{background:rgba(10,75,77,.91)}
+body.is-kofad-home .kfd-category:nth-child(3) .kfd-photo-tag{background:rgba(87,61,112,.92)}
+body.is-kofad-home .kfd-category:nth-child(4) .kfd-photo-tag{background:rgba(105,78,37,.92)}
+body.is-kofad-home .kfd-category .kfd-category-body{min-height:62px}
+body.is-kofad-home .kfd-category:hover .kfd-category-body{background:#f4f7f7}
