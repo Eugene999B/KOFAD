@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views, public_views, seo
+from core import google_oauth as google
 
 urlpatterns = [
     path("robots.txt", seo.robots, name="robots_txt"),
@@ -26,6 +27,9 @@ urlpatterns = [
     path("market/products/<int:pk>/image/<str:size>/", views.product_image, name="market_product_image"),
     path("market/gallery/<int:pk>/image/<str:size>/", views.gallery_image, name="market_gallery_image"),
     path("market/access/", views.customer_access, name="market_access"),
+    path("market/auth/google/login/", google.start, {"kind": "customer", "mode": "login"}, name="google_customer_login"),
+    path("market/auth/google/link/", google.start, {"kind": "customer", "mode": "link"}, name="google_customer_link"),
+    path("market/auth/google/callback/", google.callback, {"kind": "customer"}, name="google_customer_callback"),
     path("market/account/", views.customer_account, name="market_account"),
     path("market/account/register/", views.account_start, name="market_register"),
     path("market/account/verify/", views.account_verify, name="market_verify"),
