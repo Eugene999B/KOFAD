@@ -109,6 +109,9 @@ def _conversation_access(request, conversation):
         or request.user.has_perm("core.operate_sales")
         or request.user.has_perm("core.manage_company")
     ):
+        if conversation.order_id and not request.user.is_superuser:
+            if not request.user.access.branches.filter(pk=conversation.order.branch_id, active=True).exists():
+                return ""
         return "staff"
     customer = services.customer_from_session(request)
     if customer and conversation.customer_id == customer.pk:
@@ -1947,7 +1950,7 @@ def staff_order(request, branch, pk):
 def staff_inbox(request, branch, conversation_id=None):
     _auto_close_stale_support()
     status = request.GET.get("status", "open")
-    base = Conversation.objects.select_related(
+    base = Conversation.objects.filter(Q(order__isnull=True) | Q(order__branch=branch)).select_related(
         "customer", "order", "assigned_to"
     ).prefetch_related("messages__attachments")
     if status == "waiting":
@@ -1966,7 +1969,7 @@ def staff_inbox(request, branch, conversation_id=None):
     support_form = ConversationMessageForm(request.POST or None, request.FILES or None)
     if conversation_id:
         conversation = get_object_or_404(
-            Conversation.objects.select_related(
+            Conversation.objects.filter(Q(order__isnull=True) | Q(order__branch=branch)).select_related(
                 "customer", "order", "assigned_to"
             ).prefetch_related("messages__attachments"),
             pk=conversation_id,

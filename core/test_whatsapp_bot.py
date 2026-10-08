@@ -119,3 +119,10 @@ class WhatsAppBotTests(TestCase):
             }]},
         }]}]})
         self.assertEqual(WhatsAppBotReply.objects.count(), 1)
+
+    def test_rate_limit_includes_handoff_messages(self):
+        receive(self.event("HUMAN", "human"))
+        for number in range(10):
+            receive(self.event("Hello", f"message-{number}"))
+        self.assertEqual(WhatsAppBotContact.objects.get().conversation.messages.count(), 6)
+        self.assertTrue(WhatsAppBotReply.objects.filter(status="rate_limited").exists())

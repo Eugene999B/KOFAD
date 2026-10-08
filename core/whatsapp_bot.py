@@ -102,12 +102,20 @@ def receive(event):
         contact.opted_out = True
         contact.handoff = False
         body = "The KOFAD assistant is paused. Send START to resume. For help visit " + COMPANY + "/contact/"
+        if WhatsAppBotReply.objects.filter(contact=contact, body=body, created_at__gte=now - timedelta(minutes=1)).exists():
+            body, status = "", "suppressed"
     elif command == "start":
         contact.opted_out = False
         contact.handoff = False
         body = MENU
+        if WhatsAppBotReply.objects.filter(contact=contact, created_at__gte=now - timedelta(minutes=1)).count() >= 6:
+            body, status = "", "rate_limited"
     elif contact.opted_out:
         body, status = "", "suppressed"
+    elif command not in {"stop", "start"} and WhatsAppBotReply.objects.filter(
+        contact=contact, created_at__gte=now - timedelta(minutes=1),
+    ).count() >= 6:
+        body, status = "", "rate_limited"
     elif command == "human" or contact.handoff:
         from marketplace.models import Conversation, ConversationMessage
         if not contact.conversation_id or contact.conversation.status != "open":

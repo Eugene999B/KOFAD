@@ -768,6 +768,7 @@ def initialize_paystack(order, callback_url):
         attempt = MarketPaymentAttempt.objects.create(
             order=order, provider="paystack", reference=reference, amount=order.total,
             currency="GHS", status="initializing",
+            next_check_at=timezone.now() + timedelta(minutes=1),
         )
         order.payment_status = "initializing"
         order.payment_reference = reference
@@ -794,18 +795,26 @@ def initialize_paystack(order, callback_url):
     except (requests.RequestException, ValueError) as exc:
         attempt.status = "submission_unknown"
         attempt.provider_message = "Paystack could not be reached."
-        attempt.save(update_fields=["status", "provider_message"])
+        MarketPaymentAttempt.objects.filter(pk=attempt.pk, status="initializing").update(
+            status=attempt.status, provider_message=attempt.provider_message,
+        )
         order.payment_status = "pending"
-        order.save(update_fields=["payment_status", "updated_at"])
+        OnlineOrder.objects.filter(pk=order.pk).exclude(payment_status__in=["paid", "refunded"]).update(
+            payment_status="pending", updated_at=timezone.now(),
+        )
         raise ValidationError("We could not start the payment. Your order is saved; please wait for confirmation.") from exc
     if not isinstance(data, dict):
         data = {}
     if not 200 <= response.status_code < 300 or data.get("status") is not True:
         attempt.status = "submission_unknown"
         attempt.provider_message = str(data.get("message", "Paystack rejected the payment initialization."))[:240]
-        attempt.save(update_fields=["status", "provider_message"])
+        MarketPaymentAttempt.objects.filter(pk=attempt.pk, status="initializing").update(
+            status=attempt.status, provider_message=attempt.provider_message,
+        )
         order.payment_status = "pending"
-        order.save(update_fields=["payment_status", "updated_at"])
+        OnlineOrder.objects.filter(pk=order.pk).exclude(payment_status__in=["paid", "refunded"]).update(
+            payment_status="pending", updated_at=timezone.now(),
+        )
         raise ValidationError("We could not start the payment. Please wait for confirmation.")
     payload_data = data.get("data")
     if not isinstance(payload_data, dict):
@@ -817,17 +826,27 @@ def initialize_paystack(order, callback_url):
             or payload_data.get("reference") != reference or len(authorization_url) > 200):
         attempt.status = "submission_unknown"
         attempt.provider_message = "Invalid secure checkout response."
-        attempt.save(update_fields=["status", "provider_message"])
+        MarketPaymentAttempt.objects.filter(pk=attempt.pk, status="initializing").update(
+            status=attempt.status, provider_message=attempt.provider_message,
+        )
         order.payment_status = "pending"
-        order.save(update_fields=["payment_status", "updated_at"])
+        OnlineOrder.objects.filter(pk=order.pk).exclude(payment_status__in=["paid", "refunded"]).update(
+            payment_status="pending", updated_at=timezone.now(),
+        )
         raise ValidationError("We could not open the secure payment page. Please wait for confirmation.")
     attempt.status = "pending"
     attempt.access_code = str(payload_data.get("access_code", ""))[:120]
     attempt.authorization_url = authorization_url
     attempt.provider_message = str(data.get("message", ""))[:240]
-    attempt.save(update_fields=["status", "access_code", "authorization_url", "provider_message"])
+    MarketPaymentAttempt.objects.filter(pk=attempt.pk, status="initializing").update(
+        status=attempt.status, access_code=attempt.access_code, authorization_url=attempt.authorization_url,
+        provider_message=attempt.provider_message,
+    )
     order.payment_status = "pending"
-    order.save(update_fields=["payment_status", "updated_at"])
+    OnlineOrder.objects.filter(pk=order.pk).exclude(payment_status__in=["paid", "refunded"]).update(
+        payment_status="pending", updated_at=timezone.now(),
+    )
+    attempt.refresh_from_db()
     return attempt
 
 
@@ -1053,7 +1072,7 @@ def paystack_signature_valid(raw_body, signature):
     if not settings.PAYSTACK_SECRET_KEY or not signature:
         return False
     digest = hmac.new(settings.PAYSTACK_SECRET_KEY.encode(), raw_body, hashlib.sha512).hexdigest()
-    return hmac.compare_digest(digest, str(signature))
+    return hmac.compare_digest(digest.encode(), str(signature).encode())
 
 
 def handover_code(order):
