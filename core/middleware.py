@@ -1,3 +1,4 @@
+import re
 from django.conf import settings
 from django.contrib.auth import logout
 from django.utils import timezone
@@ -37,11 +38,33 @@ class RequestSizeLimitMiddleware:
         return self.get_response(request)
 
 
+
+def _public_indexable_request(request):
+    """Index only canonical company and catalogue pages, never staff/customer state."""
+    host = request.get_host().split(":")[0].lower().rstrip(".")
+    path = request.path
+    if host in {"staff.kofadimpex.com", "kofad-web-production.up.railway.app"}:
+        return False
+    if host in {"kofadimpex.com", "www.kofadimpex.com", "localhost", "127.0.0.1", "testserver"}:
+        return path in {
+            "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+            "/terms/", "/privacy/", "/contact/", "/robots.txt", "/sitemap.xml",
+        }
+    if host == "market.kofadimpex.com":
+        return path == "/market/" or bool(re.fullmatch(r"/market/products/\d+/", path))
+    return False
+
+
 class AccessMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        if request.path.startswith("/technical-admin/") and not request.user.is_authenticated:
+            response = HttpResponse(status=404)
+            response["Cache-Control"] = "no-store"
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            return response
         if request.user.is_authenticated:
             now = timezone.now().timestamp()
             staff_expires_at = request.session.get("staff_session_expires_at")
@@ -93,4 +116,6 @@ class AccessMiddleware:
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):
             response["Cache-Control"] = "no-store"
+        if not _public_indexable_request(request):
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         return response
