@@ -1,3 +1,4 @@
+import re
 from django.conf import settings
 from django.contrib.auth import logout
 from django.utils import timezone
@@ -35,6 +36,23 @@ class RequestSizeLimitMiddleware:
                 response["Cache-Control"] = "no-store"
                 return response
         return self.get_response(request)
+
+
+def _public_indexable_path(path):
+    """Only explicitly public company/market pages are indexable."""
+    if path in {
+        "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/terms/", "/privacy/", "/contact/", "/market/",
+        "/robots.txt", "/sitemap.xml",
+    }:
+        return True
+    if re.fullmatch(r"/market/products/\d+/", path):
+        return True
+    if re.fullmatch(r"/market/products/\d+/image/(?:thumb|large)/", path):
+        return True
+    if re.fullmatch(r"/market/gallery/\d+/image/(?:thumb|large)/", path):
+        return True
+    return False
 
 
 class AccessMiddleware:
@@ -93,4 +111,7 @@ class AccessMiddleware:
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):
             response["Cache-Control"] = "no-store"
+
+        if not _public_indexable_path(request.path):
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         return response
