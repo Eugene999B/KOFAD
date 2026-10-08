@@ -60,6 +60,7 @@ STAFF_LOGIN_SLUG = os.environ.get("STAFF_LOGIN_SLUG", "login").strip("/")
 if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,80}", STAFF_LOGIN_SLUG):
     raise RuntimeError("STAFF_LOGIN_SLUG must contain only lowercase letters, digits and hyphens.")
 STAFF_LOGIN_PATH = f"/{STAFF_LOGIN_SLUG}/"
+PUBLIC_SITE_ORIGIN = os.environ.get("PUBLIC_SITE_ORIGIN", "https://kofadimpex.com").rstrip("/")
 LOGIN_URL = STAFF_LOGIN_PATH
 LOGIN_REDIRECT_URL = "/workspace/"
 LOGOUT_REDIRECT_URL = STAFF_LOGIN_PATH
