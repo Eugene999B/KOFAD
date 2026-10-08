@@ -57,6 +57,26 @@ def _market_context(request, **extra):
             sender_type="staff",
             read_by_customer=False,
         ).count()
+    path = request.path
+    host = request.get_host().split(":")[0].lower().rstrip(".")
+    root_hosts = {"kofadimpex.com", "www.kofadimpex.com", "localhost", "127.0.0.1", "testserver"}
+    root_public = path in {
+        "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/terms/", "/privacy/", "/contact/",
+    }
+    market_public = path == "/market/" or bool(
+        __import__("re").fullmatch(r"/market/products/\d+/", path)
+    )
+    seo_indexable = (host in root_hosts and root_public) or (
+        host == "market.kofadimpex.com" and market_public
+    )
+    page = extra.get("page") or {}
+    seo_description = str(
+        extra.get("seo_description")
+        or (page.get("intro") if isinstance(page, dict) else "")
+        or "KOFAD IMPEX ENTERPRISE — retail and wholesale products, secure ordering, delivery, collection and customer care in Ghana."
+    ).strip()[:220]
+    canonical_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else settings.PUBLIC_SITE_ORIGIN
     context = {
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
@@ -67,6 +87,12 @@ def _market_context(request, **extra):
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
+        "seo_indexable": seo_indexable,
+        "seo_description": seo_description,
+        "canonical_url": canonical_origin + path if seo_indexable else "",
+        "public_site_origin": settings.PUBLIC_SITE_ORIGIN,
+        "market_site_origin": settings.MARKET_SITE_ORIGIN,
+        "google_site_verification": settings.GOOGLE_SITE_VERIFICATION,
         **extra,
     }
     return context
@@ -361,6 +387,7 @@ def product_detail(request, pk):
     return render(request, "marketplace/product.html", _market_context(
         request, title=listing.display_name, listing=listing, related=related,
         gallery=gallery, in_wishlist=in_wishlist,
+        seo_description=(listing.description or f"{listing.display_name} from KOFAD IMPEX ENTERPRISE. View the selling unit, price and current availability.")[:220],
     ))
 
 
