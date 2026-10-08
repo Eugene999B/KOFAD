@@ -126,3 +126,20 @@ class WhatsAppBotTests(TestCase):
             receive(self.event("Hello", f"message-{number}"))
         self.assertEqual(WhatsAppBotContact.objects.get().conversation.messages.count(), 6)
         self.assertTrue(WhatsAppBotReply.objects.filter(status="rate_limited").exists())
+
+    @patch("core.whatsapp_delivery.requests.post")
+    def test_stop_also_blocks_automatic_notification_delivery(self, post):
+        from django.contrib.auth.models import User
+        from django.core.exceptions import ValidationError
+        from core.models import Branch, Message, Party
+        from core.whatsapp_delivery import send_whatsapp
+        receive(self.event("STOP"))
+        branch = Branch.objects.create(name="Main", code="main")
+        user = User.objects.create_user("notification-test")
+        party = Party.objects.create(branch=branch, kind="customer", name="Customer",
+                                     phone="+233551234567", consent=True)
+        message = Message.objects.create(branch=branch, party=party, channel="whatsapp",
+            body="Receipt", recipient=party.phone, created_by=user, status="queued")
+        with self.assertRaises(ValidationError):
+            send_whatsapp(user, branch, message.pk, automatic=True)
+        post.assert_not_called()

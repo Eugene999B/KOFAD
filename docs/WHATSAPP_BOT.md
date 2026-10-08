@@ -25,3 +25,5 @@ Settings → SMS & WhatsApp → Assistant setup & delivery status shows configur
 Accepted is not delivered. Signed Meta status callbacks update delivery state. Unknown submissions are not retried automatically. Messages older than 24 hours cannot reopen a conversation window. The bot has no arbitrary code, SQL, financial or permission-changing tools.
 
 The bot uses public product information and account links; it is intentionally not an unrestricted generative AI agent. Add new commands only with explicit authorization checks and regression tests.
+
+STOP also prevents the standard WhatsApp notification sender from contacting that number. START resumes eligibility; existing receipt consent and notification switches still apply.

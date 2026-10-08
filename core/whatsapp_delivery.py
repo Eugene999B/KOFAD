@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .models import CommunicationSettings, Message, WhatsAppAttempt, WhatsAppWebhookEvent
+from .models import CommunicationSettings, Message, WhatsAppAttempt, WhatsAppWebhookEvent, WhatsAppBotContact
 from .services import audit, permit
 from .sms.service import _recipient_is_current, validate_current_context
 
@@ -50,6 +50,10 @@ def send_whatsapp(user, branch, message_id, *, automatic=False, retry=False):
             raise ValidationError("This recipient has changed or is no longer eligible.")
         validate_current_context(message)
         recipient = message.recipient.lstrip("+")
+        if WhatsAppBotContact.objects.filter(
+            wa_id=recipient, phone_number_id=settings.WHATSAPP_PHONE_NUMBER_ID, opted_out=True,
+        ).exists():
+            raise ValidationError("This recipient paused WhatsApp messages. They must send START to resume.")
         inbound_events = WhatsAppWebhookEvent.objects.filter(
             event_type="message", wa_id=recipient,
             phone_number_id=settings.WHATSAPP_PHONE_NUMBER_ID,
