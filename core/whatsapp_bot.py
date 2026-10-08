@@ -118,8 +118,10 @@ def receive(event):
         body, status = "", "rate_limited"
     elif command == "human" or contact.handoff:
         from marketplace.models import Conversation, ConversationMessage
+        from core.models import Branch
         if not contact.conversation_id or contact.conversation.status != "open":
             contact.conversation = Conversation.objects.create(
+                branch=Branch.objects.filter(active=True).order_by("pk").first(),
                 public_name="WhatsApp customer", public_phone="+" + event.wa_id,
                 subject="WhatsApp support · verify identity before sharing account information",
             )
