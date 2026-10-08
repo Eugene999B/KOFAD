@@ -1,8 +1,6 @@
 import io
-from pathlib import Path
 from xml.sax.saxutils import escape
 
-from django.conf import settings
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.lib import colors
@@ -12,15 +10,16 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from .brand_art import official_logo_bytes
 from .models import Company
 from .services import balance
 
 
-INK = colors.HexColor("#102b46")
-TEAL = colors.HexColor("#138895")
-MUTED = colors.HexColor("#657585")
-LINE = colors.HexColor("#cfd8df")
-SOFT = colors.HexColor("#f4f7f9")
+INK = colors.HexColor("#1F252A")
+TEAL = colors.HexColor("#0F3B58")
+MUTED = colors.HexColor("#71808A")
+LINE = colors.HexColor("#DFE4E6")
+SOFT = colors.HexColor("#F7F4ED")
 
 
 def _text(value):
@@ -51,10 +50,7 @@ def _location(document, company):
 
 
 def _logo(max_width, max_height):
-    path = Path(settings.BASE_DIR) / "static" / "brand" / "kofad-emblem.png"
-    if not path.exists():
-        return None
-    image = Image(str(path))
+    image = Image(io.BytesIO(official_logo_bytes()))
     ratio = min(max_width / image.imageWidth, max_height / image.imageHeight)
     image.drawWidth = image.imageWidth * ratio
     image.drawHeight = image.imageHeight * ratio

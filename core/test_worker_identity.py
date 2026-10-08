@@ -142,7 +142,7 @@ class WorkerIdentityExperienceTests(TestCase):
         self.assertNotContains(response, self.worker.ssnit_number)
         self.assertNotContains(response, self.worker.bank_account_number)
         self.assertNotContains(response, self.worker.residential_address)
-        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
+        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow, noarchive")
 
     def test_expired_card_is_not_reported_as_current(self):
         self.worker.id_card_expiry_date = date(2026, 1, 1)
