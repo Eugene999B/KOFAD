@@ -25,7 +25,8 @@ with sync_playwright() as playwright:
     expect(page.locator("[name=cookie_analytics]")).to_be_disabled()
     page.locator("[name=cookie_preferences]").check()
     page.locator("[data-cookie-save]").click()
-    page.locator("[data-theme-toggle]").first.click()
+    page.goto("http://127.0.0.1:8000/market/access/")
+    page.locator("[data-theme-toggle]:visible").first.click()
     selected = page.locator("html").get_attribute("data-theme")
     page.reload()
     assert page.locator("html").get_attribute("data-theme") == selected
