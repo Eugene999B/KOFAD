@@ -69,8 +69,21 @@ class CheckoutSecurityTests(MarketFixtures):
         staff.user_permissions.add(Permission.objects.get(codename="operate_sales"))
         staff.access.branches.add(self.branch)
         self.client.force_login(staff)
+        staff.access.refresh_from_db()
         session = self.client.session
         session["access_version"] = staff.access.session_version
         session["branch"] = self.branch.pk
         session.save()
         self.assertEqual(self.client.get("/settings/whatsapp-bot/").status_code, 403)
+
+    def test_owner_can_open_bot_activation_dashboard(self):
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+        response = self.client.get("/settings/whatsapp-bot/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Waiting for activation")
+        self.assertContains(response, "Customer support inbox")

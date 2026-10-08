@@ -140,6 +140,6 @@ class WhatsAppBotTests(TestCase):
                                      phone="+233551234567", consent=True)
         message = Message.objects.create(branch=branch, party=party, channel="whatsapp",
             body="Receipt", recipient=party.phone, created_by=user, status="queued")
-        with self.assertRaises(ValidationError):
+        with self.assertRaisesMessage(ValidationError, "paused WhatsApp"):
             send_whatsapp(user, branch, message.pk, automatic=True)
         post.assert_not_called()
