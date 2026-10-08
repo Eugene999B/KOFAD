@@ -131,7 +131,11 @@ def receive(event):
             read_by_customer=True,
         )
         Conversation.objects.filter(pk=contact.conversation_id).update(updated_at=now)
-        body = "Your message is in the KOFAD support inbox. A team member will reply when available. Send START to return to the menu."
+        body = (
+            "Your message is in the KOFAD support inbox. For account, order or payment details, "
+            "sign in at " + MARKET + "/market/messages/ so KOFAD can verify your identity. "
+            "Send START to return to the menu."
+        )
         if contact.handoff:
             body, status = "", "handoff"
         contact.handoff = True
