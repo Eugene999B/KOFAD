@@ -171,3 +171,25 @@ class CustomerMomoTests(MarketFixtures):
         saved = form.save()
         self.assertEqual(saved.receiving_momo, "+233538812780")
         self.assertEqual(saved.receiving_momo_name, "KOFAD IMPEX ENTERPRISE/ERNEST AMOAH KOFFIE")
+
+    @patch("marketplace.services.requests.get")
+    def test_staff_can_verify_a_paystack_order_without_charging(self, get):
+        order = self.order()
+        attempt = MarketPaymentAttempt.objects.create(order=order, provider="paystack", reference="staff-check",
+            amount=order.total, status="pending", verification_summary={"flow": "mobile_money"})
+        get.return_value = Mock(status_code=200, json=lambda: {"status": True, "data": {
+            "reference": attempt.reference, "status": "success", "id": 123,
+            "amount": int(order.total * 100), "currency": "GHS", "channel": "mobile_money"}})
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
+        self.assertContains(self.client.get(f"/online-orders/{order.pk}/"), "Verify with Paystack")
+        response = self.client.post(f"/online-orders/{order.pk}/", {
+            "form_type": "payment_check", "payment_reference": attempt.reference})
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, "paid")
+        self.assertEqual(get.call_count, 1)

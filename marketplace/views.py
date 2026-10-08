@@ -1966,16 +1966,22 @@ def staff_order(request, branch, pk):
         pk=pk,
     )
     if request.method == "POST" and request.POST.get("form_type") == "payment_check":
-        attempt = order.payment_attempts.filter(provider="hubtel").first()
+        attempts = order.payment_attempts.all()
+        reference = request.POST.get("payment_reference", "").strip()
+        attempt = attempts.filter(reference=reference).first() if reference else attempts.first()
         if attempt:
-            # An authorised staff member may recheck a quarantined result, never mark it paid manually.
             MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
                 next_check_at=timezone.now(),
-                provider_message="Staff requested an immediate Hubtel verification.",
+                provider_message="Staff requested an immediate provider verification.",
             )
             try:
-                hubtel.reconcile(attempt.reference)
-                messages.success(request, "Hubtel payment verified.")
+                if attempt.provider == "hubtel":
+                    hubtel.reconcile(attempt.reference)
+                elif attempt.provider == "paystack":
+                    services.finalize_payment(attempt.reference, services.verify_paystack(attempt.reference))
+                else:
+                    raise ValidationError("This payment provider is not supported.")
+                messages.success(request, "Payment verified.")
             except ValidationError as exc:
                 messages.info(request, problem(exc))
         return redirect("staff_online_order", pk=order.pk)
