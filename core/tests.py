@@ -1118,10 +1118,8 @@ class AdministrationAndExportTests(Fixtures, TestCase):
         self.setup_data()
         self.authenticate_client()
 
-    def test_admin_route_is_business_centre_not_django_index(self):
-        response = self.client.get("/admin/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/administration/")
+    def test_old_admin_route_is_dead_and_business_centre_remains_branded(self):
+        self.assertEqual(self.client.get("/admin/").status_code, 404)
         page = self.client.get("/administration/")
         self.assertContains(page, "Run KOFAD without entering the technical backend")
         self.assertNotContains(page, "Authentication and Authorization")
