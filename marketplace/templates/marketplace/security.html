@@ -1,6 +1,30 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block content %}<section class="simple-customer-access"><div class="simple-access-card"><img src="{% static 'brand/kofad-official-logo.svg' %}" width="64" height="64" alt="KOFAD IMPEX ENTERPRISE"><h1>Change password</h1><p>Update the password for your customer account.</p><form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">{{ form.non_field_errors }}<label>Current password{{ form.current_password }}{{ form.current_password.errors }}</label><label>New password{{ form.password }}{{ form.password.errors }}</label><label>Confirm new password{{ form.password_confirm }}{{ form.password_confirm.errors }}</label><button class="market-button primary wide">Save password <span>→</span></button></form><hr><h2>Change your phone number</h2><p>Verify the new number by SMS. Your orders and account history stay with this account.</p><form method="post">{% csrf_token %}
+{% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}{% block content %}<section class="simple-customer-access"><div class="simple-access-card"><img src="{% static 'brand/kofad-official-logo.svg' %}" width="64" height="64" alt="KOFAD IMPEX ENTERPRISE"><h1>Change password</h1><p>Update the password for your customer account.</p><form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">{{ form.non_field_errors }}<label>Current password{{ form.current_password }}{{ form.current_password.errors }}</label><label>New password{{ form.password }}{{ form.password.errors }}</label><label>Confirm new password{{ form.password_confirm }}{{ form.password_confirm.errors }}</label><button class="market-button primary wide">Save password <span>→</span></button></form><hr><h2>Change your phone number</h2><p>Verify the new number by SMS. Your orders and account history stay with this account.</p><form method="post">{% csrf_token %}
 {% if pending_phone %}<input type="hidden" name="action" value="phone_verify"><p>Code sent to {{ pending_phone }}</p><label>Six-digit verification code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required></label>
 {% else %}<input type="hidden" name="action" value="phone_start"><label>New phone number<input name="new_phone" type="tel" autocomplete="tel" required></label>{% endif %}
 <label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label><button class="market-button primary wide">{% if pending_phone %}Verify and change number{% else %}Send verification code{% endif %}</button></form>
 {% if pending_phone %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="phone_cancel"><button class="market-button">Use another number</button></form>{% endif %}
+<section class="experience-email-card">
+  <p class="market-eyebrow">VERIFIED EMAIL</p><h2>Email sign-in & notifications</h2>
+  <p class="helper">Your phone number remains linked. Email login uses the same password and is available only after you verify the mailbox.</p>
+  {% if verified_email.verified_at %}<p class="verified">✓ Verified: {{ verified_email.email }}</p>{% else %}<p class="waiting">Not verified yet</p>{% endif %}
+  {% if email_ready %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_start">
+    <label>Email address<input type="email" name="email" autocomplete="email" maxlength="254" required></label>
+    <label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
+    <button class="market-button primary wide">Send verification code</button>
+  </form>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_verify">
+    <label>Six-digit email code<input type="text" name="email_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+    <label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
+    <button class="market-button primary wide">Verify email & enable email sign-in</button>
+  </form>
+  {% else %}<p class="helper">Email verification is awaiting the business email connection. Continue signing in with your phone as usual.</p>{% endif %}
+  {% if verified_email.verified_at %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_notifications">
+    <label><input type="checkbox" name="email_notifications" {% if verified_email.notifications_enabled %}checked{% endif %}> Receive important order updates by email</label>
+    <label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>
+    <button class="market-button ghost">Save notification preference</button>
+  </form>
+  {% endif %}
+</section>
 <a class="simple-access-back" href="/market/account/">← Back to account</a></div></section>{% endblock %}
