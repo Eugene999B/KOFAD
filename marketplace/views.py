@@ -1,3 +1,4 @@
+import re
 import json
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -57,6 +58,24 @@ def _market_context(request, **extra):
             sender_type="staff",
             read_by_customer=False,
         ).count()
+    path = request.path
+    seo_indexable = path in {
+        "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/terms/", "/privacy/", "/contact/", "/market/",
+    } or bool(re.fullmatch(r"/market/products/\d+/", path))
+    page = extra.get("page") or {}
+    listing = extra.get("listing")
+    default_description = (
+        "KOFAD IMPEX ENTERPRISE — retail and wholesale shopping in Ghana, "
+        "with delivery, collection and customer care."
+    )
+    seo_description = str(
+        (getattr(listing, "description", "") if listing else "")
+        or (page.get("intro", "") if isinstance(page, dict) else "")
+        or default_description
+    ).strip()[:180]
+    canonical_url = settings.PUBLIC_SITE_ORIGIN + path if seo_indexable else ""
+
     context = {
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
@@ -67,6 +86,10 @@ def _market_context(request, **extra):
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
+        "seo_indexable": seo_indexable,
+        "seo_description": seo_description,
+        "canonical_url": canonical_url,
+        "public_site_origin": settings.PUBLIC_SITE_ORIGIN,
         **extra,
     }
     return context
