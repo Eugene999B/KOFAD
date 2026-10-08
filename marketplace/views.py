@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -14,6 +15,7 @@ from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -62,9 +64,9 @@ def _market_context(request, **extra):
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
-        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
-        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
         **extra,
     }
     return context
@@ -761,9 +763,41 @@ def _map_access_allowed(request):
     return bool(request.user.is_authenticated or services.customer_from_session(request))
 
 
+def _consume_map_lookup_budget(request):
+    """Bound paid server-side map lookups per browser and across the deployment."""
+    if not request.session.session_key:
+        request.session.save()
+    session_token = salted_hmac(
+        "kofad-map-budget", str(request.session.session_key), algorithm="sha256"
+    ).hexdigest()
+    minute = int(timezone.now().timestamp() // 60)
+
+    def consume(key, limit):
+        limit = max(int(limit), 1)
+        if cache.add(key, 1, timeout=70):
+            return True
+        try:
+            value = cache.incr(key)
+        except ValueError:
+            cache.set(key, 1, timeout=70)
+            value = 1
+        return value <= limit
+
+    if not consume(
+        f"kofad:map:global:{minute}", settings.MAP_LOOKUP_GLOBAL_MINUTE_LIMIT
+    ):
+        return False
+    return consume(
+        f"kofad:map:session:{session_token}:{minute}",
+        settings.MAP_LOOKUP_SESSION_MINUTE_LIMIT,
+    )
+
+
 def market_location_search(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to search locations."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
     try:
         rows = services.location_search(request.GET.get("q", ""))
         return JsonResponse({"results": rows})
@@ -774,6 +808,8 @@ def market_location_search(request):
 def market_location_reverse(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to use location services."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
     try:
         row = services.reverse_location(request.GET.get("lat"), request.GET.get("lng"))
         return JsonResponse(row)
@@ -784,6 +820,8 @@ def market_location_reverse(request):
 def market_delivery_quote(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to calculate delivery."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
     try:
         quote = services.delivery_quote(request.GET.get("lat"), request.GET.get("lng"))
         return JsonResponse({
@@ -1870,9 +1908,9 @@ def market_settings(request, branch):
         "selected_zone": selected,
         "zones": DeliveryZone.objects.all(),
         "google_maps_ready": bool(settings.GOOGLE_MAPS_SERVER_KEY),
-        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
-        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
         "market_url": request.build_absolute_uri("/market/"),
         "company": company,
     })
@@ -1950,9 +1988,9 @@ def staff_order(request, branch, pk):
         "delivery_updates": order.delivery_updates.all(),
         "latest_delivery_location": order.delivery_updates.exclude(latitude__isnull=True).exclude(longitude__isnull=True).last(),
         "return_requests": order.return_requests.all(),
-        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY,
+        "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
-        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY),
+        "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
     })
 
 
