@@ -3,7 +3,7 @@ import json
 import secrets
 import uuid
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.conf import settings
@@ -538,6 +538,25 @@ def complete_trade(request):
         data = json.loads(request.body)
         if not isinstance(data, dict):
             raise ValidationError("Expected a transaction object.")
+        if data.get("kind", "sale") == "sale":
+            for payment in data.get("payments") or []:
+                if not isinstance(payment, dict) or payment.get("method") != "momo":
+                    continue
+                try:
+                    momo_amount = Decimal(str(payment.get("amount", "0")))
+                except (InvalidOperation, ValueError, TypeError):
+                    raise ValidationError("Invalid Mobile Money payment amount.")
+                if not momo_amount.is_finite() or momo_amount < 0:
+                    raise ValidationError("Invalid Mobile Money payment amount.")
+                if momo_amount > 0:
+                    from . import pos_paystack
+                    if pos_paystack.ready():
+                        raise ValidationError(
+                            "Mobile Money sales must use the Paystack approval request so KOFAD can verify payment before posting the sale."
+                        )
+                    raise ValidationError(
+                        "Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now."
+                    )
         branch = branch_for(request)
         doc = s.post_trade(
             request.user,
