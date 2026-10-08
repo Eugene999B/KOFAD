@@ -35,7 +35,10 @@ class OfficialDomainMiddleware:
         ))
         staff_support = host == STAFF and path.startswith(("/market/support/", "/market/returns/attachments/"))
         if shared or staff_map or public_image or staff_support:
-            return self.get_response(request)
+            response = self.get_response(request)
+            if host == STAFF:
+                response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            return response
         target_path = request.get_full_path()
         if path == "/" and host in {MARKET, STAFF}:
             target_path = "/market/" if host == MARKET else "/workspace/"
@@ -60,4 +63,7 @@ class OfficialDomainMiddleware:
             response = HttpResponseRedirect("https://" + target + target_path)
             response["Cache-Control"] = "no-store"
             return response
-        return self.get_response(request)
+        response = self.get_response(request)
+        if host == STAFF:
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+        return response
