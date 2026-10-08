@@ -28,9 +28,6 @@ class Command(BaseCommand):
             return
         if not name:
             raise CommandError("Set KOFAD_OWNER_ADMIN_NAME.")
-        if not password:
-            raise CommandError("Set KOFAD_OWNER_ADMIN_INITIAL_PASSWORD for first-time provisioning.")
-
         canonical_phone = normalize_ghana_phone(phone_raw)
         username = "0" + canonical_phone[4:]
         by_username = User.objects.filter(username__iexact=username).first()
@@ -45,6 +42,8 @@ class Command(BaseCommand):
         last_name = parts[1] if len(parts) > 1 else ""
 
         if created:
+            if not password:
+                raise CommandError("Set KOFAD_OWNER_ADMIN_INITIAL_PASSWORD for first-time provisioning.")
             user = User.objects.create_user(
                 username=username,
                 password=password,
