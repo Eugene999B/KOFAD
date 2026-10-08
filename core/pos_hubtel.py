@@ -65,6 +65,7 @@ def save_state(held, next_state):
         cart["payment_request"] = next_state
         current.cart = cart
         current.save(update_fields=["cart"])
+        held.cart = cart
 
 
 def response_state(held):
