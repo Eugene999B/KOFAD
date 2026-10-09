@@ -65,3 +65,25 @@ class EmailLetter(models.Model):
             models.Index(fields=["status", "next_attempt_at"], name="kofad_mail_delivery"),
             models.Index(fields=["mailbox", "direction", "created_at"], name="kofad_mail_list"),
         ]
+
+
+class EmailDailyUsage(models.Model):
+    """Local send-attempt allowance for Brevo; not a substitute for provider telemetry."""
+    day = models.DateField(unique=True)
+    attempted = models.PositiveIntegerField(default=0)
+    accepted = models.PositiveIntegerField(default=0)
+    failed = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-day"]
+
+
+class EmailCampaign(models.Model):
+    """Owner-controlled promotional campaign; recipients must explicitly opt in."""
+    title = models.CharField(max_length=150)
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_queued_at = models.DateTimeField(null=True, blank=True)
