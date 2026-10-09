@@ -1240,6 +1240,10 @@
     let newPhone = "";
 
     if (!purchase) {
+      if (!party && customerChoiceButtons.some(button =>
+        button.dataset.customerMode === "saved" && button.getAttribute("aria-pressed") === "true")) {
+        throw new Error("Choose a saved customer from the search results, or switch to Walk-in sale.");
+      }
       if (!party) {
         const rawName = customerName?.value.trim() || "";
         const rawPhone = customerPhone?.value.trim() || "";
