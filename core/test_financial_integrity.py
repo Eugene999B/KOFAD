@@ -165,6 +165,25 @@ class FinancialIntegrityTests(Fixtures, TestCase):
         self.assertEqual(warnings[0]["difference"], Decimal("-1.50"))
         self.assertEqual(summary["Closing channel variances"], 1)
 
+    def test_closing_expected_recalculation_detects_incorrect_source_snapshot(self):
+        sale = self.sale()
+        Closing.objects.create(
+            branch=self.branch, date=self.today,
+            expected={"cash": "0", "momo": "0", "bank": "0", "card": "0"},
+            counted={"cash": "0", "momo": "0", "bank": "0", "card": "0"},
+            submitted_by=self.user,
+        )
+        checks, summary = self.checks()
+        matches = [r for r in checks if r["source"] == "Daily closing"
+                   and "stored expected versus recomputed" in r["check"]
+                   and r["reference"] == str(self.today)
+                   and "CASH" in r["check"]]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["expected"], sale.total)
+        self.assertEqual(matches[0]["actual"], Decimal("0"))
+        self.assertEqual(matches[0]["status"], "REVIEW")
+        self.assertGreater(summary["Exceptions for investigation"], 0)
+
     def test_export_and_accounting_page_include_full_audit_scope(self):
         self.sale()
         page = self.client.get("/accounting/", {"view": "integrity"})
