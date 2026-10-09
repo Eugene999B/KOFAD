@@ -102,15 +102,22 @@ def _snapshot(held):
     }
 
 
-def validate_review_token(token, *, user, branch, key, phone, provider):
-    """Bind approval to signed branch/staff/sale key/recipient and network."""
+def validate_review_token(token, *, user, branch, key, phone, provider, sale):
+    """Bind approval to staff, sale, amount and recipient: never authorize changed details."""
+    if not isinstance(sale, dict):
+        raise ValidationError("Invalid sale request.")
+    amount_pesewas = int(pos_paystack._payment_amount(sale) * 100)
+    party_id = str(sale.get("party") or "")
+    customer_name = "" if party_id else str(sale.get("customer_name") or "").strip()[:140]
     try:
         data = signing.loads(token or "", salt=TOKEN_SALT, max_age=TOKEN_AGE_SECONDS)
         if not isinstance(data, dict) or data != {
             "user": user.pk, "branch": branch.pk, "key": str(key),
             "phone": normalize_ghana_phone(phone), "network": str(provider or "").lower(),
+            "amount_pesewas": amount_pesewas, "party": party_id,
+            "customer_name": customer_name,
         }:
-            raise ValidationError("Review the recipient again before sending this payment.")
+            raise ValidationError("Payment details changed. Review the recipient and amount again.")
     except (signing.BadSignature, ValueError, TypeError) as exc:
         raise ValidationError("Recipient review expired. Verify the customer details again.") from exc
 
@@ -136,6 +143,9 @@ def recipient_review(request):
             raise ValidationError("Choose a supported MoMo network.")
         name = str(body.get("name") or "").strip()[:140]
         party_id = body.get("party")
+        amount_pesewas = body.get("amount_pesewas")
+        if type(amount_pesewas) is not int or not 0 < amount_pesewas <= 100000000000:
+            raise ValidationError("Confirm a positive full-sale amount before reviewing payment.")
         party_phone = ""
         if party_id:
             party = Party.objects.filter(pk=party_id, branch=branch, kind="customer").first()
@@ -148,9 +158,13 @@ def recipient_review(request):
         token = signing.dumps({
             "user": request.user.pk, "branch": branch.pk, "key": key,
             "phone": phone, "network": network,
+            "amount_pesewas": amount_pesewas,
+            "party": str(party_id or ""),
+            "customer_name": "" if party_id else name,
         }, salt=TOKEN_SALT)
         response = JsonResponse({
             "customer_name": name, "phone": phone, "network": network.upper(),
+            "amount": f"{amount_pesewas / 100:.2f}",
             "phone_matches_record": bool(party_phone and party_phone == phone) if party_id else None,
             "registered_wallet_name": None,
             "name_source": "KOFAD customer record" if party_id else "Cashier entry",
