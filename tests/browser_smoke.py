@@ -291,8 +291,10 @@ with sync_playwright() as p:
     assert page.locator(".debt-account-pane").is_visible()
     assert not page.locator(".debt-detail-pane").is_visible()
     page.locator(".debt-account-card").first.click()
-    assert page.locator(".debt-detail-pane").is_visible()
-    assert not page.locator(".debt-account-pane").is_visible()
+    # The responsive debt pane can animate into view after the click handler.
+    # Wait for its actual state rather than asserting during that transition.
+    page.locator(".debt-detail-pane").wait_for(state="visible", timeout=8000)
+    page.locator(".debt-account-pane").wait_for(state="hidden", timeout=8000)
     assert page.get_by_text("Back to customer accounts", exact=False).is_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Debt desk overflows"
     page.screenshot(path=str(out / "debt-account-mobile-focused.png"), full_page=True)
