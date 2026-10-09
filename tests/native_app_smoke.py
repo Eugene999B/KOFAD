@@ -32,7 +32,7 @@ with sync_playwright() as browser_tool:
     assert customer.locator(".native-platform-not-ready").count() == 3
     assert customer.get_by_role("link", name="Continue to Market").is_visible()
     for platform in ("android", "apple", "windows"):
-        icon = customer.locator(f".native-platform-visual img[src*=\'native-brands/{platform}.svg\']")
+        icon = customer.locator(f".native-platform-visual img[src*=\'native-brands/{platform}\']")
         assert icon.count() == 1, f"Missing actual brand icon: {platform}"
         assert icon.evaluate("(img) => img.complete && img.naturalWidth > 0"), f"Icon not loaded: {platform}"
     assert "Download staff app" not in customer.content()
