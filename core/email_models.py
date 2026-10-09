@@ -29,7 +29,7 @@ class EmailMailboxMember(models.Model):
 
 class EmailLetter(models.Model):
     DIRECTION = [("inbound", "Incoming"), ("outbound", "Outgoing")]
-    STATUS = [("received", "Received"), ("queued", "Queued"), ("sending", "Sending"),
+    STATUS = [("received", "Received"), ("draft", "Awaiting review"), ("queued", "Queued"), ("sending", "Sending"),
               ("submitted", "Submitted to provider"), ("internal", "Delivered internally"),
               ("failed", "Failed"), ("uncertain", "Needs review"),
               ("suppressed", "Suppressed by recipient preference")]
