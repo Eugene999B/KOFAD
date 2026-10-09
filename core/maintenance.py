@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import zlib
 from collections import Counter
 from datetime import timezone as dt_timezone
 from itertools import chain
@@ -30,7 +31,7 @@ from .models import Access, Audit, Branch, Company
 
 BACKUP_FORMAT = "kofad-full-system-backup"
 BACKUP_VERSION = 2
-MAX_BACKUP_BYTES = 100 * 1024 * 1024
+MAX_BACKUP_BYTES = 256 * 1024 * 1024
 MAX_ENCRYPTED_BACKUP_BYTES = MAX_BACKUP_BYTES + 1024 * 1024
 ENCRYPTED_BACKUP_MAGIC = b"KOFAD-ENCRYPTED-BACKUP-V1\n"
 ENCRYPTED_BACKUP_FORMAT = "kofad-encrypted-backup"
@@ -134,17 +135,21 @@ def _serialize_fixture():
 
 
 def create_backup(actor=None):
-    # A single snapshot prevents sales and payments changing between model reads.
+    # REPEATABLE READ ensures all models, photos and transactions come from the
+    # same MVCC snapshot WITHOUT taking SHARE locks that block live sales.
+    # Django TestCase wraps its own outer transaction, so do not attempt
+    # to change isolation in nested transactions.
+    nested_transaction = connection.in_atomic_block
     with transaction.atomic():
-        if connection.vendor == "postgresql":
-            tables = ", ".join(connection.ops.quote_name(name) for name in _table_names_for_restore())
+        if connection.vendor == "postgresql" and not nested_transaction:
             with connection.cursor() as cursor:
-                cursor.execute("SET LOCAL lock_timeout = '10s'")
-                cursor.execute(f"LOCK TABLE {tables} IN SHARE MODE")
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         fixture = _serialize_fixture()
         migrations = current_migrations()
     records = json.loads(fixture)
-    counts = Counter(row["model"] for row in records)
+    coverage = sorted(backup_model_labels())
+    counts = Counter({label: 0 for label in coverage})
+    counts.update(row["model"] for row in records)
     bundle = {
         "format": BACKUP_FORMAT,
         "version": BACKUP_VERSION,
@@ -153,6 +158,7 @@ def create_backup(actor=None):
         "database_engine": connection.vendor,
         "migrations": migrations,
         "record_count": len(records),
+        "model_inventory": coverage,
         "model_counts": dict(sorted(counts.items())),
         "fixture_sha256": hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
         "fixture": fixture,
@@ -163,7 +169,11 @@ def create_backup(actor=None):
 
 def backup_bytes(actor=None):
     bundle = create_backup(actor)
-    return json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    data = json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    if len(data) > MAX_BACKUP_BYTES:
+        raise BackupError("Uncompressed backup exceeds the 256 MB safety limit. "
+                          "Use a controlled database-level recovery process for a larger system.")
+    return data
 
 
 def validate_backup_passphrase(passphrase):
@@ -190,9 +200,14 @@ def encrypted_backup_bytes(actor=None, passphrase=""):
     passphrase = validate_backup_passphrase(passphrase)
     plaintext = backup_bytes(actor)
     if len(plaintext) > MAX_BACKUP_BYTES:
-        raise BackupError("Backup content is larger than the supported 100 MB limit.")
+        raise BackupError("Backup content exceeds the supported 256 MB safety limit.")
     salt = os.urandom(16)
     nonce = os.urandom(12)
+    # Compress the signed snapshot before encryption. PostgreSQL-backed image
+    # blobs and extensive communication history can make plaintext backups large.
+    # Older encrypted files without the compression header still decrypt.
+    compressed = zlib.compress(plaintext, level=6)
+    use_compression = len(compressed) < len(plaintext)
     header = {
         "format": ENCRYPTED_BACKUP_FORMAT,
         "version": ENCRYPTED_BACKUP_VERSION,
@@ -203,9 +218,12 @@ def encrypted_backup_bytes(actor=None, passphrase=""):
         "p": BACKUP_KDF_P,
         "salt": base64.b64encode(salt).decode("ascii"),
         "nonce": base64.b64encode(nonce).decode("ascii"),
+        "compression": "zlib" if use_compression else "none",
     }
     aad = _canonical(header)
-    ciphertext = AESGCM(_backup_key(passphrase, salt)).encrypt(nonce, plaintext, aad)
+    ciphertext = AESGCM(_backup_key(passphrase, salt)).encrypt(
+        nonce, compressed if use_compression else plaintext, aad
+    )
     encoded_header = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
     output = ENCRYPTED_BACKUP_MAGIC + encoded_header + b"\n" + ciphertext
     if len(output) > MAX_ENCRYPTED_BACKUP_BYTES:
@@ -251,6 +269,19 @@ def _decrypt_backup(raw, passphrase):
         )
     except InvalidTag as exc:
         raise BackupError("Backup passphrase is incorrect or the encrypted file was altered.") from exc
+    compression = header.get("compression", "none")
+    if compression not in {"none", "zlib"}:
+        raise BackupError("Unsupported backup compression.")
+    if compression == "zlib":
+        try:
+            decoder = zlib.decompressobj()
+            uncompressed = decoder.decompress(plaintext, MAX_BACKUP_BYTES + 1)
+            if (len(uncompressed) > MAX_BACKUP_BYTES or not decoder.eof
+                    or decoder.unconsumed_tail or decoder.unused_data):
+                raise BackupError("Encrypted backup decompressed beyond the safety limit or is incomplete.")
+            plaintext = uncompressed
+        except zlib.error as exc:
+            raise BackupError("Encrypted backup compression is damaged.") from exc
     if len(plaintext) > MAX_BACKUP_BYTES:
         raise BackupError("Decrypted backup is larger than the supported limit.")
     return plaintext
@@ -270,7 +301,7 @@ def parse_backup(raw):
     if not isinstance(raw, (bytes, bytearray)):
         raise BackupError("Backup content is missing.")
     if len(raw) > MAX_BACKUP_BYTES:
-        raise BackupError("Backup file is larger than the supported 100 MB limit.")
+        raise BackupError("Backup file exceeds the supported 256 MB safety limit.")
     try:
         bundle = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -313,10 +344,16 @@ def validate_backup(bundle):
 
     actual_counts = Counter(row["model"] for row in records)
     manifest = bundle.get("model_counts")
-    if not isinstance(manifest, dict) or any(not isinstance(v, int) or v < 0 for v in manifest.values()):
+    if not isinstance(manifest, dict) or any(not isinstance(v, int) or isinstance(v, bool) or v < 0 for v in manifest.values()):
         raise BackupError("Backup model counts are malformed.")
-    expected_counts = manifest
-    if dict(actual_counts) != expected_counts:
+    inventory = bundle.get("model_inventory")
+    if inventory is not None:
+        if (not isinstance(inventory, list)
+                or inventory != sorted(allowed)
+                or set(manifest) != set(inventory)):
+            raise BackupError("Backup coverage does not match the current KOFAD model inventory.")
+        actual_counts.update({label: 0 for label in inventory})
+    if dict(actual_counts) != manifest:
         raise BackupError("Backup model counts do not match its manifest.")
 
     if not actual_counts.get("auth.user"):
@@ -329,7 +366,7 @@ def backup_summary(bundle):
         "created_at": bundle.get("created_at"),
         "created_by": bundle.get("created_by") or "Unknown",
         "record_count": bundle.get("record_count", 0),
-        "model_count": len(bundle.get("model_counts") or {}),
+        "model_count": len(bundle.get("model_inventory") or bundle.get("model_counts") or {}),
         "checksum": bundle.get("fixture_sha256", ""),
     }
 
@@ -364,6 +401,58 @@ def _reset_sequences(models):
                 cursor.execute(statement)
 
 
+def _quarantine_restored_delivery_and_recovery():
+    """A backup is evidence of the past, not permission to resend or log in.
+
+    Restoring past queued messages could cause repeat financial/debt notices.
+    Similarly, staff invitations and one-time codes must not become active
+    again just because an older record was restored.
+    """
+    from marketplace.models import CustomerEmailRecovery, EmailIdentity, EmailNotice
+    from .models import (
+        EmailLetter, Message, SmsAttempt, StaffInvitation, WhatsAppAttempt, WhatsAppBotReply,
+    )
+
+    now = timezone.now()
+    EmailIdentity.objects.exclude(code_digest="").update(
+        code_digest="", pending_email="", requested_at=None, expires_at=None,
+        last_sent_at=None, code_attempts=0,
+    )
+    CustomerEmailRecovery.objects.filter(used=False).update(
+        used=True, expires_at=now, code_digest="",
+    )
+    StaffInvitation.objects.filter(consumed_at__isnull=True).update(expires_at=now)
+    # Legacy email delivery retries queued/failed/sending while attempts < 5.
+    # Exhaust automatic retry attempts so a restored file never resends emails.
+    EmailNotice.objects.filter(status__in=["queued", "sending", "failed"]).update(
+        status="failed", attempts=5, next_attempt_at=now,
+    )
+    # Department email's worker ALSO retries "failed" rows. Use its existing
+    # explicit manual-review state, which the worker never auto-sends.
+    EmailLetter.objects.filter(
+        direction="outbound", status__in=["queued", "sending", "failed"],
+    ).update(
+        status="uncertain", next_attempt_at=None,
+        last_error="Restored snapshot: delivery requires manual reconciliation.",
+    )
+    Message.objects.filter(status__in=["queued", "sending"]).update(
+        status="unknown", last_error="Restored snapshot: delivery status requires manager review.",
+    )
+    SmsAttempt.objects.filter(status__in=["queued", "sending"]).update(status="unknown")
+    WhatsAppAttempt.objects.filter(status__in=["queued", "sending"]).update(status="unknown")
+    WhatsAppBotReply.objects.filter(status__in=["queued", "sending"]).update(
+        status="unknown", error="Restored snapshot: delivery status requires manual review.",
+    )
+
+
+def _verify_restored_rows(bundle):
+    expected = bundle.get("model_counts") or {}
+    for model in backup_models():
+        name = model._meta.label_lower
+        if model._default_manager.count() != expected.get(name, 0):
+            raise BackupError(f"Restored {name} record count does not agree with its signed manifest.")
+
+
 @transaction.atomic
 def restore_backup(bundle, actor_username=""):
     validate_backup(bundle)
@@ -380,11 +469,8 @@ def restore_backup(bundle, actor_username=""):
             restored_models.append(model)
             seen.add(model)
     _reset_sequences(restored_models)
-    # Restoring an old outbox must not resend messages already delivered after the snapshot.
-    from .models import WhatsAppBotReply
-    WhatsAppBotReply.objects.filter(status__in=["queued", "sending"]).update(
-        status="unknown", error="Restored from backup; delivery requires manual review.",
-    )
+    _verify_restored_rows(bundle)
+    _quarantine_restored_delivery_and_recovery()
 
     if not User.objects.filter(is_active=True, is_superuser=True).exists():
         raise BackupError("Restore would leave KOFAD without an active system administrator.")
@@ -493,6 +579,21 @@ def reset_business_data(actor):
     # test doubles and future storage changes.
     Session.objects.all().delete()
 
+    # Do not report a successful system reset if any old business row remains.
+    # Everything is inside the same database transaction and will roll back.
+    expected_shell = {"core.company": 1, "core.branch": 1, "core.access": 1}
+    for model in models:
+        expected = expected_shell.get(model._meta.label_lower, 0)
+        if model._default_manager.count() != expected:
+            raise BackupError(
+                f"Full reset did not clear {model._meta.label_lower} completely. "
+                "The reset was rolled back."
+            )
+    if User.objects.count() != 1 or not User.objects.filter(pk=actor_pk, is_active=True, is_superuser=True).exists():
+        raise BackupError("Administrator access was not preserved; reset rolled back.")
+    if Session.objects.exists():
+        raise BackupError("Old login sessions survived; reset rolled back.")
+
     logger.warning(
         "KOFAD fresh-start reset completed by administrator=%s; all core and marketplace data cleared",
         actor_username,
@@ -518,9 +619,86 @@ def recent_backup_downloaded(session):
     return timezone.now().timestamp() - timestamp <= RECENT_BACKUP_SECONDS
 
 
-def mark_backup_downloaded(session):
+def mark_backup_downloaded(session, encrypted_bytes=None):
     session["kofad_recent_backup_at"] = timezone.now().timestamp()
+    session["kofad_recent_backup_sha256"] = (
+        hashlib.sha256(encrypted_bytes).hexdigest() if encrypted_bytes else ""
+    )
+    # A newer download always requires fresh round-trip validation.
+    session.pop("kofad_verified_backup_sha256", None)
     session.modified = True
+
+
+def mark_backup_verified(session, file_sha256):
+    """Prove the operator possesses the exact file downloaded this session."""
+    if not recent_backup_downloaded(session):
+        return False
+    digest = session.get("kofad_recent_backup_sha256", "")
+    if not digest or not hmac.compare_digest(digest, str(file_sha256 or "")):
+        return False
+    session["kofad_verified_backup_sha256"] = digest
+    session.modified = True
+    return True
+
+
+def recent_backup_verified(session):
+    if not recent_backup_downloaded(session):
+        return False
+    digest = session.get("kofad_recent_backup_sha256", "")
+    return bool(digest and hmac.compare_digest(
+        digest, session.get("kofad_verified_backup_sha256", "")
+    ))
+
+
+COVERAGE_GROUPS = (
+    ("Operations & stock", {"branch", "company", "product", "stock", "party", "document",
+                            "line", "payment", "allocation", "movement", "operation", "closing",
+                            "heldsale", "idempotency", "audit", "correction"}),
+    ("Financial governance & payroll", {"manualjournal", "manualjournalline", "worker",
+                                         "workerdocument", "payrollrule", "payrollperiod",
+                                         "payrollentry", "payrollpayment", "stockcount",
+                                         "stockcountline", "supplierreturn", "quarantineitem"}),
+    ("Business messages & access", {"access", "message", "smsattempt", "smsevent",
+                                     "whatsappattempt", "whatsappwebhookevent",
+                                     "messagetemplate", "staffinvitation",
+                                     "whatsappbotreply", "whatsappbotcontact",
+                                     "debtsettings", "communicationsettings",
+                                     "managementcontact", "customerservicecontact"}),
+)
+
+
+def backup_coverage(stats=None):
+    """Include zero-row models so newly added settings are not silently missed."""
+    if stats is None:
+        stats = maintenance_stats()
+    rows = []
+    for label in sorted(backup_model_labels()):
+        if label in {"contenttypes.contenttype", "auth.permission", "auth.group",
+                     "auth.user", "admin.logentry"}:
+            category = "Staff identities, roles & permissions"
+        elif label.startswith("marketplace."):
+            category = "Online Market, payments, files & customer conversations"
+        else:
+            name = label.split(".", 1)[-1]
+            group = next((title for title, names in COVERAGE_GROUPS if name in names), None)
+            category = group or "Core business, finance & integrations"
+        rows.append({
+            "label": label,
+            "area": category,
+            "records": stats.get(label) if stats.get(label) is not None else 0,
+        })
+    areas = {}
+    for row in rows:
+        area = areas.setdefault(row["area"], {"name": row["area"], "models": 0, "records": 0})
+        area["models"] += 1
+        area["records"] += row["records"]
+    return {
+        "model_count": len(rows),
+        "record_count": sum(x["records"] for x in rows),
+        "areas": sorted(areas.values(), key=lambda x: x["name"]),
+        "models": rows,
+        "excluded_temporary": sorted(EXCLUDED_BACKUP_MODELS),
+    }
 
 
 def maintenance_stats():
@@ -532,4 +710,7 @@ def maintenance_stats():
                     counts[model._meta.label_lower] = model._default_manager.count()
                 except Exception:
                     counts[model._meta.label_lower] = None
+    # Identity, role, and Django admin logs are part of encrypted backups too.
+    for model in (ContentType, Permission, Group, User, LogEntry):
+        counts[model._meta.label_lower] = model._default_manager.count()
     return counts

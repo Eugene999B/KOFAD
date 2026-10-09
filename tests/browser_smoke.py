@@ -510,14 +510,21 @@ with sync_playwright() as p:
         ).click()
     download = backup_download.value
     assert download.suggested_filename.endswith(".kofad.enc")
+    # New safety gate: downloading a file alone does NOT prove that it was
+    # saved and can be decrypted. It must be re-uploaded and validated first.
+    assert reset_button.is_disabled()
+    assert restore_button.is_disabled()
+    admin_page.locator("#validate-file").set_input_files(str(download.path()))
+    admin_page.locator("#validate-passphrase").fill("CI-backup-passphrase-very-strong-42!")
+    admin_page.get_by_role("button", name="Validate backup").click()
     admin_page.wait_for_function(
         "() => !document.querySelector('[data-requires-recent-backup]').disabled",
         timeout=30000,
     )
-    assert not reset_button.is_disabled()
-    assert not restore_button.is_disabled()
+    assert not admin_page.get_by_role("button", name="Reset KOFAD to fresh start", exact=True).is_disabled()
+    assert not admin_page.get_by_role("button", name="Restore full system", exact=True).is_disabled()
     assert admin_page.locator("[data-backup-ready-badge]").is_visible()
-    assert admin_page.locator("[data-backup-state]").get_by_text("Safety backup confirmed.", exact=True).count() == 1
+    assert "validated" in admin_page.locator("[data-backup-state]").inner_text().lower()
 
     admin_page.goto("http://127.0.0.1:8000/administration/")
     admin_sidebar = admin_page.locator(".sidebar")

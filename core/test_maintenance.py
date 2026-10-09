@@ -1,5 +1,8 @@
 import copy
+import hashlib
 import json
+import base64
+from unittest.mock import patch
 from datetime import timedelta
 
 from django.contrib.auth.models import Group, Permission, User
@@ -10,7 +13,10 @@ from django.utils import timezone
 
 from . import maintenance
 from .models import Access, Audit, Branch, Company, Party, Product, Stock
-from marketplace.models import Conversation, CustomerAccount, MarketListing, MarketListingImage, OtpThrottle
+from marketplace.models import (Conversation, ConversationMessage, ConversationAttachment, CustomerAccount,
+                                CustomerEmailRecovery, EmailIdentity, EmailNotice, MarketListing,
+                                MarketListingImage, OtpThrottle, PaymentConfiguration)
+from .models import EmailLetter, EmailMailbox, StaffInvitation
 
 
 class MaintenanceServiceTests(TransactionTestCase):
@@ -103,6 +109,94 @@ class MaintenanceServiceTests(TransactionTestCase):
             "auth.user", "admin.logentry",
         })
         self.assertEqual(maintenance.backup_model_labels(), expected)
+
+    def test_signed_inventory_includes_empty_and_new_financial_models(self):
+        bundle = maintenance.create_backup(self.user)
+        self.assertEqual(bundle["model_inventory"], sorted(maintenance.backup_model_labels()))
+        self.assertEqual(set(bundle["model_counts"]), set(bundle["model_inventory"]))
+        for label in ("marketplace.paymentconfiguration", "marketplace.emailnotice",
+                      "marketplace.conversationattachment", "core.payrollentry",
+                      "core.staffinvitation"):
+            self.assertIn(label, bundle["model_inventory"])
+        self.assertEqual(bundle["model_counts"]["marketplace.paymentconfiguration"], 0)
+        self.assertEqual(maintenance.validate_backup(bundle), bundle)
+        summary = maintenance.backup_coverage()
+        self.assertEqual(summary["model_count"], len(bundle["model_inventory"]))
+
+    def test_encrypted_backup_is_compressed_and_restores_database_media(self):
+        MarketListingImage.objects.create(
+            listing=self.listing, image_data=b"a" * 160000,
+            image_thumb=b"b" * 6000, image_mime="image/png",
+        )
+        password = "recovery-test-passphrase-123456"
+        raw = maintenance.encrypted_backup_bytes(self.user, password)
+        self.assertTrue(raw.startswith(maintenance.ENCRYPTED_BACKUP_MAGIC))
+        header_line = raw[len(maintenance.ENCRYPTED_BACKUP_MAGIC):].split(b"\n", 1)[0]
+        header = json.loads(header_line)
+        self.assertEqual(header["compression"], "zlib")
+        bundle = maintenance.parse_uploaded_backup(raw, password)
+        self.assertEqual(bundle["record_count"], sum(bundle["model_counts"].values()))
+        with patch.object(maintenance, "MAX_BACKUP_BYTES", 1024):
+            with self.assertRaisesRegex(maintenance.BackupError, "safety limit|larger"):
+                maintenance.parse_uploaded_backup(raw, password)
+
+    def test_new_communication_and_financial_models_round_trip_safely(self):
+        PaymentConfiguration.objects.create(provider="hubtel", online_price_markup_percent="2.500")
+        EmailIdentity.objects.create(kind="customer", owner_id=self.market_customer.pk,
+            email="customer@example.test", pending_email="new@example.test",
+            code_digest="1" * 64, expires_at=timezone.now() + timedelta(minutes=10))
+        notice = EmailNotice.objects.create(
+            event_key="backup-delivery-001", email="customer@example.test",
+            subject="Debt notice", body="Historical debt notice", status="queued")
+        mailbox = EmailMailbox.objects.create(
+            address="transactions@example.test", label="Transactions",
+            branch=self.branch,
+        )
+        letter = EmailLetter.objects.create(
+            mailbox=mailbox, direction="outbound", status="queued",
+            from_address="transactions@example.test", to_address="customer@example.test",
+            subject="Old payment confirmation", body_text="Previously queued response",
+            source_key="backup-test-email-001",
+        )
+        conversation = Conversation.objects.get(customer=self.market_customer)
+        chat = ConversationMessage.objects.create(
+            conversation=conversation, sender_type="customer", body="I need the original reply.")
+        ConversationAttachment.objects.create(
+            message=chat, original_name="evidence.pdf", mime_type="application/pdf",
+            size=8, sha256=hashlib.sha256(b"testdata").hexdigest(), data=b"testdata")
+        StaffInvitation.objects.create(
+            user=self.staff, created_by=self.user, token_digest="3" * 64,
+            channel="email", destination="staff@example.test",
+            expires_at=timezone.now() + timedelta(minutes=45))
+        CustomerEmailRecovery.objects.create(
+            customer=self.market_customer, email="customer@example.test",
+            code_digest="4" * 64, password_stamp="x" * 64,
+            expires_at=timezone.now() + timedelta(minutes=30))
+        bundle = maintenance.create_backup(self.user)
+        self.assertEqual(bundle["model_counts"]["marketplace.conversationattachment"], 1)
+        self.assertEqual(bundle["model_counts"]["marketplace.paymentconfiguration"], 1)
+        maintenance.reset_business_data(self.user)
+        self.assertFalse(ConversationMessage.objects.exists())
+        self.assertFalse(PaymentConfiguration.objects.exists())
+        maintenance.restore_backup(bundle, actor_username=self.user.username)
+        restored = PaymentConfiguration.objects.get()
+        self.assertEqual(str(restored.online_price_markup_percent), "2.500")
+        self.assertEqual(restored.provider, "hubtel")
+        self.assertEqual(ConversationMessage.objects.get().body, "I need the original reply.")
+        self.assertEqual(bytes(ConversationAttachment.objects.get().data), b"testdata")
+        restored_notice = EmailNotice.objects.get(pk=notice.pk)
+        self.assertEqual(restored_notice.status, "failed")
+        self.assertEqual(restored_notice.attempts, 5)  # Worker cannot retry a restored notice.
+        restored_letter = EmailLetter.objects.get(pk=letter.pk)
+        self.assertEqual(restored_letter.status, "uncertain")
+        self.assertIsNone(restored_letter.next_attempt_at)
+        self.assertIn("manual reconciliation", restored_letter.last_error)
+        self.assertEqual(EmailIdentity.objects.get().code_digest, "")
+        self.assertIsNone(EmailIdentity.objects.get().expires_at)
+        self.assertTrue(CustomerEmailRecovery.objects.get().used)
+        self.assertEqual(CustomerEmailRecovery.objects.get().code_digest, "")
+        self.assertLessEqual(StaffInvitation.objects.get().expires_at, timezone.now())
+        self.assertTrue(User.objects.get(username="owner").is_superuser)
 
     def test_signed_backup_with_malformed_records_fails_cleanly(self):
         import hashlib
@@ -309,11 +403,43 @@ class MaintenanceViewTests(TestCase):
         )
         self.assertEqual(parsed["format"], maintenance.BACKUP_FORMAT)
         self.assertTrue(maintenance.recent_backup_downloaded(self.client.session))
+        self.assertFalse(maintenance.recent_backup_verified(self.client.session))
+        response_status = self.client.get("/settings/backup/status/")
+        self.assertFalse(response_status.json()["verified"])
+        upload = SimpleUploadedFile("download.kofad.enc", response.content)
+        validated = self.client.post("/settings/backup/", {
+            "action": "validate", "backup_file": upload,
+            "backup_passphrase": "test-backup-passphrase-1234",
+        })
+        self.assertEqual(validated.status_code, 200)
+        self.assertTrue(maintenance.recent_backup_verified(self.client.session))
 
         after = self.client.get("/settings/backup/status/")
         self.assertEqual(after.status_code, 200)
         self.assertTrue(after.json()["recent"])
+        self.assertTrue(after.json()["verified"])
         self.assertGreater(after.json()["expires_in_seconds"], 0)
+
+    def test_other_valid_backup_does_not_unlock_reset(self):
+        self._login(self.admin)
+        earlier = maintenance.encrypted_backup_bytes(self.admin, "test-backup-passphrase-1234")
+        downloaded = self.client.post("/settings/backup/download/", {
+            "password": "test-password-long-enough",
+            "backup_passphrase": "test-backup-passphrase-1234",
+            "backup_passphrase_confirm": "test-backup-passphrase-1234",
+        })
+        self.assertEqual(downloaded.status_code, 200)
+        self.assertFalse(maintenance.mark_backup_verified(
+            self.client.session, hashlib.sha256(earlier).hexdigest()
+        ))
+        other_file = SimpleUploadedFile("old.kofad.enc", earlier)
+        checked = self.client.post("/settings/backup/", {
+            "action": "validate", "backup_file": other_file,
+            "backup_passphrase": "test-backup-passphrase-1234",
+        })
+        self.assertEqual(checked.status_code, 200)
+        self.assertFalse(maintenance.recent_backup_verified(self.client.session))
+        self.assertContains(checked, "validate the exact encrypted file")
 
     def test_reset_requires_recent_backup_and_exact_confirmation(self):
         self._login(self.admin)
@@ -361,7 +487,19 @@ class MaintenanceDestructiveViewTests(TransactionTestCase):
             "backup_passphrase_confirm": "safety-backup-passphrase-1234",
         })
         self.assertEqual(backup.status_code, 200)
-
+        before_validation = self.client.post("/settings/backup/", {
+            "action": "reset", "password": "test-password-long-enough",
+            "confirmation": maintenance.RESET_CONFIRMATION, "understand": "yes",
+        })
+        self.assertEqual(before_validation.status_code, 200)
+        self.assertTrue(Product.objects.filter(sku="RESET-ME").exists())
+        validation = self.client.post("/settings/backup/", {
+            "action": "validate",
+            "backup_file": SimpleUploadedFile("download.kofad.enc", backup.content),
+            "backup_passphrase": "safety-backup-passphrase-1234",
+        })
+        self.assertEqual(validation.status_code, 200)
+        self.assertTrue(maintenance.recent_backup_verified(self.client.session))
         response = self.client.post("/settings/backup/", {
             "action": "reset",
             "password": "test-password-long-enough",
@@ -394,6 +532,12 @@ class MaintenanceDestructiveViewTests(TransactionTestCase):
             "backup_passphrase_confirm": "safety-backup-passphrase-1234",
         })
         self.assertEqual(safety.status_code, 200)
+        validation = self.client.post("/settings/backup/", {
+            "action": "validate",
+            "backup_file": SimpleUploadedFile("safety.kofad.enc", safety.content),
+            "backup_passphrase": "safety-backup-passphrase-1234",
+        })
+        self.assertEqual(validation.status_code, 200)
         upload = SimpleUploadedFile(
             "original.kofad.json",
             original,
