@@ -439,6 +439,13 @@ def deliver_outgoing(limit=10):
             and settings.KOFAD_BREVO_API_KEY):
         return 0
     now = timezone.now()
+    # An interrupted worker may have reached Brevo before crashing. Never
+    # automatically resend a stuck submission and risk duplicate receipts.
+    EmailLetter.objects.filter(
+        direction="outbound", status="sending",
+        next_attempt_at__lt=now - timedelta(minutes=20),
+    ).update(status="uncertain",
+             last_error="Submission was interrupted; review before retrying.")
     ids = list(EmailLetter.objects.filter(
         direction="outbound", status__in=["queued", "failed"], attempts__lt=3,
         next_attempt_at__lte=now,
@@ -449,7 +456,8 @@ def deliver_outgoing(limit=10):
             claimed = EmailLetter.objects.filter(
                 pk=pk, direction="outbound", status__in=["queued", "failed"],
                 attempts__lt=3, next_attempt_at__lte=timezone.now(),
-            ).update(status="sending", attempts=models.F("attempts") + 1)
+            ).update(status="sending", attempts=models.F("attempts") + 1,
+                     next_attempt_at=timezone.now())
         if not claimed:
             continue
         row = EmailLetter.objects.get(pk=pk)
