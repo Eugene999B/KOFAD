@@ -8,7 +8,7 @@ const profiles = Object.freeze({
   }),
   staff: Object.freeze({
     appId: "com.kofadimpex.staff.windows", productName: "KOFAD Staff",
-    userData: "KOFAD-Staff", startUrl: "https://staff.kofadimpex.com/login/",
+    userData: "KOFAD-Staff", startUrl: "https://staff.kofadimpex.com/workspace/",
     hosts: ["staff.kofadimpex.com"],
     windowsFeed: "https://downloads.kofadimpex.com/windows/staff/",
   }),
