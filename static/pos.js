@@ -230,11 +230,16 @@
     if (!cart.length) container.append(el("div", "Choose a product to start.", "empty cart-empty"));
     cart.forEach((line, index) => {
       const row = el("div", undefined, "cart-line");
-      const top = el("div", undefined, "section-heading");
-      top.append(el("strong", line.name));
-      const remove = el("button", "×", "text-button");
+      const top = el("div", undefined, "cart-line-header");
+      const title = el("strong", line.name, "cart-product-name");
+      top.append(title);
+      const remove = el("button", "Remove", "cart-remove-button");
       remove.type = "button";
-      remove.setAttribute("aria-label", "Remove " + line.name);
+      remove.setAttribute("aria-label", "Remove " + line.name + " from sale");
+      remove.title = "Remove " + line.name;
+      const removeSymbol = el("span", "✕", "cart-remove-symbol");
+      removeSymbol.setAttribute("aria-hidden", "true");
+      remove.prepend(removeSymbol);
       remove.addEventListener("click", () => {
         changed();
         cart.splice(index, 1);
@@ -243,7 +248,7 @@
       top.append(remove);
       row.append(
         top,
-        el("small", modeLabel(line) + " · " + line.factor + " base unit" + (line.factor === 1 ? "" : "s") + " each", "muted")
+        el("small", modeLabel(line) + " · " + line.factor + " base unit" + (line.factor === 1 ? "" : "s") + " each", "cart-line-meta muted")
       );
       const controls = el("div", undefined, "cart-controls");
       const quantity = el("input");
@@ -263,7 +268,9 @@
         line.quantity = n;
         render();
       });
-      controls.append(quantity);
+      const quantityWrap = el("label", undefined, "cart-quantity-field");
+      quantityWrap.append(el("span", "Qty"), quantity);
+      controls.append(quantityWrap);
 
       if (purchase || allowPriceOverrides) {
         const priceWrap = el("label", undefined, "cart-control-field");
@@ -318,7 +325,9 @@
         discountWrap.append(discount);
         controls.append(discountWrap);
       }
-      controls.append(el("strong", formatted(effectiveUnit(line) * line.quantity)));
+      const lineTotal = el("div", undefined, "cart-line-value");
+      lineTotal.append(el("span", "Line total"), el("strong", root.dataset.currency + " " + formatted(effectiveUnit(line) * line.quantity)));
+      controls.append(lineTotal);
       row.append(controls);
       container.append(row);
     });
@@ -894,6 +903,18 @@
 
   function syncPaystackMomoPanel() {
     const active = directMomoSelected();
+    const deposit = document.querySelector("#momo-deposit-amount");
+    const balance = document.querySelector("#momo-balance-amount");
+    if (deposit && balance) {
+      try {
+        const depositCents = cents(document.querySelector("#pay-momo")?.value || "0");
+        deposit.textContent = root.dataset.currency + " " + formatted(depositCents);
+        balance.textContent = root.dataset.currency + " " + formatted(Math.max(0, total() - depositCents));
+      } catch (_) {
+        deposit.textContent = "Check amount";
+        balance.textContent = "—";
+      }
+    }
     paystackMomoPanel?.classList.toggle("hidden", !active);
     if (active) {
       if (paystackMomoPhone && !paystackMomoPhone.value) {
@@ -974,12 +995,14 @@
   singlePaymentValue?.addEventListener("input", () => {
     changed();
     syncSinglePayment();
+    syncPaystackMomoPanel();
     persist();
   });
   paymentMethods.forEach(method => {
     document.querySelector("#pay-" + method)?.addEventListener("input", () => {
       changed();
       renderCheckoutSummary();
+      syncPaystackMomoPanel();
       persist();
     });
   });
@@ -1379,7 +1402,7 @@
         // it. Begin a new review rather than reusing its signed token.
         pendingBody = null;
         requestKey = crypto.randomUUID();
-            lockCheckoutForMomo(false);
+        lockCheckoutForMomo(false);
         persist();
       } else if (!momoReference) {
         // The network/browser may have lost a successful POST response.
