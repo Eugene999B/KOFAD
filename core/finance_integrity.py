@@ -205,6 +205,8 @@ def financial_controls(branch, first, last):
     closings = _limit(Closing.objects.filter(branch=branch, date__range=(first, last)),
                       "Daily closings")
     for closing in closings:
+        recomputed_channels = s.channel_totals(branch, closing.date)
+        recomputed_channels["cash"] += closing.opening_cash + closing.cash_in - closing.cash_out
         for method in ("cash", "momo", "bank", "card"):
             try:
                 expected = Decimal(str((closing.expected or {}).get(method, "0")))
@@ -214,6 +216,11 @@ def financial_controls(branch, first, last):
                        f"{method.upper()} counted reconciliation", 1, 0,
                        "Invalid saved channel amount: manager investigation required")
             else:
+                record(closing.date, "Daily closing", closing.date,
+                       f"{method.upper()} stored expected versus recomputed source movements",
+                       recomputed_channels[method], expected,
+                       "Recalculate from signed transaction channels, payroll and recorded cash float; "
+                       "investigate a closing snapshot that differs from its source records.")
                 record(closing.date, "Daily closing", closing.date,
                        f"{method.upper()} counted versus expected", expected, counted,
                        "Physical/provider balance differs from the closing; variance requires review",
