@@ -21,7 +21,7 @@
  <p>Cashier-initiated Paystack MoMo payments are tracked separately from online marketplace orders. Only independently verified and posted sales have printable receipts.</p>
  <div class="payment-attempt-list">{% for payment in pos_momo_rows %}
  <article><div><strong>{{ payment.customer_name }}</strong><small>{{ payment.phone }} · {{ payment.network }} · Cashier: {{ payment.cashier }}</small><code>{{ payment.reference }}</code><small>{{ payment.created_at|date:"d M Y, H:i" }}</small></div>
- <div><strong>GHS {{ payment.amount }}</strong><span class="pill">{{ payment.display_status }}</span><small>Checks: {{ payment.check_count }}</small><a href="{% url 'pos_momo_payment' payment.reference %}">Track / Verify →</a>{% if payment.paid %}<a href="{{ payment.receipt_thermal }}" target="_blank" rel="noopener">Print receipt</a><a href="{{ payment.receipt_a4 }}" target="_blank" rel="noopener">A4 PDF</a>{% endif %}</div></article>
+ <div><strong>MoMo GHS {{ payment.amount }}</strong><small>Sale {{ payment.sale_total }} · Balance due {{ payment.balance_due }}</small><span class="pill">{{ payment.display_status }}</span><small>Checks: {{ payment.check_count }}</small><a href="{% url 'pos_momo_payment' payment.reference %}">Track / Verify →</a>{% if payment.paid %}<a href="{{ payment.receipt_thermal }}" target="_blank" rel="noopener">Print receipt</a><a href="{{ payment.receipt_a4 }}" target="_blank" rel="noopener">A4 PDF</a>{% endif %}</div></article>
  {% empty %}<p class="empty">No staff Paystack MoMo attempts in this location.</p>{% endfor %}</div>
  <p class="hint">Open all payments to search and filter paid, pending, failed and manager-review transactions.</p>
 </section>

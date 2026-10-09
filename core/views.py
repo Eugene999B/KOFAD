@@ -843,16 +843,9 @@ def pos_paystack_momo_start(request):
         if not (original_paystack or original_hubtel) and requested and requested != chosen:
             raise ValidationError("The payment provider was changed in Settings. Refresh this checkout before proceeding.")
         processor = pos_hubtel if chosen == "hubtel" else pos_paystack
-        if chosen == "paystack" and not original_paystack:
-            if data.get("recipient_confirmed") is not True:
-                raise ValidationError("Review recipient details and obtain consent before sending a payment request.")
-            from .pos_payment_views import validate_review_token
-            validate_review_token(
-                data.get("recipient_review_token"),
-                user=request.user, branch=branch, key=key,
-                phone=data.get("phone"), provider=data.get("provider"),
-                sale=data.get("sale"),
-            )
+        # No unsupported wallet-name lookup or pre-approval token: the cashier
+        # initiates the charge directly. Paystack's independently verified
+        # amount/reference/currency/channel still gates sale posting.
         result = processor.start(
             request.user,
             branch,
@@ -945,12 +938,16 @@ def documents(request):
         allowed += ["expense", "collection", "supplier_payment", "creditor_charge", "supplier_return", "inventory_writeoff"]
     if kind not in allowed:
         raise PermissionDenied
-    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
+    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by").prefetch_related("payments")
     q = request.GET.get("q", "")[:100]
     if q:
         rows = rows.filter(Q(reference__icontains=q) | Q(party__name__icontains=q))
+    from django.core.paginator import Paginator
+    from .sale_history import decorate_sales
+    page = Paginator(rows.order_by("-created_at", "-pk"), 50).get_page(request.GET.get("page"))
     return render(request, "documents.html", {"title": dict(Document.KINDS).get(kind, "Transactions"),
-        "rows": rows[:200], "kind": kind, "q": q})
+        "rows": decorate_sales(branch, page.object_list), "kind": kind, "q": q,
+        "page_obj": page})
 
 
 @login_required
@@ -965,6 +962,8 @@ def document(request, pk):
     )
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
+    from .sale_history import decorate_sales
+    decorate_sales(branch, [doc])
     return render(request, "document.html", {
         "title": doc.reference,
         "doc": doc,

@@ -1187,6 +1187,10 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
 
     was_cancelled = order.status == "cancelled"
     channel = str(provider_data.get("channel", ""))[:40]
+    payment_channel_label = {
+        "mobile_money": "Mobile Money", "card": "bank card",
+        "bank": "bank payment", "bank_transfer": "bank transfer",
+    }.get(channel, "online payment")
     now = timezone.now()
     order.status = "paid"
     order.payment_status = "paid"
@@ -1232,16 +1236,27 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     from .notifications import queue_order_sms
     queue_order_sms(
         order, "paid",
-        f"KOFAD: Payment confirmed for {order.customer_reference}. "
-        f"Amount: GHS {order.total:.2f}. Follow your order status in your account. "
-        "Track it in your KOFAD Market account.",
+        f"KOFAD: Payment verified for order {order.customer_reference}. "
+        f"Received GHS {order.total:.2f} via {payment_channel_label}. "
+        f"Your 6-digit collection/delivery code is {handover_code(order)}. "
+        "Show this code to KOFAD staff only when you receive your items; "
+        "they must enter it to confirm handover. Never share your MoMo PIN. "
+        "Track your order in KOFAD Market.",
     )
     from core.email_identity import enqueue_notice
     transaction.on_commit(lambda: enqueue_notice(
         "customer", order.customer_id, f"order-paid:{order.pk}",
-        "KOFAD payment confirmed",
-        f"Payment received for order {order.customer_reference}. "
-        f"Amount: GHS {order.total:.2f}. View your receipt and delivery progress in your account.",
+        f"KOFAD payment confirmed — {order.customer_reference}",
+        f"Hello {order.recipient_name},\n\n"
+        f"Your payment for KOFAD order {order.customer_reference} has been independently verified.\n"
+        f"Amount received: GHS {order.total:.2f}\n"
+        f"Payment channel: {payment_channel_label}\n"
+        f"Order status: {order.get_status_display()}\n"
+        f"Fulfilment: {order.get_fulfilment_display()}\n\n"
+        "You can follow your delivery or pickup updates and view the order details in your KOFAD Market account. "
+        "Please quote your order reference when contacting customer support. "
+        "If a separate payment is still shown as pending, do not pay it again without verification.\n\n"
+        "Thank you for shopping with KOFAD.",
     ))
     from core.email_identity import enqueue_staff_payment_alerts
     transaction.on_commit(lambda: enqueue_staff_payment_alerts(order))
@@ -1331,12 +1346,23 @@ def advance_order(user, order, action, cleaned):
         if target in {"ready_pickup", "out_for_delivery"}:
             extra = f" Your handover code is {handover_code(order)}."
         from .notifications import queue_order_sms
-        queue_order_sms(order, target, f"KOFAD: {title} for {order.customer_reference}.{extra}")
+        queue_order_sms(
+            order, target,
+            f"KOFAD: {title} for order {order.customer_reference}. "
+            f"{'Your order is ready for pickup.' if target == 'ready_pickup' else 'Follow your KOFAD account for fulfilment updates.'}{extra}"
+            " Keep your order reference for support.",
+        )
         from core.email_identity import enqueue_notice
         transaction.on_commit(lambda: enqueue_notice(
             "customer", order.customer_id, f"order-progress:{order.pk}:{target}",
-            "KOFAD order update",
-            f"{title} for {order.customer_reference}. View the latest status in your KOFAD Market account.",
+            f"KOFAD order update — {order.customer_reference}",
+            f"Hello {order.recipient_name},\n\n"
+            f"{title} for order {order.customer_reference}.\n"
+            f"Current order status: {order.get_status_display()}.\n"
+            f"Fulfilment: {order.get_fulfilment_display()}.\n"
+            "View your KOFAD Market account for the latest progress. "
+            "Please give your handover code to KOFAD only when you receive your items.\n\n"
+            "Thank you for choosing KOFAD.",
         ))
     return order
 

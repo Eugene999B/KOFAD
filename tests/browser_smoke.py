@@ -423,12 +423,13 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "market-catalog-readable.png"), full_page=True)
 
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
-    admin_page.locator("tbody td").first.wait_for()
-    assert float(admin_page.locator("tbody td").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
-    assert admin_page.locator("tbody td").first.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
-    sale_history_row = admin_page.locator("tbody tr[data-row-href]").first
-    sale_target = sale_history_row.get_attribute("data-row-href")
-    sale_history_row.locator("td").nth(1).click()
+    admin_page.locator(".sales-history-item").first.wait_for()
+    sale_link = admin_page.locator(".sales-history-reference").first
+    assert float(sale_link.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+    assert sale_link.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    sale_target = sale_link.get_attribute("href")
+    assert sale_target and sale_target.startswith("/documents/")
+    sale_link.click()
     admin_page.wait_for_url("http://127.0.0.1:8000" + sale_target)
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
     admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")

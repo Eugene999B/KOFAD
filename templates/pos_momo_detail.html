@@ -11,7 +11,10 @@
   </div>
   <p id="payment-stage-message" role="status" aria-live="polite">{{ payment.message }}</p>
   <div class="momo-summary">
-    <div><small>Amount requested</small><strong>{{ payment.currency }} {{ payment.amount }}</strong></div>
+    <div><small>Mobile Money deposit</small><strong>{{ payment.currency }} {{ payment.amount }}</strong></div>
+    <div><small>Sale total</small><strong>{{ payment.currency }} {{ payment.sale_total }}</strong></div>
+    <div><small>Remaining customer debt</small><strong>{{ payment.currency }} {{ payment.balance_due }}</strong></div>
+    {% if payment.due_date %}<div><small>Balance due date</small><strong>{{ payment.due_date }}</strong></div>{% endif %}
     <div><small>Customer (KOFAD record)</small><strong>{{ payment.customer_name }}</strong></div>
     <div><small>Mobile Money network</small><strong>{{ payment.network }}</strong></div>
     <div><small>Recipient number</small><strong>{{ payment.phone }}</strong></div>
@@ -38,8 +41,8 @@
     </form>
   </div>
   <div id="payment-receipt" class="momo-receipt {% if not payment.paid %}hidden{% endif %}">
-    <h3>Payment confirmed — receipt ready</h3>
-    <p>The receipt is available only after Paystack confirmed the transaction and KOFAD posted the sale.</p>
+    <h3>MoMo payment confirmed — receipt ready</h3>
+    <p>Paystack verified the amount collected. KOFAD posted the sale, with any unpaid balance recorded against the customer's account and shown on the receipt.</p>
     <div class="momo-actions">
       <a class="button" id="payment-print" {% if payment.receipt_thermal %}href="{{ payment.receipt_thermal }}"{% endif %} target="_blank" rel="noopener">Print 80mm receipt</a>
       <a class="button secondary" id="payment-a4" {% if payment.receipt_a4 %}href="{{ payment.receipt_a4 }}"{% endif %} target="_blank" rel="noopener">Download A4 PDF</a>

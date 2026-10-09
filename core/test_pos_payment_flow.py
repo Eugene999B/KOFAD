@@ -33,63 +33,35 @@ class PosMomoPaymentFlowTests(Fixtures, TestCase):
             "payments": [{"method": "momo", "amount": "50.00"}],
         }
 
-    def _review(self, key, phone="0551234567"):
-        return self.client.post("/api/pos/paystack-momo/recipient-review/",
-            data=json.dumps({
-                "phone": phone, "provider": "mtn", "request_key": str(key),
-                "party": self.customer.pk, "name": self.customer.name,
-                "amount_pesewas": 5000,
-            }), content_type="application/json")
-
-    def _start(self, key, *, token=None, phone="0551234567", confirmed=True):
+    def _start(self, key, *, phone="0551234567"):
         return self.client.post("/api/pos/paystack-momo/start/",
             data=json.dumps({
                 "sale": self._payload(), "phone": phone, "email": "",
                 "provider": "mtn", "payment_gateway": "paystack",
-                "request_key": str(key), "recipient_confirmed": confirmed,
-                "recipient_review_token": token or "",
+                "request_key": str(key),
             }), content_type="application/json",
             HTTP_IDEMPOTENCY_KEY=str(key))
 
     @patch("core.pos_paystack.requests.post")
-    def test_verify_customer_never_claims_paystack_wallet_name(self, charge):
+    def test_staff_does_not_require_unsupported_wallet_name_lookup(self, charge):
         key = uuid.uuid4()
-        response = self._review(key)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["customer_name"], self.customer.name)
-        self.assertIsNone(data["registered_wallet_name"])
-        self.assertFalse(data["wallet_name_verified"])
-        self.assertTrue(data["review_token"])
-        charge.assert_not_called()
+        reference = pos_paystack._reference_from_key(key)
+        charge.return_value = Mock(status_code=200, json=lambda: {
+            "status": True, "data": {"reference": reference, "status": "pay_offline"},
+        })
+        result = self._start(key)
+        self.assertEqual(result.status_code, 200, result.content)
+        charge.assert_called_once()
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(self.client.post("/api/pos/paystack-momo/recipient-review/",
+                                          data="{}", content_type="application/json").status_code, 404)
 
     @patch("core.pos_paystack.requests.post")
-    def test_charge_requires_unexpired_matching_review_and_customer_consent(self, charge):
-        key = uuid.uuid4()
-        token = self._review(key).json()["review_token"]
-        self.assertEqual(self._start(key, token=None).status_code, 400)
-        self.assertEqual(self._start(key, token=token, confirmed=False).status_code, 400)
-        self.assertEqual(self._start(key, token=token, phone="0241234567").status_code, 400)
-        self.assertEqual(self._start(uuid.uuid4(), token=token).status_code, 400)
+    def test_invalid_momo_phone_never_initiates_provider_charge(self, charge):
+        response = self._start(uuid.uuid4(), phone="bad")
+        self.assertEqual(response.status_code, 400)
         charge.assert_not_called()
         self.assertEqual(Document.objects.count(), 0)
-
-    @patch("core.pos_paystack.requests.post")
-    def test_review_token_rejects_changed_sale_amount(self, charge):
-        key = uuid.uuid4()
-        token = self._review(key).json()["review_token"]
-        changed = self._payload()
-        changed["payments"][0]["amount"] = "51.00"
-        response = self.client.post("/api/pos/paystack-momo/start/",
-            data=json.dumps({
-                "sale": changed, "phone": "0551234567",
-                "provider": "mtn", "email": "", "payment_gateway": "paystack",
-                "request_key": str(key), "recipient_confirmed": True,
-                "recipient_review_token": token,
-            }), content_type="application/json", HTTP_IDEMPOTENCY_KEY=str(key))
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("details changed", response.json()["error"].lower())
-        charge.assert_not_called()
 
     @patch("core.pos_paystack.requests.post")
     def test_pending_manual_verify_and_paid_receipts(self, charge):
@@ -99,8 +71,7 @@ class PosMomoPaymentFlowTests(Fixtures, TestCase):
             "status": True, "data": {"reference": reference, "status": "pay_offline",
                                     "display_text": "Approve on your phone."},
         })
-        token = self._review(key).json()["review_token"]
-        started = self._start(key, token=token)
+        started = self._start(key)
         self.assertEqual(started.status_code, 200, started.content)
         self.assertEqual(started.json()["reference"], reference)
         self.assertEqual(charge.call_count, 1)

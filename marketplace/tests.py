@@ -447,6 +447,53 @@ class MarketFulfilmentTests(MarketFixtures):
             "channel": "card",
         })
 
+    @override_settings(SMS_ENABLED=True)
+    def test_verified_payment_sms_contains_customer_handover_code(self):
+        from core.models import Message
+        order = self.order()
+        self.assertFalse(Message.objects.filter(
+            source_key=f"market-event:{order.pk}:paid",
+        ).exists())
+        reference = "KFD-SMS-HANDOVER"
+        MarketPaymentAttempt.objects.create(
+            order=order, reference=reference, amount=order.total,
+            currency="GHS", status="pending",
+        )
+        order = services.finalize_payment(reference, {
+            "status": "success", "amount": int(order.total * 100),
+            "currency": "GHS", "channel": "card",
+        })
+        message = Message.objects.get(source_key=f"market-event:{order.pk}:paid")
+        code = services.handover_code(order)
+        self.assertEqual(len(code), 6)
+        self.assertTrue(code.isdigit())
+        self.assertIn(f"collection/delivery code is {code}", message.body)
+        self.assertIn("when you receive your items", message.body)
+        self.assertIn("Received GHS", message.body)
+        self.assertEqual(message.recipient, order.phone)
+        self.assertEqual(message.status, "draft")
+        services.finalize_payment(reference, {
+            "status": "success", "amount": int(order.total * 100),
+            "currency": "GHS", "channel": "card",
+        })
+        self.assertEqual(Message.objects.filter(
+            source_key=f"market-event:{order.pk}:paid",
+        ).count(), 1)
+
+    def test_staff_order_detail_requires_customer_code_without_revealing_it(self):
+        order = self.paid_order()
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session["mfa_ok"] = True
+        session.save()
+        response = self.client.get(f"/online-orders/{order.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ask the customer for their 6-digit code")
+        self.assertNotContains(response, services.handover_code(order))
+
     def test_pickup_cannot_complete_without_customer_handover_code(self):
         order = self.paid_order()
         order = services.advance_order(self.staff, order, "prepare", {

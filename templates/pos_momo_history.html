@@ -11,7 +11,7 @@
 {% for row in page_obj %}
 <article class="momo-history-entry">
  <div><a href="{% url 'pos_momo_payment' row.payment.reference %}"><strong>{{ row.payment.customer_name }}</strong></a><small>{{ row.payment.phone }} · {{ row.payment.network }} · {{ row.held.created_at|date:"d M Y, H:i" }}</small><code>{{ row.payment.reference }}</code><small>Cashier: {{ row.payment.cashier }}</small></div>
- <div><strong>GHS {{ row.payment.amount }}</strong><span class="momo-history-status" data-status="{{ row.payment.status }}">{{ row.payment.display_status }}</span><small>Checks: {{ row.payment.check_count }}</small>
+ <div><strong>MoMo GHS {{ row.payment.amount }}</strong><small>Sale {{ row.payment.sale_total }} · Balance {{ row.payment.balance_due }}</small><span class="momo-history-status" data-status="{{ row.payment.status }}">{{ row.payment.display_status }}</span><small>Checks: {{ row.payment.check_count }}</small>
  <a href="{% url 'pos_momo_payment' row.payment.reference %}">Details / Verify →</a>
  {% if row.payment.paid %}<a href="{{ row.payment.receipt_thermal }}" target="_blank" rel="noopener">Print receipt</a><a href="{{ row.payment.receipt_a4 }}" target="_blank" rel="noopener">A4 PDF</a>{% endif %}</div>
 </article>

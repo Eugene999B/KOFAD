@@ -1,4 +1,5 @@
 {% extends "base.html" %}{% load static %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'sales-history-v2.css' %}">{% endblock %}
 {% block actions %}
 <div class="actions receipt-actions">
 {% if doc.party and doc.kind == "sale" and outstanding and perms.core.operate_sales %}
@@ -11,7 +12,21 @@
 </div>
 {% endblock %}
 {% block content %}
-{% if doc.kind == "sale" %}<section class="panel"><h2>Receipt delivery</h2>{% include "_receipt_channels.html" with row=doc %}</section>{% endif %}
+{% if doc.kind == "sale" %}
+<section class="panel" aria-label="Sale payment details">
+  <p class="eyebrow">PAYMENT &amp; AUDIT</p><h2>{{ doc.transaction_type }}</h2>
+  <p>{% if doc.online_payment_reference %}✓ Online order payment independently verified with {{ doc.online_payment_provider }} and posted to this sale.{% elif doc.paystack_verified_reference %}✓ Mobile Money deposit independently verified with Paystack and posted to this sale.{% else %}{{ doc.payment_evidence }}. Cashier-entered payment records are not automatically gateway-verified.{% endif %}</p>
+  <div class="sale-details-overview">
+    <div><small>Original sale value</small><strong>{{ company.currency }} {{ doc.total|floatformat:2 }}</strong></div>
+    <div><small>Paid when posted</small><strong>{{ company.currency }} {{ doc.paid|floatformat:2 }}</strong></div>
+    <div><small>Current outstanding</small><strong>{{ company.currency }} {{ outstanding|floatformat:2 }}</strong></div>
+    <div><small>Payment method</small><strong>{{ doc.payment_method_summary }}</strong></div>
+  </div>
+  {% if doc.due_date %}<p><strong>Payment due:</strong> {{ doc.due_date|date:"d M Y" }}{% if outstanding %} · Remaining balance is tracked in Customer Debts.{% endif %}</p>{% endif %}
+  {% if doc.paystack_verified_reference %}<a class="sale-details-link" href="{% url 'pos_momo_payment' doc.paystack_verified_reference %}">View verified Paystack transaction and approval history →</a>{% elif doc.online_order_pk %}<a class="sale-details-link" href="/online-orders/{{ doc.online_order_pk }}/">View original online order and payment attempts →</a>{% endif %}
+  <p class="hint">This is a posted sale receipt. Pending or declined Mobile Money prompts are listed separately in <a href="{% url 'pos_momo_payments' %}">payment requests</a>, and do not count as completed sales.</p>
+</section>
+<section class="panel"><h2>Receipt delivery</h2>{% include "_receipt_channels.html" with row=doc %}</section>{% endif %}
 <article class="panel receipt document-receipt">
 <header class="receipt-header">
 <div class="brand receipt-brand">{% include "brand.html" %}</div>

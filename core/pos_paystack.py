@@ -22,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import services
+from .payment_failure_guidance import explain_provider_error
 from .identity import normalize_ghana_phone
 from .models import Document, HeldSale, Idempotency, Message, Party
 
@@ -128,12 +129,12 @@ def _payment_amount(payload):
             amount = Decimal(str(row.get("amount", "0")))
         except (InvalidOperation, TypeError, ValueError) as exc:
             raise ValidationError("Invalid payment amount.") from exc
-        if not amount.is_finite() or amount < 0:
-            raise ValidationError("Invalid payment amount.")
+        if not amount.is_finite() or amount < 0 or amount != amount.quantize(Decimal("0.01")):
+            raise ValidationError("Enter a valid nonnegative payment amount with at most two decimal places.")
         if amount > 0:
             nonzero.append((str(row.get("method", "")), amount))
     if len(nonzero) != 1 or nonzero[0][0] != "momo":
-        raise ValidationError("Direct MoMo approval is available only for a full MoMo payment.")
+        raise ValidationError("Direct MoMo requires one positive Mobile Money amount. Do not mix unverified payment methods.")
     return nonzero[0][1]
 
 
@@ -245,13 +246,18 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     if not ready():
         raise ValidationError("Paystack direct MoMo is awaiting activation.")
     payload = copy.deepcopy(sale_payload)
-    if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
-        raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
     email = _customer_email(branch, payload, email, phone)
     paid_amount = _payment_amount(payload)
+    if paid_amount <= 0:
+        raise ValidationError("The Mobile Money deposit must be greater than zero.")
+    # Preview executes the real sale/credit-policy validation atomically and
+    # rolls everything back. An unpaid remainder is never posted until Paystack
+    # proves that this exact MoMo deposit was received.
     total = _preview_total(user, branch, payload)
-    if paid_amount != total or total <= 0:
-        raise ValidationError("The MoMo request must exactly match the full sale total.")
+    if total <= 0 or paid_amount > total:
+        raise ValidationError("The MoMo payment cannot exceed the sale total.")
+    if paid_amount < total and not (payload.get("party") or str(payload.get("customer_name") or "").strip()):
+        raise ValidationError("Select a customer before recording the outstanding amount as debt.")
 
     party_name = ""
     if payload.get("party"):
@@ -274,7 +280,10 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         "customer_name": customer_name_at_request,
         "cashier_name": cashier_at_request,
         "email": email,
-        "amount": str(total),
+        "amount": str(paid_amount),
+        "sale_total": str(total),
+        "balance_due": str(total - paid_amount),
+        "due_date": str(payload.get("due_date") or ""),
         "request_key": str(request_key),
         "created_at": now.timestamp(),
         "expires_at": (now + timedelta(seconds=180)).timestamp(),
@@ -310,7 +319,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
 
     request_body = {
         "email": email,
-        "amount": str(int(total * 100)),
+        "amount": str(int(paid_amount * 100)),
         "currency": "GHS",
         "reference": reference,
         # Paystack's Ghana Mobile Money contract documents the local 0XXXXXXXXX format.
@@ -351,7 +360,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     ):
         state["status"] = "submission_unknown"
         state["provider_status"] = provider_status or "unknown"
-        state["message"] = str(body.get("message", "Paystack rejected the MoMo request."))[:240] if isinstance(body, dict) else "Paystack rejected the MoMo request."
+        state["message"] = explain_provider_error(body.get("message") if isinstance(body, dict) else "")
         state["next_check_at"] = (timezone.now() + timedelta(seconds=20)).timestamp()
         _save_state(held, state)
         return _response_state(held)
@@ -482,11 +491,18 @@ def finalize_verified(reference, verified):
                 state.get("request_key"),
                 kind="sale",
             )
-            if doc.total != Decimal(str(state["amount"])) or doc.paid != doc.total:
-                raise ValidationError("Sale total changed after payment was requested.")
+            expected_total = Decimal(str(state.get("sale_total", state["amount"])))
+            expected_paid = Decimal(str(state["amount"]))
+            if (doc.total != expected_total or doc.paid != expected_paid
+                    or doc.total - doc.paid != expected_total - expected_paid):
+                raise ValidationError("Sale total or paid amount changed after payment was requested.")
+            if doc.paid < doc.total and (not doc.party_id or not doc.due_date):
+                raise ValidationError("An unpaid balance must have a named debtor and a due date.")
             state["status"] = "success"
             state["provider_status"] = provider_status
-            state["message"] = "Payment verified by Paystack and sale posted."
+            state["message"] = ("Deposit verified and sale posted with outstanding customer debt."
+                                 if doc.paid < doc.total else
+                                 "Payment verified by Paystack and sale posted.")
             state["verified_at"] = timezone.now().timestamp()
             state["next_check_at"] = None
             state["document_id"] = str(doc.pk)
@@ -502,7 +518,9 @@ def finalize_verified(reference, verified):
             )
             services.audit(held.user, held.branch, "sale.paystack_momo_verified", doc.reference, {
                 "payment_reference": reference,
-                "amount": str(doc.total),
+                "amount": str(doc.paid),
+                "sale_total": str(doc.total),
+                "balance_due": str(doc.total - doc.paid),
                 "network": state.get("network", ""),
             })
             return doc
@@ -568,7 +586,7 @@ def reconcile(reference, *, force=False):
         return finalize_verified(reference, verified)
     if provider_status in TERMINAL_FAILURES and state.get("charge_status") in TERMINAL_FAILURES:
         state["status"] = provider_status
-        state["message"] = str(verified.get("gateway_response") or verified.get("message") or "The MoMo request was not successful.")[:240]
+        state["message"] = explain_provider_error(verified.get("gateway_response") or verified.get("message"))
         state["next_check_at"] = None
         _save_state(held, state)
         raise ValidationError(state["message"])
