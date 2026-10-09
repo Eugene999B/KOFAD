@@ -16,7 +16,7 @@ from .models import Access, Audit, Branch, Company, Party, Product, Stock
 from marketplace.models import (Conversation, ConversationMessage, ConversationAttachment, CustomerAccount,
                                 CustomerEmailRecovery, EmailIdentity, EmailNotice, MarketListing,
                                 MarketListingImage, OtpThrottle, PaymentConfiguration)
-from .models import StaffInvitation
+from .models import EmailLetter, EmailMailbox, StaffInvitation
 
 
 class MaintenanceServiceTests(TransactionTestCase):
@@ -148,6 +148,16 @@ class MaintenanceServiceTests(TransactionTestCase):
         notice = EmailNotice.objects.create(
             event_key="backup-delivery-001", email="customer@example.test",
             subject="Debt notice", body="Historical debt notice", status="queued")
+        mailbox = EmailMailbox.objects.create(
+            address="transactions@example.test", label="Transactions",
+            branch=self.branch,
+        )
+        letter = EmailLetter.objects.create(
+            mailbox=mailbox, direction="outbound", status="queued",
+            from_address="transactions@example.test", to_address="customer@example.test",
+            subject="Old payment confirmation", body_text="Previously queued response",
+            source_key="backup-test-email-001",
+        )
         conversation = Conversation.objects.get(customer=self.market_customer)
         chat = ConversationMessage.objects.create(
             conversation=conversation, sender_type="customer", body="I need the original reply.")
@@ -174,7 +184,13 @@ class MaintenanceServiceTests(TransactionTestCase):
         self.assertEqual(restored.provider, "hubtel")
         self.assertEqual(ConversationMessage.objects.get().body, "I need the original reply.")
         self.assertEqual(bytes(ConversationAttachment.objects.get().data), b"testdata")
-        self.assertEqual(EmailNotice.objects.get(pk=notice.pk).status, "failed")
+        restored_notice = EmailNotice.objects.get(pk=notice.pk)
+        self.assertEqual(restored_notice.status, "failed")
+        self.assertEqual(restored_notice.attempts, 5)  # Worker cannot retry a restored notice.
+        restored_letter = EmailLetter.objects.get(pk=letter.pk)
+        self.assertEqual(restored_letter.status, "uncertain")
+        self.assertIsNone(restored_letter.next_attempt_at)
+        self.assertIn("manual reconciliation", restored_letter.last_error)
         self.assertEqual(EmailIdentity.objects.get().code_digest, "")
         self.assertIsNone(EmailIdentity.objects.get().expires_at)
         self.assertTrue(CustomerEmailRecovery.objects.get().used)
