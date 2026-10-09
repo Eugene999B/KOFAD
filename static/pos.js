@@ -727,11 +727,15 @@
     if (partyInput) partyInput.value = customer.id;
     selectedCustomerBox?.classList.remove("hidden");
     if (selectedCustomerBox) {
+      const debtAmount = Number(customer.outstanding || 0);
       selectedCustomerBox.replaceChildren();
       selectedCustomerBox.append(
         el("strong", customer.name),
         el("small", customer.phone + " · Outstanding " + root.dataset.currency + " " + customer.outstanding, "muted")
       );
+      if (Number.isFinite(debtAmount) && debtAmount > 0) {
+        selectedCustomerBox.append(el("strong", "Existing debt account — check credit terms before adding more debt.", "customer-debt-warning"));
+      }
     }
     customerResults?.replaceChildren();
     newCustomerFields?.classList.add("hidden");
