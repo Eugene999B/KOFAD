@@ -150,3 +150,8 @@ html[data-theme="dark"] .native-next-step p:not(.native-kicker) { color:#c3dce1;
   .native-explainer>div { padding:10px 6px; }
 }
 @media(prefers-reduced-motion:reduce) { .native-platform { transition:none; } }
+
+/* Platform-first ordering is informational only, never a download promise. */
+.native-device-hint { display:inline-block;margin-bottom:6px;padding:3px 7px;border-radius:50px;background:#e9f5f0;color:#137466;font-size:10px;line-height:1.5;font-weight:800; }
+.native-device-match { border-color:#a9cfc7; }
+html[data-theme="dark"] .native-device-hint { background:#315f57;color:#c2f3e6; }
