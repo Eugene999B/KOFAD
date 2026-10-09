@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'maintenance.js' %}"></script>{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'maintenance-coverage.css' %}"><script defer src="{% static 'maintenance.js' %}"></script>{% endblock %}
 {% block actions %}<a class="button secondary" href="/settings/">← Settings</a>{% endblock %}
 {% block content %}
 <section class="hero-panel">
