@@ -30,13 +30,38 @@ def decorate_sales(branch, rows):
                         for payment in by_pk[pk].payments.all())):
             paystack_refs[pk] = reference
 
+    # Online orders are posted through a distinct gateway-verified workflow.
+    # Match the provider receipt and posted sales ledger entry exactly; never
+    # describe an online sale as a cashier-entered payment.
+    from django.db.models import F
+    from marketplace.models import MarketPaymentAttempt
+    online_receipts = {}
+    for attempt in MarketPaymentAttempt.objects.filter(
+        order__branch=branch,
+        order__sale_document_id__in=list(by_pk),
+        order__ledger_status="posted",
+        order__payment_status="paid",
+        status="success",
+        reference=F("order__payment_reference"),
+    ).select_related("order"):
+        doc_id = str(attempt.order.sale_document_id)
+        if doc_id in by_pk:
+            online_receipts[doc_id] = attempt
+
     for doc in documents:
+        online = online_receipts.get(str(doc.pk))
+        doc.online_payment_reference = online.reference if online else ""
+        doc.online_payment_provider = online.provider.title() if online else ""
+        doc.online_order_pk = online.order_id if online else None
         methods = [payment.get_method_display() for payment in doc.payments.all()]
         doc.payment_method_summary = ", ".join(methods) if methods else "No payment recorded"
         doc.paystack_verified_reference = paystack_refs.get(str(doc.pk), "")
         doc.balance_at_posting = doc.total - doc.paid
         if doc.kind == "sale":
-            if doc.paystack_verified_reference:
+            if online:
+                doc.transaction_type = "Online order · " + doc.online_payment_provider
+                doc.payment_evidence = doc.online_payment_provider + " verified and order posted"
+            elif doc.paystack_verified_reference:
                 doc.transaction_type = ("Verified MoMo deposit + debt" if doc.balance_at_posting > 0
                                         else "Verified MoMo sale")
                 doc.payment_evidence = "Paystack verified and sale posted"
