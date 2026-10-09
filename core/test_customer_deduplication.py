@@ -110,7 +110,7 @@ class CustomerDeduplicationTests(Fixtures, TestCase):
                 "name": name, "phone": phone, "email": "", "address": "",
             })
             self.assertEqual(response.status_code, 200)
-            self.assertContains(response, "saved customer already uses")
+            self.assertContains(response, "A saved customer already uses")
         self.assertEqual(Party.objects.filter(branch=self.branch, kind="customer").count(), 1)
 
     def test_similar_names_are_not_automatically_merged(self):
