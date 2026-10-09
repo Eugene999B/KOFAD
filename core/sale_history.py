@@ -24,7 +24,10 @@ def decorate_sales(branch, rows):
         state = (held.cart or {}).get("payment_request") or {}
         pk = str(state.get("document_id") or "")
         reference = str(state.get("reference") or "")
-        if pk in by_pk and held.label == pos_paystack.LABEL_PREFIX + reference:
+        if (pk in by_pk
+                and held.label == pos_paystack.LABEL_PREFIX + reference
+                and any(payment.method == "momo" and payment.reference == reference
+                        for payment in by_pk[pk].payments.all())):
             paystack_refs[pk] = reference
 
     for doc in documents:
