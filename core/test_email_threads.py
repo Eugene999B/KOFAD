@@ -2,11 +2,13 @@
 import hashlib
 import hmac
 import time
+from datetime import timedelta
 from email.message import EmailMessage
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 
 from core.email_center import compose, deliver_outgoing
@@ -222,6 +224,21 @@ class TeamInboxThreadsTests(TestCase):
         self.assertContains(result, "Provider failed")
         self.assertContains(result, "Delivery uncertain")
         self.assertNotContains(result, "Private finance failure")
+
+
+    @patch("core.brevo_email.requests.post")
+    def test_stale_provider_send_requires_review_without_automatic_retry(self, post):
+        row = EmailLetter.objects.create(
+            mailbox=self.support, direction="outbound", status="sending",
+            from_address=self.support.address, to_address="client@example.org",
+            subject="Customer receipt", body_text="Already possibly submitted",
+            attempts=1, next_attempt_at=timezone.now() - timedelta(minutes=21),
+        )
+        self.assertEqual(deliver_outgoing(limit=2), 0)
+        row.refresh_from_db()
+        self.assertEqual(row.status, "uncertain")
+        self.assertIn("review", row.last_error)
+        post.assert_not_called()
 
     def test_inbound_duplicate_does_not_create_two_conversations(self):
         for _ in range(2):
