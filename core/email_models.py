@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 
 class EmailMailbox(models.Model):
@@ -38,7 +39,7 @@ class EmailConversation(models.Model):
     priority = models.CharField(max_length=8, choices=PRIORITY, default="normal")
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
                                     related_name="kofad_assigned_conversations", on_delete=models.SET_NULL)
-    last_activity_at = models.DateTimeField(default=__import__("django.utils.timezone", fromlist=["now"]).now)
+    last_activity_at = models.DateTimeField(default=timezone.now)
     last_customer_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
