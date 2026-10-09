@@ -126,15 +126,18 @@ def start(user, branch, sale_payload, request_key, phone, network, email):
     if email:
         validate_email(email)
         payload["customer_email"] = email
+    from marketplace.pricing import online_markup_percent
+    markup = online_markup_percent()
     amount = pos_paystack._payment_amount(payload)
-    total = pos_paystack._preview_total(user, branch, payload)
+    total = pos_paystack._preview_total(user, branch, payload, online_markup_percent=markup)
     if total <= 0 or amount != total:
         raise ValidationError("The MoMo request must exactly match the full sale total.")
     now = timezone.now()
     state = {
         "provider": "hubtel", "reference": reference, "status": "initializing",
         "phone": phone, "network": str(network or ""), "email": email,
-        "amount": str(total), "request_key": str(request_key),
+        "amount": str(total), "online_markup_percent": str(markup),
+        "request_key": str(request_key),
         "authorization_url": "", "display_text": "",
         "message": "Creating a secure Hubtel checkout.",
         "created_at": now.timestamp(), "next_check_at": (now + timedelta(seconds=40)).timestamp(),
@@ -269,6 +272,7 @@ def reconcile(reference, *, force=False):
                     row["reference"] = reference
             doc = services.post_trade(
                 held.user, held.branch, payload, state["request_key"], kind="sale",
+                online_markup_percent=Decimal(str(state.get("online_markup_percent", "0"))),
             )
             if doc.total != amount or doc.paid != doc.total:
                 raise ValidationError("Sale total changed since payment was requested.")
