@@ -88,3 +88,4 @@ class EmailCampaign(models.Model):
     active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_queued_at = models.DateTimeField(null=True, blank=True)
+    completed_queuing_at = models.DateTimeField(null=True, blank=True)
