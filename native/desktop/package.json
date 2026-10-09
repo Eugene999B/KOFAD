@@ -1,0 +1,22 @@
+{
+  "name": "kofad-native-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native Windows desktop clients for KOFAD Market and KOFAD Staff",
+  "main": "main.cjs",
+  "scripts": {
+    "dev:customer": "cross-env KOFAD_NATIVE_CHANNEL=customer electron .",
+    "dev:staff": "cross-env KOFAD_NATIVE_CHANNEL=staff electron .",
+    "dist:customer": "cross-env KOFAD_NATIVE_CHANNEL=customer node scripts/guard-release.cjs && electron-builder --win --x64 --config build.config.cjs --publish never",
+    "dist:staff": "cross-env KOFAD_NATIVE_CHANNEL=staff node scripts/guard-release.cjs && electron-builder --win --x64 --config build.config.cjs --publish never",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}
