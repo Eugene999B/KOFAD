@@ -98,3 +98,48 @@
 @media(max-width:540px){.email-shell{gap:14px}.email-hero-actions{width:100%}.email-history-filters{grid-template-columns:1fr 1fr}.email-search-label{grid-column:1/-1}.email-history-filters button{grid-column:1}.email-item-header{flex-direction:column}.email-chip{align-self:flex-start}.email-compose-grid,.email-detail-grid{grid-template-columns:1fr}.email-metric strong{font-size:1.3rem}.email-composer summary{align-items:flex-start;flex-direction:column;gap:4px}}
 
 .email-system-log{min-width:0}.email-system-table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--border,#dce2ea);border-radius:12px}.email-system-table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:650px}.email-system-table th{text-align:left;font-size:.75rem;font-weight:750;color:var(--muted,#667085);background:var(--surface-alt,rgba(90,105,127,.055))}.email-system-table th,.email-system-table td{padding:12px 13px;border-bottom:1px solid var(--border,#e4e8ef);vertical-align:top}.email-system-table td{overflow-wrap:anywhere}.email-system-table td strong,.email-system-table td small{display:block}.email-system-table td small{font-size:.73rem;color:var(--muted,#667085);margin-top:4px}
+
+/* Shared inbox conversation workspace */
+.email-conversations{margin:20px 0 28px;min-width:0}
+.email-conversation-grid{display:grid;grid-template-columns:minmax(215px,38%) minmax(0,1fr);gap:12px;border:1px solid var(--border,#dce2ea);border-radius:15px;overflow:hidden;min-height:400px}
+.email-thread-list{display:grid;align-content:start;max-height:670px;overflow-y:auto;background:var(--surface-alt,rgba(100,120,145,.04));border-right:1px solid var(--border,#dce2ea)}
+.email-thread-link{display:flex;gap:9px;padding:14px 10px;min-width:0;text-decoration:none;color:inherit;border-bottom:1px solid var(--border,#e5eaf0);align-items:flex-start}
+.email-thread-link:hover,.email-thread-link.current{background:var(--surface,#fff)}
+.email-thread-link.current{box-shadow:inset 3px 0 #276ca8}
+.email-thread-avatar{display:grid;place-items:center;flex:0 0 33px;width:33px;height:33px;background:rgba(31,95,146,.12);border-radius:11px;color:#276ca8;font-weight:800}
+.email-thread-summary{min-width:0;display:grid;gap:4px;flex:1}
+.email-thread-summary strong{overflow-wrap:anywhere;font-size:.82rem}
+.email-thread-summary small{overflow-wrap:anywhere;color:var(--muted,#667085);font-size:.73rem;line-height:1.4}
+.email-thread-status{font-size:.68rem;border:1px solid var(--border,#dce2ea);border-radius:999px;padding:3px 6px;white-space:nowrap}
+.email-thread-status.status-open{color:#126c4b;background:rgba(18,108,75,.07)}
+.email-thread-status.status-pending{color:#8e652e;background:rgba(142,101,46,.08)}
+.email-thread-detail{min-width:0;padding:16px;display:flex;flex-direction:column}
+.email-thread-detail-head{display:flex;gap:14px;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border,#e6eaf0);padding-bottom:12px}
+.email-thread-detail-head h4{font-size:1.1rem;overflow-wrap:anywhere;margin:0 0 7px}
+.email-thread-detail-head p{color:var(--muted,#667085);font-size:.78rem;margin:0;overflow-wrap:anywhere}
+.email-thread-manage{min-width:125px;max-width:100%}
+.email-thread-manage summary{cursor:pointer;padding:8px;border:1px solid var(--border,#dce2ea);border-radius:9px;font-size:.78rem}
+.email-thread-manage form{padding:12px;margin-top:6px;min-width:min(235px,60vw);border:1px solid var(--border,#dce2ea);border-radius:12px}
+.email-thread-messages{display:grid;gap:12px;align-content:start;padding:19px 4px;max-height:580px;overflow:auto}
+.email-thread-bubble{min-width:0;max-width:93%;border:1px solid var(--border,#dce2ea);padding:13px;border-radius:14px;background:var(--surface,#fff)}
+.email-thread-bubble.is-outgoing{justify-self:end;background:var(--surface-alt,rgba(47,109,175,.07));border-color:rgba(47,109,175,.20)}
+.email-thread-bubble.is-incoming{justify-self:start}
+.email-thread-message-meta{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;font-size:.76rem}
+.email-thread-message-meta span{color:var(--muted,#667085)}
+.email-thread-message-subject{font-size:.74rem;color:var(--muted,#667085);margin:7px 0}
+.email-thread-message-body{line-height:1.6;white-space:normal;overflow-wrap:anywhere;font-size:.86rem}
+.email-thread-placeholder{display:grid;place-content:center;justify-items:center;text-align:center;flex:1;padding:30px 12px;color:var(--muted,#667085)}
+.email-thread-placeholder>span{font-size:2.4rem}
+.email-thread-placeholder h4{margin:10px 0;color:inherit}
+.email-thread-placeholder p{max-width:360px;font-size:.83rem;line-height:1.55}
+.email-thread-actions{display:grid;gap:14px;border-top:1px solid var(--border,#dce2ea);padding-top:15px}
+.email-thread-actions form{display:grid;gap:10px}
+.email-private-notes{padding:12px;background:rgba(182,138,51,.075);border-radius:12px;border:1px solid rgba(182,138,51,.22);margin:8px 0 18px}
+.email-private-notes h5{margin:0 0 9px}
+.email-private-notes h5 small{color:var(--muted,#667085);font-weight:normal}
+.email-private-note{padding:10px 0;border-top:1px solid var(--border,#dce2ea);font-size:.8rem}
+.email-private-note:first-of-type{border-top:0}
+.email-private-note small{margin-left:8px;color:var(--muted,#667085)}
+.email-private-note p{line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:1100px){.email-conversation-grid{grid-template-columns:1fr}.email-thread-list{max-height:220px;border-right:0;border-bottom:1px solid var(--border,#dce2ea)}}
+@media(max-width:540px){.email-thread-detail{padding:11px}.email-thread-detail-head{flex-wrap:wrap}.email-thread-bubble{max-width:100%}.email-thread-status{font-size:.64rem}}
