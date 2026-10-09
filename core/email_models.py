@@ -47,6 +47,9 @@ class EmailLetter(models.Model):
     had_attachments = models.BooleanField(default=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
                                    related_name="kofad_sent_letters", on_delete=models.SET_NULL)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                    related_name="kofad_approved_letters", on_delete=models.SET_NULL)
+    approved_at = models.DateTimeField(null=True, blank=True)
     attempts = models.PositiveSmallIntegerField(default=0)
     next_attempt_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=160, blank=True)
