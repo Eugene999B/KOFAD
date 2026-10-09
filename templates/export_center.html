@@ -87,6 +87,8 @@
 
 <section class="export-library" id="report-library" aria-labelledby="library-title">
   <div class="export-library-top"><div><p class="export-eyebrow">FULL REPORT LIBRARY</p><h2 id="library-title">Find the right export faster</h2><p>Choose a report to load it in the download builder above.</p></div><span class="export-available-count">{{ datasets|length }} available</span></div>
+  <div class="export-library-search"><label for="export-library-query">Search available reports</label><input type="search" id="export-library-query" autocomplete="off" placeholder="Search by customer, sale, payment, stock, staff…" aria-controls="export-library-groups"><span aria-hidden="true">⌕</span></div>
+  <div id="export-library-groups">
   {% for group in groups %}
   <div class="export-library-group">
     <div class="export-library-group-heading"><h3>{{ group.title }}</h3><p>{{ group.description }}</p></div>
@@ -101,6 +103,8 @@
     </div>
   </div>
   {% endfor %}
+  </div>
+  <p id="export-library-no-results" class="export-empty" hidden>No reports match that search. Try “customer”, “payment” or “stock”.</p>
 </section>
 <script defer src="{% static 'export-studio.js' %}"></script>
 {% endblock %}
