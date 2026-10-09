@@ -22,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import services
+from .payment_failure_guidance import explain_provider_error
 from .identity import normalize_ghana_phone
 from .models import Document, HeldSale, Idempotency, Message, Party
 
@@ -359,7 +360,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     ):
         state["status"] = "submission_unknown"
         state["provider_status"] = provider_status or "unknown"
-        state["message"] = str(body.get("message", "Paystack rejected the MoMo request."))[:240] if isinstance(body, dict) else "Paystack rejected the MoMo request."
+        state["message"] = explain_provider_error(body.get("message") if isinstance(body, dict) else "")
         state["next_check_at"] = (timezone.now() + timedelta(seconds=20)).timestamp()
         _save_state(held, state)
         return _response_state(held)
