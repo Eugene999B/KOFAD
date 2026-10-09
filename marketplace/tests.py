@@ -914,6 +914,74 @@ class MarketV2SupportTests(MarketFixtures):
         session["branch"] = self.branch.pk
         session.save()
 
+    def test_customer_can_start_chat_and_staff_can_reply_live(self):
+        self.customer_session()
+        created = self.client.post("/market/messages/", {
+            "subject": "Where is my order?",
+            "message": "Hello, can I get help with delivery?",
+        })
+        conversation = Conversation.objects.get(customer=self.customer)
+        self.assertRedirects(created, f"/market/messages/{conversation.pk}/", fetch_redirect_response=False)
+        self.assertEqual(conversation.branch, self.branch)
+        self.assertEqual(conversation.messages.count(), 1)
+        waiting_page = self.client.get(f"/market/messages/{conversation.pk}/")
+        self.assertContains(waiting_page, "Waiting for customer care")
+        self.client.post("/market/account/logout/")
+        self.staff_session()
+        queue = self.client.get("/online-inbox/?status=waiting")
+        self.assertContains(queue, conversation.subject)
+        self.assertContains(queue, "support-inbox-live.")
+        self.assertEqual(self.client.post(
+            f"/online-inbox/{conversation.pk}/", {"action": "accept"}
+        ).status_code, 302)
+        response = self.client.post(
+            f"/online-inbox/{conversation.pk}/", {"action": "reply", "message": "We're here to help."}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(conversation.messages.filter(
+            sender_type="staff", body="We're here to help."
+        ).exists())
+        self.client.logout()
+        self.customer_session()
+        update = self.client.get(
+            f"/market/support/conversations/{conversation.pk}/updates/?after=0"
+        )
+        self.assertEqual(update.status_code, 200)
+        payload = update.json()
+        self.assertTrue(payload["agent_connected"])
+        self.assertEqual([row["sender"] for row in payload["messages"]], ["customer", "staff"])
+        self.assertEqual(payload["messages"][-1]["body"], "We're here to help.")
+        answer = self.client.post(f"/market/messages/{conversation.pk}/", {
+            "message": "Thanks, please keep me posted."
+        })
+        self.assertEqual(answer.status_code, 302)
+        self.assertEqual(conversation.messages.count(), 3)
+
+    def test_start_chat_without_active_store_shows_error_without_ghost_thread(self):
+        self.branch.active = False
+        self.branch.save(update_fields=["active"])
+        self.customer_session()
+        page = self.client.post("/market/messages/", {
+            "subject": "Customer care",
+            "message": "I need help",
+        })
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "waiting for an active shop location")
+        self.assertEqual(Conversation.objects.count(), 0)
+
+    @patch("marketplace.services.prepare_support_attachment")
+    def test_failed_support_attachment_does_not_create_empty_conversation(self, prepare):
+        prepare.side_effect = ValidationError("This attachment could not be accepted.")
+        self.customer_session()
+        page = self.client.post("/market/messages/", {
+            "subject": "Broken attachment",
+            "message": "Please check",
+            "attachment": SimpleUploadedFile("photo.png", b"not an actual image", content_type="image/png"),
+        })
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "This attachment could not be accepted.")
+        self.assertEqual(Conversation.objects.count(), 0)
+
     def test_customer_support_accepts_and_hashes_document_attachment(self):
         self.customer_session()
         upload = SimpleUploadedFile(

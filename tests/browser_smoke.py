@@ -715,6 +715,24 @@ with sync_playwright() as p:
         ):
             market_page.goto("http://127.0.0.1:8000" + market_path)
             assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width) + market_path
+            if market_path == "/market/messages/":
+                # Regression: support-v3 used to hide the entire new chat
+                # composer on screens <= 680px, so the Start button was unusable.
+                assert market_page.locator(".support-new-panel-v3 form").is_visible(), str(width)
+                assert market_page.get_by_role("button", name="Start chat").is_visible(), str(width)
+    market_page.set_viewport_size({"width":390,"height":844})
+    market_page.goto("http://127.0.0.1:8000/market/messages/")
+    assert market_page.locator(".support-new-panel-v3 form").is_visible()
+    market_page.locator(".support-new-panel-v3 input[name='subject']").fill("Browser support request")
+    market_page.locator(".support-new-panel-v3 textarea[name='message']").fill("I need help with my order.")
+    market_page.get_by_role("button", name="Start chat").click()
+    market_page.wait_for_url("**/market/messages/*/")
+    assert market_page.locator(".support-message.customer").count() == 1
+    assert market_page.locator("[data-live-thread]").is_visible()
+    assert "I need help with my order." in market_page.locator(".support-stream-v3").inner_text()
+    market_page.screenshot(path=str(out / "market-support-new-chat-mobile.png"), full_page=True)
+    market_page.goto("http://127.0.0.1:8000/market/messages/")
+    assert market_page.locator(".support-new-panel-v3 form").is_visible()
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
     assert market_page.locator("[data-location-map]").count() == 1

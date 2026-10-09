@@ -1387,27 +1387,36 @@ def customer_messages(request, customer, conversation_id=None):
             messages.info(request, "That chat has ended. Start a new conversation if you still need help.")
             return redirect("market_messages")
         if form.is_valid():
-            if not conversation:
-                order = None
-                order_id = request.POST.get("order")
-                if order_id:
-                    order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
-                subject = request.POST.get("subject", "").strip()[:180] or (
-                    f"Order support · {order.public_reference}" if order else "Customer support"
-                )
-                conversation = Conversation.objects.create(
-                    branch=order.branch if order else services.market_branch(),
-                    customer=customer, public_name=customer.full_name,
-                    public_phone=customer.phone or "", order=order, subject=subject,
-                )
+            starting_new_conversation = conversation is None
             try:
-                _save_conversation_message(
-                    conversation, "customer",
-                    body=form.cleaned_data.get("message", ""),
-                    attachment=form.cleaned_data.get("attachment"),
-                )
+                # Treat creation and the first message as ONE write. An invalid
+                # attachment or unavailable market branch must not leave an
+                # empty, unreplyable support conversation in the staff queue.
+                with transaction.atomic():
+                    if not conversation:
+                        order = None
+                        order_id = request.POST.get("order")
+                        if order_id:
+                            order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
+                        subject = request.POST.get("subject", "").strip()[:180] or (
+                            f"Order support · {order.public_reference}" if order else "Customer support"
+                        )
+                        conversation = Conversation.objects.create(
+                            branch=order.branch if order else services.market_branch(),
+                            customer=customer, public_name=customer.full_name,
+                            public_phone=customer.phone or "", order=order, subject=subject,
+                        )
+                    _save_conversation_message(
+                        conversation, "customer",
+                        body=form.cleaned_data.get("message", ""),
+                        attachment=form.cleaned_data.get("attachment"),
+                    )
             except ValidationError as exc:
-                form.add_error("attachment", problem(exc))
+                # The transaction rolled back creation. Do not render a
+                # phantom detail view for an unsaved/newly rolled-back row.
+                if starting_new_conversation:
+                    conversation = None
+                form.add_error(None, problem(exc))
             else:
                 return redirect("market_message_thread", conversation_id=conversation.pk)
 
