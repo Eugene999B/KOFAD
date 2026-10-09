@@ -5,6 +5,10 @@ from core.native_apps import approved_release_url, app_metadata
 from core.tests import Fixtures
 
 
+@override_settings(ALLOWED_HOSTS=[
+    "localhost", "127.0.0.1", "testserver",
+    "kofadimpex.com", "market.kofadimpex.com", "staff.kofadimpex.com",
+])
 class NativeAppDownloadsTests(Fixtures, TestCase):
     def setUp(self):
         self.setup_data()
