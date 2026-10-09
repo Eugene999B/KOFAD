@@ -302,6 +302,11 @@ def deliver_outgoing(limit=10):
                     last_error="Reserved daily email allowance for security and transactions.",
                 )
                 continue
+        from .debt_email import email_still_allowed
+        if not email_still_allowed(row.source_key, row.to_address):
+            EmailLetter.objects.filter(pk=pk).update(
+                status="suppressed", last_error="Customer email preference or current debt state changed.")
+            continue
         from .email_campaigns import is_campaign_recipient_allowed
         if not is_campaign_recipient_allowed(row.source_key, row.to_address):
             EmailLetter.objects.filter(pk=pk).update(
