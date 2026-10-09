@@ -38,9 +38,7 @@ def enabled():
 
 
 def owner(user):
-    return user.is_authenticated and user.is_active and (
-        user.is_superuser or user.has_perm("core.manage_company")
-    )
+    return user.is_authenticated and user.is_active and user.is_superuser
 
 
 def visible_mailboxes(user, *, send=False):
@@ -242,11 +240,12 @@ def ingest(request):
         message_id = str(parsed.get("Message-ID", ""))[:255]
         reply_id = str(parsed.get("In-Reply-To", ""))[:255]
         plain = parsed.get_body(preferencelist=("plain",))
-        content = plain.get_content() if plain else (
-            parsed.get_content() if parsed.get_content_type() == "text/plain" else
-            "[HTML-only email — view it in the business Gmail backup inbox]"
-        )
         attachments = any(True for _ in parsed.iter_attachments()) if parsed.is_multipart() else False
+        # Do not silently drop attachments or HTML-only content. Cloudflare
+        # falls back to the verified business Gmail when we decline those.
+        if attachments or not plain:
+            return HttpResponse(status=422)
+        content = plain.get_content()
         if not isinstance(content, str):
             return HttpResponse(status=422)
         fingerprint = hashlib.sha256(recipient.encode() + b"\n" + raw).hexdigest()
