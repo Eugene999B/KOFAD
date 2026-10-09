@@ -12,7 +12,7 @@
 <div class="commerce-product-info">
 <div class="commerce-product-code"><span>{{ listing.product.category|default:"KOFAD MARKET" }}</span><small>SKU {{ listing.product.sku }}</small></div>
 {% if market_customer %}<form method="post" action="/market/wishlist/{{ listing.pk }}/toggle/" class="product-detail-save">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button>{% if in_wishlist %}♥ Saved to wishlist{% else %}♡ Save for later{% endif %}</button></form>{% endif %}
-<h1>{{ listing.display_name }}</h1>
+<h1>{{ listing.display_name }}</h1><button class="native-product-share" type="button" hidden data-native-share-product="{{ canonical_url }}" data-native-share-title="{{ listing.display_name }}">Share using your device ↗</button>
 <p class="commerce-detail-description">{{ listing.description|default:"Available to order from KOFAD IMPEX ENTERPRISE." }}</p>
 {% if listing.highlights %}<ul class="commerce-product-highlights">{% for highlight in listing.highlights %}<li><span>✓</span>{{ highlight }}</li>{% endfor %}</ul>{% endif %}
 <div class="commerce-detail-price"><span>Market price</span><strong>GHS {{ listing.market_price_value|floatformat:2 }}</strong><small>per {{ listing.selling_label }}</small></div>

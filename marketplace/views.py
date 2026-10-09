@@ -62,7 +62,7 @@ def _market_context(request, **extra):
         ).count()
     path = request.path
     seo_indexable = path in {
-        "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/", "/apps/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
         "/terms/", "/privacy/", "/contact/", "/market/",
     } or bool(re.fullmatch(r"/market/products/\d+/", path))
     page = extra.get("page") or {}
@@ -78,7 +78,16 @@ def _market_context(request, **extra):
     ).strip()[:180]
     canonical_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else settings.PUBLIC_SITE_ORIGIN
     canonical_url = canonical_origin + path if seo_indexable else ""
+    from core.native_apps import app_metadata
+    app_release = app_metadata("customer")
+    released_platforms = {
+        entry["id"]: entry["available"] for entry in app_release["platforms"]
+    }
     context = {
+        "native_customer_app_released": app_release["released"],
+        "native_customer_app_android": released_platforms.get("android", False),
+        "native_customer_app_ios": released_platforms.get("ios", False),
+        "native_customer_app_windows": released_platforms.get("windows", False),
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
