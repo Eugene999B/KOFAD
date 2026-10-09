@@ -1,16 +1,39 @@
-# KOFAD IMPEX ENTERPRISE identity
+# KOFAD IMPEX ENTERPRISE — owner's official logo
 
-KOFAD uses one approved official logo across every customer, staff and printed surface.
+The **sole master asset** is `static/brand/kofad-original-logo.png`, imported
+without re-encoding from the owner-supplied GitHub upload (which was mistakenly
+named `kofad-original-logo.png.png` on the main branch).
 
-- Canonical asset: `static/brand/kofad-official-logo.svg`
-- Primary navy: #0F3B58
-- Deep navy: #102A3D
-- Charcoal: #1F252A
-- Champagne gold: #D1BB7F
-- Warm paper: #F7F4ED
+Do not bring back any historical photo, monogram, JPEG-in-SVG artwork, or
+earlier `kofad-emblem` image. The master contains the official appearance.
 
-Do not redraw the logo, substitute a monogram, pair it with a competing wordmark, or introduce another KOFAD logo file. Present the official logo without a decorative white tile or opaque rectangular background. The official asset is used for the public website, Market, customer authentication, staff authentication, workspace navigation, browser icon, receipts, invoices, statements, workforce credentials and other generated documents.
+During Docker, CI and any local brand preparation, run:
 
-Printed records call `core.brand_art.draw_mark`, which embeds the same canonical asset. Web templates should reference the same file through Django static files.
+```sh
+python scripts/prepare_logo.py
+```
 
-The visual system should use navy/charcoal for trust and structure, champagne gold for restrained highlights, and warm neutral surfaces for readability. Avoid unrelated accent palettes that make KOFAD authentication or customer pages appear to belong to different products.
+The script builds the official transparent-padded full wordmark PNG and the
+legacy-compatible SVG path from **only** the master PNG. It also generates
+`favicon.ico`, square PNG icons at 16/32/48/96/180/192/512, and
+`apple-touch-icon.png` from the emblem region. The favicon uses a navy tile to
+keep detail visible at small browser-tab sizes.
+
+The same generated `kofad-official-logo.svg` appears in all KOFAD customer,
+staff and public templates. The print and PDF source is the generated
+`kofad-logo-transparent.png`, read by `core.brand_art.draw_mark`. This
+covers receipts, invoices, staff credentials, PDF statements and other
+ReportLab documents. Social sharing uses the PNG.
+
+`/favicon.ico` is intentionally accessible on the company, market and staff
+domains, including to Googlebot. Search engines cache favicons independently;
+Google's result thumbnail can take time to change even after deployment.
+
+Use object-fit contain for all full-logo slots. Never crop the business name,
+stretch the logo, place a white tile behind it, or redraw it from scratch.
+When the uploaded source already contains transparency, keep its alpha as is.
+For opaque uniform-colour backgrounds, remove only the edge-connected colour.
+Do not aggressively threshold a photographic background and erase lettering.
+
+Colours (interface only): primary navy #0F3B58, deep navy #102A3D,
+charcoal #1F252A, champagne gold #D1BB7F.
