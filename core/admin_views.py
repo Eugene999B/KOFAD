@@ -101,6 +101,7 @@ def users(request, branch):
             "user": user,
             "role": "System administrator" if user.is_superuser else (_assigned_role(user).name if _assigned_role(user) else "No role"),
             "phone": user.access.recovery_phone,
+            "invite": getattr(user, "staff_invitation", None),
         })
     return render(request, "admin_users.html", {"title": "Staff & users", "rows": rows})
 
