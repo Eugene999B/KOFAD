@@ -17,6 +17,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.core.validators import validate_email
 from django.db import IntegrityError, models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
@@ -161,6 +162,28 @@ def inbox(request):
                 audit(request.user, None, "email.mailbox_created", mailbox.pk,
                       {"address": mailbox.address})
                 messages.success(request, "Mailbox added. Cloudflare routing must also target KOFAD.")
+            elif action == "approve_draft":
+                mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
+                                            pk=request.POST.get("mailbox_id"))
+                if not (owner(request.user) or request.user.has_perm("core.operate_finance")):
+                    raise PermissionDenied
+                from .debt_email import email_still_allowed
+                with transaction.atomic():
+                    draft = get_object_or_404(EmailLetter.objects.select_for_update(),
+                                              pk=request.POST.get("letter_id"),
+                                              mailbox=mailbox, direction="outbound",
+                                              status="draft")
+                    if not email_still_allowed(draft.source_key, draft.to_address):
+                        raise ValidationError("Customer permission or outstanding debt changed. This draft cannot be sent.")
+                    draft.status = "queued"
+                    draft.approved_by = request.user
+                    draft.approved_at = timezone.now()
+                    draft.next_attempt_at = timezone.now()
+                    draft.save(update_fields=["status", "approved_by", "approved_at", "next_attempt_at"])
+                    from .services import audit
+                    audit(request.user, mailbox.branch, "email.draft_approved", draft.pk,
+                          {"mailbox": mailbox.address, "destination": draft.to_address})
+                messages.success(request, "Reviewed message queued for sending.")
             elif action in {"send", "reply"}:
                 mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
                                             pk=request.POST.get("mailbox_id"))
@@ -188,11 +211,38 @@ def inbox(request):
     chosen_id = request.GET.get("mailbox", "")
     chosen = next((m for m in all_mailboxes if str(m.pk) == chosen_id), None)
     chosen = chosen or (all_mailboxes[0] if all_mailboxes else None)
-    letters = (EmailLetter.objects.filter(mailbox=chosen).order_by("-created_at")[:75]
-               if chosen else [])
+    direction = request.GET.get("direction", "all")
+    status = request.GET.get("status", "all")
+    query = request.GET.get("q", "").strip()[:100]
+    if direction not in {"all", "inbound", "outbound"}:
+        direction = "all"
+    known_statuses = {value for value, _ in EmailLetter.STATUS}
+    if status not in known_statuses | {"all"}:
+        status = "all"
+    letters_qs = EmailLetter.objects.filter(mailbox=chosen) if chosen else EmailLetter.objects.none()
+    inbox_count = letters_qs.filter(direction="inbound").count()
+    sent_count = letters_qs.filter(direction="outbound").count()
+    draft_count = letters_qs.filter(status="draft").count()
+    attention_count = letters_qs.filter(status__in=["failed", "uncertain"]).count()
+    if direction != "all":
+        letters_qs = letters_qs.filter(direction=direction)
+    if status != "all":
+        letters_qs = letters_qs.filter(status=status)
+    if query:
+        letters_qs = letters_qs.filter(
+            models.Q(subject__icontains=query) |
+            models.Q(from_address__icontains=query) |
+            models.Q(to_address__icontains=query) |
+            models.Q(body_text__icontains=query))
+    letters = Paginator(
+        letters_qs.select_related("created_by", "approved_by").order_by("-created_at", "-pk"), 20
+    ).get_page(request.GET.get("page", "1"))
     return render(request, "email_center.html", {
         "title": "Email Centre", "mailboxes": all_mailboxes, "selected": chosen,
         "letters": letters, "writable_ids": can_write,
+        "mail_query": query, "mail_direction": direction, "mail_status": status,
+        "inbox_count": inbox_count, "sent_count": sent_count, "draft_count": draft_count,
+        "attention_count": attention_count,
         "memberships": EmailMailboxMember.objects.select_related("user", "mailbox").filter(
             mailbox__in=all_mailboxes).order_by("mailbox__address", "user__username")
         if owner(request.user) else [],
