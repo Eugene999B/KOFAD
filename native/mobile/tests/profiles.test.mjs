@@ -7,7 +7,7 @@ test("customer and staff use unique app IDs and isolated official secure origins
   assert.notEqual(a.appId, b.appId);
   assert.notEqual(a.hostname, b.hostname);
   assert.match(a.startUrl, /^https:\/\/market\.kofadimpex\.com\/market\//);
-  assert.match(b.startUrl, /^https:\/\/staff\.kofadimpex\.com\/login\//);
+  assert.match(b.startUrl, /^https:\/\/staff\.kofadimpex\.com\/workspace\//);
 });
 test("invalid channel rejected", () => {
   assert.throws(() => profileFor("unknown"));
