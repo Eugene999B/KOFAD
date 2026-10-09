@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<link rel="stylesheet" href="{% static 'email-workspace.css' %}">{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'email-workspace.css' %}"><script defer src="{% static 'email-workspace.js' %}"></script>{% endblock %}
 {% block content %}
 <main class="mail-workspace">
   <header class="mail-banner">
@@ -312,6 +312,11 @@
         <p>Permissions follow this employee's staff role. Reply access also requires the role's sending permission.</p></div></div>
       <form method="post" action="{% url 'email_team' %}" class="mail-bulk-form">{% csrf_token %}
         <input type="hidden" name="action" value="bulk_assign"><input type="hidden" name="user_id" value="{{ email_selected_staff.pk }}">
+        <div class="mail-permission-tools">
+          <button type="button" class="mail-button subtle" data-mail-action="read-all">Select all read</button>
+          <button type="button" class="mail-button subtle" data-mail-action="clear">Clear selections</button>
+          <span class="mail-permission-count" aria-live="polite" data-permission-count></span>
+        </div>
         <div class="mail-permission-head"><strong>Department mailbox</strong><strong>Read</strong><strong>Reply</strong></div>
         {% for row in email_permission_rows %}
         <div class="mail-permission-row">
