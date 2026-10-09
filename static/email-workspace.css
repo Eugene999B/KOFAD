@@ -311,3 +311,12 @@ html[data-theme="dark"] .mail-button.secondary,body.dark .mail-button.secondary,
 
 .mail-brand-image{flex:none;width:70px;height:63px;object-fit:contain;object-position:center}
 @media(max-width:600px){.mail-brand-image{width:54px;height:52px}}
+
+.mail-older-letters{border-top:1px solid var(--mail-line);padding:14px 15px;background:var(--mail-wash)}
+.mail-older-letters h4{font-size:.78rem;letter-spacing:.01em;margin:0 0 11px}
+.mail-older-letters h4 span{font-weight:500;color:var(--mail-muted);font-size:.68rem;margin-left:6px}
+.mail-older-letter{display:block;padding:10px 11px;margin-top:7px;border:1px solid var(--mail-line);
+  background:var(--mail-surface);border-radius:9px;overflow-wrap:anywhere}
+.mail-older-letter strong,.mail-older-letter small{display:block}
+.mail-older-letter strong{font-size:.78rem}.mail-older-letter small{font-size:.69rem;color:var(--mail-muted);margin-top:4px}
+.mail-older-letter:hover{border-color:#66b6a4}
