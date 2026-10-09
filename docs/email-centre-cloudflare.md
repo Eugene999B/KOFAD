@@ -23,7 +23,8 @@ No inbound routing is changed as part of this code change. Cloudflare's existing
 forwarding rules and catch-all to the verified company Gmail remain intact.
 No user, finance, customer or sale records are migrated or overwritten.
 This feature does not store attachments or HTML email bodies. Messages with
-attachments or larger than 1 MiB fall back to verified Gmail, not KOFAD.
+attachments, HTML-only messages or larger than 1 MiB fall back to verified
+Gmail, not KOFAD.
 
 To activate safely:
 
