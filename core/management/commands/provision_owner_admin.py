@@ -54,24 +54,25 @@ class Command(BaseCommand):
                 is_superuser=True,
             )
         else:
-            changed = False
-            for field, value in (
-                ("first_name", first_name),
-                ("last_name", last_name),
-                ("is_active", True),
-                ("is_staff", True),
-                ("is_superuser", True),
-            ):
-                if getattr(user, field) != value:
-                    setattr(user, field, value)
-                    changed = True
-            if changed:
-                user.save()
+            # A deployment is never a permission-repair or password-reset tool.
+            # In particular, a disabled/restricted owner must not be promoted
+            # back to superuser simply because a legacy variable remains set.
+            if not (user.is_active and user.is_staff and user.is_superuser):
+                self.stderr.write(
+                    "Existing owner account is disabled or not an active superuser; "
+                    "skipping owner provisioning without changing permissions."
+                )
+                return
+            # Existing account identity, recovery phone, access scope and MFA
+            # are owned by authenticated administration, not stale variables.
+            self.stdout.write(
+                "Existing owner administrator verified; all account settings preserved."
+            )
+            return
 
         access, _ = Access.objects.get_or_create(user=user)
         access.recovery_phone = canonical_phone
-        if created:
-            access.force_password_change = True
+        access.force_password_change = True
         access.save(update_fields=["recovery_phone", "force_password_change"])
         access.branches.set(Branch.objects.filter(active=True))
 
@@ -90,8 +91,4 @@ class Command(BaseCommand):
         if created:
             self.stdout.write(self.style.SUCCESS(
                 f"Owner administrator {username} created with full access. A password change is required at first login."
-            ))
-        else:
-            self.stdout.write(self.style.SUCCESS(
-                f"Owner administrator {username} already exists; full access and owner identity were verified without resetting the password."
             ))
