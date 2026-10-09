@@ -65,11 +65,11 @@
     <summary><span>＋ Compose a new customer email</span><small>Opens a new tracked conversation</small></summary>
     <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
       <input type="hidden" name="action" value="send"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
-      <div class="mail-fields two"><label>From<input value="{{ selected.address }}" readonly aria-label="Business mailbox"></label>
+      <div class="mail-fields two"><label>Visible sender<input value="{% if email_uses_shared_sender %}{{ email_shared_sender }}{% else %}{{ selected.address }}{% endif %}" readonly aria-label="Verified sending address"></label>
       <label>Customer email<input name="to" type="email" maxlength="254" placeholder="customer@example.com" required></label></div>
       <label>Subject<input name="subject" maxlength="255" placeholder="How can we help?" required></label>
       <label>Message<textarea name="body" rows="5" maxlength="32000" required placeholder="Write a clear, helpful message…"></textarea></label>
-      <div class="mail-form-foot"><p>Messages are queued securely. Provider acceptance is not confirmed inbox delivery.</p>
+      <div class="mail-form-foot"><p>{% if email_uses_shared_sender %}Replies return to {{ selected.address }}. Brevo currently shows the verified KOFAD shared sender to customers. {% endif %}Messages are queued securely; acceptance is not confirmed delivery.</p>
         <button class="mail-button primary" type="submit">Queue customer email ↗</button></div>
     </form>
   </details>{% endif %}
