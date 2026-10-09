@@ -421,6 +421,13 @@ def inbox(request, section="inbox"):
             models.Q(customer_email__icontains=thread_q)
         )
     conversations = conversation_qs.select_related("assigned_to").order_by("-last_activity_at")[:50]
+    # Retain visibility of older inbound mail that predates threaded conversations.
+    unthreaded_letters = (
+        EmailLetter.objects.filter(
+            mailbox=chosen, direction="inbound", conversation__isnull=True,
+        ).order_by("-created_at", "-pk")[:12]
+        if chosen else EmailLetter.objects.none()
+    )
     active_thread = None
     thread_letters = []
     thread_notes = []
@@ -492,6 +499,7 @@ def inbox(request, section="inbox"):
         "eligible_assignees": eligible_assignees,
         "mail_query": query, "mail_direction": direction, "mail_status": status,
         "thread_status_filter": thread_status, "thread_owner_filter": thread_owner,
+        "unthreaded_letters": unthreaded_letters,
         "thread_search": thread_q, "open_conversations": open_conversations,
         "unassigned_conversations": unassigned_conversations,
         "inbox_count": inbox_count, "sent_count": sent_count, "draft_count": draft_count,
