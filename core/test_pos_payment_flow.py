@@ -93,7 +93,7 @@ class PosMomoPaymentFlowTests(Fixtures, TestCase):
         self.assertContains(status_page, 'class="momo-receipt hidden"')
         history = self.client.get("/payments/momo/?status=pending")
         self.assertContains(history, reference)
-        self.assertContains(self.client.get("/online-payments/"), reference)
+        self.assertContains(self.client.get("/settings/online-payments/"), reference)
 
         with patch("core.pos_paystack.verify", return_value={
             "id": 123456, "status": "success", "reference": reference,
