@@ -5,6 +5,8 @@
 {% block content %}
 <section class="hero-panel"><div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ party.name }}</h2><p>{{ party.phone }}{% if party.address %} · {{ party.address }}{% endif %}</p></div><span class="pill">{% if account.outstanding %}Owes {{ company.currency }} {{ account.outstanding|floatformat:2 }}{% else %}Account clear{% endif %}</span></section>
 
+<section class="notice subtle" style="margin-bottom:16px"><strong>Debt email contact</strong> · {% if party.debt_email_opt_in and party.email %}Enabled — {{ party.email }}{% elif party.email %}Disabled — {{ party.email }}{% else %}No email contact recorded{% endif %}. These messages follow Debt Settings and are separate from promotional mailing preferences.</section>
+
 <div class="metric-grid">
 <article class="metric-card"><small>Outstanding</small><strong>{{ company.currency }} {{ account.outstanding|floatformat:2 }}</strong></article>
 <article class="metric-card"><small>Overdue</small><strong>{{ company.currency }} {{ account.overdue|floatformat:2 }}</strong></article>
