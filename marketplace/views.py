@@ -1387,6 +1387,7 @@ def customer_messages(request, customer, conversation_id=None):
             messages.info(request, "That chat has ended. Start a new conversation if you still need help.")
             return redirect("market_messages")
         if form.is_valid():
+            starting_new_conversation = conversation is None
             try:
                 # Treat creation and the first message as ONE write. An invalid
                 # attachment or unavailable market branch must not leave an
@@ -1411,6 +1412,10 @@ def customer_messages(request, customer, conversation_id=None):
                         attachment=form.cleaned_data.get("attachment"),
                     )
             except ValidationError as exc:
+                # The transaction rolled back creation. Do not render a
+                # phantom detail view for an unsaved/newly rolled-back row.
+                if starting_new_conversation:
+                    conversation = None
                 form.add_error(None, problem(exc))
             else:
                 return redirect("market_message_thread", conversation_id=conversation.pk)
