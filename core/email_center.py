@@ -354,7 +354,7 @@ def deliver_outgoing(limit=10):
                 )
                 continue
         from .debt_email import email_still_allowed
-        if not email_still_allowed(row.source_key, row.to_address):
+        if not email_still_allowed(row.source_key, row.to_address, for_delivery=True, approved=bool(row.approved_at)):
             EmailLetter.objects.filter(pk=pk).update(
                 status="suppressed", last_error="Customer email preference or current debt state changed.")
             continue
