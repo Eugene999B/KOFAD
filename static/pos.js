@@ -1439,11 +1439,21 @@
       pollMomoPayment();
       return true;
     } catch (error) {
-      if (!momoReference) {
+      if (!momoReference && error.rejected === true) {
+        // Server validation rejected this intent before the provider accepted
+        // it. Begin a new review rather than reusing its signed token.
         pendingBody = null;
         requestKey = crypto.randomUUID();
+        resetMomoRecipientReview();
         lockCheckoutForMomo(false);
         persist();
+      } else if (!momoReference) {
+        // The network/browser may have lost a successful POST response.
+        // NEVER issue a fresh request key: the backend could already hold a
+        // Paystack request. Its original reference will be reconciled.
+        lockCheckoutForMomo(true);
+        persist();
+        setMomoStatus("Payment request outcome is uncertain. Do NOT send another prompt. Check MoMo payment history or contact your manager.", "error");
       }
       throw error;
     }
