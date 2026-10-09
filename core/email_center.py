@@ -441,15 +441,26 @@ def inbox(request, section="inbox"):
             user=selected_staff, mailbox__active=True
         )
     } if selected_staff else {}
+    allowed_staff_branches = (
+        set(selected_staff.access.branches.values_list("pk", flat=True))
+        if selected_staff and hasattr(selected_staff, "access") else set()
+    )
+    staff_can_reply = bool(
+        selected_staff and selected_staff.has_perm("core.send_messages")
+    )
     permission_rows = [
-        {"mailbox": mailbox, "can_read": bool(grants.get(mailbox.pk) and grants[mailbox.pk].can_read),
-         "can_send": bool(grants.get(mailbox.pk) and grants[mailbox.pk].can_send)}
+        {"mailbox": mailbox,
+         "can_read": bool(grants.get(mailbox.pk) and grants[mailbox.pk].can_read),
+         "can_send": bool(grants.get(mailbox.pk) and grants[mailbox.pk].can_send),
+         "assignable": mailbox.branch_id is None
+         or mailbox.branch_id in allowed_staff_branches}
         for mailbox in all_mailboxes
     ] if owner(request.user) else []
     return render(request, "email_center.html", {
         "title": "Email Centre", "mailboxes": all_mailboxes, "selected": chosen,
         "email_section": section, "email_selected_staff": selected_staff,
         "email_permission_rows": permission_rows,
+        "email_staff_can_reply": staff_can_reply,
         "letters": letters, "writable_ids": can_write,
         "conversations": conversations, "active_thread": active_thread,
         "thread_letters": thread_letters, "thread_notes": thread_notes,
