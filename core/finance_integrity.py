@@ -157,8 +157,8 @@ def financial_controls(branch, first, last):
             record(day, "Online ledger", ref, "Paid order total matches posted sale document",
                    order.total, order.sale_document.total,
                    order.sale_document.reference,
-                   condition=order.payment_status == "paid")
-        elif order.payment_status == "paid":
+                   condition=order.payment_status in {"paid", "refunded"})
+        elif order.payment_status in {"paid", "refunded"}:
             record(day, "Online ledger", ref, "Paid order requires a reconciled sales document",
                    1, 0, f"Ledger state: {order.ledger_status}; investigate posting")
         for line in order.lines.all():
@@ -174,7 +174,7 @@ def financial_controls(branch, first, last):
                "Provider request amount matches frozen online order total",
                attempt.order.total, attempt.amount,
                f"{attempt.provider} · {attempt.status} · {attempt.order.public_reference}")
-        if attempt.status in {"success", "paid"} and attempt.order.payment_status != "paid":
+        if attempt.status in {"success", "paid"} and attempt.order.payment_status not in {"paid", "refunded"}:
             record(day, "Provider", attempt.reference,
                    "Verified provider payment must have a paid order", 1, 0,
                    "Potential settled-but-unposted payment. Investigate before retrying.")
