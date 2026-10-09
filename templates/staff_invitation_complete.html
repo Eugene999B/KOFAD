@@ -1,0 +1,28 @@
+{% load static %}<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Activate your KOFAD staff account</title>
+<link rel="stylesheet" href="{% static 'app.css' %}">
+<link rel="stylesheet" href="{% static 'kofad-contrast-mobile.css' %}">
+<style>
+body{min-height:100svh;display:grid;place-items:center;padding:24px;margin:0;background:#eff5f8;color:#0e2c40;font:16px/1.5 system-ui,sans-serif}
+.invite-card{width:min(100%,460px);box-sizing:border-box;padding:clamp(22px,5vw,38px);border:1px solid #ccdce4;border-radius:23px;background:#fff;box-shadow:0 16px 48px #1033481c}
+.invite-card img{width:82px;max-height:80px;object-fit:contain}
+.invite-card h1{font-size:clamp(24px,6vw,32px);line-height:1.17;color:#0e2c40}
+.invite-card p{color:#476476}
+.invite-card label{display:block;margin-top:15px;font-weight:650}
+.invite-card input{width:100%;box-sizing:border-box;padding:13px 15px;min-height:49px;border:1px solid #9cb7c5;border-radius:12px;font:inherit}
+.invite-card button{width:100%;min-height:50px;margin:20px 0 0;background:#0e3b56;color:#fff;border:0;border-radius:12px;font-weight:750;cursor:pointer}
+.invite-card a{color:#075d72}
+</style></head><body><main class="invite-card">
+<img src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE">
+<h1>Create your staff password</h1>
+<p>Welcome, <strong>{{ invitation.user.get_full_name|default:invitation.user.username }}</strong>. Your role and location were assigned by a system administrator. Set your own password to activate access.</p>
+{% for message in messages %}<p role="alert">{{ message }}</p>{% endfor %}
+<form method="post">{% csrf_token %}
+<label for="password">New password</label><input type="password" id="password" name="password" autocomplete="new-password" minlength="12" required>
+<label for="password_confirm">Confirm password</label><input type="password" id="password_confirm" name="password_confirm" autocomplete="new-password" minlength="12" required>
+<button type="submit">Activate my staff account</button></form>
+<p><small>This invitation is valid for 24 hours and can be used only once. Do not share the link.</small></p>
+</main></body></html>
