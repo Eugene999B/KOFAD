@@ -309,7 +309,7 @@
       </form>
       <div class="mail-staff-context"><span class="mail-avatar">{{ email_selected_staff.username|first|upper }}</span>
         <div><strong>{{ email_selected_staff.get_full_name|default:email_selected_staff.username }}</strong>
-        <p>Permissions follow this employee's staff role. Reply access also requires the role's sending permission.</p></div></div>
+        <p>Permissions follow this employee's staff role. {% if not email_staff_can_reply %}This role cannot send email yet; assign the email sending permission before enabling Reply.{% else %}This role can read and reply to authorised department mailboxes.{% endif %}</p></div></div>
       <form method="post" action="{% url 'email_team' %}" class="mail-bulk-form">{% csrf_token %}
         <input type="hidden" name="action" value="bulk_assign"><input type="hidden" name="user_id" value="{{ email_selected_staff.pk }}">
         <div class="mail-permission-tools">
@@ -321,13 +321,13 @@
         {% for row in email_permission_rows %}
         <div class="mail-permission-row">
           <div class="mail-permission-name"><span class="mail-mailbox-initial">{{ row.mailbox.label|first|upper }}</span>
-            <span><strong>{{ row.mailbox.label }}</strong><small>{{ row.mailbox.address }}{% if row.mailbox.branch %} · {{ row.mailbox.branch.name }}{% endif %}</small></span>
+            <span><strong>{{ row.mailbox.label }}</strong><small>{{ row.mailbox.address }}{% if row.mailbox.branch %} · {{ row.mailbox.branch.name }}{% endif %}{% if not row.assignable %} · Branch access required{% endif %}</small></span>
           </div>
-          <label class="mail-check"><input type="checkbox" name="read_mailboxes" value="{{ row.mailbox.pk }}"{% if row.can_read %} checked{% endif %}><span class="sr-only">Read {{ row.mailbox.address }}</span></label>
-          <label class="mail-check"><input type="checkbox" name="send_mailboxes" value="{{ row.mailbox.pk }}"{% if row.can_send %} checked{% endif %}><span class="sr-only">Reply from {{ row.mailbox.address }}</span></label>
+          <label class="mail-check"><input type="checkbox" name="read_mailboxes" value="{{ row.mailbox.pk }}"{% if row.can_read %} checked{% endif %}{% if not row.assignable %} disabled{% endif %}><span class="sr-only">Read {{ row.mailbox.address }}</span></label>
+          <label class="mail-check"><input type="checkbox" name="send_mailboxes" value="{{ row.mailbox.pk }}"{% if row.can_send %} checked{% endif %}{% if not row.assignable or not email_staff_can_reply %} disabled{% endif %}><span class="sr-only">Reply from {{ row.mailbox.address }}</span></label>
         </div>
         {% endfor %}
-        <p class="mail-help">Tick Reply to allow reading and responding. Saving replaces this employee's active mailbox assignments; other employees are unaffected. Unticking all removes access.</p>
+        <p class="mail-help">Tick Reply to allow reading and responding. Mailboxes outside this employee's branches cannot be selected. Saving replaces this employee's active mailbox assignments; other employees are unaffected. Unticking all removes access.</p>
         <label class="mail-confirm"><input type="checkbox" name="confirm_replace" value="yes" required>
           <span>I have reviewed the selected mailboxes for this staff member.</span></label>
         <div class="mail-form-foot"><span>Changes are recorded in the audit history.</span>
