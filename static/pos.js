@@ -738,8 +738,8 @@
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
-    if (paystackMomoPhone && customer.phone) paystackMomoPhone.value = customer.phone;
-    if (paystackMomoEmail && customer.email) paystackMomoEmail.value = customer.email;
+    if (paystackMomoPhone && !momoReference) paystackMomoPhone.value = customer.phone || "";
+    if (paystackMomoEmail && !momoReference) paystackMomoEmail.value = customer.email || "";
     if (creditCustomerEmail) creditCustomerEmail.value = customer.email || "";
     if (creditDebtEmailConsent) creditDebtEmailConsent.checked = customer.debt_email_opt_in === true;
     changed();
@@ -762,6 +762,9 @@
     if (customerEmail) customerEmail.value = "";
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
+    // Never carry a previous customer's wallet or email into a new sale.
+    if (!momoReference && paystackMomoPhone) paystackMomoPhone.value = "";
+    if (!momoReference && paystackMomoEmail) paystackMomoEmail.value = "";
     customerDuplicateAlert?.classList.add("hidden");
     if (creditCustomerEmail) creditCustomerEmail.value = "";
     if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
