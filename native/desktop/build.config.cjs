@@ -8,6 +8,7 @@ module.exports = {
   files: ["main.cjs", "profile.cjs", "package.json"],
   asar: true,
   win: {
+    icon: "build/icon.ico",
     target: [{ target: "nsis", arch: ["x64"] }],
     publisherName: process.env.KOFAD_WINDOWS_CERT_SUBJECT,
     verifyUpdateCodeSignature: true,
