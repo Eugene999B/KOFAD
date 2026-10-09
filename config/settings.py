@@ -199,6 +199,8 @@ KOFAD_EMAIL_PROVIDER = os.environ.get("KOFAD_EMAIL_PROVIDER", "auto").strip().lo
 KOFAD_BREVO_API_KEY = os.environ.get("KOFAD_BREVO_API_KEY", "").strip()
 # Conservative KOFAD-wide daily cap for Brevo HTTPS sending (enforced in database).
 KOFAD_BREVO_DAILY_LIMIT = int(os.environ.get("KOFAD_BREVO_DAILY_LIMIT", "300"))
+# Business senders confirmed as active in Brevo (others use the verified transactional sender).
+KOFAD_BREVO_REGISTERED_SENDERS = os.environ.get("KOFAD_BREVO_REGISTERED_SENDERS", "transactions@kofadimpex.com")
 KOFAD_BREVO_SECURITY_FROM_EMAIL = os.environ.get("KOFAD_BREVO_SECURITY_FROM_EMAIL", "").strip()
 KOFAD_BREVO_TRANSACTION_FROM_EMAIL = os.environ.get("KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "").strip()
 KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", "").strip()

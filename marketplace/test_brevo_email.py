@@ -17,6 +17,7 @@ BREVO = override_settings(
     KOFAD_BREVO_API_KEY="CI-do-not-send-live",
     KOFAD_BREVO_SECURITY_FROM_EMAIL="security@kofadimpex.com",
     KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+    KOFAD_BREVO_REGISTERED_SENDERS="transactions@kofadimpex.com,security@kofadimpex.com",
     KOFAD_SUPPORT_REPLY_TO_EMAIL="support@kofadimpex.com",
 )
 
