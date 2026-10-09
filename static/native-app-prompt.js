@@ -2,6 +2,13 @@
   "use strict";
   const suggestion = document.querySelector("[data-native-suggest]");
   if (!suggestion) return;
+  if (window.Capacitor?.isNativePlatform?.()) return; // Already in the app.
+  const agent = navigator.userAgent || "";
+  const platform = /Android/i.test(agent) ? "android"
+    : /iPad|iPhone|iPod/i.test(agent) ? "ios"
+    : /Windows/i.test(agent) ? "windows" : "";
+  // Do not advertise Android if only the Windows edition is released, etc.
+  if (!platform || suggestion.dataset[platform] !== "yes") return;
   // The prompt is marketing, not a security or permission check. Show at most
   // once per browser session, never over checkout/login or private staff pages.
   const path = window.location.pathname;
