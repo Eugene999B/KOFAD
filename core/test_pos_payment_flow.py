@@ -105,7 +105,12 @@ class PosMomoPaymentFlowTests(Fixtures, TestCase):
         self.assertEqual(started.json()["reference"], reference)
         self.assertEqual(charge.call_count, 1)
         self.assertEqual(Document.objects.count(), 0)
+        original_name = self.customer.name
+        self.customer.name = "Updated profile name"
+        self.customer.save(update_fields=["name"])
         status_page = self.client.get(f"/payments/momo/{reference}/")
+        self.assertContains(status_page, original_name)
+        self.assertNotContains(status_page, "Updated profile name")
         self.assertEqual(status_page.status_code, 200)
         self.assertContains(status_page, "Awaiting approval")
         self.assertContains(status_page, 'class="momo-receipt hidden"')
