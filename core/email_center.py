@@ -12,7 +12,6 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import parseaddr
 
-import requests
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -200,6 +199,8 @@ def inbox(request):
         "staff_users": User.objects.filter(is_active=True).order_by("username")[:300]
         if owner(request.user) else [],
         "is_mail_owner": owner(request.user),
+        "daily_email_usage": __import__("core.brevo_email", fromlist=["usage_today"]).usage_today(),
+        "email_queued_count": EmailLetter.objects.filter(direction="outbound", status__in=["queued", "failed"]).count() if owner(request.user) else 0,
         "external_ready": bool(getattr(settings, "KOFAD_EMAIL_ENABLED", False)
                                and settings.KOFAD_EMAIL_PROVIDER == "brevo"
                                and settings.KOFAD_BREVO_API_KEY),
@@ -286,6 +287,11 @@ def deliver_outgoing(limit=10):
         if not claimed:
             continue
         row = EmailLetter.objects.get(pk=pk)
+        from .email_campaigns import is_campaign_recipient_allowed
+        if not is_campaign_recipient_allowed(row.source_key, row.to_address):
+            EmailLetter.objects.filter(pk=pk).update(
+                status="suppressed", last_error="Recipient did not opt in or campaign was paused.")
+            continue
         try:
             from .brevo_email import send_brevo
             send_brevo(subject=row.subject, body=row.body_text,
