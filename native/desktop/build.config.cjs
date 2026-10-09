@@ -7,6 +7,7 @@ module.exports = {
   directories: { output: "dist/" + (process.env.KOFAD_NATIVE_CHANNEL || "customer") },
   files: ["main.cjs", "profile.cjs", "package.json"],
   asar: true,
+  forceCodeSigning: process.env.KOFAD_NATIVE_SIGNED_RELEASE === "1",
   win: {
     icon: "build/icon.ico",
     target: [{ target: "nsis", arch: ["x64"] }],
