@@ -1,0 +1,133 @@
+
+/* Scoped 2026 counter refinements — no changes to marketplace/global components. */
+#pos .counter-cart .cart-line{
+  display:block;
+  margin:10px 0;
+  padding:16px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:color-mix(in srgb,var(--white) 94%,var(--soft));
+  box-shadow:0 8px 24px rgba(8,38,59,.035);
+}
+#pos .counter-cart .cart-line:first-child{margin-top:4px}
+#pos .cart-line-header{
+  display:flex;
+  flex-direction:row;
+  align-items:flex-start;
+  justify-content:space-between;
+  flex-wrap:nowrap;
+  gap:16px;
+  width:100%;
+  margin:0 0 7px;
+}
+#pos .cart-product-name{
+  display:block;
+  flex:1 1 auto;
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-weight:800;
+  font-size:clamp(15px,2.5vw,18px);
+  line-height:1.45;
+  color:var(--ink);
+}
+#pos .cart-remove-button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  gap:7px;
+  min-width:98px;
+  min-height:44px;
+  padding:9px 12px;
+  margin:0;
+  border:1px solid #efc7c7;
+  border-radius:12px;
+  color:#a12f35;
+  background:#fff3f2;
+  font-weight:800;
+  font-size:12px;
+  cursor:pointer;
+  transition:background .15s,border-color .15s,transform .15s;
+}
+#pos .cart-remove-button:hover{background:#ffe4e2;border-color:#ce6c6c}
+#pos .cart-remove-button:active{transform:scale(.97)}
+#pos .cart-remove-button:focus-visible{outline:3px solid #e8a46c;outline-offset:2px}
+#pos .cart-remove-symbol{font-size:15px;line-height:1}
+#pos .cart-line-meta{display:block;margin:0 0 13px;font-size:12px;line-height:1.6;color:var(--muted)}
+#pos .counter-cart .cart-controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:0}
+#pos .cart-quantity-field{display:flex;flex-direction:column;gap:5px;min-width:88px;margin:0}
+#pos .cart-quantity-field span,#pos .cart-line-value span{display:block;font-size:11px;font-weight:700;color:var(--muted)}
+#pos .cart-quantity-field input{
+  width:90px;
+  max-width:100%;
+  min-height:44px;
+  height:44px;
+  padding:6px 10px;
+  margin:0;
+  border-radius:10px;
+  font-weight:750;
+  font-variant-numeric:tabular-nums;
+}
+#pos .cart-line-value{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
+  margin-left:auto;
+  text-align:right;
+  white-space:nowrap;
+}
+#pos .cart-line-value strong{font-size:17px;font-weight:850;color:var(--ink);font-variant-numeric:tabular-nums}
+#pos .momo-deposit-summary{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  margin:14px 0;
+}
+#pos .momo-deposit-summary>div{
+  border:1px solid var(--line);
+  border-radius:13px;
+  padding:13px;
+  background:color-mix(in srgb,var(--soft) 55%,var(--white));
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  min-width:0;
+}
+#pos .momo-deposit-summary span{font-size:11px;line-height:1.5;color:var(--muted);font-weight:700}
+#pos .momo-deposit-summary strong{color:var(--ink);font-size:16px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#pos .counter-sale-panel .counter-total{
+  border-radius:14px!important;
+  background:color-mix(in srgb,var(--soft) 80%,var(--white))!important;
+}
+#pos .counter-finish-bar{
+  background:var(--green)!important;
+  border:1px solid color-mix(in srgb,var(--green) 80%,var(--white));
+  border-radius:14px!important;
+  box-shadow:0 12px 26px rgba(3,32,53,.14)!important;
+}
+#pos .counter-finish-bar,
+#pos .counter-finish-bar *,
+#pos .counter-finish-bar .sale-checkout-total strong,
+#pos .counter-finish-bar .sale-payment-open{
+  color:#fff!important;
+}
+#pos .counter-finish-bar button{border-color:rgba(255,255,255,.3)!important;background:transparent!important}
+html[data-theme="dark"] #pos .cart-remove-button{background:#42272d;border-color:#9c4f50;color:#ffd8d8}
+html[data-theme="dark"] #pos .counter-cart .cart-line{background:color-mix(in srgb,var(--white) 88%,var(--soft))}
+@media(max-width:720px){
+  #pos .counter-cart .cart-line{padding:15px 13px;margin:9px 0;border-radius:15px}
+  #pos .cart-line-header{gap:10px;align-items:flex-start}
+  #pos .cart-remove-button{min-width:88px;min-height:44px;padding:9px 10px;font-size:11px}
+  #pos .cart-line-meta{margin-bottom:12px}
+  #pos .cart-line-value strong{font-size:15px}
+  #pos .momo-deposit-summary{grid-template-columns:1fr 1fr;gap:8px}
+  #pos .momo-deposit-summary>div{padding:11px 9px}
+  #pos .momo-deposit-summary strong{font-size:14px}
+  #pos .counter-finish-bar{padding:12px!important}
+}
+@media(max-width:380px){
+  #pos .cart-remove-button{min-width:44px;font-size:0;gap:0;padding:8px}
+  #pos .cart-remove-symbol{font-size:18px}
+  #pos .cart-quantity-field{min-width:70px}
+}
