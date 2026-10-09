@@ -610,6 +610,57 @@ def mark_backup_downloaded(session):
     session.modified = True
 
 
+COVERAGE_GROUPS = (
+    ("Operations & stock", {"branch", "company", "product", "stock", "party", "document",
+                            "line", "payment", "allocation", "movement", "operation", "closing",
+                            "heldsale", "idempotency", "audit", "correction"}),
+    ("Financial governance & payroll", {"manualjournal", "manualjournalline", "worker",
+                                         "workerdocument", "payrollrule", "payrollperiod",
+                                         "payrollentry", "payrollpayment", "stockcount",
+                                         "stockcountline", "supplierreturn", "quarantineitem"}),
+    ("Business messages & access", {"access", "message", "smsattempt", "smsevent",
+                                     "whatsappattempt", "whatsappwebhookevent",
+                                     "messagetemplate", "staffinvitation",
+                                     "whatsappbotreply", "whatsappbotcontact",
+                                     "debtsettings", "communicationsettings",
+                                     "managementcontact", "customerservicecontact"}),
+)
+
+
+def backup_coverage(stats=None):
+    """Include zero-row models so newly added settings are not silently missed."""
+    if stats is None:
+        stats = maintenance_stats()
+    rows = []
+    for label in sorted(backup_model_labels()):
+        if label in {"contenttypes.contenttype", "auth.permission", "auth.group",
+                     "auth.user", "admin.logentry"}:
+            category = "Staff identities, roles & permissions"
+        elif label.startswith("marketplace."):
+            category = "Online Market, payments, files & customer conversations"
+        else:
+            name = label.split(".", 1)[-1]
+            group = next((title for title, names in COVERAGE_GROUPS if name in names), None)
+            category = group or "Core business, finance & integrations"
+        rows.append({
+            "label": label,
+            "area": category,
+            "records": stats.get(label) if stats.get(label) is not None else 0,
+        })
+    areas = {}
+    for row in rows:
+        area = areas.setdefault(row["area"], {"name": row["area"], "models": 0, "records": 0})
+        area["models"] += 1
+        area["records"] += row["records"]
+    return {
+        "model_count": len(rows),
+        "record_count": sum(x["records"] for x in rows),
+        "areas": sorted(areas.values(), key=lambda x: x["name"]),
+        "models": rows,
+        "excluded_temporary": sorted(EXCLUDED_BACKUP_MODELS),
+    }
+
+
 def maintenance_stats():
     counts = {}
     for app_label in BACKUP_APP_LABELS:
@@ -619,4 +670,7 @@ def maintenance_stats():
                     counts[model._meta.label_lower] = model._default_manager.count()
                 except Exception:
                     counts[model._meta.label_lower] = None
+    # Identity, role, and Django admin logs are part of encrypted backups too.
+    for model in (ContentType, Permission, Group, User, LogEntry):
+        counts[model._meta.label_lower] = model._default_manager.count()
     return counts
