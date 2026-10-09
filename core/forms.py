@@ -142,13 +142,14 @@ class DebtSettingsForm(forms.ModelForm):
     class Meta:
         model = DebtSettings
         fields = [
-            "delivery_mode", "reminder_time", "due_soon_enabled", "due_soon_days",
+            "delivery_mode", "email_delivery_mode", "reminder_time", "due_soon_enabled", "due_soon_days",
             "due_today_enabled", "overdue_enabled", "overdue_grace_value", "overdue_grace_unit",
             "overdue_repeat_days", "max_sms_7_days", "max_sms_30_days",
             "minimum_hours_between_sms", "minimum_balance", "skip_weekends", "message_template",
         ]
         labels = {
-            "delivery_mode": "Automatic reminder action",
+            "delivery_mode": "Automatic SMS action",
+            "email_delivery_mode": "Debt email action",
             "reminder_time": "Reminder run time",
             "due_soon_days": "Due-soon reminder days",
             "overdue_grace_value": "Grace period before overdue",
@@ -162,7 +163,8 @@ class DebtSettingsForm(forms.ModelForm):
         }
         widgets = {"reminder_time": forms.TimeInput(attrs={"type": "time"})}
         help_texts = {
-            "delivery_mode": "Off does nothing. Draft prepares messages for review. Send SMS immediately submits straight to Arkesel when live SMS is configured.",
+            "delivery_mode": "Off does nothing. Draft prepares messages for review. Send submits SMS to Arkesel when configured.",
+            "email_delivery_mode": "Off by default. Drafts must be approved by finance-authorised mail staff; Send queues to Brevo after customer consent, frequency and due-date checks.",
             "reminder_time": "Africa/Accra local time.",
             "due_soon_days": "Comma-separated days before due date, for example 7,3,1.",
             "overdue_grace_value": "Zero means a debt becomes overdue immediately after its due date.",
