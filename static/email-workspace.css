@@ -308,3 +308,6 @@ html[data-theme="dark"] .mail-button.secondary,body.dark .mail-button.secondary,
 .mail-permission-tools .mail-button{min-height:33px;padding:7px 10px;font-size:.72rem!important}
 .mail-permission-count{margin-left:auto;font-size:.73rem;font-weight:700;color:var(--mail-muted)}
 @media(max-width:600px){.mail-permission-count{margin:2px 0;width:100%}}
+
+.mail-brand-image{flex:none;width:70px;height:63px;object-fit:contain;object-position:center}
+@media(max-width:600px){.mail-brand-image{width:54px;height:52px}}
