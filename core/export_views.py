@@ -52,8 +52,8 @@ EXPORT_COLUMNS = {
                   "outstanding", "consent", "debt_email_opt_in"],
     "suppliers": ["name", "phone", "email", "address", "credit_limit", "outstanding"],
     "market_customers": [
-        "account_id", "name", "phone", "email", "created", "phone_status",
-        "email_status", "google_account", "last_login", "orders",
+        "account_id", "name", "phone", "email", "verified_email", "created",
+        "phone_status", "email_status", "google_account", "last_login", "orders",
         "paid_orders", "paid_spend", "last_order", "notifications",
         "marketing_consent", "status",
     ],
