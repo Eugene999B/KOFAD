@@ -27,6 +27,42 @@ class EmailMailboxMember(models.Model):
         constraints = [models.UniqueConstraint(fields=["mailbox", "user"], name="unique_kofad_mailbox_member")]
 
 
+class EmailConversation(models.Model):
+    """Customer email thread restricted to exactly one departmental mailbox."""
+    STATUS = [("open", "Open"), ("pending", "Waiting for customer"), ("closed", "Closed")]
+    PRIORITY = [("normal", "Normal"), ("high", "High")]
+    mailbox = models.ForeignKey(EmailMailbox, related_name="conversations", on_delete=models.PROTECT)
+    customer_email = models.EmailField()
+    subject = models.CharField(max_length=255)
+    status = models.CharField(max_length=8, choices=STATUS, default="open")
+    priority = models.CharField(max_length=8, choices=PRIORITY, default="normal")
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                    related_name="kofad_assigned_conversations", on_delete=models.SET_NULL)
+    last_activity_at = models.DateTimeField(default=__import__("django.utils.timezone", fromlist=["now"]).now)
+    last_customer_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-last_activity_at", "-pk"]
+        indexes = [
+            models.Index(fields=["mailbox", "status", "last_activity_at"],
+                         name="kofad_thread_listing"),
+            models.Index(fields=["mailbox", "customer_email"],
+                         name="kofad_thread_customer"),
+        ]
+
+
+class EmailConversationNote(models.Model):
+    """Internal-only remark; never emitted to Brevo or Cloudflare."""
+    conversation = models.ForeignKey(EmailConversation, related_name="notes", on_delete=models.CASCADE)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+
 class EmailLetter(models.Model):
     DIRECTION = [("inbound", "Incoming"), ("outbound", "Outgoing")]
     STATUS = [("received", "Received"), ("draft", "Awaiting review"), ("queued", "Queued"), ("sending", "Sending"),
@@ -34,6 +70,8 @@ class EmailLetter(models.Model):
               ("failed", "Failed"), ("uncertain", "Needs review"),
               ("suppressed", "Suppressed by recipient preference")]
     mailbox = models.ForeignKey(EmailMailbox, related_name="letters", on_delete=models.PROTECT)
+    conversation = models.ForeignKey(EmailConversation, null=True, blank=True,
+                                     related_name="letters", on_delete=models.SET_NULL)
     direction = models.CharField(max_length=8, choices=DIRECTION)
     status = models.CharField(max_length=12, choices=STATUS)
     from_address = models.EmailField()
