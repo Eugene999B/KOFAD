@@ -332,8 +332,10 @@ def run_low_stock_summary(now=None):
 
 
 def run_scheduled_automations(now=None):
+    from .debt_email import run_debt_email_reminders
     return {
         "debt": run_debt_reminders(now),
+        "debt_email": run_debt_email_reminders(now),
         "low_stock": run_low_stock_summary(now),
     }
 
