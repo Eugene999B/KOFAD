@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
+class DailyEmailLimitExceeded(ValidationError):
+    pass
+
+
 class UncertainEmailDelivery(Exception):
     """A timeout after request submission may still have delivered the email."""
 
@@ -34,7 +38,7 @@ def _reserve():
         row, _ = EmailDailyUsage.objects.get_or_create(day=timezone.localdate())
         row = EmailDailyUsage.objects.select_for_update().get(pk=row.pk)
         if row.attempted >= daily_limit():
-            raise ValidationError("KOFAD daily outgoing email allowance has been reached.")
+            raise DailyEmailLimitExceeded("KOFAD daily outgoing email allowance has been reached.")
         row.attempted += 1
         row.save(update_fields=["attempted"])
         return row.pk
