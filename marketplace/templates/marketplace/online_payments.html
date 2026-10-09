@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<link rel="stylesheet" href="{% static 'marketplace/payments-center.css' %}">{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'marketplace/payments-center.css' %}"><link rel="stylesheet" href="{% static 'marketplace/online-pricing-settings.css' %}">{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/settings/">Settings</a><a class="button secondary" href="/online-orders/">Online orders</a></div>{% endblock %}
 {% block content %}
 <section class="panel payment-intro"><p class="eyebrow">PAYMENTS AT KOFAD</p><h2>A clear view of every online payment.</h2><p>Choose the provider used for new checkouts. A payment already started stays with its original provider so it can be confirmed safely.</p><p class="notice">{% if payment_ready %}{{ payment_provider|title }} is enabled for new checkouts. Payment confirmation still requires a verified provider response.{% else %}{{ payment_notice }}{% endif %}</p></section>
