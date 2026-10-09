@@ -43,7 +43,7 @@ def _public_indexable_path(path):
     if path in {
         "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
         "/terms/", "/privacy/", "/contact/", "/market/",
-        "/robots.txt", "/sitemap.xml",
+        "/robots.txt", "/sitemap.xml", "/favicon.ico",
     }:
         return True
     if re.fullmatch(r"/market/products/\d+/", path):
