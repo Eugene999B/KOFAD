@@ -2557,6 +2557,12 @@ def online_payments(request, branch):
     if query:
         rows = rows.filter(Q(reference__icontains=query) | Q(order__public_reference__icontains=query))
     page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
+    from core.models import HeldSale
+    from core.pos_paystack import LABEL_PREFIX
+    from core.pos_payment_views import _snapshot
+    pos_rows = [_snapshot(item) for item in HeldSale.objects.filter(
+        branch=branch, label__startswith=LABEL_PREFIX,
+    ).select_related("user").order_by("-created_at")[:12]]
     return render(request, "marketplace/online_payments.html", {
         "title": "Online payments", "account_form": account_form,
         "payment_provider": hubtel.selected_provider(),
@@ -2565,6 +2571,7 @@ def online_payments(request, branch):
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
         "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
+        "pos_momo_rows": pos_rows,
     })
 
 
