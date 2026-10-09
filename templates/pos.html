@@ -137,14 +137,24 @@
         <button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button>
         <button type="button" class="text-button hidden" id="clear-customer">Change</button>
       </div>
-      <input id="customer-search" type="search" autocomplete="off" placeholder="Search saved customer by name or Ghana phone">
-      <div id="customer-results" class="customer-results counter-customer-results" role="listbox" aria-label="Customer search results"></div>
+      <div class="customer-choice" id="customer-mode-picker" role="group" aria-label="Choose customer type">
+        <button type="button" class="customer-choice-button active" data-customer-mode="walkin" aria-pressed="true">Walk-in sale<small>No customer record</small></button>
+        <button type="button" class="customer-choice-button" data-customer-mode="saved" aria-pressed="false">Saved customer<small>History and debts</small></button>
+        <button type="button" class="customer-choice-button" data-customer-mode="new" aria-pressed="false">New customer<small>Keep future records</small></button>
+      </div>
+      <p class="customer-choice-note" id="walkin-explanation">Walk-in is for eligible fully paid sales only. Choose a saved or new customer for any unpaid balance.</p>
+      <div id="customer-search-wrap" class="hidden">
+        <label for="customer-search" class="customer-field-label">Find a saved customer</label>
+        <input id="customer-search" type="search" autocomplete="off" placeholder="Search by name or Ghana phone">
+        <div id="customer-results" class="customer-results counter-customer-results" role="listbox" aria-label="Customer search results"></div>
+      </div>
       <div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
       <div id="new-customer-fields" class="new-customer-fields hidden counter-new-customer">
         <input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer name">
         <div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
         <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email (optional for direct MoMo)">
       </div>
+      <div id="customer-duplicate-alert" class="customer-duplicate-alert hidden" role="alert" aria-live="assertive"></div>
       <label class="checkout-consent compact-consent" id="customer-consent-wrap">
         <input id="customer-consent" type="checkbox" checked>
         <span><strong>Send receipt by SMS</strong></span>

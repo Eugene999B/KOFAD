@@ -1187,6 +1187,38 @@ def product_edit(request, branch, pk=None):
 
 
 @protected("operate_sales|operate_finance|view_reports")
+def customer_duplicate_check(request, branch):
+    """Preflight hint only. The final transactional creation check is authoritative."""
+    from .customer_guard import customer_conflicts
+    name = (request.GET.get("name") or "").strip()[:120]
+    phone = (request.GET.get("phone") or "").strip()[:40]
+    if not name and not phone:
+        return JsonResponse({"matches": [], "duplicate": False})
+    if len(name) < 2 and not phone:
+        return JsonResponse({"matches": [], "duplicate": False})
+    try:
+        matches = customer_conflicts(branch, name, phone)
+    except ValidationError as exc:
+        return JsonResponse({"error": "; ".join(exc.messages)}, status=400)
+    response = JsonResponse({
+        "duplicate": bool(matches),
+        "matches": [
+            {"id": m["party"].pk, "name": m["party"].name,
+             "phone": m["party"].phone, "email": m["party"].email,
+             "consent": m["party"].consent,
+             "debt_email_opt_in": m["party"].debt_email_opt_in,
+             "outstanding": str(m["debt"]),
+             "phone_match": m["phone_match"], "name_match": m["name_match"]}
+            for m in matches[:10]
+        ],
+        "message": ("Existing customer found. Select the saved record; do not create another account."
+                    if matches else "No saved customer uses this name or number."),
+    })
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@protected("operate_sales|operate_finance|view_reports")
 def customer_search(request, branch):
     query = request.GET.get("q", "").strip()[:100]
     rows = Party.objects.filter(branch=branch, kind="customer")
@@ -1336,13 +1368,20 @@ def party_edit(request, pk=None):
     if not request.user.has_perm("core.operate_finance"):
         form.fields.pop("credit_limit")
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            item = form.save(commit=False)
-            item.branch = branch
-            item.kind = obj.kind if obj else kind
-            item.save()
-            s.audit(request.user, branch, "party.saved", item.pk, {"name": item.name})
-        return redirect("/parties/?kind=" + item.kind)
+        try:
+            with transaction.atomic():
+                item = form.save(commit=False)
+                item.branch = branch
+                item.kind = obj.kind if obj else kind
+                if item.kind == "customer":
+                    from .customer_guard import assert_unique_customer
+                    s.lock_branch(branch)
+                    assert_unique_customer(branch, item.name, item.phone, exclude_pk=item.pk)
+                item.save()
+                s.audit(request.user, branch, "party.saved", item.pk, {"name": item.name})
+            return redirect("/parties/?kind=" + item.kind)
+        except ValidationError as exc:
+            form.add_error(None, exc)
     return render(request, "form.html", {"title": "Edit contact" if pk else "New contact", "form": form,
         "description": "Name and phone are enough to start. Credit limits are controlled by finance."})
 
