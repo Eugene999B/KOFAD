@@ -62,7 +62,7 @@ def _market_context(request, **extra):
         ).count()
     path = request.path
     seo_indexable = path in {
-        "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/", "/apps/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
         "/terms/", "/privacy/", "/contact/", "/market/",
     } or bool(re.fullmatch(r"/market/products/\d+/", path))
     page = extra.get("page") or {}
