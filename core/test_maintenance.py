@@ -131,7 +131,7 @@ class MaintenanceServiceTests(TransactionTestCase):
         password = "recovery-test-passphrase-123456"
         raw = maintenance.encrypted_backup_bytes(self.user, password)
         self.assertTrue(raw.startswith(maintenance.ENCRYPTED_BACKUP_MAGIC))
-        header_line = raw[len(maintenance.ENCRYPTED_BACKUP_MAGIC):].split(b"\\n", 1)[0]
+        header_line = raw[len(maintenance.ENCRYPTED_BACKUP_MAGIC):].split(b"\n", 1)[0]
         header = json.loads(header_line)
         self.assertEqual(header["compression"], "zlib")
         bundle = maintenance.parse_uploaded_backup(raw, password)
