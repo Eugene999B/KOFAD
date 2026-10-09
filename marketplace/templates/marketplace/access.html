@@ -1,24 +1,35 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block content %}
-<section class="simple-customer-access premium-market-access" aria-labelledby="market-access-title">
-  <div class="simple-access-card premium-access-card">
-    <div class="premium-access-logo" aria-hidden="true">
-      <img src="{% static 'brand/kofad-official-logo.svg' %}" alt="">
-    </div>
-    <h1 id="market-access-title">Sign in or create account</h1>
-    <p>Choose Google for fast access, or continue with a mobile number. You can add the other sign-in method later.</p>
-    {% if google_ready %}<a class="kofad-google-button" href="{% url 'google_customer_login' %}"><span class="kofad-google-mark" aria-hidden="true">G</span> Continue with Google</a><div class="kofad-oauth-separator"><span>or use your mobile number</span></div>{% endif %}
-    {% include "marketplace/_auth_messages.html" %}
-    <form method="post" class="access-phone-form" novalidate>
-      {% csrf_token %}
-      {{ form.non_field_errors }}
-      <label for="{{ form.phone.id_for_label }}">Mobile number</label>
-      {{ form.phone }}
-      {{ form.phone.errors }}
-      <button class="market-button primary wide" type="submit">Continue <span aria-hidden="true">→</span></button>
-    </form>
-    <div class="simple-access-links"><a href="/market/account/login/">Already registered? Sign in with password</a></div>
-    <a class="simple-access-back" href="/market/">Back to Market</a>
-    {% include "marketplace/_support_contacts.html" %}
-  </div>
-</section>
+{% extends "marketplace/base.html" %}{% load static %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/customer-auth-premium.css' %}">{% endblock %}
+{% block content %}
+<section class="kofad-entry" aria-labelledby="market-access-title">
+<div class="kofad-entry-shell">
+<aside class="kofad-entry-story" aria-label="KOFAD Market welcome">
+ <div class="kofad-story-top"><span class="kofad-story-kicker">KOFAD IMPEX ENTERPRISE</span>
+ <h2>Everything you need.<br><em>One easy account.</em></h2>
+ <p>Shop with confidence, follow your orders and connect with our team — all in one place.</p></div>
+ <div class="kofad-story-benefits"><div><span aria-hidden="true">✓</span><strong>Simple and secure sign-in</strong></div><div><span aria-hidden="true">✓</span><strong>Orders and support in one place</strong></div><div><span aria-hidden="true">✓</span><strong>Mobile number linking is optional</strong></div></div>
+ <p class="kofad-story-foot">KOFAD Market · Retail &amp; wholesale</p>
+ </aside>
+<div class="kofad-entry-form simple-access-card premium-access-card">
+<div class="kofad-auth-brand"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE" width="184" height="110"></div>
+<span class="kofad-access-label"><span aria-hidden="true">●</span> SECURE CUSTOMER ACCESS</span>
+<h1 id="market-access-title">Sign in or create<br>your account.</h1>
+<p class="kofad-auth-description">Welcome to KOFAD Market. Choose the easiest way to get started.</p>
+{% include "marketplace/_auth_messages.html" %}
+{% if google_ready %}
+<a class="kofad-google-button" href="{% url 'google_customer_login' %}" aria-label="Continue securely with Google"><svg class="google-colour-mark" viewBox="0 0 24 24" width="23" height="23" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.2H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.8a6 6 0 0 1 0-3.6V7.6H3.1a10 10 0 0 0 0 8.8l3.3-2.6Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.9.5 4 1.6L18.8 5A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg><span>Continue with Google</span><span class="kofad-button-arrow" aria-hidden="true">→</span></a>
+<div class="kofad-oauth-separator"><span>or continue with your number</span></div>
+{% endif %}
+<form method="post" class="access-phone-form kofad-access-form">
+{% csrf_token %}{{ form.non_field_errors }}
+<label for="{{ form.phone.id_for_label }}">Mobile number</label>
+{{ form.phone }}{{ form.phone.errors }}
+<p class="kofad-phone-help">Use your Ghana mobile number to sign in or register.</p>
+<button class="market-button primary wide" type="submit">Continue with mobile number <span aria-hidden="true">→</span></button>
+</form>
+<div class="kofad-access-bottom"><a class="kofad-password-link" href="/market/account/login/">Already have a password? <strong>Sign in</strong></a>
+<a class="kofad-market-back" href="/market/">← Back to KOFAD Market</a></div>
+<p class="kofad-privacy-note">Your account is private. Google and mobile sign-in are separate options; linking them is your choice.</p>
+{% include "marketplace/_support_contacts.html" %}
+</div></div></section>
 {% endblock %}
