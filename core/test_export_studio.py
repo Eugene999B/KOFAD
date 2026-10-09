@@ -155,6 +155,26 @@ class ExportStudioTests(Fixtures, TestCase):
         self.assertTrue(sheet.auto_filter.ref)
         self.assertTrue(any("Registered name" in str(cell.value) for row in sheet for cell in row))
 
+    def test_csv_negative_amounts_remain_numeric_and_formula_text_is_escaped(self):
+        from core.exports import export
+        from core.models import Company
+        records = [{"description": "  =SUM(1,2)", "amount": Decimal("-12.50")}]
+        response = export(records, "csv", "Security export",
+                          Company.objects.get(),
+                          [("description", "Description"), ("amount", "Amount")])
+        row = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))[0]
+        self.assertTrue(row["Description"].startswith("'  ="))
+        self.assertEqual(row["Amount"], "-12.50")
+
+    def test_export_row_limit_fails_closed_before_generating_documents(self):
+        from unittest.mock import patch
+        from core import export_views
+        fake = [{"name": "Test"}] * 10001
+        with patch.object(export_views, "_rows", return_value=(fake, [("name", "Name")])):
+            response = self.client.get("/exports/download/pdf/", {"dataset": "customers"})
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "10,000", status_code=400)
+
     def test_invalid_download_format_rejected_and_not_rendered(self):
         response = self.client.get("/exports/download/exe/", {"dataset": "customers"})
         self.assertEqual(response.status_code, 400)
