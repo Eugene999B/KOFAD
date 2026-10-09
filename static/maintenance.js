@@ -11,11 +11,11 @@
   let expiryTimer = null;
   let polling = false;
 
-  const setLocked = (locked, seconds = 0) => {
+  const setLocked = (locked, seconds = 0, downloaded = false) => {
     guardedButtons.forEach(button => {
       button.disabled = locked;
       if (locked) {
-        button.setAttribute("title", "Download a fresh backup first");
+        button.setAttribute("title", "Download and validate a fresh safety backup first");
       } else {
         button.removeAttribute("title");
       }
@@ -24,12 +24,13 @@
     statusNode.classList.toggle("ready", !locked);
     if (locked) {
       statusNode.innerHTML =
-        "<strong>Safety backup required.</strong><span>Download the backup above. " +
-        "Restore and reset will unlock automatically after the server confirms it.</span>";
+        downloaded
+          ? "<strong>Backup saved but not yet validated.</strong><span>Upload the same encrypted file in Step 2 with your passphrase to unlock restore and reset.</span>"
+          : "<strong>Safety backup required.</strong><span>Download and save an encrypted backup, then re-upload it in Step 2 to verify it before restore or reset.</span>";
     } else {
       const minutes = Math.max(1, Math.ceil(seconds / 60));
       statusNode.innerHTML =
-        "<strong>Safety backup confirmed.</strong><span>Restore and reset are unlocked for this browser session" +
+        "<strong>Exact backup file validated.</strong><span>Restore and reset are unlocked for this browser session" +
         (seconds ? " for about " + minutes + " minute" + (minutes === 1 ? "" : "s") + "." : ".") +
         "</span>";
     }
@@ -59,7 +60,7 @@
     try {
       const data = await readStatus();
       if (!data) return false;
-      setLocked(!data.recent, Number(data.expires_in_seconds || 0));
+      setLocked(!data.verified, Number(data.expires_in_seconds || 0), Boolean(data.recent));
       if (data.recent) scheduleExpiry(Number(data.expires_in_seconds || 0));
       return Boolean(data.recent);
     } catch (_) {
@@ -73,14 +74,14 @@
     const started = Date.now();
     statusNode.classList.remove("ready");
     statusNode.innerHTML =
-      "<strong>Preparing your safety backup…</strong><span>The download can continue while KOFAD verifies the safety marker.</span>";
+      "<strong>Preparing your encrypted backup…</strong><span>Save the downloaded file and re-upload it in Step 2 to verify possession.</span>";
     try {
       while (Date.now() - started < 30000) {
         await new Promise(resolve => window.setTimeout(resolve, 450));
         if (await syncStatus()) return;
       }
       statusNode.innerHTML =
-        "<strong>Backup download started.</strong><span>If Restore and Reset stay locked, refresh this page after the download finishes.</span>";
+        "<strong>Backup download started.</strong><span>Upload the exact saved file in Step 2 and enter the encryption passphrase before unlocking destructive actions.</span>";
     } finally {
       polling = false;
     }
