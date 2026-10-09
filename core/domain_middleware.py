@@ -49,6 +49,7 @@ class OfficialDomainMiddleware:
         elif target_path.startswith("/market/"):
             target = MARKET
         elif path in {
+            "/apps/", "/apps/releases.json",
             "/about/", "/faq/", "/delivery/", "/returns-policy/", "/terms/",
             "/privacy/", "/contact/", "/robots.txt", "/sitemap.xml",
         } or path.startswith("/verify/worker/"):
