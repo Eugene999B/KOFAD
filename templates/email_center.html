@@ -86,6 +86,11 @@
     </section>
   </div>
   {% if is_mail_owner %}
+  <section class="panel email-admin"><h2>Email usage today</h2>
+    <p>{{ daily_email_usage.attempted }} / {{ daily_email_usage.limit }} attempted · {{ daily_email_usage.accepted }} accepted by Brevo · {{ daily_email_usage.remaining }} estimated remaining.</p>
+    <p>{{ email_queued_count }} messages queued or awaiting retry. Usage includes the KOFAD Brevo API calls tracked by this application.</p>
+    <p><a class="button secondary" href="/email/campaigns/">Customer email campaigns and daily balance →</a></p>
+  </section>
   <section class="panel email-admin">
     <div><p class="eyebrow">SYSTEM ADMINISTRATOR</p><h2>Staff mailbox permissions</h2>
       <p>Grant access to named staff. A staff member must also have permission for the selected branch.</p>
