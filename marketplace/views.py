@@ -2562,9 +2562,14 @@ def online_payments(request, branch):
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
         else:
-            PaymentConfiguration.objects.update_or_create(
-                pk=1, defaults={"online_price_markup_percent": rate},
-            )
+            # A first-ever pricing save must NOT silently switch the live
+            # Hubtel/Paystack gateway to the model's default provider.
+            with transaction.atomic():
+                current, _ = PaymentConfiguration.objects.select_for_update().get_or_create(
+                    pk=1, defaults={"provider": hubtel.selected_provider()},
+                )
+                current.online_price_markup_percent = rate
+                current.save(update_fields=["online_price_markup_percent"])
             core_services.audit(request.user, branch, "market.online_price_markup_saved", "1", {
                 "percentage": str(rate),
             })
