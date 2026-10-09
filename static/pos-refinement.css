@@ -131,3 +131,24 @@ html[data-theme="dark"] #pos .counter-cart .cart-line{background:color-mix(in sr
   #pos .cart-remove-symbol{font-size:18px}
   #pos .cart-quantity-field{min-width:70px}
 }
+
+/* Simple, explicit identity choices for checkout, never obscured on phones. */
+#pos .customer-choice{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0}
+#pos .customer-choice-button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;justify-content:center;text-align:left;min-height:68px;min-width:0;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:var(--white);color:var(--ink);font-size:13px;font-weight:750;cursor:pointer;box-shadow:none}
+#pos .customer-choice-button small{color:var(--muted);font-size:11px;font-weight:500;line-height:1.4}
+#pos .customer-choice-button.active{border-color:#228895;background:color-mix(in srgb,var(--soft) 80%,#e3f5f3);box-shadow:0 0 0 2px rgba(34,136,149,.13)}
+#pos .customer-choice-button:focus-visible{outline:3px solid #84c6d1;outline-offset:3px}
+#pos .customer-choice-note{margin:8px 0 12px;color:var(--muted);font-size:12px;line-height:1.6}
+#pos .customer-field-label{display:block;margin-bottom:7px;font-weight:700}
+#pos #customer-search-wrap{margin:13px 0}
+#pos .customer-duplicate-alert{margin:14px 0;padding:14px;border:1.5px solid #e6bb74;background:#fff8ec;color:#664617;border-radius:13px;line-height:1.55}
+#pos .customer-duplicate-alert strong{display:block}
+#pos .customer-duplicate-alert p{font-size:12px;margin:7px 0 12px}
+#pos .customer-duplicate-match{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:50px;width:100%;padding:11px;margin:7px 0 0;background:#fff;border:1px solid #d9be85;color:#213b49;border-radius:10px;cursor:pointer}
+#pos .customer-duplicate-match small{font-size:12px}
+#pos .customer-duplicate-match:focus-visible{outline:3px solid #84c6d1;outline-offset:3px}
+#pos .customer-choice-button[aria-pressed="true"]::before{content:"✓ Selected";font-size:10px;color:#167c75;font-weight:850}
+@media(max-width:660px){#pos .customer-choice{gap:7px}#pos .customer-choice-button{padding:9px;min-height:72px;font-size:12px}#pos .customer-choice-button small{font-size:10px}}
+@media(max-width:370px){#pos .customer-choice{grid-template-columns:1fr}#pos .customer-choice-button{min-height:48px}}
+html[data-theme="dark"] #pos .customer-duplicate-alert{background:#4b3820;border-color:#a4834e;color:#ffefcf}
+html[data-theme="dark"] #pos .customer-duplicate-match{background:#1c303b;color:#ebf5f7;border-color:#68848a}
