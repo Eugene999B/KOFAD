@@ -1,7 +1,9 @@
 """Crawl entrypoints for KOFAD public domains; staff remains private."""
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from django.http import HttpResponse, HttpResponseNotFound
+from pathlib import Path
+from django.conf import settings
+from django.http import FileResponse, HttpResponse, HttpResponseNotFound
 from django.views.decorators.http import require_safe
 
 from .models import MarketListing
@@ -63,4 +65,17 @@ def sitemap(request):
     payload = b'<?xml version="1.0" encoding="UTF-8"?>\n' + tostring(root, encoding="utf-8")
     response = HttpResponse(payload, content_type="application/xml; charset=utf-8")
     response["Cache-Control"] = "public, max-age=1800"
+    return response
+
+
+@require_safe
+def favicon(request):
+    """Public, same-origin image for Google Search and browser tab crawlers."""
+    path = Path(settings.BASE_DIR) / "static" / "brand" / "favicon.ico"
+    if not path.exists():
+        from scripts.prepare_logo import prepare_logo
+        prepare_logo()
+    response = FileResponse(path.open("rb"), content_type="image/x-icon")
+    response["Cache-Control"] = "public, max-age=86400"
+    response["X-Content-Type-Options"] = "nosniff"
     return response
