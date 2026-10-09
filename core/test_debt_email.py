@@ -67,8 +67,7 @@ class DebtEmailAutomationTests(Fixtures, TestCase):
         self.policy.due_soon_days = "3"
         self.policy.minimum_balance = Decimal("1.00")
         self.policy.save(update_fields=["email_delivery_mode", "due_soon_days", "minimum_balance"])
-        with patch("core.debt_email.timezone.localtime", wraps=timezone.localtime):
-            self.assertEqual(run_debt_email_reminders(), 1)
+        self.assertEqual(run_debt_email_reminders(), 1)
         self.assertEqual(run_debt_email_reminders(), 0)
         row = EmailLetter.objects.get(source_key__startswith="debtmail:", status="queued")
         self.assertIn("outstanding balance", row.body_text)
@@ -153,4 +152,4 @@ class DebtEmailAutomationTests(Fixtures, TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "SALE-DEBTMAIL-1")
         self.assertNotContains(resp, "Private support")
-        self.assertContains(resp, "Created by")
+        self.assertContains(resp, "System automation")
