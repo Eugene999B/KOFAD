@@ -165,6 +165,64 @@ class TeamInboxThreadsTests(TestCase):
         self.assertIsNone(thread.assigned_to)
         self.assertEqual(thread.priority, "normal")
 
+
+    def test_conversation_queue_filters_by_status_assignment_and_customer(self):
+        mine = EmailConversation.objects.create(
+            mailbox=self.support, customer_email="vip@example.org",
+            subject="VIP product help", status="open", assigned_to=self.admin)
+        pending = EmailConversation.objects.create(
+            mailbox=self.support, customer_email="other@example.org",
+            subject="Order progress", status="pending")
+        EmailConversation.objects.create(
+            mailbox=self.finance, customer_email="vip@example.org",
+            subject="Confidential account help", status="open", assigned_to=self.admin)
+        self.login(self.admin)
+        result = self.client.get(reverse("email_center"), {
+            "mailbox": self.support.pk, "thread_status": "open",
+            "thread_owner": "mine", "thread_q": "VIP",
+        })
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual([x.pk for x in result.context["conversations"]], [mine.pk])
+        self.assertEqual(result.context["thread_status_filter"], "open")
+        self.assertEqual(result.context["thread_owner_filter"], "mine")
+        self.assertContains(result, "thread_q=VIP")
+
+        result = self.client.get(reverse("email_center"), {
+            "mailbox": self.support.pk, "thread_status": "pending",
+            "thread_owner": "unassigned",
+        })
+        self.assertEqual([x.pk for x in result.context["conversations"]], [pending.pk])
+
+        self.login(self.reader)
+        result = self.client.get(reverse("email_center"), {
+            "mailbox": self.support.pk, "thread_q": "account",
+        })
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(list(result.context["conversations"]), [])
+
+    def test_failed_and_uncertain_history_link_shows_both_without_cross_mailbox_mail(self):
+        for mailbox, subject, status in (
+            (self.support, "Provider failed", "failed"),
+            (self.support, "Delivery uncertain", "uncertain"),
+            (self.support, "Provider accepted", "submitted"),
+            (self.finance, "Private finance failure", "failed"),
+        ):
+            EmailLetter.objects.create(
+                mailbox=mailbox, direction="outbound", status=status,
+                from_address=mailbox.address, to_address="buyer@example.org",
+                subject=subject, body_text="Technical message",
+            )
+        self.login(self.admin)
+        result = self.client.get(reverse("email_center"), {
+            "mailbox": self.support.pk, "status": "attention",
+        })
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.context["attention_count"], 2)
+        self.assertEqual(result.context["letters"].paginator.count, 2)
+        self.assertContains(result, "Provider failed")
+        self.assertContains(result, "Delivery uncertain")
+        self.assertNotContains(result, "Private finance failure")
+
     def test_inbound_duplicate_does_not_create_two_conversations(self):
         for _ in range(2):
             self.assertEqual(self.signed_inbound("client@example.org", "Enquiry",
