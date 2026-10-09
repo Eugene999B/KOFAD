@@ -9,6 +9,17 @@ from core.whatsapp_delivery import process_whatsapp_queue, recover_stale_whatsap
 from marketplace.notifications import process_order_sms
 
 
+def recover_pending_deliveries(error_stream):
+    """Keep one failed provider recovery from stopping the whole payment/message worker."""
+    for label, recover in (("SMS", recover_stale), ("WhatsApp", recover_stale_whatsapp)):
+        try:
+            recover()
+        except Exception:
+            # A transient DB/provider failure must not block independent recovery
+            # or terminate reconciliation of payments and customer messages.
+            error_stream.write(f"{label} recovery failed safely; will retry.")
+
+
 class Command(BaseCommand):
     help = "Run communication automations and Arkesel delivery tracking."
 
@@ -101,8 +112,7 @@ class Command(BaseCommand):
             # Payment checks and receipt delivery both run independently of any customer browser.
             # Stale-message recovery remains less frequent because those records need time to age.
             if last_recovery is None or now - last_recovery >= 30:
-                recover_stale()
-                recover_stale_whatsapp()
+                recover_pending_deliveries(self.stderr)
                 last_recovery = now
 
             if not options["loop"]:
