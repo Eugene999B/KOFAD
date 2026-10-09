@@ -1350,17 +1350,20 @@
       const phone = paystackMomoPhone?.value.trim() || selectedCustomer?.phone || customerPhone?.value.trim() || "";
       const name = (selectedCustomer?.name || customerName?.value || "").trim();
       if (!phone || name.length < 2) throw new Error("Choose or enter a customer and their Mobile Money number.");
+      const amount = paymentTotal();
+      if (amount <= 0 || amount !== total()) throw new Error("Only a full single-method Mobile Money payment can be reviewed.");
       momoCheckRecipient.disabled = true;
       const result = await api("/api/pos/paystack-momo/recipient-review/", {
         phone, name, party: selectedCustomer?.id || null,
         provider: paystackMomoProvider?.value || "mtn",
+        amount_pesewas: amount,
         request_key: requestKey
       });
       if (!result.review_token) throw new Error("Recipient review could not be completed.");
       momoRecipientToken = result.review_token;
       momoRecipientDetails = {phone, name:result.customer_name, network:result.network};
       momoRecipientName.textContent = result.customer_name + " — KOFAD customer details";
-      momoRecipientMeta.textContent = result.phone + " · " + result.network +
+      momoRecipientMeta.textContent = "GHS " + result.amount + " · " + result.phone + " · " + result.network +
         " · " + result.name_source + " (not mobile-network verified)" +
         (result.phone_matches_record === false ? " · Number differs from saved customer contact" : "");
       momoRecipientResult.classList.remove("hidden");
