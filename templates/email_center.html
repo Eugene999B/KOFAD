@@ -79,6 +79,123 @@
       </details>
       {% endif %}
 
+      <section class="email-conversations" aria-label="Customer conversations">
+        <div class="email-section-heading">
+          <div><h3>Customer conversations</h3>
+            <p>One thread for customer replies, follow-ups and departmental handoffs.</p>
+          </div>
+          <span class="email-count">{{ conversations|length }} recent</span>
+        </div>
+        <div class="email-conversation-grid">
+          <nav class="email-thread-list" aria-label="Recent customer conversations">
+            {% for thread in conversations %}
+            <a href="?mailbox={{ selected.pk }}&thread={{ thread.pk }}#customer-conversation"
+               class="email-thread-link{% if active_thread.pk == thread.pk %} current{% endif %}"
+               {% if active_thread.pk == thread.pk %}aria-current="page"{% endif %}>
+              <span class="email-thread-avatar" aria-hidden="true">{{ thread.customer_email|first|upper }}</span>
+              <span class="email-thread-summary">
+                <strong>{{ thread.customer_email }}</strong>
+                <small>{{ thread.subject|truncatechars:65 }}</small>
+                <small>{% if thread.assigned_to %}Assigned: {{ thread.assigned_to.get_full_name|default:thread.assigned_to.username }}{% else %}Unassigned{% endif %} · {{ thread.last_activity_at|date:"j M, H:i" }}</small>
+              </span>
+              <span class="email-thread-status status-{{ thread.status }}">{{ thread.get_status_display }}</span>
+            </a>
+            {% empty %}
+            <div class="email-empty"><strong>No customer conversations yet.</strong>
+              <p>Incoming customer emails and new staff replies will appear here automatically.</p></div>
+            {% endfor %}
+          </nav>
+
+          <div class="email-thread-detail" id="customer-conversation">
+            {% if active_thread %}
+            <header class="email-thread-detail-head">
+              <div>
+                <p class="eyebrow">CONVERSATION #{{ active_thread.pk }}</p>
+                <h4>{{ active_thread.subject }}</h4>
+                <p>{{ active_thread.customer_email }} · {{ active_thread.get_status_display }}
+                  {% if active_thread.priority == 'high' %} · High priority{% endif %}</p>
+              </div>
+              {% if selected.pk in writable_ids %}
+              <details class="email-thread-manage">
+                <summary>Manage conversation</summary>
+                <form method="post">{% csrf_token %}
+                  <input type="hidden" name="action" value="thread_update">
+                  <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+                  <input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
+                  <label>Status<select name="thread_status">
+                    <option value="open"{% if active_thread.status == 'open' %} selected{% endif %}>Open</option>
+                    <option value="pending"{% if active_thread.status == 'pending' %} selected{% endif %}>Waiting for customer</option>
+                    <option value="closed"{% if active_thread.status == 'closed' %} selected{% endif %}>Closed</option>
+                  </select></label>
+                  <label>Priority<select name="priority">
+                    <option value="normal"{% if active_thread.priority == 'normal' %} selected{% endif %}>Normal</option>
+                    <option value="high"{% if active_thread.priority == 'high' %} selected{% endif %}>High</option>
+                  </select></label>
+                  <label>Assigned staff<select name="assigned_to">
+                    <option value="">Unassigned</option>
+                    {% for member in eligible_assignees %}
+                    <option value="{{ member.pk }}"{% if active_thread.assigned_to_id == member.pk %} selected{% endif %}>{{ member.get_full_name|default:member.username }}</option>
+                    {% endfor %}
+                  </select></label>
+                  <button class="button secondary" type="submit">Save assignment</button>
+                </form>
+              </details>{% endif %}
+            </header>
+
+            <div class="email-thread-messages" aria-label="Conversation timeline">
+              {% for entry in thread_letters %}
+              <article class="email-thread-bubble {% if entry.direction == 'outbound' %}is-outgoing{% else %}is-incoming{% endif %}">
+                <div class="email-thread-message-meta">
+                  <strong>{% if entry.direction == 'outbound' %}KOFAD · {{ entry.created_by.get_full_name|default:entry.created_by.username|default:"System" }}{% else %}{{ entry.from_address }}{% endif %}</strong>
+                  <span>{{ entry.created_at|date:"j M Y, H:i" }} · {{ entry.get_status_display }}</span>
+                </div>
+                <p class="email-thread-message-subject">{{ entry.subject }}</p>
+                <div class="email-thread-message-body">{{ entry.body_text|linebreaksbr }}</div>
+                {% if entry.last_error %}<p class="email-error">{{ entry.last_error }}</p>{% endif %}
+              </article>
+              {% empty %}<p class="email-empty">No messages recorded in this conversation yet.</p>{% endfor %}
+            </div>
+            {% if thread_notes %}
+            <section class="email-private-notes" aria-label="Internal staff notes">
+              <h5>Private team notes <small>Never emailed</small></h5>
+              {% for note in thread_notes %}
+              <div class="email-private-note">
+                <strong>{{ note.author.get_full_name|default:note.author.username }}</strong>
+                <small>{{ note.created_at|date:"j M, H:i" }}</small>
+                <p>{{ note.body|linebreaksbr }}</p>
+              </div>{% endfor %}
+            </section>{% endif %}
+            {% if selected.pk in writable_ids %}
+            <div class="email-thread-actions">
+              <form method="post">{% csrf_token %}
+                <input type="hidden" name="action" value="thread_reply">
+                <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+                <input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
+                <label>Reply by email to {{ active_thread.customer_email }}
+                  <textarea name="body" rows="5" maxlength="32000" placeholder="Your reply goes to the customer's email inbox." required></textarea>
+                </label>
+                <button type="submit" class="button">↗ Send email reply</button>
+              </form>
+              <form method="post" class="email-note-form">{% csrf_token %}
+                <input type="hidden" name="action" value="thread_note">
+                <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+                <input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
+                <label>Internal note (only authorised staff can see)
+                  <textarea name="note" rows="3" maxlength="4000" placeholder="Record handover or follow-up information…" required></textarea>
+                </label>
+                <button type="submit" class="button secondary">Save private note</button>
+              </form>
+            </div>{% endif %}
+            {% else %}
+              <div class="email-thread-placeholder">
+                <span aria-hidden="true">✉</span>
+                <h4>Choose a conversation</h4>
+                <p>Select an email thread on the left to see the full history, assignment, notes and reply options.</p>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
       <section class="email-history" aria-label="Mailbox message history">
         <div class="email-section-heading"><div><h3>Message history</h3><p>Search communications, review drafts and investigate sending status.</p></div><span class="email-count">{{ letters.paginator.count }} found</span></div>
         <form method="get" class="email-history-filters" role="search">
