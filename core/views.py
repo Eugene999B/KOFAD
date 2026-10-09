@@ -843,6 +843,8 @@ def pos_paystack_momo_start(request):
         if not (original_paystack or original_hubtel) and requested and requested != chosen:
             raise ValidationError("The payment provider was changed in Settings. Refresh this checkout before proceeding.")
         processor = pos_hubtel if chosen == "hubtel" else pos_paystack
+        if chosen == "paystack" and not original_paystack and data.get("recipient_confirmed") is not True:
+            raise ValidationError("Confirm the customer name and Mobile Money number, and obtain consent before sending a payment request.")
         result = processor.start(
             request.user,
             branch,

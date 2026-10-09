@@ -37,7 +37,7 @@ from .models import (
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
-from . import services, hubtel, paystack_momo
+from . import services, hubtel, paystack_momo, momo_security
 from .hubtel_evidence import save_exchange, decrypt_exchange
 
 
@@ -1063,10 +1063,14 @@ def checkout(request, customer):
             request.session.modified = True
             try:
                 if payment_form.cleaned_data["payment_method"] == "momo":
-                    paystack_momo.initialize(order, payment_form.cleaned_data["momo_phone"],
-                                             payment_form.cleaned_data["momo_network"])
+                    momo_security.begin(request, customer, order,
+                        payment_form.cleaned_data["momo_phone"],
+                        payment_form.cleaned_data["momo_network"])
                     return redirect("market_order", pk=order.pk)
-                hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+                if hubtel.selected_provider() == "paystack":
+                    services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+                else:
+                    hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
                 return redirect("market_payment_launch", pk=order.pk)
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -1110,9 +1114,13 @@ def order_pay(request, customer, pk):
         return redirect("market_order", pk=order.pk)
     try:
         if form.cleaned_data["payment_method"] == "momo":
-            paystack_momo.initialize(order, form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"])
+            momo_security.begin(request, customer, order,
+                form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"])
             return redirect("market_order", pk=order.pk)
-        hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+        if hubtel.selected_provider() == "paystack":
+            services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+        else:
+            hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
         return redirect("market_payment_launch", pk=order.pk)
     except ValidationError as exc:
         messages.error(request, problem(exc))
@@ -1265,6 +1273,28 @@ def customer_orders(request, customer):
 
 @market_customer_required
 @require_POST
+def customer_momo_phone_verify(request, customer, pk):
+    """First-time phone-control SMS is separate from Paystack's charge OTP."""
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    try:
+        action = request.POST.get("action", "verify")
+        if action not in {"verify", "resend"}:
+            raise ValidationError("Invalid verification action.")
+        submitted = momo_security.complete(
+            request, customer, order,
+            code=request.POST.get("code"), resend=action == "resend",
+        )
+        if submitted:
+            messages.info(request, "Phone confirmed. Approve the Mobile Money prompt on your phone. Your PIN stays private.")
+        else:
+            messages.info(request, "We sent a new phone verification code.")
+    except ValidationError as exc:
+        messages.error(request, problem(exc))
+    return redirect("market_order", pk=order.pk)
+
+
+@market_customer_required
+@require_POST
 def customer_payment_otp(request, customer, pk):
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
     try:
@@ -1293,6 +1323,7 @@ def customer_order(request, customer, pk):
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel.ready(),
+        momo_phone_verification=momo_security.pending_for_order(request, customer, order),
         payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
             momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
         momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready(),

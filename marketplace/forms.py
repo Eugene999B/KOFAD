@@ -461,7 +461,7 @@ class ReceivingAccountForm(forms.ModelForm):
 
 class CheckoutPaymentForm(forms.Form):
     payment_method = forms.ChoiceField(
-        choices=[("momo", "Mobile Money prompt"), ("hosted", "Secure checkout (card or other methods)")],
+        choices=[("momo", "Mobile Money prompt"), ("hosted", "Pay by card (secure checkout)")],
         required=False, initial="momo",
     )
     momo_phone = forms.CharField(required=False, max_length=30, label="Mobile Money number",
@@ -473,7 +473,7 @@ class CheckoutPaymentForm(forms.Form):
         self.momo_available = momo_available
         super().__init__(*args, **kwargs)
         if not momo_available:
-            self.fields["payment_method"].choices = [("hosted", "Secure checkout")]
+            self.fields["payment_method"].choices = [("hosted", "Pay by card (secure checkout)")]
             self.fields["payment_method"].initial = "hosted"
 
     def clean(self):

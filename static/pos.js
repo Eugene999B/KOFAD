@@ -1326,6 +1326,23 @@
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
     if (momoGateway === "paystack" && (!email || !email.includes("@"))) throw new Error("Enter the customer's email for the Paystack payment request.");
+    // Paystack's Ghana Charge API does not return a wallet-holder-name lookup.
+    // Require the cashier to confirm the entered customer identity and consent
+    // before any prompt is sent to a phone they may have mistyped.
+    if (momoGateway === "paystack") {
+      const displayName = (selectedCustomer?.name || customerName?.value || "").trim();
+      if (displayName.length < 2) throw new Error("Choose or enter the customer name before requesting Mobile Money.");
+      const accepted = window.confirm(
+        "CONFIRM PAYMENT RECIPIENT\n\nCustomer: " + displayName +
+        "\nMobile Money: " + phone + "\nNetwork: " + provider.toUpperCase() +
+        "\n\nHave you checked these details with the customer and obtained permission to send the payment prompt? The wallet holder's registered name is NOT independently verified by Paystack."
+      );
+      if (!accepted) {
+        pendingBody = null;
+        persist();
+        return false;
+      }
+    }
 
     setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
     lockCheckoutForMomo(true);
@@ -1336,6 +1353,7 @@
         email,
         provider,
         payment_gateway: momoGateway,
+        recipient_confirmed: momoGateway === "paystack",
         request_key: requestKey
       }, requestKey);
       momoReference = result.reference || momoReference;

@@ -885,6 +885,7 @@ def initialize_paystack(order, callback_url):
         attempt = MarketPaymentAttempt.objects.create(
             order=order, provider="paystack", reference=reference, amount=order.total,
             currency="GHS", status="initializing",
+            verification_summary={"flow": "card"},
             next_check_at=timezone.now() + timedelta(minutes=1),
         )
         order.payment_status = "initializing"
@@ -896,7 +897,7 @@ def initialize_paystack(order, callback_url):
         "currency": "GHS",
         "reference": reference,
         "callback_url": callback_url,
-        "channels": ["card", "mobile_money", "bank_transfer"],
+        "channels": ["card"],
         "metadata": json.dumps({
             "order_reference": order.public_reference,
             "customer_phone": order.phone,
@@ -1134,7 +1135,14 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
                 order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("The payment has not been completed.")
 
-    direct_momo = attempt.verification_summary.get("flow") == "mobile_money"
+    flow = (attempt.verification_summary or {}).get("flow")
+    direct_momo = flow == "mobile_money"
+    if expected_provider == "paystack" and flow == "card" and provider_data.get("channel") != "card":
+        attempt.status = "attention"
+        attempt.next_check_at = None
+        attempt.provider_message = "Verified payment channel differs from the requested card channel."
+        attempt.save(update_fields=["status", "next_check_at", "provider_message"])
+        raise ValidationError("The payment channel does not match the saved card request.")
     if expected_provider == "paystack" and (
         (str(settings.PAYSTACK_SECRET_KEY).startswith("sk_live_") and provider_data.get("domain") != "live")
         or (direct_momo and (provider_data.get("channel") != "mobile_money" or not provider_data.get("id")))

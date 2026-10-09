@@ -1619,3 +1619,124 @@ class MarketOtpReliabilityTests(MarketFixtures):
         response = self.client.post("/market/account/verify/", {"code": "123456"})
         self.assertRedirects(response, "/market/account/finish/", fetch_redirect_response=False)
         verify_otp.assert_not_called()
+
+
+class DirectMomoPhoneVerificationTests(MarketFixtures):
+    """Prevent unsolicited first-time requests and keep hosted cards separate."""
+
+    def sign_in(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    @override_settings(
+        PAYSTACK_SECRET_KEY="sk_test_example",
+        PAYSTACK_CUSTOMER_MOMO_ENABLED=True,
+        CUSTOMER_OTP_ENABLED=True,
+    )
+    @patch("marketplace.paystack_momo.requests.post")
+    @patch("marketplace.momo_security.services.send_otp")
+    def test_first_momo_payment_sends_sms_before_any_charge(self, send_otp, charge):
+        self.sign_in()
+        order = self.order()
+        result = self.client.post(f"/market/orders/{order.pk}/pay/", {
+            "payment_method": "momo", "momo_phone": "0241234567",
+            "momo_network": "mtn",
+        })
+        self.assertRedirects(result, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        send_otp.assert_called_once()
+        self.assertEqual(send_otp.call_args.args, (self.customer.phone, "momo"))
+        charge.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
+        self.assertContains(self.client.get(f"/market/orders/{order.pk}/"), "Verify your Mobile Money number")
+
+    @override_settings(
+        PAYSTACK_SECRET_KEY="sk_test_example",
+        PAYSTACK_CUSTOMER_MOMO_ENABLED=True,
+        CUSTOMER_OTP_ENABLED=True,
+    )
+    @patch("marketplace.momo_security.services.send_otp")
+    @patch("marketplace.momo_security.services.verify_otp")
+    @patch("marketplace.paystack_momo.requests.post")
+    def test_sms_verified_number_starts_one_direct_charge(self, charge, verify_otp, send_otp):
+        from .models import VerifiedMomoPhone
+        self.sign_in()
+        order = self.order()
+        send_otp.return_value = self.customer.phone
+        first = self.client.post(f"/market/orders/{order.pk}/pay/", {
+            "payment_method": "momo", "momo_phone": "0241234567",
+            "momo_network": "mtn",
+        })
+        self.assertEqual(first.status_code, 302)
+        def charge_response(*args, **kwargs):
+            reference = kwargs["json"]["reference"]
+            return Mock(status_code=200, json=Mock(return_value={
+                "status": True, "data": {
+                    "reference": reference, "status": "pay_offline",
+                    "display_text": "Approve on your phone.",
+                },
+            }))
+        charge.side_effect = charge_response
+        result = self.client.post(f"/market/orders/{order.pk}/momo-phone/verify/", {
+            "action": "verify", "code": "123456",
+        })
+        self.assertRedirects(result, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        verify_otp.assert_called_once_with(self.customer.phone, "123456", "momo")
+        self.assertTrue(VerifiedMomoPhone.objects.filter(
+            customer=self.customer, phone=self.customer.phone,
+        ).exists())
+        self.assertEqual(charge.call_count, 1)
+        self.assertEqual(order.payment_attempts.count(), 1)
+        self.assertEqual(order.payment_attempts.get().verification_summary["flow"], "mobile_money")
+        self.assertEqual(order.payment_attempts.get().status, "pending")
+        self.assertEqual(self.client.session.get("market_momo_phone_pending"), None)
+        # An old SMS code cannot generate another attempt while the first is pending.
+        self.client.post(f"/market/orders/{order.pk}/momo-phone/verify/", {
+            "action": "verify", "code": "123456",
+        })
+        self.assertEqual(charge.call_count, 1)
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example", PAYSTACK_CUSTOMER_MOMO_ENABLED=True)
+    @patch("marketplace.paystack_momo.requests.post")
+    def test_direct_api_rejects_unverified_phone_even_when_called_directly(self, charge):
+        from .paystack_momo import initialize
+        order = self.order()
+        with self.assertRaises(ValidationError):
+            initialize(order, self.customer.phone, "mtn")
+        charge.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    @patch("marketplace.views.hubtel.initialize_payment")
+    @patch("marketplace.views.services.initialize_paystack")
+    def test_card_checkout_never_invokes_hubtel(self, card, hubtel_charge):
+        self.sign_in()
+        order = self.order()
+        result = self.client.post(f"/market/orders/{order.pk}/pay/", {
+            "payment_method": "hosted",
+        })
+        self.assertRedirects(result, f"/market/orders/{order.pk}/payment/launch/",
+                             fetch_redirect_response=False)
+        card.assert_called_once()
+        hubtel_charge.assert_not_called()
+
+    def test_card_attempt_rejects_mobile_money_success_even_with_matching_amount(self):
+        order = self.order()
+        reference = "CARD-CHANNEL-TEST"
+        order.payment_reference = reference
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        attempt = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=reference,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "card"},
+        )
+        with self.assertRaises(ValidationError):
+            services.finalize_payment(reference, {
+                "status": "success", "amount": int(order.total * 100),
+                "currency": "GHS", "channel": "mobile_money",
+            })
+        order.refresh_from_db()
+        attempt.refresh_from_db()
+        self.assertNotEqual(order.payment_status, "paid")
+        self.assertIsNone(order.sale_document_id)

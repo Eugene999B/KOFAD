@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.test import override_settings
 from django.utils import timezone
 from .tests import MarketFixtures
-from .models import MarketPaymentAttempt, PaymentConfiguration, CustomerAccount
+from .models import MarketPaymentAttempt, PaymentConfiguration, CustomerAccount, VerifiedMomoPhone
 from . import paystack_momo, services
 from .forms import CheckoutPaymentForm
 from .paystack_reconciliation import reconcile_due
@@ -14,6 +14,10 @@ from .paystack_reconciliation import reconcile_due
 class CustomerMomoTests(MarketFixtures):
     def setUp(self):
         super().setUp()
+        # These existing processor tests start at the post-verification stage;
+        # first-time / unverified-number rejection is tested separately.
+        VerifiedMomoPhone.objects.create(customer=self.customer, phone="+233551234567")
+        VerifiedMomoPhone.objects.create(customer=self.customer, phone="+233201234567")
         charge_check = patch("core.paystack_challenges.charge_step", side_effect=ValidationError("Pending"))
         charge_check.start()
         self.addCleanup(charge_check.stop)
