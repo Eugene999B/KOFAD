@@ -22,6 +22,7 @@ from django.core.validators import validate_email
 from django.db import IntegrityError, models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -347,10 +348,22 @@ def inbox(request, section="inbox"):
                 raise ValidationError("Unknown email action.")
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-        if action in {"bulk_assign", "assign", "new_mailbox"}:
+        # Keep staff on the same mailbox and conversation after a form action.
+        if action == "bulk_assign" and "member" in locals():
+            return redirect(f"{reverse('email_team')}?staff={member.pk}")
+        if action in {"assign", "new_mailbox", "bulk_assign"}:
             return redirect("email_team")
         if action == "approve_draft":
+            if "mailbox" in locals():
+                return redirect(f"{reverse('email_history')}?mailbox={mailbox.pk}&status=draft")
             return redirect("email_history")
+        if action in {"send", "reply", "thread_reply"} and "created" in locals():
+            target = f"{reverse('email_center')}?mailbox={mailbox.pk}"
+            if created.conversation_id:
+                target += f"&thread={created.conversation_id}#conversation"
+            return redirect(target)
+        if action in {"thread_update", "thread_note"} and "thread" in locals():
+            return redirect(f"{reverse('email_center')}?mailbox={mailbox.pk}&thread={thread.pk}#conversation")
         return redirect("email_center")
     chosen_id = request.GET.get("mailbox", "")
     chosen = next((m for m in all_mailboxes if str(m.pk) == chosen_id), None)
