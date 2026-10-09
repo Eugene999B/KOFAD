@@ -10,7 +10,7 @@ from django.utils import timezone
 from core.brevo_email import send_brevo, usage_today, DailyEmailLimitExceeded
 from core.email_campaigns import queue_active_campaigns, is_campaign_recipient_allowed
 from core.email_models import EmailCampaign, EmailLetter
-from core.models import CustomerServiceContact, PasswordRecovery
+from core.models import Access, CustomerServiceContact, PasswordRecovery
 from marketplace.models import CustomerAccount, EmailIdentity
 from marketplace import email_recovery
 
@@ -118,7 +118,7 @@ class EmailCampaignConsentTests(TestCase):
     def test_nonadmin_cannot_access_campaigns(self):
         regular = User.objects.create_user("noaccess", password="A-good-password-098!")
         self.client.force_login(regular)
-        access = regular.access
+        access, _ = Access.objects.get_or_create(user=regular)
         sess = self.client.session
         sess["access_version"] = access.session_version
         sess.save()
