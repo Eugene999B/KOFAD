@@ -2539,6 +2539,21 @@ def online_payments(request, branch):
             core_services.audit(request.user, branch, "market.receiving_accounts_saved", "1", {"fields": account_form.changed_data})
             messages.success(request, "Receiving details saved for owner reference. Provider payout settings have not changed.")
             return redirect("online_payments")
+    elif request.method == "POST" and request.POST.get("action") == "online_price_markup":
+        from .pricing import parse_rate
+        try:
+            rate = parse_rate(request.POST.get("percentage", ""))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            PaymentConfiguration.objects.update_or_create(
+                pk=1, defaults={"online_price_markup_percent": rate},
+            )
+            core_services.audit(request.user, branch, "market.online_price_markup_saved", "1", {
+                "percentage": str(rate),
+            })
+            messages.success(request, "All-inclusive online product prices updated. Existing orders and payment requests are unchanged.")
+        return redirect("online_payments")
     elif request.method == "POST":
         provider = request.POST.get("provider")
         if provider not in {"hubtel", "paystack"}:
@@ -2580,6 +2595,7 @@ def online_payments(request, branch):
         "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
         "pos_momo_rows": pos_rows,
+        "online_price_markup_percent": configuration.online_price_markup_percent,
     })
 
 
