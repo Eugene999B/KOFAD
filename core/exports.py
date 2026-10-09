@@ -383,7 +383,13 @@ def export(
         text = io.StringIO()
         writer = csv.writer(text)
         writer.writerow(headers)
-        writer.writerows([[safe(value) for value in record] for record in shown])
+        # Preserve genuine signed numeric values. Escape only untrusted text,
+        # otherwise negative amounts become apostrophe-prefixed strings in CSV.
+        writer.writerows([
+            [display(value) if isinstance(value, (Decimal, int, float)) and not isinstance(value, bool)
+             else safe(display(value)) for value in record]
+            for record in raw
+        ])
         output.write(text.getvalue().encode("utf-8-sig"))
         content_type = "text/csv"
     else:
