@@ -1,10 +1,110 @@
 {% extends "base.html" %}
+{% load static %}
+{% block body_class %}kofad-export-studio{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'export-studio.css' %}">{% endblock %}
 {% block content %}
-<section class="hero-panel exports-hero"><div><p class="eyebrow">DOCUMENT & DATA CENTRE</p><h2>Download what the business needs.</h2><p>Create professional Excel workbooks, PDF reports, editable Word documents or CSV data without entering the technical backend.</p></div><span class="pill">Permission-aware exports</span></section>
-<section class="panel export-builder"><div class="section-heading"><div><h2>Build a download</h2><p class="muted">The same permissions and store scope used on-screen are enforced in every export.</p></div></div>
-<form method="get">
-<div class="form-grid"><div><label for="dataset">What do you want to export?</label><select id="dataset" name="dataset" required>{% for item in datasets %}<option value="{{ item.key }}" {% if request.GET.dataset == item.key %}selected{% endif %}>{{ item.label }}</option>{% endfor %}</select></div><div><label for="start">From</label><input id="start" type="date" name="start" value="{{ request.GET.start|default:month_start }}"><small>Snapshot exports such as customers and inventory ignore the date range.</small></div><div><label for="end">To</label><input id="end" type="date" name="end" value="{{ request.GET.end|default:today }}"></div></div>
-<div class="format-grid"><button class="format-card" formaction="/exports/download/xlsx/"><span class="format-badge">XLSX</span><strong>Microsoft Excel</strong><small>Best for filtering, calculations and audit work.</small></button><button class="format-card" formaction="/exports/download/pdf/"><span class="format-badge">PDF</span><strong>Professional PDF</strong><small>Best for printing, sharing and read-only records.</small></button><button class="format-card" formaction="/exports/download/docx/"><span class="format-badge">DOCX</span><strong>Microsoft Word</strong><small>Editable formal document for management use.</small></button><button class="format-card" formaction="/exports/download/csv/"><span class="format-badge">CSV</span><strong>CSV data</strong><small>Lightweight raw data for analysis and import.</small></button></div>
-</form></section>
-<div class="export-catalog">{% for item in datasets %}<article><span>⇩</span><div><strong>{{ item.label }}</strong><small>Available with your current KOFAD permissions.</small></div></article>{% endfor %}</div>
+<section class="export-intro" aria-labelledby="export-title">
+  <div class="export-intro-copy">
+    <p class="export-kicker">KOFAD · BUSINESS RECORDS</p>
+    <h2 id="export-title">An intelligent home for every business download.</h2>
+    <p>Build detailed, permission-controlled reports from current KOFAD records, ready for management review, Excel analysis and professional printing.</p>
+    <div class="export-intro-pills"><span>Current location controls</span><span>Protected customer details</span><span>Audited downloads</span></div>
+  </div>
+  <div class="export-intro-aside" aria-label="Export centre capabilities">
+    <div class="export-intro-number">04</div>
+    <strong>Professional formats</strong>
+    <p>Excel · PDF · Word · CSV</p>
+    <div class="export-intro-separator"></div>
+    <small>Each file includes clear source information. Only records permitted by your role are available.</small>
+  </div>
+</section>
+
+<section class="export-layout" aria-label="Export workspace">
+  <div class="export-main">
+    <section class="export-card export-builder" id="export-builder" aria-labelledby="builder-title">
+      <div class="export-heading">
+        <span class="export-step" aria-hidden="true">01</span>
+        <div>
+          <p class="export-eyebrow">CONFIGURE YOUR REPORT</p>
+          <h2 id="builder-title">Create a download</h2>
+          <p>Choose the exact register, dates where applicable, and the format you need.</p>
+        </div>
+      </div>
+      {% if datasets %}
+      <form method="get" id="export-download-form" class="export-form">
+        <div class="export-field">
+          <label for="export-dataset">What should this report contain?</label>
+          <div class="export-select-shell"><select id="export-dataset" name="dataset" required>
+            {% for item in datasets %}<option value="{{ item.key }}" data-snapshot="{{ item.snapshot|yesno:'true,false' }}" {% if selected_dataset == item.key %}selected{% endif %}>{{ item.label }}</option>{% endfor %}
+          </select><span class="export-select-chevron" aria-hidden="true">⌄</span></div>
+          <p class="export-field-hint" id="export-scope-hint" role="status">Current-location and role restrictions are applied automatically.</p>
+        </div>
+        <div class="export-date-grid">
+          <div class="export-field">
+            <label for="export-start">Start date</label>
+            <input type="date" name="start" id="export-start" value="{{ request.GET.start|default:month_start }}">
+          </div>
+          <div class="export-field">
+            <label for="export-end">End date</label>
+            <input type="date" name="end" id="export-end" value="{{ request.GET.end|default:today }}">
+          </div>
+        </div>
+        <div class="export-window-note" id="export-window-note"><span aria-hidden="true">ⓘ</span><span>Date filters apply to activity reports. Customer, stock and other snapshot registers use current records.</span></div>
+        <div class="export-heading export-format-heading">
+          <span class="export-step" aria-hidden="true">02</span>
+          <div><p class="export-eyebrow">SELECT FILE FORMAT</p><h3>Download with confidence</h3></div>
+        </div>
+        <div class="export-formats">
+          <button class="export-format-card" type="submit" formaction="{% url 'export_download' 'xlsx' %}">
+            <span class="export-format-icon excel" aria-hidden="true">X</span><span class="export-format-content"><strong>Excel workbook <small>· XLSX</small></strong><span>Sortable columns, numeric values, summary figures, frozen headings.</span></span><span class="export-format-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button class="export-format-card" type="submit" formaction="{% url 'export_download' 'pdf' %}">
+            <span class="export-format-icon pdf" aria-hidden="true">P</span><span class="export-format-content"><strong>Professional PDF <small>· PDF</small></strong><span>Branded, print-friendly layout with numbered pages and readable field groups.</span></span><span class="export-format-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button class="export-format-card" type="submit" formaction="{% url 'export_download' 'docx' %}">
+            <span class="export-format-icon word" aria-hidden="true">W</span><span class="export-format-content"><strong>Editable document <small>· DOCX</small></strong><span>Structured report for management notes, records and meetings.</span></span><span class="export-format-arrow" aria-hidden="true">↗</span>
+          </button>
+          <button class="export-format-card" type="submit" formaction="{% url 'export_download' 'csv' %}">
+            <span class="export-format-icon csv" aria-hidden="true">C</span><span class="export-format-content"><strong>Raw data export <small>· CSV</small></strong><span>Portable rows for secure data analysis and approved imports.</span></span><span class="export-format-arrow" aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
+      {% else %}
+      <p class="export-empty">No downloadable reports are assigned to your role. Contact an administrator if you need access.</p>
+      {% endif %}
+    </section>
+  </div>
+  <aside class="export-sidebar">
+    <section class="export-card export-guidance" aria-labelledby="guide-heading">
+      <span class="export-eyebrow">REPORT QUALITY</span><h3 id="guide-heading">Built for professional business use</h3>
+      <div class="export-guide-line"><span aria-hidden="true">✓</span><div><strong>Respectful of customer data</strong><p>Only authorized staff can export sensitive personal and financial records.</p></div></div>
+      <div class="export-guide-line"><span aria-hidden="true">✓</span><div><strong>Recorded vs. verified</strong><p>Gateway verification and manually recorded payment entries are labelled differently.</p></div></div>
+      <div class="export-guide-line"><span aria-hidden="true">✓</span><div><strong>Detailed and traceable</strong><p>Reports identify their preparation time, location, record count and source.</p></div></div>
+      <p class="export-guidance-notice">Downloads can contain confidential business data. Share only with people who are entitled to receive it.</p>
+    </section>
+  </aside>
+</section>
+
+<section class="export-library" id="report-library" aria-labelledby="library-title">
+  <div class="export-library-top"><div><p class="export-eyebrow">FULL REPORT LIBRARY</p><h2 id="library-title">Find the right export faster</h2><p>Choose a report to load it in the download builder above.</p></div><span class="export-available-count">{{ datasets|length }} available</span></div>
+  <div class="export-library-search"><label for="export-library-query">Search available reports</label><input type="search" id="export-library-query" autocomplete="off" placeholder="Search by customer, sale, payment, stock, staff…" aria-controls="export-library-groups"><span aria-hidden="true">⌕</span></div>
+  <div id="export-library-groups">
+  {% for group in groups %}
+  <div class="export-library-group">
+    <div class="export-library-group-heading"><h3>{{ group.title }}</h3><p>{{ group.description }}</p></div>
+    <div class="export-library-grid">
+      {% for item in group.items %}
+      <a class="export-library-item" href="?dataset={{ item.key }}#export-builder" {% if selected_dataset == item.key %}aria-current="true"{% endif %}>
+        <span class="export-library-symbol" aria-hidden="true">↧</span>
+        <span><strong>{{ item.label }}</strong><small>{% if item.snapshot %}Current business snapshot{% else %}Activity for selected dates{% endif %}</small></span>
+        <span class="export-library-go" aria-hidden="true">↗</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+  <p id="export-library-no-results" class="export-empty" hidden>No reports match that search. Try “customer”, “payment” or “stock”.</p>
+</section>
+<script defer src="{% static 'export-studio.js' %}"></script>
 {% endblock %}

@@ -11,6 +11,7 @@ from django.utils import timezone
 from . import services as s
 from .context import shell
 from .exports import export
+from .export_extra import EXTRA_DATASETS, EXTRA_COLUMNS, extra_rows, registration_rows
 from .models import Audit, Closing, CustomerReturnRequest, Document, Movement, Party, Product, QuarantineItem, Stock, SupplierReturn
 
 
@@ -36,33 +37,25 @@ DATASETS = {
     "workers": ("Workforce register", ("manage_company",)),
     "payroll": ("Payroll register", ("operate_finance", "view_reports")),
     "online_orders": ("Online orders & fulfilment", ("operate_sales", "manage_company", "view_reports")),
-    "market_customers": ("Market customer accounts", ("operate_sales", "manage_company", "view_reports")),
+    "market_customers": ("Registered Market customer accounts", ("manage_company",)),
     "market_catalog": ("Published Market catalog", ("operate_sales", "operate_inventory", "manage_company", "view_reports")),
     "customer_support": ("Customer support conversations", ("operate_sales", "manage_company", "view_reports")),
     "online_returns": ("Online return requests", ("operate_sales", "operate_finance", "manage_company", "view_reports")),
     "delivery_tracking": ("Online delivery tracking", ("operate_sales", "manage_company", "view_reports")),
 }
+DATASETS.update(EXTRA_DATASETS)
 
 
 # Each register presents the fields needed for that business task.
 EXPORT_COLUMNS = {
-    "customers": [
-        "name",
-        "phone",
-        "outstanding"
-    ],
-    "suppliers": [
-        "name",
-        "phone",
-        "outstanding"
-    ],
+    "customers": ["name", "phone", "email", "address", "credit_limit",
+                  "outstanding", "consent", "debt_email_opt_in"],
+    "suppliers": ["name", "phone", "email", "address", "credit_limit", "outstanding"],
     "market_customers": [
-        "name",
-        "phone",
-        "created",
-        "orders",
-        "paid_spend",
-        "status"
+        "account_id", "name", "phone", "email", "verified_email", "created",
+        "phone_status", "email_status", "google_account", "last_login", "orders",
+        "paid_orders", "paid_spend", "last_order", "notifications",
+        "marketing_consent", "status",
     ],
     "sales": [
         "reference",
@@ -235,6 +228,7 @@ EXPORT_COLUMNS = {
         "outstanding"
     ]
 }
+EXPORT_COLUMNS.update(EXTRA_COLUMNS)
 
 
 def select_columns(dataset, columns):
@@ -253,7 +247,9 @@ def _branch(request):
 
 
 def _allowed(user, codes):
-    return user.is_superuser or any(user.has_perm("core." + code) for code in codes)
+    if "__owner_only__" in codes:
+        return bool(user.is_active and user.is_superuser)
+    return bool(user.is_active and (user.is_superuser or any(user.has_perm("core." + code) for code in codes)))
 
 
 def _dates(request):
@@ -270,6 +266,8 @@ def _dates(request):
 
 
 def _rows(request, dataset, branch, first, last):
+    if dataset in EXTRA_DATASETS:
+        return extra_rows(dataset, branch, first, last)
     if dataset == "customers" or dataset == "suppliers":
         kind = "customer" if dataset == "customers" else "supplier"
         rows = []
@@ -277,12 +275,16 @@ def _rows(request, dataset, branch, first, last):
             rows.append({
                 "name": party.name,
                 "phone": party.phone,
+                "email": party.email, "address": party.address,
                 "credit_limit": party.credit_limit,
                 "outstanding": s.party_debt(party),
+                "consent": "Yes" if party.consent else "No",
+                "debt_email_opt_in": "Yes" if party.debt_email_opt_in else "No",
             })
         return rows, [
             ("name", "Name"), ("phone", "Phone"), ("email", "Email"), ("address", "Address"),
-            ("credit_limit", "Credit limit"), ("outstanding", "Outstanding"), ("messages", "Messaging consent"),
+            ("credit_limit", "Credit limit"), ("outstanding", "Outstanding"),
+            ("consent", "Messaging consent"), ("debt_email_opt_in", "Debt email consent"),
         ]
 
     if dataset == "debts":
@@ -339,29 +341,7 @@ def _rows(request, dataset, branch, first, last):
         ]
 
     if dataset == "market_customers":
-        from marketplace.models import CustomerAccount
-        rows = []
-        for customer in CustomerAccount.objects.order_by("-created_at"):
-            paid_spend = customer.orders.filter(
-                payment_status="paid"
-            ).aggregate(total=Sum("total"))["total"] or Decimal("0")
-            rows.append({
-                "name": customer.full_name,
-                "phone": customer.phone,
-                "email": customer.email,
-                "verified": customer.verified_at,
-                "created": customer.created_at,
-                "last_login": customer.last_login_at,
-                "orders": customer.orders.count(),
-                "paid_spend": paid_spend,
-                "status": "Active" if customer.active else "Disabled",
-            })
-        return rows, [
-            ("name", "Customer"), ("phone", "Phone"), ("email", "Email"),
-            ("verified", "Verified at"), ("created", "Account created"), ("last_login", "Last login"),
-            ("orders", "Orders"), ("paid_spend", "Paid online spend"),
-            ("support_threads", "Support threads"), ("addresses", "Saved addresses"), ("status", "Status"),
-        ]
+        return registration_rows(request.user, branch)
 
     if dataset == "market_catalog":
         from marketplace.models import MarketListing
@@ -783,8 +763,13 @@ def _rows(request, dataset, branch, first, last):
 
     if dataset == "audit":
         rows = []
+        # System-wide events can contain cross-location security evidence.
+        # Only the owner may include unassigned/global audit events.
+        audit_scope = Q(branch=branch)
+        if request.user.is_superuser:
+            audit_scope |= Q(branch__isnull=True)
         for row in Audit.objects.filter(
-            Q(branch=branch) | Q(branch__isnull=True),
+            audit_scope,
             created_at__date__gte=first, created_at__date__lte=last,
         ).select_related("actor").order_by("-created_at"):
             integrity = ""
@@ -872,7 +857,10 @@ def _rows(request, dataset, branch, first, last):
     if dataset == "staff":
         from django.contrib.auth.models import User
         rows = []
-        for user in User.objects.prefetch_related("groups").select_related("access").order_by("username"):
+        accounts = User.objects.prefetch_related("groups").select_related("access")
+        if not request.user.is_superuser:
+            accounts = accounts.filter(access__branches=branch).distinct()
+        for user in accounts.order_by("username"):
             role = "System administrator" if user.is_superuser else ", ".join(user.groups.values_list("name", flat=True)) or "No role"
             rows.append({
                 "username": user.username,
@@ -890,26 +878,93 @@ def _rows(request, dataset, branch, first, last):
     raise ValidationError("Unknown export dataset.")
 
 
+EXPORT_GROUPS = [
+    ("Customers & relationships", "Profiles, registrations, credit exposure and supporting history",
+     ("customers", "market_customers", "debts", "debt_invoices", "suppliers", "creditors")),
+    ("Sales & payments", "Revenue, line items, payment evidence, settlement and online orders",
+     ("sales", "sales_lines", "payments", "payment_ledger", "transactions",
+      "online_orders", "online_order_lines", "gateway_attempts")),
+    ("Products & fulfilment", "Stock balances, restocking priorities, movement and return evidence",
+     ("inventory", "stock_alerts", "movements", "market_catalog", "purchases",
+      "customer_returns", "supplier_returns", "online_returns", "delivery_tracking", "quarantine", "losses")),
+    ("Finance & accountability", "Closings, expenses, payroll, team access and audit evidence",
+     ("expenses", "closings", "payroll", "workers", "staff", "audit")),
+    ("Communications", "Provider submission states and support interactions",
+     ("message_delivery", "email_delivery", "customer_support")),
+]
+SNAPSHOT_DATASETS = {
+    "customers", "suppliers", "creditors", "inventory", "stock_alerts",
+    "staff", "workers", "market_customers", "market_catalog", "debts", "debt_invoices",
+}
+
+
 @login_required
 def export_center(request):
     _branch(request)
-    available = [
-        {"key": key, "label": label}
-        for key, (label, codes) in DATASETS.items()
-        if _allowed(request.user, codes)
-    ]
+    allowed = {key for key, (_, codes) in DATASETS.items() if _allowed(request.user, codes)}
+    groups = [{
+        "title": title, "description": description,
+        "items": [{"key": key, "label": DATASETS[key][0], "snapshot": key in SNAPSHOT_DATASETS}
+                  for key in keys if key in allowed],
+    } for title, description, keys in EXPORT_GROUPS]
+    groups = [group for group in groups if group["items"]]
+    requested = request.GET.get("dataset")
+    selected = requested if requested in allowed else (next(iter(allowed), "") if allowed else "")
     return render(request, "export_center.html", {
-        "title": "Downloads & exports",
-        "datasets": available,
+        "title": "Export Studio",
+        "groups": groups,
+        "datasets": [{"key": key, "label": label, "snapshot": key in SNAPSHOT_DATASETS}
+                     for key, (label, codes) in DATASETS.items() if key in allowed],
+        "selected_dataset": selected,
         "today": timezone.localdate().isoformat(),
         "month_start": timezone.localdate().replace(day=1).isoformat(),
     })
+
+
+def _export_summary(dataset, rows, currency):
+    """Concise, correctly labelled KPIs; never present pending order value as paid."""
+    totals = {"Records": len(rows)}
+    amount = lambda name: sum((row.get(name) or Decimal("0") for row in rows), Decimal("0"))
+    if dataset in {"customers", "suppliers", "creditors", "debts", "debt_invoices"}:
+        totals["Outstanding (" + currency + ")"] = amount("outstanding") + (
+            amount("balance") if dataset == "debt_invoices" else Decimal("0")
+        )
+    if dataset == "market_customers":
+        totals["Active accounts"] = sum(row.get("status") == "Active" for row in rows)
+        totals["Confirmed paid orders"] = sum(row.get("paid_orders", 0) for row in rows)
+        totals["Paid order value (" + currency + ")"] = amount("paid_spend")
+    if dataset == "sales_lines":
+        totals["Net line sales (" + currency + ")"] = amount("total")
+        totals["Product cost (" + currency + ")"] = amount("cost")
+        totals["Gross profit (" + currency + ")"] = amount("gross_profit")
+    if dataset == "payment_ledger":
+        totals["Incoming (" + currency + ")"] = sum(
+            (row["amount"] for row in rows if row["direction"] == "Incoming"), Decimal("0")
+        )
+        totals["Outgoing (" + currency + ")"] = sum(
+            (row["amount"] for row in rows if row["direction"] == "Outgoing"), Decimal("0")
+        )
+    if dataset == "gateway_attempts":
+        totals["Verified payments"] = sum(row["status"] == "success" for row in rows)
+        totals["Needs review"] = sum(row["status"] in {"attention", "submission_unknown"} for row in rows)
+    if dataset == "message_delivery":
+        totals["Provider delivered"] = sum(row["status"] == "delivered" for row in rows)
+        totals["Failed or unknown"] = sum(row["status"] in {"failed", "unknown"} for row in rows)
+    if dataset == "email_delivery":
+        totals["Submitted / internal"] = sum(row["status"] in {"Submitted to provider", "Delivered internally"} for row in rows)
+        totals["Attention needed"] = sum(row["status"] in {"Failed", "Needs review"} for row in rows)
+    if dataset == "stock_alerts":
+        totals["Out of stock"] = sum(row["priority"] == "Out of stock" for row in rows)
+        totals["Reorder units"] = sum(row["shortfall"] for row in rows)
+    return totals
 
 
 @login_required
 def download(request, format):
     try:
         branch = _branch(request)
+        if format not in {"xlsx", "pdf", "docx", "csv"}:
+            raise ValidationError("Choose a supported download format.")
         dataset = request.GET.get("dataset", "")
         if dataset not in DATASETS:
             raise ValidationError("Choose a valid export.")
@@ -918,31 +973,33 @@ def download(request, format):
             raise PermissionDenied("You do not have permission to export this information.")
         first, last, start, end = _dates(request)
         rows, columns = _rows(request, dataset, branch, first, last)
+        if len(rows) > 10000:
+            raise ValidationError("This download exceeds 10,000 rows. Narrow the period or contact management for a secure batch export.")
         columns = select_columns(dataset, columns)
         s.audit(request.user, branch, "export.downloaded", dataset, {
             "format": format, "start": start, "end": end, "rows": len(rows),
         })
-        date_suffix = "" if dataset in {"customers", "suppliers", "creditors", "inventory", "staff", "workers", "market_customers", "market_catalog"} else f" · {start} to {end}"
+        date_suffix = "" if dataset in SNAPSHOT_DATASETS else f" · {start} to {end}"
         company = shell(request)["company"]
-        return export(
+        response = export(
             rows, format, f"{label}{date_suffix}", company, columns,
-            filename=f"kofad-{dataset}",
+            filename=f"kofad-{dataset}-{timezone.localdate().isoformat()}",
             sheet_name=label[:31],
             metadata={
                 "Location": branch.name,
-                "Date range": "Current snapshot" if not date_suffix else f"{start} to {end}",
+                "Date range": "Current snapshot" if dataset in SNAPSHOT_DATASETS else f"{start} to {end}",
+                "Scope": ("Company register" if request.user.is_superuser and dataset in {"market_customers", "email_delivery", "staff"} else "Current business location"),
                 "Generated": timezone.localtime().strftime("%d %b %Y %H:%M"),
                 "Currency": company.currency,
                 "Prepared by": request.user.get_full_name() or request.user.username,
             },
-            summary={
-                "Records": len(rows),
-                **({"Outstanding (" + company.currency + ")": sum(
-                    (row.get("outstanding", Decimal("0")) for row in rows), Decimal("0")
-                )} if dataset in {"customers", "suppliers", "creditors", "debts"} else {}),
-            },
-            notes=["Generated directly from KOFAD with the current user's permission and location scope."],
+            summary=_export_summary(dataset, rows, company.currency),
+            notes=["Confidential business export. Access is audited; share only with authorized recipients.",
+                   "A recorded MoMo or bank payment does not itself prove independent provider verification."],
         )
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
     except ValidationError as exc:
         return render(request, "error.html", {
             "title": "Check your export",
