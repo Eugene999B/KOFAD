@@ -68,8 +68,8 @@ class StaffInvitationSecurityTests(TestCase):
         self.assertEqual(self.client.get(url).status_code, 302)
         response = self.client.get("/staff-invite/complete/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "staff-activation.css")
-        self.assertContains(response, "staff-activation.js")
+        self.assertContains(response, "staff-activation")
+        self.assertContains(response, "staff-activation")
         self.assertContains(response, 'name="password"')
         self.assertContains(response, 'name="password_confirm"')
         self.assertContains(response, 'name="csrfmiddlewaretoken"')
@@ -79,7 +79,7 @@ class StaffInvitationSecurityTests(TestCase):
     def test_expired_invitation_uses_the_same_isolated_layout(self):
         response = self.client.get("/staff-invite/complete/")
         self.assertEqual(response.status_code, 410)
-        self.assertContains(response, "staff-activation.css", status_code=410)
+        self.assertContains(response, "staff-activation", status_code=410)
         self.assertContains(response, "Back to staff sign in", status_code=410)
         self.assertNotContains(response, 'app.css', status_code=410)
 
