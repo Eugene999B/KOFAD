@@ -1325,7 +1325,7 @@
     const email = paystackMomoEmail?.value.trim() || selectedCustomer?.email || customerEmail?.value.trim() || "";
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
-    if (momoGateway === "paystack" && (!email || !email.includes("@"))) throw new Error("Enter the customer's email for the Paystack payment request.");
+    if (momoGateway === "paystack" && email && !email.includes("@")) throw new Error("Enter a valid customer email or leave it blank for a walk-in MoMo payment.");
     // Paystack's Ghana Charge API does not return a wallet-holder-name lookup.
     // Require the cashier to confirm the entered customer identity and consent
     // before any prompt is sent to a phone they may have mistyped.
