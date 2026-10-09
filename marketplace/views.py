@@ -691,11 +691,17 @@ def customer_login(request):
 @market_customer_required
 def customer_security(request, customer):
     from core import email_identity
+    from django.contrib.auth.hashers import is_password_usable
+    google_only = not is_password_usable(customer.password_hash)
+    recent_google_auth = bool(
+        google_only and request.session.get("market_google_authenticated_at")
+        and timezone.now().timestamp() - request.session["market_google_authenticated_at"] < 900
+    )
     action = request.POST.get("action", "password")
     if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
         try:
-            if not customer.check_password(request.POST.get("current_password", "")):
-                raise ValidationError("Enter your current password to update email access.")
+            if not (recent_google_auth or customer.check_password(request.POST.get("current_password", ""))):
+                raise ValidationError("Sign in with Google again or enter your current password to update email access.")
             if action == "email_start":
                 email_identity.request_code("customer", customer.pk, request.POST.get("email"))
                 messages.success(request, "A six-digit verification code was sent to your email.")
@@ -718,8 +724,8 @@ def customer_security(request, customer):
     if request.method == "POST" and action in {"phone_start", "phone_verify"}:
         try:
             password = request.POST.get("current_password", "")
-            if not customer.check_password(password):
-                raise ValidationError("Your current password is incorrect.")
+            if not (recent_google_auth or customer.check_password(password)):
+                raise ValidationError("Sign in with Google again or enter your current password.")
             if action == "phone_start":
                 phone = normalize_ghana_phone(request.POST.get("new_phone", ""))
                 if phone == customer.phone:
@@ -737,7 +743,7 @@ def customer_security(request, customer):
                 services.verify_otp(phone, request.POST.get("code"), "change_phone")
                 with transaction.atomic():
                     locked = CustomerAccount.objects.select_for_update().get(pk=customer.pk)
-                    if not locked.check_password(password):
+                    if not (recent_google_auth and not is_password_usable(locked.password_hash)) and not locked.check_password(password):
                         raise ValidationError("Your password changed. Start again.")
                     locked.phone = phone
                     locked.verified_at = timezone.now()
@@ -750,7 +756,7 @@ def customer_security(request, customer):
         except (ValidationError, IntegrityError) as exc:
             messages.error(request, "That phone number is already linked to an account." if isinstance(exc, IntegrityError) else problem(exc))
         return redirect("market_security")
-    form = CustomerPasswordChangeForm(request.POST if request.method == "POST" and action == "password" else None, customer=customer)
+    form = CustomerPasswordChangeForm(request.POST if request.method == "POST" and action == "password" else None, customer=customer, fresh_google_auth=recent_google_auth)
     if request.method == "POST" and form.is_valid():
         customer.set_password(form.cleaned_data["password"])
         customer.save(update_fields=["password_hash"])
@@ -762,6 +768,7 @@ def customer_security(request, customer):
         verified_email=email_identity.EmailIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
         email_ready=email_identity.delivery_ready(),
         google_identity=__import__("marketplace.models", fromlist=["GoogleIdentity"]).GoogleIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
+        google_only=google_only, recent_google_auth=recent_google_auth,
     ))
 
 
