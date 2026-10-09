@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel"><p class="eyebrow">CUSTOMER COMMUNICATIONS</p>
+<h2>Customer care contacts</h2>
+<p>Manage the official numbers customers see on the homepage, sign-in and account recovery pages. Only add business-controlled numbers.</p>
+<form method="post" class="form-grid">{% csrf_token %}
+<input type="hidden" name="action" value="save">
+<label>Contact name<input name="label" maxlength="70" placeholder="Customer Care • Accra" required></label>
+<label>Contact type<select name="channel"><option value="call">Phone call</option><option value="whatsapp">WhatsApp chat</option></select></label>
+<label>Number<input name="number" type="tel" placeholder="024 123 4567" required></label>
+<label>Display position<input name="sort_order" type="number" min="0" max="99" value="0"></label>
+<label><input type="checkbox" name="active" checked> Show this contact publicly</label>
+<button class="button" type="submit">Add contact</button>
+</form>
+</section>
+<section class="panel"><h2>Published contacts</h2>
+{% for contact in contacts %}
+<div class="settings-contact-row"><div><strong>{{ contact.label }}</strong><p>{{ contact.get_channel_display }} · {{ contact.number }} · {% if contact.active %}Public{% else %}Hidden{% endif %}</p></div>
+<form method="post" onsubmit="return confirm('Remove this customer-care contact?')">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ contact.pk }}"><button class="button secondary" type="submit">Remove</button></form></div>
+{% empty %}<p>No additional customer-care contacts configured. The existing company phone and WhatsApp settings are still available.</p>{% endfor %}
+</section>
+<style>.settings-contact-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border,#ccc)}.settings-contact-row p{margin:4px 0;font-size:.85rem}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.form-grid label{display:grid;gap:4px}.form-grid input,.form-grid select{padding:10px;width:100%;max-width:100%;border:1px solid var(--border,#ccc);border-radius:8px;background:var(--surface,#fff);color:inherit}</style>
+{% endblock %}
