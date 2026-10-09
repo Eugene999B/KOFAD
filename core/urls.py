@@ -13,10 +13,13 @@ from . import count_views
 from . import admin_views
 from . import staff_invites
 from . import export_views
+from . import native_apps
 from . import maintenance_views
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
+    path("staff/app/", native_apps.staff_downloads, name="staff_native_downloads"),
+    path("staff/app/releases.json", native_apps.staff_release_status, name="staff_native_releases"),
     path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     path("account/", accounts.account, name="account"),
     path("auth/google/staff/login/", google.start, {"kind": "staff", "mode": "login"}, name="google_staff_login"),
