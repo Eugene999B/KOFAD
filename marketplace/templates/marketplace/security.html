@@ -25,6 +25,12 @@
     {% if not google_only %}<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>{% endif %}
     <button class="market-button ghost">Save notification preference</button>
   </form>
+  {% if verified_email.verified_at %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_marketing">
+    <label><input type="checkbox" name="marketing_emails" {% if verified_email.marketing_emails_enabled %}checked{% endif %}> Send me occasional KOFAD promotions and product updates (optional)</label>
+    {% if not google_only %}<label>Current password<input type="password" name="current_password" autocomplete="current-password" required></label>{% endif %}
+    <button class="market-button ghost">Save promotional email preference</button>
+  </form>{% endif %}
   {% endif %}
 </section>
 <section class="experience-email-card">

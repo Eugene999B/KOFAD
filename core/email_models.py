@@ -31,7 +31,8 @@ class EmailLetter(models.Model):
     DIRECTION = [("inbound", "Incoming"), ("outbound", "Outgoing")]
     STATUS = [("received", "Received"), ("queued", "Queued"), ("sending", "Sending"),
               ("submitted", "Submitted to provider"), ("internal", "Delivered internally"),
-              ("failed", "Failed"), ("uncertain", "Needs review")]
+              ("failed", "Failed"), ("uncertain", "Needs review"),
+              ("suppressed", "Suppressed by recipient preference")]
     mailbox = models.ForeignKey(EmailMailbox, related_name="letters", on_delete=models.PROTECT)
     direction = models.CharField(max_length=8, choices=DIRECTION)
     status = models.CharField(max_length=12, choices=STATUS)
@@ -65,3 +66,26 @@ class EmailLetter(models.Model):
             models.Index(fields=["status", "next_attempt_at"], name="kofad_mail_delivery"),
             models.Index(fields=["mailbox", "direction", "created_at"], name="kofad_mail_list"),
         ]
+
+
+class EmailDailyUsage(models.Model):
+    """Local send-attempt allowance for Brevo; not a substitute for provider telemetry."""
+    day = models.DateField(unique=True)
+    attempted = models.PositiveIntegerField(default=0)
+    accepted = models.PositiveIntegerField(default=0)
+    failed = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-day"]
+
+
+class EmailCampaign(models.Model):
+    """Owner-controlled promotional campaign; recipients must explicitly opt in."""
+    title = models.CharField(max_length=150)
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_queued_at = models.DateTimeField(null=True, blank=True)
+    completed_queuing_at = models.DateTimeField(null=True, blank=True)

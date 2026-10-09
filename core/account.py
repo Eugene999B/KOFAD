@@ -161,9 +161,18 @@ def consume_budget(username):
 @never_cache
 @sensitive_post_parameters()
 def forgot_password(request):
-    ready = sms_ready()
-    if request.method == "POST" and ready:
+    from .email_identity import delivery_ready, _send_kofad_mail
+    sms_available = sms_ready()
+    email_available = delivery_ready()
+    if request.method == "POST" and (sms_available or email_available):
         username = request.POST.get("username", "").strip()[:150]
+        channel = request.POST.get("channel", "sms")
+        if channel == "whatsapp":
+            messages.error(request, "WhatsApp OTP recovery is not available until an approved authentication template is connected.")
+            return redirect("forgot_password")
+        if channel not in {"sms", "email"} or (channel == "sms" and not sms_available) or (channel == "email" and not email_available):
+            messages.error(request, "The selected recovery channel is not available.")
+            return redirect("forgot_password")
         challenge_id = uuid.uuid4()
         request.session["recovery_id"] = str(challenge_id)
         if username and consume_budget(username):
@@ -171,44 +180,78 @@ def forgot_password(request):
             if len(users) == 1:
                 user = users[0]
                 access, _ = Access.objects.get_or_create(user=user)
-                try:
-                    phone = normalize_phone(access.recovery_phone)
-                except ValidationError:
-                    phone = ""
-                if phone:
+                phone = ""
+                email = ""
+                if channel == "sms":
+                    try:
+                        phone = normalize_phone(access.recovery_phone)
+                    except ValidationError:
+                        phone = ""
+                else:
+                    from marketplace.models import EmailIdentity
+                    verified = EmailIdentity.objects.filter(
+                        kind="staff", owner_id=user.pk, verified_at__isnull=False
+                    ).first()
+                    email = verified.email if verified else ""
+                if phone or email:
                     code = f"{secrets.randbelow(1000000):06d}"
                     with transaction.atomic():
                         user = User.objects.select_for_update().get(pk=user.pk)
                         current_access = Access.objects.select_for_update().get(pk=access.pk)
-                        phone = current_access.recovery_phone
-                        if not phone or not user.is_active:
+                        if not user.is_active:
                             return redirect("reset_password")
+                        if channel == "sms" and current_access.recovery_phone != phone:
+                            return redirect("reset_password")
+                        if channel == "email":
+                            from marketplace.models import EmailIdentity
+                            if not EmailIdentity.objects.filter(
+                                kind="staff", owner_id=user.pk, email=email,
+                                verified_at__isnull=False
+                            ).exists():
+                                return redirect("reset_password")
                         recent = PasswordRecovery.objects.filter(
-                            user=user, used=False, phone=phone,
+                            user=user, used=False, channel=channel,
                             created_at__gte=timezone.now() - timedelta(seconds=60),
                         ).order_by("-created_at").first()
                         if recent:
                             request.session["recovery_id"] = str(recent.pk)
                             return redirect("reset_password")
                         PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
-                        challenge = PasswordRecovery.objects.create(id=challenge_id, user=user, phone=phone,
-                            code_digest=digest(str(challenge_id)+":"+code), password_stamp=digest(user.password),
-                            expires_at=timezone.now()+timedelta(minutes=10))
+                        challenge = PasswordRecovery.objects.create(
+                            id=challenge_id, user=user, phone=phone, email=email,
+                            channel=channel,
+                            code_digest=digest(str(challenge_id)+":"+code),
+                            password_stamp=digest(user.password),
+                            expires_at=timezone.now()+timedelta(minutes=10),
+                        )
                     try:
-                        result = get_provider(settings.SMS_PROVIDER).submit(phone,
-                            f"KOFAD password reset code: {code}. Expires in 10 minutes. Do not share this code.",
-                            settings.SMS_SENDER_ID, "", False)
-                        sent = result.status in ("accepted", "delivered", "unknown")
+                        if channel == "sms":
+                            result = get_provider(settings.SMS_PROVIDER).submit(
+                                phone,
+                                f"KOFAD password reset code: {code}. Expires in 10 minutes. Do not share this code.",
+                                settings.SMS_SENDER_ID, "", False
+                            )
+                            sent = result.status in ("accepted", "delivered", "unknown")
+                        else:
+                            _send_kofad_mail(
+                                "KOFAD staff password recovery",
+                                f"Your KOFAD staff recovery code is {code}. It expires in 10 minutes. "
+                                "Do not share it. If you did not request it, contact your system administrator.",
+                                [email], purpose="security",
+                            )
+                            sent = True
                     except Exception:
                         sent = False
-                    update = {"sent": sent}
+                    updates = {"sent": sent}
                     if sent:
-                        update["expires_at"] = timezone.now() + timedelta(minutes=10)
-                    PasswordRecovery.objects.filter(pk=challenge.pk).update(**update)
-                    audit(None, None, "password.recovery_requested", user.pk, {"accepted":sent})
+                        updates["expires_at"] = timezone.now() + timedelta(minutes=10)
+                    PasswordRecovery.objects.filter(pk=challenge.pk).update(**updates)
+                    audit(None, None, "password.recovery_requested", user.pk,
+                          {"accepted": sent, "channel": channel})
         return redirect("reset_password")
-    return render(request, "forgot_password.html", {"sms_ready":ready})
-
+    return render(request, "forgot_password.html", {
+        "sms_ready": sms_available, "email_ready": email_available,
+    })
 
 @never_cache
 @sensitive_post_parameters("code", "new_password1", "new_password2")
@@ -227,7 +270,13 @@ def reset_password(request):
             challenge = PasswordRecovery.objects.select_for_update().filter(pk=challenge_id).first()
             valid = bool(challenge and access and user and user.is_active and challenge.sent and
                 not challenge.used and challenge.attempts < 5 and challenge.expires_at > timezone.now() and
-                access.recovery_phone == challenge.phone and constant_time_compare(challenge.password_stamp, digest(user.password)))
+                (
+                (challenge.channel == "sms" and access.recovery_phone == challenge.phone)
+                or (challenge.channel == "email" and bool(challenge.email) and
+                    __import__("marketplace.models", fromlist=["EmailIdentity"]).EmailIdentity.objects.filter(
+                        kind="staff", owner_id=user.pk, email=challenge.email,
+                        verified_at__isnull=False).exists())
+            ) and constant_time_compare(challenge.password_stamp, digest(user.password)))
             if valid:
                 challenge.attempts += 1
                 challenge.save(update_fields=["attempts"])

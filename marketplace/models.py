@@ -26,6 +26,7 @@ class EmailIdentity(models.Model):
     sends_in_window = models.PositiveSmallIntegerField(default=0)
     code_attempts = models.PositiveSmallIntegerField(default=0)
     notifications_enabled = models.BooleanField(default=False)
+    marketing_emails_enabled = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -37,6 +38,21 @@ class EmailIdentity(models.Model):
             ),
         ]
 
+
+
+class CustomerEmailRecovery(models.Model):
+    """Hashed, short-lived one-time email recovery for a verified customer address."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    customer = models.ForeignKey("CustomerAccount", on_delete=models.CASCADE)
+    email = models.EmailField()
+    code_digest = models.CharField(max_length=64)
+    password_stamp = models.CharField(max_length=64)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(null=True, blank=True)
+    sent = models.BooleanField(default=False)
+    used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class GoogleIdentity(models.Model):

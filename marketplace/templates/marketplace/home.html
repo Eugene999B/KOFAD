@@ -46,7 +46,7 @@
 
 <section class="commerce-contact-simple" id="contact">
 <div class="commerce-section-title"><div><p class="market-eyebrow">CONTACT US</p><h2>Talk to KOFAD IMPEX ENTERPRISE.</h2><p>Call, email, WhatsApp or use KOFAD customer chat.</p></div></div>
-<div class="contact-method-grid"><a href="/contact/" class="contact-method-card"><span>CUSTOMER CARE</span><strong>Send an enquiry or feedback</strong><small>No account needed.</small></a>
+<div class="contact-method-grid">{% for contact in customer_service_contacts %}<a href="{{ contact.contact_url }}" class="contact-method-card" {% if contact.channel == "whatsapp" %}target="_blank" rel="noopener noreferrer"{% endif %}><span>{% if contact.channel == "whatsapp" %}WHATSAPP SUPPORT{% else %}CUSTOMER CARE{% endif %}</span><strong>{{ contact.label }}</strong><small>{{ contact.number }}</small></a>{% endfor %}<a href="/contact/" class="contact-method-card"><span>CUSTOMER CARE</span><strong>Send an enquiry or feedback</strong><small>No account needed.</small></a>
 {% if company.phone %}<a href="tel:{{ company.phone }}" class="contact-method-card"><span>CALL</span><strong>{{ company.phone }}</strong><small>Primary business number</small></a>{% endif %}
 {% if company.secondary_phone %}<a href="tel:{{ company.secondary_phone }}" class="contact-method-card"><span>CALL</span><strong>{{ company.secondary_phone }}</strong><small>Alternative business number</small></a>{% endif %}
 {% if company.email %}<a href="mailto:{{ company.email }}" class="contact-method-card"><span>EMAIL</span><strong>{{ company.email }}</strong><small>Business enquiries</small></a>{% endif %}

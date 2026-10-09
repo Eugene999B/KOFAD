@@ -58,6 +58,8 @@ class Command(BaseCommand):
                     deliver_pending(limit=15)
                     from core.email_center import deliver_outgoing
                     deliver_outgoing(limit=15)
+                    from core.email_campaigns import queue_active_campaigns
+                    queue_active_campaigns(limit=75)
                 except Exception:
                     self.stderr.write("Email notification queue check failed safely; will retry.")
                 try:

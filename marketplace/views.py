@@ -1,4 +1,5 @@
 import re
+import uuid
 import json
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -85,6 +86,7 @@ def _market_context(request, **extra):
         "market_auth_page": market_auth_page,
         "google_ready": __import__("core.google_oauth", fromlist=["enabled"]).enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
+        "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
@@ -567,27 +569,78 @@ def account_finish(request):
 def customer_password_reset_start(request):
     if services.customer_from_session(request):
         return redirect("market")
-    phone = request.POST.get("phone", "").strip()
+    identifier = request.POST.get("identifier", request.POST.get("phone", "")).strip()
+    channel = request.POST.get("channel", "sms")
     if request.method == "POST":
-        try:
-            canonical = normalize_ghana_phone(phone)
-            if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
-                # Do not disclose whether a number owns an account.
-                messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
-                return redirect("market_login")
-            services.send_otp(canonical, "reset", request=request)
-            request.session["market_reset_phone"] = canonical
-            request.session.pop("market_reset_verified_phone", None)
-            messages.success(request, "Verification code sent by SMS.")
-            return redirect("market_password_reset_verify")
-        except ValidationError as exc:
-            messages.error(request, problem(exc))
+        if channel == "whatsapp":
+            messages.error(request, "WhatsApp OTP is not enabled yet. Use verified email or SMS instead.")
+        elif channel == "email":
+            from . import email_recovery
+            try:
+                challenge_id = email_recovery.issue(identifier, request)
+                request.session["market_reset_method"] = "email"
+                request.session["market_reset_email_id"] = str(challenge_id) if challenge_id else str(uuid.uuid4())
+                request.session["market_reset_email_input"] = identifier[:254]
+                request.session.pop("market_reset_verified_email_id", None)
+                request.session.pop("market_reset_phone", None)
+                request.session.pop("market_reset_verified_phone", None)
+                messages.success(request, "If this verified email belongs to a KOFAD account, a recovery code has been sent.")
+                return redirect("market_password_reset_verify")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        elif channel == "sms":
+            try:
+                canonical = normalize_ghana_phone(identifier)
+                if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
+                    messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
+                    return redirect("market_login")
+                services.send_otp(canonical, "reset", request=request)
+                request.session["market_reset_method"] = "sms"
+                request.session["market_reset_phone"] = canonical
+                request.session.pop("market_reset_verified_phone", None)
+                request.session.pop("market_reset_email_id", None)
+                request.session.pop("market_reset_verified_email_id", None)
+                messages.success(request, "Verification code sent by SMS.")
+                return redirect("market_password_reset_verify")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        else:
+            messages.error(request, "Choose SMS, email or WhatsApp.")
+    from core.email_identity import delivery_ready
     return render(request, "marketplace/password_reset_start.html", _market_context(
-        request, title="Reset customer password", phone=phone,
+        request, title="Reset customer password", identifier=identifier,
+        email_recovery_ready=delivery_ready(),
     ))
 
 
 def customer_password_reset_verify(request):
+    method = request.session.get("market_reset_method", "sms")
+    if method == "email":
+        from . import email_recovery
+        if request.session.get("market_reset_verified_email_id"):
+            return redirect("market_password_reset_finish")
+        challenge_id = request.session.get("market_reset_email_id")
+        if not challenge_id:
+            return redirect("market_password_reset")
+        if request.method == "POST":
+            if request.POST.get("action") == "resend":
+                try:
+                    new_id = email_recovery.issue(request.session.get("market_reset_email_input", ""), request)
+                    request.session["market_reset_email_id"] = str(new_id) if new_id else str(uuid.uuid4())
+                    messages.success(request, "If the address is verified, a new recovery code was requested.")
+                except ValidationError as exc:
+                    messages.error(request, problem(exc))
+                return redirect("market_password_reset_verify")
+            try:
+                email_recovery.verify(challenge_id, request.POST.get("code"))
+                request.session["market_reset_verified_email_id"] = challenge_id
+                return redirect("market_password_reset_finish")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        return render(request, "marketplace/password_reset_verify.html", _market_context(
+            request, title="Verify email reset", recovery_channel="email",
+            recovery_destination="your verified email address",
+        ))
     verified_phone = request.session.get("market_reset_verified_phone")
     if verified_phone:
         return redirect("market_password_reset_finish")
@@ -609,11 +662,33 @@ def customer_password_reset_verify(request):
         except ValidationError as exc:
             messages.error(request, problem(exc))
     return render(request, "marketplace/password_reset_verify.html", _market_context(
-        request, title="Verify password reset", phone=phone,
+        request, title="Verify password reset", phone=phone, recovery_channel="sms",
+        recovery_destination=phone,
     ))
 
 
 def customer_password_reset_finish(request):
+    if request.session.get("market_reset_method") == "email":
+        email_id = request.session.get("market_reset_verified_email_id")
+        if not email_id:
+            return redirect("market_password_reset")
+        form = CustomerPasswordResetForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            from . import email_recovery
+            try:
+                customer = email_recovery.finish(email_id, form.cleaned_data["password"])
+                for key in ("market_reset_email_id", "market_reset_email_input",
+                            "market_reset_verified_email_id", "market_reset_method",
+                            "market_reset_phone", "market_reset_verified_phone"):
+                    request.session.pop(key, None)
+                services.set_customer_session(request, customer)
+                messages.success(request, "Your KOFAD password has been changed.")
+                return redirect("market")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        return render(request, "marketplace/password_reset_finish.html", _market_context(
+            request, title="Choose a new password", form=form,
+        ))
     phone = request.session.get("market_reset_verified_phone")
     if not phone:
         return redirect("market_password_reset")
@@ -628,6 +703,7 @@ def customer_password_reset_finish(request):
         customer.save(update_fields=["password_hash"])
         request.session.pop("market_reset_phone", None)
         request.session.pop("market_reset_verified_phone", None)
+        request.session.pop("market_reset_method", None)
         services.set_customer_session(request, customer)
         messages.success(request, "Your KOFAD Market password has been changed.")
         return redirect("market")
@@ -703,7 +779,7 @@ def customer_security(request, customer):
         and timezone.now().timestamp() - request.session["market_google_authenticated_at"] < 900
     )
     action = request.POST.get("action", "password")
-    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
+    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications", "email_marketing"}:
         try:
             if not (recent_google_auth or customer.check_password(request.POST.get("current_password", ""))):
                 raise ValidationError("Sign in with Google again or enter your current password to update email access.")
@@ -715,6 +791,14 @@ def customer_security(request, customer):
                 if not verified:
                     raise ValidationError("The email code is incorrect.")
                 messages.success(request, "Email verified. You can now sign in with your email or phone.")
+            elif action == "email_marketing":
+                from marketplace.models import EmailIdentity
+                changed = EmailIdentity.objects.filter(
+                    kind="customer", owner_id=customer.pk, verified_at__isnull=False,
+                ).update(marketing_emails_enabled=request.POST.get("marketing_emails") == "on")
+                if not changed:
+                    raise ValidationError("Verify your email before setting promotional email preferences.")
+                messages.success(request, "Promotional email preference saved.")
             else:
                 email_identity.set_notifications(
                     "customer", customer.pk, request.POST.get("email_notifications") == "on"

@@ -12,7 +12,6 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import parseaddr
 
-import requests
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -200,6 +199,8 @@ def inbox(request):
         "staff_users": User.objects.filter(is_active=True).order_by("username")[:300]
         if owner(request.user) else [],
         "is_mail_owner": owner(request.user),
+        "daily_email_usage": __import__("core.brevo_email", fromlist=["usage_today"]).usage_today(),
+        "email_queued_count": EmailLetter.objects.filter(direction="outbound", status__in=["queued", "failed"]).count() if owner(request.user) else 0,
         "external_ready": bool(getattr(settings, "KOFAD_EMAIL_ENABLED", False)
                                and settings.KOFAD_EMAIL_PROVIDER == "brevo"
                                and settings.KOFAD_BREVO_API_KEY),
@@ -286,23 +287,45 @@ def deliver_outgoing(limit=10):
         if not claimed:
             continue
         row = EmailLetter.objects.get(pk=pk)
+        # Preserve part of today's limited free allowance for security codes,
+        # receipts and staff correspondence instead of exhausting it on campaigns.
+        if row.source_key and row.source_key.startswith("campaign:"):
+            from .brevo_email import usage_today
+            allowance = usage_today()
+            safety_reserve = min(50, allowance["limit"] // 5)
+            if allowance["remaining"] <= safety_reserve:
+                tomorrow = (timezone.localtime().replace(hour=0, minute=10, second=0,
+                                                         microsecond=0) + timedelta(days=1))
+                EmailLetter.objects.filter(pk=pk).update(
+                    status="failed", next_attempt_at=tomorrow,
+                    attempts=models.F("attempts") - 1,
+                    last_error="Reserved daily email allowance for security and transactions.",
+                )
+                continue
+        from .email_campaigns import is_campaign_recipient_allowed
+        if not is_campaign_recipient_allowed(row.source_key, row.to_address):
+            EmailLetter.objects.filter(pk=pk).update(
+                status="suppressed", last_error="Recipient did not opt in or campaign was paused.")
+            continue
         try:
-            response = requests.post(
-                "https://api.brevo.com/v3/smtp/email",
-                headers={"api-key": settings.KOFAD_BREVO_API_KEY,
-                         "accept": "application/json"},
-                json={"sender": {"name": "KOFAD IMPEX ENTERPRISE", "email": row.from_address},
-                      "to": [{"email": row.to_address}], "subject": row.subject,
-                      "textContent": row.body_text,
-                      "replyTo": {"email": row.from_address}},
-                timeout=15, allow_redirects=False,
+            from .brevo_email import send_brevo
+            send_brevo(subject=row.subject, body=row.body_text,
+                       recipient=row.to_address, purpose="transaction",
+                       sender_email=row.from_address)
+        except __import__("core.brevo_email", fromlist=["UncertainEmailDelivery"]).UncertainEmailDelivery:
+            EmailLetter.objects.filter(pk=pk).update(
+                status="uncertain",
+                last_error="Delivery status unknown; review before retry.",
             )
-            if response.status_code != 201:
-                raise ValueError("Sender rejected the message")
-        except requests.Timeout:
-            # Provider may have accepted before timeout; never blindly resend.
-            EmailLetter.objects.filter(pk=pk).update(status="uncertain",
-                                                       last_error="Delivery status unknown; review before retry.")
+        except __import__("core.brevo_email", fromlist=["DailyEmailLimitExceeded"]).DailyEmailLimitExceeded:
+            # Do not burn retry attempts while waiting for tomorrow's free allowance.
+            tomorrow = (timezone.localtime().replace(hour=0, minute=10, second=0,
+                                                     microsecond=0) + timedelta(days=1))
+            EmailLetter.objects.filter(pk=pk).update(
+                status="failed", next_attempt_at=tomorrow,
+                attempts=models.F("attempts") - 1,
+                last_error="Daily send allowance reached; queued for tomorrow.",
+            )
         except Exception:
             EmailLetter.objects.filter(pk=pk).update(
                 status="failed", next_attempt_at=timezone.now()
