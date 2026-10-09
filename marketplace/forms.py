@@ -324,12 +324,22 @@ class CustomerPasswordChangeForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, label="New password")
     password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
 
-    def __init__(self, *args, customer=None, **kwargs):
+    def __init__(self, *args, customer=None, fresh_google_auth=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.customer = customer
+        self.fresh_google_auth = fresh_google_auth
+        if customer and not customer.check_password(""):
+            from django.contrib.auth.hashers import is_password_usable
+            if not is_password_usable(customer.password_hash):
+                self.fields["current_password"].required = False
 
     def clean_current_password(self):
-        value = self.cleaned_data["current_password"]
+        value = self.cleaned_data.get("current_password", "")
+        from django.contrib.auth.hashers import is_password_usable
+        if self.customer and not is_password_usable(self.customer.password_hash):
+            if not self.fresh_google_auth:
+                raise forms.ValidationError("Sign in with Google again before setting a password.")
+            return ""
         if not self.customer or not self.customer.check_password(value):
             raise forms.ValidationError("The current password is incorrect.")
         return value
