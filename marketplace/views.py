@@ -420,12 +420,17 @@ def customer_access(request):
         try:
             # Returning customers authenticate with their password; do not charge
             # the business for another SMS merely because they opened sign-in.
-            if CustomerAccount.objects.filter(phone=phone, active=True).exists():
+            matching = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            if matching and not __import__("django.contrib.auth.hashers", fromlist=["is_password_usable"]).is_password_usable(matching.password_hash):
+                messages.info(request, "This mobile number belongs to a Google-only account. Continue with Google or set a password in Account Security.")
+            elif matching:
                 request.session["market_login_phone"] = phone
                 request.session.pop("market_pending_phone", None)
                 request.session.pop("market_pending_otp_purpose", None)
                 request.session.pop("market_verified_phone", None)
                 return redirect("market_login")
+            if matching:
+                return render(request, "marketplace/access.html", _market_context(request, title="Sign in or create your account", form=form))
             services.send_otp(phone, "register", request=request)
             request.session.pop("market_login_phone", None)
             request.session.pop("market_verified_phone", None)
@@ -954,7 +959,7 @@ def checkout(request, customer):
     payment_ready = hubtel.ready()
     momo_available = hubtel.selected_provider() == "paystack" and paystack_momo.ready()
     payment_form = CheckoutPaymentForm(request.POST or None,
-        initial={"momo_phone": customer.phone}, momo_available=momo_available)
+        initial={"momo_phone": customer.phone or ""}, momo_available=momo_available)
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
     if request.method == "POST" and payment_ready and form.is_valid() and payment_form.is_valid():
@@ -1278,7 +1283,7 @@ def customer_messages(request, customer, conversation_id=None):
                 conversation = Conversation.objects.create(
                     branch=order.branch if order else services.market_branch(),
                     customer=customer, public_name=customer.full_name,
-                    public_phone=customer.phone, order=order, subject=subject,
+                    public_phone=customer.phone or "", order=order, subject=subject,
                 )
             try:
                 _save_conversation_message(
