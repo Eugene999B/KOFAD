@@ -670,7 +670,7 @@ def customer_from_session(request):
 
 
 def customer_credential_stamp(customer):
-    return hmac.new(settings.SECRET_KEY.encode(), (customer.phone + ":" + customer.password_hash).encode(), hashlib.sha256).hexdigest()
+    return hmac.new(settings.SECRET_KEY.encode(), ((customer.phone or "") + ":" + customer.password_hash).encode(), hashlib.sha256).hexdigest()
 
 
 def set_customer_session(request, customer):
