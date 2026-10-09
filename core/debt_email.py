@@ -139,7 +139,7 @@ def run_debt_email_reminders(now=None):
         budget = usage_today()
         if budget["remaining"] <= min(50, budget["limit"] // 5):
             return 0
-    from .automations import _debt_stage, _debt_due_sentence
+    from .automations import _debt_stage, render_debt_account_message
     queued = 0
     for party in Party.objects.filter(branch__active=True, kind="customer",
                                       debt_email_opt_in=True).exclude(email="").iterator(chunk_size=100):
@@ -149,15 +149,16 @@ def run_debt_email_reminders(now=None):
             continue
         currency = (__import__("core.models", fromlist=["Company"]).Company.objects.first()
                     or __import__("core.models", fromlist=["Company"]).Company()).currency
+        # Debt Settings owns the wording for both SMS and email, so an owner
+        # changing the approved template updates future reminders consistently.
+        message = render_debt_account_message(party, today)
+        if not message:
+            continue
         notice = _queue(
             party, reference=f"debtmail:{party.pk}:reminder:{stage}:{today.isoformat()}",
             subject=f"KOFAD account update · {stage.replace('_', ' ').title()}",
-            body=(f"Hello {party.name},\n\n"
-                  f"Your current KOFAD outstanding balance is {currency} {snapshot['outstanding']:.2f}.\n"
-                  f"{_debt_due_sentence(snapshot, today)}\n"
-                  f"Unpaid receipts: {snapshot['invoice_count']}\n\n"
-                  "If you have recently paid or need to discuss your account, "
-                  "please contact KOFAD Customer Care. We will review any discrepancy."),
+            body=(message + "\n\nIf you have paid recently, or believe this notice is "
+                  "incorrect, please contact KOFAD Customer Care to review your account."),
             mode=policy.email_delivery_mode,
         )
         if notice:
