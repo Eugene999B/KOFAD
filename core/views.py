@@ -1209,6 +1209,7 @@ def customer_search(request, branch):
             "phone": party.phone,
             "email": party.email,
             "consent": party.consent,
+            "debt_email_opt_in": party.debt_email_opt_in,
             "outstanding": str(s.party_debt(party)),
             "purchase_count": sales.count(),
             "last_purchase_at": last_sale.created_at.isoformat() if last_sale else "",

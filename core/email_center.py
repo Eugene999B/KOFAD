@@ -17,6 +17,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.core.validators import validate_email
 from django.db import IntegrityError, models, transaction
 from django.http import Http404, HttpResponse, JsonResponse
@@ -25,7 +26,10 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .email_models import EmailLetter, EmailMailbox, EmailMailboxMember
+from .email_models import (EmailLetter, EmailMailbox, EmailMailboxMember,
+                           EmailConversation, EmailConversationNote)
+from .email_threads import (record_incoming, new_outgoing_conversation, thread_subject,
+                            record_outgoing_status)
 
 logger = logging.getLogger(__name__)
 MAX_INGEST_BYTES = 1024 * 1024
@@ -64,7 +68,7 @@ def _address(value):
     return address
 
 
-def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id=""):
+def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None):
     if not (getattr(settings, "KOFAD_EMAIL_ENABLED", False)
             and settings.KOFAD_EMAIL_PROVIDER == "brevo"
             and settings.KOFAD_BREVO_API_KEY):
@@ -75,18 +79,19 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
             defaults=dict(mailbox=mailbox, direction="outbound", status="queued",
                           from_address=mailbox.address, to_address=recipient,
                           subject=subject, body_text=body, created_by=user,
-                          in_reply_to=reply_id, next_attempt_at=timezone.now()),
+                          in_reply_to=reply_id, conversation=conversation,
+                          next_attempt_at=timezone.now()),
         )
         return letter
     return EmailLetter.objects.create(
         mailbox=mailbox, direction="outbound", status="queued",
         from_address=mailbox.address, to_address=recipient, subject=subject,
         body_text=body, created_by=user, in_reply_to=reply_id,
-        next_attempt_at=timezone.now(),
+        conversation=conversation, next_attempt_at=timezone.now(),
     )
 
 
-def compose(mailbox, recipient, subject, body, user, *, reply_id=""):
+def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None):
     recipient = _address(recipient)
     subject = (subject or "").strip()
     body = (body or "").strip()
@@ -100,7 +105,16 @@ def compose(mailbox, recipient, subject, body, user, *, reply_id=""):
     internal = EmailMailbox.objects.filter(address=recipient, active=True).first()
     with transaction.atomic():
         if not internal:
-            return _queue_external(mailbox, recipient, subject, body, user, reply_id=reply_id)
+            if conversation is not None:
+                if conversation.mailbox_id != mailbox.pk or conversation.customer_email.lower() != recipient:
+                    raise ValidationError("Conversation does not belong to this mailbox or recipient.")
+            else:
+                conversation = new_outgoing_conversation(mailbox, recipient, subject)
+            final_subject = thread_subject(subject, conversation, reply=bool(reply_id))
+            record = _queue_external(mailbox, recipient, final_subject, body, user,
+                                     reply_id=reply_id, conversation=conversation)
+            record_outgoing_status(conversation)
+            return record
         sent = EmailLetter.objects.create(
             mailbox=mailbox, direction="outbound", status="internal",
             from_address=mailbox.address, to_address=recipient,
@@ -161,25 +175,104 @@ def inbox(request):
                 audit(request.user, None, "email.mailbox_created", mailbox.pk,
                       {"address": mailbox.address})
                 messages.success(request, "Mailbox added. Cloudflare routing must also target KOFAD.")
-            elif action in {"send", "reply"}:
+            elif action == "approve_draft":
+                mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
+                                            pk=request.POST.get("mailbox_id"))
+                if not (owner(request.user) or request.user.has_perm("core.operate_finance")):
+                    raise PermissionDenied
+                from .debt_email import email_still_allowed
+                with transaction.atomic():
+                    draft = get_object_or_404(EmailLetter.objects.select_for_update(),
+                                              pk=request.POST.get("letter_id"),
+                                              mailbox=mailbox, direction="outbound",
+                                              status="draft")
+                    if not email_still_allowed(draft.source_key, draft.to_address):
+                        raise ValidationError("Customer permission or outstanding debt changed. This draft cannot be sent.")
+                    draft.status = "queued"
+                    draft.approved_by = request.user
+                    draft.approved_at = timezone.now()
+                    draft.next_attempt_at = timezone.now()
+                    draft.save(update_fields=["status", "approved_by", "approved_at", "next_attempt_at"])
+                    from .services import audit
+                    audit(request.user, mailbox.branch, "email.draft_approved", draft.pk,
+                          {"mailbox": mailbox.address, "destination": draft.to_address})
+                messages.success(request, "Reviewed message queued for sending.")
+            elif action in {"send", "reply", "thread_reply"}:
                 mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
                                             pk=request.POST.get("mailbox_id"))
                 reply_id = ""
                 recipient = request.POST.get("to", "")
                 subject = request.POST.get("subject", "")
+                conversation = None
                 if action == "reply":
                     original = get_object_or_404(EmailLetter, pk=request.POST.get("reply_to"),
                                                  mailbox=mailbox, direction="inbound")
-                    recipient = original.from_address
-                    subject = "Re: " + original.subject[:250].removeprefix("Re: ")
-                    reply_id = original.message_id
+                    recipient, subject, reply_id = original.from_address, original.subject, original.message_id
+                    conversation = original.conversation
+                    if conversation is None:
+                        with transaction.atomic():
+                            original = EmailLetter.objects.select_for_update().get(pk=original.pk)
+                            conversation = original.conversation
+                            if conversation is None:
+                                conversation = EmailConversation.objects.create(
+                                    mailbox=mailbox, customer_email=recipient,
+                                    subject=subject[:255], last_customer_at=original.created_at,
+                                )
+                                original.conversation = conversation
+                                original.save(update_fields=["conversation"])
+                if action == "thread_reply":
+                    conversation = get_object_or_404(EmailConversation,
+                                                     pk=request.POST.get("conversation_id"),
+                                                     mailbox=mailbox)
+                    recipient, subject = conversation.customer_email, conversation.subject
+                    latest_customer = conversation.letters.filter(direction="inbound").order_by("-created_at").first()
+                    reply_id = latest_customer.message_id if latest_customer else ""
                 created = compose(mailbox, recipient, subject, request.POST.get("body"), request.user,
-                                  reply_id=reply_id)
+                                  reply_id=reply_id, conversation=conversation)
                 from .services import audit
                 audit(request.user, mailbox.branch, "email.message_created", created.pk,
-                      {"mailbox": mailbox.address, "direction": created.direction})
+                      {"mailbox": mailbox.address, "direction": created.direction,
+                       "conversation_id": created.conversation_id})
                 messages.success(request, "Delivered internally." if created.status == "internal"
-                                 else "Message queued for the email delivery service.")
+                                 else "Reply queued in the customer conversation.")
+            elif action in {"thread_update", "thread_note"}:
+                mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
+                                            pk=request.POST.get("mailbox_id"))
+                with transaction.atomic():
+                    thread = get_object_or_404(EmailConversation.objects.select_for_update(),
+                                               pk=request.POST.get("conversation_id"),
+                                               mailbox=mailbox)
+                    if action == "thread_note":
+                        note = request.POST.get("note", "").strip()
+                        if not note or len(note) > 4000:
+                            raise ValidationError("An internal note must be 1-4,000 characters.")
+                        EmailConversationNote.objects.create(
+                            conversation=thread, author=request.user, body=note,
+                        )
+                        messages.success(request, "Private team note saved. It was not emailed.")
+                    else:
+                        new_status = request.POST.get("thread_status", thread.status)
+                        priority = request.POST.get("priority", thread.priority)
+                        if new_status not in {"open", "pending", "closed"}:
+                            raise ValidationError("Unknown conversation status.")
+                        if priority not in {"normal", "high"}:
+                            raise ValidationError("Unknown priority.")
+                        assigned = request.POST.get("assigned_to", "")
+                        if assigned:
+                            person = get_object_or_404(User, pk=assigned, is_active=True)
+                            if not (owner(person) or visible_mailboxes(person, send=True)
+                                    .filter(pk=mailbox.pk).exists()):
+                                raise ValidationError("User is not authorised to send from this mailbox.")
+                            thread.assigned_to = person
+                        else:
+                            thread.assigned_to = None
+                        thread.status = new_status
+                        thread.priority = priority
+                        thread.save(update_fields=["assigned_to", "status", "priority"])
+                        messages.success(request, "Conversation assignment and status updated.")
+                    from .services import audit
+                    audit(request.user, mailbox.branch, "email.conversation_" + action,
+                          thread.pk, {"mailbox": mailbox.address, "status": thread.status})
             else:
                 raise ValidationError("Unknown email action.")
         except ValidationError as exc:
@@ -188,11 +281,64 @@ def inbox(request):
     chosen_id = request.GET.get("mailbox", "")
     chosen = next((m for m in all_mailboxes if str(m.pk) == chosen_id), None)
     chosen = chosen or (all_mailboxes[0] if all_mailboxes else None)
-    letters = (EmailLetter.objects.filter(mailbox=chosen).order_by("-created_at")[:75]
-               if chosen else [])
+    direction = request.GET.get("direction", "all")
+    status = request.GET.get("status", "all")
+    query = request.GET.get("q", "").strip()[:100]
+    if direction not in {"all", "inbound", "outbound"}:
+        direction = "all"
+    known_statuses = {value for value, _ in EmailLetter.STATUS}
+    if status not in known_statuses | {"all"}:
+        status = "all"
+    letters_qs = EmailLetter.objects.filter(mailbox=chosen) if chosen else EmailLetter.objects.none()
+    inbox_count = letters_qs.filter(direction="inbound").count()
+    sent_count = letters_qs.filter(direction="outbound").count()
+    draft_count = letters_qs.filter(status="draft").count()
+    attention_count = letters_qs.filter(status__in=["failed", "uncertain"]).count()
+    if direction != "all":
+        letters_qs = letters_qs.filter(direction=direction)
+    if status != "all":
+        letters_qs = letters_qs.filter(status=status)
+    if query:
+        letters_qs = letters_qs.filter(
+            models.Q(subject__icontains=query) |
+            models.Q(from_address__icontains=query) |
+            models.Q(to_address__icontains=query) |
+            models.Q(body_text__icontains=query))
+    letters = Paginator(
+        letters_qs.select_related("created_by", "approved_by").order_by("-created_at", "-pk"), 20
+    ).get_page(request.GET.get("page", "1"))
+    conversations = (EmailConversation.objects.filter(mailbox=chosen)
+                     .select_related("assigned_to").order_by("-last_activity_at")[:35]
+                     if chosen else [])
+    active_thread = None
+    thread_letters = []
+    thread_notes = []
+    eligible_assignees = []
+    thread_id = request.GET.get("thread", "")
+    if chosen and thread_id:
+        active_thread = get_object_or_404(EmailConversation.objects.select_related("assigned_to"),
+                                          pk=thread_id, mailbox=chosen)
+        thread_letters = list(active_thread.letters.select_related("created_by")
+                              .order_by("created_at", "pk")[:200])
+        thread_notes = list(active_thread.notes.select_related("author")
+                            .order_by("created_at", "pk")[:100])
+        if chosen.pk in can_write:
+            eligible_assignees = list(User.objects.filter(
+                is_active=True,
+                pk__in=EmailMailboxMember.objects.filter(
+                    mailbox=chosen, can_send=True).values("user_id")
+            ).order_by("username")[:150])
+            if owner(request.user) and not any(u.pk == request.user.pk for u in eligible_assignees):
+                eligible_assignees.insert(0, request.user)
     return render(request, "email_center.html", {
         "title": "Email Centre", "mailboxes": all_mailboxes, "selected": chosen,
         "letters": letters, "writable_ids": can_write,
+        "conversations": conversations, "active_thread": active_thread,
+        "thread_letters": thread_letters, "thread_notes": thread_notes,
+        "eligible_assignees": eligible_assignees,
+        "mail_query": query, "mail_direction": direction, "mail_status": status,
+        "inbox_count": inbox_count, "sent_count": sent_count, "draft_count": draft_count,
+        "attention_count": attention_count,
         "memberships": EmailMailboxMember.objects.select_related("user", "mailbox").filter(
             mailbox__in=all_mailboxes).order_by("mailbox__address", "user__username")
         if owner(request.user) else [],
@@ -201,6 +347,7 @@ def inbox(request):
         "is_mail_owner": owner(request.user),
         "daily_email_usage": __import__("core.brevo_email", fromlist=["usage_today"]).usage_today(),
         "email_queued_count": EmailLetter.objects.filter(direction="outbound", status__in=["queued", "failed"]).count() if owner(request.user) else 0,
+        "system_notice_history": list(__import__("marketplace.models", fromlist=["EmailNotice"]).EmailNotice.objects.order_by("-created_at")[:20]) if owner(request.user) else [],
         "external_ready": bool(getattr(settings, "KOFAD_EMAIL_ENABLED", False)
                                and settings.KOFAD_EMAIL_PROVIDER == "brevo"
                                and settings.KOFAD_BREVO_API_KEY),
@@ -250,13 +397,11 @@ def ingest(request):
         if not isinstance(content, str):
             return HttpResponse(status=422)
         fingerprint = hashlib.sha256(recipient.encode() + b"\n" + raw).hexdigest()
-        EmailLetter.objects.get_or_create(
-            mailbox=mailbox, fingerprint=fingerprint,
-            defaults={"direction": "inbound", "status": "received",
-                      "from_address": from_address, "to_address": recipient,
-                      "subject": subject, "body_text": content[:MAX_BODY_CHARS],
-                      "message_id": message_id, "in_reply_to": reply_id,
-                      "had_attachments": attachments},
+        record_incoming(
+            mailbox, sender=from_address, subject=subject, reply_id=reply_id,
+            references=str(parsed.get("References", ""))[:2048],
+            body=content[:MAX_BODY_CHARS], message_id=message_id,
+            fingerprint=fingerprint, attachments=attachments,
         )
         result = JsonResponse({"accepted": True})
         result["Cache-Control"] = "no-store"
@@ -289,7 +434,7 @@ def deliver_outgoing(limit=10):
         row = EmailLetter.objects.get(pk=pk)
         # Preserve part of today's limited free allowance for security codes,
         # receipts and staff correspondence instead of exhausting it on campaigns.
-        if row.source_key and row.source_key.startswith("campaign:"):
+        if row.source_key and (row.source_key.startswith("campaign:") or ":reminder:" in row.source_key and row.source_key.startswith("debtmail:")):
             from .brevo_email import usage_today
             allowance = usage_today()
             safety_reserve = min(50, allowance["limit"] // 5)
@@ -302,6 +447,11 @@ def deliver_outgoing(limit=10):
                     last_error="Reserved daily email allowance for security and transactions.",
                 )
                 continue
+        from .debt_email import email_still_allowed
+        if not email_still_allowed(row.source_key, row.to_address, for_delivery=True, approved=bool(row.approved_at)):
+            EmailLetter.objects.filter(pk=pk).update(
+                status="suppressed", last_error="Customer email preference or current debt state changed.")
+            continue
         from .email_campaigns import is_campaign_recipient_allowed
         if not is_campaign_recipient_allowed(row.source_key, row.to_address):
             EmailLetter.objects.filter(pk=pk).update(
@@ -309,9 +459,9 @@ def deliver_outgoing(limit=10):
             continue
         try:
             from .brevo_email import send_brevo
-            send_brevo(subject=row.subject, body=row.body_text,
+            provider_id = send_brevo(subject=row.subject, body=row.body_text,
                        recipient=row.to_address, purpose="transaction",
-                       sender_email=row.from_address)
+                       sender_email=row.from_address, return_message_id=True)
         except __import__("core.brevo_email", fromlist=["UncertainEmailDelivery"]).UncertainEmailDelivery:
             EmailLetter.objects.filter(pk=pk).update(
                 status="uncertain",
@@ -335,6 +485,7 @@ def deliver_outgoing(limit=10):
         else:
             EmailLetter.objects.filter(pk=pk).update(
                 status="submitted", submitted_at=timezone.now(), last_error="",
+                message_id=provider_id or "",
             )
             submitted += 1
     return submitted

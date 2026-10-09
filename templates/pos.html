@@ -245,6 +245,17 @@
       <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
         <label for="due-date">Due date <small>Required while a balance remains</small></label>
         <input id="due-date" type="date" max="9999-12-31">
+        {% if not purchase %}
+        <div class="credit-email-capture">
+          <label for="credit-customer-email">Customer email for credit records <small>Optional</small></label>
+          <input id="credit-customer-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
+          <label class="checkout-consent compact-consent" for="credit-debt-email-consent">
+            <input id="credit-debt-email-consent" type="checkbox">
+            <span><strong>Customer agrees to receive credit statements and debt reminders by email</strong></span>
+          </label>
+          <p class="hint">Confirm this address with the customer. Reminders follow Debt Settings, not marketing preferences. Without this choice, no debt emails are sent.</p>
+        </div>
+        {% endif %}
         {% if not purchase %}<p class="hint">Credit policy allows up to {{ max_credit_days }} days.</p>{% endif %}
       </div>
 

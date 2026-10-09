@@ -83,11 +83,12 @@ class ProductForm(forms.ModelForm):
 class PartyForm(forms.ModelForm):
     class Meta:
         model = Party
-        fields = ["name", "phone", "email", "address", "credit_limit", "consent"]
-        labels = {"phone": "Ghana phone number", "credit_limit": "Individual credit limit"}
+        fields = ["name", "phone", "email", "address", "credit_limit", "consent", "debt_email_opt_in"]
+        labels = {"phone": "Ghana phone number", "credit_limit": "Individual credit limit", "debt_email_opt_in": "Send debt account emails (customer opt-in)"}
         help_texts = {
             "phone": "Enter 0241234567, 241234567 or +233241234567. KOFAD stores +233241234567.",
             "credit_limit": "Zero means no individual customer cap; company credit policy still applies.",
+            "debt_email_opt_in": "Only enable after the customer confirms this address and agrees to account emails. This does not enable promotions. Debt Settings controls the sending schedule.",
         }
 
     def clean_phone(self):
@@ -142,13 +143,14 @@ class DebtSettingsForm(forms.ModelForm):
     class Meta:
         model = DebtSettings
         fields = [
-            "delivery_mode", "reminder_time", "due_soon_enabled", "due_soon_days",
+            "delivery_mode", "email_delivery_mode", "reminder_time", "due_soon_enabled", "due_soon_days",
             "due_today_enabled", "overdue_enabled", "overdue_grace_value", "overdue_grace_unit",
             "overdue_repeat_days", "max_sms_7_days", "max_sms_30_days",
             "minimum_hours_between_sms", "minimum_balance", "skip_weekends", "message_template",
         ]
         labels = {
-            "delivery_mode": "Automatic reminder action",
+            "delivery_mode": "Automatic SMS action",
+            "email_delivery_mode": "Debt email action",
             "reminder_time": "Reminder run time",
             "due_soon_days": "Due-soon reminder days",
             "overdue_grace_value": "Grace period before overdue",
@@ -162,7 +164,8 @@ class DebtSettingsForm(forms.ModelForm):
         }
         widgets = {"reminder_time": forms.TimeInput(attrs={"type": "time"})}
         help_texts = {
-            "delivery_mode": "Off does nothing. Draft prepares messages for review. Send SMS immediately submits straight to Arkesel when live SMS is configured.",
+            "delivery_mode": "Off does nothing. Draft prepares messages for review. Send submits SMS to Arkesel when configured.",
+            "email_delivery_mode": "Off by default. Drafts must be approved by finance-authorised mail staff; Send queues to Brevo after customer consent, frequency and due-date checks.",
             "reminder_time": "Africa/Accra local time.",
             "due_soon_days": "Comma-separated days before due date, for example 7,3,1.",
             "overdue_grace_value": "Zero means a debt becomes overdue immediately after its due date.",
@@ -171,6 +174,18 @@ class DebtSettingsForm(forms.ModelForm):
             "minimum_balance": "Balances below this amount are ignored by automatic debt reminders.",
             "message_template": "Available placeholders: {company}, {customer}, {currency}, {balance}, {debt_count}, {due_sentence}, {business_phone}, {location}.",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Old clients and existing KOFAD settings posts may omit this new
+        # field. Preserve the stored owner's choice rather than resetting it.
+        if self.is_bound and "email_delivery_mode" not in self.data:
+            self.fields["email_delivery_mode"].required = False
+
+    def clean_email_delivery_mode(self):
+        return self.cleaned_data.get("email_delivery_mode") or (
+            self.instance.email_delivery_mode if self.instance.pk else "off"
+        )
 
     def clean_due_soon_days(self):
         raw = self.cleaned_data["due_soon_days"]

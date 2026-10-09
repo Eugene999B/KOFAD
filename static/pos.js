@@ -82,6 +82,8 @@
   const paymentPlan = document.querySelector("#payment-plan");
   const creditFields = document.querySelector("#credit-fields");
   const dueDate = document.querySelector("#due-date");
+  const creditCustomerEmail = document.querySelector("#credit-customer-email");
+  const creditDebtEmailConsent = document.querySelector("#credit-debt-email-consent");
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
   const paystackMomoPanel = document.querySelector("#paystack-momo-panel");
@@ -218,6 +220,8 @@
         paystackMomoEmail: paystackMomoEmail?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
+        creditCustomerEmail: creditCustomerEmail?.value || "",
+        creditDebtEmailConsent: Boolean(creditDebtEmailConsent?.checked),
         customerConsent: Boolean(customerConsent?.checked),
         customerWhatsApp: Boolean(customerWhatsApp?.checked),
         purchaseReference: purchaseReference?.value || "",
@@ -719,6 +723,8 @@
     if (customerSearch) customerSearch.value = "";
     if (paystackMomoPhone && customer.phone) paystackMomoPhone.value = customer.phone;
     if (paystackMomoEmail && customer.email) paystackMomoEmail.value = customer.email;
+    if (creditCustomerEmail) creditCustomerEmail.value = customer.email || "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = customer.debt_email_opt_in === true;
     changed();
     updateConsentAvailability();
     persist();
@@ -736,6 +742,8 @@
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
     if (customerEmail) customerEmail.value = "";
+    if (creditCustomerEmail) creditCustomerEmail.value = "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
     changed();
     updateConsentAvailability();
     persist();
@@ -861,6 +869,8 @@
     // A customer lookup must never overwrite the cashier\u0027s choice.
   }
 
+  creditCustomerEmail?.addEventListener("input", () => { changed(); persist(); });
+  creditDebtEmailConsent?.addEventListener("change", () => { changed(); persist(); });
   customerConsent?.addEventListener("change", () => {
     changed();
     persist();
@@ -1164,6 +1174,9 @@
       if ((plan === "part" || plan === "credit") && !dueDate?.value) {
         throw new Error("Choose a due date for the unpaid balance.");
       }
+      if ((plan === "part" || plan === "credit") && creditDebtEmailConsent?.checked && !(creditCustomerEmail?.value.trim() || customerEmail?.value.trim())) {
+        throw new Error("Enter the customer email before enabling credit email updates.");
+      }
     } else {
       if (!party) throw new Error("Search and choose a supplier before posting this purchase.");
       if (!purchaseDocumentDate?.value) throw new Error("Choose the supplier invoice date.");
@@ -1185,6 +1198,10 @@
         customer_name: newName,
         customer_phone: newPhone,
         customer_email: customerEmail?.value.trim() || ""
+      } : {}),
+      ...(!purchase && (paymentPlan?.value === "part" || paymentPlan?.value === "credit") ? {
+        customer_email: creditCustomerEmail?.value.trim() || customerEmail?.value.trim() || selectedCustomer?.email || "",
+        customer_debt_email_opt_in: Boolean(creditDebtEmailConsent?.checked)
       } : {}),
       ...(!purchase ? {
         customer_consent: Boolean((party || newName) && (customerConsent?.checked || customerWhatsApp?.checked)),
@@ -1564,6 +1581,8 @@
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
     if (customerEmail) customerEmail.value = "";
+    if (creditCustomerEmail) creditCustomerEmail.value = "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
     if (paystackMomoPhone) paystackMomoPhone.value = "";
     if (paystackMomoEmail) paystackMomoEmail.value = "";
     if (paystackMomoProvider) paystackMomoProvider.value = "mtn";
@@ -1668,7 +1687,8 @@
         customer: selectedCustomer,
         customer_name: customerName?.value.trim() || "",
         customer_phone: customerPhone?.value || "",
-        customer_email: customerEmail?.value.trim() || "",
+        customer_email: creditCustomerEmail?.value.trim() || customerEmail?.value.trim() || "",
+        customer_debt_email_opt_in: Boolean(creditDebtEmailConsent?.checked),
         customer_consent: Boolean(customerConsent?.checked),
         send_whatsapp: Boolean(customerWhatsApp?.checked),
         payment_plan: paymentPlan?.value || "full",
@@ -1717,6 +1737,8 @@
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
+      if (creditCustomerEmail) creditCustomerEmail.value = saved.customer_email || "";
+      if (creditDebtEmailConsent) creditDebtEmailConsent.checked = saved.customer_debt_email_opt_in === true;
       if (customerWhatsApp) customerWhatsApp.checked = saved.send_whatsapp === true;
       if (customerConsent) {
         if (Object.prototype.hasOwnProperty.call(saved, "customer_consent")) {
@@ -1752,6 +1774,8 @@
     if (paystackMomoEmail && restoredState.paystackMomoEmail) paystackMomoEmail.value = restoredState.paystackMomoEmail;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
+    if (creditCustomerEmail && restoredState.creditCustomerEmail) creditCustomerEmail.value = restoredState.creditCustomerEmail;
+    if (creditDebtEmailConsent && restoredState.creditDebtEmailConsent === true) creditDebtEmailConsent.checked = true;
     if (customerWhatsApp) customerWhatsApp.checked = restoredState.customerWhatsApp === true;
     if (customerConsent) {
       if (Object.prototype.hasOwnProperty.call(restoredState, "customerConsent")) {
@@ -1787,6 +1811,8 @@
       updateConsentAvailability();
     }
     if (customerWhatsApp) customerWhatsApp.checked = pendingBody.send_whatsapp === true;
+    if (creditCustomerEmail) creditCustomerEmail.value = pendingBody.customer_email || "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = pendingBody.customer_debt_email_opt_in === true;
     if (dueDate) dueDate.value = pendingBody.due_date || "";
     if (purchaseReference) purchaseReference.value = pendingBody.external_reference || "";
     if (purchaseDocumentDate) purchaseDocumentDate.value = pendingBody.document_date || purchaseDocumentDate.value;
