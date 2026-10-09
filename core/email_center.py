@@ -287,6 +287,21 @@ def deliver_outgoing(limit=10):
         if not claimed:
             continue
         row = EmailLetter.objects.get(pk=pk)
+        # Preserve part of today's limited free allowance for security codes,
+        # receipts and staff correspondence instead of exhausting it on campaigns.
+        if row.source_key and row.source_key.startswith("campaign:"):
+            from .brevo_email import usage_today
+            allowance = usage_today()
+            safety_reserve = min(50, allowance["limit"] // 5)
+            if allowance["remaining"] <= safety_reserve:
+                tomorrow = (timezone.localtime().replace(hour=0, minute=10, second=0,
+                                                         microsecond=0) + timedelta(days=1))
+                EmailLetter.objects.filter(pk=pk).update(
+                    status="failed", next_attempt_at=tomorrow,
+                    attempts=models.F("attempts") - 1,
+                    last_error="Reserved daily email allowance for security and transactions.",
+                )
+                continue
         from .email_campaigns import is_campaign_recipient_allowed
         if not is_campaign_recipient_allowed(row.source_key, row.to_address):
             EmailLetter.objects.filter(pk=pk).update(
