@@ -35,7 +35,7 @@ def approved_release_url(value, platform, kind=None):
         path = parsed.path or ""
         owned = hostname == "downloads.kofadimpex.com"
         if platform == "ios":
-            return value.strip() if hostname == "apps.apple.com" and re.search(r"/id\\d+(?:/)?$", path) else ""
+            return value.strip() if hostname == "apps.apple.com" and re.search(r"/id\d+(?:/)?$", path) else ""
         if platform == "android":
             identifier = parse_qs(parsed.query).get("id", [""])[0]
             expected = "com.kofadimpex." + ("market" if kind == "customer" else "staff") if kind else ""
@@ -43,11 +43,11 @@ def approved_release_url(value, platform, kind=None):
                 identifier == expected if expected else bool(identifier)
             ):
                 return value.strip()
-            if owned and path.startswith("/android/" + kind + "/") and path.lower().endswith(".apk") and not parsed.query:
+            if owned and kind in {"customer", "staff"} and path.startswith("/android/" + kind + "/") and path.lower().endswith(".apk") and not parsed.query:
                 return value.strip()
             return ""
         if platform == "windows":
-            if owned and path.startswith("/windows/" + kind + "/") and path.lower().endswith((".exe", ".msi", ".msix")) and not parsed.query:
+            if owned and kind in {"customer", "staff"} and path.startswith("/windows/" + kind + "/") and path.lower().endswith((".exe", ".msi", ".msix")) and not parsed.query:
                 return value.strip()
             return ""
     except ValueError:
