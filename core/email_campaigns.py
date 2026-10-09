@@ -48,6 +48,7 @@ def dashboard(request):
                     if not settings.KOFAD_EMAIL_ENABLED or not ready() or settings.KOFAD_EMAIL_PROVIDER != "brevo":
                         raise ValidationError("Connect and verify the business email provider before activating campaigns.")
                     campaign.active = True
+                    campaign.completed_queuing_at = None
                     messages.success(request, "Campaign approved. KOFAD will queue opted-in customers in batches.")
                 else:
                     campaign.active = False
@@ -57,7 +58,7 @@ def dashboard(request):
                         status__in=["queued", "failed"],
                     ).update(status="suppressed", last_error="Campaign paused by owner.")
                     messages.success(request, "Campaign paused; unsent queued messages suppressed.")
-                campaign.save(update_fields=["active"])
+                campaign.save(update_fields=["active", "completed_queuing_at"] if action == "activate" else ["active"])
                 audit(request.user, None, f"email.campaign_{action}", campaign.pk)
             else:
                 raise ValidationError("Unknown campaign action.")
@@ -113,7 +114,7 @@ def queue_active_campaigns(limit=MAX_BATCH):
     if not mailbox:
         return 0
     queued = 0
-    for campaign in EmailCampaign.objects.filter(active=True).order_by("created_at")[:5]:
+    for campaign in EmailCampaign.objects.filter(active=True, completed_queuing_at__isnull=True).order_by("created_at")[:5]:
         eligible = EmailIdentity.objects.filter(
             kind="customer", verified_at__isnull=False,
             marketing_emails_enabled=True,
@@ -140,7 +141,8 @@ def queue_active_campaigns(limit=MAX_BATCH):
             queued += 1
         if not remaining:
             campaign.last_queued_at = timezone.now()
-            campaign.save(update_fields=["last_queued_at"])
+            campaign.completed_queuing_at = timezone.now()
+            campaign.save(update_fields=["last_queued_at", "completed_queuing_at"])
         elif queued >= limit:
             break
     return queued
