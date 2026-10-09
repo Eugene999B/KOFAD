@@ -46,9 +46,12 @@ class ChannelAndExportTests(Fixtures, TestCase):
         self.assertFalse(Message.objects.exists())
         submit.assert_not_called()
 
-    def test_customer_register_has_only_operational_columns(self):
+    def test_customer_register_includes_approved_contact_details_but_no_unknown_fields(self):
         columns = [(key, key.title()) for key in ("name", "email", "phone", "address", "messages", "outstanding")]
-        self.assertEqual([key for key, _ in select_columns("customers", columns)], ["name", "phone", "outstanding"])
+        self.assertEqual(
+            [key for key, _ in select_columns("customers", columns)],
+            ["name", "phone", "email", "address", "outstanding"],
+        )
 
     def test_excel_handles_aware_dates_numeric_values_and_formula_text(self):
         now = timezone.now()
