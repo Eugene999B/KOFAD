@@ -57,3 +57,9 @@ html[data-theme="dark"] .native-market-promo p{color:#c4dbe0}
 @media(max-width:900px){.native-platform-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.native-download-page .native-download-hero{grid-template-columns:minmax(0,1fr) 170px}}
 @media(max-width:640px){.native-download-page{padding:14px}.native-download-page .native-download-hero{grid-template-columns:minmax(0,1fr);min-height:0;padding:25px;border-radius:20px}.native-device-preview{display:none}.native-platform-grid,.native-explainer{grid-template-columns:1fr}.native-platform{min-height:0;padding:17px}.native-market-promo{flex-direction:column;align-items:flex-start}.native-market-promo a{white-space:normal;width:100%;box-sizing:border-box}.native-suggest{bottom:85px}}
 @media(prefers-reduced-motion:reduce){.native-device-frame{transform:none}}
+
+.native-product-share{display:inline-flex;align-items:center;gap:8px;border:1px solid #b0d3d4;border-radius:12px;background:linear-gradient(110deg,#eefafa,#fff);color:#126a73;cursor:pointer;padding:10px 15px;font-size:12px;font-weight:800;margin:9px 0 13px}
+.native-product-share[hidden],.native-connection-notice[hidden]{display:none!important}
+.native-product-share:focus-visible{outline:3px solid #38aaa7;outline-offset:3px}
+.native-connection-notice{position:fixed;top:12px;left:50%;transform:translateX(-50%);max-width:min(580px,calc(100vw - 24px));box-sizing:border-box;z-index:300;background:#fff2d9;color:#5a380b;border:1px solid #e7b862;border-radius:13px;padding:12px 16px;font-size:12px;line-height:1.55;font-weight:750;box-shadow:0 10px 24px #0002;text-align:center}
+html[data-theme=dark] .native-product-share{background:#1d3b45;color:#b4eeee;border-color:#3e7b82}
