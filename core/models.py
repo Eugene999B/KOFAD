@@ -1051,6 +1051,26 @@ class StaffInvitation(models.Model):
     ])
     created_at = models.DateTimeField(auto_now_add=True)
 
+class CustomerServiceContact(models.Model):
+    """Public support contact controlled from KOFAD company settings."""
+    CHANNELS = [("call", "Customer care phone"), ("whatsapp", "Customer care WhatsApp")]
+    label = models.CharField(max_length=70)
+    channel = models.CharField(max_length=12, choices=CHANNELS)
+    number = models.CharField(max_length=20)
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "pk"]
+
+    @property
+    def contact_url(self):
+        if self.channel == "whatsapp":
+            return "https://wa.me/" + "".join(c for c in self.number if c.isdecimal())
+        return "tel:" + self.number
+
+
+
 
 # Department mailboxes are imported so Django discovers their migrations.
 from .email_models import EmailMailbox, EmailMailboxMember, EmailLetter  # noqa: E402, F401
