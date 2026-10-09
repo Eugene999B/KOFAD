@@ -14,7 +14,10 @@ CHARCOAL, COPPER, CREAM, LIGHT, WHITE = "142B3B", "96603B", "F8F5EE", "E8EEF0", 
 
 def safe(value):
     text = "" if value is None else str(value)
-    return "'" + text if text.startswith(("=", "+", "-", "@", "\t", "\r")) else text
+    # Spreadsheet software can ignore leading whitespace before formula tokens.
+    # Escape hostile customer-supplied strings in Excel and CSV alike.
+    trimmed = text.lstrip(" \t\r\n")
+    return "'" + text if trimmed.startswith(("=", "+", "-", "@")) or text.startswith(("\t", "\r", "\n")) else text
 
 
 def display(value):
