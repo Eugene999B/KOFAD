@@ -82,7 +82,7 @@ def accounting(request, branch):
         messages.error(request, problem(exc))
         return redirect("/accounting/")
     view = request.GET.get("view", "overview")
-    if view not in {"overview", "trial", "ledger", "pnl", "balance", "cashflow", "journals"}:
+    if view not in {"overview", "trial", "ledger", "pnl", "balance", "cashflow", "journals", "integrity"}:
         view = "overview"
 
     if request.method == "POST":
@@ -168,6 +168,17 @@ def accounting(request, branch):
             })
     control_ok_count = sum(1 for item in control_checks if item["ok"])
     equation_ok = report["balance_check"] == 0
+    integrity_rows, integrity_summary = [], {}
+    integrity_page = None
+    if view == "integrity":
+        from .finance_integrity import financial_controls
+        try:
+            checks, integrity_summary = financial_controls(branch, first, last)
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+            return redirect("/accounting/?view=overview")
+        integrity_rows = [row for row in checks if row["status"] != "OK"]
+        integrity_page = Paginator(integrity_rows, 80).get_page(request.GET.get("page"))
 
     return render(request, "accounting.html", {
         "title": "Accounting Intelligence",
@@ -190,6 +201,10 @@ def accounting(request, branch):
         "control_checks": control_checks,
         "control_ok_count": control_ok_count,
         "equation_ok": equation_ok,
+        "integrity_summary": integrity_summary,
+        "integrity_page": integrity_page,
+        "integrity_count": len(integrity_rows),
+        "integrity_checked": integrity_summary.get("Checks completed", 0),
         "can_journal": request.user.has_perm("core.operate_finance") or request.user.has_perm("core.manage_company") or request.user.is_superuser,
         "owner_direct": request.user.has_perm("core.manage_company") or request.user.is_superuser,
     })
@@ -205,7 +220,18 @@ def accounting_export(request, branch, format):
     view = request.GET.get("view", "trial")
     report = engine.statements(branch, first, last)
 
-    if view == "ledger":
+    if view == "integrity":
+        from .finance_integrity import financial_controls, COLUMNS
+        try:
+            rows, _ = financial_controls(branch, first, last)
+        except ValidationError as exc:
+            return render(request, "error.html", {
+                "title": "Narrow the accounting audit range",
+                "error": problem(exc),
+            }, status=400)
+        columns = COLUMNS
+        title, sheet = "Financial integrity reconciliation", "Finance Integrity"
+    elif view == "ledger":
         rows = _filtered_ledger(request, engine.ledger(branch, first, last))
         columns = [
             ("date", "Date"), ("reference", "Reference"), ("source", "Source"),
@@ -264,5 +290,7 @@ def accounting_export(request, branch, format):
             "KOFAD derives this double-entry management ledger from controlled operational source records and approved manual journals.",
             "The statements are IFRS-informed management information. Statutory reporting still requires the entity's accounting policies, period-end adjustments, disclosures and professional review.",
             f"Balance equation check: {report['balance_check']}. A non-zero value requires accounting review.",
+            "Financial integrity checks identify source mismatches and closing variances; they do not alter any historical financial record.",
+            "The payment ledger is not a substitute for independent Paystack, Hubtel, MoMo or bank settlement statements.",
         ],
     )

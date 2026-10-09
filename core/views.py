@@ -1392,25 +1392,20 @@ def statement(request, pk):
     branch = branch_for(request)
     s.permit(request.user, branch, "view_reports" if request.user.has_perm("core.view_reports") else "operate_finance")
     party = get_object_or_404(Party, pk=pk, branch=branch)
-    docs = Document.objects.filter(party=party).select_related("original").order_by("created_at")
-    running = Decimal(0)
-    rows = []
-    for doc in docs:
-        if doc.kind in ("sale", "purchase", "creditor_charge"):
-            change = doc.total
-        elif doc.kind in ("collection", "supplier_payment"):
-            change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
-        elif doc.kind in ("return", "supplier_return"):
-            change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
-        elif doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
-            change = sum((a.amount for a in doc.original.allocations.all()), Decimal(0))
-        elif doc.kind == "reversal" and doc.original_id and doc.original.kind == "creditor_charge":
-            change = -doc.original.total
-        else:
-            change = Decimal(0)
-        running += change
-        rows.append({"doc": doc, "change": change, "running": running})
-    return render(request, "statement.html", {"title": party.name, "party": party, "rows": rows, "balance": running})
+    from .statement_engine import account_statement
+    try:
+        rows, running = account_statement(party, branch)
+    except ValidationError as exc:
+        s.audit(request.user, branch, "statement.reconciliation_failed", party.pk, {
+            "details": problem(exc),
+        }, category="accounting", severity="warning")
+        return render(request, "error.html", {
+            "title": "Account statement needs reconciliation",
+            "error": problem(exc),
+        }, status=400)
+    return render(request, "statement.html", {
+        "title": party.name, "party": party, "rows": rows, "balance": running,
+    })
 
 
 @protected("operate_finance")

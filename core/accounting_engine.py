@@ -78,6 +78,9 @@ def _document_entries(branch, first, last):
         "payments", "lines", "lines__product", "allocations", "settlements"
     )
     for doc in docs:
+        # An approved correction produces a distinct reversal entry on its own
+        # date. Never also remove the original accrual/payment: doing both
+        # leaves a phantom opposite-sign expense, cash or payable balance.
         day = _doc_date(doc)
         if day < first or day > last:
             continue
@@ -123,15 +126,11 @@ def _document_entries(branch, first, last):
             _row(rows, day, ref, "Supplier return", note, "1200", credit=doc.total)
 
         elif doc.kind == "creditor_charge":
-            if hasattr(doc, "correction") and doc.correction.status == "approved":
-                continue
             code = EXPENSE_ACCOUNT.get(doc.payable_category or "other", "6990")
             _row(rows, day, ref, "Creditor bill", note, code, debit=doc.total)
             _row(rows, day, ref, "Creditor bill", "Trade payable created", "2000", credit=doc.total)
 
         elif doc.kind == "expense":
-            if hasattr(doc, "correction") and doc.correction.status == "approved":
-                continue
             code = EXPENSE_ACCOUNT.get(doc.expense_category or "other", "6990")
             _row(rows, day, ref, "Expense", note, code, debit=doc.total)
             if doc.expense_funding_source == "owner_manager_funds":
@@ -143,15 +142,11 @@ def _document_entries(branch, first, last):
                     _row(rows, day, ref, "Expense", note, cash_code, credit=amount)
 
         elif doc.kind == "collection":
-            if hasattr(doc, "correction") and doc.correction.status == "approved":
-                continue
             for code, amount in cash.items():
                 _row(rows, day, ref, "Receivable collection", note, code, debit=amount)
             _row(rows, day, ref, "Receivable collection", "Customer debt collected", "1100", credit=doc.total)
 
         elif doc.kind == "supplier_payment":
-            if hasattr(doc, "correction") and doc.correction.status == "approved":
-                continue
             _row(rows, day, ref, "Supplier payment", "Trade payable settled", "2000", debit=doc.total)
             for code, amount in cash.items():
                 _row(rows, day, ref, "Supplier payment", note, code, credit=amount)

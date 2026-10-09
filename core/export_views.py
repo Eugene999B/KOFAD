@@ -40,6 +40,8 @@ DATASETS = {
     "market_catalog": ("Published Market catalog", ("operate_sales", "operate_inventory", "manage_company", "view_reports")),
     "customer_support": ("Customer support conversations", ("operate_sales", "manage_company", "view_reports")),
     "online_returns": ("Online return requests", ("operate_sales", "operate_finance", "manage_company", "view_reports")),
+    "financial_integrity": ("Financial integrity & reconciliation checks", ("operate_finance", "view_reports", "manage_company")),
+    "cash_channels": ("Signed cash, MoMo, bank, card & payroll movements", ("operate_finance", "view_reports", "manage_company")),
     "delivery_tracking": ("Online delivery tracking", ("operate_sales", "manage_company", "view_reports")),
 }
 
@@ -270,6 +272,15 @@ def _dates(request):
 
 
 def _rows(request, dataset, branch, first, last):
+    if dataset == "financial_integrity":
+        from .finance_integrity import financial_controls, COLUMNS
+        rows, _ = financial_controls(branch, first, last)
+        return rows, COLUMNS
+
+    if dataset == "cash_channels":
+        from .finance_integrity import payment_channel_rows
+        return payment_channel_rows(branch, first, last)
+
     if dataset == "customers" or dataset == "suppliers":
         kind = "customer" if dataset == "customers" else "supplier"
         rows = []
@@ -919,6 +930,41 @@ def download(request, format):
         first, last, start, end = _dates(request)
         rows, columns = _rows(request, dataset, branch, first, last)
         columns = select_columns(dataset, columns)
+        financial_summary = {}
+        financial_notes = []
+        if dataset == "financial_integrity":
+            # These are checks, not accounting journal adjustments. No
+            # exception is automatically fixed or silently omitted.
+            exceptions = [r for r in rows if r["status"] != "OK"]
+            financial_summary = {
+                "Checks passed": len(rows) - len(exceptions),
+                "Checks needing review": len([r for r in exceptions if r["status"] == "REVIEW"]),
+                "Daily closing variances": len([r for r in exceptions if r["status"] == "VARIANCE"]),
+                "Absolute discrepancies (GHS)": sum(
+                    (abs(r["difference"]) for r in exceptions), Decimal("0")
+                ),
+            }
+            financial_notes = [
+                "Read-only audit: differences require investigation; source records and historical balances have not been changed.",
+                "Closing variances are evidence of a physical/channel mismatch, not proof of fraud or a bank settlement.",
+                "Provider requests are checked against frozen order or POS amounts; independent bank/provider settlement statements must still be reconciled.",
+            ]
+        elif dataset == "cash_channels":
+            signed = lambda name: sum(  # noqa: E731
+                (r["amount"] for r in rows if r["channel"].casefold() == name.casefold()),
+                Decimal("0"),
+            )
+            financial_summary = {
+                "Net cash movement (GHS)": signed("Cash"),
+                "Net MoMo movement (GHS)": signed("MoMo"),
+                "Net bank movement (GHS)": signed("Bank"),
+                "Net card movement (GHS)": signed("Card"),
+                "Net all channels (GHS)": sum((r["amount"] for r in rows), Decimal("0")),
+            }
+            financial_notes = [
+                "Signed movements: positive = receipt, negative = payment out.",
+                "Includes ledger cash movements and payroll payments but does not imply a bank reconciliation or gateway settlement has cleared.",
+            ]
         s.audit(request.user, branch, "export.downloaded", dataset, {
             "format": format, "start": start, "end": end, "rows": len(rows),
         })
@@ -937,11 +983,12 @@ def download(request, format):
             },
             summary={
                 "Records": len(rows),
+                **financial_summary,
                 **({"Outstanding (" + company.currency + ")": sum(
                     (row.get("outstanding", Decimal("0")) for row in rows), Decimal("0")
                 )} if dataset in {"customers", "suppliers", "creditors", "debts"} else {}),
             },
-            notes=["Generated directly from KOFAD with the current user's permission and location scope."],
+            notes=["Generated directly from KOFAD with the current user's permission and location scope.", *financial_notes],
         )
     except ValidationError as exc:
         return render(request, "error.html", {
@@ -957,23 +1004,22 @@ def statement_download(request, pk, format):
     if not _allowed(request.user, ("operate_finance", "view_reports")):
         raise PermissionDenied("You do not have permission to export account statements.")
     party = get_object_or_404(Party, pk=pk, branch=branch)
-    running = Decimal("0")
-    rows = []
-    for doc in Document.objects.filter(party=party).order_by("created_at"):
-        change = doc.balance if doc.kind in ("sale", "purchase") else -sum(
-            (allocation.amount for allocation in doc.allocations.all()), Decimal("0")
-        )
-        if doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
-            change = sum((allocation.amount for allocation in doc.original.allocations.all()), Decimal("0"))
-        running += change
-        rows.append({
-            "date": timezone.localtime(doc.created_at).strftime("%Y-%m-%d %H:%M"),
-            "reference": doc.reference,
-            "type": doc.get_kind_display(),
-            "change": change,
-            "running": running,
-            "note": doc.note,
-        })
+    from .statement_engine import account_statement
+    try:
+        statement, running = account_statement(party, branch)
+    except ValidationError as exc:
+        s.audit(request.user, branch, "statement.reconciliation_failed", party.pk, {
+            "details": "; ".join(exc.messages),
+        }, category="accounting", severity="warning")
+        return render(request, "error.html", {
+            "title": "Statement needs reconciliation",
+            "error": "; ".join(exc.messages),
+        }, status=400)
+    rows = [{
+        "date": row["date"].strftime("%Y-%m-%d %H:%M"),
+        "reference": row["reference"], "type": row["type"],
+        "change": row["change"], "running": row["running"], "note": row["note"],
+    } for row in statement]
     s.audit(request.user, branch, "statement.exported", party.pk, {
         "format": format, "rows": len(rows), "balance": str(running),
     })
