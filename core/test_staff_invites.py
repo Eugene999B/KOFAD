@@ -63,6 +63,26 @@ class StaffInvitationSecurityTests(TestCase):
         self.assertEqual(self.client.get(new_url).status_code, 302)
         self.assertEqual(renewed.user_id, self.newcomer.pk)
 
+    def test_activation_page_has_isolated_css_and_secure_form(self):
+        _, url = self.invite()
+        self.assertEqual(self.client.get(url).status_code, 302)
+        response = self.client.get("/staff-invite/complete/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "staff-activation")
+        self.assertContains(response, "staff-activation")
+        self.assertContains(response, 'name="password"')
+        self.assertContains(response, 'name="password_confirm"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        self.assertContains(response, 'autocomplete="new-password"')
+        self.assertNotContains(response, 'app.css')
+
+    def test_expired_invitation_uses_the_same_isolated_layout(self):
+        response = self.client.get("/staff-invite/complete/")
+        self.assertEqual(response.status_code, 410)
+        self.assertContains(response, "staff-activation", status_code=410)
+        self.assertContains(response, "Back to staff sign in", status_code=410)
+        self.assertNotContains(response, 'app.css', status_code=410)
+
     @override_settings(SMS_ENABLED=False, KOFAD_EMAIL_ENABLED=False)
     def test_unavailable_delivery_methods_are_blocked(self):
         with self.assertRaises(ValidationError):

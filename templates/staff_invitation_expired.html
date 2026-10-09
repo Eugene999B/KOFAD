@@ -1,21 +1,24 @@
-{% load static %}<!doctype html><html lang="en"><head>
+{% load static %}<!doctype html>
+<html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow,noarchive">
-<meta name="referrer" content="no-referrer">
-<title>Activate your KOFAD staff account</title>
-<link rel="stylesheet" href="{% static 'app.css' %}">
-<link rel="stylesheet" href="{% static 'kofad-contrast-mobile.css' %}">
-<style>
-body{min-height:100svh;display:grid;place-items:center;padding:24px;margin:0;background:#eff5f8;color:#0e2c40;font:16px/1.5 system-ui,sans-serif}
-.invite-card{width:min(100%,460px);box-sizing:border-box;padding:clamp(22px,5vw,38px);border:1px solid #ccdce4;border-radius:23px;background:#fff;box-shadow:0 16px 48px #1033481c}
-.invite-card img{width:82px;max-height:80px;object-fit:contain}
-.invite-card h1{font-size:clamp(24px,6vw,32px);line-height:1.17;color:#0e2c40}
-.invite-card p{color:#476476}
-.invite-card label{display:block;margin-top:15px;font-weight:650}
-.invite-card input{width:100%;box-sizing:border-box;padding:13px 15px;min-height:49px;border:1px solid #9cb7c5;border-radius:12px;font:inherit}
-.invite-card button{width:100%;min-height:50px;margin:20px 0 0;background:#0e3b56;color:#fff;border:0;border-radius:12px;font-weight:750;cursor:pointer}
-.invite-card a{color:#075d72}
-</style></head><body><main class="invite-card">
-<img src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE">
-<h1>Invitation unavailable</h1><p>This private link has expired, was already used, or is invalid. Ask your KOFAD administrator to renew your invitation.</p>
-</main></body></html>
+<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#f7f8fa">
+<title>Invitation unavailable · KOFAD</title>
+<link rel="icon" type="image/svg+xml" href="{% static 'brand/kofad-official-logo.svg' %}">
+<link rel="stylesheet" href="{% static 'staff-activation.css' %}">
+</head><body class="staff-invite">
+<header class="site-head"><a href="{% url 'login' %}" class="brand" aria-label="KOFAD staff sign in"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE" width="170" height="93"></a><span class="secure-label">Private staff onboarding</span></header>
+<main class="invite-layout">
+<aside class="invite-story"><div><p class="overline">KOFAD IMPEX ENTERPRISE</p>
+<h2>Your workspace.<br><em>Ready when you are.</em></h2><p class="story-copy">One secure account for the business tools and locations your administrator has assigned.</p></div>
+<ul class="trust-list"><li><b aria-hidden="true">✓</b>Your account is protected</li><li><b aria-hidden="true">✓</b>Invitation links are private</li><li><b aria-hidden="true">✓</b>Administrators can send a fresh link</li></ul></aside>
+<section class="invite-content" aria-labelledby="unavailable-title">
+<div class="expired-mark" aria-hidden="true">!</div>
+<h1 id="unavailable-title">This link is no longer available</h1>
+<p class="intro">This staff invitation has expired, already been used, or been replaced by a new invitation. For your security, links work once and expire after 24 hours.</p>
+<p class="intro">Contact your KOFAD system administrator for a fresh invitation. If your password is already set, you can sign in below.</p>
+<a class="secondary-link" href="{% url 'login' %}">← Back to staff sign in</a>
+<p class="fine-print">Never share invitation links or passwords with anyone.</p>
+</section></main>
+<footer class="site-foot">© {% now "Y" %} KOFAD IMPEX ENTERPRISE · Secure business access</footer>
+</body></html>
