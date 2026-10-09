@@ -20,4 +20,27 @@
   }
   selector.addEventListener("change", refresh);
   refresh();
+
+  const search = document.getElementById("export-library-query");
+  const empty = document.getElementById("export-library-no-results");
+  if (search && empty) {
+    const groups = [...document.querySelectorAll(".export-library-group")];
+    const updateLibrary = () => {
+      const term = search.value.trim().toLocaleLowerCase();
+      let visible = 0;
+      groups.forEach((group) => {
+        const items = [...group.querySelectorAll(".export-library-item")];
+        let groupVisible = 0;
+        items.forEach((item) => {
+          const match = item.textContent.toLocaleLowerCase().includes(term);
+          item.hidden = !match;
+          if (match) groupVisible += 1;
+        });
+        group.hidden = groupVisible === 0;
+        visible += groupVisible;
+      });
+      empty.hidden = visible !== 0;
+    };
+    search.addEventListener("input", updateLibrary);
+  }
 })();
