@@ -52,7 +52,6 @@ urlpatterns = [
     path("api/trades/", v.complete_trade),
     path("api/pos/paystack-momo/<str:reference>/otp/", v.pos_paystack_momo_otp, name="pos_paystack_momo_otp"),
     path("api/pos/paystack-momo/start/", v.pos_paystack_momo_start, name="pos_paystack_momo_start"),
-    path("api/pos/paystack-momo/recipient-review/", momo_payments.recipient_review, name="pos_momo_recipient_review"),
     path("payments/momo/", momo_payments.payments_history, name="pos_momo_payments"),
     path("payments/momo/<str:reference>/", momo_payments.payment_detail, name="pos_momo_payment"),
     path("payments/momo/<str:reference>/verify/", momo_payments.manual_verify, name="pos_momo_verify"),
