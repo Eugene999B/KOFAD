@@ -259,12 +259,64 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         payload = self.payload()
         payload["payments"][0]["amount"] = "10"
         payload["payments"][1]["amount"] = "40"
-        with self.assertRaisesMessage(ValidationError, "full MoMo payment"):
+        with self.assertRaisesMessage(ValidationError, "one positive Mobile Money amount"):
             pos_paystack.start(
                 self.user, self.branch, payload, uuid.uuid4(),
                 "0551234567", "mtn", "customer@example.test",
             )
         post.assert_not_called()
+
+    @patch("core.pos_paystack.requests.get")
+    @patch("core.pos_paystack.requests.post")
+    def test_verified_partial_momo_posts_deposit_and_customer_debt_once(self, post, get):
+        from datetime import timedelta
+        from django.utils import timezone
+        from core import services
+        key = uuid.uuid4()
+        reference = pos_paystack._reference_from_key(key)
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "20.00"
+        payload["due_date"] = str(timezone.localdate() + timedelta(days=1))
+        post.return_value = self.charge_response(reference)
+        created = pos_paystack.start(
+            self.user, self.branch, payload, key,
+            "0551234567", "mtn", "customer@example.test",
+        )
+        self.assertTrue(created["waiting"])
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], "2000")
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(Movement.objects.count(), 0)
+        get.return_value = self.verify_response(reference, amount=2000)
+        doc = pos_paystack.reconcile(reference, force=True)
+        self.assertEqual(doc.total, Decimal("50.00"))
+        self.assertEqual(doc.paid, Decimal("20.00"))
+        self.assertEqual(services.balance(doc), Decimal("30.00"))
+        self.assertEqual(doc.party_id, self.customer.pk)
+        self.assertIsNotNone(doc.due_date)
+        self.assertEqual(Payment.objects.get(document=doc, method="momo").amount, Decimal("20.00"))
+        self.assertEqual(pos_paystack.reconcile(reference, force=True).pk, doc.pk)
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(Movement.objects.count(), 1)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_partial_momo_cannot_create_debt_without_due_date(self, post):
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "20.00"
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(self.user, self.branch, payload, uuid.uuid4(),
+                               "0551234567", "mtn", "")
+        post.assert_not_called()
+        self.assertEqual(Document.objects.count(), 0)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_deposit_not_accepted_over_sale_total(self, post):
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "60.00"
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(self.user, self.branch, payload, uuid.uuid4(),
+                               "0551234567", "mtn", "")
+        post.assert_not_called()
+        self.assertEqual(Document.objects.count(), 0)
 
     @patch("core.pos_paystack.requests.post")
     @patch("core.paystack_challenges.charge_step")
