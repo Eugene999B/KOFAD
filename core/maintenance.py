@@ -605,9 +605,35 @@ def recent_backup_downloaded(session):
     return timezone.now().timestamp() - timestamp <= RECENT_BACKUP_SECONDS
 
 
-def mark_backup_downloaded(session):
+def mark_backup_downloaded(session, encrypted_bytes=None):
     session["kofad_recent_backup_at"] = timezone.now().timestamp()
+    session["kofad_recent_backup_sha256"] = (
+        hashlib.sha256(encrypted_bytes).hexdigest() if encrypted_bytes else ""
+    )
+    # A newer download always requires fresh round-trip validation.
+    session.pop("kofad_verified_backup_sha256", None)
     session.modified = True
+
+
+def mark_backup_verified(session, file_sha256):
+    """Prove the operator possesses the exact file downloaded this session."""
+    if not recent_backup_downloaded(session):
+        return False
+    digest = session.get("kofad_recent_backup_sha256", "")
+    if not digest or not hmac.compare_digest(digest, str(file_sha256 or "")):
+        return False
+    session["kofad_verified_backup_sha256"] = digest
+    session.modified = True
+    return True
+
+
+def recent_backup_verified(session):
+    if not recent_backup_downloaded(session):
+        return False
+    digest = session.get("kofad_recent_backup_sha256", "")
+    return bool(digest and hmac.compare_digest(
+        digest, session.get("kofad_verified_backup_sha256", "")
+    ))
 
 
 COVERAGE_GROUPS = (
