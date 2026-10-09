@@ -175,6 +175,18 @@ class DebtSettingsForm(forms.ModelForm):
             "message_template": "Available placeholders: {company}, {customer}, {currency}, {balance}, {debt_count}, {due_sentence}, {business_phone}, {location}.",
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Old clients and existing KOFAD settings posts may omit this new
+        # field. Preserve the stored owner's choice rather than resetting it.
+        if self.is_bound and "email_delivery_mode" not in self.data:
+            self.fields["email_delivery_mode"].required = False
+
+    def clean_email_delivery_mode(self):
+        return self.cleaned_data.get("email_delivery_mode") or (
+            self.instance.email_delivery_mode if self.instance.pk else "off"
+        )
+
     def clean_due_soon_days(self):
         raw = self.cleaned_data["due_soon_days"]
         values = []
