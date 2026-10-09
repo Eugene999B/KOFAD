@@ -114,6 +114,16 @@
         <p>New customer emails will appear here. Try clearing filters if you're looking for an earlier conversation.</p></div>
         {% endfor %}
       </nav>
+      {% if unthreaded_letters %}
+      <section class="mail-older-letters" aria-label="Older incoming emails">
+        <h4>Unfiled incoming emails <span>Earlier correspondence</span></h4>
+        {% for letter in unthreaded_letters %}
+        <a href="{% url 'email_history' %}?mailbox={{ selected.pk }}&q={{ letter.subject|urlencode }}"
+           class="mail-older-letter"><strong>{{ letter.subject|default:"(No subject)" }}</strong>
+          <small>{{ letter.from_address }} · {{ letter.created_at|date:"j M, H:i" }}</small></a>
+        {% endfor %}
+      </section>
+      {% endif %}
     </section>
 
     <section class="mail-thread-pane" id="conversation" aria-label="Selected customer conversation">
