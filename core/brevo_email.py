@@ -57,7 +57,8 @@ def usage_today():
     }
 
 
-def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None,\n               return_message_id=False):
+def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None,
+               return_message_id=False):
     if not ready():
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
