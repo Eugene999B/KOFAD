@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
-from django.test import override_settings
+from django.contrib.auth.hashers import is_password_usable
+from django.utils import timezone
 from marketplace.models import CustomerAccount, EmailIdentity, GoogleIdentity
 from .test_google_oauth import GOOGLE_TEST, GoogleOAuthContractTests
 
@@ -30,8 +31,7 @@ class GoogleFirstCustomerRegistrationTests(GoogleOAuthContractTests):
         self.assertEqual(finish.status_code, 302)
         customer = CustomerAccount.objects.get(full_name="New Market Shopper")
         self.assertIsNone(customer.phone)
-        self.assertFalse(customer.has_usable_password() if hasattr(customer, "has_usable_password") else
-                         __import__("django.contrib.auth.hashers", fromlist=["is_password_usable"]).is_password_usable(customer.password_hash))
+        self.assertFalse(is_password_usable(customer.password_hash))
         self.assertEqual(self.client.session["market_customer_id"], customer.pk)
         self.assertEqual(GoogleIdentity.objects.get(kind="customer", owner_id=customer.pk).subject, claims.return_value["subject"])
         self.assertEqual(EmailIdentity.objects.get(kind="customer", owner_id=customer.pk).email, "new-shopper@gmail.com")
@@ -45,7 +45,7 @@ class GoogleFirstCustomerRegistrationTests(GoogleOAuthContractTests):
         EmailIdentity.objects.create(
             kind="customer", owner_id=self.customer.pk,
             email="existing-shopper@gmail.com",
-            verified_at=__import__("django.utils.timezone", fromlist=["now"]).now(),
+            verified_at=timezone.now(),
         )
         claims.return_value = {"subject": "new-google-identity", "email": "existing-shopper@gmail.com"}
         pending = self._start("/market/auth/google/login/")
