@@ -58,10 +58,11 @@ class Command(BaseCommand):
             # In particular, a disabled/restricted owner must not be promoted
             # back to superuser simply because a legacy variable remains set.
             if not (user.is_active and user.is_staff and user.is_superuser):
-                raise CommandError(
-                    "Existing owner account is disabled or not an active superuser. "
-                    "Deployment cannot restore privileges; use audited administrator recovery."
+                self.stderr.write(
+                    "Existing owner account is disabled or not an active superuser; "
+                    "skipping owner provisioning without changing permissions."
                 )
+                return
             # Existing account identity, recovery phone, access scope and MFA
             # are owned by authenticated administration, not stale variables.
             self.stdout.write(
