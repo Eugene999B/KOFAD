@@ -26,7 +26,10 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .email_models import EmailLetter, EmailMailbox, EmailMailboxMember
+from .email_models import (EmailLetter, EmailMailbox, EmailMailboxMember,
+                           EmailConversation, EmailConversationNote)
+from .email_threads import (record_incoming, new_outgoing_conversation, thread_subject,
+                            record_outgoing_status)
 
 logger = logging.getLogger(__name__)
 MAX_INGEST_BYTES = 1024 * 1024
@@ -65,7 +68,7 @@ def _address(value):
     return address
 
 
-def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id=""):
+def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None):
     if not (getattr(settings, "KOFAD_EMAIL_ENABLED", False)
             and settings.KOFAD_EMAIL_PROVIDER == "brevo"
             and settings.KOFAD_BREVO_API_KEY):
@@ -76,18 +79,19 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
             defaults=dict(mailbox=mailbox, direction="outbound", status="queued",
                           from_address=mailbox.address, to_address=recipient,
                           subject=subject, body_text=body, created_by=user,
-                          in_reply_to=reply_id, next_attempt_at=timezone.now()),
+                          in_reply_to=reply_id, conversation=conversation,
+                          next_attempt_at=timezone.now()),
         )
         return letter
     return EmailLetter.objects.create(
         mailbox=mailbox, direction="outbound", status="queued",
         from_address=mailbox.address, to_address=recipient, subject=subject,
         body_text=body, created_by=user, in_reply_to=reply_id,
-        next_attempt_at=timezone.now(),
+        conversation=conversation, next_attempt_at=timezone.now(),
     )
 
 
-def compose(mailbox, recipient, subject, body, user, *, reply_id=""):
+def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None):
     recipient = _address(recipient)
     subject = (subject or "").strip()
     body = (body or "").strip()
@@ -101,7 +105,16 @@ def compose(mailbox, recipient, subject, body, user, *, reply_id=""):
     internal = EmailMailbox.objects.filter(address=recipient, active=True).first()
     with transaction.atomic():
         if not internal:
-            return _queue_external(mailbox, recipient, subject, body, user, reply_id=reply_id)
+            if conversation is not None:
+                if conversation.mailbox_id != mailbox.pk or conversation.customer_email.lower() != recipient:
+                    raise ValidationError("Conversation does not belong to this mailbox or recipient.")
+            else:
+                conversation = new_outgoing_conversation(mailbox, recipient, subject)
+            final_subject = thread_subject(subject, conversation, reply=bool(reply_id))
+            record = _queue_external(mailbox, recipient, final_subject, body, user,
+                                     reply_id=reply_id, conversation=conversation)
+            record_outgoing_status(conversation)
+            return record
         sent = EmailLetter.objects.create(
             mailbox=mailbox, direction="outbound", status="internal",
             from_address=mailbox.address, to_address=recipient,
@@ -301,13 +314,11 @@ def ingest(request):
         if not isinstance(content, str):
             return HttpResponse(status=422)
         fingerprint = hashlib.sha256(recipient.encode() + b"\n" + raw).hexdigest()
-        EmailLetter.objects.get_or_create(
-            mailbox=mailbox, fingerprint=fingerprint,
-            defaults={"direction": "inbound", "status": "received",
-                      "from_address": from_address, "to_address": recipient,
-                      "subject": subject, "body_text": content[:MAX_BODY_CHARS],
-                      "message_id": message_id, "in_reply_to": reply_id,
-                      "had_attachments": attachments},
+        record_incoming(
+            mailbox, sender=from_address, subject=subject, reply_id=reply_id,
+            references=str(parsed.get("References", ""))[:2048],
+            body=content[:MAX_BODY_CHARS], message_id=message_id,
+            fingerprint=fingerprint, attachments=attachments,
         )
         result = JsonResponse({"accepted": True})
         result["Cache-Control"] = "no-store"
@@ -365,9 +376,9 @@ def deliver_outgoing(limit=10):
             continue
         try:
             from .brevo_email import send_brevo
-            send_brevo(subject=row.subject, body=row.body_text,
+            provider_id = send_brevo(subject=row.subject, body=row.body_text,
                        recipient=row.to_address, purpose="transaction",
-                       sender_email=row.from_address)
+                       sender_email=row.from_address, return_message_id=True)
         except __import__("core.brevo_email", fromlist=["UncertainEmailDelivery"]).UncertainEmailDelivery:
             EmailLetter.objects.filter(pk=pk).update(
                 status="uncertain",
@@ -391,6 +402,7 @@ def deliver_outgoing(limit=10):
         else:
             EmailLetter.objects.filter(pk=pk).update(
                 status="submitted", submitted_at=timezone.now(), last_error="",
+                message_id=provider_id or "",
             )
             submitted += 1
     return submitted
