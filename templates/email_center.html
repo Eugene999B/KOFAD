@@ -58,7 +58,7 @@
         <div class="email-metric"><small>Inbox</small><strong>{{ inbox_count }}</strong></div>
         <div class="email-metric"><small>Outgoing history</small><strong>{{ sent_count }}</strong></div>
         <a class="email-metric metric-link" href="?mailbox={{ selected.pk }}&status=draft"><small>Needs approval</small><strong>{{ draft_count }}</strong></a>
-        <a class="email-metric metric-link{% if attention_count %} needs-attention{% endif %}" href="?mailbox={{ selected.pk }}&status=failed"><small>Failed / review</small><strong>{{ attention_count }}</strong></a>
+        <a class="email-metric metric-link{% if attention_count %} needs-attention{% endif %}" href="?mailbox={{ selected.pk }}&status=attention"><small>Failed / review</small><strong>{{ attention_count }}</strong></a>
       </div>
 
       {% if selected.pk in writable_ids %}
@@ -84,12 +84,32 @@
           <div><h3>Customer conversations</h3>
             <p>One thread for customer replies, follow-ups and departmental handoffs.</p>
           </div>
-          <span class="email-count">{{ conversations|length }} recent</span>
+          <span class="email-count">{{ conversations|length }} matching</span>
         </div>
+        <form method="get" class="email-history-filters email-thread-filters" role="search" aria-label="Filter customer conversations">
+          <input type="hidden" name="mailbox" value="{{ selected.pk }}">
+          <label class="email-search-label">Find customer or subject
+            <input type="search" name="thread_q" value="{{ thread_search }}" maxlength="100" placeholder="Email address or subject">
+          </label>
+          <label>Conversation status<select name="thread_status">
+            <option value="all"{% if thread_status_filter == "all" %} selected{% endif %}>All statuses</option>
+            <option value="open"{% if thread_status_filter == "open" %} selected{% endif %}>Open</option>
+            <option value="pending"{% if thread_status_filter == "pending" %} selected{% endif %}>Waiting for customer</option>
+            <option value="closed"{% if thread_status_filter == "closed" %} selected{% endif %}>Closed</option>
+          </select></label>
+          <label>Assignment<select name="thread_owner">
+            <option value="all"{% if thread_owner_filter == "all" %} selected{% endif %}>Everyone</option>
+            <option value="mine"{% if thread_owner_filter == "mine" %} selected{% endif %}>Assigned to me</option>
+            <option value="unassigned"{% if thread_owner_filter == "unassigned" %} selected{% endif %}>Unassigned</option>
+          </select></label>
+          <button type="submit" class="button secondary">Filter</button>
+          {% if thread_search or thread_status_filter != "all" or thread_owner_filter != "all" %}
+          <a class="email-clear-filter" href="?mailbox={{ selected.pk }}">Clear</a>{% endif %}
+        </form>
         <div class="email-conversation-grid">
           <nav class="email-thread-list" aria-label="Recent customer conversations">
             {% for thread in conversations %}
-            <a href="?mailbox={{ selected.pk }}&thread={{ thread.pk }}#customer-conversation"
+            <a href="?mailbox={{ selected.pk }}&thread={{ thread.pk }}&thread_status={{ thread_status_filter }}&thread_owner={{ thread_owner_filter }}&thread_q={{ thread_search|urlencode }}#customer-conversation"
                class="email-thread-link{% if active_thread.pk == thread.pk %} current{% endif %}"
                {% if active_thread.pk == thread.pk %}aria-current="page"{% endif %}>
               <span class="email-thread-avatar" aria-hidden="true">{{ thread.customer_email|first|upper }}</span>
@@ -101,8 +121,8 @@
               <span class="email-thread-status status-{{ thread.status }}">{{ thread.get_status_display }}</span>
             </a>
             {% empty %}
-            <div class="email-empty"><strong>No customer conversations yet.</strong>
-              <p>Incoming customer emails and new staff replies will appear here automatically.</p></div>
+            <div class="email-empty"><strong>No matching conversations.</strong>
+              <p>Try another status, assignment or search, or clear filters to view recent conversations.</p></div>
             {% endfor %}
           </nav>
 
@@ -215,6 +235,7 @@
             <option value="queued"{% if mail_status == 'queued' %} selected{% endif %}>Queued</option>
             <option value="submitted"{% if mail_status == 'submitted' %} selected{% endif %}>Provider accepted</option>
             <option value="internal"{% if mail_status == 'internal' %} selected{% endif %}>Internal delivery</option>
+            <option value="attention"{% if mail_status == 'attention' %} selected{% endif %}>Failed or needs review</option>
             <option value="failed"{% if mail_status == 'failed' %} selected{% endif %}>Failed</option>
             <option value="uncertain"{% if mail_status == 'uncertain' %} selected{% endif %}>Needs review</option>
             <option value="suppressed"{% if mail_status == 'suppressed' %} selected{% endif %}>Suppressed</option>
