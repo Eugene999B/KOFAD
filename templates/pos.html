@@ -142,7 +142,7 @@
       <div id="new-customer-fields" class="new-customer-fields hidden counter-new-customer">
         <input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer name">
         <div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
-        <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email · required for Paystack MoMo">
+        <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email (optional for direct MoMo)">
       </div>
       <label class="checkout-consent compact-consent" id="customer-consent-wrap">
         <input id="customer-consent" type="checkbox" checked>
@@ -213,6 +213,18 @@
           <label>Customer email (optional for direct MoMo)
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          {% if pos_momo_gateway == "paystack" %}
+          <div class="momo-recipient-review" id="momo-recipient-review">
+            <button id="momo-check-recipient" class="button secondary" type="button">1. Check customer details</button>
+            <div id="momo-recipient-result" class="notice subtle hidden" aria-live="polite">
+              <strong id="momo-recipient-name">—</strong>
+              <p id="momo-recipient-meta"></p>
+              <p>Wallet-holder name lookup is not available through Paystack Ghana MoMo. Ask the customer to confirm the name, number and network directly.</p>
+              <label class="checkout-consent"><input type="checkbox" id="momo-recipient-consent"><span>I confirmed the customer details and have permission to send this payment prompt.</span></label>
+            </div>
+          </div>
+          <p class="hint"><a href="{% url 'pos_momo_payments' %}">View previous MoMo payments and receipts →</a></p>
+          {% endif %}
           {% if pos_momo_gateway != "hubtel" %}<p class="hint">No email? Paystack receives a unique processor-only address for this wallet. It is not saved as the customer's email; consented receipts still use KOFAD's SMS/WhatsApp options.</p>{% endif %}
           <a id="hubtel-momo-checkout-link" class="button hidden" target="_blank" rel="noopener noreferrer" href="#">Open secure Hubtel checkout ↗</a>
           <div id="paystack-momo-challenge" class="hidden">
