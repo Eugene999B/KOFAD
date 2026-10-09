@@ -19,8 +19,8 @@
       notice.hidden = Boolean(status.connected);
     };
     if (Network) {
-      Network.getStatus?.().then(showNetwork).catch(() => {});
-      Network.addListener?.("networkStatusChange", showNetwork).catch(() => {});
+      if (typeof Network.getStatus === "function") Network.getStatus().then(showNetwork).catch(() => {});
+      if (typeof Network.addListener === "function") Network.addListener("networkStatusChange", showNetwork).catch(() => {});
     }
     if (location.hostname !== "market.kofadimpex.com") return;
     const shareButton = document.querySelector("[data-native-share-product]");
