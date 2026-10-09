@@ -10,7 +10,7 @@ const profiles = Object.freeze({
     appId: "com.kofadimpex.staff",
     appName: "KOFAD Staff",
     hostname: "staff.kofadimpex.com",
-    startUrl: "https://staff.kofadimpex.com/login/",
+    startUrl: "https://staff.kofadimpex.com/workspace/",
   }),
 });
 function profileFor(channel) {
