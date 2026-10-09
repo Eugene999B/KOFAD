@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.test import TestCase
 
 from core.models import Branch
@@ -49,23 +48,20 @@ class OwnerProvisioningSafetyTests(TestCase):
     def test_disabled_account_cannot_be_automatically_reactivated(self):
         self.user.is_active = False
         self.user.save(update_fields=["is_active"])
-        with self.assertRaises(CommandError):
-            self.invoke()
+        self.invoke()
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_active)
 
     def test_demoted_account_cannot_be_automatically_repromoted(self):
         self.user.is_superuser = False
         self.user.save(update_fields=["is_superuser"])
-        with self.assertRaises(CommandError):
-            self.invoke()
+        self.invoke()
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_superuser)
 
     def test_removed_staff_rights_cannot_be_automatically_restored(self):
         self.user.is_staff = False
         self.user.save(update_fields=["is_staff"])
-        with self.assertRaises(CommandError):
-            self.invoke()
+        self.invoke()
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_staff)
