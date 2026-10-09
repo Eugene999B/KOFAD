@@ -200,6 +200,7 @@ def accounting(request, branch):
         "integrity_summary": integrity_summary,
         "integrity_page": integrity_page,
         "integrity_count": len(integrity_rows),
+        "integrity_checked": integrity_summary.get("Checks completed", 0),
         "can_journal": request.user.has_perm("core.operate_finance") or request.user.has_perm("core.manage_company") or request.user.is_superuser,
         "owner_direct": request.user.has_perm("core.manage_company") or request.user.is_superuser,
     })
