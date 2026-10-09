@@ -42,6 +42,25 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertEqual(self.client.session["market_cart"], {str(self.listing.pk): 1})
         post.assert_not_called()
 
+    def test_checkout_dropdowns_have_clear_mobile_selection_controls(self):
+        self.customer_session()
+        response = self.client.get("/market/checkout/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Tap to select delivery or collection")
+        self.assertContains(response, "marketplace/select-affordances.css")
+        self.assertContains(response, 'name="fulfilment"')
+
+    def test_payment_and_network_dropdowns_show_change_hint(self):
+        from django.template.loader import render_to_string
+        from .forms import CheckoutPaymentForm
+        body = render_to_string("marketplace/payment_choices.html", {
+            "momo_available": True,
+            "payment_form": CheckoutPaymentForm(momo_available=True),
+        })
+        self.assertIn("Tap to choose payment option", body)
+        self.assertIn("Tap to choose your MoMo network", body)
+        self.assertIn("momo_network", body)
+
     def test_pickup_needs_no_address_or_coordinates(self):
         data = self.pickup_data()
         data.update(town="Old town", address_line="Old delivery address", latitude="5.61", longitude="-0.18")
