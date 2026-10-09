@@ -42,6 +42,11 @@ with sync_playwright() as p:
     page.get_by_role("heading", name="Create a download").wait_for()
     assert page.get_by_text("Registered Market customer accounts").count() > 0
     assert page.locator(".export-library-item").count() >= 10
+    page.locator("#export-library-query").fill("gateway")
+    assert page.locator(".export-library-item:visible").count() >= 1
+    assert page.locator(".export-library-item:visible").count() < 6
+    page.locator("#export-library-query").fill("")
+    assert page.locator(".export-library-item:visible").count() >= 10
     assert page.locator(".export-formats button").count() == 4
     page.screenshot(path=str(out / "export-studio-desktop.png"), full_page=True)
     for width in (320, 390, 768):
