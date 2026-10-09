@@ -117,6 +117,14 @@ def management_contacts(branch, field):
 
 
 def prepare_closing_notifications(closing, actor=None):
+    # Queue authorized email notices in the same transaction as the closing.
+    # Email failures must never prevent a finalized closing or SMS alerts.
+    try:
+        from .email_center import enqueue_closing_report
+        enqueue_closing_report(closing)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('Could not queue a closing email report')
     policy = _communication_policy()
     if policy.daily_closing_mode == "off" and policy.whatsapp_daily_closing_mode == "off":
         return []
