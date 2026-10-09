@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from core.models import Message, Payment
+from core.models import Audit, Message, Payment
 from core.tests import Fixtures
 from marketplace.models import CustomerAccount, EmailIdentity, GoogleIdentity, MarketPaymentAttempt, OnlineOrder
 
@@ -98,6 +98,30 @@ class ExportStudioTests(Fixtures, TestCase):
                                          {"dataset": "market_customers"}).status_code, 403)
         self.assertEqual(self.client.get("/exports/download/csv/",
                                          {"dataset": "email_delivery"}).status_code, 403)
+
+    def test_staff_register_scope_by_branch(self):
+        current = User.objects.create_user("cashier-main", password="Unit-Test-Password-2026!")
+        current.access.branches.add(self.branch)
+        another = User.objects.create_user("cashier-other", password="Unit-Test-Password-2026!")
+        another.access.branches.add(self.other)
+        manager = User.objects.create_user("branch-owner", password="Unit-Test-Password-2026!")
+        manager.user_permissions.add(Permission.objects.get(codename="manage_company"))
+        manager.access.branches.add(self.branch)
+        self.authenticate_client(manager)
+        export_body = self.client.get("/exports/download/csv/", {"dataset": "staff"}).content
+        self.assertIn(b"cashier-main", export_body)
+        self.assertNotIn(b"cashier-other", export_body)
+
+    def test_branch_audit_export_excludes_unassigned_events(self):
+        Audit.objects.create(actor=self.user, action="system.event", reference="GLOBAL-EVENT")
+        Audit.objects.create(branch=self.branch, actor=self.user, action="sale.event", reference="LOCAL-EVENT")
+        viewer = User.objects.create_user("auditor-test", password="Unit-Test-Password-2026!")
+        viewer.user_permissions.add(Permission.objects.get(codename="view_reports"))
+        viewer.access.branches.add(self.branch)
+        self.authenticate_client(viewer)
+        export_body = self.client.get("/exports/download/csv/", {"dataset": "audit"}).content
+        self.assertIn(b"LOCAL-EVENT", export_body)
+        self.assertNotIn(b"GLOBAL-EVENT", export_body)
 
     def test_detailed_sales_math_and_manual_momo_are_labeled_accurately(self):
         sale = self.sale()
