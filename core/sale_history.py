@@ -5,7 +5,7 @@ Only a posted Paystack intent pointing to this exact sale may display the
 "provider verified" badge. Historic cash/bank/manual MoMo records remain
 honestly classified as staff-recorded.
 """
-from .models import HeldSale
+from .models import Audit, HeldSale
 from . import pos_paystack
 
 
@@ -14,6 +14,14 @@ def decorate_sales(branch, rows):
     if not documents:
         return documents
     by_pk = {str(doc.pk): doc for doc in documents}
+    provider_audits = {}
+    for row in Audit.objects.filter(
+        branch=branch, action="sale.paystack_momo_verified",
+        reference__in=[doc.reference for doc in documents],
+    ).only("reference", "detail"):
+        detail = row.detail if isinstance(row.detail, dict) else {}
+        provider_audits.setdefault(row.reference, set()).add(str(detail.get("payment_reference") or ""))
+
     paystack_refs = {}
     for held in HeldSale.objects.filter(
         branch=branch,
@@ -26,6 +34,7 @@ def decorate_sales(branch, rows):
         reference = str(state.get("reference") or "")
         if (pk in by_pk
                 and held.label == pos_paystack.LABEL_PREFIX + reference
+                and reference in provider_audits.get(by_pk[pk].reference, set())
                 and any(payment.method == "momo" and payment.reference == reference
                         for payment in by_pk[pk].payments.all())):
             paystack_refs[pk] = reference
