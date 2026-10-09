@@ -35,7 +35,7 @@ with sync_playwright() as p:
     if cookie_button.is_visible():
         cookie_button.click()
     page.get_by_label("Username, mobile number or verified email").fill("admin")
-    page.get_by_label("Password", exact=True).fill("admin")
+    page.get_by_label("Password", exact=True).fill("New-private-admin-passphrase-986!")
     page.get_by_role("button", name="Sign in", exact=False).click()
     page.wait_for_url(origin + "/workspace/")
     page.goto(origin + "/exports/")
