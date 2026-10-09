@@ -63,7 +63,7 @@ class EmailWorkspaceTests(TestCase):
     def test_workspace_sections_have_dedicated_pages(self):
         self.login(self.admin)
         urls = [
-            ("email_center", "Shared inbox"),
+            ("email_center", "conversations"),
             ("email_history", "Mail history"),
             ("email_automations", "Automations & delivery"),
             ("email_team", "Staff mailbox access"),
