@@ -93,6 +93,17 @@ class CustomerDeduplicationTests(Fixtures, TestCase):
         self.assertIn("no-store", response["Cache-Control"])
         self.assertEqual(services.balance(doc), Decimal("30.00"))
 
+    def test_legacy_formatted_phone_cannot_create_second_debtor(self):
+        self.customer.phone = "+233 (55) 123-4567"
+        self.customer.save(update_fields=["phone"])
+        with self.assertRaisesMessage(ValidationError, "phone number"):
+            services.post_trade(
+                self.user, self.branch,
+                self.fresh_payload(name="Unrelated Name", phone="0551234567"),
+                uuid.uuid4(),
+            )
+        self.assertEqual(Party.objects.filter(branch=self.branch, kind="customer").count(), 1)
+
     def test_customer_form_blocks_duplicate_phone_and_name(self):
         for name, phone in [("Other Person", "0551234567"), ("Ama Boafo", "0241234567")]:
             response = self.client.post("/parties/new/?kind=customer", {
