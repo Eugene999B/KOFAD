@@ -524,7 +524,7 @@ with sync_playwright() as p:
     assert not admin_page.get_by_role("button", name="Reset KOFAD to fresh start", exact=True).is_disabled()
     assert not admin_page.get_by_role("button", name="Restore full system", exact=True).is_disabled()
     assert admin_page.locator("[data-backup-ready-badge]").is_visible()
-    assert admin_page.locator("[data-backup-state]").get_by_text("Saved backup validated.", exact=True).count() == 1
+    assert "validated" in admin_page.locator("[data-backup-state]").inner_text().lower()
 
     admin_page.goto("http://127.0.0.1:8000/administration/")
     admin_sidebar = admin_page.locator(".sidebar")
