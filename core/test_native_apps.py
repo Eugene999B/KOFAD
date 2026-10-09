@@ -20,12 +20,17 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertContains(response, "Android")
         self.assertContains(response, "Windows")
         self.assertNotContains(response, "KOFAD Staff")
-        self.assertContains(response, "Installer not published yet")
+        self.assertContains(response, "Our dedicated apps are being prepared")
+        self.assertContains(response, "Not released yet", count=3)
+        self.assertContains(response, "native-brands/android.svg")
+        self.assertContains(response, "native-brands/apple.svg")
+        self.assertContains(response, "native-brands/windows.svg")
+        self.assertContains(response, "Continue to Market")
         self.assertNotContains(response, "Download staff app")
 
     def test_public_and_market_have_customer_native_app_promotion(self):
-        self.assertContains(self.client.get("/"), "Get the KOFAD app")
-        self.assertContains(self.client.get("/market/"), "Download customer app")
+        self.assertContains(self.client.get("/"), "Explore the upcoming app")
+        self.assertContains(self.client.get("/market/"), "View app release status")
         self.assertNotContains(self.client.get("/"), "Download staff app")
 
     def test_staff_page_requires_valid_staff_session(self):
@@ -41,6 +46,7 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         response = self.client.get("/staff/app/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "KOFAD Staff")
+        self.assertContains(response, "Open workspace")
         self.assertIn("no-store", response["Cache-Control"])
         self.assertIn("noindex", response["X-Robots-Tag"])
         self.assertContains(self.client.get("/workspace/"), "Download staff app")
@@ -74,8 +80,8 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
     )
     def test_fake_download_links_never_activate(self):
         response = self.client.get("/apps/")
-        self.assertContains(response, "Release pending")
-        self.assertNotContains(response, "Get KOFAD Market for Android")
+        self.assertContains(response, "In preparation", count=3)
+        self.assertNotContains(response, "Get Android app")
         self.assertFalse(app_metadata("customer")["released"])
 
     def test_reject_fake_store_urls_redirectors_and_invalid_protocols(self):
