@@ -119,6 +119,8 @@ class DebtSettings(models.Model):
     GRACE_UNITS = [("days", "Days"), ("weeks", "Weeks"), ("months", "Months (30 days)")]
 
     delivery_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    EMAIL_DELIVERY = [("off", "Off"), ("draft", "Prepare for review"), ("send", "Send automatically")]
+    email_delivery_mode = models.CharField(max_length=8, choices=EMAIL_DELIVERY, default="off")
     reminder_time = models.TimeField(default=time(9, 0))
     due_soon_enabled = models.BooleanField(default=True)
     due_soon_days = models.CharField(max_length=80, default="7,3,1")
@@ -233,6 +235,7 @@ class Party(models.Model):
     name = models.CharField(max_length=120)
     phone = models.CharField(max_length=40)
     email = models.EmailField(blank=True)
+    debt_email_opt_in = models.BooleanField(default=False)
     address = models.TextField(blank=True)
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     consent = models.BooleanField(default=False)
