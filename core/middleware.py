@@ -15,7 +15,9 @@ class RequestSizeLimitMiddleware:
         "/market/payments/hubtel/callback/": 131072,
         "/whatsapp/webhook/": 524288,
         "/sms/delivery/": 131072,
-        "/settings/backup/": 110 * 1024 * 1024,
+        # Encrypted KOFAD recovery files may be up to 257 MiB; allow
+        # multipart framing overhead but keep a strict hard request ceiling.
+        "/settings/backup/": 258 * 1024 * 1024,
     }
 
     def __init__(self, get_response):
