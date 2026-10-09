@@ -62,14 +62,27 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
         raise ValueError("Invalid KOFAD business email purpose.")
-    sender = sender_email or (
+    requested_sender = sender_email or (
         settings.KOFAD_BREVO_SECURITY_FROM_EMAIL if purpose == "security"
         else settings.KOFAD_BREVO_TRANSACTION_FROM_EMAIL
     )
-    for address in (recipient, sender):
+    for address in (recipient, requested_sender):
         validate_email(address)
-    if not sender.lower().endswith("@kofadimpex.com"):
+    if not requested_sender.lower().endswith("@kofadimpex.com"):
         raise ValidationError("Unverified KOFAD business sender.")
+    # A domain can be authenticated while individual Brevo senders remain
+    # unregistered. Use the explicitly verified shared sender until each
+    # department is registered; preserve the department as Reply-To.
+    verified = {
+        x.strip().lower()
+        for x in getattr(
+            settings, "KOFAD_BREVO_REGISTERED_SENDERS",
+            settings.KOFAD_BREVO_TRANSACTION_FROM_EMAIL,
+        ).split(",") if x.strip()
+    }
+    sender = requested_sender if requested_sender.lower() in verified else settings.KOFAD_BREVO_TRANSACTION_FROM_EMAIL
+    if sender.lower() not in verified or not sender.lower().endswith("@kofadimpex.com"):
+        raise ValidationError("A verified KOFAD email sender is required.")
     reply = getattr(settings, "KOFAD_SUPPORT_REPLY_TO_EMAIL", "")
     if reply:
         validate_email(reply)
@@ -83,7 +96,7 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
     payload = {
         "sender": {"name": "KOFAD IMPEX ENTERPRISE", "email": sender},
         "to": [{"email": recipient}], "subject": subject, "textContent": body,
-        "replyTo": {"email": sender_email or reply or sender},
+        "replyTo": {"email": requested_sender if requested_sender != sender else (reply or sender)},
     }
     try:
         response = requests.post(
