@@ -60,6 +60,10 @@
   const partyInput = document.querySelector("#party");
   const customerSearch = document.querySelector("#customer-search");
   const customerResults = document.querySelector("#customer-results");
+  const customerSearchWrap = document.querySelector("#customer-search-wrap");
+  const customerChoiceButtons = [...document.querySelectorAll("[data-customer-mode]")];
+  const walkinExplanation = document.querySelector("#walkin-explanation");
+  const customerDuplicateAlert = document.querySelector("#customer-duplicate-alert");
   const selectedCustomerBox = document.querySelector("#selected-customer");
   const newCustomerFields = document.querySelector("#new-customer-fields");
   const newCustomerToggle = document.querySelector("#new-customer-toggle");
@@ -705,7 +709,19 @@
   }
 
 
+  function setCustomerMode(mode) {
+    customerChoiceButtons.forEach(button => {
+      const active = button.dataset.customerMode === mode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    customerSearchWrap?.classList.toggle("hidden", mode !== "saved");
+    walkinExplanation?.classList.toggle("hidden", mode !== "walkin");
+    if (mode !== "new") customerDuplicateAlert?.classList.add("hidden");
+  }
+
   function showSelectedCustomer(customer) {
+    setCustomerMode("saved");
     selectedCustomer = customer;
     newCustomerMode = false;
     if (partyInput) partyInput.value = customer.id;
@@ -732,6 +748,7 @@
   }
 
   function clearCustomer() {
+    setCustomerMode("walkin");
     selectedCustomer = null;
     newCustomerMode = false;
     if (partyInput) partyInput.value = "";
@@ -742,6 +759,9 @@
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
     if (customerEmail) customerEmail.value = "";
+    if (customerName) customerName.value = "";
+    if (customerPhone) customerPhone.value = "";
+    customerDuplicateAlert?.classList.add("hidden");
     if (creditCustomerEmail) creditCustomerEmail.value = "";
     if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
     changed();
@@ -751,6 +771,7 @@
 
   function beginNewCustomer() {
     clearCustomer();
+    setCustomerMode("new");
     newCustomerMode = true;
     newCustomerFields?.classList.remove("hidden");
     newCustomerToggle?.classList.add("hidden");
@@ -792,7 +813,13 @@
     }, 180);
   });
   newCustomerToggle?.addEventListener("click", beginNewCustomer);
-  clearCustomerButton?.addEventListener("click", clearCustomer);
+  clearCustomerButton?.addEventListener("click", () => { clearCustomer(); });
+  customerChoiceButtons.forEach(button => button.addEventListener("click", () => {
+    const mode = button.dataset.customerMode;
+    if (mode === "new") beginNewCustomer();
+    else if (mode === "saved") { clearCustomer(); setCustomerMode("saved"); customerSearch?.focus(); }
+    else clearCustomer();
+  }));
   function showSelectedSupplier(supplier) {
     selectedSupplier = supplier;
     if (partyInput) partyInput.value = supplier.id;
@@ -877,6 +904,57 @@
   });
   customerWhatsApp?.addEventListener("change", () => { changed(); persist(); });
   customerName?.addEventListener("input", updateConsentAvailability);
+  let duplicateLookupSequence = 0;
+  let duplicateLookupTimer = null;
+  async function checkNewCustomerDuplicate() {
+    if (!newCustomerMode || !customerDuplicateAlert) return [];
+    const name = customerName?.value.trim() || "";
+    const phone = customerPhone?.value.trim() || "";
+    if (name.length < 2 && !phone) { customerDuplicateAlert.classList.add("hidden"); return []; }
+    const sequence = ++duplicateLookupSequence;
+    const response = await fetch("/api/customers/check-duplicate/?name=" +
+      encodeURIComponent(name) + "&phone=" + encodeURIComponent(phone), {
+        credentials: "same-origin", cache: "no-store", headers: {Accept:"application/json"}
+      });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Could not check saved customers. Try again before completing the sale.");
+    }
+    const result = await response.json();
+    if (sequence !== duplicateLookupSequence || !newCustomerMode) return [];
+    customerDuplicateAlert.replaceChildren();
+    if (!result.duplicate) { customerDuplicateAlert.classList.add("hidden"); return []; }
+    customerDuplicateAlert.classList.remove("hidden");
+    customerDuplicateAlert.append(
+      el("strong", "Existing customer found — don't create a duplicate."),
+      el("p", "Confirm their identity, then choose the saved record. If this is a different person with the same name, ask a manager to review.")
+    );
+    for (const match of result.matches) {
+      const button = el("button", undefined, "customer-duplicate-match");
+      button.type = "button";
+      button.append(
+        el("strong", "Use existing: " + match.name),
+        el("small", match.phone + " · Outstanding " + root.dataset.currency + " " + match.outstanding +
+          (match.phone_match ? " · matching number" : " · matching name"), "muted")
+      );
+      button.addEventListener("click", () => showSelectedCustomer(match));
+      customerDuplicateAlert.append(button);
+    }
+    return result.matches;
+  }
+  for (const field of [customerName, customerPhone]) {
+    field?.addEventListener("input", () => {
+      clearTimeout(duplicateLookupTimer);
+      duplicateLookupSequence++;
+      if (newCustomerMode) duplicateLookupTimer = setTimeout(() => {
+        checkNewCustomerDuplicate().catch(error => {
+          customerDuplicateAlert?.classList.remove("hidden");
+          customerDuplicateAlert?.replaceChildren(el("strong", error.message));
+        });
+      }, 350);
+    });
+  }
+
   customerPhone?.addEventListener("input", () => {
     updateConsentAvailability();
     if (paystackMomoPhone && !momoReference) paystackMomoPhone.value = customerPhone.value;
@@ -1164,7 +1242,8 @@
       if (!party) {
         const rawName = customerName?.value.trim() || "";
         const rawPhone = customerPhone?.value.trim() || "";
-        const wantsNamedCustomer = newCustomerMode || rawName || rawPhone;
+        // Walk-ins must never create an accidental customer record.
+        const wantsNamedCustomer = newCustomerMode;
         if (wantsNamedCustomer) {
           if (rawName.length < 2) throw new Error("Enter the new customer's name.");
           newName = rawName;
@@ -1585,6 +1664,11 @@
     const button = document.querySelector("#complete");
     clearError();
     try {
+      if (!pendingBody && !purchase && newCustomerMode) {
+        const matches = await checkNewCustomerDuplicate();
+        if (!newCustomerMode) return;
+        if (matches.length) throw new Error("Customer already exists. Select the saved record instead of creating a duplicate.");
+      }
       if (!pendingBody) pendingBody = buildCheckoutBody();
       persist();
 
@@ -1718,6 +1802,7 @@
 
   if (selectedCustomer?.id) showSelectedCustomer(selectedCustomer);
   else if (newCustomerMode) beginNewCustomer();
+  else setCustomerMode("walkin");
   if (selectedSupplier?.id) showSelectedSupplier(selectedSupplier);
   if (restoredState) {
     if (customerName && restoredState.customerName) customerName.value = restoredState.customerName;
