@@ -2225,7 +2225,6 @@ def staff_order(request, branch, pk):
     return render(request, "marketplace/staff_order_detail.html", {
         "title": order.public_reference, "order": order, "form": form,
         "tracking_form": tracking_form,
-        "handover_code": services.handover_code(order),
         "delivery_updates": order.delivery_updates.all(),
         "latest_delivery_location": order.delivery_updates.exclude(latitude__isnull=True).exclude(longitude__isnull=True).last(),
         "return_requests": order.return_requests.all(),
