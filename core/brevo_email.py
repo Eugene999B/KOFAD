@@ -57,7 +57,7 @@ def usage_today():
     }
 
 
-def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None):
+def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None,\n               return_message_id=False):
     if not ready():
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
@@ -115,4 +115,10 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
         raise ValidationError("Email provider did not accept the message.")
     EmailDailyUsage.objects.filter(pk=pk).update(accepted=models.F("accepted") + 1)
+    if return_message_id:
+        try:
+            provider_id = str(response.json().get("messageId") or "")[:255]
+        except (TypeError, ValueError, AttributeError):
+            provider_id = ""
+        return provider_id
     return 1
