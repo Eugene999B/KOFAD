@@ -1187,6 +1187,10 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
 
     was_cancelled = order.status == "cancelled"
     channel = str(provider_data.get("channel", ""))[:40]
+    payment_channel_label = {
+        "mobile_money": "Mobile Money", "card": "bank card",
+        "bank": "bank payment", "bank_transfer": "bank transfer",
+    }.get(channel, "online payment")
     now = timezone.now()
     order.status = "paid"
     order.payment_status = "paid"
@@ -1233,7 +1237,7 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     queue_order_sms(
         order, "paid",
         f"KOFAD: Payment verified for order {order.customer_reference}. "
-        f"Received GHS {order.total:.2f} via {order.payment_channel or 'online payment'}. "
+        f"Received GHS {order.total:.2f} via {payment_channel_label}. "
         "Your order is confirmed for processing. Track delivery or pickup in your KOFAD Market account. "
         "If you have questions, quote the order reference.",
     )
@@ -1244,7 +1248,7 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         f"Hello {order.recipient_name},\n\n"
         f"Your payment for KOFAD order {order.customer_reference} has been independently verified.\n"
         f"Amount received: GHS {order.total:.2f}\n"
-        f"Payment channel: {order.payment_channel or 'online payment'}\n"
+        f"Payment channel: {payment_channel_label}\n"
         f"Order status: {order.get_status_display()}\n"
         f"Fulfilment: {order.get_fulfilment_display()}\n\n"
         "You can follow your delivery or pickup updates and view the order details in your KOFAD Market account. "
