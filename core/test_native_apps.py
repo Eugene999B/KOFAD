@@ -91,6 +91,20 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         for url, platform in invalid:
             self.assertEqual(approved_release_url(url, platform), "", url)
 
+    @override_settings(
+        KOFAD_CUSTOMER_APP_ANDROID_URL="https://play.google.com/store/apps/details?id=com.kofadimpex.staff",
+        KOFAD_CUSTOMER_APP_WINDOWS_URL="https://downloads.kofadimpex.com/windows/staff/setup.exe",
+        KOFAD_STAFF_APP_ANDROID_URL="https://play.google.com/store/apps/details?id=com.kofadimpex.market",
+        KOFAD_STAFF_APP_WINDOWS_URL="https://downloads.kofadimpex.com/windows/customer/setup.exe",
+    )
+    def test_customer_and_staff_release_addresses_cannot_be_mixed(self):
+        public = app_metadata("customer")
+        staff = app_metadata("staff")
+        self.assertFalse(public["released"])
+        self.assertFalse(staff["released"])
+        self.assertTrue(all(not item["available"] for item in public["platforms"]))
+        self.assertTrue(all(not item["available"] for item in staff["platforms"]))
+
     def test_market_host_redirects_public_app_link_to_canonical_home(self):
         response = self.client.get("/apps/", HTTP_HOST="market.kofadimpex.com", secure=True)
         self.assertEqual(response.status_code, 302)
