@@ -1829,3 +1829,50 @@ class MarketLateDuplicateSettlementTests(MarketFixtures):
         late.refresh_from_db()
         self.assertEqual(late.status, "pending")
         self.assertFalse(order.events.filter(status="payment_attention").exists())
+
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    def test_late_payment_cannot_reopen_an_already_refunded_order(self):
+        order = self.order()
+        original_ref = "KFD-REFUNDED-ORIGINAL"
+        order.payment_reference = original_ref
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=original_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "card"},
+        )
+        receipt = {
+            "status": "success", "reference": original_ref, "channel": "card",
+            "currency": "GHS", "amount": int(order.total * 100),
+        }
+        paid = services.finalize_payment(original_ref, receipt)
+        original_document_id = paid.sale_document_id
+        stock_after_first = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        OnlineOrder.objects.filter(pk=order.pk).update(
+            payment_status="refunded", status="refunded",
+        )
+        late_ref = "KFD-REFUND-LATE"
+        late = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=late_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "mobile_money"},
+        )
+        services.finalize_payment(late_ref, {
+            "status": "success", "reference": late_ref, "id": 6438,
+            "channel": "mobile_money", "currency": "GHS",
+            "amount": int(order.total * 100),
+        })
+        order.refresh_from_db()
+        late.refresh_from_db()
+        self.assertEqual(order.payment_status, "refunded")
+        self.assertEqual(order.status, "refunded")
+        self.assertEqual(order.sale_document_id, original_document_id)
+        self.assertEqual(order.payment_reference, original_ref)
+        self.assertEqual(late.status, "attention")
+        self.assertEqual(
+            Stock.objects.get(branch=self.branch, product=self.product).quantity,
+            stock_after_first,
+        )
+        self.assertEqual(order.events.filter(status="payment_attention").count(), 1)
