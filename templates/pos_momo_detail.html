@@ -1,0 +1,52 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'pos-momo-status.css' %}">{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'pos_momo_payments' %}">MoMo payment history</a><a class="button secondary" href="{% url 'pos' %}">New sale</a></div>{% endblock %}
+{% block content %}
+<section class="panel momo-stage" data-reference="{{ payment.reference }}" id="momo-monitor">
+  <p class="eyebrow">PAYSTACK DIRECT MOBILE MONEY</p>
+  <h2>Payment {{ payment.display_status }}</h2>
+  <p>Independent Paystack verification is required before KOFAD posts the sale. You may leave this page: the background worker continues checking.</p>
+  <div class="momo-status" id="payment-stage" data-state="{{ payment.status }}">
+    <span class="momo-dot" aria-hidden="true"></span><strong id="payment-state-label">{{ payment.display_status }}</strong>
+  </div>
+  <p id="payment-stage-message" role="status" aria-live="polite">{{ payment.message }}</p>
+  <div class="momo-summary">
+    <div><small>Amount requested</small><strong>{{ payment.currency }} {{ payment.amount }}</strong></div>
+    <div><small>Customer (KOFAD record)</small><strong>{{ payment.customer_name }}</strong></div>
+    <div><small>Mobile Money network</small><strong>{{ payment.network }}</strong></div>
+    <div><small>Recipient number</small><strong>{{ payment.phone }}</strong></div>
+    <div><small>Cashier</small><strong>{{ payment.cashier }}</strong></div>
+    <div><small>Initiated</small><strong>{{ payment.created_at|date:"d M Y, H:i:s" }}</strong></div>
+    <div><small>Payment reference</small><code>{{ payment.reference }}</code></div>
+    <div><small>Paystack transaction ID</small><code id="payment-transaction-id">{{ payment.transaction_id|default:"Not yet confirmed" }}</code></div>
+  </div>
+  <p class="hint">Paystack does not provide a verified Ghana MoMo wallet-holder name through this flow. The name above comes from KOFAD's customer details, not the wallet operator.</p>
+  <div class="momo-actions">
+    <form method="post" action="{% url 'pos_momo_verify' payment.reference %}" id="payment-manual-verify">
+      {% csrf_token %}
+      <button class="button" id="payment-verify-button" {% if payment.paid or payment.attention or not payment.pending %}disabled{% endif %}>Verify payment with Paystack</button>
+    </form>
+    <a class="button secondary" href="{% url 'pos_momo_payments' %}">View all payments</a>
+    <a class="button secondary" href="{% url 'pos' %}">Leave and make another sale</a>
+  </div>
+  <div id="payment-otp" class="momo-otp {% if not payment.needs_otp %}hidden{% endif %}">
+    <h3>Paystack needs a one-time payment code</h3>
+    <p>Only enter the one-time code explicitly requested for this Paystack transaction. Never request or enter a customer's MoMo PIN.</p>
+    <form id="payment-code-form">{% csrf_token %}
+      <label>Payment code <input id="payment-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" pattern="[0-9]{4,8}" required></label>
+      <button class="button" type="submit">Submit payment code</button>
+    </form>
+  </div>
+  <div id="payment-receipt" class="momo-receipt {% if not payment.paid %}hidden{% endif %}">
+    <h3>Payment confirmed — receipt ready</h3>
+    <p>The receipt is available only after Paystack confirmed the transaction and KOFAD posted the sale.</p>
+    <div class="momo-actions">
+      <a class="button" id="payment-print" {% if payment.receipt_thermal %}href="{{ payment.receipt_thermal }}"{% endif %} target="_blank" rel="noopener">Print 80mm receipt</a>
+      <a class="button secondary" id="payment-a4" {% if payment.receipt_a4 %}href="{{ payment.receipt_a4 }}"{% endif %} target="_blank" rel="noopener">Download A4 PDF</a>
+      <a class="button secondary" id="payment-document" {% if payment.receipt %}href="{{ payment.receipt }}"{% endif %}>View full receipt</a>
+    </div>
+  </div>
+  {% if payment.attention %}<p class="notice">This transaction requires manager review. Do not create another payment for the same sale without reconciliation.</p>{% endif %}
+</section>
+<script src="{% static 'pos-momo-status.js' %}" defer></script>
+{% endblock %}
