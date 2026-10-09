@@ -61,7 +61,7 @@ def issue(user, owner, channel, destination):
             "token_digest": digest,
             "channel": channel,
             "destination": destination,
-            "expires_at": timezone.now() + timedelta(hours=24),
+            "expires_at": timezone.now() + timedelta(hours=1),
             "consumed_at": None, "delivered_at": None,
             "delivery_state": "pending",
         },
@@ -76,7 +76,7 @@ def deliver(invitation, url):
     """Send an invitation; no raw token in database, audit events or logs."""
     body = (
         "KOFAD IMPEX ENTERPRISE invited you to activate your staff account. "
-        "Set your own password with this private link (expires in 24 hours): " + url
+        "Set your own password with this private link (expires in 1 hour): " + url
         + " If unexpected, ignore this message."
     )
     try:
@@ -146,6 +146,7 @@ def open_invitation(request, pk, token):
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
     invitation = StaffInvitation.objects.select_related("user").filter(pk=pk).first()
     if not valid(invitation, digest):
+        request.session.pop("staff_invitation_pending", None)
         response = render(request, "staff_invitation_expired.html", status=410)
     else:
         request.session["staff_invitation_pending"] = {"pk": pk, "digest": digest}
