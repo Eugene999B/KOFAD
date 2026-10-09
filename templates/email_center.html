@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<link rel="stylesheet" href="{% static 'email-workspace.css' %}"><script defer src="{% static 'email-workspace.js' %}"></script>{% endblock %}
+{% block head %}<script defer src="{% static 'email-workspace.js' %}"></script>{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'email-workspace.css' %}">{% endblock %}
 {% block content %}
 <main class="mail-workspace">
   <header class="mail-banner">
