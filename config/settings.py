@@ -197,6 +197,8 @@ KOFAD_GMAIL_CLIENT_SECRET = os.environ.get("KOFAD_GMAIL_CLIENT_SECRET", "").stri
 # "smtp" for environments where SMTP is permitted.
 KOFAD_EMAIL_PROVIDER = os.environ.get("KOFAD_EMAIL_PROVIDER", "auto").strip().lower()
 KOFAD_BREVO_API_KEY = os.environ.get("KOFAD_BREVO_API_KEY", "").strip()
+# Conservative KOFAD-wide daily cap for Brevo HTTPS sending (enforced in database).
+KOFAD_BREVO_DAILY_LIMIT = int(os.environ.get("KOFAD_BREVO_DAILY_LIMIT", "300"))
 KOFAD_BREVO_SECURITY_FROM_EMAIL = os.environ.get("KOFAD_BREVO_SECURITY_FROM_EMAIL", "").strip()
 KOFAD_BREVO_TRANSACTION_FROM_EMAIL = os.environ.get("KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "").strip()
 KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", "").strip()
