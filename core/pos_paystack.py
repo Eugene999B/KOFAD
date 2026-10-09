@@ -234,7 +234,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         if existing.branch_id != branch.pk or existing.user_id != user.pk:
             raise ValidationError("This payment request could not be found.")
         candidate = copy.deepcopy(sale_payload)
-        candidate["customer_email"] = _customer_email(branch, candidate, email, phone)
+        _customer_email(branch, candidate, email, phone)
         if (existing.cart.get("sale_payload") != candidate or _state(existing).get("phone") != phone
                 or _state(existing).get("network") != provider):
             raise ValidationError("Use the original sale details for this payment request.")
