@@ -399,6 +399,46 @@ def _reset_sequences(models):
                 cursor.execute(statement)
 
 
+def _quarantine_restored_delivery_and_recovery():
+    """A backup is evidence of the past, not permission to resend or log in.
+
+    Restoring past queued messages could cause repeat financial/debt notices.
+    Similarly, staff invitations and one-time codes must not become active
+    again just because an older record was restored.
+    """
+    from marketplace.models import CustomerEmailRecovery, EmailIdentity, EmailNotice
+    from .models import Message, SmsAttempt, StaffInvitation, WhatsAppAttempt, WhatsAppBotReply
+
+    now = timezone.now()
+    EmailIdentity.objects.exclude(code_digest="").update(
+        code_digest="", pending_email="", requested_at=None, expires_at=None,
+        last_sent_at=None, code_attempts=0,
+    )
+    CustomerEmailRecovery.objects.filter(used=False).update(
+        used=True, expires_at=now, code_digest="",
+    )
+    StaffInvitation.objects.filter(consumed_at__isnull=True).update(expires_at=now)
+    EmailNotice.objects.filter(status__in=["queued", "sending"]).update(
+        status="failed", next_attempt_at=now,
+    )
+    Message.objects.filter(status__in=["queued", "sending"]).update(
+        status="unknown", last_error="Restored snapshot: delivery status requires manager review.",
+    )
+    SmsAttempt.objects.filter(status__in=["queued", "sending"]).update(status="unknown")
+    WhatsAppAttempt.objects.filter(status__in=["queued", "sending"]).update(status="unknown")
+    WhatsAppBotReply.objects.filter(status__in=["queued", "sending"]).update(
+        status="unknown", error="Restored snapshot: delivery status requires manual review.",
+    )
+
+
+def _verify_restored_rows(bundle):
+    expected = bundle.get("model_counts") or {}
+    for model in backup_models():
+        name = model._meta.label_lower
+        if model._default_manager.count() != expected.get(name, 0):
+            raise BackupError(f"Restored {name} record count does not agree with its signed manifest.")
+
+
 @transaction.atomic
 def restore_backup(bundle, actor_username=""):
     validate_backup(bundle)
@@ -415,11 +455,8 @@ def restore_backup(bundle, actor_username=""):
             restored_models.append(model)
             seen.add(model)
     _reset_sequences(restored_models)
-    # Restoring an old outbox must not resend messages already delivered after the snapshot.
-    from .models import WhatsAppBotReply
-    WhatsAppBotReply.objects.filter(status__in=["queued", "sending"]).update(
-        status="unknown", error="Restored from backup; delivery requires manual review.",
-    )
+    _verify_restored_rows(bundle)
+    _quarantine_restored_delivery_and_recovery()
 
     if not User.objects.filter(is_active=True, is_superuser=True).exists():
         raise BackupError("Restore would leave KOFAD without an active system administrator.")
@@ -527,6 +564,21 @@ def reset_business_data(actor):
     # TRUNCATE already clears sessions, but keep this explicit for non-PostgreSQL
     # test doubles and future storage changes.
     Session.objects.all().delete()
+
+    # Do not report a successful system reset if any old business row remains.
+    # Everything is inside the same database transaction and will roll back.
+    expected_shell = {"core.company": 1, "core.branch": 1, "core.access": 1}
+    for model in models:
+        expected = expected_shell.get(model._meta.label_lower, 0)
+        if model._default_manager.count() != expected:
+            raise BackupError(
+                f"Full reset did not clear {model._meta.label_lower} completely. "
+                "The reset was rolled back."
+            )
+    if User.objects.count() != 1 or not User.objects.filter(pk=actor_pk, is_active=True, is_superuser=True).exists():
+        raise BackupError("Administrator access was not preserved; reset rolled back.")
+    if Session.objects.exists():
+        raise BackupError("Old login sessions survived; reset rolled back.")
 
     logger.warning(
         "KOFAD fresh-start reset completed by administrator=%s; all core and marketplace data cleared",
