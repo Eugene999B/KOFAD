@@ -134,10 +134,17 @@
     if (!Number.isSafeInteger(points) || points < 0 || points > 10000) throw new Error("Enter a percentage from 0 to 100.");
     return points;
   };
+  // Server-managed online percentage is given only to the authorised POS.
+  // Monetary calculations use integer pesewas; the markup is applied once to
+  // the effective unit, AFTER an allowed discount, exactly as on the server.
+  const onlineMarkupThousandths = Math.round(Number(root.dataset.onlineMarkupPercent || "0") * 1000);
   const effectiveUnit = line => {
     const price = cents(line.price);
     const discount = percentBasisPoints(line.discount || "0");
-    return Math.round(price * (10000 - discount) / 10000);
+    const discounted = Math.round(price * (10000 - discount) / 10000);
+    return !purchase && directMomoSelected() && onlineMarkupThousandths > 0
+      ? Math.round(discounted * (100000 + onlineMarkupThousandths) / 100000)
+      : discounted;
   };
   const fail = msg => {
     errorBox.textContent = msg;
@@ -282,7 +289,7 @@
 
       if (purchase || allowPriceOverrides) {
         const priceWrap = el("label", undefined, "cart-control-field");
-        priceWrap.append(el("small", purchase ? "Purchase price" : "Selling price"));
+        priceWrap.append(el("small", purchase ? "Purchase price" : "Base selling price"));
         const price = el("input");
         price.type = "number";
         price.min = "0";
@@ -1053,6 +1060,9 @@
       }
       syncSinglePayment();
     }
+    // Switching cash ↔ provider-backed MoMo must immediately recalculate
+    // every displayed line and the exact full-payment amount.
+    render();
     syncPaystackMomoPanel();
     persist();
   }

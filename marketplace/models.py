@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -167,8 +167,12 @@ class MarketListing(models.Model):
 
     @property
     def market_price(self):
+        from .pricing import all_in_unit_price, online_markup_percent
         value = getattr(self.product, self.price_source, None)
-        return value if value is not None else Decimal("0")
+        if value is None:
+            return Decimal("0")
+        rate = getattr(self, "_online_price_percent", None)
+        return all_in_unit_price(value, rate if rate is not None else online_markup_percent())
 
     @property
     def factor(self):
@@ -606,6 +610,7 @@ class VerifiedMomoPhone(models.Model):
 class PaymentConfiguration(models.Model):
     """One company-wide checkout provider; secrets stay in environment variables."""
     provider = models.CharField(max_length=24, choices=[("paystack", "Paystack"), ("hubtel", "Hubtel")], default="paystack")
+    online_price_markup_percent = models.DecimalField(max_digits=6, decimal_places=3, default=Decimal("0"), validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Built into customer-visible Market and provider-backed POS MoMo product prices.")
 
     bank_account_name = models.CharField(max_length=140, blank=True)
     bank_account_number = models.CharField(max_length=40, blank=True)

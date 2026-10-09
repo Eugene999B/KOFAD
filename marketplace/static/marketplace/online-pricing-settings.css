@@ -1,0 +1,21 @@
+/* All-inclusive online payment pricing settings; staff-only dashboard */
+.payment-pricing-config{display:grid;gap:16px}
+.payment-pricing-config>p{margin:0;max-width:920px;color:var(--muted,#566878);line-height:1.75}
+.payment-markup-form{display:grid;gap:15px;padding:19px 20px;border:1px solid #d5e5e9;border-radius:17px;background:linear-gradient(125deg,#f8fcfd,#f6faf7)}
+.payment-markup-form>label{display:grid;gap:5px}
+.payment-markup-form label strong{font-size:14px;color:#12384a}
+.payment-markup-form label small{font-size:12px;color:#557184}
+.payment-markup-controls{display:flex;align-items:stretch;flex-wrap:wrap;gap:12px}
+.payment-markup-input{display:flex;align-items:center;min-width:160px;max-width:260px;background:#fff;border:1.5px solid #acc8d5;border-radius:13px;overflow:hidden}
+.payment-markup-input:focus-within{border-color:#0f747a;box-shadow:0 0 0 3px #13778818}
+.payment-markup-input input{flex:1;min-width:0;width:100%;border:0!important;outline:0!important;background:transparent;padding:10px 14px;font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#12384a}
+.payment-markup-input span{align-self:stretch;display:grid;place-items:center;min-width:44px;background:#e4f1f0;color:#125963;font-size:21px;font-weight:800}
+.payment-markup-controls .button{min-height:50px;border-radius:12px}
+.payment-pricing-config .hint{margin:0;font-size:12px;line-height:1.6}
+html[data-theme="dark"] .payment-markup-form{background:#142c39;border-color:#31546a}
+html[data-theme="dark"] .payment-markup-form label strong{color:#e6f5fa}
+html[data-theme="dark"] .payment-markup-form label small{color:#b4cbd6}
+html[data-theme="dark"] .payment-markup-input{background:#0e2635;border-color:#446678}
+html[data-theme="dark"] .payment-markup-input input{color:#f4f9fa}
+html[data-theme="dark"] .payment-markup-input span{background:#224654;color:#ddf2f6}
+@media(max-width:560px){.payment-markup-form{padding:16px}.payment-markup-controls{flex-direction:column;align-items:stretch}.payment-markup-input{max-width:none}.payment-markup-controls .button{width:100%}}

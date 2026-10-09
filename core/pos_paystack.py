@@ -106,12 +106,12 @@ def _save_state(held, state):
         held.cart = cart
 
 
-def _preview_total(user, branch, payload):
+def _preview_total(user, branch, payload, *, online_markup_percent=Decimal("0")):
     """Run the real sale validation and roll it back before any money is requested."""
     preview_key = str(uuid.uuid4())
     try:
         with transaction.atomic():
-            doc = services.post_trade(user, branch, copy.deepcopy(payload), preview_key, kind="sale")
+            doc = services.post_trade(user, branch, copy.deepcopy(payload), preview_key, kind="sale", online_markup_percent=online_markup_percent)
             raise _PreviewRollback(doc.total)
     except _PreviewRollback as exc:
         return exc.total
@@ -247,13 +247,15 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         raise ValidationError("Paystack direct MoMo is awaiting activation.")
     payload = copy.deepcopy(sale_payload)
     email = _customer_email(branch, payload, email, phone)
+    from marketplace.pricing import online_markup_percent as current_online_markup_percent
+    markup = current_online_markup_percent()
     paid_amount = _payment_amount(payload)
     if paid_amount <= 0:
         raise ValidationError("The Mobile Money deposit must be greater than zero.")
     # Preview executes the real sale/credit-policy validation atomically and
     # rolls everything back. An unpaid remainder is never posted until Paystack
     # proves that this exact MoMo deposit was received.
-    total = _preview_total(user, branch, payload)
+    total = _preview_total(user, branch, payload, online_markup_percent=markup)
     if total <= 0 or paid_amount > total:
         raise ValidationError("The MoMo payment cannot exceed the sale total.")
     if paid_amount < total and not (payload.get("party") or str(payload.get("customer_name") or "").strip()):
@@ -282,6 +284,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         "email": email,
         "amount": str(paid_amount),
         "sale_total": str(total),
+        "online_markup_percent": str(markup),
         "balance_due": str(total - paid_amount),
         "due_date": str(payload.get("due_date") or ""),
         "request_key": str(request_key),
@@ -490,6 +493,7 @@ def finalize_verified(reference, verified):
                 payload,
                 state.get("request_key"),
                 kind="sale",
+                online_markup_percent=Decimal(str(state.get("online_markup_percent", "0"))),
             )
             expected_total = Decimal(str(state.get("sale_total", state["amount"])))
             expected_paid = Decimal(str(state["amount"]))

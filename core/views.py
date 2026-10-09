@@ -596,6 +596,7 @@ def trade_screen(request, branch, kind):
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
         ),
         "pos_momo_gateway": payment_gateway,
+        "pos_online_markup_percent": __import__("marketplace.pricing", fromlist=["online_markup_percent"]).online_markup_percent() if kind == "sale" else 0,
         "paystack_pos_momo_ready": kind == "sale" and (
             payment_gateway_settings.ready("hubtel") if payment_gateway == "hubtel"
             else paystack_pos.ready()

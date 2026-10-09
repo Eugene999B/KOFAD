@@ -362,7 +362,7 @@ def _new_purchase_product(data):
 
 
 @transaction.atomic
-def post_trade(user, branch, payload, key, kind="sale"):
+def post_trade(user, branch, payload, key, kind="sale", *, online_markup_percent=Decimal("0")):
     if kind not in ("sale", "purchase"):
         raise ValidationError("Invalid transaction kind.")
     permit(user, branch, "operate_sales" if kind == "sale" else "operate_inventory")
@@ -496,6 +496,12 @@ def post_trade(user, branch, payload, key, kind="sale"):
             list_price = price
 
         price = money(price)
+        if kind == "sale" and online_markup_percent:
+            # Only trusted provider-backed POS callers set this argument.
+            # Never accept an unverified browser field to change the ledger.
+            from marketplace.pricing import all_in_unit_price
+            price = all_in_unit_price(price, online_markup_percent)
+            list_price = all_in_unit_price(list_price, online_markup_percent)
         if qty * factor > 1000000000:
             raise ValidationError("Base-unit quantity exceeds the supported posting limit.")
         line_total = money(price * qty)
