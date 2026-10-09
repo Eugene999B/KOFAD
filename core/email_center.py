@@ -287,22 +287,24 @@ def deliver_outgoing(limit=10):
             continue
         row = EmailLetter.objects.get(pk=pk)
         try:
-            response = requests.post(
-                "https://api.brevo.com/v3/smtp/email",
-                headers={"api-key": settings.KOFAD_BREVO_API_KEY,
-                         "accept": "application/json"},
-                json={"sender": {"name": "KOFAD IMPEX ENTERPRISE", "email": row.from_address},
-                      "to": [{"email": row.to_address}], "subject": row.subject,
-                      "textContent": row.body_text,
-                      "replyTo": {"email": row.from_address}},
-                timeout=15, allow_redirects=False,
+            from .brevo_email import send_brevo
+            send_brevo(subject=row.subject, body=row.body_text,
+                       recipient=row.to_address, purpose="transaction",
+                       sender_email=row.from_address)
+        except __import__("core.brevo_email", fromlist=["UncertainEmailDelivery"]).UncertainEmailDelivery:
+            EmailLetter.objects.filter(pk=pk).update(
+                status="uncertain",
+                last_error="Delivery status unknown; review before retry.",
             )
-            if response.status_code != 201:
-                raise ValueError("Sender rejected the message")
-        except requests.Timeout:
-            # Provider may have accepted before timeout; never blindly resend.
-            EmailLetter.objects.filter(pk=pk).update(status="uncertain",
-                                                       last_error="Delivery status unknown; review before retry.")
+        except __import__("core.brevo_email", fromlist=["DailyEmailLimitExceeded"]).DailyEmailLimitExceeded:
+            # Do not burn retry attempts while waiting for tomorrow's free allowance.
+            tomorrow = (timezone.localtime().replace(hour=0, minute=10, second=0,
+                                                     microsecond=0) + timedelta(days=1))
+            EmailLetter.objects.filter(pk=pk).update(
+                status="failed", next_attempt_at=tomorrow,
+                attempts=models.F("attempts") - 1,
+                last_error="Daily send allowance reached; queued for tomorrow.",
+            )
         except Exception:
             EmailLetter.objects.filter(pk=pk).update(
                 status="failed", next_attempt_at=timezone.now()
