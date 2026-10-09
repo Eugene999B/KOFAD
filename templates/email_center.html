@@ -203,6 +203,19 @@
       </details>
     </article>
   </section>
+  <section class="panel email-admin email-system-log" aria-label="System generated email history">
+    <div class="email-section-heading"><div><p class="eyebrow">SYSTEM NOTIFICATIONS · OWNER ONLY</p>
+      <h2>Automated notification history</h2>
+      <p>Receipts, order notices and other system-triggered emails recorded in the legacy notification queue.</p></div></div>
+    <div class="email-system-table-wrap"><table class="email-system-table"><thead><tr><th>Created</th><th>Event / subject</th><th>Recipient</th><th>Queue status</th><th>Attempts</th></tr></thead>
+      <tbody>{% for notice in system_notice_history %}
+      <tr><td>{{ notice.created_at|date:"j M Y, H:i" }}</td><td><strong>{{ notice.subject }}</strong><small>{{ notice.event_key|truncatechars:50 }}</small></td>
+      <td>{{ notice.email }}</td><td><span class="email-chip {% if notice.status == 'failed' %}status-failed{% elif notice.status == 'sent' %}status-submitted{% endif %}">{{ notice.get_status_display }}</span></td>
+      <td>{{ notice.attempts }}</td></tr>
+      {% empty %}<tr><td colspan="5">No automated email notices have been created yet.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <p class="email-help">"Sent" means KOFAD submitted the email to the provider; it does not prove that the message reached an inbox. One-time security codes are not displayed here.</p>
+  </section>
   {% endif %}
 </section>
 {% endblock %}
