@@ -1,17 +1,23 @@
-"""Transactional KOFAD email through Brevo HTTPS API (no SMTP sockets).
-
-Requires an approved sender domain in Brevo and an API key stored only in
-Railway secure variables. This does not create or host incoming mailboxes.
-"""
+"""KOFAD business email via Brevo HTTPS, with a conservative daily send cap."""
 import logging
 import requests
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.db import models, transaction
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 API_URL = "https://api.brevo.com/v3/smtp/email"
+
+
+class UncertainEmailDelivery(Exception):
+    """A timeout after request submission may still have delivered the email."""
+
+
+def daily_limit():
+    return min(300, max(1, int(getattr(settings, "KOFAD_BREVO_DAILY_LIMIT", 300))))
 
 
 def ready():
@@ -22,48 +28,74 @@ def ready():
     )
 
 
-def send_brevo(*, subject, body, recipient, purpose="transaction"):
-    """Send one plain-text message from an explicitly verified business role."""
+def _reserve():
+    from .email_models import EmailDailyUsage
+    with transaction.atomic():
+        row, _ = EmailDailyUsage.objects.get_or_create(day=timezone.localdate())
+        row = EmailDailyUsage.objects.select_for_update().get(pk=row.pk)
+        if row.attempted >= daily_limit():
+            raise ValidationError("KOFAD daily outgoing email allowance has been reached.")
+        row.attempted += 1
+        row.save(update_fields=["attempted"])
+        return row.pk
+
+
+def usage_today():
+    from .email_models import EmailDailyUsage
+    today = timezone.localdate()
+    row = EmailDailyUsage.objects.filter(day=today).first()
+    attempted = row.attempted if row else 0
+    return {
+        "date": today, "limit": daily_limit(), "attempted": attempted,
+        "accepted": row.accepted if row else 0,
+        "failed": row.failed if row else 0,
+        "remaining": max(0, daily_limit() - attempted),
+    }
+
+
+def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None):
     if not ready():
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
         raise ValueError("Invalid KOFAD business email purpose.")
-    sender = (
+    sender = sender_email or (
         settings.KOFAD_BREVO_SECURITY_FROM_EMAIL if purpose == "security"
         else settings.KOFAD_BREVO_TRANSACTION_FROM_EMAIL
     )
+    for address in (recipient, sender):
+        validate_email(address)
+    if not sender.lower().endswith("@kofadimpex.com"):
+        raise ValidationError("Unverified KOFAD business sender.")
+    reply = getattr(settings, "KOFAD_SUPPORT_REPLY_TO_EMAIL", "")
+    if reply:
+        validate_email(reply)
+    if not isinstance(body, str) or len(body) > 100000 or len(subject) > 255:
+        raise ValidationError("Email content is too long.")
+
+    # Reserve before calling Brevo: concurrent services cannot exceed our cap.
+    # Attempts remain counted on timeouts because delivery status is unknown.
+    pk = _reserve()
+    from .email_models import EmailDailyUsage
+    payload = {
+        "sender": {"name": "KOFAD IMPEX ENTERPRISE", "email": sender},
+        "to": [{"email": recipient}], "subject": subject, "textContent": body,
+        "replyTo": {"email": sender_email or reply or sender},
+    }
     try:
-        for address in (recipient, sender):
-            validate_email(address)
-        reply = getattr(settings, "KOFAD_SUPPORT_REPLY_TO_EMAIL", "")
-        if reply:
-            validate_email(reply)
-        payload = {
-            "sender": {"name": "KOFAD IMPEX ENTERPRISE", "email": sender},
-            "to": [{"email": recipient}],
-            "subject": subject,
-            "textContent": body,
-        }
-        if reply:
-            payload["replyTo"] = {"email": reply, "name": "KOFAD Support"}
         response = requests.post(
-            API_URL,
-            json=payload,
-            headers={
-                "api-key": settings.KOFAD_BREVO_API_KEY,
-                "Content-Type": "application/json",
-                "accept": "application/json",
-            },
-            timeout=15,
-            allow_redirects=False,
+            API_URL, json=payload,
+            headers={"api-key": settings.KOFAD_BREVO_API_KEY,
+                     "Content-Type": "application/json", "accept": "application/json"},
+            timeout=15, allow_redirects=False,
         )
-        response.raise_for_status()
-        # Brevo returns HTTP 201 when the message is accepted for delivery.
-        if response.status_code != 201:
-            raise ValueError("Unexpected sender response status.")
-        return 1
-    except (requests.RequestException, ValueError, ValidationError) as exc:
-        # Do not include customer recipient, message body or provider response
-        # details in application logs.
-        logger.warning("KOFAD Brevo API delivery unavailable; retry is managed by the outbox")
-        raise ValidationError("Email sending is temporarily unavailable.") from exc
+    except requests.Timeout as exc:
+        logger.warning("KOFAD email provider timeout; status uncertain")
+        raise UncertainEmailDelivery from exc
+    except requests.RequestException as exc:
+        EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
+        raise ValidationError("Email sending temporarily unavailable.") from exc
+    if response.status_code != 201:
+        EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
+        raise ValidationError("Email provider did not accept the message.")
+    EmailDailyUsage.objects.filter(pk=pk).update(accepted=models.F("accepted") + 1)
+    return 1
