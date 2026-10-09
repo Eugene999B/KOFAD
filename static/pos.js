@@ -25,8 +25,15 @@
   let lastCompletedSale = null;
   let momoReference = null;
   let momoPollTimer = null;
+  let momoRecipientToken = "";
+  let momoRecipientDetails = null;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
+  // Leaving the status screen must not trap the cashier in an old cart;
+  // the original charge remains in the database and worker reconciliation.
+  if (new URLSearchParams(location.search).get("new") === "1") {
+    try { sessionStorage.removeItem(storageKey); } catch (_) {}
+  }
   try {
     restoredState = JSON.parse(sessionStorage.getItem(storageKey) || "null");
     if (restoredState && Array.isArray(restoredState.cart) && restoredState.cart.length <= 100) {
@@ -82,6 +89,11 @@
   const paystackMomoPhone = document.querySelector("#paystack-momo-phone");
   const paystackMomoEmail = document.querySelector("#paystack-momo-email");
   const paystackMomoStatus = document.querySelector("#paystack-momo-status");
+  const momoCheckRecipient = document.querySelector("#momo-check-recipient");
+  const momoRecipientResult = document.querySelector("#momo-recipient-result");
+  const momoRecipientName = document.querySelector("#momo-recipient-name");
+  const momoRecipientMeta = document.querySelector("#momo-recipient-meta");
+  const momoRecipientConsent = document.querySelector("#momo-recipient-consent");
   const completeButton = document.querySelector("#complete");
   const completeSaleHint = document.querySelector("#complete-sale-hint");
   const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
@@ -688,6 +700,7 @@
 
 
   function showSelectedCustomer(customer) {
+    resetMomoRecipientReview();
     selectedCustomer = customer;
     newCustomerMode = false;
     if (partyInput) partyInput.value = customer.id;
@@ -712,6 +725,7 @@
   }
 
   function clearCustomer() {
+    resetMomoRecipientReview();
     selectedCustomer = null;
     newCustomerMode = false;
     if (partyInput) partyInput.value = "";
@@ -1318,6 +1332,46 @@
     }
   }
 
+  function resetMomoRecipientReview() {
+    momoRecipientToken = "";
+    momoRecipientDetails = null;
+    if (momoRecipientConsent) momoRecipientConsent.checked = false;
+    momoRecipientResult?.classList.add("hidden");
+  }
+
+  for (const control of [paystackMomoPhone, paystackMomoProvider, customerName, customerPhone, partyInput]) {
+    control?.addEventListener("input", resetMomoRecipientReview);
+    control?.addEventListener("change", resetMomoRecipientReview);
+  }
+
+  momoCheckRecipient?.addEventListener("click", async () => {
+    try {
+      resetMomoRecipientReview();
+      const phone = paystackMomoPhone?.value.trim() || selectedCustomer?.phone || customerPhone?.value.trim() || "";
+      const name = (selectedCustomer?.name || customerName?.value || "").trim();
+      if (!phone || name.length < 2) throw new Error("Choose or enter a customer and their Mobile Money number.");
+      momoCheckRecipient.disabled = true;
+      const result = await api("/api/pos/paystack-momo/recipient-review/", {
+        phone, name, party: selectedCustomer?.id || null,
+        provider: paystackMomoProvider?.value || "mtn",
+        request_key: requestKey
+      });
+      if (!result.review_token) throw new Error("Recipient review could not be completed.");
+      momoRecipientToken = result.review_token;
+      momoRecipientDetails = {phone, name:result.customer_name, network:result.network};
+      momoRecipientName.textContent = result.customer_name + " — KOFAD customer details";
+      momoRecipientMeta.textContent = result.phone + " · " + result.network +
+        " · " + result.name_source + " (not mobile-network verified)" +
+        (result.phone_matches_record === false ? " · Number differs from saved customer contact" : "");
+      momoRecipientResult.classList.remove("hidden");
+      setMomoStatus("Ask the customer to confirm these details, then tick the consent box before sending a prompt.");
+    } catch (error) {
+      setMomoStatus(error.message || "Could not review the customer details.", "error");
+    } finally {
+      momoCheckRecipient.disabled = false;
+    }
+  });
+
   async function startPaystackMomo() {
     if (!directMomoSelected() || !paystackMomoReady) return false;
     if (!pendingBody) pendingBody = buildCheckoutBody();
@@ -1326,22 +1380,10 @@
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
     if (momoGateway === "paystack" && email && !email.includes("@")) throw new Error("Enter a valid customer email or leave it blank for a walk-in MoMo payment.");
-    // Paystack's Ghana Charge API does not return a wallet-holder-name lookup.
-    // Require the cashier to confirm the entered customer identity and consent
-    // before any prompt is sent to a phone they may have mistyped.
-    if (momoGateway === "paystack") {
-      const displayName = (selectedCustomer?.name || customerName?.value || "").trim();
-      if (displayName.length < 2) throw new Error("Choose or enter the customer name before requesting Mobile Money.");
-      const accepted = window.confirm(
-        "CONFIRM PAYMENT RECIPIENT\n\nCustomer: " + displayName +
-        "\nMobile Money: " + phone + "\nNetwork: " + provider.toUpperCase() +
-        "\n\nHave you checked these details with the customer and obtained permission to send the payment prompt? The wallet holder's registered name is NOT independently verified by Paystack."
-      );
-      if (!accepted) {
-        pendingBody = null;
-        persist();
-        return false;
-      }
+    // KOFAD's recipient review is signed and bound to this cashier, phone,
+    // network, sale key and branch. It is NOT a wallet-provider name lookup.
+    if (momoGateway === "paystack" && (!momoRecipientToken || !momoRecipientConsent?.checked)) {
+      throw new Error("Click Check customer details, confirm them with the customer and tick the consent box before sending payment.");
     }
 
     setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
@@ -1353,7 +1395,8 @@
         email,
         provider,
         payment_gateway: momoGateway,
-        recipient_confirmed: momoGateway === "paystack",
+        recipient_confirmed: momoGateway === "paystack" && Boolean(momoRecipientConsent?.checked),
+        recipient_review_token: momoGateway === "paystack" ? momoRecipientToken : "",
         request_key: requestKey
       }, requestKey);
       momoReference = result.reference || momoReference;
@@ -1362,6 +1405,11 @@
       syncMomoChallenge(result);
       syncHubtelCheckoutLink(result);
       persist();
+      if (momoGateway === "paystack") {
+        // Track a durable provider reference, not a fragile payment modal.
+        location.assign("/payments/momo/" + encodeURIComponent(momoReference) + "/");
+        return true;
+      }
       if (result.paid && result.sale) {
         completed = true;
         momoReference = null;
