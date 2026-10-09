@@ -763,8 +763,13 @@ def _rows(request, dataset, branch, first, last):
 
     if dataset == "audit":
         rows = []
+        # System-wide events can contain cross-location security evidence.
+        # Only the owner may include unassigned/global audit events.
+        audit_scope = Q(branch=branch)
+        if request.user.is_superuser:
+            audit_scope |= Q(branch__isnull=True)
         for row in Audit.objects.filter(
-            Q(branch=branch) | Q(branch__isnull=True),
+            audit_scope,
             created_at__date__gte=first, created_at__date__lte=last,
         ).select_related("actor").order_by("-created_at"):
             integrity = ""
@@ -852,7 +857,10 @@ def _rows(request, dataset, branch, first, last):
     if dataset == "staff":
         from django.contrib.auth.models import User
         rows = []
-        for user in User.objects.prefetch_related("groups").select_related("access").order_by("username"):
+        accounts = User.objects.prefetch_related("groups").select_related("access")
+        if not request.user.is_superuser:
+            accounts = accounts.filter(access__branches=branch).distinct()
+        for user in accounts.order_by("username"):
             role = "System administrator" if user.is_superuser else ", ".join(user.groups.values_list("name", flat=True)) or "No role"
             rows.append({
                 "username": user.username,
