@@ -572,7 +572,7 @@ class ConversationAttachment(models.Model):
 
 
 class OtpThrottle(models.Model):
-    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login"), ("change_phone", "Change phone")]
+    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login"), ("change_phone", "Change phone"), ("momo", "First Mobile Money payment")]
     phone = models.CharField(max_length=20)
     purpose = models.CharField(max_length=12, choices=PURPOSES)
     send_count = models.PositiveIntegerField(default=0)
@@ -585,6 +585,22 @@ class OtpThrottle(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["phone", "purpose"], name="one_market_otp_throttle")]
+
+
+class VerifiedMomoPhone(models.Model):
+    """Customer-specific proof of phone control; never wallet-name verification."""
+    customer = models.ForeignKey(
+        CustomerAccount, on_delete=models.CASCADE, related_name="verified_momo_phones"
+    )
+    phone = models.CharField(max_length=20)
+    verified_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["customer", "phone"], name="one_verified_momo_phone_per_customer"
+            )
+        ]
 
 
 class PaymentConfiguration(models.Model):
