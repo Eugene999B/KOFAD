@@ -95,6 +95,55 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["currency"], "GHS")
         self.assertEqual(post.call_args.kwargs["json"]["mobile_money"]["provider"], "mtn")
 
+
+    @patch("core.pos_paystack.requests.post")
+    def test_walk_in_momo_without_customer_email_uses_processor_only_alias(self, post):
+        self.customer.email = ""
+        self.customer.save(update_fields=["email"])
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        post.return_value = self.charge_response(reference)
+        payload = self.payload()
+        result = pos_paystack.start(
+            self.user, self.branch, payload, key, "0551234567", "mtn", "",
+        )
+        sent_email = post.call_args.kwargs["json"]["email"]
+        self.assertTrue(sent_email.startswith("momo-"))
+        self.assertTrue(sent_email.endswith("@kofadimpex.com"))
+        self.assertTrue(result["waiting"])
+        stored = HeldSale.objects.get(label=pos_paystack.LABEL_PREFIX + reference)
+        self.assertFalse(stored.cart["sale_payload"].get("customer_email"))
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.email, "")
+        # Retries must keep their original reference and never issue a second prompt.
+        result_again = pos_paystack.start(
+            self.user, self.branch, self.payload(), key, "0551234567", "mtn", "",
+        )
+        self.assertEqual(result_again["reference"], reference)
+        self.assertEqual(post.call_count, 1)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_invalid_explicit_customer_email_is_rejected_not_silently_replaced(self, post):
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(
+                self.user, self.branch, self.payload(), uuid.uuid4(),
+                "0551234567", "mtn", "not-an-email",
+            )
+        post.assert_not_called()
+
+    @patch("core.pos_paystack.requests.post")
+    def test_real_customer_email_is_still_used_for_paystack(self, post):
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        post.return_value = self.charge_response(reference)
+        pos_paystack.start(
+            self.user, self.branch, self.payload(), key,
+            "0551234567", "mtn", "customer@example.test",
+        )
+        self.assertEqual(
+            post.call_args.kwargs["json"]["email"], "customer@example.test"
+        )
+
     @patch("core.pos_paystack.requests.post")
     def test_start_is_idempotent_for_same_sale_key(self, post):
         key = uuid.uuid4()

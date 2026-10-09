@@ -210,9 +210,10 @@
               <input id="paystack-momo-phone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="0551234567">
             </label>
           </div>
-          <label>Customer email
+          <label>Customer email (optional for direct MoMo)
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          {% if pos_momo_gateway != "hubtel" %}<p class="hint">No email? Paystack receives a unique processor-only address for this wallet. It is not saved as the customer's email; consented receipts still use KOFAD's SMS/WhatsApp options.</p>{% endif %}
           <a id="hubtel-momo-checkout-link" class="button hidden" target="_blank" rel="noopener noreferrer" href="#">Open secure Hubtel checkout ↗</a>
           <div id="paystack-momo-challenge" class="hidden">
             <label>One-time payment code

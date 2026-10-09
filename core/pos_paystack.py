@@ -137,7 +137,13 @@ def _payment_amount(payload):
     return nonzero[0][1]
 
 
-def _customer_email(branch, payload, supplied):
+def _customer_email(branch, payload, supplied, phone):
+    """Paystack requires an email, but many Ghana counter customers only have MoMo.
+
+    Where no real customer email was given, use a stable *processor-only* alias.
+    Never save this generated address to KOFAD's customer or ledger records,
+    queue email notifications to it, or represent it as customer consent.
+    """
     supplied = str(supplied or "").strip().lower()
     party = None
     if payload.get("party"):
@@ -147,12 +153,18 @@ def _customer_email(branch, payload, supplied):
     email = supplied or (party.email.strip().lower() if party and party.email else "") or str(
         payload.get("customer_email", "")
     ).strip().lower()
-    try:
-        validate_email(email)
-    except ValidationError as exc:
-        raise ValidationError("Enter the customer's email before requesting a Paystack MoMo payment.") from exc
-    payload["customer_email"] = email
-    return email
+    if email:
+        try:
+            validate_email(email)
+        except ValidationError as exc:
+            raise ValidationError("Enter a valid customer email address, or leave the field blank.") from exc
+        payload["customer_email"] = email
+        return email
+    # Paystack's integration guidance permits customer-specific merchant-domain
+    # addresses when merchants collect a phone number but not an email.
+    # Only use this in the Paystack API payload; the KOFAD sale keeps no email.
+    unique_suffix = hashlib.sha256(("kofad-pos-momo:" + phone).encode()).hexdigest()[:24]
+    return f"momo-{unique_suffix}@kofadimpex.com"
 
 
 def _response_state(held):
@@ -222,7 +234,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         if existing.branch_id != branch.pk or existing.user_id != user.pk:
             raise ValidationError("This payment request could not be found.")
         candidate = copy.deepcopy(sale_payload)
-        candidate["customer_email"] = _customer_email(branch, candidate, email)
+        _customer_email(branch, candidate, email, phone)
         if (existing.cart.get("sale_payload") != candidate or _state(existing).get("phone") != phone
                 or _state(existing).get("network") != provider):
             raise ValidationError("Use the original sale details for this payment request.")
@@ -235,7 +247,7 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     payload = copy.deepcopy(sale_payload)
     if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
         raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
-    email = _customer_email(branch, payload, email)
+    email = _customer_email(branch, payload, email, phone)
     paid_amount = _payment_amount(payload)
     total = _preview_total(user, branch, payload)
     if paid_amount != total or total <= 0:
