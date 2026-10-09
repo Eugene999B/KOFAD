@@ -41,7 +41,7 @@ class RequestSizeLimitMiddleware:
 def _public_indexable_path(path):
     """Only explicitly public company/market pages are indexable."""
     if path in {
-        "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/", "/apps/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
         "/terms/", "/privacy/", "/contact/", "/market/",
         "/robots.txt", "/sitemap.xml", "/favicon.ico",
     }:
