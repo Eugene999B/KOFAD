@@ -456,11 +456,23 @@ def inbox(request, section="inbox"):
          or mailbox.branch_id in allowed_staff_branches}
         for mailbox in all_mailboxes
     ] if owner(request.user) else []
+    verified_senders = {
+        value.strip().lower()
+        for value in getattr(settings, "KOFAD_BREVO_REGISTERED_SENDERS",
+                             getattr(settings, "KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "")).split(",")
+        if value.strip()
+    }
+    shared_sender_email = getattr(settings, "KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "")
+    uses_shared_sender = bool(
+        chosen and chosen.address.lower() not in verified_senders
+    )
     return render(request, "email_center.html", {
         "title": "Email Centre", "mailboxes": all_mailboxes, "selected": chosen,
         "email_section": section, "email_selected_staff": selected_staff,
         "email_permission_rows": permission_rows,
         "email_staff_can_reply": staff_can_reply,
+        "email_shared_sender": shared_sender_email,
+        "email_uses_shared_sender": uses_shared_sender,
         "letters": letters, "writable_ids": can_write,
         "conversations": conversations, "active_thread": active_thread,
         "thread_letters": thread_letters, "thread_notes": thread_notes,
