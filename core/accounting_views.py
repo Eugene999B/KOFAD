@@ -172,7 +172,11 @@ def accounting(request, branch):
     integrity_page = None
     if view == "integrity":
         from .finance_integrity import financial_controls
-        checks, integrity_summary = financial_controls(branch, first, last)
+        try:
+            checks, integrity_summary = financial_controls(branch, first, last)
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+            return redirect("/accounting/?view=overview")
         integrity_rows = [row for row in checks if row["status"] != "OK"]
         integrity_page = Paginator(integrity_rows, 80).get_page(request.GET.get("page"))
 
@@ -218,7 +222,13 @@ def accounting_export(request, branch, format):
 
     if view == "integrity":
         from .finance_integrity import financial_controls, COLUMNS
-        rows, _ = financial_controls(branch, first, last)
+        try:
+            rows, _ = financial_controls(branch, first, last)
+        except ValidationError as exc:
+            return render(request, "error.html", {
+                "title": "Narrow the accounting audit range",
+                "error": problem(exc),
+            }, status=400)
         columns = COLUMNS
         title, sheet = "Financial integrity reconciliation", "Finance Integrity"
     elif view == "ledger":
