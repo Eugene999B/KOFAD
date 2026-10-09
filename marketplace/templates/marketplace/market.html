@@ -6,7 +6,7 @@
 <header class="shop-catalog-head">
 <div><p>KOFAD MARKET</p><h1>{% if selected_category %}{{ selected_category }}{% elif q %}Search results{% else %}All products{% endif %}</h1><span>{{ listings|length }} item{{ listings|length|pluralize }}{% if q %} for “{{ q }}”{% endif %}</span></div>
 <form method="get" class="shop-catalog-filters">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
-<label class="shop-sort"><span>Sort products</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Featured</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low to high</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high to low</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Product name</option></select></label>
+<label class="shop-sort"><span>Sort products</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Recommended</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low to high</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high to low</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Product name</option></select></label>
 </form>
 </header>
 
