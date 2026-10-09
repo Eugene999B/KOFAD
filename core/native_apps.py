@@ -4,7 +4,8 @@ No install button is enabled until a real, approved, signed release location
 is configured. This module never hands out privileged staff download metadata
 on a public endpoint.
 """
-from urllib.parse import urlsplit
+import re
+from urllib.parse import parse_qs, urlsplit
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -20,7 +21,7 @@ PLATFORMS = (
 )
 
 
-def approved_release_url(value, platform):
+def approved_release_url(value, platform, kind=None):
     """Reject redirects, IPs, credentials, scheme downgrades and unknown stores."""
     if not isinstance(value, str) or not value or len(value) > 1200:
         return ""
@@ -32,17 +33,21 @@ def approved_release_url(value, platform):
         if parsed.fragment or parsed.netloc.lower() != hostname:
             return ""
         path = parsed.path or ""
-        owned = hostname == "kofadimpex.com" or hostname.endswith(".kofadimpex.com")
+        owned = hostname == "downloads.kofadimpex.com"
         if platform == "ios":
-            return value.strip() if hostname == "apps.apple.com" and path.startswith("/") else ""
+            return value.strip() if hostname == "apps.apple.com" and re.search(r"/id\\d+(?:/)?$", path) else ""
         if platform == "android":
-            if hostname == "play.google.com" and path == "/store/apps/details" and "id=" in parsed.query:
+            identifier = parse_qs(parsed.query).get("id", [""])[0]
+            expected = "com.kofadimpex." + ("market" if kind == "customer" else "staff") if kind else ""
+            if hostname == "play.google.com" and path == "/store/apps/details" and (
+                identifier == expected if expected else bool(identifier)
+            ):
                 return value.strip()
-            if owned and path.lower().endswith(".apk") and not parsed.query:
+            if owned and path.startswith("/android/" + kind + "/") and path.lower().endswith(".apk") and not parsed.query:
                 return value.strip()
             return ""
         if platform == "windows":
-            if owned and path.lower().endswith((".exe", ".msi", ".msix")) and not parsed.query:
+            if owned and path.startswith("/windows/" + kind + "/") and path.lower().endswith((".exe", ".msi", ".msix")) and not parsed.query:
                 return value.strip()
             return ""
     except ValueError:
@@ -57,7 +62,7 @@ def app_metadata(kind):
     entries = []
     for platform, label, description in PLATFORMS:
         value = getattr(settings, prefix + platform.upper() + "_URL", "")
-        url = approved_release_url(value, platform)
+        url = approved_release_url(value, platform, kind)
         entries.append({
             "id": platform, "label": label, "description": description,
             "url": url, "available": bool(url),
