@@ -309,7 +309,7 @@
       </form>
       <div class="mail-staff-context"><span class="mail-avatar">{{ email_selected_staff.username|first|upper }}</span>
         <div><strong>{{ email_selected_staff.get_full_name|default:email_selected_staff.username }}</strong>
-        <p>{% if email_selected_staff.has_perm %}Permissions follow this employee's assigned staff role.{% endif %} Reply access also requires the role's sending permission.</p></div></div>
+        <p>Permissions follow this employee's staff role. Reply access also requires the role's sending permission.</p></div></div>
       <form method="post" action="{% url 'email_team' %}" class="mail-bulk-form">{% csrf_token %}
         <input type="hidden" name="action" value="bulk_assign"><input type="hidden" name="user_id" value="{{ email_selected_staff.pk }}">
         <div class="mail-permission-head"><strong>Department mailbox</strong><strong>Read</strong><strong>Reply</strong></div>
