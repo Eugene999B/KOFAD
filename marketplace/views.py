@@ -1067,7 +1067,10 @@ def checkout(request, customer):
                         payment_form.cleaned_data["momo_phone"],
                         payment_form.cleaned_data["momo_network"])
                     return redirect("market_order", pk=order.pk)
-                hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+                if hubtel.selected_provider() == "paystack":
+                    services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+                else:
+                    hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
                 return redirect("market_payment_launch", pk=order.pk)
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -1114,7 +1117,10 @@ def order_pay(request, customer, pk):
             momo_security.begin(request, customer, order,
                 form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"])
             return redirect("market_order", pk=order.pk)
-        hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+        if hubtel.selected_provider() == "paystack":
+            services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+        else:
+            hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
         return redirect("market_payment_launch", pk=order.pk)
     except ValidationError as exc:
         messages.error(request, problem(exc))
