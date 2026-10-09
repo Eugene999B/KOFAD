@@ -1,5 +1,6 @@
 """Regression tests for all-inclusive product prices across online payment channels."""
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -102,6 +103,19 @@ class AllInclusiveOnlinePricingTests(MarketFixtures):
         next_order = self.order()
         self.assertEqual(next_order.total, Decimal("208.00"))
         self.assertEqual(OnlineOrder.objects.count(), 2)
+
+    @patch("marketplace.hubtel.selected_provider", return_value="hubtel")
+    def test_first_percentage_save_keeps_existing_selected_hubtel_gateway(self, selected):
+        self.staff_session()
+        self.assertFalse(PaymentConfiguration.objects.exists())
+        response = self.client.post("/settings/online-payments/", {
+            "action": "online_price_markup", "percentage": "1.95",
+        })
+        self.assertEqual(response.status_code, 302)
+        config = PaymentConfiguration.objects.get(pk=1)
+        self.assertEqual(config.provider, "hubtel")
+        self.assertEqual(config.online_price_markup_percent, Decimal("1.950"))
+        selected.assert_called()
 
     def test_provider_configuration_update_does_not_erase_saved_percentage(self):
         self.staff_session()
