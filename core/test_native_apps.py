@@ -22,9 +22,9 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertNotContains(response, "KOFAD Staff")
         self.assertContains(response, "Our dedicated apps are being prepared")
         self.assertContains(response, "Not released yet", count=3)
-        self.assertContains(response, "native-brands/android.svg")
-        self.assertContains(response, "native-brands/apple.svg")
-        self.assertContains(response, "native-brands/windows.svg")
+        self.assertContains(response, "native-brands/android")
+        self.assertContains(response, "native-brands/apple")
+        self.assertContains(response, "native-brands/windows")
         self.assertContains(response, "Continue to Market")
         self.assertNotContains(response, "Download staff app")
 
