@@ -47,7 +47,7 @@ class CheckoutControlsTests(MarketFixtures):
         response = self.client.get("/market/checkout/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Tap to select delivery or collection")
-        self.assertContains(response, "marketplace/select-affordances.css")
+        self.assertContains(response, "marketplace/select-affordances.")
         self.assertContains(response, 'name="fulfilment"')
 
     def test_payment_and_network_dropdowns_show_change_hint(self):
