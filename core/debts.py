@@ -232,8 +232,8 @@ def post_customer_payment(user, branch, payload, key):
         "remaining_customer_debt": str(total_outstanding - amount),
         "note": note,
     })
-    from .debt_email import queue_debt_payment
-    transaction.on_commit(lambda document_id=doc.pk: queue_debt_payment(Document.objects.select_related("party", "created_by").get(pk=document_id)))
+    from .debt_email import safe_queue_debt_payment
+    transaction.on_commit(lambda document_id=doc.pk: safe_queue_debt_payment(document_id))
     from . import automations
     transaction.on_commit(
         lambda document_id=doc.pk, actor_id=user.pk:
