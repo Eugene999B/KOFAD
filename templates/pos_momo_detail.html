@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load static %}
 {% block head %}<link rel="stylesheet" href="{% static 'pos-momo-status.css' %}">{% endblock %}
-{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'pos_momo_payments' %}">MoMo payment history</a><a class="button secondary" href="{% url 'pos' %}">New sale</a></div>{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'pos_momo_payments' %}">MoMo payment history</a><a class="button secondary" href="{% url 'pos' %}?new=1">New sale</a></div>{% endblock %}
 {% block content %}
 <section class="panel momo-stage" data-reference="{{ payment.reference }}" id="momo-monitor">
   <p class="eyebrow">PAYSTACK DIRECT MOBILE MONEY</p>
@@ -27,7 +27,7 @@
       <button class="button" id="payment-verify-button" {% if payment.paid or payment.attention or not payment.pending %}disabled{% endif %}>Verify payment with Paystack</button>
     </form>
     <a class="button secondary" href="{% url 'pos_momo_payments' %}">View all payments</a>
-    <a class="button secondary" href="{% url 'pos' %}">Leave and make another sale</a>
+    <a class="button secondary" href="{% url 'pos' %}?new=1">Leave and make another sale</a>
   </div>
   <div id="payment-otp" class="momo-otp {% if not payment.needs_otp %}hidden{% endif %}">
     <h3>Paystack needs a one-time payment code</h3>
