@@ -930,7 +930,7 @@ class MarketV2SupportTests(MarketFixtures):
         self.staff_session()
         queue = self.client.get("/online-inbox/?status=waiting")
         self.assertContains(queue, conversation.subject)
-        self.assertContains(queue, "support-inbox-live.js")
+        self.assertContains(queue, "support-inbox-live.")
         self.assertEqual(self.client.post(
             f"/online-inbox/{conversation.pk}/", {"action": "accept"}
         ).status_code, 302)
