@@ -1333,9 +1333,9 @@
       const displayName = (selectedCustomer?.name || customerName?.value || "").trim();
       if (displayName.length < 2) throw new Error("Choose or enter the customer name before requesting Mobile Money.");
       const accepted = window.confirm(
-        "CONFIRM PAYMENT RECIPIENT\\n\\nCustomer: " + displayName +
-        "\\nMobile Money: " + phone + "\\nNetwork: " + provider.toUpperCase() +
-        "\\n\\nHave you checked these details with the customer and obtained permission to send the payment prompt? The wallet holder's registered name is NOT independently verified by Paystack."
+        "CONFIRM PAYMENT RECIPIENT\n\nCustomer: " + displayName +
+        "\nMobile Money: " + phone + "\nNetwork: " + provider.toUpperCase() +
+        "\n\nHave you checked these details with the customer and obtained permission to send the payment prompt? The wallet holder's registered name is NOT independently verified by Paystack."
       );
       if (!accepted) {
         pendingBody = null;
