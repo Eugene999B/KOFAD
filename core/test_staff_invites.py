@@ -1,7 +1,12 @@
 from datetime import timedelta
+from importlib import import_module
+from unittest.mock import patch
 from urllib.parse import urlparse
 
+from django.apps import apps
 from django.contrib.auth.models import User
+from django.db import connection
+from django.test import Client
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -47,6 +52,93 @@ class StaffInvitationSecurityTests(TestCase):
         self.assertTrue(self.newcomer.check_password(password))
         self.assertIsNotNone(invite.consumed_at)
         self.assertEqual(self.client.get(url).status_code, 410)
+
+    def test_new_staff_invitation_expires_after_exactly_one_hour(self):
+        start = timezone.now()
+        invitation, url = self.invite()
+        self.assertLess(abs((invitation.expires_at - start).total_seconds() - 3600), 10)
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.assertEqual(self.client.get("/staff-invite/complete/").status_code, 200)
+        self.assertEqual(self.client.get(url.rstrip("/") + "-invalid/").status_code, 410)
+        self.assertEqual(self.client.get("/staff-invite/complete/").status_code, 410)
+
+    def test_opened_invitation_cannot_finish_at_one_hour_deadline(self):
+        invitation, url = self.invite()
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.assertEqual(self.client.get("/staff-invite/complete/").status_code, 200)
+        # Expiry is checked again at submission, not just when a link is clicked.
+        StaffInvitation.objects.filter(pk=invitation.pk).update(expires_at=timezone.now())
+        password = "NewStaffPrivatePasswordPass27!"
+        denied = self.client.post("/staff-invite/complete/", {
+            "password": password, "password_confirm": password,
+        })
+        self.assertEqual(denied.status_code, 410)
+        self.assertEqual(self.client.get(url).status_code, 410)
+        self.newcomer.refresh_from_db()
+        self.assertFalse(self.newcomer.is_active)
+        self.assertFalse(self.newcomer.has_usable_password())
+
+    def test_link_consumed_once_even_with_second_browser_and_replay(self):
+        invitation, url = self.invite()
+        first_browser = self.client
+        second_browser = Client()
+        self.assertEqual(first_browser.get(url).status_code, 302)
+        self.assertEqual(second_browser.get(url).status_code, 302)
+        password = "NewStaffPrivatePasswordPass27!"
+        successful = first_browser.post("/staff-invite/complete/", {
+            "password": password, "password_confirm": password,
+        })
+        self.assertEqual(successful.status_code, 302)
+        failed = second_browser.post("/staff-invite/complete/", {
+            "password": "AnotherPrivatePasswordPass27!",
+            "password_confirm": "AnotherPrivatePasswordPass27!",
+        })
+        self.assertEqual(failed.status_code, 410)
+        self.assertEqual(first_browser.get(url).status_code, 410)
+        self.assertEqual(second_browser.get(url).status_code, 410)
+        invitation.refresh_from_db()
+        self.newcomer.refresh_from_db()
+        self.assertIsNotNone(invitation.consumed_at)
+        self.assertTrue(self.newcomer.check_password(password))
+        self.assertFalse(self.newcomer.check_password("AnotherPrivatePasswordPass27!"))
+
+    def test_renewal_invalidates_previously_opened_activation_form(self):
+        first, old_url = self.invite()
+        self.assertEqual(self.client.get(old_url).status_code, 302)
+        self.assertEqual(self.client.get("/staff-invite/complete/").status_code, 200)
+        renewed, new_url = self.invite()
+        self.assertEqual(first.pk, renewed.pk)
+        password = "NewStaffPrivatePasswordPass27!"
+        self.assertEqual(self.client.post("/staff-invite/complete/", {
+            "password": password, "password_confirm": password,
+        }).status_code, 410)
+        self.assertEqual(self.client.get(old_url).status_code, 410)
+        self.assertEqual(self.client.get(new_url).status_code, 302)
+
+    def test_prior_24h_invites_are_shrunk_by_deployment_migration(self):
+        invitation, old_url = self.invite()
+        fake_legacy_expiry = timezone.now() + timedelta(hours=24)
+        StaffInvitation.objects.filter(pk=invitation.pk).update(expires_at=fake_legacy_expiry)
+        migration = import_module("core.migrations.0038_shorten_staff_invitation_expiry")
+        migration.shorten_legacy_invites(apps, connection.schema_editor())
+        invitation.refresh_from_db()
+        self.assertLess(abs((invitation.expires_at - fake_legacy_expiry + timedelta(hours=23)).total_seconds()), 1)
+        # Even an already opened old link cannot be activated after its now-shortened deadline.
+        StaffInvitation.objects.filter(pk=invitation.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=10),
+        )
+        self.assertEqual(self.client.get(old_url).status_code, 410)
+
+    @patch("core.staff_invites.get_provider")
+    def test_sms_instructions_state_one_hour(self, provider_factory):
+        invitation, url = staff_invites.issue(
+            self.newcomer, self.owner, "sms", "+233241234567"
+        )
+        provider_factory.return_value.submit.return_value.status = "accepted"
+        staff_invites.deliver(invitation, url)
+        body = provider_factory.return_value.submit.call_args.args[1]
+        self.assertIn("expires in 1 hour", body)
+        self.assertNotIn("24 hours", body)
 
     def test_expired_or_invalid_invitation_cannot_activate(self):
         invite, url = self.invite()
