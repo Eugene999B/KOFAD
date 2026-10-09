@@ -148,6 +148,9 @@ HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"
 
 # Independent kill switch. Enable only after verified-number configuration and a delivery test.
 WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"
+# Staff invitation WhatsApp requires a separate Meta-approved template with one URL placeholder.
+KOFAD_STAFF_INVITE_WHATSAPP_TEMPLATE = os.environ.get("KOFAD_STAFF_INVITE_WHATSAPP_TEMPLATE", "").strip()
+KOFAD_STAFF_INVITE_WHATSAPP_LANGUAGE = os.environ.get("KOFAD_STAFF_INVITE_WHATSAPP_LANGUAGE", "en").strip()
 
 PAYSTACK_CUSTOMER_MOMO_ENABLED = os.environ.get("PAYSTACK_CUSTOMER_MOMO_ENABLED", "0") == "1"
 
