@@ -407,7 +407,9 @@ def _quarantine_restored_delivery_and_recovery():
     again just because an older record was restored.
     """
     from marketplace.models import CustomerEmailRecovery, EmailIdentity, EmailNotice
-    from .models import Message, SmsAttempt, StaffInvitation, WhatsAppAttempt, WhatsAppBotReply
+    from .models import (
+        EmailLetter, Message, SmsAttempt, StaffInvitation, WhatsAppAttempt, WhatsAppBotReply,
+    )
 
     now = timezone.now()
     EmailIdentity.objects.exclude(code_digest="").update(
@@ -418,8 +420,18 @@ def _quarantine_restored_delivery_and_recovery():
         used=True, expires_at=now, code_digest="",
     )
     StaffInvitation.objects.filter(consumed_at__isnull=True).update(expires_at=now)
-    EmailNotice.objects.filter(status__in=["queued", "sending"]).update(
-        status="failed", next_attempt_at=now,
+    # Legacy email delivery retries queued/failed/sending while attempts < 5.
+    # Exhaust automatic retry attempts so a restored file never resends emails.
+    EmailNotice.objects.filter(status__in=["queued", "sending", "failed"]).update(
+        status="failed", attempts=5, next_attempt_at=now,
+    )
+    # Department email's worker ALSO retries "failed" rows. Use its existing
+    # explicit manual-review state, which the worker never auto-sends.
+    EmailLetter.objects.filter(
+        direction="outbound", status__in=["queued", "sending", "failed"],
+    ).update(
+        status="uncertain", next_attempt_at=None,
+        last_error="Restored snapshot: delivery requires manual reconciliation.",
     )
     Message.objects.filter(status__in=["queued", "sending"]).update(
         status="unknown", last_error="Restored snapshot: delivery status requires manager review.",
