@@ -8,8 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const reads = new Map(readBoxes.map(node => [node.value, node]));
   const replies = new Map(replyBoxes.map(node => [node.value, node]));
   const update = () => {
-    const readable = readBoxes.filter(box => box.checked).length;
-    const replyable = replyBoxes.filter(box => box.checked).length;
+    const readable = readBoxes.filter(box => box.checked && !box.disabled).length;
+    const replyable = replyBoxes.filter(box => box.checked && !box.disabled).length;
     if (count) count.textContent = readable + ' readable · ' + replyable + ' reply-enabled';
   };
   for (const box of replyBoxes) {
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const all = form.querySelector('[data-mail-action="read-all"]');
   if (all) all.addEventListener('click', () => {
-    readBoxes.forEach(box => { box.checked = true; });
+    readBoxes.forEach(box => { if (!box.disabled) box.checked = true; });
     update();
   });
   const clear = form.querySelector('[data-mail-action="clear"]');
