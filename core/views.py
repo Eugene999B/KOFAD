@@ -851,6 +851,7 @@ def pos_paystack_momo_start(request):
                 data.get("recipient_review_token"),
                 user=request.user, branch=branch, key=key,
                 phone=data.get("phone"), provider=data.get("provider"),
+                sale=data.get("sale"),
             )
         result = processor.start(
             request.user,
