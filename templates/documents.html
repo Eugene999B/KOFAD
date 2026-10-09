@@ -2,7 +2,7 @@
 {% block after_styles %}<link rel="stylesheet" href="{% static 'sales-history-v2.css' %}">{% endblock %}
 {% block actions %}<div class="actions">{% if perms.core.operate_sales or perms.core.manage_company %}<a class="button secondary" href="/payments/momo/">MoMo payment requests</a>{% endif %}<a class="button secondary" href="/exports/?dataset={% if kind == 'sale' %}sales{% elif kind == 'purchase' %}purchases{% elif kind == 'expense' %}expenses{% elif kind == 'collection' or kind == 'supplier_payment' %}payments{% else %}transactions{% endif %}">Download records</a></div>{% endblock %}
 {% block content %}
-<section class="panel sales-history-hero"><div><p class="eyebrow">KOFAD / BUSINESS TRANSACTIONS</p><h2>{% if kind == "sale" %}Sales history &amp; receipts{% else %}{{ title }} history{% endif %}</h2><p>Open any transaction to view its items, staff, payment channels, debt balance and printable receipt. Mobile Money requests awaiting verification appear in <a href="/payments/momo/">MoMo payment history</a> and are never labelled as completed sales.</p></div><strong>{{ rows|length }} shown</strong></section>
+<section class="panel sales-history-hero"><div><p class="eyebrow">KOFAD / BUSINESS TRANSACTIONS</p><h2>{% if kind == "sale" %}Sales history &amp; receipts{% else %}{{ title }} history{% endif %}</h2><p>Open any transaction to view its items, staff, payment channels, debt balance and printable receipt. Mobile Money requests awaiting verification appear in <a href="/payments/momo/">MoMo payment history</a> and are never labelled as completed sales.</p></div><strong>{{ page_obj.paginator.count }} records</strong></section>
 <form class="sales-history-search" method="get"><input type="hidden" name="kind" value="{{ kind }}"><label><span>Search by receipt or customer</span><input aria-label="Find transaction" name="q" type="search" value="{{ q }}" placeholder="Receipt reference or customer name"></label><button class="button secondary" type="submit">Search records</button></form>
 <section class="panel sales-history-panel"><div class="sales-list">
 {% for row in rows %}
@@ -12,5 +12,11 @@
   <div class="sales-history-footer"><small>{{ row.payment_evidence }}{% if row.paystack_verified_reference %} · {{ row.paystack_verified_reference }}{% elif row.online_payment_reference %} · {{ row.online_payment_reference }}{% endif %}</small><div><a class="button secondary" href="/documents/{{ row.pk }}/">View details / receipt →</a>{% if kind == "sale" %}{% include "_receipt_channels.html" %}{% endif %}</div></div>
 </article>
 {% empty %}<p class="empty">No transactions match your search. Check the receipt reference or customer name.</p>{% endfor %}
-</div></section>
+</div>
+{% if page_obj.has_other_pages %}<nav class="sales-history-pagination" aria-label="Sales history pages">
+  {% if page_obj.has_previous %}<a class="button secondary" href="?kind={{ kind|urlencode }}&amp;q={{ q|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="button secondary" href="?kind={{ kind|urlencode }}&amp;q={{ q|urlencode }}&amp;page={{ page_obj.next_page_number }}">Next →</a>{% endif %}
+</nav>{% endif %}
+</section>
 {% endblock %}
