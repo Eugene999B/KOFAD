@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <p class="eyebrow">KOFAD BUSINESS EMAIL</p><h1>Customer Email Campaigns</h1>
+  <p>System administrator only. Send to verified customers who <strong>explicitly opted in</strong> to promotional email.
+     Existing order updates and recovery codes are separate from marketing.</p>
+  {% if provider_ready %}<p class="verified">Brevo API sender configured.</p>
+  {% else %}<p class="notice">External sending is not connected. Drafts can be prepared, but campaigns cannot be activated.</p>{% endif %}
+  <div class="email-usage-cards">
+    <div><small>Daily sending limit</small><strong>{{ usage.limit }}</strong></div>
+    <div><small>KOFAD sends attempted today</small><strong>{{ usage.attempted }}</strong></div>
+    <div><small>Accepted by Brevo</small><strong>{{ usage.accepted }}</strong></div>
+    <div><small>Estimated remaining</small><strong>{{ usage.remaining }}</strong></div>
+    <div><small>Failed today</small><strong>{{ usage.failed }}</strong></div>
+    <div><small>Queued messages</small><strong>{{ pending }}</strong></div>
+    <div><small>Promotional opt-ins</small><strong>{{ opted_in }}</strong></div>
+  </div>
+  <p class="email-note">The remaining allowance is based on KOFAD's tracked Brevo submissions and the configured daily cap.
+     Brevo's actual provider balance may differ if other apps use the account. "Accepted" does not mean delivered to the inbox.</p>
+</section>
+<section class="panel">
+  <h2>Create email campaign</h2>
+  <form method="post" class="email-campaign-form">{% csrf_token %}
+    <input type="hidden" name="action" value="create">
+    <label>Campaign name<input name="title" maxlength="150" required placeholder="October product updates"></label>
+    <label>Email subject<input name="subject" maxlength="200" required placeholder="What's new at KOFAD"></label>
+    <label>Message<textarea name="body" maxlength="16000" rows="8" required></textarea></label>
+    <p class="email-note">A link to manage promotional email preferences will be appended automatically. Emails are sent individually, not with all customer addresses exposed in CC.</p>
+    <button class="button">Save draft</button>
+  </form>
+</section>
+<section class="panel">
+  <h2>Campaigns</h2>
+  {% for item in campaigns %}
+    <div class="email-campaign-item">
+      <div><strong>{{ item.title }}</strong><p>{{ item.subject }} · {% if item.active %}Running{% else %}Draft / stopped{% endif %}</p><small>Created {{ item.created_at|date:"j M Y, H:i" }}</small></div>
+      {% if item.active %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="pause"><input type="hidden" name="campaign_id" value="{{ item.pk }}"><button class="button secondary">Pause</button></form>
+      {% else %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="activate"><input type="hidden" name="campaign_id" value="{{ item.pk }}">
+        <label><input type="checkbox" name="confirm" value="yes" required> Confirm opted-in recipients only</label><button class="button" {% if not provider_ready %}disabled{% endif %}>Approve and queue</button>
+      </form>
+      {% endif %}
+    </div>
+  {% empty %}<p>No campaigns yet.</p>{% endfor %}
+  <a href="/email/">← Back to Email Centre</a>
+</section>
+<style>
+.email-usage-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:18px 0}
+.email-usage-cards>div{display:grid;gap:6px;background:var(--surface-alt,rgba(100,100,100,.08));border-radius:12px;padding:14px}
+.email-usage-cards strong{font-size:1.4rem}
+.email-note{font-size:.86rem;color:var(--muted,#697386)}
+.email-campaign-form{display:grid;gap:14px;max-width:750px}
+.email-campaign-form label{display:grid;gap:6px}
+.email-campaign-form input,.email-campaign-form textarea{width:100%;max-width:100%;padding:10px;background:var(--surface,#fff);color:inherit;border:1px solid var(--border,#ccd0d8);border-radius:9px}
+.email-campaign-item{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#ccd0d8);padding:14px 0}
+.email-campaign-item form{display:grid;gap:8px}
+</style>
+{% endblock %}
