@@ -41,6 +41,11 @@ def resolve_sale_customer(user, branch, payload, audit):
     submitted_email = str(payload.get("customer_email", "")).strip().lower()
     if submitted_email:
         validate_email(submitted_email)
+    credit_choice = payload.get("customer_debt_email_opt_in")
+    if credit_choice is not None and not isinstance(credit_choice, bool):
+        raise ValidationError("Invalid debt email preference.")
+    if credit_choice is True and not submitted_email:
+        raise ValidationError("Enter the customer email before enabling debt messages.")
 
     if payload.get("party"):
         party = Party.objects.filter(pk=payload["party"], branch=branch, kind="customer").first()
@@ -51,7 +56,17 @@ def resolve_sale_customer(user, branch, payload, audit):
             party.consent = True
             updates.append("consent")
             audit(user, branch, "customer.messaging_consent_enabled_at_checkout", party.pk)
-        if submitted_email and not party.email:
+        if credit_choice is not None:
+            if submitted_email and party.email and party.email.casefold() != submitted_email:
+                raise ValidationError("This customer has a different saved email. Update their account details before sending private debt notices.")
+            if submitted_email and not party.email:
+                party.email = submitted_email
+                updates.append("email")
+            if party.debt_email_opt_in != credit_choice:
+                party.debt_email_opt_in = credit_choice
+                updates.append("debt_email_opt_in")
+                audit(user, branch, "customer.debt_email_preference_at_checkout", party.pk, {"enabled": credit_choice})
+        elif submitted_email and not party.email:
             party.email = submitted_email
             updates.append("email")
         if updates:
@@ -76,9 +91,15 @@ def resolve_sale_customer(user, branch, payload, audit):
             existing.consent = True
             updates.append("consent")
             audit(user, branch, "customer.messaging_consent_enabled_at_checkout", existing.pk)
+        if submitted_email and existing.email and existing.email.casefold() != submitted_email and credit_choice is not None:
+            raise ValidationError("Saved customer has a different email. Correct it in customer records first.")
         if submitted_email and not existing.email:
             existing.email = submitted_email
             updates.append("email")
+        if credit_choice is not None and existing.debt_email_opt_in != credit_choice:
+            existing.debt_email_opt_in = credit_choice
+            updates.append("debt_email_opt_in")
+            audit(user, branch, "customer.debt_email_preference_at_checkout", existing.pk, {"enabled": credit_choice})
         if updates:
             existing.save(update_fields=updates)
         audit(user, branch, "customer.reused_at_checkout", existing.pk, {
@@ -93,6 +114,7 @@ def resolve_sale_customer(user, branch, payload, audit):
         name=name,
         phone=canonical,
         email=submitted_email,
+        debt_email_opt_in=credit_choice is True,
         consent=consent_requested,
     )
     audit(user, branch, "customer.created_at_checkout", party.pk, {
