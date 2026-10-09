@@ -1050,12 +1050,18 @@ def statement_download(request, pk, format):
         })
     expected_balance = s.party_debt(party)
     if running != expected_balance:
-        # Refuse to produce a misleading customer/supplier statement while
-        # unmatched historical transactions are under investigation.
-        raise ValidationError(
-            "The statement does not reconcile with the account balance. "
-            "Review allocations and approved corrections before exporting."
-        )
+        # Fail closed with a useful 400 page, not an uncaught 500.
+        # No inaccurate statement file is ever issued.
+        s.audit(request.user, branch, "statement.reconciliation_failed", party.pk, {
+            "statement_balance": str(running), "subledger_balance": str(expected_balance),
+        }, category="accounting", severity="warning")
+        return render(request, "error.html", {
+            "title": "Statement needs reconciliation",
+            "error": (
+                "The statement does not agree with this account's balance. "
+                "Review allocations and approved corrections before exporting."
+            ),
+        }, status=400)
     s.audit(request.user, branch, "statement.exported", party.pk, {
         "format": format, "rows": len(rows), "balance": str(running),
     })
