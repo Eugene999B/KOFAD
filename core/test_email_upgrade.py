@@ -129,6 +129,26 @@ class EmailCampaignConsentTests(TestCase):
 @override_settings(**BREVO, KOFAD_BREVO_DAILY_LIMIT=1)
 class EmailDailyCapTests(TestCase):
     @patch("core.brevo_email.requests.post")
+    def test_unregistered_department_uses_verified_sender_and_reply_to(self, send):
+        send.return_value = Mock(status_code=201)
+        send_brevo(subject="Closing test", body="Safe test",
+                   recipient="manager@example.org",
+                   sender_email="reports@kofadimpex.com")
+        payload = send.call_args.kwargs["json"]
+        self.assertEqual(payload["sender"]["email"], "transactions@kofadimpex.com")
+        self.assertEqual(payload["replyTo"]["email"], "reports@kofadimpex.com")
+
+    @patch("core.brevo_email.requests.post")
+    @override_settings(KOFAD_BREVO_REGISTERED_SENDERS="transactions@kofadimpex.com,support@kofadimpex.com")
+    def test_registered_department_sends_from_own_address(self, send):
+        send.return_value = Mock(status_code=201)
+        send_brevo(subject="Support test", body="Safe test",
+                   recipient="manager@example.org",
+                   sender_email="support@kofadimpex.com")
+        payload = send.call_args.kwargs["json"]
+        self.assertEqual(payload["sender"]["email"], "support@kofadimpex.com")
+
+    @patch("core.brevo_email.requests.post")
     def test_second_external_send_is_blocked_by_shared_cap(self, send):
         send.return_value = Mock(status_code=201)
         send_brevo(subject="Test", body="One", recipient="buyer@example.org")
