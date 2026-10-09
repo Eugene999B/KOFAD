@@ -63,6 +63,15 @@ STAFF_LOGIN_PATH = f"/{STAFF_LOGIN_SLUG}/"
 PUBLIC_SITE_ORIGIN = os.environ.get("PUBLIC_SITE_ORIGIN", "https://kofadimpex.com").rstrip("/")
 MARKET_SITE_ORIGIN = os.environ.get("MARKET_SITE_ORIGIN", "https://market.kofadimpex.com").rstrip("/")
 GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()
+# Approved native app release destinations; empty until externally signed/published.
+# Two physically independent app identities and version channels.
+for _native_kind in ("CUSTOMER", "STAFF"):
+    _native_prefix = "KOFAD_" + _native_kind + "_APP_"
+    for _native_field in ("VERSION", "ANDROID_URL", "IOS_URL", "WINDOWS_URL"):
+        globals()[_native_prefix + _native_field] = os.environ.get(
+            _native_prefix + _native_field, ""
+        ).strip()
+
 LOGIN_URL = STAFF_LOGIN_PATH
 LOGIN_REDIRECT_URL = "/workspace/"
 LOGOUT_REDIRECT_URL = STAFF_LOGIN_PATH

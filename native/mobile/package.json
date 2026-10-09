@@ -1,0 +1,33 @@
+{
+  "name": "kofad-native-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "prepare:customer": "cross-env KOFAD_NATIVE_CHANNEL=customer node scripts/write-profile.mjs",
+    "prepare:staff": "cross-env KOFAD_NATIVE_CHANNEL=staff node scripts/write-profile.mjs",
+    "android:customer": "npm run prepare:customer && npx cap sync android && npx cap open android",
+    "android:staff": "npm run prepare:staff && npx cap sync android && npx cap open android",
+    "ios:customer": "npm run prepare:customer && npx cap sync ios && npx cap open ios",
+    "ios:staff": "npm run prepare:staff && npx cap sync ios && npx cap open ios",
+    "test": "node --test tests/*.test.mjs",
+    "brand:customer": "python ../scripts/branding.py --channel customer",
+    "brand:staff": "python ../scripts/branding.py --channel staff"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/network": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0",
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/share": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "cross-env": "^7.0.0",
+    "typescript": "^5.0.0",
+    "@capacitor/assets": "^3.0.0"
+  }
+}

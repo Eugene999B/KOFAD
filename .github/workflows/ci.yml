@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-# New PR commits supersede old checkouts. Never deploy an outdated result.
+# Superseded PR revisions should not consume runners or promote obsolete code.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        # Public ECR mirror avoids Docker Hub's unauthenticated pull-rate limit.
         image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_USER: kofad
@@ -38,10 +37,13 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - run: ruff check .
+      - run: node --test native/mobile/tests/profiles.test.mjs native/desktop/tests/security.test.cjs
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
       - run: python scripts/prepare_logo.py
+      - run: python native/scripts/branding.py --channel customer
+      - run: python native/scripts/branding.py --channel staff
       - run: python manage.py collectstatic --noinput
       - run: pip-audit -r requirements.lock
       - run: playwright install --with-deps chromium
@@ -59,6 +61,7 @@ jobs:
           python tests/render_document_evidence.py
           for file in test-results/documents/*.pdf; do pdftoppm -r 110 -png "$file" "${file%.pdf}"; done
       - run: python tests/browser_smoke.py
+      - run: python tests/native_app_smoke.py
       - run: python tests/cookie_smoke.py
       - run: python manage.py test --noinput
       - name: Verify production container
