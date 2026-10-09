@@ -6,13 +6,14 @@
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script defer src="{% static 'marketplace/market-map.js' %}"></script>
 {% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/select-affordances.css' %}">{% endblock %}
 {% block content %}
 <section class="commerce-checkout-page">
 <header class="commerce-flow-head"><div><p class="market-eyebrow">CHECKOUT</p><h1>Delivery or pickup</h1></div><a href="/market/cart/">← Back to cart</a></header>
 <div class="commerce-checkout-steps"><span class="done"><b>✓</b> Cart</span><i></i><span class="active"><b>2</b> Delivery</span><i></i><span><b>3</b> Payment</span><i></i><span><b>4</b> Tracking</span></div>
 <div class="commerce-checkout-layout">
 <form method="post" class="commerce-checkout-form" data-checkout-form>{% csrf_token %}{{ form.non_field_errors }}
-<section class="checkout-v2-section"><div class="checkout-v2-number">01</div><div class="checkout-v2-content"><p class="market-eyebrow">FULFILMENT</p><h2>How do you want to receive it?</h2><div class="fulfilment-choice commerce-fulfilment-choice">{{ form.fulfilment }}{{ form.fulfilment.errors }}</div></div></section>
+<section class="checkout-v2-section"><div class="checkout-v2-number">01</div><div class="checkout-v2-content"><p class="market-eyebrow">FULFILMENT</p><h2>How do you want to receive it?</h2><div class="fulfilment-choice commerce-fulfilment-choice">{{ form.fulfilment }}{{ form.fulfilment.errors }}<p class="market-select-help">Tap to select delivery or collection</p></div></div></section>
 <section class="checkout-v2-section"><div class="checkout-v2-number">02</div><div class="checkout-v2-content"><p class="market-eyebrow">RECIPIENT</p><h2>Who should we contact?</h2><div class="checkout-grid"><label>Recipient name{{ form.recipient_name }}{{ form.recipient_name.errors }}</label><label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><label class="full">Email address{{ form.email }}{{ form.email.errors }}</label></div></div></section>
 <section class="checkout-v2-section pickup-note" data-pickup-fields{% if form.fulfilment.value != "pickup" %} hidden{% endif %}><div class="checkout-v2-number">03</div><div class="checkout-v2-content"><p class="market-eyebrow">COLLECT FROM KOFAD</p><h2>No delivery address needed</h2><p>{{ delivery_company.delivery_origin_label|default:delivery_company.address }}</p><p>Delivery fee: <strong>GHS 0.00</strong>. We will update your order when it is ready for collection.</p></div></section>
 <section class="checkout-v2-section" data-delivery-fields{% if form.fulfilment.value == "pickup" %} hidden{% endif %}><div class="checkout-v2-number">03</div><div class="checkout-v2-content"><p class="market-eyebrow">DELIVERY LOCATION</p><h2>Where should we deliver?</h2><p>Search for your address or use your current location. Then check the pin and add directions for the driver.</p>

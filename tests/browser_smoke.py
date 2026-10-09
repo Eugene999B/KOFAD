@@ -207,6 +207,11 @@ with sync_playwright() as p:
     second_product.locator(".product-composer input[type='number']").first.fill("1")
     second_product.get_by_role("button",name="Add to sale",exact=False).click()
     assert page.locator("#cart-count").inner_text() == "2 lines"
+    # The new POS defaults to an explicit walk-in. Saved customers require
+    # an intentional choice before the customer search becomes visible.
+    assert page.locator('[data-customer-mode="walkin"]').get_attribute("aria-pressed") == "true"
+    page.locator('[data-customer-mode="saved"]').click()
+    assert page.locator("#customer-search").is_visible()
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
     assert receipt_sms_choice.is_enabled()

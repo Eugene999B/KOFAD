@@ -91,8 +91,20 @@ class PartyForm(forms.ModelForm):
             "debt_email_opt_in": "Only enable after the customer confirms this address and agrees to account emails. This does not enable promotions. Debt Settings controls the sending schedule.",
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Creating a customer should not require the cashier to choose a
+        # credit limit. Blank means the existing 0 (uncapped individual) policy.
+        self.fields["credit_limit"].required = False
+        if not self.instance.pk:
+            self.fields["credit_limit"].initial = 0
+
     def clean_phone(self):
         return normalize_ghana_phone(self.cleaned_data["phone"])
+
+    def clean_credit_limit(self):
+        value = self.cleaned_data.get("credit_limit")
+        return 0 if value is None else value
 
 
 class CompanyForm(forms.ModelForm):
