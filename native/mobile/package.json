@@ -10,7 +10,9 @@
     "android:staff": "npm run prepare:staff && npx cap sync android && npx cap open android",
     "ios:customer": "npm run prepare:customer && npx cap sync ios && npx cap open ios",
     "ios:staff": "npm run prepare:staff && npx cap sync ios && npx cap open ios",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "brand:customer": "python ../scripts/branding.py --channel customer",
+    "brand:staff": "python ../scripts/branding.py --channel staff"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
@@ -24,6 +26,7 @@
   "devDependencies": {
     "@capacitor/cli": "^7.0.0",
     "cross-env": "^7.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@capacitor/assets": "^3.0.0"
   }
 }
