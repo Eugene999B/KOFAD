@@ -8,6 +8,7 @@
 <div class="company-prose">
 {% if page_slug == 'faq' %}{% for heading, paragraphs in page.sections %}<details class="company-faq"><summary>{{ heading }}</summary>{% for paragraph in paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</details>{% endfor %}
 {% else %}{% for heading, paragraphs in page.sections %}<section><h2>{{ heading }}</h2>{% for paragraph in paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</section>{% endfor %}{% endif %}
+{% if page_slug == 'privacy' %}<section><h2>How Google processes analytics information</h2><p><a href="https://policies.google.com/technologies/partner-sites" rel="noopener" target="_blank">How Google uses information from websites and apps that use its services</a></p><p>You can reopen <button type="button" class="company-button" data-cookie-open>Cookie choices</button> to change your permissions.</p></section>{% endif %}
 {% if page_slug == 'delivery' %}<section class="company-note"><h2>Current delivery options</h2>{% if company.delivery_enabled %}<p>Delivery is enabled. Your exact eligibility and fee are calculated at checkout.</p>{% if delivery_zones %}<ul>{% for zone in delivery_zones %}<li><strong>{{ zone.name }}</strong>{% if zone.eta_text %} — {{ zone.eta_text }}{% endif %}</li>{% endfor %}</ul>{% endif %}{% else %}<p>Online delivery is currently unavailable. Check the Market for pickup options or contact the team.</p>{% endif %}</section>{% endif %}
 {% if page_slug == 'contact' %}
 <div class="company-contact-grid">
