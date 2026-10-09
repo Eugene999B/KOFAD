@@ -339,7 +339,7 @@ def deliver_outgoing(limit=10):
         row = EmailLetter.objects.get(pk=pk)
         # Preserve part of today's limited free allowance for security codes,
         # receipts and staff correspondence instead of exhausting it on campaigns.
-        if row.source_key and row.source_key.startswith("campaign:"):
+        if row.source_key and (row.source_key.startswith("campaign:") or ":reminder:" in row.source_key and row.source_key.startswith("debtmail:")):
             from .brevo_email import usage_today
             allowance = usage_today()
             safety_reserve = min(50, allowance["limit"] // 5)
