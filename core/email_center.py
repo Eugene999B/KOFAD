@@ -197,25 +197,82 @@ def inbox(request):
                     audit(request.user, mailbox.branch, "email.draft_approved", draft.pk,
                           {"mailbox": mailbox.address, "destination": draft.to_address})
                 messages.success(request, "Reviewed message queued for sending.")
-            elif action in {"send", "reply"}:
+            elif action in {"send", "reply", "thread_reply"}:
                 mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
                                             pk=request.POST.get("mailbox_id"))
                 reply_id = ""
                 recipient = request.POST.get("to", "")
                 subject = request.POST.get("subject", "")
+                conversation = None
                 if action == "reply":
                     original = get_object_or_404(EmailLetter, pk=request.POST.get("reply_to"),
                                                  mailbox=mailbox, direction="inbound")
-                    recipient = original.from_address
-                    subject = "Re: " + original.subject[:250].removeprefix("Re: ")
-                    reply_id = original.message_id
+                    recipient, subject, reply_id = original.from_address, original.subject, original.message_id
+                    conversation = original.conversation
+                    if conversation is None:
+                        with transaction.atomic():
+                            original = EmailLetter.objects.select_for_update().get(pk=original.pk)
+                            conversation = original.conversation
+                            if conversation is None:
+                                conversation = EmailConversation.objects.create(
+                                    mailbox=mailbox, customer_email=recipient,
+                                    subject=subject[:255], last_customer_at=original.created_at,
+                                )
+                                original.conversation = conversation
+                                original.save(update_fields=["conversation"])
+                if action == "thread_reply":
+                    conversation = get_object_or_404(EmailConversation,
+                                                     pk=request.POST.get("conversation_id"),
+                                                     mailbox=mailbox)
+                    recipient, subject = conversation.customer_email, conversation.subject
+                    latest_customer = conversation.letters.filter(direction="inbound").order_by("-created_at").first()
+                    reply_id = latest_customer.message_id if latest_customer else ""
                 created = compose(mailbox, recipient, subject, request.POST.get("body"), request.user,
-                                  reply_id=reply_id)
+                                  reply_id=reply_id, conversation=conversation)
                 from .services import audit
                 audit(request.user, mailbox.branch, "email.message_created", created.pk,
-                      {"mailbox": mailbox.address, "direction": created.direction})
+                      {"mailbox": mailbox.address, "direction": created.direction,
+                       "conversation_id": created.conversation_id})
                 messages.success(request, "Delivered internally." if created.status == "internal"
-                                 else "Message queued for the email delivery service.")
+                                 else "Reply queued in the customer conversation.")
+            elif action in {"thread_update", "thread_note"}:
+                mailbox = get_object_or_404(visible_mailboxes(request.user, send=True),
+                                            pk=request.POST.get("mailbox_id"))
+                with transaction.atomic():
+                    thread = get_object_or_404(EmailConversation.objects.select_for_update(),
+                                               pk=request.POST.get("conversation_id"),
+                                               mailbox=mailbox)
+                    if action == "thread_note":
+                        note = request.POST.get("note", "").strip()
+                        if not note or len(note) > 4000:
+                            raise ValidationError("An internal note must be 1-4,000 characters.")
+                        EmailConversationNote.objects.create(
+                            conversation=thread, author=request.user, body=note,
+                        )
+                        messages.success(request, "Private team note saved. It was not emailed.")
+                    else:
+                        new_status = request.POST.get("thread_status", thread.status)
+                        priority = request.POST.get("priority", thread.priority)
+                        if new_status not in {"open", "pending", "closed"}:
+                            raise ValidationError("Unknown conversation status.")
+                        if priority not in {"normal", "high"}:
+                            raise ValidationError("Unknown priority.")
+                        assigned = request.POST.get("assigned_to", "")
+                        if assigned:
+                            person = get_object_or_404(User, pk=assigned, is_active=True)
+                            if not (owner(person) or visible_mailboxes(person, send=True)
+                                    .filter(pk=mailbox.pk).exists()):
+                                raise ValidationError("User is not authorised to send from this mailbox.")
+                            thread.assigned_to = person
+                        else:
+                            thread.assigned_to = None
+                        thread.status = new_status
+                        thread.priority = priority
+                        thread.save(update_fields=["assigned_to", "status", "priority"])
+                        messages.success(request, "Conversation assignment and status updated.")
+                    from .services import audit
+                    audit(request.user, mailbox.branch, "email.conversation_" + action,
+                          thread.pk, {"mailbox": mailbox.address, "status": thread.status})
             else:
                 raise ValidationError("Unknown email action.")
         except ValidationError as exc:
@@ -250,9 +307,35 @@ def inbox(request):
     letters = Paginator(
         letters_qs.select_related("created_by", "approved_by").order_by("-created_at", "-pk"), 20
     ).get_page(request.GET.get("page", "1"))
+    conversations = (EmailConversation.objects.filter(mailbox=chosen)
+                     .select_related("assigned_to").order_by("-last_activity_at")[:35]
+                     if chosen else [])
+    active_thread = None
+    thread_letters = []
+    thread_notes = []
+    eligible_assignees = []
+    thread_id = request.GET.get("thread", "")
+    if chosen and thread_id:
+        active_thread = get_object_or_404(EmailConversation.objects.select_related("assigned_to"),
+                                          pk=thread_id, mailbox=chosen)
+        thread_letters = list(active_thread.letters.select_related("created_by")
+                              .order_by("created_at", "pk")[:200])
+        thread_notes = list(active_thread.notes.select_related("author")
+                            .order_by("created_at", "pk")[:100])
+        if chosen.pk in can_write:
+            eligible_assignees = list(User.objects.filter(
+                is_active=True,
+                pk__in=EmailMailboxMember.objects.filter(
+                    mailbox=chosen, can_send=True).values("user_id")
+            ).order_by("username")[:150])
+            if owner(request.user) and not any(u.pk == request.user.pk for u in eligible_assignees):
+                eligible_assignees.insert(0, request.user)
     return render(request, "email_center.html", {
         "title": "Email Centre", "mailboxes": all_mailboxes, "selected": chosen,
         "letters": letters, "writable_ids": can_write,
+        "conversations": conversations, "active_thread": active_thread,
+        "thread_letters": thread_letters, "thread_notes": thread_notes,
+        "eligible_assignees": eligible_assignees,
         "mail_query": query, "mail_direction": direction, "mail_status": status,
         "inbox_count": inbox_count, "sent_count": sent_count, "draft_count": draft_count,
         "attention_count": attention_count,
