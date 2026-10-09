@@ -1298,6 +1298,12 @@ def advance_order(user, order, action, cleaned):
             extra = f" Your handover code is {handover_code(order)}."
         from .notifications import queue_order_sms
         queue_order_sms(order, target, f"KOFAD: {title} for {order.customer_reference}.{extra}")
+        from core.email_identity import enqueue_notice
+        transaction.on_commit(lambda: enqueue_notice(
+            "customer", order.customer_id, f"order-progress:{order.pk}:{target}",
+            "KOFAD order update",
+            f"{title} for {order.customer_reference}. View the latest status in your KOFAD Market account.",
+        ))
     return order
 
 
