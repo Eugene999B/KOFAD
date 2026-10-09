@@ -67,7 +67,6 @@ For an installer, register the release publisher and provide **secret signing ma
 WIN_CSC_LINK                   # certificate file/secure reference
 WIN_CSC_KEY_PASSWORD           # certificate passphrase
 KOFAD_WINDOWS_CERT_SUBJECT     # exact certified signing identity
-ELECTRON_BUILDER_UPDATE_SIGN_KEY # signed update manifest key
 ```
 With the relevant protected secrets configured and an approved Windows release channel, run `npm run dist:customer` or `npm run dist:staff`. The script **fails closed** when signing material is absent. Two separate release folders/feeds are mandatory. Configure the updater feed on a separately verified `downloads.kofadimpex.com` release origin before shipping.
 
