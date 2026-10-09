@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'pos-momo-status.css' %}">{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'pos' %}">New sale</a><a class="button secondary" href="{% url 'online_payments' %}">Online checkout payments</a></div>{% endblock %}
+{% block content %}
+<section class="panel"><p class="eyebrow">KOFAD / MOBILE MONEY</p><h2>Staff payment history</h2>
+<p>{% if manager %}Payments initiated by staff in this location.{% else %}Your Mobile Money payment requests in this location.{% endif %} Pending requests continue to be checked when this page is closed. Only verified and posted transactions have printable receipts.</p>
+<form method="get" class="momo-filters"><label>Find by reference, phone or customer<input type="search" name="q" value="{{ q }}" placeholder="Search payments"></label>
+<label>Status<select name="status"><option value="">All statuses</option><option value="paid" {% if selected_status == "paid" %}selected{% endif %}>Paid</option><option value="pending" {% if selected_status == "pending" %}selected{% endif %}>Pending</option><option value="failed" {% if selected_status == "failed" %}selected{% endif %}>Failed / abandoned</option><option value="review" {% if selected_status == "review" %}selected{% endif %}>Needs review</option></select></label>
+<button class="button secondary">Filter</button></form>
+<div class="momo-history-list">
+{% for row in page_obj %}
+<article class="momo-history-entry">
+ <div><a href="{% url 'pos_momo_payment' row.payment.reference %}"><strong>{{ row.payment.customer_name }}</strong></a><small>{{ row.payment.phone }} · {{ row.payment.network }} · {{ row.held.created_at|date:"d M Y, H:i" }}</small><code>{{ row.payment.reference }}</code><small>Cashier: {{ row.payment.cashier }}</small></div>
+ <div><strong>GHS {{ row.payment.amount }}</strong><span class="momo-history-status" data-status="{{ row.payment.status }}">{{ row.payment.display_status }}</span><small>Checks: {{ row.payment.check_count }}</small>
+ <a href="{% url 'pos_momo_payment' row.payment.reference %}">Details / Verify →</a>
+ {% if row.payment.paid %}<a href="{{ row.payment.receipt_thermal }}" target="_blank" rel="noopener">Print receipt</a><a href="{{ row.payment.receipt_a4 }}" target="_blank" rel="noopener">A4 PDF</a>{% endif %}</div>
+</article>
+{% empty %}<p>No matching MoMo transactions. A payment appears here as soon as its request is recorded.</p>{% endfor %}
+</div>
+{% if page_obj.has_other_pages %}<nav class="momo-actions">{% if page_obj.has_previous %}<a class="button secondary" href="?page={{ page_obj.previous_page_number }}&amp;q={{ q|urlencode }}&amp;status={{ selected_status|urlencode }}">Previous</a>{% endif %}<span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="button secondary" href="?page={{ page_obj.next_page_number }}&amp;q={{ q|urlencode }}&amp;status={{ selected_status|urlencode }}">Next</a>{% endif %}</nav>{% endif %}
+</section>{% endblock %}
