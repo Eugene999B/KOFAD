@@ -5,6 +5,7 @@ import uuid
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.test import TestCase
 from django.utils import timezone
@@ -146,6 +147,28 @@ class FinancialIntegrityTests(Fixtures, TestCase):
         channel = self.client.get("/exports/download/csv/", {"dataset": "cash_channels"})
         self.assertEqual(channel.status_code, 200)
         self.assertContains(channel, "Inflow")
+
+    def test_statement_refuses_cross_store_allocations_with_clear_error(self):
+        sale = self.sale()
+        payment = Document.objects.create(
+            branch=self.other, party=self.customer, kind="collection",
+            reference="WRONG-BRANCH-PAYMENT", total=Decimal("10"), paid=Decimal("10"),
+            created_by=self.user,
+        )
+        Allocation.objects.create(payment_document=payment, invoice=sale, amount=Decimal("10"))
+        result = self.client.get(f"/parties/{self.customer.pk}/statement/export/csv/")
+        self.assertEqual(result.status_code, 400)
+        self.assertContains(result, "does not agree", status_code=400)
+        self.assertNotIn("attachment", result.get("Content-Disposition", ""))
+
+    def test_oversized_audit_does_not_crash_finance_pages(self):
+        with patch("core.finance_integrity.financial_controls", side_effect=ValidationError("Narrow the date range")):
+            page = self.client.get("/accounting/", {"view": "integrity"})
+            self.assertEqual(page.status_code, 302)
+            self.assertIn("/accounting/", page.url)
+            export = self.client.get("/accounting/export/csv/", {"view": "integrity"})
+            self.assertEqual(export.status_code, 400)
+            self.assertContains(export, "Narrow the date range", status_code=400)
 
     def test_csv_keeps_signed_money_as_exact_numbers_and_escapes_formula_text(self):
         from .exports import export
