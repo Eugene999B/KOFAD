@@ -10,6 +10,7 @@ from django.urls import reverse
 
 from core.email_center import compose, visible_mailboxes
 from core.email_models import EmailLetter, EmailMailbox, EmailMailboxMember
+from core.models import Access
 
 
 @override_settings(KOFAD_EMAIL_CENTER_ENABLED=True)
@@ -28,17 +29,24 @@ class KofadEmailCentreTests(TestCase):
             fingerprint="a" * 64,
         )
 
+    def login_staff(self, user):
+        access, _ = Access.objects.get_or_create(user=user)
+        self.client.force_login(user)
+        session = self.client.session
+        session["access_version"] = access.session_version
+        session.save()
+
     def test_reader_sees_only_assigned_mailbox(self):
         self.assertEqual(list(visible_mailboxes(self.reader)), [self.support])
         self.assertFalse(visible_mailboxes(self.stranger).exists())
-        self.client.force_login(self.reader)
+        self.login_staff(self.reader)
         response = self.client.get(reverse("email_center"), {"mailbox": self.accounts.pk})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Private enquiry")
         self.assertNotContains(response, "accounts@kofadimpex.com")
 
     def test_staff_cannot_grant_themselves_an_inbox(self):
-        self.client.force_login(self.reader)
+        self.login_staff(self.reader)
         response = self.client.post(reverse("email_center"), {
             "action": "assign", "mailbox_id": self.accounts.pk,
             "user_id": self.reader.pk, "can_read": "on"})
