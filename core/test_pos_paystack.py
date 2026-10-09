@@ -364,3 +364,40 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         self.assertEqual(state["status"], "pending")
         self.assertEqual(state["charge_status"], "send_otp")
         self.assertEqual(Document.objects.count(), 0)
+
+    @patch("core.pos_paystack.requests.get")
+    @patch("core.pos_paystack.requests.post")
+    def test_online_markup_is_built_into_verified_momo_sale_and_frozen(self, post, get):
+        from marketplace.models import PaymentConfiguration
+        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "51.25"
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        post.return_value = self.charge_response(reference)
+        result = pos_paystack.start(self.user, self.branch, payload, key,
+            "0551234567", "mtn", "customer@example.test")
+        self.assertEqual(result["reference"], reference)
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], "5125")
+        held = HeldSale.objects.get(label=pos_paystack.LABEL_PREFIX + reference)
+        self.assertEqual(held.cart["payment_request"]["online_markup_percent"], "2.500")
+        self.assertEqual(held.cart["payment_request"]["sale_total"], "51.25")
+        self.assertEqual(Document.objects.count(), 0)
+        # New settings must not reprice a payment already initiated.
+        PaymentConfiguration.objects.filter(pk=1).update(online_price_markup_percent=Decimal("8.000"))
+        get.return_value = self.verify_response(reference, amount=5125)
+        doc = pos_paystack.reconcile(reference, force=True)
+        self.assertEqual(doc.total, Decimal("51.25"))
+        self.assertEqual(doc.paid, Decimal("51.25"))
+        self.assertEqual(doc.lines.get().unit_price, Decimal("51.25"))
+        self.assertEqual(Payment.objects.get(document=doc, method="momo").amount, Decimal("51.25"))
+        self.assertEqual(pos_paystack.reconcile(reference, force=True).pk, doc.pk)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_provider_amount_not_matching_all_in_price_is_rejected_before_charge(self, post):
+        from marketplace.models import PaymentConfiguration
+        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(self.user, self.branch, self.payload(), uuid.uuid4(),
+                "0551234567", "mtn", "customer@example.test")
+        post.assert_not_called()
