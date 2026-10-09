@@ -36,7 +36,7 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
                 with self.assertRaises(ValidationError):
                     normalize_ghana_phone(value)
 
-    def test_checkout_creates_and_then_reuses_customer_by_phone(self):
+    def test_checkout_requires_explicit_selection_of_existing_customer_by_phone(self):
         first = s.post_trade(self.user, self.branch, self.payload(
             customer_name="Ama Mensah",
             customer_phone="0241234567",
@@ -45,14 +45,19 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
         self.assertEqual(customer.name, "Ama Mensah")
         self.assertEqual(customer.phone, "+233241234567")
 
+        # A typed new name cannot silently inherit somebody else's debt/history.
+        with self.assertRaisesMessage(ValidationError, "phone number"):
+            s.post_trade(self.user, self.branch, self.payload(
+                customer_name="Ama M.", customer_phone="241234567",
+            ), uuid.uuid4())
+        # After the cashier confirms identity and selects the saved record, an
+        # additional sale correctly remains on the original customer account.
         second = s.post_trade(self.user, self.branch, self.payload(
-            customer_name="Ama M.",
-            customer_phone="241234567",
+            party=customer.pk,
         ), uuid.uuid4())
         self.assertEqual(second.party_id, customer.pk)
         self.assertEqual(
-            Party.objects.filter(branch=self.branch, kind="customer", phone="+233241234567").count(),
-            1,
+            Party.objects.filter(branch=self.branch, kind="customer", phone="+233241234567").count(), 1,
         )
 
     def test_fully_paid_sale_can_remain_walk_in(self):
