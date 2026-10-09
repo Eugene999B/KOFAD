@@ -59,7 +59,7 @@ class StaffInvitationSecurityTests(TestCase):
         self.assertLess(abs((invitation.expires_at - start).total_seconds() - 3600), 10)
         self.assertEqual(self.client.get(url).status_code, 302)
         self.assertEqual(self.client.get("/staff-invite/complete/").status_code, 200)
-        self.assertEqual(self.client.get(url + "incorrect").status_code, 410)
+        self.assertEqual(self.client.get(url.rstrip("/") + "-invalid/").status_code, 410)
         self.assertEqual(self.client.get("/staff-invite/complete/").status_code, 410)
 
     def test_opened_invitation_cannot_finish_at_one_hour_deadline(self):
