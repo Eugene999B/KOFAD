@@ -78,10 +78,11 @@ def app_metadata(kind):
 
 @require_GET
 def customer_downloads(request):
+    from marketplace.views import _market_context
     app = app_metadata("customer")
-    return render(request, "native_apps/customer.html", {
-        "title": "Get the KOFAD Market app", "app": app,
-    })
+    return render(request, "native_apps/customer.html", _market_context(
+        request, title="Get the KOFAD Market app", app=app,
+    ))
 
 
 @require_GET
