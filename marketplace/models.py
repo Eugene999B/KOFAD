@@ -167,8 +167,12 @@ class MarketListing(models.Model):
 
     @property
     def market_price(self):
+        from .pricing import all_in_unit_price, online_markup_percent
         value = getattr(self.product, self.price_source, None)
-        return value if value is not None else Decimal("0")
+        if value is None:
+            return Decimal("0")
+        rate = getattr(self, "_online_price_percent", None)
+        return all_in_unit_price(value, rate if rate is not None else online_markup_percent())
 
     @property
     def factor(self):
