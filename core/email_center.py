@@ -132,9 +132,19 @@ def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversatio
 
 
 @login_required
-def inbox(request):
+def inbox(request, section="inbox"):
+    """One secured service behind separate, focused email workspace pages."""
+    if section not in {"inbox", "history", "automations", "team"}:
+        raise Http404
     if not enabled():
         raise Http404("Email Centre is not enabled yet.")
+    if section in {"automations", "team"} and not owner(request.user):
+        raise PermissionDenied("Only the system administrator can manage email settings.")
+    # Older history links use /email/?status=... and must remain usable.
+    if section == "inbox" and not request.GET.get("thread") and any(
+        name in request.GET for name in ("q", "direction", "status", "page")
+    ):
+        section = "history"
     all_mailboxes = list(visible_mailboxes(request.user))
     can_write = set(visible_mailboxes(request.user, send=True).values_list("pk", flat=True))
     if request.method == "POST":
@@ -158,6 +168,66 @@ def inbox(request):
                 audit(request.user, mailbox.branch, "email.membership_updated", user.pk,
                       {"mailbox": mailbox.address, "read": can_read, "send": can_send})
                 messages.success(request, "Staff mailbox permissions updated.")
+            elif action == "bulk_assign":
+                if not owner(request.user):
+                    raise PermissionDenied
+                if request.POST.get("confirm_replace") != "yes":
+                    raise ValidationError("Confirm the mailbox permissions to save.")
+                raw_read = request.POST.getlist("read_mailboxes")
+                raw_send = request.POST.getlist("send_mailboxes")
+                if len(raw_read) + len(raw_send) > 300:
+                    raise ValidationError("Too many mailbox selections.")
+                if any(not item.isdecimal() for item in raw_read + raw_send):
+                    raise ValidationError("Invalid mailbox selection.")
+                read_ids = {int(item) for item in raw_read}
+                send_ids = {int(item) for item in raw_send}
+                read_ids.update(send_ids)  # Reply access always includes reading.
+                available = {
+                    m.pk: m for m in EmailMailbox.objects.filter(active=True)
+                }
+                if not read_ids.issubset(available):
+                    raise ValidationError("One or more selected mailboxes are unavailable.")
+                with transaction.atomic():
+                    member = get_object_or_404(
+                        User.objects.select_for_update(), pk=request.POST.get("user_id"),
+                        is_active=True, is_superuser=False,
+                    )
+                    if send_ids and not member.has_perm("core.send_messages"):
+                        raise ValidationError(
+                            "This staff role does not have the email sending permission. "
+                            "Update the staff role first."
+                        )
+                    branches = (
+                        set(member.access.branches.values_list("pk", flat=True))
+                        if hasattr(member, "access") else set()
+                    )
+                    if any(
+                        available[pk].branch_id is not None
+                        and available[pk].branch_id not in branches
+                        for pk in read_ids
+                    ):
+                        raise ValidationError(
+                            "Staff cannot be assigned email from an unauthorised branch."
+                        )
+                    EmailMailboxMember.objects.filter(
+                        user=member, mailbox__active=True
+                    ).exclude(mailbox_id__in=read_ids).delete()
+                    for mailbox_id in sorted(read_ids):
+                        EmailMailboxMember.objects.update_or_create(
+                            user=member, mailbox_id=mailbox_id,
+                            defaults={"can_read": True,
+                                      "can_send": mailbox_id in send_ids},
+                        )
+                    from .services import audit
+                    audit(
+                        request.user, None, "email.mailbox_access_bulk_updated",
+                        member.pk,
+                        {"read_mailbox_ids": sorted(read_ids),
+                         "send_mailbox_ids": sorted(send_ids)},
+                    )
+                messages.success(
+                    request, f"Saved {len(read_ids)} mailboxes for {member.get_full_name() or member.username}."
+                )
             elif action == "new_mailbox":
                 if not owner(request.user):
                     raise PermissionDenied
@@ -277,6 +347,10 @@ def inbox(request):
                 raise ValidationError("Unknown email action.")
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        if action in {"bulk_assign", "assign", "new_mailbox"}:
+            return redirect("email_team")
+        if action == "approve_draft":
+            return redirect("email_history")
         return redirect("email_center")
     chosen_id = request.GET.get("mailbox", "")
     chosen = next((m for m in all_mailboxes if str(m.pk) == chosen_id), None)
@@ -287,7 +361,7 @@ def inbox(request):
     if direction not in {"all", "inbound", "outbound"}:
         direction = "all"
     known_statuses = {value for value, _ in EmailLetter.STATUS}
-    if status not in known_statuses | {"all"}:
+    if status not in known_statuses | {"all", "attention"}:
         status = "all"
     letters_qs = EmailLetter.objects.filter(mailbox=chosen) if chosen else EmailLetter.objects.none()
     inbox_count = letters_qs.filter(direction="inbound").count()
@@ -296,7 +370,9 @@ def inbox(request):
     attention_count = letters_qs.filter(status__in=["failed", "uncertain"]).count()
     if direction != "all":
         letters_qs = letters_qs.filter(direction=direction)
-    if status != "all":
+    if status == "attention":
+        letters_qs = letters_qs.filter(status__in=["failed", "uncertain"])
+    elif status != "all":
         letters_qs = letters_qs.filter(status=status)
     if query:
         letters_qs = letters_qs.filter(
@@ -307,9 +383,31 @@ def inbox(request):
     letters = Paginator(
         letters_qs.select_related("created_by", "approved_by").order_by("-created_at", "-pk"), 20
     ).get_page(request.GET.get("page", "1"))
-    conversations = (EmailConversation.objects.filter(mailbox=chosen)
-                     .select_related("assigned_to").order_by("-last_activity_at")[:35]
-                     if chosen else [])
+    thread_status = request.GET.get("thread_status", "all")
+    thread_owner = request.GET.get("thread_owner", "all")
+    thread_q = request.GET.get("thread_q", "").strip()[:100]
+    if thread_status not in {"all", "open", "pending", "closed"}:
+        thread_status = "all"
+    if thread_owner not in {"all", "mine", "unassigned"}:
+        thread_owner = "all"
+    conversation_qs = (
+        EmailConversation.objects.filter(mailbox=chosen)
+        if chosen else EmailConversation.objects.none()
+    )
+    open_conversations = conversation_qs.filter(status="open").count()
+    unassigned_conversations = conversation_qs.filter(assigned_to__isnull=True).exclude(status="closed").count()
+    if thread_status != "all":
+        conversation_qs = conversation_qs.filter(status=thread_status)
+    if thread_owner == "mine":
+        conversation_qs = conversation_qs.filter(assigned_to=request.user)
+    elif thread_owner == "unassigned":
+        conversation_qs = conversation_qs.filter(assigned_to__isnull=True)
+    if thread_q:
+        conversation_qs = conversation_qs.filter(
+            models.Q(subject__icontains=thread_q) |
+            models.Q(customer_email__icontains=thread_q)
+        )
+    conversations = conversation_qs.select_related("assigned_to").order_by("-last_activity_at")[:50]
     active_thread = None
     thread_letters = []
     thread_notes = []
@@ -330,20 +428,42 @@ def inbox(request):
             ).order_by("username")[:150])
             if owner(request.user) and not any(u.pk == request.user.pk for u in eligible_assignees):
                 eligible_assignees.insert(0, request.user)
+    staff_users = (
+        list(User.objects.filter(is_active=True, is_superuser=False).order_by("username")[:300])
+        if owner(request.user) else []
+    )
+    staff_id = request.GET.get("staff", "")
+    selected_staff = next((u for u in staff_users if str(u.pk) == staff_id), None)
+    if selected_staff is None and staff_users:
+        selected_staff = staff_users[0]
+    grants = {
+        m.mailbox_id: m for m in EmailMailboxMember.objects.filter(
+            user=selected_staff, mailbox__active=True
+        )
+    } if selected_staff else {}
+    permission_rows = [
+        {"mailbox": mailbox, "can_read": bool(grants.get(mailbox.pk) and grants[mailbox.pk].can_read),
+         "can_send": bool(grants.get(mailbox.pk) and grants[mailbox.pk].can_send)}
+        for mailbox in all_mailboxes
+    ] if owner(request.user) else []
     return render(request, "email_center.html", {
         "title": "Email Centre", "mailboxes": all_mailboxes, "selected": chosen,
+        "email_section": section, "email_selected_staff": selected_staff,
+        "email_permission_rows": permission_rows,
         "letters": letters, "writable_ids": can_write,
         "conversations": conversations, "active_thread": active_thread,
         "thread_letters": thread_letters, "thread_notes": thread_notes,
         "eligible_assignees": eligible_assignees,
         "mail_query": query, "mail_direction": direction, "mail_status": status,
+        "thread_status_filter": thread_status, "thread_owner_filter": thread_owner,
+        "thread_search": thread_q, "open_conversations": open_conversations,
+        "unassigned_conversations": unassigned_conversations,
         "inbox_count": inbox_count, "sent_count": sent_count, "draft_count": draft_count,
         "attention_count": attention_count,
         "memberships": EmailMailboxMember.objects.select_related("user", "mailbox").filter(
             mailbox__in=all_mailboxes).order_by("mailbox__address", "user__username")
         if owner(request.user) else [],
-        "staff_users": User.objects.filter(is_active=True).order_by("username")[:300]
-        if owner(request.user) else [],
+        "staff_users": staff_users,
         "is_mail_owner": owner(request.user),
         "daily_email_usage": __import__("core.brevo_email", fromlist=["usage_today"]).usage_today(),
         "email_queued_count": EmailLetter.objects.filter(direction="outbound", status__in=["queued", "failed"]).count() if owner(request.user) else 0,
@@ -418,6 +538,12 @@ def deliver_outgoing(limit=10):
             and settings.KOFAD_BREVO_API_KEY):
         return 0
     now = timezone.now()
+    # An interrupted provider request might have succeeded before the process died.
+    # Flag it for review rather than silently causing a duplicate financial email.
+    EmailLetter.objects.filter(
+        direction="outbound", status="sending",
+        next_attempt_at__lt=now - timedelta(minutes=20),
+    ).update(status="uncertain", last_error="Interrupted send; review before retry.")
     ids = list(EmailLetter.objects.filter(
         direction="outbound", status__in=["queued", "failed"], attempts__lt=3,
         next_attempt_at__lte=now,
@@ -428,7 +554,8 @@ def deliver_outgoing(limit=10):
             claimed = EmailLetter.objects.filter(
                 pk=pk, direction="outbound", status__in=["queued", "failed"],
                 attempts__lt=3, next_attempt_at__lte=timezone.now(),
-            ).update(status="sending", attempts=models.F("attempts") + 1)
+            ).update(status="sending", attempts=models.F("attempts") + 1,
+                     next_attempt_at=timezone.now())
         if not claimed:
             continue
         row = EmailLetter.objects.get(pk=pk)
