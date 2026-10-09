@@ -20,11 +20,12 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseNotAllowed
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
@@ -279,10 +280,23 @@ def callback(request, kind):
             kind=kind, subject=identity["subject"]
         ).first()
         if not binding:
-            raise ValidationError(
-                "This Google account is not linked yet. Sign in with your existing "
-                "KOFAD credentials and link Google in Account Security."
-            )
+            if kind != "customer":
+                raise ValidationError(
+                    "This staff Google account is not linked. Ask the system administrator for access."
+                )
+            # Only customer identities may self-register. Never infer or attach a
+            # Google subject to an existing account merely by matching email.
+            if EmailIdentity.objects.filter(
+                kind="customer", email=identity["email"], verified_at__isnull=False,
+            ).exists():
+                raise ValidationError(
+                    "An account already uses this email. Sign in to that account and link Google in Security."
+                )
+            request.session["market_google_signup_pending"] = {
+                "subject": identity["subject"], "email": identity["email"],
+                "created_at": time.time(),
+            }
+            return redirect("market_google_finish")
         if kind == "staff":
             user = User.objects.filter(pk=binding.owner_id, is_active=True).first()
             if not user:
@@ -309,11 +323,12 @@ def callback(request, kind):
                 return redirect("mfa")
             return redirect("dashboard")
         customer = CustomerAccount.objects.filter(
-            pk=binding.owner_id, active=True, verified_at__isnull=False,
+            pk=binding.owner_id, active=True,
         ).first()
-        if customer is None:
-            raise ValidationError("Customer account is unavailable. Verify your phone first.")
+        if customer is None or (customer.phone and not customer.verified_at):
+            raise ValidationError("Customer account is unavailable.")
         market_services.set_customer_session(request, customer)
+        request.session["market_google_authenticated_at"] = time.time()
         binding.last_login_at = timezone.now()
         binding.email = identity["email"]
         binding.save(update_fields=["last_login_at", "email"])
@@ -326,6 +341,72 @@ def callback(request, kind):
         else:
             messages.error(request, "Google could not verify this sign-in. Please try again.")
         return _redirect(kind)
+
+
+
+@never_cache
+@sensitive_post_parameters("full_name")
+def customer_complete(request):
+    """Create a customer profile only after validated Google OIDC and a name form.
+
+    An existing verified email alias is never automatically adopted. Google
+    alone authenticates the customer; phone and local password are optional.
+    """
+    pending = request.session.get("market_google_signup_pending") or {}
+    if (
+        not pending or not isinstance(pending.get("subject"), str)
+        or not isinstance(pending.get("email"), str)
+        or time.time() - pending.get("created_at", 0) > 600
+    ):
+        request.session.pop("market_google_signup_pending", None)
+        messages.error(request, "Google signup expired. Please continue with Google again.")
+        return redirect("market_access")
+    if request.method == "POST":
+        full_name = " ".join(str(request.POST.get("full_name", "")).split())
+        if not (2 <= len(full_name) <= 140):
+            messages.error(request, "Enter your full name (2–140 characters).")
+        else:
+            try:
+                with transaction.atomic():
+                    if EmailIdentity.objects.select_for_update().filter(
+                        kind="customer", email=pending["email"],
+                        verified_at__isnull=False,
+                    ).exists() or GoogleIdentity.objects.select_for_update().filter(
+                        kind="customer", subject=pending["subject"],
+                    ).exists():
+                        raise ValidationError(
+                            "This Google account or email already has a customer profile. Please sign in."
+                        )
+                    customer = CustomerAccount(
+                        phone=None, full_name=full_name, email=pending["email"],
+                        active=True,
+                    )
+                    customer.password_hash = make_password(None)
+                    customer.save()
+                    GoogleIdentity.objects.create(
+                        kind="customer", owner_id=customer.pk,
+                        subject=pending["subject"], email=pending["email"],
+                    )
+                    EmailIdentity.objects.create(
+                        kind="customer", owner_id=customer.pk,
+                        email=pending["email"], verified_at=timezone.now(),
+                    )
+                request.session.pop("market_google_signup_pending", None)
+                market_services.set_customer_session(request, customer)
+                request.session["market_google_authenticated_at"] = time.time()
+                messages.success(request, "Welcome to KOFAD! You can add a phone number later in Account Security.")
+                return redirect(request.session.pop("market_after_login", None) or "market_account")
+            except (IntegrityError, ValidationError):
+                messages.error(request, "This Google account is already registered. Please sign in.")
+    elif request.method != "GET":
+        return HttpResponseNotAllowed(["GET"])
+    # Local import avoids a circular dependency with marketplace.views.
+    from marketplace.views import _market_context
+    response = render(request, "marketplace/google_finish.html", _market_context(
+        request, title="Finish your KOFAD account", google_email=pending["email"],
+    ))
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 @never_cache

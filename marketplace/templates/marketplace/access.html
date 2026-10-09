@@ -5,7 +5,8 @@
       <img src="{% static 'brand/kofad-official-logo.svg' %}" alt="">
     </div>
     <h1 id="market-access-title">Sign in or create account</h1>
-    <p>Enter your mobile number.</p>
+    <p>Choose Google for fast access, or continue with a mobile number. You can add the other sign-in method later.</p>
+    {% if google_ready %}<a class="kofad-google-button" href="{% url 'google_customer_login' %}"><span class="kofad-google-mark" aria-hidden="true">G</span> Continue with Google</a><div class="kofad-oauth-separator"><span>or use your mobile number</span></div>{% endif %}
     {% include "marketplace/_auth_messages.html" %}
     <form method="post" class="access-phone-form" novalidate>
       {% csrf_token %}
@@ -15,7 +16,7 @@
       {{ form.phone.errors }}
       <button class="market-button primary wide" type="submit">Continue <span aria-hidden="true">→</span></button>
     </form>
-    <div class="simple-access-links"><a href="/market/account/login/">Sign in with password instead</a></div>
+    <div class="simple-access-links"><a href="/market/account/login/">Already registered? Sign in with password</a></div>
     <a class="simple-access-back" href="/market/">Back to Market</a>
   </div>
 </section>

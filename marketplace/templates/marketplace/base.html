@@ -40,7 +40,7 @@
 <link rel="stylesheet" href="{% static 'marketplace/checkout-flow.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/market-v13.css' %}">
 <link rel="stylesheet" href="{% static 'brand-system.css' %}">
-<link rel="stylesheet" href="{% static 'brand-transparent.css' %}">
+<link rel="stylesheet" href="{% static 'brand-transparent.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-polish.css' %}">
 {% block after_styles %}{% endblock %}
 </head>
 <body class="market-body market-v2{% if request.path == '/' %} is-kofad-home{% endif %}{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
@@ -69,7 +69,7 @@
 <span class="shop-account-chevron" aria-hidden="true">⌄</span>
 </summary>
 <div class="shop-account-popover">
-<div class="shop-account-popover-head"><span class="shop-shell-avatar large">{{ market_customer.full_name|first|upper }}</span><div><strong>{{ market_customer.full_name|default:"KOFAD customer" }}</strong><small>{{ market_customer.phone }}</small></div></div>
+<div class="shop-account-popover-head"><span class="shop-shell-avatar large">{{ market_customer.full_name|first|upper }}</span><div><strong>{{ market_customer.full_name|default:"KOFAD customer" }}</strong><small>{{ market_customer.phone|default:market_customer.email }}</small></div></div>
 <nav aria-label="Customer account menu">
 <a href="/market/account/"><span>Account overview</span><b>›</b></a>
 <a href="/market/orders/"><span>Your orders</span><b>›</b></a>

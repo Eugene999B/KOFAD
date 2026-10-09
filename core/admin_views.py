@@ -7,6 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from . import services as s
 from .models import Access, Branch, PasswordRecovery
@@ -100,6 +101,7 @@ def users(request, branch):
             "user": user,
             "role": "System administrator" if user.is_superuser else (_assigned_role(user).name if _assigned_role(user) else "No role"),
             "phone": user.access.recovery_phone,
+            "invite": getattr(user, "staff_invitation", None),
         })
     return render(request, "admin_users.html", {"title": "Staff & users", "rows": rows})
 
@@ -124,6 +126,8 @@ def user_edit(request, branch, pk=None):
         "role": str(selected_role),
         "active": True if creating else user.is_active,
         "branches": selected_branches,
+        "invite_channel": "sms",
+        "invite_email": user.email if user else "",
     }
 
     if request.method == "POST":
@@ -135,6 +139,8 @@ def user_edit(request, branch, pk=None):
             "role": request.POST.get("role", ""),
             "active": request.POST.get("active") == "on",
             "branches": {int(x) for x in request.POST.getlist("branches") if x.isdigit()},
+            "invite_channel": request.POST.get("invite_channel", "sms").strip(),
+            "invite_email": request.POST.get("invite_email", "").strip(),
         })
         extra_raw = request.POST.getlist("extra_permissions")
         extra_permissions = {int(value) for value in extra_raw if value.isdigit()}
@@ -164,9 +170,23 @@ def user_edit(request, branch, pk=None):
             phone = ""
             errors.extend(exc.messages)
 
-        password = request.POST.get("password", "")
-        if creating and not password:
-            errors.append("Set an initial password for the new staff account.")
+        password = "" if creating else request.POST.get("password", "")
+        invite_destination = ""
+        if creating:
+            from . import staff_invites
+            if values["invite_channel"] in {"sms", "whatsapp"} and not phone:
+                errors.append("Provide the staff member's mobile number to send an invitation.")
+            elif values["invite_channel"] == "email" and not values["invite_email"]:
+                errors.append("Provide the staff member's email to send an invitation.")
+            else:
+                try:
+                    invite_destination = staff_invites.validate_delivery(
+                        values["invite_channel"],
+                        values["invite_email"] if values["invite_channel"] == "email" else phone,
+                        whatsapp_opt_in=request.POST.get("whatsapp_opt_in") == "on",
+                    )
+                except ValidationError as exc:
+                    errors.extend(exc.messages)
         if password:
             candidate = user or User(username=values["username"], first_name=values["first_name"], last_name=values["last_name"])
             try:
@@ -195,11 +215,14 @@ def user_edit(request, branch, pk=None):
                         "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                     }
                 if creating:
-                    user = User.objects.create_user(username=values["username"], password=password)
+                    user = User.objects.create_user(username=values["username"])
+                    user.set_unusable_password()
                 user.username = values["username"]
                 user.first_name = values["first_name"]
                 user.last_name = values["last_name"]
-                user.is_active = values["active"]
+                user.is_active = False if creating else values["active"]
+                if creating and values["invite_channel"] == "email":
+                    user.email = invite_destination
                 user.save()
                 if password and not creating:
                     user.set_password(password)
@@ -225,10 +248,21 @@ def user_edit(request, branch, pk=None):
                     "recovery_phone": phone,
                     "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                 }
+                if creating:
+                    invitation, invitation_url = staff_invites.issue(
+                        user, request.user, values["invite_channel"], invite_destination,
+                    )
                 s.audit(request.user, branch, "staff.created" if creating else "staff.updated", user.pk, {
                     "before": before, "after": after, "password_reset": bool(password and not creating)
                 })
-            messages.success(request, "Staff account created." if creating else "Staff account updated.")
+            if creating:
+                try:
+                    staff_invites.deliver(invitation, invitation_url)
+                    messages.success(request, "Staff account created inactive. Activation link submitted via " + values["invite_channel"] + ".")
+                except ValidationError as exc:
+                    messages.warning(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, "Staff account updated.")
             return redirect("admin_users")
 
     return render(request, "admin_user_form.html", {
@@ -319,3 +353,35 @@ def settings_center(request, branch):
         "title": "Settings",
         "single_branch": Branch.objects.filter(active=True).count() == 1,
     })
+
+
+@company_admin
+@require_POST
+def resend_staff_invitation(request, branch, pk):
+    """Owner can renew the token for a still-unactivated account."""
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only the system administrator can invite staff.")
+    from . import staff_invites
+    from .models import StaffInvitation
+    user = get_object_or_404(User, pk=pk, is_active=False)
+    invitation = StaffInvitation.objects.filter(user=user, consumed_at__isnull=True).first()
+    if not invitation:
+        messages.error(request, "This staff member has no pending invitation.")
+        return redirect("admin_users")
+    if invitation.delivered_at and invitation.created_at and (
+        __import__("django.utils.timezone", fromlist=["now"]).now() - invitation.delivered_at
+    ).total_seconds() < 60:
+        messages.error(request, "Wait at least a minute before resending an invitation.")
+        return redirect("admin_users")
+    try:
+        recipient = staff_invites.validate_delivery(
+            invitation.channel, invitation.destination,
+            whatsapp_opt_in=request.POST.get("whatsapp_opt_in") == "on",
+        )
+        renewed, link = staff_invites.issue(user, request.user, invitation.channel, recipient)
+        staff_invites.deliver(renewed, link)
+        s.audit(request.user, branch, "staff.invitation_renewed", user.pk)
+        messages.success(request, "A new private activation link was submitted. The old link no longer works.")
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    return redirect("admin_users")

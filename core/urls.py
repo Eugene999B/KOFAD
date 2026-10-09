@@ -7,6 +7,7 @@ from . import google_oauth as google
 from . import gmail_api as gmail_sender
 from . import count_views
 from . import admin_views
+from . import staff_invites
 from . import export_views
 from . import maintenance_views
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
@@ -93,6 +94,9 @@ urlpatterns = [
     path("administration/", admin_views.administration, name="administration"),
     path("administration/users/", admin_views.users, name="admin_users"),
     path("administration/users/new/", admin_views.user_edit, name="admin_user_new"),
+    path("administration/users/<int:pk>/invite/resend/", admin_views.resend_staff_invitation, name="staff_invite_resend"),
+    path("staff-invite/<int:pk>/<str:token>/", staff_invites.open_invitation, name="staff_invitation_open"),
+    path("staff-invite/complete/", staff_invites.complete_invitation, name="staff_invitation_complete"),
     path("administration/users/<int:pk>/", admin_views.user_edit, name="admin_user_edit"),
     path("administration/roles/", admin_views.roles, name="admin_roles"),
     path("administration/roles/new/", admin_views.role_edit, name="admin_role_new"),
