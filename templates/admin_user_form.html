@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel form-panel admin-form"><div class="section-heading"><div><p class="eyebrow">STAFF ACCESS</p><h2>{% if creating %}Create a staff account{% else %}{{ edited_user.username }}{% endif %}</h2></div>{% if edited_user and edited_user.is_superuser %}<span class="pill amber">System administrator</span>{% endif %}</div>
-<p class="muted">Give each person their own account. Do not share the ADMIN password with Cashiers, Managers or other staff.</p>
+<p class="muted">The system administrator selects each staff member's role and location. New staff receive a one-time activation link and choose their own password.</p>
 <form method="post">{% csrf_token %}
 <div class="form-grid">
 <div><label for="username">Username *</label><input id="username" name="username" value="{{ values.username }}" maxlength="150" autocomplete="off" required><small>Used at sign-in. Usernames are treated as case-insensitive.</small></div>
@@ -9,11 +9,20 @@
 <div><label for="first_name">First name</label><input id="first_name" name="first_name" value="{{ values.first_name }}" maxlength="150"></div>
 <div><label for="last_name">Last name</label><input id="last_name" name="last_name" value="{{ values.last_name }}" maxlength="150"></div>
 <div><label for="recovery_phone">Recovery phone</label><input id="recovery_phone" name="recovery_phone" value="{{ values.recovery_phone }}" inputmode="tel" placeholder="0241234567"><small>Forgot-password SMS will go only to this staff member's saved number.</small></div>
-<div><label for="password">{% if creating %}Initial password *{% else %}Reset password{% endif %}</label><input id="password" name="password" type="password" autocomplete="new-password" {% if creating %}required{% endif %}><small>{% if creating %}Use a strong temporary password; the staff member can change it later.{% else %}Leave blank to keep the current password.{% endif %}</small></div>
+{% if creating %}
+<div><label for="invite_channel">Send activation link via *</label>
+<select id="invite_channel" name="invite_channel" required>
+<option value="sms" {% if values.invite_channel == 'sms' %}selected{% endif %}>SMS to staff mobile number</option>
+<option value="email" {% if values.invite_channel == 'email' %}selected{% endif %}>Email to staff inbox</option>
+<option value="whatsapp" {% if values.invite_channel == 'whatsapp' %}selected{% endif %}>WhatsApp (approved company template)</option>
+</select><small>Link expires after 24 hours and works only once. Email and WhatsApp need their provider configured.</small></div>
+<div><label for="invite_email">Staff email (for email invitations)</label><input type="email" id="invite_email" name="invite_email" value="{{ values.invite_email|default:'' }}" autocomplete="off" placeholder="staff@example.com"></div>
+<div><label><input type="checkbox" name="whatsapp_opt_in"> I confirm the staff member opted in to WhatsApp invitations.</label></div>
+{% else %}<div><label for="password">Administrator password reset (optional)</label><input id="password" name="password" type="password" autocomplete="new-password"><small>Leave blank to keep the current password.</small></div>{% endif %}
 </div>
 {% if not single_branch %}<fieldset class="permission-box"><legend>Location access</legend><div class="check-grid">{% for b in active_branches %}<label class="check-card"><input type="checkbox" name="branches" value="{{ b.pk }}" {% if b.pk in values.branches %}checked{% endif %}><span><strong>{{ b.name }}</strong><small>{{ b.code }}</small></span></label>{% endfor %}</div></fieldset>{% else %}<div class="notice subtle">This is currently a one-store KOFAD setup. The account will automatically use <strong>{{ active_branches.0.name }}</strong>; there is no unnecessary store selector.</div>{% endif %}
 {% if not edited_user.is_superuser %}<details class="permission-box"><summary>Additional permissions for this person</summary><p class="muted">Optional. Role permissions apply automatically. Select only the extra duties this person needs; clearing a selection removes that individual grant.</p><div class="check-grid">{% for choice in extra_choices %}<label class="check-card"><input type="checkbox" name="extra_permissions" value="{{ choice.id }}" {% if choice.checked %}checked{% endif %}><span><strong>{{ choice.label }}</strong><small>{{ choice.help }}</small></span></label>{% endfor %}</div></details>{% endif %}
-<label class="switch-row"><input type="checkbox" name="active" {% if values.active %}checked{% endif %}><span><strong>Account active</strong><small>Turn this off to block future sign-ins and revoke the staff member's access.</small></span></label>
+{% if not creating %}<label class="switch-row"><input type="checkbox" name="active" {% if values.active %}checked{% endif %}><span><strong>Account active</strong><small>Turn this off to block future sign-ins and revoke the staff member's access.</small></span></label>{% else %}<p class="muted">The new staff account remains inactive until the invitation is accepted and a password is set.</p>{% endif %}
 <div class="form-actions"><button class="button">{% if creating %}Create staff account{% else %}Save staff account{% endif %}</button><a class="text-link" href="/administration/users/">Cancel</a></div>
 </form></section>
 {% endblock %}
