@@ -31,7 +31,8 @@ class EmailLetter(models.Model):
     DIRECTION = [("inbound", "Incoming"), ("outbound", "Outgoing")]
     STATUS = [("received", "Received"), ("queued", "Queued"), ("sending", "Sending"),
               ("submitted", "Submitted to provider"), ("internal", "Delivered internally"),
-              ("failed", "Failed"), ("uncertain", "Needs review")]
+              ("failed", "Failed"), ("uncertain", "Needs review"),
+              ("suppressed", "Suppressed by recipient preference")]
     mailbox = models.ForeignKey(EmailMailbox, related_name="letters", on_delete=models.PROTECT)
     direction = models.CharField(max_length=8, choices=DIRECTION)
     status = models.CharField(max_length=12, choices=STATUS)
