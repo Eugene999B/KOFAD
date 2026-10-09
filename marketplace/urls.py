@@ -3,6 +3,7 @@ from . import views, public_views, seo
 from core import google_oauth as google
 
 urlpatterns = [
+    path("favicon.ico", seo.favicon, name="site_favicon"),
     path("robots.txt", seo.robots, name="robots_txt"),
     path("sitemap.xml", seo.sitemap, name="sitemap_xml"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),
