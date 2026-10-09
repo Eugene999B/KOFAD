@@ -779,7 +779,7 @@ def customer_security(request, customer):
         and timezone.now().timestamp() - request.session["market_google_authenticated_at"] < 900
     )
     action = request.POST.get("action", "password")
-    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
+    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications", "email_marketing"}:
         try:
             if not (recent_google_auth or customer.check_password(request.POST.get("current_password", ""))):
                 raise ValidationError("Sign in with Google again or enter your current password to update email access.")
@@ -791,6 +791,14 @@ def customer_security(request, customer):
                 if not verified:
                     raise ValidationError("The email code is incorrect.")
                 messages.success(request, "Email verified. You can now sign in with your email or phone.")
+            elif action == "email_marketing":
+                from marketplace.models import EmailIdentity
+                changed = EmailIdentity.objects.filter(
+                    kind="customer", owner_id=customer.pk, verified_at__isnull=False,
+                ).update(marketing_emails_enabled=request.POST.get("marketing_emails") == "on")
+                if not changed:
+                    raise ValidationError("Verify your email before setting promotional email preferences.")
+                messages.success(request, "Promotional email preference saved.")
             else:
                 email_identity.set_notifications(
                     "customer", customer.pk, request.POST.get("email_notifications") == "on"
