@@ -6,7 +6,6 @@ cashier-entered name, clearly distinguishing it from a network-verified name.
 """
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import Http404, JsonResponse
@@ -15,11 +14,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.core.paginator import Paginator
 
 from . import pos_paystack, services
-from .identity import normalize_ghana_phone
 from .models import HeldSale, Party
-
-TOKEN_SALT = "kofad.pos.momo.recipient.v1"
-TOKEN_AGE_SECONDS = 300
 
 
 def _branch(request):
@@ -100,82 +95,6 @@ def _snapshot(held):
         "receipt_thermal": (f"/documents/{doc.pk}/pdf/thermal80/" if doc else ""),
         "receipt_a4": (f"/documents/{doc.pk}/pdf/a4/" if doc else ""),
     }
-
-
-def validate_review_token(token, *, user, branch, key, phone, provider, sale):
-    """Bind approval to staff, sale, amount and recipient: never authorize changed details."""
-    if not isinstance(sale, dict):
-        raise ValidationError("Invalid sale request.")
-    amount_pesewas = int(pos_paystack._payment_amount(sale) * 100)
-    party_id = str(sale.get("party") or "")
-    customer_name = "" if party_id else str(sale.get("customer_name") or "").strip()[:140]
-    try:
-        data = signing.loads(token or "", salt=TOKEN_SALT, max_age=TOKEN_AGE_SECONDS)
-        if not isinstance(data, dict) or data != {
-            "user": user.pk, "branch": branch.pk, "key": str(key),
-            "phone": normalize_ghana_phone(phone), "network": str(provider or "").lower(),
-            "amount_pesewas": amount_pesewas, "party": party_id,
-            "customer_name": customer_name,
-        }:
-            raise ValidationError("Payment details changed. Review the recipient and amount again.")
-    except (signing.BadSignature, ValueError, TypeError) as exc:
-        raise ValidationError("Recipient review expired. Verify the customer details again.") from exc
-
-
-@login_required
-@require_POST
-def recipient_review(request):
-    """Confirmation of *customer-record details*, not a wallet-name lookup."""
-    import json
-    branch = _branch(request)
-    services.permit(request.user, branch, "operate_sales")
-    if len(request.body) > 2048:
-        return JsonResponse({"error": "Invalid recipient review."}, status=400)
-    try:
-        body = json.loads(request.body or "{}")
-        if not isinstance(body, dict):
-            raise ValidationError("Invalid recipient details.")
-        key = str(body.get("request_key") or "")
-        pos_paystack._reference_from_key(key)
-        phone = normalize_ghana_phone(body.get("phone"))
-        network = str(body.get("provider") or "").lower()
-        if network not in pos_paystack.PROVIDERS:
-            raise ValidationError("Choose a supported MoMo network.")
-        name = str(body.get("name") or "").strip()[:140]
-        party_id = body.get("party")
-        amount_pesewas = body.get("amount_pesewas")
-        if type(amount_pesewas) is not int or not 0 < amount_pesewas <= 100000000000:
-            raise ValidationError("Confirm a positive full-sale amount before reviewing payment.")
-        party_phone = ""
-        if party_id:
-            party = Party.objects.filter(pk=party_id, branch=branch, kind="customer").first()
-            if not party:
-                raise ValidationError("Choose an existing customer in this branch.")
-            name = party.name
-            party_phone = party.phone or ""
-        if len(name) < 2:
-            raise ValidationError("Enter or choose the customer name first.")
-        token = signing.dumps({
-            "user": request.user.pk, "branch": branch.pk, "key": key,
-            "phone": phone, "network": network,
-            "amount_pesewas": amount_pesewas,
-            "party": str(party_id or ""),
-            "customer_name": "" if party_id else name,
-        }, salt=TOKEN_SALT)
-        response = JsonResponse({
-            "customer_name": name, "phone": phone, "network": network.upper(),
-            "amount": f"{amount_pesewas / 100:.2f}",
-            "phone_matches_record": bool(party_phone and party_phone == phone) if party_id else None,
-            "registered_wallet_name": None,
-            "name_source": "KOFAD customer record" if party_id else "Cashier entry",
-            "wallet_name_verified": False,
-            "notice": "Paystack has not provided a registered MoMo-wallet name. Confirm these details directly with the customer before sending a prompt.",
-            "review_token": token,
-        })
-        response["Cache-Control"] = "no-store, private"
-        return response
-    except (ValidationError, ValueError, TypeError) as exc:
-        return JsonResponse({"error": "; ".join(exc.messages) if isinstance(exc, ValidationError) else "Invalid review request."}, status=400)
 
 
 @login_required
