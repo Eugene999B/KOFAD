@@ -84,6 +84,23 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertNotContains(response, "Get Android app")
         self.assertFalse(app_metadata("customer")["released"])
 
+    @override_settings(
+        KOFAD_CUSTOMER_APP_VERSION="1.4.0",
+        KOFAD_CUSTOMER_APP_ANDROID_URL="https://play.google.com/store/apps/details?id=com.kofadimpex.market",
+    )
+    def test_published_android_link_is_active_but_unreleased_ios_windows_remain_pending(self):
+        page = self.client.get("/apps/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Get Android app")
+        self.assertContains(page, "Ready to download", count=1)
+        self.assertContains(page, "In preparation", count=2)
+        self.assertNotContains(page, "Get Windows installer")
+        self.assertNotContains(page, "View on the App Store")
+        home = self.client.get("/")
+        self.assertContains(home, "Get the KOFAD app")
+        market = self.client.get("/market/")
+        self.assertContains(market, "Explore app downloads")
+
     def test_reject_fake_store_urls_redirectors_and_invalid_protocols(self):
         invalid = [
             ("http://downloads.kofadimpex.com/customer.apk", "android"),
