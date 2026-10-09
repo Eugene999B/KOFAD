@@ -75,15 +75,19 @@ def registration_rows(user, branch):
     for customer in customers:
         stat = stats.get(customer.pk, {})
         alias = aliases.get(customer.pk)
+        verified_email = (alias.email if alias and alias.verified_at else "") or ""
+        same_email = bool(verified_email and verified_email.casefold() == (customer.email or "").casefold())
         has_phone = bool(customer.phone)
         rows.append({
             "account_id": customer.pk,
             "name": customer.full_name,
             "phone": customer.phone or "",
             "email": customer.email or "",
+            "verified_email": verified_email,
             "created": customer.created_at,
             "phone_status": "Verified" if customer.verified_at else ("Unverified" if has_phone else "Not linked"),
-            "email_status": "Verified" if alias and alias.verified_at else "Not verified",
+            "email_status": ("Verified" if same_email else
+                             "Different verified sign-in email" if verified_email else "Not verified"),
             "google_account": "Linked" if customer.pk in google_ids else "Not linked",
             "last_login": customer.last_login_at or "",
             "orders": stat.get("orders", 0),
@@ -96,7 +100,8 @@ def registration_rows(user, branch):
         })
     return rows, [
         ("account_id", "Account ID"), ("name", "Registered name"), ("phone", "Phone"),
-        ("email", "Profile email"), ("created", "Registered on"),
+        ("email", "Profile email"), ("verified_email", "Verified sign-in email"),
+        ("created", "Registered on"),
         ("phone_status", "Phone verification"), ("email_status", "Email verification"),
         ("google_account", "Google sign-in"), ("last_login", "Last login"),
         ("orders", "Orders"), ("paid_orders", "Paid orders"),
