@@ -83,7 +83,7 @@ class EmailWorkspaceTests(TestCase):
             read=[str(self.support.pk), str(self.accounts.pk)],
             send=[str(self.support.pk)]
         )
-        self.assertRedirects(response, reverse("email_team"))
+        self.assertRedirects(response, f"{reverse('email_team')}?staff={self.staff.pk}")
         grants = {g.mailbox_id: g for g in EmailMailboxMember.objects.filter(user=self.staff)}
         self.assertEqual(set(grants), {self.support.pk, self.accounts.pk})
         self.assertTrue(grants[self.support.pk].can_read)
