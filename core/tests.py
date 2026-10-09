@@ -1127,22 +1127,28 @@ class AdministrationAndExportTests(Fixtures, TestCase):
     def test_owner_can_create_cashier_in_branded_admin(self):
         role = Group.objects.create(name="Cashier test")
         role.permissions.add(Permission.objects.get(codename="operate_sales"))
-        response = self.client.post("/administration/users/new/", {
-            "username": "counter-one",
-            "first_name": "Counter",
-            "last_name": "One",
-            "role": str(role.pk),
-            "password": "Strong-counter-password-2026!",
-            "active": "on",
-            "branches": [str(self.branch.pk)],
-            "recovery_phone": "0241234567",
-        })
+        with patch("core.staff_invites.validate_delivery", return_value="+233241234567"), patch(
+            "core.staff_invites.deliver"
+        ) as deliver:
+            response = self.client.post("/administration/users/new/", {
+                "username": "counter-one",
+                "first_name": "Counter",
+                "last_name": "One",
+                "role": str(role.pk),
+                "invite_channel": "sms",
+                "branches": [str(self.branch.pk)],
+                "recovery_phone": "0241234567",
+            })
         self.assertEqual(response.status_code, 302)
         user = User.objects.get(username="counter-one")
         self.assertTrue(user.groups.filter(pk=role.pk).exists())
         self.assertTrue(user.access.branches.filter(pk=self.branch.pk).exists())
         self.assertEqual(user.access.recovery_phone, "+233241234567")
         self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_active)
+        self.assertFalse(user.has_usable_password())
+        self.assertIsNotNone(user.staff_invitation)
+        deliver.assert_called_once()
 
     def test_role_editor_changes_only_selected_role_members_sessions(self):
         role = Group.objects.create(name="Counter control")
