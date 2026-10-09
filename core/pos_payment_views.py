@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 from django.core.paginator import Paginator
@@ -42,7 +42,7 @@ def _accessible(request, branch):
 def _payment(request, branch, reference):
     _accessible(request, branch)
     if not reference.startswith("KFD-POS-"):
-        raise ValidationError("Unsupported payment reference.")
+        raise Http404("Unknown Paystack payment.")
     queryset = HeldSale.objects.filter(branch=branch, label=pos_paystack.LABEL_PREFIX + reference)
     if not _manager(request, branch):
         queryset = queryset.filter(user=request.user)
