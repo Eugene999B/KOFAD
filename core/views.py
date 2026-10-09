@@ -942,9 +942,12 @@ def documents(request):
     q = request.GET.get("q", "")[:100]
     if q:
         rows = rows.filter(Q(reference__icontains=q) | Q(party__name__icontains=q))
+    from django.core.paginator import Paginator
     from .sale_history import decorate_sales
+    page = Paginator(rows.order_by("-created_at", "-pk"), 50).get_page(request.GET.get("page"))
     return render(request, "documents.html", {"title": dict(Document.KINDS).get(kind, "Transactions"),
-        "rows": decorate_sales(branch, rows[:200]), "kind": kind, "q": q})
+        "rows": decorate_sales(branch, page.object_list), "kind": kind, "q": q,
+        "page_obj": page})
 
 
 @login_required
