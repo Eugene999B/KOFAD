@@ -586,7 +586,7 @@ def reconcile(reference, *, force=False):
         return finalize_verified(reference, verified)
     if provider_status in TERMINAL_FAILURES and state.get("charge_status") in TERMINAL_FAILURES:
         state["status"] = provider_status
-        state["message"] = str(verified.get("gateway_response") or verified.get("message") or "The MoMo request was not successful.")[:240]
+        state["message"] = explain_provider_error(verified.get("gateway_response") or verified.get("message"))
         state["next_check_at"] = None
         _save_state(held, state)
         raise ValidationError(state["message"])
