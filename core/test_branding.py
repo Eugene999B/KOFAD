@@ -84,7 +84,7 @@ class BrandingConsistencyTests(SimpleTestCase):
         svg = (brand / "kofad-official-logo.svg").read_text("utf-8")
         self.assertIn("data:image/png;base64,", svg)
         self.assertNotIn("data:image/jpeg;base64,", svg)
-        self.assertNotIn("kofad-emblem.png", svg)
+        self.assertNotIn("kofad-" + "emblem.png", svg)
 
     def test_favicon_endpoint_delivers_correct_type(self):
         from django.test import Client
