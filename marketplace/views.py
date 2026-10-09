@@ -78,7 +78,9 @@ def _market_context(request, **extra):
     ).strip()[:180]
     canonical_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else settings.PUBLIC_SITE_ORIGIN
     canonical_url = canonical_origin + path if seo_indexable else ""
+    from core.native_apps import app_metadata
     context = {
+        "native_customer_app_released": app_metadata("customer")["released"],
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
