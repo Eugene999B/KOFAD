@@ -97,12 +97,13 @@ def verify(challenge_id, code):
         if not _eligible(row) or row.verified_at:
             raise ValidationError("That recovery code has expired or is unavailable.")
         row.attempts += 1
-        if not hmac.compare_digest(row.code_digest, _digest(row, raw)):
-            row.save(update_fields=["attempts"])
-            raise ValidationError("That recovery code was not accepted.")
-        row.verified_at = timezone.now()
+        matched = hmac.compare_digest(row.code_digest, _digest(row, raw))
+        if matched:
+            row.verified_at = timezone.now()
         row.save(update_fields=["attempts", "verified_at"])
-        return row.pk
+    if not matched:
+        raise ValidationError("That recovery code was not accepted.")
+    return row.pk
 
 
 def finish(challenge_id, password):
