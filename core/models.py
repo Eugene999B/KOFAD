@@ -1050,3 +1050,7 @@ class StaffInvitation(models.Model):
         ("pending", "Pending"), ("submitted", "Submitted"), ("failed", "Failed"),
     ])
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+# Department mailboxes are imported so Django discovers their migrations.
+from .email_models import EmailMailbox, EmailMailboxMember, EmailLetter  # noqa: E402, F401

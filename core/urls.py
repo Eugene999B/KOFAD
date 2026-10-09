@@ -5,6 +5,7 @@ from . import views as v
 from . import account as accounts
 from . import google_oauth as google
 from . import gmail_api as gmail_sender
+from . import email_center as business_email
 from . import count_views
 from . import admin_views
 from . import staff_invites
@@ -23,6 +24,8 @@ urlpatterns = [
     path("auth/google/gmail/callback/", gmail_sender.connect_callback, name="gmail_sender_callback"),
     path("auth/google/gmail/disconnect/", gmail_sender.disconnect, name="gmail_sender_disconnect"),
     path("auth/google/gmail/send-test/", gmail_sender.send_test, name="gmail_sender_test"),
+    path("email/", business_email.inbox, name="email_center"),
+    path("email/ingest/", business_email.ingest, name="email_ingest"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
     path("api/approvals/summary/", approval_views.approval_summary, name="approval_summary"),

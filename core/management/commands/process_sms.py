@@ -56,6 +56,8 @@ class Command(BaseCommand):
                 try:
                     from core.email_identity import deliver_pending
                     deliver_pending(limit=15)
+                    from core.email_center import deliver_outgoing
+                    deliver_outgoing(limit=15)
                 except Exception:
                     self.stderr.write("Email notification queue check failed safely; will retry.")
                 try:

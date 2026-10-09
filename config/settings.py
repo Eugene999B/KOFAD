@@ -200,6 +200,9 @@ KOFAD_BREVO_API_KEY = os.environ.get("KOFAD_BREVO_API_KEY", "").strip()
 KOFAD_BREVO_SECURITY_FROM_EMAIL = os.environ.get("KOFAD_BREVO_SECURITY_FROM_EMAIL", "").strip()
 KOFAD_BREVO_TRANSACTION_FROM_EMAIL = os.environ.get("KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "").strip()
 KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", "").strip()
+# Feature remains private until inbound Worker and HTTPS outbound sender are verified.
+KOFAD_EMAIL_CENTER_ENABLED = os.environ.get("KOFAD_EMAIL_CENTER_ENABLED", "0") == "1"
+KOFAD_EMAIL_INGEST_SECRET = os.environ.get("KOFAD_EMAIL_INGEST_SECRET", "").strip()
 
 
 # Optional public-site analytics is loaded only after the visitor opts in.

@@ -1,0 +1,110 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'email-center.css' %}">{% endblock %}
+{% block content %}
+<section class="email-shell">
+  <header class="email-hero">
+    <div><p class="eyebrow">KOFAD COMMUNICATIONS</p><h1>Email Centre</h1>
+      <p>Department inboxes, private staff permissions and outgoing business mail.</p>
+    </div>
+    <span class="email-sending-state">{% if external_ready %}External sender configured{% else %}External sender pending{% endif %}</span>
+  </header>
+  <div class="email-grid">
+    <aside class="panel email-folders" aria-label="Assigned business mailboxes">
+      <h2>Mailboxes</h2>
+      {% for m in mailboxes %}
+      <a class="email-folder {% if selected.pk == m.pk %}current{% endif %}"
+         href="{% url 'email_center' %}?mailbox={{ m.pk }}">
+        <strong>{{ m.label }}</strong><small>{{ m.address }}</small>
+      </a>
+      {% empty %}
+      <p>No mailbox is assigned to your account. Ask the system administrator.</p>
+      {% endfor %}
+      {% if is_mail_owner %}
+      <details class="email-owner-setup">
+        <summary>Add a business address</summary>
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="new_mailbox">
+          <label>Name<input name="label" maxlength="100" placeholder="Procurement" required></label>
+          <label>Address<input type="email" name="address" placeholder="procurement@kofadimpex.com" required></label>
+          <button class="button secondary" type="submit">Add address</button>
+          <small>Addresses must also be routed to the Email Worker in Cloudflare.</small>
+        </form>
+      </details>
+      {% endif %}
+    </aside>
+    <section class="panel email-main">
+      {% if selected %}
+      <div class="email-main-header">
+        <div><p class="eyebrow">SELECTED INBOX</p><h2>{{ selected.label }}</h2><small>{{ selected.address }}</small></div>
+      </div>
+      {% if selected.pk in writable_ids %}
+      <details class="email-composer">
+        <summary>Compose email</summary>
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="send">
+          <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+          <label>Recipient<input type="email" name="to" placeholder="name@example.com" maxlength="254" required></label>
+          <label>Subject<input name="subject" maxlength="255" required></label>
+          <label>Message<textarea name="body" rows="6" maxlength="32000" required></textarea></label>
+          <p class="email-help">Internal KOFAD mail is instant. External mail requires a verified sender.</p>
+          <button class="button" type="submit">Send message</button>
+        </form>
+      </details>
+      {% endif %}
+      <h3>Recent messages</h3>
+      <div class="email-list">
+      {% for letter in letters %}
+        <article class="email-item">
+          <div class="email-item-header">
+            <div><strong>{{ letter.subject|default:"(No subject)" }}</strong>
+            <small>{% if letter.direction == "inbound" %}From: {{ letter.from_address }}{% else %}To: {{ letter.to_address }}{% endif %}</small></div>
+            <span class="email-chip">{{ letter.get_status_display }}</span>
+          </div>
+          <p class="email-meta">{{ letter.created_at|date:"j M Y, H:i" }} · {{ letter.get_direction_display }}</p>
+          <pre class="email-body">{{ letter.body_text }}</pre>
+          {% if letter.had_attachments %}<p class="email-help">Attachments are not stored here. Contact the sender to obtain them securely.</p>{% endif %}
+          {% if letter.last_error %}<p class="email-error">{{ letter.last_error }}</p>{% endif %}
+          {% if letter.direction == "inbound" and selected.pk in writable_ids %}
+          <details class="email-reply"><summary>Reply</summary>
+            <form method="post">{% csrf_token %}
+              <input type="hidden" name="action" value="reply">
+              <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+              <input type="hidden" name="reply_to" value="{{ letter.pk }}">
+              <p class="email-help">Reply to {{ letter.from_address }}</p>
+              <label>Message<textarea name="body" rows="4" maxlength="32000" required></textarea></label>
+              <button class="button secondary" type="submit">Send reply</button>
+            </form>
+          </details>
+          {% endif %}
+        </article>
+      {% empty %}
+        <p class="email-empty">No emails have arrived in this mailbox yet.</p>
+      {% endfor %}
+      </div>
+      {% else %}
+        <h2>No mailboxes available</h2><p>Only staff explicitly assigned to an inbox can access its messages.</p>
+      {% endif %}
+    </section>
+  </div>
+  {% if is_mail_owner %}
+  <section class="panel email-admin">
+    <div><p class="eyebrow">SYSTEM ADMINISTRATOR</p><h2>Staff mailbox permissions</h2>
+      <p>Grant access to named staff. A staff member must also have permission for the selected branch.</p>
+    </div>
+    <form method="post" class="email-admin-form">{% csrf_token %}
+      <input type="hidden" name="action" value="assign">
+      <label>Mailbox<select name="mailbox_id" required>{% for m in mailboxes %}<option value="{{ m.pk }}">{{ m.address }}</option>{% endfor %}</select></label>
+      <label>Staff member<select name="user_id" required>{% for staff in staff_users %}<option value="{{ staff.pk }}">{{ staff.get_full_name|default:staff.username }} ({{ staff.username }})</option>{% endfor %}</select></label>
+      <label class="email-checkbox"><input type="checkbox" name="can_read" checked> Read received emails</label>
+      <label class="email-checkbox"><input type="checkbox" name="can_send"> Send and reply (requires Communications permission)</label>
+      <button class="button" type="submit">Save staff access</button>
+    </form>
+    <h3>Current assignments</h3>
+    <div class="email-member-list">{% for grant in memberships %}
+      <p><strong>{{ grant.user.username }}</strong> · {{ grant.mailbox.address }} ·
+      {% if grant.can_read %}Read{% endif %}{% if grant.can_send %} / Send{% endif %}</p>
+    {% empty %}<p>No staff assignments yet.</p>{% endfor %}</div>
+    <p class="email-help">Uncheck both permissions and save to remove an assignment. System administrators retain emergency administrative access.</p>
+  </section>
+  {% endif %}
+</section>
+{% endblock %}
