@@ -302,3 +302,9 @@ html[data-theme="dark"] .mail-compose>summary,body.dark .mail-compose>summary,[d
 html[data-theme="dark"] .mail-internal-notes,body.dark .mail-internal-notes,[data-theme="dark"] .mail-internal-notes{background:#383325;border-color:#5e5637}
 html[data-theme="dark"] .mail-note,body.dark .mail-note,[data-theme="dark"] .mail-note{background:#262d31}
 html[data-theme="dark"] .mail-button.secondary,body.dark .mail-button.secondary,[data-theme="dark"] .mail-button.secondary{background:#214640;color:#bdf5e7!important;border-color:#387166}
+
+/* Compact permission matrix tools, hidden from other staff-facing pages. */
+.mail-permission-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:0 0 13px}
+.mail-permission-tools .mail-button{min-height:33px;padding:7px 10px;font-size:.72rem!important}
+.mail-permission-count{margin-left:auto;font-size:.73rem;font-weight:700;color:var(--mail-muted)}
+@media(max-width:600px){.mail-permission-count{margin:2px 0;width:100%}}
