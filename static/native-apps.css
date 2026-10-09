@@ -63,3 +63,90 @@ html[data-theme="dark"] .native-market-promo p{color:#c4dbe0}
 .native-product-share:focus-visible{outline:3px solid #38aaa7;outline-offset:3px}
 .native-connection-notice{position:fixed;top:12px;left:50%;transform:translateX(-50%);max-width:min(580px,calc(100vw - 24px));box-sizing:border-box;z-index:300;background:#fff2d9;color:#5a380b;border:1px solid #e7b862;border-radius:13px;padding:12px 16px;font-size:12px;line-height:1.55;font-weight:750;box-shadow:0 10px 24px #0002;text-align:center}
 html[data-theme=dark] .native-product-share{background:#1d3b45;color:#b4eeee;border-color:#3e7b82}
+
+/* 2026 download-centre polish: real platform marks, compact mobile availability. */
+.native-download-page { --native-line: #d9e4e9; --native-muted:#617988; --native-surface:#fff; }
+.native-download-shell { width:100%;min-width:0; }
+.native-download-hero { margin:0 0 18px; }
+.native-download-copy .native-kicker { font-size:11px;letter-spacing:.14em; }
+.native-hero-actions { display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:20px; }
+.native-hero-button { display:inline-flex;align-items:center;justify-content:center;gap:13px;min-height:45px;padding:10px 17px;border-radius:11px;background:#f4d18d;color:#183c4b!important;font-size:12px;text-decoration:none;font-weight:850;box-sizing:border-box; }
+.native-hero-button:hover { background:#ffe3ac; }
+.native-hero-actions .native-back-link { margin:0;color:#e5f5f6; }
+.native-release-overview { display:flex;align-items:flex-start;gap:15px;padding:18px 20px;background:#eef7f8;border:1px solid #c9e4e5;border-radius:17px;margin:0 0 27px;color:#183747; }
+.native-overview-mark { flex:0 0 38px;height:38px;border-radius:12px;display:grid;place-items:center;background:#d3eaea;color:#177d78;font-size:19px; }
+.native-release-overview>div:nth-child(2) { flex:1;min-width:0; }
+.native-release-overview strong { font-size:15px;line-height:1.4;font-weight:850;display:block; }
+.native-release-overview p { font-size:12px;line-height:1.65;margin:5px 0 0;color:#4b6978; }
+.native-release-overview .native-version { flex:none; }
+.native-platforms { margin:0 0 24px;scroll-margin-top:18px; }
+.native-platform-heading { margin-bottom:14px; }
+.native-platform-heading h3 { margin:4px 0 7px; }
+.native-platform-heading p:last-child { margin:0;color:var(--native-muted); }
+.native-platform-grid { gap:14px; }
+.native-platform { min-height:0;border-color:var(--native-line);padding:18px 18px 16px;box-shadow:0 10px 30px rgba(15,55,73,.055);transition:box-shadow .18s ease,border-color .18s ease; }
+.native-platform:hover { border-color:#aacfd4;box-shadow:0 13px 32px rgba(15,55,73,.095); }
+.native-platform:target { outline:3px solid #83c8c9;outline-offset:3px; }
+.native-platform-top { gap:9px;align-items:center; }
+.native-platform-visual { width:54px;height:54px;border-radius:15px;flex:0 0 54px;background:#ebf6ef; }
+.native-platform-visual img { display:block;width:33px;height:33px;object-fit:contain; }
+.native-platform-visual.ios { background:#f0f3f7; }
+.native-platform-visual.windows { background:#e8f3ff; }
+.native-platform-state { color:#597482;background:#edf2f4;padding:6px 10px;font-size:10px;text-align:center;font-weight:790;white-space:normal;line-height:1.3; }
+.native-platform-state.available { color:#125c4c;background:#ddf5e6; }
+.native-platform-details { margin-top:17px; }
+.native-platform-details h4 { font-size:21px;line-height:1.2;letter-spacing:-.04em;margin:0 0 5px; }
+.native-platform-details p { font-size:12px;color:var(--native-muted);line-height:1.5;margin:0 0 17px; }
+.native-platform-not-ready { display:flex;align-items:flex-start;gap:9px;padding:12px 13px;background:#f6f8f9;border-radius:11px;color:#59717e;font-size:11px;line-height:1.6;min-height:58px;box-sizing:border-box;margin-top:auto; }
+.native-preparing-dot { display:block;flex:0 0 7px;width:7px;height:7px;margin-top:5px;background:#87a2ac;border-radius:50%; }
+.native-platform-fineprint { font-size:11px;color:var(--native-muted);margin:9px 0 0;line-height:1.5; }
+.native-platform-ready { border-color:#a9d6c7; }
+.native-platform-action { min-height:48px;line-height:1.5; }
+.native-next-step { display:flex;align-items:center;justify-content:space-between;gap:21px;border:1px solid #d9e7e6;background:linear-gradient(108deg,#eaf7f5,#f9fbfb);border-radius:18px;padding:23px 26px;margin:0 0 22px; }
+.native-next-step>div { flex:1;min-width:0; }
+.native-next-step .native-kicker { font-size:10px;font-weight:850;color:#138078;letter-spacing:.12em;margin:0 0 6px; }
+.native-next-step h3 { color:#143748;font-size:19px;line-height:1.24;letter-spacing:-.025em;margin:0 0 7px;font-weight:850; }
+.native-next-step p:not(.native-kicker) { color:#577481;font-size:12px;line-height:1.6;margin:0;max-width:660px; }
+.native-next-step>a { flex:none;display:inline-flex;gap:12px;align-items:center;justify-content:center;background:#0d3e52;color:#fff!important;text-decoration:none;border-radius:11px;padding:13px 17px;font-weight:820;font-size:12px;min-height:47px;box-sizing:border-box; }
+.native-next-step>a:hover { background:#13717a; }
+.native-explainer { padding-top:18px; }
+.native-platform-action:focus-visible,.native-hero-button:focus-visible,.native-next-step a:focus-visible { outline:3px solid #35bbb0;outline-offset:3px; }
+html[data-theme="dark"] .native-release-overview { background:#193941;border-color:#34666b;color:#f0f8f9; }
+html[data-theme="dark"] .native-release-overview p { color:#c1d7dc; }
+html[data-theme="dark"] .native-overview-mark { background:#235456;color:#b4e5df; }
+html[data-theme="dark"] .native-platform { background:#203340;color:#edf4f7;border-color:#36505f; }
+html[data-theme="dark"] .native-platform-details p,
+html[data-theme="dark"] .native-platform-fineprint { color:#bdcdd4; }
+html[data-theme="dark"] .native-platform-state:not(.available) { background:#354755;color:#d3e1e7; }
+html[data-theme="dark"] .native-platform-not-ready { background:#293f4a;color:#c5d4dc; }
+html[data-theme="dark"] .native-next-step { background:#1b3941;border-color:#35616a; }
+html[data-theme="dark"] .native-next-step h3 { color:#eaf8f9; }
+html[data-theme="dark"] .native-next-step p:not(.native-kicker) { color:#c3dce1; }
+@media(max-width:780px) {
+  .native-platform-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .native-next-step { flex-wrap:wrap; }
+  .native-next-step>a { width:100%; }
+}
+@media(max-width:640px) {
+  .native-download-page { padding:12px 12px 20px; }
+  .native-download-page .native-download-hero { padding:25px 19px;margin-bottom:13px; }
+  .native-download-copy h2 { font-size:clamp(25px,6.5vw,36px); }
+  .native-hero-actions { gap:13px; }
+  .native-release-overview { padding:15px 14px;gap:11px;margin-bottom:23px; }
+  .native-overview-mark { flex-basis:34px;height:34px; }
+  .native-release-overview strong { font-size:14px; }
+  .native-release-overview p { font-size:12px; }
+  .native-platform-grid { grid-template-columns:1fr;gap:11px; }
+  .native-platform { padding:16px; }
+  .native-platform-top { align-items:center; }
+  .native-platform-visual { width:49px;height:49px;flex-basis:49px;border-radius:13px; }
+  .native-platform-visual img { height:32px;width:32px; }
+  .native-platform-details { margin-top:12px; }
+  .native-platform-details h4 { font-size:19px; }
+  .native-platform-details p { margin:0 0 13px; }
+  .native-platform-not-ready { min-height:0;padding:10px 12px;font-size:11px; }
+  .native-next-step { padding:19px 17px;gap:15px; }
+  .native-explainer { gap:4px; }
+  .native-explainer>div { padding:10px 6px; }
+}
+@media(prefers-reduced-motion:reduce) { .native-platform { transition:none; } }
