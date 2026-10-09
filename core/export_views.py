@@ -1004,64 +1004,22 @@ def statement_download(request, pk, format):
     if not _allowed(request.user, ("operate_finance", "view_reports")):
         raise PermissionDenied("You do not have permission to export account statements.")
     party = get_object_or_404(Party, pk=pk, branch=branch)
-    # Statements must reconcile to the same allocation-aware subledger as
-    # services.balance(). Document.balance alone omits collections and returns.
-    # Reversal events belong on their own posting dates: a corrected payment
-    # must be restored to the customer/supplier balance, not lost from history.
-    from .models import Allocation
-    documents = list(Document.objects.filter(party=party, branch=branch)
-                     .select_related("original", "created_by").order_by("created_at", "pk"))
-    events = []
-    for doc in documents:
-        if doc.kind in ({"sale"} if party.kind == "customer" else {"purchase", "creditor_charge"}):
-            initial = doc.total - doc.paid
-            if initial:
-                events.append((doc.created_at, str(doc.pk), doc.reference, doc.get_kind_display(),
-                               initial, doc.note))
-        elif (doc.kind == "reversal" and doc.original_id
-              and doc.original.kind == "creditor_charge" and party.kind == "supplier"):
-            events.append((doc.created_at, str(doc.pk), doc.reference, "Creditor bill reversal",
-                           -(doc.original.total - doc.original.paid), doc.note))
-    allocations = Allocation.objects.filter(invoice__party=party, invoice__branch=branch).select_related(
-        "payment_document", "payment_document__correction", "invoice"
-    ).order_by("payment_document__created_at", "pk")
-    for allocation in allocations:
-        source = allocation.payment_document
-        if source.branch_id != branch.pk:
-            # Invalid cross-location allocations are exposed by the financial
-            # integrity audit, never silently included in another branch.
-            continue
-        events.append((source.created_at, str(source.pk), source.reference,
-                       source.get_kind_display(), -allocation.amount, source.note))
-        correction = getattr(source, "correction", None)
-        if correction and correction.status == "approved" and correction.posted_id:
-            reversal = correction.posted
-            events.append((reversal.created_at, str(reversal.pk), reversal.reference,
-                           "Reversed " + source.get_kind_display(), allocation.amount, reversal.note))
-    events.sort(key=lambda event: (event[0], event[1]))
-    running = Decimal("0")
-    rows = []
-    for occurred_at, _, reference, kind, change, note in events:
-        running += change
-        rows.append({
-            "date": timezone.localtime(occurred_at).strftime("%Y-%m-%d %H:%M"),
-            "reference": reference, "type": kind, "change": change,
-            "running": running, "note": note,
-        })
-    expected_balance = s.party_debt(party)
-    if running != expected_balance:
-        # Fail closed with a useful 400 page, not an uncaught 500.
-        # No inaccurate statement file is ever issued.
+    from .statement_engine import account_statement
+    try:
+        statement, running = account_statement(party, branch)
+    except ValidationError as exc:
         s.audit(request.user, branch, "statement.reconciliation_failed", party.pk, {
-            "statement_balance": str(running), "subledger_balance": str(expected_balance),
+            "details": "; ".join(exc.messages),
         }, category="accounting", severity="warning")
         return render(request, "error.html", {
             "title": "Statement needs reconciliation",
-            "error": (
-                "The statement does not agree with this account's balance. "
-                "Review allocations and approved corrections before exporting."
-            ),
+            "error": "; ".join(exc.messages),
         }, status=400)
+    rows = [{
+        "date": row["date"].strftime("%Y-%m-%d %H:%M"),
+        "reference": row["reference"], "type": row["type"],
+        "change": row["change"], "running": row["running"], "note": row["note"],
+    } for row in statement]
     s.audit(request.user, branch, "statement.exported", party.pk, {
         "format": format, "rows": len(rows), "balance": str(running),
     })
