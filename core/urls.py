@@ -58,6 +58,7 @@ urlpatterns = [
     path("api/pos/paystack-momo/<str:reference>/status/", v.pos_paystack_momo_status, name="pos_paystack_momo_status"),
     path("api/documents/<uuid:pk>/send-sms/", v.send_transaction_message_api, name="send_transaction_message_api"),
     path("api/customers/", v.customer_search, name="customer_search"),
+    path("api/customers/check-duplicate/", v.customer_duplicate_check, name="customer_duplicate_check"),
     path("api/suppliers/", creditor_views.supplier_search, name="supplier_search"), path("api/held/", v.hold),
     path("api/held/<int:pk>/", v.held),
     path("documents/", v.documents, name="documents"), path("documents/<uuid:pk>/", v.document, name="document"),
