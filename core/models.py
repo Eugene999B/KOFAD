@@ -1027,3 +1027,26 @@ class WhatsAppBotReply(models.Model):
     error = models.CharField(max_length=240, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class StaffInvitation(models.Model):
+    """One-time, expiring onboarding grant for an owner-created staff account."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="staff_invitation",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+",
+    )
+    token_digest = models.CharField(max_length=64)
+    channel = models.CharField(max_length=12, choices=[
+        ("sms", "SMS"), ("email", "Email"), ("whatsapp", "WhatsApp"),
+    ])
+    destination = models.CharField(max_length=254)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    delivery_state = models.CharField(max_length=12, default="pending", choices=[
+        ("pending", "Pending"), ("submitted", "Submitted"), ("failed", "Failed"),
+    ])
+    created_at = models.DateTimeField(auto_now_add=True)
