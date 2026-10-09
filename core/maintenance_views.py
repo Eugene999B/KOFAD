@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from functools import wraps
 
@@ -26,15 +27,17 @@ def system_administrator(view):
     return inner
 
 
-def _uploaded_backup(request):
+def _uploaded_backup(request, *, with_digest=False):
     uploaded = request.FILES.get("backup_file")
     if not uploaded:
         raise maintenance.BackupError("Choose a KOFAD backup file.")
     if uploaded.size > maintenance.MAX_ENCRYPTED_BACKUP_BYTES:
         raise maintenance.BackupError("Backup file is larger than the supported limit.")
-    return maintenance.parse_uploaded_backup(
-        uploaded.read(), request.POST.get("backup_passphrase", "")
+    contents = uploaded.read()
+    validated = maintenance.parse_uploaded_backup(
+        contents, request.POST.get("backup_passphrase", "")
     )
+    return (validated, hashlib.sha256(contents).hexdigest()) if with_digest else validated
 
 
 def _password_ok(request):
@@ -50,14 +53,24 @@ def backup_restore(request):
         action = request.POST.get("action", "")
         try:
             if action == "validate":
-                bundle = _uploaded_backup(request)
+                bundle, digest = _uploaded_backup(request, with_digest=True)
                 validation = maintenance.backup_summary(bundle)
-                messages.success(request, "Backup signature, checksum and schema are valid.")
+                if maintenance.mark_backup_verified(request.session, digest):
+                    messages.success(
+                        request, "Exact safety backup validated. Restore/reset is unlocked "
+                        "for this browser session until the 30-minute deadline."
+                    )
+                else:
+                    messages.success(
+                        request, "Backup signature, checksum and schema are valid. "
+                        "To unlock restore/reset, validate the exact encrypted file "
+                        "you downloaded during the last 30 minutes."
+                    )
             elif action == "restore":
-                if not maintenance.recent_backup_downloaded(request.session):
+                if not maintenance.recent_backup_verified(request.session):
                     raise maintenance.BackupError(
-                        "Download a fresh backup of the current system before restoring. "
-                        "The safety backup must be downloaded within the last 30 minutes."
+                        "Download a fresh backup and validate that same encrypted file before restoring. "
+                        "The verified safety backup must be less than 30 minutes old."
                     )
                 if not _password_ok(request):
                     raise maintenance.BackupError("Your administrator password is incorrect.")
@@ -75,8 +88,8 @@ def backup_restore(request):
             elif action == "reset":
                 if not maintenance.recent_backup_downloaded(request.session):
                     raise maintenance.BackupError(
-                        "Download a fresh backup before resetting business data. "
-                        "The safety backup must be downloaded within the last 30 minutes."
+                        "Download a fresh backup and validate that same encrypted file before resetting. "
+                        "The verified safety backup must be less than 30 minutes old."
                     )
                 if not _password_ok(request):
                     raise maintenance.BackupError("Your administrator password is incorrect.")
@@ -105,10 +118,12 @@ def backup_restore(request):
         "title": "Backup, restore & reset",
         "restore_phrase": maintenance.RESTORE_CONFIRMATION,
         "reset_phrase": maintenance.RESET_CONFIRMATION,
-        "recent_backup": maintenance.recent_backup_downloaded(request.session),
+        "recent_backup": maintenance.recent_backup_verified(request.session),
+        "download_ready": maintenance.recent_backup_downloaded(request.session),
         "recent_backup_at": request.session.get("kofad_recent_backup_at"),
         "validation": validation,
-        "stats": maintenance.maintenance_stats(),
+        "stats": (stats := maintenance.maintenance_stats()),
+        "coverage": maintenance.backup_coverage(stats),
     })
 
 
@@ -132,7 +147,7 @@ def download_backup(request):
         logger.exception("Could not obtain a consistent backup snapshot.")
         messages.error(request, "The database is busy. No partial backup was downloaded. Please try again shortly.")
         return redirect("backup_restore")
-    maintenance.mark_backup_downloaded(request.session)
+    maintenance.mark_backup_downloaded(request.session, raw)
     stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     response = HttpResponse(raw, content_type="application/octet-stream")
     response["Content-Disposition"] = f'attachment; filename="KOFAD-full-backup-{stamp}.kofad.enc"'
@@ -158,6 +173,7 @@ def backup_status(request):
         )
     response = JsonResponse({
         "recent": recent,
+        "verified": maintenance.recent_backup_verified(request.session),
         "downloaded_at": timestamp,
         "expires_in_seconds": remaining,
     })
