@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load static %}
 {% block head %}<link rel="stylesheet" href="{% static 'pos-momo-status.css' %}">{% endblock %}
-{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'pos' %}">New sale</a><a class="button secondary" href="{% url 'online_payments' %}">Online checkout payments</a></div>{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="{% url 'pos' %}?new=1">New sale</a>{% if manager %}<a class="button secondary" href="{% url 'online_payments' %}">Online checkout payments</a>{% endif %}</div>{% endblock %}
 {% block content %}
 <section class="panel"><p class="eyebrow">KOFAD / MOBILE MONEY</p><h2>Staff payment history</h2>
 <p>{% if manager %}Payments initiated by staff in this location.{% else %}Your Mobile Money payment requests in this location.{% endif %} Pending requests continue to be checked when this page is closed. Only verified and posted transactions have printable receipts.</p>
