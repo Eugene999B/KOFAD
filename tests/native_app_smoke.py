@@ -44,6 +44,21 @@ with sync_playwright() as browser_tool:
         if width == 390:
             customer.screenshot(path=str(out / "customer-native-app-mobile.png"), full_page=True)
 
+    # On an iPhone the Apple logo/edition should be first, never Android.
+    iphone = browser.new_page(
+        viewport={"width": 390, "height": 844},
+        device_scale_factor=3,
+        is_mobile=True, has_touch=True,
+        user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    )
+    iphone.goto(base + "/apps/")
+    iphone.locator(".native-device-hint").wait_for()
+    assert iphone.locator(".native-platform").first.get_attribute("data-native-platform") == "ios"
+    assert iphone.locator(".native-platform").first.get_by_text("Your device").is_visible()
+    assert iphone.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "iPhone horizontal overflow"
+    iphone.screenshot(path=str(out / "customer-native-app-iphone.png"), full_page=True)
+    iphone.close()
+
     customer.goto(base + "/")
     assert customer.get_by_role("link", name="Explore the upcoming app", exact=False).is_visible()
     customer.goto(base + "/market/")
