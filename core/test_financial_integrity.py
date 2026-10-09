@@ -116,6 +116,25 @@ class FinancialIntegrityTests(Fixtures, TestCase):
         ar = next(r for r in tb if r["code"] == "1100")
         self.assertEqual(ar["balance"], Decimal("100"))
 
+    def test_screen_and_export_use_identical_reconciled_customer_balance(self):
+        # Paid-at-sale money is not customer debt. Previously the screen
+        # incorrectly showed the full invoice total as outstanding.
+        sale = self.sale(2, payments=[{"method": "cash", "amount": "25"}],
+                         due_date=self.today.isoformat())
+        pay = s.post_payment(self.user, self.branch, {
+            "invoice": str(sale.pk), "amount": "35", "method": "momo",
+        }, uuid.uuid4())
+        screen = self.client.get(f"/parties/{self.customer.pk}/statement/")
+        exported = self.statement_rows(self.customer)
+        self.assertEqual(screen.status_code, 200)
+        self.assertEqual(screen.context["balance"], Decimal("40"))
+        self.assertEqual(screen.context["balance"], s.party_debt(self.customer))
+        self.assertEqual([row["running"] for row in screen.context["rows"]],
+                         [row["running"] for row in exported])
+        self.assertEqual([row["change"] for row in exported],
+                         [Decimal("75"), Decimal("-35")])
+        self.assertContains(screen, pay.reference)
+
     def test_supplier_statement_uses_bill_balance_and_reversal(self):
         bill = Document.objects.create(
             branch=self.branch, party=self.supplier, kind="creditor_charge",
@@ -167,6 +186,9 @@ class FinancialIntegrityTests(Fixtures, TestCase):
             created_by=self.user,
         )
         Allocation.objects.create(payment_document=payment, invoice=sale, amount=Decimal("10"))
+        screen = self.client.get(f"/parties/{self.customer.pk}/statement/")
+        self.assertEqual(screen.status_code, 400)
+        self.assertContains(screen, "does not agree", status_code=400)
         result = self.client.get(f"/parties/{self.customer.pk}/statement/export/csv/")
         self.assertEqual(result.status_code, 400)
         self.assertContains(result, "does not agree", status_code=400)
