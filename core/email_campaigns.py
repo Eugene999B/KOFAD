@@ -141,9 +141,8 @@ def queue_active_campaigns(limit=MAX_BATCH):
             )
             queued += 1
         if not remaining:
-            campaign.active = False
             campaign.last_queued_at = timezone.now()
-            campaign.save(update_fields=["active", "last_queued_at"])
+            campaign.save(update_fields=["last_queued_at"])
         elif queued >= limit:
             break
     return queued
