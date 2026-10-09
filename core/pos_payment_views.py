@@ -65,7 +65,9 @@ def _snapshot(held):
         "reference": str(state.get("reference") or held.label[len(pos_paystack.LABEL_PREFIX):]),
         "status": status,
         "display_status": {
-            "success": "Paid and posted",
+            "success": "Deposit verified — debt recorded" if (
+                str(state.get("balance_due") or "0.00") not in {"0", "0.0", "0.00", ""}
+            ) else "Paid and posted",
             "pending": "Awaiting approval",
             "initializing": "Preparing request",
             "submission_unknown": "Checking request",
@@ -77,6 +79,9 @@ def _snapshot(held):
         }.get(status, status.replace("_", " ").title()),
         "message": str(state.get("message") or "")[:240],
         "amount": str(state.get("amount") or "0.00"),
+        "sale_total": str(state.get("sale_total") or state.get("amount") or "0.00"),
+        "balance_due": str(state.get("balance_due") or "0.00"),
+        "due_date": str(state.get("due_date") or ""),
         "currency": "GHS",
         "phone": str(state.get("phone") or ""),
         "network": str(state.get("network") or "").upper(),
