@@ -957,23 +957,58 @@ def statement_download(request, pk, format):
     if not _allowed(request.user, ("operate_finance", "view_reports")):
         raise PermissionDenied("You do not have permission to export account statements.")
     party = get_object_or_404(Party, pk=pk, branch=branch)
+    # Statements must reconcile to the same allocation-aware subledger as
+    # services.balance(). Document.balance alone omits collections and returns.
+    # Reversal events belong on their own posting dates: a corrected payment
+    # must be restored to the customer/supplier balance, not lost from history.
+    from .models import Allocation
+    documents = list(Document.objects.filter(party=party, branch=branch)
+                     .select_related("original", "created_by").order_by("created_at", "pk"))
+    events = []
+    for doc in documents:
+        if doc.kind in ({"sale"} if party.kind == "customer" else {"purchase", "creditor_charge"}):
+            initial = doc.total - doc.paid
+            if initial:
+                events.append((doc.created_at, str(doc.pk), doc.reference, doc.get_kind_display(),
+                               initial, doc.note))
+        elif (doc.kind == "reversal" and doc.original_id
+              and doc.original.kind == "creditor_charge" and party.kind == "supplier"):
+            events.append((doc.created_at, str(doc.pk), doc.reference, "Creditor bill reversal",
+                           -(doc.original.total - doc.original.paid), doc.note))
+    allocations = Allocation.objects.filter(invoice__party=party, invoice__branch=branch).select_related(
+        "payment_document", "payment_document__correction", "invoice"
+    ).order_by("payment_document__created_at", "pk")
+    for allocation in allocations:
+        source = allocation.payment_document
+        if source.branch_id != branch.pk:
+            # Invalid cross-location allocations are exposed by the financial
+            # integrity audit, never silently included in another branch.
+            continue
+        events.append((source.created_at, str(source.pk), source.reference,
+                       source.get_kind_display(), -allocation.amount, source.note))
+        correction = getattr(source, "correction", None)
+        if correction and correction.status == "approved" and correction.posted_id:
+            reversal = correction.posted
+            events.append((reversal.created_at, str(reversal.pk), reversal.reference,
+                           "Reversed " + source.get_kind_display(), allocation.amount, reversal.note))
+    events.sort(key=lambda event: (event[0], event[1]))
     running = Decimal("0")
     rows = []
-    for doc in Document.objects.filter(party=party).order_by("created_at"):
-        change = doc.balance if doc.kind in ("sale", "purchase") else -sum(
-            (allocation.amount for allocation in doc.allocations.all()), Decimal("0")
-        )
-        if doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
-            change = sum((allocation.amount for allocation in doc.original.allocations.all()), Decimal("0"))
+    for occurred_at, _, reference, kind, change, note in events:
         running += change
         rows.append({
-            "date": timezone.localtime(doc.created_at).strftime("%Y-%m-%d %H:%M"),
-            "reference": doc.reference,
-            "type": doc.get_kind_display(),
-            "change": change,
-            "running": running,
-            "note": doc.note,
+            "date": timezone.localtime(occurred_at).strftime("%Y-%m-%d %H:%M"),
+            "reference": reference, "type": kind, "change": change,
+            "running": running, "note": note,
         })
+    expected_balance = s.party_debt(party)
+    if running != expected_balance:
+        # Refuse to produce a misleading customer/supplier statement while
+        # unmatched historical transactions are under investigation.
+        raise ValidationError(
+            "The statement does not reconcile with the account balance. "
+            "Review allocations and approved corrections before exporting."
+        )
     s.audit(request.user, branch, "statement.exported", party.pk, {
         "format": format, "rows": len(rows), "balance": str(running),
     })
