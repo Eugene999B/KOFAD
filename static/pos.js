@@ -1383,7 +1383,15 @@
     // KOFAD's recipient review is signed and bound to this cashier, phone,
     // network, sale key and branch. It is NOT a wallet-provider name lookup.
     if (momoGateway === "paystack" && (!momoRecipientToken || !momoRecipientConsent?.checked)) {
+      // The initial submit only asked for details; no provider request exists.
+      pendingBody = null;
+      persist();
       throw new Error("Click Check customer details, confirm them with the customer and tick the consent box before sending payment.");
+    }
+    if (momoGateway === "paystack" && !momoReference) {
+      // Rebuild after the recipient was reviewed: a previous pre-review
+      // submit must not freeze an old cart or create a wrong-amount charge.
+      pendingBody = buildCheckoutBody();
     }
 
     setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
