@@ -4,11 +4,7 @@ Never silently associate a cashier-typed name with a stored debtor merely
 because the phone matches. An exact match is a *conflict requiring selection*,
 not proof of identity. Do not merge old customer records automatically.
 """
-import re
-
 from django.core.exceptions import ValidationError
-from django.db.models import Q
-
 from .models import Party
 from .services import party_debt
 
@@ -18,45 +14,36 @@ def name_key(value):
 
 
 def customer_conflicts(branch, name, phone, *, exclude_pk=None):
-    """Find stored customers matching either canonical phone or exact folded name."""
-    from .identity import normalize_ghana_phone, phone_variants
+    """Find any branch customer with the same canonical phone OR normalized name.
+
+    Older customers may have numbers stored with spaces/brackets or inconsistent
+    leading zeros. Check those too before allowing a new identity. We deliberately
+    do not auto-merge, even when both fields match.
+    """
+    from .identity import normalize_ghana_phone
 
     name = str(name or "").strip()
     phone = str(phone or "").strip()
-    variants = []
-    if phone:
-        variants = phone_variants(normalize_ghana_phone(phone))
-    if not name and not variants:
+    canonical = normalize_ghana_phone(phone) if phone else ""
+    normalized_name = name_key(name)
+    if not normalized_name and not canonical:
         return []
-    records = Party.objects.filter(branch=branch, kind="customer")
+    records = Party.objects.filter(branch=branch, kind="customer").only(
+        "pk", "name", "phone", "email", "consent", "debt_email_opt_in",
+    )
     if exclude_pk:
         records = records.exclude(pk=exclude_pk)
-    candidates = records.filter(
-        Q(phone__in=variants) | Q(name__iexact=name)
-    ).order_by("pk")
-    # Historical names may contain repeated spacing, so check those as well.
-    # A bounded branch-level scan avoids hiding duplicates when old records
-    # have inconsistent punctuation/spacing; used only on explicit creation.
-    if name:
-        normalized = name_key(name)
-        nearby_ids = [
-            p.pk for p in records.only("pk", "name")
-            if name_key(p.name) == normalized
-        ]
-        if nearby_ids:
-            candidates = records.filter(
-                Q(pk__in=nearby_ids) | Q(phone__in=variants)
-            ).order_by("pk")
     matches = []
-    for party in candidates:
-        same_phone = bool(variants and party.phone in variants)
-        # Existing records might have arbitrary spacing around phone punctuation.
-        if not same_phone and phone:
+    # Streaming avoids loading the whole branch's contact register into memory.
+    # New contacts are already serialized on the branch's financial row lock.
+    for party in records.iterator(chunk_size=500):
+        same_name = bool(normalized_name and name_key(party.name) == normalized_name)
+        same_phone = False
+        if canonical:
             try:
-                same_phone = normalize_ghana_phone(party.phone) == normalize_ghana_phone(phone)
+                same_phone = normalize_ghana_phone(party.phone) == canonical
             except ValidationError:
-                pass
-        same_name = bool(name and name_key(party.name) == name_key(name))
+                pass  # Historical bad phone: do not exclude a same-name match.
         if not (same_phone or same_name):
             continue
         matches.append({
@@ -65,8 +52,9 @@ def customer_conflicts(branch, name, phone, *, exclude_pk=None):
             "name_match": same_name,
             "debt": party_debt(party),
         })
+        if len(matches) >= 20:  # Never return an unbounded list to the cashier.
+            break
     return matches
-
 
 def assert_unique_customer(branch, name, phone, *, exclude_pk=None):
     matches = customer_conflicts(branch, name, phone, exclude_pk=exclude_pk)
