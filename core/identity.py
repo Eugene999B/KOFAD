@@ -84,29 +84,11 @@ def resolve_sale_customer(user, branch, payload, audit):
     if len(name) < 2 or len(name) > 120:
         raise ValidationError("Enter the new customer's name.")
     canonical = normalize_ghana_phone(phone)
-    existing = customer_by_phone(branch, canonical)
-    if existing:
-        updates = []
-        if consent_requested and not existing.consent:
-            existing.consent = True
-            updates.append("consent")
-            audit(user, branch, "customer.messaging_consent_enabled_at_checkout", existing.pk)
-        if submitted_email and existing.email and existing.email.casefold() != submitted_email and credit_choice is not None:
-            raise ValidationError("Saved customer has a different email. Correct it in customer records first.")
-        if submitted_email and not existing.email:
-            existing.email = submitted_email
-            updates.append("email")
-        if credit_choice is not None and existing.debt_email_opt_in != credit_choice:
-            existing.debt_email_opt_in = credit_choice
-            updates.append("debt_email_opt_in")
-            audit(user, branch, "customer.debt_email_preference_at_checkout", existing.pk, {"enabled": credit_choice})
-        if updates:
-            existing.save(update_fields=updates)
-        audit(user, branch, "customer.reused_at_checkout", existing.pk, {
-            "submitted_name": name,
-            "phone": canonical,
-        })
-        return existing
+    # Never silently link a typed name to a debtor or any existing customer.
+    # Cashiers must select the existing record via its ID, after confirming
+    # identity. A matching name with a changed phone is also not new.
+    from .customer_guard import assert_unique_customer
+    assert_unique_customer(branch, name, canonical)
 
     party = Party.objects.create(
         branch=branch,
