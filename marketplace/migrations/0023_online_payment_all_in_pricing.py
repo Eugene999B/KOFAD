@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
             field=models.DecimalField(
                 max_digits=6, decimal_places=3, default=Decimal("0"),
                 validators=[MinValueValidator(0), MaxValueValidator(100)],
-                help_text="Included in displayed online Market prices and provider-backed POS MoMo prices.",
+                help_text="Built into customer-visible Market and provider-backed POS MoMo product prices.",
             ),
         ),
     ]
