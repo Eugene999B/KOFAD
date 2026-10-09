@@ -1,46 +1,82 @@
-<section class="native-download-hero" aria-labelledby="native-app-heading">
-  <div class="native-download-copy">
-    <p class="native-kicker">KOFAD IMPEX ENTERPRISE · {{ app.kind|upper }} EDITION</p>
-    <h2 id="native-app-heading">{{ app.title }} — made for your devices.</h2>
-    <p>{{ app.description }}</p>
-    <div class="native-pill-row"><span>Android phones</span><span>iPhone &amp; iPad</span><span>Windows computers</span></div>
-    <a class="native-back-link" href="{% if app.kind == 'staff' %}/workspace/{% else %}/market/{% endif %}">← Return to {% if app.kind == 'staff' %}staff workspace{% else %}the Market{% endif %}</a>
-  </div>
-  <div class="native-device-preview" aria-hidden="true">
-    <div class="native-device-frame"><div class="native-device-notch"></div><div class="native-device-screen">
-      <div class="native-device-avatar">K</div><small>YOUR BUSINESS, CONNECTED</small>
-      <strong>{{ app.title }}</strong><i>● ● ●</i>
-      <div class="native-preview-tile"></div><div class="native-preview-tile short"></div>
-    </div></div>
-  </div>
-</section>
-
-<section class="native-platforms" aria-label="Available installation channels">
-  <div class="native-platform-heading">
-    <div><p class="native-kicker">CHOOSE A PLATFORM</p><h3>One app. Your preferred device.</h3><p>Each download is independently released and verified before it appears here.</p></div>
-    {% if app.version %}<span class="native-version">Release {{ app.version }}</span>{% endif %}
-  </div>
-  <div class="native-platform-grid">
-    {% for entry in app.platforms %}
-    <article class="native-platform" data-native-platform="{{ entry.id }}">
-      <div class="native-platform-top">
-        <span class="native-platform-visual {{ entry.id }}" aria-hidden="true">{% if entry.id == 'android' %}◉{% elif entry.id == 'ios' %}◈{% else %}▦{% endif %}</span>
-        <span class="native-platform-state{% if entry.available %} available{% endif %}">{% if entry.available %}Available{% else %}Release pending{% endif %}</span>
+{% load static %}
+<div class="native-download-shell" data-native-download-kind="{{ app.kind }}" data-any-native-released="{{ app.released|yesno:'yes,no' }}">
+  <section class="native-download-hero" aria-labelledby="native-app-heading">
+    <div class="native-download-copy">
+      <p class="native-kicker">KOFAD IMPEX ENTERPRISE <span aria-hidden="true">/</span> {% if app.kind == 'staff' %}TEAM EDITION{% else %}CUSTOMER EDITION{% endif %}</p>
+      <h2 id="native-app-heading">{% if app.kind == 'staff' %}Your workspace, beyond the desk.{% else %}Your KOFAD Market, wherever you go.{% endif %}</h2>
+      <p>{{ app.description }}</p>
+      <div class="native-pill-row"><span>Android</span><span>iPhone &amp; iPad</span><span>Windows PC</span></div>
+      <div class="native-hero-actions">
+        <a class="native-hero-button" href="#native-platform-options">Explore app availability <span aria-hidden="true">↓</span></a>
+        <a class="native-back-link" href="{% if app.kind == 'staff' %}/workspace/{% else %}/market/{% endif %}">{% if app.kind == 'staff' %}Open staff workspace{% else %}Shop the Market now{% endif %} <span aria-hidden="true">↗</span></a>
       </div>
-      <h4>{{ entry.label }}</h4><p>{{ entry.description }}</p>
-      {% if entry.available %}
-      <a class="native-platform-action" href="{{ entry.url }}" rel="noopener noreferrer" target="_blank">Get {{ app.title }} for {{ entry.label }} <span aria-hidden="true">↗</span></a>
-      {% else %}
-      <div class="native-platform-pending">Installer not published yet</div>
-      {% endif %}
-    </article>
-    {% endfor %}
-  </div>
-  {% if not app.released %}<p class="native-release-notice" role="status"><strong>Native releases are being prepared.</strong> There are no approved installers or store listings to download yet. You can continue using KOFAD securely in your browser; the buttons will become available after signed and verified releases are published.</p>{% endif %}
-</section>
+    </div>
+    <div class="native-device-preview" aria-hidden="true">
+      <div class="native-device-frame"><div class="native-device-notch"></div><div class="native-device-screen">
+        <div class="native-device-avatar">K</div><small>KOFAD IMPEX ENTERPRISE</small>
+        <strong>{{ app.title }}</strong><i>● ● ●</i>
+        <div class="native-preview-tile"></div><div class="native-preview-tile short"></div>
+      </div></div>
+    </div>
+  </section>
 
-<section class="native-explainer" aria-label="Installation and updates">
-  <div><span class="native-explainer-icon" aria-hidden="true">01</span><h3>Choose your device</h3><p>Use the verified store listing or signed installer shown for your platform when published.</p></div>
-  <div><span class="native-explainer-icon" aria-hidden="true">02</span><h3>Install and sign in</h3><p>{% if app.kind == 'staff' %}Use your existing authorized staff login; your store, permissions, and account security still apply.{% else %}Use your existing KOFAD Market account or browse products before signing in.{% endif %}</p></div>
-  <div><span class="native-explainer-icon" aria-hidden="true">03</span><h3>Keep your app current</h3><p>Android and iOS updates are delivered through their approved stores. Signed Windows releases can prompt you to download and install an update.</p></div>
-</section>
+  <section class="native-release-overview" aria-label="App release status">
+    <div class="native-overview-mark" aria-hidden="true">✦</div>
+    <div>
+      <strong>{% if app.released %}Select an available app release{% else %}Our dedicated apps are being prepared{% endif %}</strong>
+      <p>{% if app.released %}Verified links are shown only for published platforms. Other editions remain in preparation.{% else %}There is no approved Android, Apple or Windows app to install yet. The Market and staff workspace remain available through their secure websites while native releases are prepared.{% endif %}</p>
+    </div>
+    {% if app.version and app.released %}<span class="native-version">Version {{ app.version }}</span>{% endif %}
+  </section>
+
+  <section class="native-platforms" aria-labelledby="native-platform-heading" id="native-platform-options">
+    <div class="native-platform-heading">
+      <div><p class="native-kicker">YOUR DEVICE</p><h3 id="native-platform-heading">Choose your platform.</h3><p>Real platform editions with separate release and update channels.</p></div>
+    </div>
+    <div class="native-platform-grid">
+      {% for entry in app.platforms %}
+        <article class="native-platform{% if entry.available %} native-platform-ready{% endif %}" data-native-platform="{{ entry.id }}" id="native-{{ entry.id }}">
+          <div class="native-platform-top">
+            <span class="native-platform-visual {{ entry.id }}" aria-hidden="true">
+              {% if entry.id == 'android' %}<img src="{% static 'native-brands/android.svg' %}" alt="" width="38" height="38" loading="lazy">
+              {% elif entry.id == 'ios' %}<img src="{% static 'native-brands/apple.svg' %}" alt="" width="38" height="38" loading="lazy">
+              {% else %}<img src="{% static 'native-brands/windows.svg' %}" alt="" width="38" height="38" loading="lazy">{% endif %}
+            </span>
+            <span class="native-platform-state{% if entry.available %} available{% endif %}">{% if entry.available %}<span aria-hidden="true">● </span>Ready to download{% else %}In preparation{% endif %}</span>
+          </div>
+          <div class="native-platform-details">
+            <h4>{{ entry.label }}</h4>
+            <p>{% if entry.id == 'android' %}Android phones and tablets{% elif entry.id == 'ios' %}iPhone and iPad{% else %}Windows laptops and desktops{% endif %}</p>
+          </div>
+          {% if entry.available %}
+            <a class="native-platform-action" href="{{ entry.url }}" rel="noopener noreferrer" target="_blank">
+              {% if entry.id == 'android' %}Get Android app{% elif entry.id == 'ios' %}View on the App Store{% else %}Get Windows installer{% endif %}
+              <span aria-hidden="true">↗</span>
+            </a>
+            <p class="native-platform-fineprint">{{ entry.description }}</p>
+          {% else %}
+            <div class="native-platform-not-ready">
+              <span class="native-preparing-dot" aria-hidden="true"></span>
+              <span>Not released yet. An official installation link will appear here when ready.</span>
+            </div>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="native-next-step" aria-label="Use KOFAD now">
+    <div>
+      <p class="native-kicker">NO WAITING TO GET STARTED</p>
+      <h3>{% if app.kind == 'staff' %}Your secure staff workspace is available now.{% else %}You can shop KOFAD Market right now.{% endif %}</h3>
+      <p>{% if app.kind == 'staff' %}Continue with the existing staff system. Your permissions, approvals and transactions are enforced by KOFAD servers.{% else %}Explore products, place orders and contact customer support from your browser while the customer apps are prepared.{% endif %}</p>
+    </div>
+    <a href="{% if app.kind == 'staff' %}/workspace/{% else %}/market/{% endif %}">{% if app.kind == 'staff' %}Open workspace{% else %}Continue to Market{% endif %} <span aria-hidden="true">→</span></a>
+  </section>
+
+  <section class="native-explainer" aria-label="How releases and updates work">
+    <div><span class="native-explainer-icon" aria-hidden="true">01</span><h3>Official release</h3><p>Download links appear after platform-specific builds have been signed, checked and published.</p></div>
+    <div><span class="native-explainer-icon" aria-hidden="true">02</span><h3>Secure sign-in</h3><p>{% if app.kind == 'staff' %}Staff must sign in using their existing authorized work account. The app does not bypass permissions or MFA.{% else %}Use your existing customer account to shop and manage orders. Guest visitors can browse first.{% endif %}</p></div>
+    <div><span class="native-explainer-icon" aria-hidden="true">03</span><h3>Updates</h3><p>New versions will be delivered through approved app stores or signed Windows updates, with clear prompts.</p></div>
+  </section>
+</div>
