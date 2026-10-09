@@ -1,5 +1,6 @@
 {% extends "marketplace/base.html" %}{% block content %}
 <section class="shop-catalog">
+<div class="native-market-promo"><div><strong>KOFAD Market on your device</strong><p>Explore the dedicated customer app for Android, iPhone and Windows. Installation becomes available as each native release is approved.</p></div><a href="/apps/">Download customer app →</a></div>
 {% if not market_customer %}<aside class="market-guest-welcome" aria-label="Welcome to KOFAD Market"><div><h2>Welcome to KOFAD Market</h2><p>Browse products freely. Sign in or create a free account when you are ready to shop.</p></div><a href="{% url 'market_access' %}">Sign in or create account →</a></aside>{% endif %}
 {% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="/market/?category={{ category|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 
