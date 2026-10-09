@@ -1238,8 +1238,10 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         order, "paid",
         f"KOFAD: Payment verified for order {order.customer_reference}. "
         f"Received GHS {order.total:.2f} via {payment_channel_label}. "
-        "Your order is confirmed for processing. Track delivery or pickup in your KOFAD Market account. "
-        "If you have questions, quote the order reference.",
+        f"Your 6-digit collection/delivery code is {handover_code(order)}. "
+        "Show this code to KOFAD staff only when you receive your items; "
+        "they must enter it to confirm handover. Never share your MoMo PIN. "
+        "Track your order in KOFAD Market.",
     )
     from core.email_identity import enqueue_notice
     transaction.on_commit(lambda: enqueue_notice(
