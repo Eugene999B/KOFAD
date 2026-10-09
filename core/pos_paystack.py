@@ -253,6 +253,14 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
     if paid_amount != total or total <= 0:
         raise ValidationError("The MoMo request must exactly match the full sale total.")
 
+    party_name = ""
+    if payload.get("party"):
+        party = Party.objects.filter(pk=payload["party"], branch=branch, kind="customer").first()
+        if party:
+            party_name = party.name
+    customer_name_at_request = (party_name or str(payload.get("customer_name") or "").strip() or "Walk-in customer")[:140]
+    cashier_at_request = (user.get_full_name().strip() or user.get_username())[:140]
+
     now = timezone.now()
     state = {
         "provider": "paystack",
@@ -263,6 +271,8 @@ def start(user, branch, sale_payload, request_key, phone, provider, email):
         "display_text": "",
         "phone": phone,
         "network": provider,
+        "customer_name": customer_name_at_request,
+        "cashier_name": cashier_at_request,
         "email": email,
         "amount": str(total),
         "request_key": str(request_key),
