@@ -199,3 +199,37 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.assertEqual(second.json()["reference"], key.hex)
         self.assertEqual(second.json()["provider"], "hubtel")
         self.assertEqual(post.call_count, 1)
+
+    @patch("core.pos_hubtel.hubtel.verify")
+    @patch("core.pos_hubtel.hubtel.headers", return_value={})
+    @patch("core.pos_hubtel.requests.post")
+    def test_hubtel_all_in_price_is_fixed_through_verified_posting(self, post, _, verify):
+        from marketplace.models import PaymentConfiguration
+        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "51.25"
+        key = uuid.uuid4()
+        post.return_value = self.initiate(key.hex)
+        pos_hubtel.start(self.user, self.branch, payload, key,
+                         "0551234567", "mtn", "customer@example.test")
+        self.assertEqual(post.call_args.kwargs["json"]["totalAmount"], 51.25)
+        saved = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
+        self.assertEqual(saved.cart["payment_request"]["online_markup_percent"], "2.500")
+        PaymentConfiguration.objects.filter(pk=1).update(online_price_markup_percent=Decimal("0"))
+        verify.return_value = self.verified(key.hex, amount="51.25")
+        result = pos_hubtel.reconcile(key.hex, force=True)
+        self.assertTrue(result["paid"])
+        doc = Document.objects.get(kind="sale")
+        self.assertEqual(doc.total, Decimal("51.25"))
+        self.assertEqual(doc.lines.get().unit_price, Decimal("51.25"))
+        self.assertEqual(Payment.objects.get(document=doc, method="momo").amount, Decimal("51.25"))
+
+    @patch("core.pos_hubtel.hubtel.headers", return_value={})
+    @patch("core.pos_hubtel.requests.post")
+    def test_hubtel_rejects_old_cash_price_when_percentage_is_set(self, post, _):
+        from marketplace.models import PaymentConfiguration
+        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
+        with self.assertRaises(ValidationError):
+            pos_hubtel.start(self.user, self.branch, self.payload(), uuid.uuid4(),
+                             "0551234567", "mtn", "customer@example.test")
+        post.assert_not_called()
