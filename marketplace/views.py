@@ -85,6 +85,7 @@ def _market_context(request, **extra):
         "market_auth_page": market_auth_page,
         "google_ready": __import__("core.google_oauth", fromlist=["enabled"]).enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
+        "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
