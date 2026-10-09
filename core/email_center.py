@@ -251,6 +251,7 @@ def inbox(request):
         "is_mail_owner": owner(request.user),
         "daily_email_usage": __import__("core.brevo_email", fromlist=["usage_today"]).usage_today(),
         "email_queued_count": EmailLetter.objects.filter(direction="outbound", status__in=["queued", "failed"]).count() if owner(request.user) else 0,
+        "system_notice_history": list(__import__("marketplace.models", fromlist=["EmailNotice"]).EmailNotice.objects.order_by("-created_at")[:20]) if owner(request.user) else [],
         "external_ready": bool(getattr(settings, "KOFAD_EMAIL_ENABLED", False)
                                and settings.KOFAD_EMAIL_PROVIDER == "brevo"
                                and settings.KOFAD_BREVO_API_KEY),
