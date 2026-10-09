@@ -755,6 +755,7 @@
     selectedCustomerBox?.classList.add("hidden");
     selectedCustomerBox?.replaceChildren();
     customerResults?.replaceChildren();
+    if (customerSearch) customerSearch.value = "";
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
@@ -1603,6 +1604,7 @@
     cart.splice(0, cart.length);
     selectedCustomer = null;
     newCustomerMode = false;
+    setCustomerMode("walkin");
     if (partyInput) partyInput.value = "";
     selectedCustomerBox?.classList.add("hidden");
     selectedCustomerBox?.replaceChildren();
