@@ -202,7 +202,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         response = self.client.get("/market/access/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sign in or create account")
-        self.assertContains(response, "Enter your mobile number.")
+        self.assertContains(response, "Choose Google for fast access")
         self.assertContains(response, 'class="market-auth-header"')
         self.assertContains(response, 'class="premium-access-logo"')
         self.assertContains(response, "kofad-official-logo")
