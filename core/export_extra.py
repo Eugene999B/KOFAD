@@ -160,7 +160,7 @@ def extra_rows(dataset, branch, first, last):
     if dataset == "payment_ledger":
         payments = Payment.objects.filter(
             document__branch=branch, document__created_at__date__range=(first, last)
-        ).select_related("document", "document__party", "document__created_by").order_by(
+        ).select_related("document", "document__party", "document__created_by", "document__online_order").order_by(
             "-document__created_at", "pk")[:10001]
         rows = []
         for item in payments:
@@ -212,7 +212,7 @@ def extra_rows(dataset, branch, first, last):
     if dataset == "debt_invoices":
         invoices = Document.objects.filter(
             branch=branch, kind="sale", party__isnull=False,
-        ).select_related("party").order_by("due_date", "created_at")[:10001]
+        ).select_related("party").order_by("due_date", "created_at").iterator(chunk_size=350)
         today = timezone.localdate()
         rows = []
         for invoice in invoices:
@@ -227,6 +227,8 @@ def extra_rows(dataset, branch, first, last):
                 "total": invoice.total, "paid_at_sale": invoice.paid, "balance": amount,
                 "status": "Overdue" if overdue else "Outstanding",
             })
+            if len(rows) > 10000:
+                break  # the download handler rejects the report rather than truncating it
         return rows, [
             ("reference", "Sale reference"), ("customer", "Customer"), ("phone", "Phone"),
             ("issued", "Sale created"), ("due", "Due date"), ("days_overdue", "Days overdue"),
@@ -274,7 +276,7 @@ def extra_rows(dataset, branch, first, last):
     if dataset == "stock_alerts":
         quantities = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
         rows = []
-        for product in Product.objects.filter(active=True).order_by("name")[:10001]:
+        for product in Product.objects.filter(active=True).order_by("name").iterator(chunk_size=350):
             held = quantities.get(product.pk, 0)
             if held > product.reorder_level:
                 continue
@@ -287,6 +289,8 @@ def extra_rows(dataset, branch, first, last):
                 "unit_cost": product.cost, "stock_value": product.cost * held,
                 "priority": "Out of stock" if held == 0 else "Reorder now",
             })
+            if len(rows) > 10000:
+                break  # prevent incomplete inventory reports
         return rows, [
             ("sku", "SKU"), ("product", "Product"),
             ("category", "Category"), ("sellable", "Sellable units"),
