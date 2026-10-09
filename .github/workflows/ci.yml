@@ -54,6 +54,7 @@ jobs:
           python tests/render_document_evidence.py
           for file in test-results/documents/*.pdf; do pdftoppm -r 110 -png "$file" "${file%.pdf}"; done
       - run: python tests/browser_smoke.py
+      - run: python tests/export_studio_smoke.py
       - run: python tests/cookie_smoke.py
       - run: python manage.py test --noinput
       - name: Verify production container
