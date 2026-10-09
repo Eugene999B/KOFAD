@@ -70,9 +70,16 @@ def financial_controls(branch, first, last):
                        expected_line, line.total, line.description)
         # Correctly account for owner-funded and unpaid expenses that
         # intentionally have no payment-channel posting.
-        exempt = doc.kind == "expense" and doc.expense_funding_source in {
-            "owner_manager_funds", "unpaid_credit",
-        }
+        exempt = (
+            (doc.kind == "expense" and doc.expense_funding_source in {
+                "owner_manager_funds", "unpaid_credit",
+            })
+            or (doc.kind == "reversal" and doc.original_id
+                and doc.original.kind == "expense"
+                and doc.original.expense_funding_source in {
+                    "owner_manager_funds", "unpaid_credit",
+                })
+        )
         if doc.kind in {"sale", "purchase", "return", "supplier_return", "collection",
                         "supplier_payment", "expense", "reversal"} and not exempt:
             expected_paid = sum((p.amount for p in payment_rows), ZERO)
@@ -103,12 +110,36 @@ def financial_controls(branch, first, last):
                 record(day, "Allocation", ref, "Allocation uses same business location",
                        1, int(a.invoice.branch_id == branch.pk),
                        f"Invoice {a.invoice.reference}")
+        if doc.kind == "creditor_charge" and doc.payable_category in {"inventory", "equipment", "loan"}:
+            record(day, "Accounting classification", ref,
+                   "Special creditor bill needs accountant classification", 1, 0,
+                   f"Category '{doc.payable_category}' currently maps to a generic expense. "
+                   "Confirm inventory receipt, asset capitalization or loan principal before final accounts.")
         if doc.kind in {"sale", "purchase", "creditor_charge"}:
             remaining = s.balance(doc)
             if remaining < ZERO:
                 record(day, "Receivables / payables", ref, "Outstanding balance must be nonnegative",
                        ZERO, -remaining,
                        "Allocated payments/credits exceed the amount legally outstanding.")
+
+    # Reconciliation of payroll and manual salary expenses is also important:
+    # these can represent the same economic wage obligation entered twice.
+    salary_count = Document.objects.filter(
+        branch=branch, kind="expense", expense_category="salary",
+        created_at__date__range=(first, last),
+    ).count()
+    if salary_count:
+        from .models import PayrollEntry
+        recorded_payroll = PayrollEntry.objects.filter(
+            period__branch=branch,
+            period__status__in=["locked", "reconciled"],
+            period__end_date__range=(first, last),
+        ).exists()
+        if recorded_payroll:
+            record(last, "Payroll", "PAYROLL-VS-EXPENSE",
+                   "Manual salary expense may duplicate locked payroll accrual", 1, 0,
+                   f"{salary_count} salary expense document(s) and locked payroll in the same period. "
+                   "Verify they represent separate obligations before booking.")
 
     from marketplace.models import MarketPaymentAttempt, OnlineOrder
     orders = list(_limit(OnlineOrder.objects.filter(
