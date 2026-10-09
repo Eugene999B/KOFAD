@@ -79,3 +79,8 @@ html[data-theme="dark"] .market-body .kofad-entry .kofad-access-form label{color
 html[data-theme="dark"] .market-body .kofad-access-form input:not([type=hidden]){background:#101d26!important;color:#f5f9fc!important;border-color:#486070!important}
 html[data-theme="dark"] .market-body .kofad-access-bottom{border-top-color:#405462}
 html[data-theme="dark"] .market-body .kofad-oauth-separator:before,html[data-theme="dark"] .market-body .kofad-oauth-separator:after{background:#3d5260}
+
+/* Existing KOFAD auth hook retained without returning to the tiny old logo. */
+.market-body .kofad-entry .premium-access-logo{display:flex!important;align-items:center!important;justify-content:flex-start!important;width:clamp(150px,17vw,202px)!important;height:clamp(86px,9vw,112px)!important;margin:0 0 15px!important;max-width:100%!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.market-body .kofad-entry .premium-access-logo img{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important;object-position:left center!important;background:transparent!important}
+@media(max-width:560px){.market-body .kofad-entry .premium-access-logo{width:160px!important;height:89px!important}}
