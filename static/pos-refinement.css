@@ -155,3 +155,6 @@ html[data-theme="dark"] #pos .customer-duplicate-match{background:#1c303b;color:
 
 /* The three customer-type buttons replace the old duplicate 'New customer' action. */
 #pos #new-customer-toggle{display:none!important}
+
+#pos .customer-debt-warning{display:block;margin:8px 0 0;padding:10px 12px;border:1px solid #e8bb83;border-radius:10px;background:#fff7e9;color:#825019;font-size:12px;line-height:1.5}
+html[data-theme="dark"] #pos .customer-debt-warning{background:#3e3323;border-color:#a07a43;color:#f8d8a1}
