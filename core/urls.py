@@ -6,6 +6,7 @@ from . import account as accounts
 from . import google_oauth as google
 from . import gmail_api as gmail_sender
 from . import email_center as business_email
+from . import customer_care as customer_care_views
 from . import count_views
 from . import admin_views
 from . import staff_invites
@@ -106,6 +107,7 @@ urlpatterns = [
     path("administration/roles/<int:pk>/", admin_views.role_edit, name="admin_role_edit"),
     path("settings/", admin_views.settings_center, name="settings"),
     path("settings/company/", v.settings_view, name="company_settings"),
+    path("settings/customer-care/", customer_care_views.settings, name="customer_care_settings"),
     path("settings/location/", v.location_settings, name="location_settings"),
     path("settings/debt/", v.debt_settings, name="debt_settings"),
     path("settings/communications/", v.communication_settings, name="communication_settings"),
