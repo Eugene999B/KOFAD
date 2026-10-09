@@ -92,6 +92,7 @@ class BrandingConsistencyTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/x-icon")
         self.assertIn("public", response["Cache-Control"])
+        self.assertNotIn("X-Robots-Tag", response)
         response.close()
 
     def test_customer_auth_templates_have_branded_google_action(self):
