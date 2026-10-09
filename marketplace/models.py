@@ -96,7 +96,7 @@ class EmailNotice(models.Model):
 
 
 class CustomerAccount(models.Model):
-    phone = models.CharField(max_length=20, unique=True)
+    phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
     full_name = models.CharField(max_length=140)
     email = models.EmailField(blank=True)
     password_hash = models.CharField(max_length=160)
@@ -115,7 +115,7 @@ class CustomerAccount(models.Model):
         return check_password(raw, self.password_hash)
 
     def __str__(self):
-        return f"{self.full_name} · {self.phone}"
+        return f"{self.full_name} · {self.phone or self.email or 'Google account'}"
 
 
 class MarketListing(models.Model):
