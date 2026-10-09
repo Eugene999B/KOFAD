@@ -1,4 +1,6 @@
 """Regression tests for KOFAD finance controls and accounting source integrity."""
+import csv
+import io
 import uuid
 from decimal import Decimal
 from unittest.mock import patch
@@ -144,6 +146,19 @@ class FinancialIntegrityTests(Fixtures, TestCase):
         channel = self.client.get("/exports/download/csv/", {"dataset": "cash_channels"})
         self.assertEqual(channel.status_code, 200)
         self.assertContains(channel, "Inflow")
+
+    def test_csv_keeps_signed_money_as_exact_numbers_and_escapes_formula_text(self):
+        from .exports import export
+        from .models import Company
+        response = export([
+            {"name": "=2+2", "net": Decimal("-1234.56"), "gross": Decimal("1234.56")},
+            {"name": "-cmd|malicious", "net": Decimal("0.01"), "gross": Decimal("0")},
+        ], "csv", "Financial cash flow", Company.objects.first(),
+            [("name", "External memo"), ("net", "Signed amount"), ("gross", "Gross amount")])
+        reader = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
+        self.assertEqual(reader[1], ["'=2+2", "-1234.56", "1234.56"])
+        self.assertEqual(reader[2], ["'-cmd|malicious", "0.01", "0"])
+        self.assertEqual(sum(Decimal(row[1]) for row in reader[1:]), Decimal("-1234.55"))
 
     def test_scope_excludes_other_store_finances(self):
         other_sale = Document.objects.create(
