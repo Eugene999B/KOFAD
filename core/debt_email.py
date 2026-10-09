@@ -188,7 +188,12 @@ def email_still_allowed(source_key, recipient):
         snapshot = debts.customer_account_snapshot(party)
         from .automations import _debt_stage
         return _debt_stage(snapshot, policy, timezone.localdate()) == stage
-    return kind in {"opened", "payment"}
+    if kind not in {"opened", "payment"} or not rest:
+        return False
+    document = Document.objects.filter(pk=rest[0], party=party, kind="sale" if kind == "opened" else "collection").exclude(correction__status="approved").first()
+    if not document:
+        return False
+    return (kind == "payment" or debts.customer_account_snapshot(party)["outstanding"] > 0)
 
 
 def safe_queue_credit_sale(document_id):
