@@ -1,0 +1,5 @@
+.maintenance-coverage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:14px 0 18px}
+.maintenance-coverage-item{border:1px solid #d6e5e9;background:linear-gradient(145deg,#fbfefe,#edf6f7);border-radius:14px;padding:15px;display:grid;gap:6px;min-width:0}
+.maintenance-coverage-item strong{font-size:14px;line-height:1.5;color:#173b4a}.maintenance-coverage-item span{color:#285e70;font-size:13px;font-weight:650}.maintenance-coverage-item small{color:#637b83;font-size:12px}
+.maintenance-model-inventory{border:1px solid #d6e5e9;border-radius:14px;overflow:hidden}.maintenance-model-inventory summary{padding:14px 16px;font-weight:700;cursor:pointer}.maintenance-model-inventory .table-wrap{max-height:410px;overflow:auto}
+[data-theme="dark"] .maintenance-coverage-item{background:#17313b;border-color:#325360}[data-theme="dark"] .maintenance-coverage-item strong{color:#e7f6fc}[data-theme="dark"] .maintenance-coverage-item span{color:#a3d2e1}[data-theme="dark"] .maintenance-coverage-item small{color:#9bbac9}
