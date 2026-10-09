@@ -189,3 +189,21 @@ def email_still_allowed(source_key, recipient):
         from .automations import _debt_stage
         return _debt_stage(snapshot, policy, timezone.localdate()) == stage
     return kind in {"opened", "payment"}
+
+
+def safe_queue_credit_sale(document_id):
+    try:
+        document = Document.objects.select_related("party", "created_by").get(pk=document_id)
+        return queue_credit_sale(document)
+    except Exception:
+        logger.exception("KOFAD credit sale email could not be prepared")
+        return None
+
+
+def safe_queue_debt_payment(document_id):
+    try:
+        document = Document.objects.select_related("party", "created_by").get(pk=document_id)
+        return queue_debt_payment(document)
+    except Exception:
+        logger.exception("KOFAD debt payment email could not be prepared")
+        return None
