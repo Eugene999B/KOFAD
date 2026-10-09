@@ -102,7 +102,10 @@ def _market_context(request, **extra):
 
 
 def _decorate_listings(listings, branch):
+    from .pricing import online_markup_percent
+    rate = online_markup_percent()
     for listing in listings:
+        listing._online_price_percent = rate
         if hasattr(listing, "stock_available"):
             listing.available_units = max(int(listing.stock_available or 0), 0)
         else:
@@ -262,9 +265,12 @@ def market(request):
     except ValidationError:
         branch = None
 
+    from .pricing import online_markup_percent
+    from django.db.models.functions import Round
+    rate = online_markup_percent()
     price_field = DecimalField(max_digits=14, decimal_places=2)
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product").annotate(
-        market_price_sort=Coalesce(
+        market_base_price=Coalesce(
             Case(
                 When(price_source="retail_unit", then=F("product__retail_unit")),
                 When(price_source="retail_pack", then=F("product__retail_pack")),
@@ -275,6 +281,11 @@ def market(request):
             ),
             Value(Decimal("0.00")),
             output_field=price_field,
+        )
+    ).annotate(
+        market_price_sort=Round(
+            F("market_base_price") * Value(Decimal("1") + rate / Decimal("100")),
+            precision=2, output_field=price_field,
         )
     )
     if branch:
@@ -1522,6 +1533,11 @@ def market_search_suggestions(request):
         | Q(product__name__icontains=query) | Q(product__sku__icontains=query)
         | Q(product__category__icontains=query)
     ).select_related("product").order_by("-featured", "sort_order", "product__name")[:8]
+    from .pricing import online_markup_percent
+    suggestion_rate = online_markup_percent()
+    rows = list(rows)
+    for listing in rows:
+        listing._online_price_percent = suggestion_rate
     results = [{
         "id": row.pk,
         "name": row.display_name,
