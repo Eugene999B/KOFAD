@@ -333,9 +333,15 @@ def run_low_stock_summary(now=None):
 
 def run_scheduled_automations(now=None):
     from .debt_email import run_debt_email_reminders
+    try:
+        email_count = run_debt_email_reminders(now)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Debt email scheduler failed safely")
+        email_count = 0
     return {
         "debt": run_debt_reminders(now),
-        "debt_email": run_debt_email_reminders(now),
+        "debt_email": email_count,
         "low_stock": run_low_stock_summary(now),
     }
 
