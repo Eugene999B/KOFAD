@@ -152,3 +152,6 @@ html[data-theme="dark"] #pos .counter-cart .cart-line{background:color-mix(in sr
 @media(max-width:370px){#pos .customer-choice{grid-template-columns:1fr}#pos .customer-choice-button{min-height:48px}}
 html[data-theme="dark"] #pos .customer-duplicate-alert{background:#4b3820;border-color:#a4834e;color:#ffefcf}
 html[data-theme="dark"] #pos .customer-duplicate-match{background:#1c303b;color:#ebf5f7;border-color:#68848a}
+
+/* The three customer-type buttons replace the old duplicate 'New customer' action. */
+#pos #new-customer-toggle{display:none!important}
