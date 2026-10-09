@@ -33,7 +33,7 @@ class StaffInvitationSecurityTests(TestCase):
         self.assertFalse(self.newcomer.has_usable_password())
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
-        self.assertNotIn("staff-invite/", response["Location"])
+        self.assertEqual(response["Location"], "/staff-invite/complete/")
         self.assertEqual(response["Referrer-Policy"], "no-referrer")
         self.assertEqual(self.client.get(response["Location"]).status_code, 200)
         password = "PrivateNewStaffPassword2026!3905"
