@@ -135,13 +135,15 @@ def _serialize_fixture():
 
 
 def create_backup(actor=None):
-    # A single snapshot prevents sales and payments changing between model reads.
+    # REPEATABLE READ ensures all models, photos and transactions come from the
+    # same MVCC snapshot WITHOUT taking SHARE locks that block live sales.
+    # Django TestCase wraps its own outer transaction, so do not attempt
+    # to change isolation in nested transactions.
+    nested_transaction = connection.in_atomic_block
     with transaction.atomic():
-        if connection.vendor == "postgresql":
-            tables = ", ".join(connection.ops.quote_name(name) for name in _table_names_for_restore())
+        if connection.vendor == "postgresql" and not nested_transaction:
             with connection.cursor() as cursor:
-                cursor.execute("SET LOCAL lock_timeout = '10s'")
-                cursor.execute(f"LOCK TABLE {tables} IN SHARE MODE")
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         fixture = _serialize_fixture()
         migrations = current_migrations()
     records = json.loads(fixture)
