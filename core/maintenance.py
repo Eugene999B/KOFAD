@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import zlib
 from collections import Counter
 from datetime import timezone as dt_timezone
 from itertools import chain
@@ -30,7 +31,7 @@ from .models import Access, Audit, Branch, Company
 
 BACKUP_FORMAT = "kofad-full-system-backup"
 BACKUP_VERSION = 2
-MAX_BACKUP_BYTES = 100 * 1024 * 1024
+MAX_BACKUP_BYTES = 256 * 1024 * 1024
 MAX_ENCRYPTED_BACKUP_BYTES = MAX_BACKUP_BYTES + 1024 * 1024
 ENCRYPTED_BACKUP_MAGIC = b"KOFAD-ENCRYPTED-BACKUP-V1\n"
 ENCRYPTED_BACKUP_FORMAT = "kofad-encrypted-backup"
@@ -144,7 +145,9 @@ def create_backup(actor=None):
         fixture = _serialize_fixture()
         migrations = current_migrations()
     records = json.loads(fixture)
-    counts = Counter(row["model"] for row in records)
+    coverage = sorted(backup_model_labels())
+    counts = Counter({label: 0 for label in coverage})
+    counts.update(row["model"] for row in records)
     bundle = {
         "format": BACKUP_FORMAT,
         "version": BACKUP_VERSION,
@@ -153,6 +156,7 @@ def create_backup(actor=None):
         "database_engine": connection.vendor,
         "migrations": migrations,
         "record_count": len(records),
+        "model_inventory": coverage,
         "model_counts": dict(sorted(counts.items())),
         "fixture_sha256": hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
         "fixture": fixture,
@@ -163,7 +167,11 @@ def create_backup(actor=None):
 
 def backup_bytes(actor=None):
     bundle = create_backup(actor)
-    return json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    data = json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    if len(data) > MAX_BACKUP_BYTES:
+        raise BackupError("Uncompressed backup exceeds the 256 MB safety limit. "
+                          "Use a controlled database-level recovery process for a larger system.")
+    return data
 
 
 def validate_backup_passphrase(passphrase):
@@ -190,9 +198,14 @@ def encrypted_backup_bytes(actor=None, passphrase=""):
     passphrase = validate_backup_passphrase(passphrase)
     plaintext = backup_bytes(actor)
     if len(plaintext) > MAX_BACKUP_BYTES:
-        raise BackupError("Backup content is larger than the supported 100 MB limit.")
+        raise BackupError("Backup content exceeds the supported 256 MB safety limit.")
     salt = os.urandom(16)
     nonce = os.urandom(12)
+    # Compress the signed snapshot before encryption. PostgreSQL-backed image
+    # blobs and extensive communication history can make plaintext backups large.
+    # Older encrypted files without the compression header still decrypt.
+    compressed = zlib.compress(plaintext, level=6)
+    use_compression = len(compressed) < len(plaintext)
     header = {
         "format": ENCRYPTED_BACKUP_FORMAT,
         "version": ENCRYPTED_BACKUP_VERSION,
@@ -203,9 +216,12 @@ def encrypted_backup_bytes(actor=None, passphrase=""):
         "p": BACKUP_KDF_P,
         "salt": base64.b64encode(salt).decode("ascii"),
         "nonce": base64.b64encode(nonce).decode("ascii"),
+        "compression": "zlib" if use_compression else "none",
     }
     aad = _canonical(header)
-    ciphertext = AESGCM(_backup_key(passphrase, salt)).encrypt(nonce, plaintext, aad)
+    ciphertext = AESGCM(_backup_key(passphrase, salt)).encrypt(
+        nonce, compressed if use_compression else plaintext, aad
+    )
     encoded_header = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
     output = ENCRYPTED_BACKUP_MAGIC + encoded_header + b"\n" + ciphertext
     if len(output) > MAX_ENCRYPTED_BACKUP_BYTES:
@@ -251,6 +267,19 @@ def _decrypt_backup(raw, passphrase):
         )
     except InvalidTag as exc:
         raise BackupError("Backup passphrase is incorrect or the encrypted file was altered.") from exc
+    compression = header.get("compression", "none")
+    if compression not in {"none", "zlib"}:
+        raise BackupError("Unsupported backup compression.")
+    if compression == "zlib":
+        try:
+            decoder = zlib.decompressobj()
+            uncompressed = decoder.decompress(plaintext, MAX_BACKUP_BYTES + 1)
+            if (len(uncompressed) > MAX_BACKUP_BYTES or not decoder.eof
+                    or decoder.unconsumed_tail or decoder.unused_data):
+                raise BackupError("Encrypted backup decompressed beyond the safety limit or is incomplete.")
+            plaintext = uncompressed
+        except zlib.error as exc:
+            raise BackupError("Encrypted backup compression is damaged.") from exc
     if len(plaintext) > MAX_BACKUP_BYTES:
         raise BackupError("Decrypted backup is larger than the supported limit.")
     return plaintext
@@ -270,7 +299,7 @@ def parse_backup(raw):
     if not isinstance(raw, (bytes, bytearray)):
         raise BackupError("Backup content is missing.")
     if len(raw) > MAX_BACKUP_BYTES:
-        raise BackupError("Backup file is larger than the supported 100 MB limit.")
+        raise BackupError("Backup file exceeds the supported 256 MB safety limit.")
     try:
         bundle = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -313,10 +342,16 @@ def validate_backup(bundle):
 
     actual_counts = Counter(row["model"] for row in records)
     manifest = bundle.get("model_counts")
-    if not isinstance(manifest, dict) or any(not isinstance(v, int) or v < 0 for v in manifest.values()):
+    if not isinstance(manifest, dict) or any(not isinstance(v, int) or isinstance(v, bool) or v < 0 for v in manifest.values()):
         raise BackupError("Backup model counts are malformed.")
-    expected_counts = manifest
-    if dict(actual_counts) != expected_counts:
+    inventory = bundle.get("model_inventory")
+    if inventory is not None:
+        if (not isinstance(inventory, list)
+                or inventory != sorted(allowed)
+                or set(manifest) != set(inventory)):
+            raise BackupError("Backup coverage does not match the current KOFAD model inventory.")
+        actual_counts.update({label: 0 for label in inventory})
+    if dict(actual_counts) != manifest:
         raise BackupError("Backup model counts do not match its manifest.")
 
     if not actual_counts.get("auth.user"):
@@ -329,7 +364,7 @@ def backup_summary(bundle):
         "created_at": bundle.get("created_at"),
         "created_by": bundle.get("created_by") or "Unknown",
         "record_count": bundle.get("record_count", 0),
-        "model_count": len(bundle.get("model_counts") or {}),
+        "model_count": len(bundle.get("model_inventory") or bundle.get("model_counts") or {}),
         "checksum": bundle.get("fixture_sha256", ""),
     }
 
