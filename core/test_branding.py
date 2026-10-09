@@ -88,7 +88,9 @@ class BrandingConsistencyTests(SimpleTestCase):
 
     def test_favicon_endpoint_delivers_correct_type(self):
         from django.test import Client
-        response = Client().get("/favicon.ico", HTTP_HOST="kofadimpex.com")
+        from django.test import override_settings
+        with override_settings(ALLOWED_HOSTS=["kofadimpex.com", "testserver"]):
+            response = Client().get("/favicon.ico", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/x-icon")
         self.assertIn("public", response["Cache-Control"])
