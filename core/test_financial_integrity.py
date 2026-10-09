@@ -49,14 +49,25 @@ class FinancialIntegrityTests(Fixtures, TestCase):
         self.assertEqual(sum((r["amount"] for r in signed), Decimal("0")), sale.total)
         self.assertEqual({r["channel"] for r in signed}, {"Cash", "MoMo"})
 
-    def test_tampered_sale_line_and_payment_are_reported_without_editing_records(self):
-        sale = self.sale()
-        line = sale.lines.get()
-        line.total = Decimal("49.00")
-        line.save(update_fields=["total"])
-        payment = sale.payments.get()
-        payment.amount = Decimal("48.00")
-        payment.save(update_fields=["amount"])
+    def test_inconsistent_legacy_sale_is_reported_without_editing_records(self):
+        # Real KOFAD ledger records are immutable at the DATABASE level.
+        # Reproduce a legacy/imported discrepancy by creating a new source
+        # record with conflicting amounts, never by weakening that protection.
+        from .models import Line
+        sale = Document.objects.create(
+            branch=self.branch, party=self.customer, kind="sale",
+            reference="LEGACY-RECONCILIATION-CASE", total=Decimal("50.00"),
+            paid=Decimal("40.00"), created_by=self.user,
+        )
+        Line.objects.create(
+            document=sale, product=self.product, description=self.product.name,
+            mode="retail_unit", quantity=1, factor=1,
+            list_price=Decimal("50.00"), unit_price=Decimal("50.00"),
+            unit_cost=Decimal("20.00"), total=Decimal("49.00"),
+        )
+        Payment.objects.create(
+            document=sale, method="cash", amount=Decimal("30.00"), direction=1,
+        )
         checks, summary = self.checks()
         failures = [row for row in checks if row["status"] == "REVIEW"]
         self.assertGreaterEqual(len(failures), 2, failures)
