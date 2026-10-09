@@ -287,7 +287,7 @@ def inbox(request):
     if direction not in {"all", "inbound", "outbound"}:
         direction = "all"
     known_statuses = {value for value, _ in EmailLetter.STATUS}
-    if status not in known_statuses | {"all"}:
+    if status not in known_statuses | {"all", "attention"}:
         status = "all"
     letters_qs = EmailLetter.objects.filter(mailbox=chosen) if chosen else EmailLetter.objects.none()
     inbox_count = letters_qs.filter(direction="inbound").count()
@@ -296,7 +296,9 @@ def inbox(request):
     attention_count = letters_qs.filter(status__in=["failed", "uncertain"]).count()
     if direction != "all":
         letters_qs = letters_qs.filter(direction=direction)
-    if status != "all":
+    if status == "attention":
+        letters_qs = letters_qs.filter(status__in=["failed", "uncertain"])
+    elif status != "all":
         letters_qs = letters_qs.filter(status=status)
     if query:
         letters_qs = letters_qs.filter(
@@ -307,9 +309,26 @@ def inbox(request):
     letters = Paginator(
         letters_qs.select_related("created_by", "approved_by").order_by("-created_at", "-pk"), 20
     ).get_page(request.GET.get("page", "1"))
-    conversations = (EmailConversation.objects.filter(mailbox=chosen)
-                     .select_related("assigned_to").order_by("-last_activity_at")[:35]
-                     if chosen else [])
+    # Search and triage are limited to the already-authorised mailbox.
+    thread_status = request.GET.get("thread_status", "all")
+    thread_owner = request.GET.get("thread_owner", "all")
+    thread_q = request.GET.get("thread_q", "").strip()[:100]
+    if thread_status not in {"all", "open", "pending", "closed"}:
+        thread_status = "all"
+    if thread_owner not in {"all", "mine", "unassigned"}:
+        thread_owner = "all"
+    conversation_qs = EmailConversation.objects.filter(mailbox=chosen) if chosen else EmailConversation.objects.none()
+    if thread_status != "all":
+        conversation_qs = conversation_qs.filter(status=thread_status)
+    if thread_owner == "mine":
+        conversation_qs = conversation_qs.filter(assigned_to=request.user)
+    elif thread_owner == "unassigned":
+        conversation_qs = conversation_qs.filter(assigned_to__isnull=True)
+    if thread_q:
+        conversation_qs = conversation_qs.filter(
+            models.Q(subject__icontains=thread_q) |
+            models.Q(customer_email__icontains=thread_q))
+    conversations = conversation_qs.select_related("assigned_to").order_by("-last_activity_at")[:35]
     active_thread = None
     thread_letters = []
     thread_notes = []
@@ -337,6 +356,8 @@ def inbox(request):
         "thread_letters": thread_letters, "thread_notes": thread_notes,
         "eligible_assignees": eligible_assignees,
         "mail_query": query, "mail_direction": direction, "mail_status": status,
+        "thread_status_filter": thread_status, "thread_owner_filter": thread_owner,
+        "thread_search": thread_q,
         "inbox_count": inbox_count, "sent_count": sent_count, "draft_count": draft_count,
         "attention_count": attention_count,
         "memberships": EmailMailboxMember.objects.select_related("user", "mailbox").filter(
