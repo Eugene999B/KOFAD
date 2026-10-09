@@ -15,6 +15,7 @@ class AllInclusiveOnlinePricingTests(MarketFixtures):
     def staff_session(self, user=None):
         user = user or self.staff
         self.client.force_login(user)
+        user.access.refresh_from_db()
         session = self.client.session
         session["access_version"] = user.access.session_version
         session["branch"] = self.branch.pk
