@@ -53,11 +53,12 @@ def market_branch():
     return branch
 
 
-def listing_price(listing):
+def listing_price(listing, rate=None):
+    from .pricing import all_in_unit_price, online_markup_percent
     value = getattr(listing.product, listing.price_source, None)
     if value is None or value <= 0:
         raise ValidationError(f"{listing.display_name} does not currently have a valid Market price.")
-    return value
+    return all_in_unit_price(value, online_markup_percent() if rate is None else rate)
 
 
 def active_reserved_units(branch, product, exclude_order=None):
@@ -725,8 +726,10 @@ def cart_rows(cart):
         pk__in=clean, enabled=True, product__active=True
     ).select_related("product")
     rows = []
+    from .pricing import online_markup_percent
+    rate = online_markup_percent()
     for listing in listings:
-        price = listing_price(listing)
+        price = listing_price(listing, rate)
         quantity = clean[listing.pk]
         rows.append({
             "listing": listing,
