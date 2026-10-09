@@ -938,12 +938,13 @@ def documents(request):
         allowed += ["expense", "collection", "supplier_payment", "creditor_charge", "supplier_return", "inventory_writeoff"]
     if kind not in allowed:
         raise PermissionDenied
-    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
+    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by").prefetch_related("payments")
     q = request.GET.get("q", "")[:100]
     if q:
         rows = rows.filter(Q(reference__icontains=q) | Q(party__name__icontains=q))
+    from .sale_history import decorate_sales
     return render(request, "documents.html", {"title": dict(Document.KINDS).get(kind, "Transactions"),
-        "rows": rows[:200], "kind": kind, "q": q})
+        "rows": decorate_sales(branch, rows[:200]), "kind": kind, "q": q})
 
 
 @login_required
@@ -958,6 +959,8 @@ def document(request, pk):
     )
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
+    from .sale_history import decorate_sales
+    decorate_sales(branch, [doc])
     return render(request, "document.html", {
         "title": doc.reference,
         "doc": doc,
