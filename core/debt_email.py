@@ -167,7 +167,7 @@ def run_debt_email_reminders(now=None):
     return queued
 
 
-def email_still_allowed(source_key, recipient):
+def email_still_allowed(source_key, recipient, *, for_delivery=False, approved=False):
     """Evaluate stored source and current account preference before sending."""
     if not (source_key or "").startswith("debtmail:"):
         return True
@@ -177,6 +177,9 @@ def email_still_allowed(source_key, recipient):
     except (ValueError, TypeError):
         return False
     if not customer_allowed(party, recipient):
+        return False
+    current_mode = _policy().email_delivery_mode
+    if current_mode == "off" or (for_delivery and current_mode == "draft" and not approved):
         return False
     if kind == "reminder":
         if not rest:
