@@ -6,11 +6,11 @@
 <meta name="description" content="{{ seo_description }}">
 {% if google_site_verification %}<meta name="google-site-verification" content="{{ google_site_verification }}">{% endif %}
 {% if seo_indexable %}<meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="{{ canonical_url }}">
-<meta property="og:type" content="website"><meta property="og:site_name" content="KOFAD IMPEX ENTERPRISE"><meta property="og:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta property="og:description" content="{{ seo_description }}"><meta property="og:url" content="{{ canonical_url }}"><meta property="og:image" content="{{ public_site_origin }}{% static 'brand/kofad-official-logo.svg' %}">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta name="twitter:description" content="{{ seo_description }}"><meta name="twitter:image" content="{{ public_site_origin }}{% static 'brand/kofad-official-logo.svg' %}">{% else %}<meta name="robots" content="noindex,nofollow,noarchive">{% endif %}
+<meta property="og:type" content="website"><meta property="og:site_name" content="KOFAD IMPEX ENTERPRISE"><meta property="og:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta property="og:description" content="{{ seo_description }}"><meta property="og:url" content="{{ canonical_url }}"><meta property="og:image" content="{{ public_site_origin }}{% static 'brand/kofad-logo-transparent.png' %}">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{{ title|default:'KOFAD Market' }} · KOFAD IMPEX ENTERPRISE"><meta name="twitter:description" content="{{ seo_description }}"><meta name="twitter:image" content="{{ public_site_origin }}{% static 'brand/kofad-logo-transparent.png' %}">{% else %}<meta name="robots" content="noindex,nofollow,noarchive">{% endif %}
 <title>{{ title|default:"KOFAD Market" }} · KOFAD IMPEX ENTERPRISE</title>
-<link rel="icon" type="image/png" sizes="96x96" href="{% static 'brand/favicon-96.png' %}">
-<link rel="apple-touch-icon" href="{% static 'brand/favicon-96.png' %}">
+<link rel="icon" type="image/png" sizes="48x48" href="{% static 'brand/favicon-48.png' %}"><link rel="icon" type="image/png" sizes="96x96" href="{% static 'brand/favicon-96.png' %}"><link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'brand/apple-touch-icon.png' %}">
 {% if request.path == '/' %}<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"KOFAD IMPEX ENTERPRISE","url":"{{ public_site_origin }}/","logo":"{{ public_site_origin }}{% static 'brand/kofad-official-logo.svg' %}","sameAs":[]}</script>{% endif %}
 <link rel="stylesheet" href="{% static 'cookie-consent.css' %}"><script src="{% static 'cookie-consent.js' %}"></script>
 <script src="{% static 'theme.js' %}"></script>
