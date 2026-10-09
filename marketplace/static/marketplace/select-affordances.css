@@ -1,0 +1,24 @@
+/* KOFAD Market: native, keyboard-accessible selects with unmistakable chevrons. */
+.commerce-checkout-page :is(.commerce-fulfilment-choice,.checkout-payment-choice) select,
+.order-v2-page .checkout-payment-choice select {
+  appearance:none!important;-webkit-appearance:none!important;
+  width:100%;min-height:56px;border:1.5px solid #c5d9e5;border-radius:15px;
+  padding:13px 56px 13px 18px;line-height:1.4;
+  font-weight:700;font-size:16px;color:#172e45;background-color:#fff;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23245c70' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")!important;
+  background-position:right 17px center!important;background-repeat:no-repeat!important;
+  background-size:23px 23px!important;cursor:pointer;
+  box-shadow:0 2px 7px rgba(10,42,62,.035);
+}
+.commerce-checkout-page :is(.commerce-fulfilment-choice,.checkout-payment-choice) select:focus-visible,
+.order-v2-page .checkout-payment-choice select:focus-visible{
+ outline:3px solid #6cc0c7;outline-offset:3px;border-color:#258e95;
+}
+.market-select-help{display:flex;align-items:center;gap:7px;margin:8px 0 0;font-size:12px;font-weight:600;color:#4b7080}
+.market-select-help::before{content:"⌄";display:inline-flex;justify-content:center;align-items:center;width:17px;height:17px;border:1px solid #aacbd1;border-radius:5px;color:#1b7685;font-size:15px}
+@media(max-width:640px){
+ .commerce-checkout-page :is(.commerce-fulfilment-choice,.checkout-payment-choice) select,
+ .order-v2-page .checkout-payment-choice select {min-height:59px;padding-left:15px;padding-right:54px}
+}
+html[data-theme='dark'] .commerce-checkout-page :is(.commerce-fulfilment-choice,.checkout-payment-choice) select,
+html[data-theme='dark'] .order-v2-page .checkout-payment-choice select{background-color:#162936;color:#eef8fa;border-color:#69808e}
