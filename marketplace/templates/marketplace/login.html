@@ -1,26 +1,36 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}{% block content %}
-<section class="simple-customer-access premium-market-access">
-<div class="simple-access-card premium-access-card">
-{% include "marketplace/_auth_logo.html" %}
-<h1>Sign in</h1>
-<p>Use your linked phone number or verified email with your password.</p>
+{% extends "marketplace/base.html" %}{% load static %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}"><link rel="stylesheet" href="{% static 'marketplace/customer-auth-premium.css' %}">{% endblock %}
+{% block content %}
+<section class="kofad-entry simple-customer-access premium-market-access" aria-labelledby="market-login-title"><div class="kofad-entry-shell">
+<aside class="kofad-entry-story" aria-label="KOFAD Market welcome">
+ <div class="kofad-story-top"><span class="kofad-story-kicker">KOFAD IMPEX ENTERPRISE</span>
+ <h2>Everything you need.<br><em>One easy account.</em></h2>
+ <p>Shop with confidence, follow your orders and connect with our team — all in one place.</p></div>
+ <div class="kofad-story-benefits"><div><span aria-hidden="true">✓</span><strong>Simple and secure sign-in</strong></div><div><span aria-hidden="true">✓</span><strong>Orders and support in one place</strong></div><div><span aria-hidden="true">✓</span><strong>Mobile number linking is optional</strong></div></div>
+ <p class="kofad-story-foot">KOFAD Market · Retail &amp; wholesale</p>
+ </aside>
+<div class="kofad-entry-form simple-access-card premium-access-card">
+<div class="kofad-auth-brand premium-access-logo"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE" width="184" height="110"></div>
+<span class="kofad-access-label"><span aria-hidden="true">●</span> YOUR CUSTOMER ACCOUNT</span>
+<h1 id="market-login-title">Welcome back.</h1>
+<p class="kofad-auth-description">Sign in to view your orders, manage your account and contact support.</p>
 {% include "marketplace/_auth_messages.html" %}
-<form method="post" class="premium-auth-form">{% csrf_token %}{{ form.non_field_errors }}
+<form method="post" class="premium-auth-form kofad-access-form">{% csrf_token %}{{ form.non_field_errors }}
 {% if locked_phone %}
 <div class="account-known-phone"><span>MOBILE NUMBER</span><strong>{{ locked_phone }}</strong><a href="/market/access/">Change</a></div>
 <input type="hidden" name="phone" value="{{ locked_phone }}">{{ form.phone.errors }}
 {% else %}
-<label>Mobile number or verified email{{ form.phone }}{{ form.phone.errors }}</label>
+<label for="{{ form.phone.id_for_label }}">Mobile number or verified email</label>{{ form.phone }}{{ form.phone.errors }}
 {% endif %}
-<label>Password{{ form.password }}{{ form.password.errors }}</label>
-<button class="market-button primary wide" type="submit">Sign in <span>→</span></button>
+<label for="{{ form.password.id_for_label }}">Password</label>{{ form.password }}{{ form.password.errors }}
+<a class="kofad-forgot" href="/market/account/password-reset/">Forgot your password?</a>
+<button class="market-button primary wide" type="submit">Sign in securely <span aria-hidden="true">→</span></button>
 </form>
 {% if google_ready %}
-<div class="kofad-oauth-separator"><span>or continue with</span></div>
-<a class="kofad-google-button" href="{% url 'google_customer_login' %}"><span class="kofad-google-mark" aria-hidden="true">G</span> Continue with Google</a>
-<p class="kofad-google-hint">Use Google to sign in or create an account. Phone linking is optional.</p>
+<div class="kofad-oauth-separator"><span>or continue with Google</span></div>
+<a class="kofad-google-button" href="{% url 'google_customer_login' %}" aria-label="Continue securely with Google"><svg class="google-colour-mark" viewBox="0 0 24 24" width="23" height="23" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.2H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 13.8a6 6 0 0 1 0-3.6V7.6H3.1a10 10 0 0 0 0 8.8l3.3-2.6Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.9.5 4 1.6L18.8 5A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6C7.2 7.8 9.4 6 12 6Z"/></svg><span>Continue with Google</span><span class="kofad-button-arrow" aria-hidden="true">→</span></a>
 {% endif %}
-<div class="simple-access-links"><a href="/market/account/password-reset/">Forgot password?</a><a href="/market/access/">Use another number or email</a></div>
+<div class="kofad-access-bottom"><a href="/market/access/">New customer? <strong>Create an account</strong></a><a class="kofad-market-back" href="/market/">← Back to KOFAD Market</a></div>
 {% include "marketplace/_support_contacts.html" %}
-</div>
-</section>{% endblock %}
+</div></div></section>
+{% endblock %}

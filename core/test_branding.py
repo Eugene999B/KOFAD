@@ -60,23 +60,50 @@ class BrandingConsistencyTests(SimpleTestCase):
             "Legacy or duplicate KOFAD logo references remain in: " + ", ".join(offenders),
         )
 
-    def test_official_logo_keeps_emblem_and_both_text_lines_after_transparency(self):
-        """Regression: previous simple threshold destroyed the actual KOFAD lettering."""
+    def test_owner_uploaded_master_is_the_only_logo_source(self):
         from io import BytesIO
         from PIL import Image
         from core.brand_art import official_logo_bytes
+        from scripts.prepare_logo import prepare_logo
 
-        image = Image.open(BytesIO(official_logo_bytes())).convert("RGBA")
-        self.assertGreaterEqual(image.width, 210)
-        self.assertGreaterEqual(image.height, 200)
-        self.assertLess(image.getpixel((0, 0))[3], 30)
-        alpha = image.getchannel("A")
-        def visible(rect):
-            crop = alpha.crop(rect)
-            return sum(1 for v in crop.getdata() if v >= 80)
-        self.assertGreater(visible((15, 6, 201, 132)), 6000, "Compass emblem was erased")
-        self.assertGreater(visible((0, 115, 219, 175)), 4000, "KOFAD name was erased")
-        self.assertGreater(visible((0, 175, 219, 211)), 1200, "IMPEX and tagline were erased")
-        favicon = Image.open(settings.BASE_DIR / "static" / "brand" / "favicon-96.png")
-        self.assertEqual(favicon.size, (96, 96))
-        self.assertEqual(favicon.mode, "RGBA")
+        brand = Path(settings.BASE_DIR) / "static" / "brand"
+        master = brand / "kofad-original-logo.png"
+        self.assertTrue(master.exists(), "Owner-approved original PNG is required")
+        self.assertGreater(master.stat().st_size, 10000)
+        prepare_logo()
+        generated = Image.open(BytesIO(official_logo_bytes())).convert("RGBA")
+        original = Image.open(master).convert("RGBA")
+        self.assertGreaterEqual(generated.width, original.width)
+        self.assertGreaterEqual(generated.height, original.height)
+        self.assertIsNotNone(generated.getchannel("A").getbbox())
+        self.assertLess(generated.getpixel((0,0))[3], 10)
+        self.assertEqual((brand / "favicon-96.png").exists(), True)
+        self.assertEqual((brand / "favicon-48.png").exists(), True)
+        self.assertEqual((brand / "favicon.ico").exists(), True)
+        self.assertEqual((brand / "apple-touch-icon.png").exists(), True)
+        svg = (brand / "kofad-official-logo.svg").read_text("utf-8")
+        self.assertIn("data:image/png;base64,", svg)
+        self.assertNotIn("data:image/jpeg;base64,", svg)
+        self.assertNotIn("kofad-" + "emblem.png", svg)
+
+    def test_favicon_endpoint_delivers_correct_type(self):
+        from django.test import Client
+        from django.test import override_settings
+        with override_settings(ALLOWED_HOSTS=["kofadimpex.com", "testserver"]):
+            response = Client().get("/favicon.ico", HTTP_HOST="kofadimpex.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/x-icon")
+        self.assertIn("public", response["Cache-Control"])
+        self.assertNotIn("X-Robots-Tag", response)
+        response.close()
+
+    def test_customer_auth_templates_have_branded_google_action(self):
+        from pathlib import Path
+        root = Path(settings.BASE_DIR)
+        for template in ("access.html", "login.html"):
+            path = root / "marketplace" / "templates" / "marketplace" / template
+            source = path.read_text("utf-8")
+            self.assertIn("kofad-google-button", source)
+            self.assertIn("google_customer_login", source)
+            self.assertIn("google-colour-mark", source)
+            self.assertIn("customer-auth-premium.css", source)
