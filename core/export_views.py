@@ -913,6 +913,44 @@ def export_center(request):
     })
 
 
+def _export_summary(dataset, rows, currency):
+    """Concise, correctly labelled KPIs; never present pending order value as paid."""
+    totals = {"Records": len(rows)}
+    amount = lambda name: sum((row.get(name) or Decimal("0") for row in rows), Decimal("0"))
+    if dataset in {"customers", "suppliers", "creditors", "debts", "debt_invoices"}:
+        totals["Outstanding (" + currency + ")"] = amount("outstanding") + (
+            amount("balance") if dataset == "debt_invoices" else Decimal("0")
+        )
+    if dataset == "market_customers":
+        totals["Active accounts"] = sum(row.get("status") == "Active" for row in rows)
+        totals["Confirmed paid orders"] = sum(row.get("paid_orders", 0) for row in rows)
+        totals["Paid order value (" + currency + ")"] = amount("paid_spend")
+    if dataset == "sales_lines":
+        totals["Net line sales (" + currency + ")"] = amount("total")
+        totals["Product cost (" + currency + ")"] = amount("cost")
+        totals["Gross profit (" + currency + ")"] = amount("gross_profit")
+    if dataset == "payment_ledger":
+        totals["Incoming (" + currency + ")"] = sum(
+            (row["amount"] for row in rows if row["direction"] == "Incoming"), Decimal("0")
+        )
+        totals["Outgoing (" + currency + ")"] = sum(
+            (row["amount"] for row in rows if row["direction"] == "Outgoing"), Decimal("0")
+        )
+    if dataset == "gateway_attempts":
+        totals["Verified payments"] = sum(row["status"] == "success" for row in rows)
+        totals["Needs review"] = sum(row["status"] in {"attention", "submission_unknown"} for row in rows)
+    if dataset == "message_delivery":
+        totals["Provider delivered"] = sum(row["status"] == "delivered" for row in rows)
+        totals["Failed or unknown"] = sum(row["status"] in {"failed", "unknown"} for row in rows)
+    if dataset == "email_delivery":
+        totals["Submitted / internal"] = sum(row["status"] in {"Submitted to provider", "Delivered internally"} for row in rows)
+        totals["Attention needed"] = sum(row["status"] in {"Failed", "Needs review"} for row in rows)
+    if dataset == "stock_alerts":
+        totals["Out of stock"] = sum(row["priority"] == "Out of stock" for row in rows)
+        totals["Reorder units"] = sum(row["shortfall"] for row in rows)
+    return totals
+
+
 @login_required
 def download(request, format):
     try:
@@ -947,12 +985,7 @@ def download(request, format):
                 "Currency": company.currency,
                 "Prepared by": request.user.get_full_name() or request.user.username,
             },
-            summary={
-                "Records": len(rows),
-                **({"Outstanding (" + company.currency + ")": sum(
-                    (row.get("outstanding", Decimal("0")) for row in rows), Decimal("0")
-                )} if dataset in {"customers", "suppliers", "creditors", "debts"} else {}),
-            },
+            summary=_export_summary(dataset, rows, company.currency),
             notes=["Confidential business export. Access is audited; share only with authorized recipients.",
                    "A recorded MoMo or bank payment does not itself prove independent provider verification."],
         )
