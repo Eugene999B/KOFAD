@@ -1740,3 +1740,92 @@ class DirectMomoPhoneVerificationTests(MarketFixtures):
         attempt.refresh_from_db()
         self.assertNotEqual(order.payment_status, "paid")
         self.assertIsNone(order.sale_document_id)
+
+
+class MarketLateDuplicateSettlementTests(MarketFixtures):
+    """A second independently verified charge must not disappear or post stock twice."""
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    def test_second_verified_reference_is_flagged_without_duplicate_sale(self):
+        order = self.order()
+        first_ref = "KFD-SETTLED-FIRST"
+        order.payment_reference = first_ref
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        first = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=first_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "card"},
+        )
+        card_receipt = {
+            "status": "success", "reference": first_ref, "channel": "card",
+            "currency": "GHS", "amount": int(order.total * 100),
+        }
+        paid = services.finalize_payment(first_ref, card_receipt)
+        self.assertEqual(paid.payment_status, "paid")
+        first.refresh_from_db()
+        self.assertEqual(first.status, "success")
+        sale_pk = paid.sale_document_id
+        stock_after_first = Stock.objects.get(branch=self.branch, product=self.product).quantity
+
+        second_ref = "KFD-LATE-SECOND"
+        second = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=second_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "mobile_money"},
+        )
+        momo_receipt = {
+            "status": "success", "reference": second_ref, "id": 98765,
+            "channel": "mobile_money", "currency": "GHS",
+            "amount": int(order.total * 100),
+        }
+        result = services.finalize_payment(second_ref, momo_receipt)
+        result.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(result.payment_status, "paid")
+        self.assertEqual(result.payment_reference, first_ref)
+        self.assertEqual(result.sale_document_id, sale_pk)
+        self.assertEqual(result.confirmed_reference, paid.confirmed_reference)
+        self.assertEqual(second.status, "attention")
+        self.assertIsNotNone(second.verified_at)
+        self.assertIn("Additional provider payment", second.provider_message)
+        self.assertEqual(
+            Stock.objects.get(branch=self.branch, product=self.product).quantity,
+            stock_after_first,
+        )
+        self.assertEqual(
+            order.events.filter(status="payment_attention", customer_visible=False).count(), 1
+        )
+        services.finalize_payment(second_ref, momo_receipt)
+        self.assertEqual(
+            order.events.filter(status="payment_attention", customer_visible=False).count(), 1
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.status, "success")
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    def test_unsuccessful_late_attempt_does_not_raise_second_payment_alarm(self):
+        order = self.order()
+        first_ref = "KFD-SETTLED-ONLY"
+        order.payment_reference = first_ref
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=first_ref,
+            amount=order.total, currency="GHS", status="pending",
+        )
+        services.finalize_payment(first_ref, {
+            "status": "success", "channel": "mobile_money",
+            "currency": "GHS", "amount": int(order.total * 100),
+        })
+        late = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference="KFD-LATE-FAILED",
+            amount=order.total, currency="GHS", status="pending",
+        )
+        services.finalize_payment(late.reference, {
+            "status": "failed", "channel": "mobile_money",
+            "currency": "GHS", "amount": int(order.total * 100),
+        })
+        late.refresh_from_db()
+        self.assertEqual(late.status, "pending")
+        self.assertFalse(order.events.filter(status="payment_attention").exists())
