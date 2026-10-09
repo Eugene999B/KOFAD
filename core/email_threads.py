@@ -16,12 +16,13 @@ MESSAGE_IDS = re.compile(r"<[^<>\r\n]{1,250}>")
 PREFIX = re.compile(r"^(?:\s*(?:re|fw|fwd)\s*:\s*)+", re.IGNORECASE)
 
 
-def thread_subject(text, thread):
+def thread_subject(text, thread, *, reply=True):
     value = (text or "").replace("\r", " ").replace("\n", " ").strip()
     value = TOKEN.sub("", value)
     value = PREFIX.sub("", value).strip() or "Your message"
     marker = f"[KOFAD-{thread.pk}]"
-    return f"Re: {value[:max(1, 251 - len(marker))]} {marker}"[:255]
+    prefix = "Re: " if reply else ""
+    return f"{prefix}{value[:max(1, 253 - len(marker) - len(prefix))]} {marker}"[:255]
 
 
 def _ids(text):
