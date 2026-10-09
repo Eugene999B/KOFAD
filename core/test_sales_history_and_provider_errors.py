@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import HeldSale
+from .pos_paystack import LABEL_PREFIX
 from .payment_failure_guidance import explain_provider_error
 from .sale_history import decorate_sales
 from .tests import Fixtures
@@ -44,7 +45,7 @@ class SaleHistoryEvidenceTests(Fixtures, TestCase):
         doc = self.sale()
         fake_ref = "KFD-POS-UNMATCHED"
         HeldSale.objects.create(
-            user=self.user, branch=self.branch, label="paystack-momo:" + fake_ref,
+            user=self.user, branch=self.branch, label=LABEL_PREFIX + fake_ref,
             cart={"payment_request": {
                 "status": "success", "document_id": str(doc.pk), "reference": fake_ref,
             }},
