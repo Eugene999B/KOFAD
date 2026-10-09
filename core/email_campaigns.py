@@ -3,13 +3,11 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
-from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .brevo_email import daily_limit, ready, usage_today
+from .brevo_email import ready, usage_today
 from .email_models import EmailCampaign, EmailLetter, EmailMailbox
 from .services import audit
 
