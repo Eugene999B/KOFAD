@@ -83,11 +83,12 @@ class ProductForm(forms.ModelForm):
 class PartyForm(forms.ModelForm):
     class Meta:
         model = Party
-        fields = ["name", "phone", "email", "address", "credit_limit", "consent"]
-        labels = {"phone": "Ghana phone number", "credit_limit": "Individual credit limit"}
+        fields = ["name", "phone", "email", "address", "credit_limit", "consent", "debt_email_opt_in"]
+        labels = {"phone": "Ghana phone number", "credit_limit": "Individual credit limit", "debt_email_opt_in": "Send debt account emails (customer opt-in)"}
         help_texts = {
             "phone": "Enter 0241234567, 241234567 or +233241234567. KOFAD stores +233241234567.",
             "credit_limit": "Zero means no individual customer cap; company credit policy still applies.",
+            "debt_email_opt_in": "Only enable after the customer confirms this address and agrees to account emails. This does not enable promotions. Debt Settings controls the sending schedule.",
         }
 
     def clean_phone(self):
