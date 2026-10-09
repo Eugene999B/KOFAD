@@ -26,6 +26,7 @@ class EmailIdentity(models.Model):
     sends_in_window = models.PositiveSmallIntegerField(default=0)
     code_attempts = models.PositiveSmallIntegerField(default=0)
     notifications_enabled = models.BooleanField(default=False)
+    marketing_emails_enabled = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
