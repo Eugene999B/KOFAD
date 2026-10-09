@@ -1116,6 +1116,32 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         raise ValidationError("Payment provider does not match the saved attempt.")
     order = OnlineOrder.objects.select_for_update().get(pk=attempt.order_id)
     if order.payment_status == "paid":
+        # A separate transaction may settle after the original order was paid.
+        # Never post the sale twice, but do not silently ignore a second confirmed
+        # provider receipt: operations must reconcile or refund the extra charge.
+        if (order.payment_reference != reference
+                and str(provider_data.get("status", "")).lower() == "success"):
+            notice = "Additional provider payment detected after order confirmation. Manager reconciliation required."
+            if attempt.provider_message != notice:
+                attempt.status = "attention"
+                attempt.provider_message = notice
+                attempt.next_check_at = None
+                attempt.verified_at = timezone.now()
+                attempt.save(update_fields=[
+                    "status", "provider_message", "next_check_at", "verified_at",
+                ])
+                OrderEvent.objects.create(
+                    order=order,
+                    status="payment_attention",
+                    title="Additional payment requires reconciliation",
+                    note=(
+                        f"A different {expected_provider} transaction {reference} was confirmed "
+                        f"after this order was already paid using {order.payment_reference}. "
+                        "Investigate the provider account and arrange a refund when appropriate. "
+                        "Do not post a second sale or release stock twice."
+                    ),
+                    customer_visible=False,
+                )
         return order
 
     provider_status = str(provider_data.get("status", "")).lower()
