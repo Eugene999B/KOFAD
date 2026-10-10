@@ -19,6 +19,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_http_methods, require_POST
 
 from .email_center import compose, enabled, owner, visible_mailboxes
+from .email_recipients import validate_copies
 from .email_models import (
     EmailConversation, EmailConversationReadState, EmailLetter, EmailMailbox,
     EmailSavedReply, EmailStaffDraft, EmailStaffSignature,
@@ -224,6 +225,9 @@ def drafts(request):
                 recipient = (request.POST.get("recipient") or "").strip().lower()
                 subject = (request.POST.get("subject") or "").strip()
                 body = (request.POST.get("body") or "").strip()
+                cc = request.POST.get("cc", "")
+                bcc = request.POST.get("bcc", "")
+                cc, bcc = validate_copies(recipient, cc, bcc)
                 if len(subject) > 255 or "\r" in subject or "\n" in subject or len(body) > 32000:
                     raise ValidationError("Subject or message is too long.")
                 scheduled = _date(request.POST.get("scheduled_for", ""))
@@ -240,7 +244,7 @@ def drafts(request):
                             body = body.rstrip() + "\n\n" + signature.body.strip()
                     with transaction.atomic():
                         sent = compose(mailbox, recipient, subject, body, request.user,
-                                       conversation=draft.conversation)
+                                       conversation=draft.conversation, cc=cc, bcc=bcc)
                         if scheduled:
                             if sent.status != "queued":
                                 raise ValidationError("Only queued external messages can be scheduled.")
@@ -252,6 +256,8 @@ def drafts(request):
                     messages.success(request, "Message scheduled." if scheduled else "Email queued for delivery.")
                 else:
                     draft.recipient = recipient
+                    draft.cc_addresses = cc
+                    draft.bcc_addresses = bcc
                     draft.subject = subject
                     draft.body = body
                     draft.scheduled_for = scheduled
@@ -263,15 +269,24 @@ def drafts(request):
             messages.error(request, "; ".join(exc.messages))
         return redirect("email_drafts")
     current = None
+    forward_source = None
     editing = request.GET.get("edit", "")
     if editing:
         current = get_object_or_404(EmailStaffDraft, pk=editing,
                                     author=request.user, mailbox__in=writable)
+    forward_id = request.GET.get("forward", "")
+    if forward_id and not editing:
+        # Forwarding deliberately opens an editable draft, never auto-sends.
+        forward_source = get_object_or_404(
+            EmailLetter.objects.select_related("mailbox"), pk=forward_id,
+            mailbox__in=writable, direction="inbound",
+        )
     options = _base(request.user)
     options.update({"title": "Email Drafts", "email_nav": "drafts",
                     "drafts": EmailStaffDraft.objects.filter(author=request.user,
                                                             mailbox__in=writable).select_related("mailbox")[:60],
                     "editing": current,
+                    "forward_source": forward_source,
                     "scheduled": EmailLetter.objects.filter(
                         created_by=request.user, mailbox__in=writable,
                         direction="outbound", status="queued",

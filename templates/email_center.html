@@ -60,6 +60,13 @@
       <input type="hidden" name="action" value="send"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
       <div class="mail-fields two"><label>Visible sender<input value="{% if email_uses_shared_sender %}{{ email_shared_sender }}{% else %}{{ selected.address }}{% endif %}" readonly aria-label="Verified sending address"></label>
       <label>Customer email<input name="to" type="email" maxlength="254" placeholder="customer@example.com" required></label></div>
+      <details class="mail-private-note"><summary>＋ Add CC or BCC recipients</summary>
+        <div class="mail-fields two">
+          <label>CC (visible)<input name="cc" maxlength="1600" placeholder="colleague@example.com"></label>
+          <label>BCC (hidden)<input name="bcc" maxlength="1600" placeholder="manager@example.com"></label>
+        </div>
+        <p class="mail-help">Up to five addresses in each field. Copies are delivered with this message.</p>
+      </details>
       <label>Subject<input name="subject" maxlength="255" placeholder="How can we help?" required></label>
       <label>Message<textarea name="body" rows="5" maxlength="32000" required placeholder="Write a clear, helpful message…"></textarea></label>
       <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Add my saved signature for this department (if configured)</label>
@@ -156,6 +163,8 @@
             <span>{{ entry.created_at|date:"j M Y, H:i" }}</span>
           </div>
           <small class="mail-message-state">{{ entry.get_status_display }}</small>
+          {% if entry.cc_addresses %}<small class="mail-message-state">CC: {{ entry.cc_addresses }}</small>{% endif %}
+          {% if entry.bcc_addresses and entry.created_by_id == request.user.pk or entry.bcc_addresses and is_mail_owner %}<small class="mail-message-state">BCC (private): {{ entry.bcc_addresses }}</small>{% endif %}
           <p class="mail-message-subject">{{ entry.subject }}</p>
           <div class="mail-message-body">{{ entry.body_text|linebreaksbr }}</div>
           {% if entry.last_error %}<p class="mail-error">{{ entry.last_error }}</p>{% endif %}
@@ -173,10 +182,19 @@
         <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
           <input type="hidden" name="action" value="thread_reply"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
           <label>Reply to {{ active_thread.customer_email }}<textarea name="body" rows="4" maxlength="32000" placeholder="Type your reply to the customer…" required></textarea></label>
+          <details class="mail-private-note"><summary>＋ Add CC or BCC</summary>
+            <div class="mail-fields two">
+              <label>CC<input name="cc" maxlength="1600" placeholder="Visible copies"></label>
+              <label>BCC<input name="bcc" maxlength="1600" placeholder="Hidden copies"></label>
+            </div>
+          </details>
           <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Include my saved signature</label>
           <div class="mail-form-foot"><small>Your response will be queued for sending by email.</small>
           <button type="submit" class="mail-button primary">Queue reply ↗</button></div>
         </form>
+        {% if latest_inbound_letter %}
+          <a class="mail-button subtle" href="{% url 'email_drafts' %}?forward={{ latest_inbound_letter.pk }}">↗ Forward latest customer message</a>
+        {% endif %}
         <details class="mail-private-note"><summary>＋ Add private staff note</summary>
           <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
             <input type="hidden" name="action" value="thread_note"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
@@ -240,6 +258,8 @@
         <details class="mail-record-detail"><summary>View email and technical details <span aria-hidden="true">⌄</span></summary>
           <div class="mail-record-addresses"><span><b>From</b>{{ letter.from_address }}</span><span><b>To</b>{{ letter.to_address }}</span>
             {% if letter.message_id %}<span><b>Message ID</b>{{ letter.message_id }}</span>{% endif %}</div>
+          {% if letter.cc_addresses %}<p class="mail-help">CC: {{ letter.cc_addresses }}</p>{% endif %}
+          {% if letter.bcc_addresses and letter.created_by_id == request.user.pk or letter.bcc_addresses and is_mail_owner %}<p class="mail-help">BCC (private): {{ letter.bcc_addresses }}</p>{% endif %}
           <div class="mail-record-body">{{ letter.body_text|linebreaksbr }}</div>
           {% if letter.last_error %}<p class="mail-error">{{ letter.last_error }}</p>{% endif %}
           {% if letter.had_attachments %}<p class="mail-help">Attachments are not stored in the Email Centre.</p>{% endif %}
@@ -251,10 +271,17 @@
           <button type="submit" class="mail-button secondary">Review and queue</button></form>
         {% endif %}{% endif %}
         {% if letter.direction == 'inbound' and selected.pk in writable_ids %}
+        <a class="mail-button subtle" href="{% url 'email_drafts' %}?forward={{ letter.pk }}">↗ Forward as draft</a>
+        {% endif %}
+        {% if letter.direction == 'inbound' and selected.pk in writable_ids %}
         <details class="mail-record-reply"><summary>↶ Reply to this message</summary>
           <form method="post" action="{% url 'email_history' %}">{% csrf_token %}
             <input type="hidden" name="action" value="reply"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="reply_to" value="{{ letter.pk }}">
             <label>Reply to {{ letter.from_address }}<textarea name="body" maxlength="32000" rows="4" required></textarea></label>
+            <details class="mail-private-note"><summary>＋ Add CC or BCC</summary>
+              <div class="mail-fields two"><label>CC<input name="cc" maxlength="1600"></label>
+                <label>BCC<input name="bcc" maxlength="1600"></label></div>
+            </details>
             <button class="mail-button primary" type="submit">Queue reply</button>
           </form>
         </details>{% endif %}

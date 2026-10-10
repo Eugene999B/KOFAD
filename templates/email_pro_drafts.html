@@ -4,7 +4,7 @@
   <h2>Drafts & scheduled messages</h2><p>Drafts are private to their author. Saving never sends anything; scheduled messages use the outgoing queue.</p></div></section>
 <div class="pro-editor-layout">
   <section class="pro-pane">
-    <header class="mail-pane-head"><div><h3>{% if editing %}Edit draft #{{ editing.pk }}{% else %}New customer email{% endif %}</h3>
+    <header class="mail-pane-head"><div><h3>{% if editing %}Edit draft #{{ editing.pk }}{% elif forward_source %}Forward customer email{% else %}New customer email{% endif %}</h3>
       <p>Use the verified sender and reply-to address of the selected department.</p></div>
       {% if editing %}<a class="mail-button subtle" href="{% url 'email_drafts' %}">＋ New draft</a>{% endif %}</header>
     {% if writable_ids %}
@@ -12,12 +12,24 @@
       {% if editing %}<input type="hidden" name="draft_id" value="{{ editing.pk }}">{% endif %}
       <label>From department<select name="mailbox_id" required>
         {% for mailbox in mailboxes %}{% if mailbox.pk in writable_ids %}
-        <option value="{{ mailbox.pk }}"{% if editing and editing.mailbox_id == mailbox.pk %} selected{% endif %}>{{ mailbox.label }} — {{ mailbox.address }}</option>
+        <option value="{{ mailbox.pk }}"{% if editing and editing.mailbox_id == mailbox.pk or forward_source and forward_source.mailbox_id == mailbox.pk %} selected{% endif %}>{{ mailbox.label }} — {{ mailbox.address }}</option>
         {% endif %}{% endfor %}
       </select></label>
       <label>Customer email address<input type="email" name="recipient" maxlength="254" value="{{ editing.recipient|default:'' }}" placeholder="customer@example.com"></label>
-      <label>Subject<input name="subject" maxlength="255" value="{{ editing.subject|default:'' }}" placeholder="Subject of your message"></label>
-      <label>Message<textarea name="body" rows="12" maxlength="32000" placeholder="Write a professional message here…">{{ editing.body|default:'' }}</textarea></label>
+      <label>CC · visible copies<input type="text" name="cc" maxlength="1600" value="{{ editing.cc_addresses|default:'' }}" placeholder="colleague@example.com, manager@example.com"></label>
+      <label>BCC · hidden copies<input type="text" name="bcc" maxlength="1600" value="{{ editing.bcc_addresses|default:'' }}" placeholder="Optional — up to 5 addresses"></label>
+      <label>Subject<input name="subject" maxlength="255" value="{% if editing %}{{ editing.subject }}{% elif forward_source %}Forwarded: {{ forward_source.subject|truncatechars:195 }}{% endif %}" placeholder="Subject of your message"></label>
+      {% if forward_source %}<p class="mail-help">Review the original customer's information and confirm the new recipient before sending. Forwarding does not automatically send.</p>{% endif %}
+      <label>Message<textarea name="body" rows="12" maxlength="32000" placeholder="Write a professional message here…">{% if editing %}{{ editing.body }}{% elif forward_source %}
+
+
+---------- Forwarded customer message ----------
+From: {{ forward_source.from_address }}
+To: {{ forward_source.to_address }}
+Subject: {{ forward_source.subject }}
+Date: {{ forward_source.created_at|date:'j M Y, H:i' }}
+
+{{ forward_source.body_text|truncatechars:16000 }}{% endif %}</textarea></label>
       <label>Optional scheduled delivery (local time)
         <input type="datetime-local" name="scheduled_for" value="{% if editing.scheduled_for %}{{ editing.scheduled_for|date:'Y-m-d\TH:i' }}{% endif %}">
       </label>
