@@ -11,6 +11,7 @@
   <a href="?scope=unassigned" class="{% if scope == 'unassigned' %}active{% endif %}">Unassigned</a>
   <a href="?scope=unread" class="{% if scope == 'unread' %}active{% endif %}">Unread</a>
   <a href="?scope=starred" class="{% if scope == 'starred' %}active{% endif %}">Starred</a>
+  <a href="?scope=overdue" class="{% if scope == 'overdue' %}active{% endif %}">Due / Overdue</a>
   <a href="?scope=snoozed" class="{% if scope == 'snoozed' %}active{% endif %}">Snoozed</a>
   <a href="?scope=archived" class="{% if scope == 'archived' %}active{% endif %}">Archive</a>
 </nav>
@@ -34,9 +35,10 @@
           <option value="star">Star</option><option value="unstar">Remove star</option></optgroup>
         <optgroup label="For reply-authorised staff"><option value="assign_me">Assign to me</option><option value="close">Close</option>
           <option value="reopen">Reopen</option><option value="archive">Archive</option><option value="restore">Restore archive</option>
-          <option value="snooze">Snooze</option><option value="unsnooze">Unsnooze</option></optgroup>
+          <option value="snooze">Snooze</option><option value="unsnooze">Unsnooze</option>
+          <option value="set_deadline">Set follow-up due</option><option value="clear_deadline">Clear due date</option></optgroup>
       </select></label>
-      <label>Snooze duration<select name="hours"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24" selected>Tomorrow</option>
+      <label>Delay or follow-up deadline<select name="hours"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24" selected>Tomorrow</option>
           <option value="72">3 days</option><option value="168">7 days</option></select></label>
       <button class="mail-button primary" type="submit">Apply to selected</button>
       <span class="pro-selection-counter" data-selection-counter aria-live="polite">0 selected</span>
