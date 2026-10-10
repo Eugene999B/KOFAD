@@ -391,11 +391,11 @@ def queue_customer_order_email(order, event):
     label = dict(order.STATUSES).get(event, event.replace("_", " ").title())
     subject = f"KOFAD order {order.customer_reference}: {label}"
     body = (
-        f"Hello {customer.full_name},\\n\\n"
-        f"Your order {order.customer_reference} has a new update: {label}.\\n"
-        f"Total recorded order amount: GHS {order.total:,.2f}.\\n"
-        "Sign in to your KOFAD Market account to confirm current status and delivery details.\\n\\n"
-        "This is a transaction notification, not a promotional offer.\\n"
+        f"Hello {customer.full_name},\n\n"
+        f"Your order {order.customer_reference} has a new update: {label}.\n"
+        f"Total recorded order amount: GHS {order.total:,.2f}.\n"
+        "Sign in to your KOFAD Market account to confirm current status and delivery details.\n\n"
+        "This is a transaction notification, not a promotional offer.\n"
         "For safety, we never ask for your password or payment PIN by email."
     )
     _, created = EmailNotice.objects.get_or_create(
@@ -428,10 +428,10 @@ def queue_customer_email_verification(customer, confirmation_url):
             "category": "marketing_verify",
             "subject": "Confirm your KOFAD Market email preferences",
             "body": (
-                f"Hello {customer.full_name},\\n\\n"
-                "Someone requested promotional updates for this address.\\n"
-                f"To confirm this choice, use the link below within seven days:\\n{confirmation_url}\\n\\n"
-                "If you did not request promotional messages, ignore this email.\\n"
+                f"Hello {customer.full_name},\n\n"
+                "Someone requested promotional updates for this address.\n"
+                f"To confirm this choice, use the link below within seven days:\n{confirmation_url}\n\n"
+                "If you did not request promotional messages, ignore this email.\n"
                 "Order notifications are separate from promotional email."
             ),
         },
@@ -470,11 +470,11 @@ def run_customer_personalised_promotions(now=None):
                 "category": "marketing",
                 "subject": "An item you saved at KOFAD Market",
                 "body": (
-                    f"Hello {customer.full_name},\\n\\n"
+                    f"Hello {customer.full_name},\n\n"
                     f"You saved '{product_name}' at KOFAD Market. If you are still interested, "
-                    "sign in to check current availability and pricing.\\n"
-                    "No discount or stock availability is guaranteed.\\n\\n"
-                    "Manage or stop promotional emails from My Account > Email preferences.\\n"
+                    "sign in to check current availability and pricing.\n"
+                    "No discount or stock availability is guaranteed.\n\n"
+                    "Manage or stop promotional emails from My Account > Email preferences.\n"
                     "This message is sent only to customers who explicitly confirmed their marketing email."
                 ),
             },
