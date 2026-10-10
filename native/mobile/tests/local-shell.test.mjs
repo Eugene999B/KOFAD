@@ -110,3 +110,25 @@ test("Both Android channels bundle a genuine native home, welcome and separate n
     assert.ok(existsSync(resolve(root, "www/experience.js")));
   }
 });
+
+test("Native welcome, catalogue details and OS-permission prompts stay within the app", () => {
+  const html=read("app-shell/index.html");
+  const experience=read("app-shell/experience.js");
+  const core=read("app-shell/native.js");
+  const alerts=read("app-shell/alerts.js");
+  const packaging=read("scripts/write-profile.mjs");
+  assert.match(html,/id="native-welcome-signin"/);
+  assert.match(html,/id="native-welcome-guest"/);
+  assert.match(html,/id="screen-product"/);
+  assert.match(html,/id="screen-notifications"/);
+  assert.match(html,/id="native-bell"/);
+  assert.match(experience,/view\("product"\)/);
+  assert.match(experience,/localStorage\.setItem\(favoritesKey/);
+  assert.match(experience,/showCategories/);
+  assert.match(core,/KofadNativeExperience\?\.showProduct/);
+  assert.match(core,/url\.searchParams\.set\("category"/);
+  assert.match(alerts,/OS\.requestPermissions/);
+  assert.match(packaging,/copyWithProfile\("experience\.js"\)/);
+  assert.match(packaging,/kofad-logo\.png/);
+  assert.doesNotMatch(experience,/document\.write|eval\(/);
+});
