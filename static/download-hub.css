@@ -51,3 +51,36 @@ html[data-theme="dark"] .kf-download-guide p{color:#bed7d2}
 @media(max-width:860px){.kf-download-grid{gap:10px}.kf-download-device{padding:19px 15px 16px}.kf-download-device-label{font-size:15px}.kf-download-device-top{gap:9px}.kf-download-desktop-icons{min-width:55px}.kf-download-desktop-icons img{width:25px;height:25px}}
 @media(max-width:640px){.kf-download{padding:23px 15px 34px}.kf-download-hero{margin-bottom:31px}.kf-download-logo{height:69px;width:69px;margin-bottom:14px}.kf-download-hero h1{font-size:33px}.kf-download-intro{font-size:13px;margin-bottom:20px}.kf-download-btn{min-height:44px;padding:11px 14px}.kf-download-section-head{margin-bottom:13px}.kf-download-section-head h2{font-size:19px}.kf-download-section-head p{display:none}.kf-download-grid{grid-template-columns:1fr;gap:10px}.kf-download-device{padding:17px 19px}.kf-download-device-top{min-height:40px}.kf-download-device-top>img{height:32px;width:32px}.kf-download-device-label{font-size:17px}.kf-download-device>p{min-height:0;font-size:12px;margin:9px 0 14px}.kf-download-device-action{min-height:42px}.kf-download-footnote{margin-top:21px;font-size:11px}.kf-download-guide{margin-top:16px;padding:13px 15px}}
 @media(prefers-reduced-motion:reduce){.kf-download-device{transition:none}}
+
+/* Native-first, simple storefront style. */
+.kf-download{--kd-ink:#142c38;--kd-muted:#667c87;--kd-line:#dfebeb;max-width:1020px;padding-top:clamp(34px,5vw,68px)}
+.kf-download-hero{margin-bottom:38px}
+.kf-download-hero h1{font-size:clamp(34px,4.8vw,56px)}
+.kf-download-intro{max-width:480px}
+.kf-download-section-title{font-size:19px;line-height:1.3;font-weight:800;margin:0 0 18px;text-align:center;color:var(--kd-ink)}
+.kf-download-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.kf-download-device{padding:28px 23px 22px;border:1px solid #deeaeb;border-radius:20px;box-shadow:0 8px 28px #0d36440a;min-height:205px;justify-content:space-between}
+.kf-download-device-top{display:flex;align-items:center;gap:16px;min-height:58px}
+.kf-download-device-top>img{width:43px;height:43px}
+.kf-download-device-top h3{margin:0 0 5px;font-weight:850;font-size:21px;letter-spacing:-.035em;color:#163545}
+.kf-download-device-top p{margin:0!important;min-height:0;color:#728892;font-size:12px;line-height:1.5}
+.kf-download-device-action{margin-top:26px;justify-content:center;background:#0e5262;color:#fff!important;border-color:#0e5262;min-height:46px;font-size:13px}
+.kf-download-device-action:hover{background:#167082;color:#fff!important;border-color:#167082}
+.kf-download-unavailable{margin-top:26px;display:flex;align-items:center;justify-content:center;min-height:46px;border-radius:10px;border:1px solid #dce7e8;background:#f4f7f7;color:#6b8087;font-size:13px;font-weight:750;cursor:default}
+.kf-download-device-note{margin:9px 0 0!important;min-height:0!important;color:#738892!important;text-align:center;font-size:11px!important}
+.kf-download-footnote{margin-top:23px}
+.kf-download-back{text-align:center;margin:14px 0 0;font-size:13px}
+.kf-download-back a{color:#0b6571;font-weight:750;text-decoration:none}
+.kf-download-back a:hover{text-decoration:underline}
+.kf-iphone-guide{text-align:center;max-width:650px;margin:0 auto}
+.kf-iphone-guide .kf-download-logo{margin-bottom:17px}
+.kf-guide-apple{margin:8px auto 9px;display:block}
+.kf-iphone-guide h1{font-size:clamp(32px,4vw,49px);letter-spacing:-.05em;margin:0 0 12px;color:var(--kd-ink)}
+.kf-iphone-primary{max-width:340px;margin:22px auto 8px}
+.kf-iphone-guide .kf-download-guide{text-align:left}
+.kf-iphone-guide .kf-download-prompt{margin-top:15px}
+html[data-theme="dark"] .kf-download-device-top h3{color:#edf8fa}
+html[data-theme="dark"] .kf-download-unavailable{background:#2a4048;border-color:#4e6870;color:#b4cbd1}
+html[data-theme="dark"] .kf-download-device-action{background:#176476;border-color:#176476;color:#fff!important}
+@media(max-width:700px){.kf-download-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto}.kf-download-device{min-height:0;padding:20px}.kf-download-device-top{min-height:45px}.kf-download-device-action,.kf-download-unavailable{margin-top:17px}.kf-download-hero{margin-bottom:30px}.kf-download-section-title{font-size:17px}}
+@media(max-width:420px){.kf-download{padding:24px 14px 35px}.kf-download-device-top h3{font-size:19px}.kf-download-device{padding:18px}}
