@@ -3,12 +3,18 @@
 {% block after_styles %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}"><link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/reports/export/xlsx/?{{ query }}">Excel</a><a class="button secondary" href="/reports/export/pdf/?{{ query }}">PDF</a><a class="button secondary" href="/reports/export/docx/?{{ query }}">Word</a><a class="text-link" href="/reports/export/csv/?{{ query }}">CSV</a></div>{% endblock %}
 {% block content %}
+<nav class="atelier-insights-index" aria-label="Business intelligence sections">
+<a href="#atelier-reports-brief"><span>01</span> Executive brief</a>
+<a href="#atelier-reports-actions"><span>02</span> Priority decisions</a>
+<a href="#atelier-reports-trajectory"><span>03</span> Revenue trend</a>
+<a href="#intelligence-evidence"><span>04</span> Drill into records</a>
+</nav>
 <section class="hero-panel intelligence-command">
   <div><p class="eyebrow">BUSINESS INTELLIGENCE COMMAND CENTRE</p><h2>See what changed, why it changed, where cash is trapped and what management should do next.</h2><p>{{ filters.start }} → {{ filters.end }} compared with {{ intelligence.prior_first }} → {{ intelligence.prior_last }}. The intelligence layer reads sales, margins, expenses, payroll, stock, receivables, payables, returns, losses and pending controls together.</p></div>
   <div class="health-score health-{{ intelligence.health_label|slugify }}"><span>Business health</span><strong>{{ intelligence.health_score }}</strong><small>/ 100 · {{ intelligence.health_label }}</small></div>
 </section>
 
-<section class="panel executive-brief">
+<section class="panel executive-brief" id="atelier-reports-brief">
   <div class="section-heading"><div><p class="eyebrow">EXECUTIVE BRIEF</p><h2>What KOFAD sees in the business</h2></div><span class="pill">{{ intelligence.actions|length }} decision signal{{ intelligence.actions|length|pluralize }}</span></div>
   <div class="executive-narrative">{% for line in intelligence.narrative %}<p>{{ line }}</p>{% endfor %}</div>
 </section>
@@ -36,7 +42,7 @@
 </div>
 
 {% if intelligence.actions %}
-<section class="panel intelligence-actions"><div class="section-heading"><div><p class="eyebrow">PRIORITY ACTIONS</p><h2>Management attention required</h2></div><a class="text-link" href="{% url 'approval_center' %}">{{ intelligence.pending_approvals }} approvals waiting</a></div>
+<section class="panel intelligence-actions" id="atelier-reports-actions"><div class="section-heading"><div><p class="eyebrow">PRIORITY ACTIONS</p><h2>Management attention required</h2></div><a class="text-link" href="{% url 'approval_center' %}">{{ intelligence.pending_approvals }} approvals waiting</a></div>
 <div class="action-grid">{% for action in intelligence.actions %}<article class="decision-card decision-{{ action.severity }}"><span>{{ action.severity|upper }}</span><h3>{{ action.title }}</h3><p>{{ action.evidence }}</p><strong>Next move</strong><p>{{ action.action }}</p></article>{% endfor %}</div></section>
 {% endif %}
 
@@ -63,7 +69,7 @@
 </section>
 </div>
 
-<section class="panel trend-intelligence"><div class="section-heading"><div><p class="eyebrow">TRAJECTORY</p><h2>Six-month revenue direction</h2></div></div>
+<section class="panel trend-intelligence" id="atelier-reports-trajectory"><div class="section-heading"><div><p class="eyebrow">TRAJECTORY</p><h2>Six-month revenue direction</h2></div></div>
 <div class="trend-bars">{% for row in intelligence.trend %}<div class="trend-row"><span>{{ row.month }}</span><div class="trend-track"><i style="width:{{ row.sales_width }}%"></i></div><strong>{{ row.net_sales|floatformat:2 }}</strong><small>Margin {{ row.gross_margin }}%</small></div>{% endfor %}</div>
 </section>
 
