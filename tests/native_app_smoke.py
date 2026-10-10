@@ -60,9 +60,9 @@ with sync_playwright() as browser_tool:
     iphone.close()
 
     customer.goto(base + "/")
-    assert customer.get_by_role("link", name="Explore the upcoming app", exact=False).is_visible()
+    assert customer.get_by_role("link", name="Install KOFAD web app", exact=False).is_visible()
     customer.goto(base + "/market/")
-    assert customer.get_by_role("link", name="View app release status", exact=False).is_visible()
+    assert customer.get_by_role("link", name="Install the web app", exact=False).is_visible()
     staff = browser.new_page(viewport={"width": 1280, "height": 900})
     staff.goto(base + "/staff/app/")
     assert "/login/" in staff.url
