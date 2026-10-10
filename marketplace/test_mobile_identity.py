@@ -194,6 +194,37 @@ class NativeIdentityTests(Fixtures, TestCase):
             self.assertEqual(self.client.post(self.customer_base + "token/").status_code, 404)
             self.assertEqual(self.client.get(self.staff_base + "me/").status_code, 404)
 
+
+    def test_staff_browser_login_resumes_pending_mobile_authorization(self):
+        """An employee does not lose the app handoff after password sign-in."""
+        path = self.staff_base + "authorize/"
+        start = self.client.get(path, self._params("staff"), HTTP_HOST="staff.kofadimpex.com", secure=True)
+        self.assertEqual(start.status_code, 302)
+        self.assertIn("next=", start["Location"])
+        login_page = self.client.get(start["Location"], HTTP_HOST="staff.kofadimpex.com", secure=True)
+        self.assertEqual(login_page.status_code, 200)
+        self.assertTrue(self.client.session.get("staff_mobile_auth_return", "").startswith(path + "?"))
+        login_response = self.client.post(
+            "/login/",
+            {"username": "owner", "password": "test-password-long-enough"},
+            HTTP_HOST="staff.kofadimpex.com",
+            secure=True,
+        )
+        self.assertEqual(login_response.status_code, 302)
+        self.assertTrue(login_response["Location"].startswith(path + "?"))
+        consent = self.client.get(login_response["Location"], HTTP_HOST="staff.kofadimpex.com", secure=True)
+        self.assertEqual(consent.status_code, 200)
+        self.assertContains(consent, "Connect KOFAD Staff?", status_code=200)
+        self.assertNotIn("staff_mobile_auth_return", self.client.session)
+
+    def test_staff_login_rejects_external_next_destination(self):
+        page = self.client.get(
+            "/login/", {"next": "https://outside.example/steal"},
+            HTTP_HOST="staff.kofadimpex.com", secure=True,
+        )
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn("staff_mobile_auth_return", self.client.session)
+
     def test_staff_auth_requires_mfa_when_enforced(self):
         with override_settings(PRIVILEGED_MFA_ENFORCED=True):
             self.authenticate_client()
