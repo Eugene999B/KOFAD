@@ -146,7 +146,7 @@ class ProfessionalEmailWorkflowTests(TestCase):
             "action": "create_reply", "title": "Delivery answer", "body": "Thank you",
             "shared": "yes"
         })
-        self.assertRedirects(response, reverse("email_replies"))
+        self.assertEqual(response.status_code, 403)
         self.assertFalse(EmailSavedReply.objects.filter(title="Delivery answer").exists())
         self.client.post(reverse("email_replies"), {
             "action": "create_reply", "title": "Private wording", "body": "My own response"
