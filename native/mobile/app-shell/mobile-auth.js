@@ -104,10 +104,11 @@
       if (typeof VAULT?.save !== "function") throw new Error("Device vault unavailable");
       await VAULT.save({value:issued.refresh_token});
     }
+    const previousProfile = session?.profile || null;
     session = {
       access: issued.access_token, refresh: issued.refresh_token,
       expires: Date.now() + (Number(issued.expires_in) || 900) * 1000,
-      profile: null,
+      profile: previousProfile,
     };
     blocked = false;
     restoreChecked = true;
