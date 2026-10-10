@@ -23,7 +23,7 @@ class MobileAuthorizationGrant(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        indexes = [models.Index(fields=["expires_at"])]
+        indexes = [models.Index(fields=["expires_at"], name="kof_mobile_grant_exp_idx")]
 
 
 class MobileDeviceSession(models.Model):
@@ -43,4 +43,4 @@ class MobileDeviceSession(models.Model):
     last_rotated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["refresh_expires_at"])]
+        indexes = [models.Index(fields=["refresh_expires_at"], name="kof_mobile_refresh_exp_idx")]
