@@ -97,6 +97,19 @@
       <div class="native-permission-row"><div><strong>Device notifications</strong><p id="native-alerts-explainer">Choose whether Android can display KOFAD alerts. This is optional.</p></div><button id="native-alerts-toggle" type="button" class="native-outline-action">Enable alerts</button></div>
       <p class="native-caption">Android displays its own permission prompt when you enable alerts. Messages shown here are in-app notices, not background push.</p>
     </section>
+    <section id="screen-orders" class="native-screen" hidden aria-label="My orders">
+      <button type="button" id="native-orders-back" class="native-back-link">← Account</button>
+      <p class="native-overline">KOFAD MARKET</p><h1>My orders</h1>
+      <p class="native-caption">Your orders, current statuses, and payment updates from KOFAD.</p>
+      <div id="native-orders-list" class="native-read-list" role="status" aria-live="polite"></div>
+      <div id="native-order-detail" class="native-order-detail" hidden></div>
+    </section>
+    <section id="screen-work" class="native-screen" hidden aria-label="Staff operations">
+      <button type="button" id="native-work-back" class="native-back-link">← Workspace</button>
+      <p class="native-overline">KOFAD STAFF</p><h1>Your operations</h1>
+      <p class="native-caption">Live data from your assigned branch, limited to your access permissions.</p>
+      <div id="native-work-summary" class="native-read-list" role="status" aria-live="polite"></div>
+    </section>
     <section id="screen-account" class="native-screen" hidden aria-label="Your account">
       <p class="native-overline">YOUR KOFAD</p><h1 id="native-account-title">Account</h1>
       <div class="native-account-card">
