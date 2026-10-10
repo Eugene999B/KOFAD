@@ -349,10 +349,16 @@ def safe_prepare_sale_receipt(document_id, actor_id=None):
     if not document:
         return None
     try:
-        return prepare_sale_receipt(document, actor)
+        result = prepare_sale_receipt(document, actor)
     except Exception as exc:
         _record_automation_failure(document.branch, actor, "sale_receipt", document.reference, exc)
-        return None
+        result = None
+    try:
+        from .notification_engine import queue_pos_transaction_email
+        queue_pos_transaction_email(document)
+    except Exception as exc:
+        _record_automation_failure(document.branch, actor, "sale_receipt_email", document.reference, exc)
+    return result
 
 
 def safe_prepare_payment_confirmation(document_id, actor_id=None):
@@ -361,10 +367,16 @@ def safe_prepare_payment_confirmation(document_id, actor_id=None):
     if not document:
         return None
     try:
-        return prepare_payment_confirmation(document, actor)
+        result = prepare_payment_confirmation(document, actor)
     except Exception as exc:
         _record_automation_failure(document.branch, actor, "payment_confirmation", document.reference, exc)
-        return None
+        result = None
+    try:
+        from .notification_engine import queue_pos_transaction_email
+        queue_pos_transaction_email(document)
+    except Exception as exc:
+        _record_automation_failure(document.branch, actor, "payment_confirmation_email", document.reference, exc)
+    return result
 
 
 def safe_prepare_closing(closing_id, actor_id=None):
