@@ -344,14 +344,17 @@ def reconcile(reference):
 def _retry_delay(attempt, now=None):
     now = now or timezone.now()
     age = now - attempt.created_at
-    if age < timedelta(minutes=30):
-        # Hubtel allows at most 10 status checks per transaction in 300 seconds.
-        # Keep routine polling comfortably below that limit; callbacks still trigger
-        # an immediate verification when the customer actually completes payment.
+    # The customer checkout and independent provider callback still verify
+    # promptly. Long-lived unresolved references should not repeatedly hit
+    # Hubtel's missing/expired-reference endpoint or fill evidence logs.
+    # Keep the existing fast first 10 minutes (and never auto-approve).
+    if age < timedelta(minutes=10):
         return timedelta(seconds=40)
-    if age < timedelta(hours=2):
+    if age < timedelta(minutes=30):
         return timedelta(minutes=2)
-    return timedelta(minutes=5)
+    if age < timedelta(hours=2):
+        return timedelta(minutes=5)
+    return timedelta(minutes=20)
 
 
 def reconcile_due(limit=10):
