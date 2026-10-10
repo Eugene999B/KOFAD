@@ -28,7 +28,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .email_models import (EmailLetter, EmailMailbox, EmailMailboxMember,
-                           EmailConversation, EmailConversationNote)
+                           EmailConversation, EmailConversationNote, EmailConversationReadState, EmailStaffSignature)
 from .email_threads import (record_incoming, new_outgoing_conversation, thread_subject,
                             record_outgoing_status)
 
@@ -298,7 +298,14 @@ def inbox(request, section="inbox"):
                     recipient, subject = conversation.customer_email, conversation.subject
                     latest_customer = conversation.letters.filter(direction="inbound").order_by("-created_at").first()
                     reply_id = latest_customer.message_id if latest_customer else ""
-                created = compose(mailbox, recipient, subject, request.POST.get("body"), request.user,
+                message_body = request.POST.get("body", "")
+                if request.POST.get("append_signature") == "yes":
+                    signature = EmailStaffSignature.objects.filter(
+                        mailbox=mailbox, user=request.user
+                    ).first()
+                    if signature and signature.body.strip():
+                        message_body = message_body.rstrip() + "\\n\\n" + signature.body.strip()
+                created = compose(mailbox, recipient, subject, message_body, request.user,
                                   reply_id=reply_id, conversation=conversation)
                 from .services import audit
                 audit(request.user, mailbox.branch, "email.message_created", created.pk,
@@ -436,6 +443,10 @@ def inbox(request, section="inbox"):
     if chosen and thread_id:
         active_thread = get_object_or_404(EmailConversation.objects.select_related("assigned_to"),
                                           pk=thread_id, mailbox=chosen)
+        EmailConversationReadState.objects.update_or_create(
+            conversation=active_thread, user=request.user,
+            defaults={"last_read_at": timezone.now()},
+        )
         thread_letters = list(active_thread.letters.select_related("created_by")
                               .order_by("created_at", "pk")[:200])
         thread_notes = list(active_thread.notes.select_related("author")
