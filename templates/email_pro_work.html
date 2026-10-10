@@ -1,0 +1,71 @@
+{% extends "email_pro_shell.html" %}
+{% block email_page_content %}
+<section class="mail-section-heading">
+  <div><p class="mail-eyebrow">PERSONAL & SHARED QUEUES</p><h2>My Work</h2>
+  <p>Focus on assigned customers, unread enquiries and follow-ups. Select several conversations to act on them together.</p></div>
+  <a class="mail-button primary" href="{% url 'email_drafts' %}">＋ Write an email</a>
+</section>
+<nav class="pro-filter-tabs" aria-label="Work queue">
+  <a href="?scope=active" class="{% if scope == 'active' %}active{% endif %}">Active</a>
+  <a href="?scope=mine" class="{% if scope == 'mine' %}active{% endif %}">Assigned to me</a>
+  <a href="?scope=unassigned" class="{% if scope == 'unassigned' %}active{% endif %}">Unassigned</a>
+  <a href="?scope=unread" class="{% if scope == 'unread' %}active{% endif %}">Unread</a>
+  <a href="?scope=starred" class="{% if scope == 'starred' %}active{% endif %}">Starred</a>
+  <a href="?scope=snoozed" class="{% if scope == 'snoozed' %}active{% endif %}">Snoozed</a>
+  <a href="?scope=archived" class="{% if scope == 'archived' %}active{% endif %}">Archive</a>
+</nav>
+<div class="pro-pane">
+  <form method="get" class="pro-toolbar pro-toolbar-filter">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    <label>Search customer or subject<input type="search" name="q" maxlength="100" value="{{ search }}" placeholder="Customer, topic or email address"></label>
+    <label>Department<select name="mailbox">
+      <option value="">All my departments</option>
+      {% for mailbox in mailboxes %}<option value="{{ mailbox.pk }}"{% if mailbox_id == mailbox.pk|stringformat:'s' %} selected{% endif %}>{{ mailbox.label }}</option>{% endfor %}
+    </select></label>
+    <button type="submit" class="mail-button secondary">Find mail</button>
+  </form>
+  <form method="post" action="{% url 'email_work' %}" class="pro-bulk-form">{% csrf_token %}
+    <input type="hidden" name="return_to" value="/email/work/">
+    <div class="pro-toolbar pro-bulk-tools">
+      <label class="pro-select-all"><input type="checkbox" data-select-all aria-label="Select all displayed conversations"> Select page</label>
+      <label>Action<select name="action" required>
+        <option value="">Choose an action</option>
+        <optgroup label="Personal"><option value="mark_read">Mark read</option><option value="mark_unread">Mark unread</option>
+          <option value="star">Star</option><option value="unstar">Remove star</option></optgroup>
+        <optgroup label="For reply-authorised staff"><option value="assign_me">Assign to me</option><option value="close">Close</option>
+          <option value="reopen">Reopen</option><option value="archive">Archive</option><option value="restore">Restore archive</option>
+          <option value="snooze">Snooze</option><option value="unsnooze">Unsnooze</option></optgroup>
+      </select></label>
+      <label>Snooze duration<select name="hours"><option value="1">1 hour</option><option value="4">4 hours</option><option value="24" selected>Tomorrow</option>
+          <option value="72">3 days</option><option value="168">7 days</option></select></label>
+      <button class="mail-button primary" type="submit">Apply to selected</button>
+      <span class="pro-selection-counter" data-selection-counter aria-live="polite">0 selected</span>
+    </div>
+    <div class="pro-thread-list">
+      {% for thread in rows %}
+      <article class="pro-thread-row">
+        <label class="pro-row-check" aria-label="Select conversation {{ thread.pk }}"><input type="checkbox" name="conversation_ids" value="{{ thread.pk }}" data-select-row></label>
+        <div class="pro-thread-copy">
+          <a class="pro-thread-link" href="{% url 'email_center' %}?mailbox={{ thread.mailbox_id }}&thread={{ thread.pk }}#conversation">
+            <strong>{% if thread.mine_starred %}★ {% endif %}{{ thread.customer_email }}</strong>
+            <span>{{ thread.subject }}</span>
+          </a>
+          <small>{{ thread.mailbox.label }} · {% if thread.assigned_to %}{{ thread.assigned_to.get_full_name|default:thread.assigned_to.username }}{% else %}Unassigned{% endif %} · {{ thread.last_activity_at|date:"j M Y, H:i" }}</small>
+        </div>
+        <div class="pro-row-status"><span class="mail-status state-{{ thread.status }}">{{ thread.get_status_display }}</span>
+        {% if thread.archived_at %}<small>Archived</small>{% elif thread.snoozed_until and thread.snoozed_until > now %}<small>Snoozed</small>{% endif %}
+        {% if thread.due_at %}<small>Due {{ thread.due_at|date:"j M, H:i" }}</small>{% endif %}</div>
+      </article>
+      {% empty %}
+      <div class="mail-queue-empty"><strong>No messages match this view</strong>
+        <p>Select another queue or remove your search filters. Conversations aren't deleted when archived.</p></div>
+      {% endfor %}
+    </div>
+  </form>
+  <nav class="mail-pagination" aria-label="Work queue pages">
+    {% if rows.has_previous %}<a class="mail-button subtle" href="?scope={{ scope }}&q={{ search|urlencode }}&mailbox={{ mailbox_id }}&page={{ rows.previous_page_number }}">← Previous</a>{% endif %}
+    <span>Page {{ rows.number }} of {{ rows.paginator.num_pages }}</span>
+    {% if rows.has_next %}<a class="mail-button subtle" href="?scope={{ scope }}&q={{ search|urlencode }}&mailbox={{ mailbox_id }}&page={{ rows.next_page_number }}">Next →</a>{% endif %}
+  </nav>
+</div>
+{% endblock %}
