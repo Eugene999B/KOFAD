@@ -21,6 +21,12 @@ class Access(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     branches = models.ManyToManyField(Branch)
     recovery_phone = models.CharField(max_length=20, blank=True)
+    email_daily_closing = models.BooleanField(default=False)
+    email_weekly_review = models.BooleanField(default=False)
+    email_monthly_review = models.BooleanField(default=False)
+    email_critical_alerts = models.BooleanField(default=False)
+    sms_daily_closing = models.BooleanField(default=False)
+    sms_critical_alerts = models.BooleanField(default=False)
     session_version = models.PositiveIntegerField(default=1)
     must_change_password = models.BooleanField(default=False)
     force_password_change = models.BooleanField(default=False)
@@ -483,6 +489,25 @@ class Message(models.Model):
                 name="message_has_recipient",
             ),
         ]
+
+
+class EmailNotice(models.Model):
+    """Deduplicated email outbox. Never send sensitive reports from web requests."""
+    source_key = models.CharField(max_length=180, unique=True)
+    recipient = models.EmailField()
+    category = models.CharField(max_length=40)
+    subject = models.CharField(max_length=180)
+    body = models.TextField()
+    status = models.CharField(max_length=16, default="queued")
+    attempts = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["status", "created_at"], name="email_notice_queue_idx")]
 
 
 class SmsAttempt(models.Model):
