@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#103c50">
+  <meta name="color-scheme" content="light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://market.kofadimpex.com; img-src 'self' https://market.kofadimpex.com data:; style-src 'self'; script-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'">
+  <title>__APP_NAME__</title>
+  <link rel="stylesheet" href="native.css">
+  <script defer src="native.js"></script>
+</head>
+<body data-channel="__CHANNEL__">
+  <div class="native-shell">
+    <header class="native-header">
+      <div class="native-identity">
+        <span class="native-app-mark" aria-hidden="true">K</span>
+        <span><small>KOFAD IMPEX ENTERPRISE</small><strong>__APP_NAME__</strong></span>
+      </div>
+      <div class="native-connection" id="network-status" role="status" aria-live="polite"><span class="native-led"></span><span id="network-label">Connecting</span></div>
+    </header>
+    <main id="main">
+      <section class="native-hero">
+        <p class="native-overline">OFFICIAL KOFAD APPLICATION</p>
+        <h1 id="welcome-title">__WELCOME_TITLE__</h1>
+        <p>__WELCOME_SUBTITLE__</p>
+        <button class="native-hero-cta" id="open-main" type="button">__MAIN_ACTION__ <span aria-hidden="true">↗</span></button>
+      </section>
+
+      <section class="native-customer-section" id="customer-content" hidden>
+        <div class="native-section-head"><div><p class="native-overline">LIVE MARKETPLACE</p><h2>Explore KOFAD products</h2></div><button type="button" class="native-icon-button" id="refresh" aria-label="Refresh catalog">↻</button></div>
+        <label class="native-search-label" for="search">Search products</label>
+        <input id="search" type="search" placeholder="Search products, categories…" autocomplete="off" maxlength="70">
+        <div class="native-market-status" id="catalog-status" role="status" aria-live="polite">Loading products…</div>
+        <div id="products" class="native-products" aria-label="Available products"></div>
+        <button id="more-products" class="native-more" type="button" hidden>Show more products</button>
+      </section>
+
+      <section class="native-staff-section" id="staff-content" hidden>
+        <p class="native-overline">AUTHORIZED TEAM ACCESS</p>
+        <h2>Staff workspace shortcuts</h2>
+        <p class="native-intro">Each shortcut opens the official secure staff service, where login, store restrictions, financial approvals and access permissions are checked.</p>
+        <div class="native-shortcut-grid">
+          <button type="button" data-path="/workspace/" class="native-shortcut"><span aria-hidden="true">▦</span><strong>Dashboard</strong><small>Overview and alerts</small></button>
+          <button type="button" data-path="/sales/new/" class="native-shortcut"><span aria-hidden="true">▣</span><strong>New sale</strong><small>Point of sale</small></button>
+          <button type="button" data-path="/inventory/" class="native-shortcut"><span aria-hidden="true">▤</span><strong>Inventory</strong><small>Stock records</small></button>
+          <button type="button" data-path="/approvals/" class="native-shortcut"><span aria-hidden="true">✓</span><strong>Approvals</strong><small>Controlled actions</small></button>
+          <button type="button" data-path="/online-orders/" class="native-shortcut"><span aria-hidden="true">⇢</span><strong>Online orders</strong><small>Customer orders</small></button>
+          <button type="button" data-path="/email/" class="native-shortcut"><span aria-hidden="true">✉</span><strong>Email centre</strong><small>Assigned communications</small></button>
+        </div>
+      </section>
+      <section class="native-offline-panel" id="offline-panel" hidden aria-label="Offline notice">
+        <strong>No internet connection</strong><p>You can browse the last public catalog saved on this device, but sign-in, checkout and staff operations require a live connection. No transactions will be queued or replayed.</p>
+      </section>
+    </main>
+    <nav class="native-bottom-nav" aria-label="Native application navigation">
+      <button type="button" id="tab-home" class="selected" aria-current="page"><span aria-hidden="true">⌂</span><span>Home</span></button>
+      <button type="button" id="tab-account"><span aria-hidden="true">◯</span><span>Account</span></button>
+      <button type="button" id="tab-support"><span aria-hidden="true">☏</span><span>Support</span></button>
+    </nav>
+  </div>
+</body>
+</html>
