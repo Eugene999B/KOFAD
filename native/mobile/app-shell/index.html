@@ -8,52 +8,63 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src __APP_ORIGIN__; img-src 'self' __APP_ORIGIN__ data:; style-src 'self'; script-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'">
   <title>__APP_NAME__</title>
   <link rel="stylesheet" href="native.css">
+  <link rel="stylesheet" href="experience.css">
   <script defer src="alerts.js"></script>
   <script defer src="native.js"></script>
+  <script defer src="experience.js"></script>
 </head>
 <body data-channel="__CHANNEL__">
   <div class="native-shell">
     <header class="native-header">
       <div class="native-identity">
-        <span class="native-app-mark" aria-hidden="true">K</span>
+        <span class="native-app-mark" aria-hidden="true"><img src="kofad-mark.png" alt=""></span>
         <span><small>KOFAD IMPEX ENTERPRISE</small><strong>__APP_NAME__</strong></span>
       </div>
-      <div class="native-connection" id="network-status" role="status" aria-live="polite"><span class="native-led"></span><span id="network-label">Connecting</span></div>
+      <div class="native-top-actions"><button class="native-bell" id="native-bell" type="button" aria-label="Open notifications" aria-controls="native-notifications" aria-expanded="false"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg><i id="native-bell-dot" hidden></i></button><div class="native-connection" id="network-status" role="status" aria-live="polite"><span class="native-led"></span><span id="network-label">Connecting</span></div></div>
     </header>
     <aside id="native-update" class="native-update" hidden role="status" aria-live="polite">
       <div><strong>New KOFAD app version available</strong><p id="native-update-details">An official update is ready for your device.</p></div>
       <button type="button" id="native-update-action">View update ↗</button>
       <button type="button" class="native-update-close" id="native-update-dismiss" aria-label="Dismiss app update notice">×</button>
     </aside>
-    <section id="native-notifications" class="native-notifications" aria-label="App announcements">
-      <div class="native-section-head">
-        <div><p class="native-overline">UPDATES &amp; NOTICES</p><h2>Notifications</h2></div>
-        <button id="native-alerts-toggle" type="button" class="native-icon-button">Enable alerts</button>
+    <section class="native-welcome-gate" id="welcome-gate" role="dialog" aria-modal="true" aria-labelledby="gate-title" hidden>
+      <div class="native-gate-card">
+        <img src="kofad-mark.png" alt="" class="native-gate-logo">
+        <p class="native-gate-overline">KOFAD IMPEX ENTERPRISE</p>
+        <h1 id="gate-title">__WELCOME_TITLE__</h1>
+        <p class="native-gate-message" id="gate-message">__WELCOME_SUBTITLE__</p>
+        <div class="native-gate-actions">
+          <button id="gate-signin" type="button" class="native-solid-button">__MAIN_ACTION__</button>
+          <button id="gate-skip" type="button" class="native-quiet-button">__SKIP_LABEL__</button>
+        </div>
+        <small id="gate-note">__GATE_NOTE__</small>
       </div>
-      <p id="native-alerts-explainer">Alerts are optional and require permission. Contacts and photos are not accessed automatically; device pickers are used when you choose to share or attach something.</p>
-      <div id="native-notice-list" class="native-announcement-list" aria-live="polite"><p>Checking notices…</p></div>
     </section>
     <main id="main">
       <section class="native-hero">
         <p class="native-overline">OFFICIAL KOFAD APPLICATION</p>
         <h1 id="welcome-title">__WELCOME_TITLE__</h1>
         <p>__WELCOME_SUBTITLE__</p>
-        <button class="native-hero-cta" id="open-main" type="button">__MAIN_ACTION__ <span aria-hidden="true">↗</span></button>
+        <button class="native-hero-cta" id="open-main" type="button">__HERO_ACTION__ <span aria-hidden="true">→</span></button>
       </section>
 
       <section class="native-customer-section" id="customer-content" hidden>
         <div class="native-section-head"><div><p class="native-overline">LIVE MARKETPLACE</p><h2>Explore KOFAD products</h2></div><button type="button" class="native-icon-button" id="refresh" aria-label="Refresh catalog">↻</button></div>
+        <div class="native-category-pills" id="category-pills" aria-label="Browse product categories"></div>
         <label class="native-search-label" for="search">Search products</label>
         <input id="search" type="search" placeholder="Search products, categories…" autocomplete="off" maxlength="70">
         <div class="native-market-status" id="catalog-status" role="status" aria-live="polite">Loading products…</div>
         <div id="products" class="native-products" aria-label="Available products"></div>
+        <section class="native-saved-view" id="saved-view" hidden><h2>Saved for later</h2><p class="native-saved-note">Saved on this device. Sign in to keep a wishlist across devices.</p><div id="saved-products" class="native-products"></div></section>
         <button id="more-products" class="native-more" type="button" hidden>Show more products</button>
       </section>
 
       <section class="native-staff-section" id="staff-content" hidden>
         <p class="native-overline">AUTHORIZED TEAM ACCESS</p>
-        <h2>Staff workspace shortcuts</h2>
-        <p class="native-intro">Each shortcut opens the official secure staff service, where login, store restrictions, financial approvals and access permissions are checked.</p>
+        <h2>Today at KOFAD</h2>
+        <p class="native-intro">Your team workspace is protected. Sign in to use your assigned sales, stock, orders and approval tools; KOFAD will check your actual role and branch.</p>
+        <div class="native-staff-feature"><span class="native-staff-feature-mark">✓</span><div><strong>Secure company workspace</strong><p>Live information stays protected by your KOFAD staff account.</p></div><button id="staff-workspace-access" type="button">Open →</button></div>
+        <h3 class="native-module-heading">Workspaces</h3>
         <div class="native-shortcut-grid">
           <button type="button" data-path="/workspace/" class="native-shortcut"><span aria-hidden="true">▦</span><strong>Dashboard</strong><small>Overview and alerts</small></button>
           <button type="button" data-path="/sales/new/" class="native-shortcut"><span aria-hidden="true">▣</span><strong>New sale</strong><small>Point of sale</small></button>
@@ -67,10 +78,36 @@
         <strong>No internet connection</strong><p>You can browse the last public catalog saved on this device, but sign-in, checkout and staff operations require a live connection. No transactions will be queued or replayed.</p>
       </section>
     </main>
+    <section class="native-detail-sheet" id="native-product-detail" role="dialog" aria-modal="true" aria-labelledby="native-detail-title" hidden>
+      <div class="native-sheet-scrim" data-close-detail></div>
+      <article class="native-sheet-card">
+        <button type="button" class="native-sheet-close" data-close-detail aria-label="Close product details">×</button>
+        <div class="native-sheet-image" id="native-detail-image"></div>
+        <p class="native-sheet-category" id="native-detail-category"></p>
+        <h2 id="native-detail-title"></h2>
+        <p id="native-detail-description"></p>
+        <strong class="native-sheet-price" id="native-detail-price"></strong>
+        <p class="native-sheet-availability" id="native-detail-stock"></p>
+        <div class="native-sheet-actions">
+          <button type="button" id="native-detail-save" class="native-quiet-button">♡ Save</button>
+          <button type="button" id="native-detail-purchase" class="native-solid-button">Sign in to buy →</button>
+        </div>
+      </article>
+    </section>
+        <section id="native-notifications" class="native-notifications native-drawer" hidden aria-label="App announcements">
+      <div class="native-section-head"><button type="button" class="native-close-icon" id="native-notice-close" aria-label="Close notifications">×</button>
+        <div><p class="native-overline">NOTIFICATIONS</p><h2>Notifications</h2></div>
+        <button id="native-alerts-toggle" type="button" class="native-icon-button">Enable alerts</button>
+      </div>
+      <p id="native-alerts-explainer">Alerts are optional and require permission. Contacts and photos are not accessed automatically; device pickers are used when you choose to share or attach something.</p>
+      <div id="native-notice-list" class="native-announcement-list" aria-live="polite"><p>Checking notices…</p></div>
+    </section>
+
     <nav class="native-bottom-nav" aria-label="Native application navigation">
       <button type="button" id="tab-home" class="selected" aria-current="page"><span aria-hidden="true">⌂</span><span>Home</span></button>
-      <button type="button" id="tab-account"><span aria-hidden="true">◯</span><span>Account</span></button>
-      <button type="button" id="tab-support"><span aria-hidden="true">☏</span><span>Support</span></button>
+      <button type="button" id="tab-explore"><span aria-hidden="true">▦</span><span>Explore</span></button>
+      <button type="button" id="tab-account"><span aria-hidden="true">♡</span><span>Saved</span></button>
+      <button type="button" id="tab-support"><span aria-hidden="true">◯</span><span>Account</span></button>
     </nav>
   </div>
 </body>
