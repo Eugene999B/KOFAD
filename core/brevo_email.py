@@ -64,7 +64,7 @@ def usage_today():
 
 
 def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None,
-               return_message_id=False, cc="", bcc=""):
+               return_message_id=False, cc="", bcc="", event_tag=""):
     if not ready():
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
@@ -106,6 +106,11 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         "to": [{"email": recipient}], "subject": subject, "textContent": body,
         "replyTo": {"email": requested_sender if requested_sender != sender else (reply or sender)},
     }
+    if event_tag:
+        # Opaque system ID only, no customer data in provider tags.
+        if not event_tag.startswith("kofad-letter-") or not event_tag[13:].isdigit():
+            raise ValidationError("Invalid KOFAD email event identifier.")
+        payload["tags"] = [event_tag]
     if cc:
         payload["cc"] = [{"email": addr} for addr in cc.split(",")]
     if bcc:
