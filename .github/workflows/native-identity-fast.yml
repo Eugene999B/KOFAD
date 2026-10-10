@@ -46,5 +46,11 @@ jobs:
           python manage.py check
           python manage.py makemigrations --check --dry-run
           python manage.py migrate --noinput
+      - name: Prepare branding and static manifest
+        run: |
+          python scripts/prepare_logo.py
+          python native/scripts/branding.py --channel customer
+          python native/scripts/branding.py --channel staff
+          python manage.py collectstatic --noinput
       - name: Run mobile API and security integration tests
         run: python manage.py test marketplace.test_mobile_identity marketplace.test_mobile_v1_api core.test_mobile_staff_api --noinput
