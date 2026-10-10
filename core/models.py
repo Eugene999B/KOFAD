@@ -1082,3 +1082,6 @@ from .email_models import (EmailMailbox, EmailMailboxMember, EmailConversation, 
                            EmailLetter, EmailDailyUsage, EmailCampaign, EmailConversationReadState,
                            EmailStaffDraft, EmailSavedReply, EmailStaffSignature,
                            EmailDeliveryEvent)  # noqa: E402, F401
+
+# KOFAD mobile app update and announcement management.
+from .mobile_release_models import MobileReleasePolicy, MobileNotice  # noqa: E402, F401

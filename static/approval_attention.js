@@ -12,33 +12,80 @@
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-  const pinLauncher = (x, y, width, height) => {
+  // Only place the floating approval control inside the reachable content area.
+  // iOS Safari's visual viewport shrinks/offsets with browser chrome and zoom,
+  // and KOFAD's mobile dock must never cover the Approval Center control.
+  const bounds = (width, height) => {
+    const vv = window.visualViewport;
+    const viewLeft = vv ? vv.offsetLeft : 0;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewRight = vv ? vv.offsetLeft + vv.width : window.innerWidth;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const gap = 12;
+    let top = viewTop + gap;
+    let bottom = viewBottom - gap;
+
+    const header = document.querySelector(".topbar");
+    if (header) {
+      const r = header.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.top < viewBottom && r.bottom > viewTop) {
+        top = Math.max(top, r.bottom + gap);
+      }
+    }
+    const dock = document.querySelector(".mobile-dock");
+    if (dock && getComputedStyle(dock).display !== "none") {
+      const r = dock.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.top < viewBottom) {
+        bottom = Math.min(bottom, r.top - gap);
+      }
+    }
+    return {
+      minX: Math.max(gap, viewLeft + gap),
+      maxX: Math.max(gap, Math.min(window.innerWidth, viewRight) - width - gap),
+      minY: top,
+      maxY: Math.max(top, bottom - height),
+    };
+  };
+
+  const pinLauncher = (x, y) => {
     if (!launcher) return;
     launcher.style.setProperty("left", x + "px", "important");
     launcher.style.setProperty("top", y + "px", "important");
     launcher.style.setProperty("right", "auto", "important");
     launcher.style.setProperty("bottom", "auto", "important");
-    launcher.style.setProperty("width", width + "px", "important");
-    launcher.style.setProperty("height", height + "px", "important");
-    launcher.style.setProperty("min-width", width + "px", "important");
-    launcher.style.setProperty("max-width", width + "px", "important");
-    launcher.style.setProperty("box-sizing", "border-box", "important");
+    // Never freeze width/height: mobile and desktop have different layouts.
+  };
+
+  const keepReachable = () => {
+    if (!launcher || launcher.hidden) return;
+    const rect = launcher.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const limit = bounds(rect.width, rect.height);
+    const x = clamp(rect.left, limit.minX, limit.maxX);
+    const y = clamp(rect.top, limit.minY, limit.maxY);
+    pinLauncher(x, y);
   };
 
   const applySavedPosition = () => {
     if (!launcher || launcher.hidden) return;
+    const rect = launcher.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    let x = rect.left, y = rect.top;
     try {
       const saved = JSON.parse(localStorage.getItem(POSITION_KEY) || "null");
-      if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return;
-      const rect = launcher.getBoundingClientRect();
-      const x = clamp(saved.x, 8, Math.max(8, window.innerWidth - rect.width - 8));
-      const y = clamp(saved.y, 8, Math.max(8, window.innerHeight - rect.height - 8));
-      pinLauncher(x, y, rect.width, rect.height);
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+        x = saved.x;
+        y = saved.y;
+      }
     } catch (_) {}
+    const limit = bounds(rect.width, rect.height);
+    pinLauncher(clamp(x, limit.minX, limit.maxX),
+                clamp(y, limit.minY, limit.maxY));
   };
 
   const savePosition = () => {
     if (!launcher) return;
+    keepReachable();
     const rect = launcher.getBoundingClientRect();
     try {
       localStorage.setItem(POSITION_KEY, JSON.stringify({x: rect.left, y: rect.top}));
@@ -70,9 +117,10 @@
       moved = true;
       launcher.classList.remove("is-drag-ready");
       launcher.classList.add("is-dragging");
-      const x = clamp(dragState.left + dx, 8, Math.max(8, window.innerWidth - dragState.width - 8));
-      const y = clamp(dragState.top + dy, 8, Math.max(8, window.innerHeight - dragState.height - 8));
-      pinLauncher(x, y, dragState.width, dragState.height);
+      const limit = bounds(dragState.width, dragState.height);
+      const x = clamp(dragState.left + dx, limit.minX, limit.maxX);
+      const y = clamp(dragState.top + dy, limit.minY, limit.maxY);
+      pinLauncher(x, y);
       event.preventDefault();
     };
 
@@ -97,7 +145,16 @@
       event.preventDefault();
       event.stopPropagation();
     }, true);
-    window.addEventListener("resize", applySavedPosition);
+    // A bad old saved position is repaired immediately and after rotations,
+    // dynamic Safari toolbar changes, or navigation-dock dimension changes.
+    window.addEventListener("resize", keepReachable, {passive:true});
+    window.addEventListener("pageshow", keepReachable);
+    window.visualViewport?.addEventListener("resize", keepReachable, {passive:true});
+    window.visualViewport?.addEventListener("scroll", keepReachable, {passive:true});
+    const dock = document.querySelector(".mobile-dock");
+    if (dock && typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(keepReachable).observe(dock);
+    }
   }
 
   async function refresh() {
