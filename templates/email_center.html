@@ -192,9 +192,9 @@
           <div class="mail-form-foot"><small>Your response will be queued for sending by email.</small>
           <button type="submit" class="mail-button primary">Queue reply ↗</button></div>
         </form>
-        {% for message in thread_letters %}{% if message.direction == 'inbound' %}
-          <a class="mail-button subtle" href="{% url 'email_drafts' %}?forward={{ message.pk }}">↗ Forward customer message as draft</a>
-        {% endif %}{% endfor %}
+        {% if latest_inbound_letter %}
+          <a class="mail-button subtle" href="{% url 'email_drafts' %}?forward={{ latest_inbound_letter.pk }}">↗ Forward latest customer message</a>
+        {% endif %}
         <details class="mail-private-note"><summary>＋ Add private staff note</summary>
           <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
             <input type="hidden" name="action" value="thread_note"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
