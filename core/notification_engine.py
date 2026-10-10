@@ -292,6 +292,22 @@ def run_staff_scheduled_reports(now=None):
 
 
 def _may_deliver(notice):
+    if notice.category == "pos_transaction":
+        from marketplace.models import CustomerAccount
+        from .models import Document
+        document = Document.objects.select_related("party", "branch").filter(
+            pk=notice.recipient_ref, kind__in=("sale", "collection")
+        ).first()
+        if not document or not document.party or document.party.kind != "customer":
+            return False
+        try:
+            phone = normalize_phone(document.party.phone)
+        except ValidationError:
+            return False
+        customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+        return bool(customer and customer.verified_at and customer.transactional_email_enabled
+                    and customer.email.strip().lower() == notice.recipient.strip().lower()
+                    and notice.branch_id == document.branch_id)
     if notice.category in ("order", "marketing_verify", "marketing"):
         from marketplace.models import CustomerAccount, OnlineOrder
         if notice.category == "order":
@@ -491,3 +507,47 @@ def run_customer_personalised_promotions(now=None):
         )
         created += int(added)
     return created
+
+
+def queue_pos_transaction_email(document):
+    """Email an eligible in-store transaction to its phone-verified customer account."""
+    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+        return 0
+    if document.kind not in ("sale", "collection") or not document.party_id:
+        return 0
+    if document.party.kind != "customer":
+        return 0
+    try:
+        phone = normalize_phone(document.party.phone)
+    except ValidationError:
+        return 0
+    from marketplace.models import CustomerAccount
+    customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+    if not customer or not customer.verified_at or not customer.transactional_email_enabled:
+        return 0
+    try:
+        validate_email(customer.email)
+    except ValidationError:
+        return 0
+    kind_label = "purchase receipt" if document.kind == "sale" else "payment confirmation"
+    body = (
+        f"Hello {customer.full_name},\n\n"
+        f"Your in-store {kind_label} has been recorded at {document.branch.name}.\n"
+        f"Reference: {document.reference}\n"
+        f"Amount: GHS {document.total:,.2f}\n"
+        f"Amount recorded as paid: GHS {document.paid:,.2f}\n\n"
+        "For detailed receipt records, sign in to KOFAD or contact the shop.\n"
+        "This is a transactional notice. We never ask for your PIN or password by email."
+    )
+    _, created = EmailNotice.objects.get_or_create(
+        source_key=f"pos-email:{document.pk}:{document.kind}",
+        defaults={
+            "recipient": customer.email,
+            "recipient_ref": str(document.pk),
+            "branch": document.branch,
+            "category": "pos_transaction",
+            "subject": f"KOFAD {kind_label} · {document.reference}",
+            "body": body,
+        },
+    )
+    return int(created)
