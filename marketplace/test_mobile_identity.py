@@ -89,7 +89,7 @@ class NativeIdentityTests(Fixtures, TestCase):
         )
 
     def test_customer_login_to_one_time_pkce_code_and_token(self):
-        services.set_customer_session(self.client_request(), self.market_customer)
+        self.client_request()
         code = self._grant()
         self.assertEqual(MobileAuthorizationGrant.objects.count(), 1)
         grant = MobileAuthorizationGrant.objects.get()
@@ -118,10 +118,9 @@ class NativeIdentityTests(Fixtures, TestCase):
         from django.test import RequestFactory
         request = RequestFactory().get("/", secure=True)
         request.session = self.client.session
-        request.user = self.client.handler._force_user if hasattr(self.client.handler, "_force_user") else type(
-            "Anon", (), {"is_authenticated": False}
-        )()
-        # The helper calls session.cycle_key(); commit the session cookie manually.
+        from django.contrib.auth.models import AnonymousUser
+        request.user = AnonymousUser()
+        # The helper calls session.cycle_key(); copy its rotated session cookie.
         services.set_customer_session(request, self.market_customer)
         self.client.cookies[__import__("django.conf", fromlist=["settings"]).settings.SESSION_COOKIE_NAME] = request.session.session_key
         return request
