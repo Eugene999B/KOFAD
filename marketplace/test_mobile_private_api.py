@@ -121,7 +121,13 @@ class NativePrivateDataTests(Fixtures, TestCase):
         user.access.force_password_change = False
         user.access.save(update_fields=["force_password_change"])
         token="c" * 43
-        self._new_mobile(token=token,staff_user=user)
+        mobile_session = self._new_mobile(token=token,staff_user=user)
+        from marketplace.mobile_identity import _valid_device
+        self.assertTrue(user.is_active)
+        self.assertTrue(self.branch.active)
+        self.assertTrue(user.access.branches.filter(pk=self.branch.pk).exists())
+        self.assertEqual(mobile_session.staff_access_version,user.access.session_version)
+        self.assertTrue(_valid_device(mobile_session,"staff"))
         resp=self._get("/staff/mobile/v1/overview/",token,staff=True)
         self.assertEqual(resp.status_code,200,resp.content[:150])
         self.assertEqual(resp.json()["modules"],{})
