@@ -86,6 +86,25 @@ class BrandingConsistencyTests(SimpleTestCase):
         self.assertNotIn("data:image/jpeg;base64,", svg)
         self.assertNotIn("kofad-" + "emblem.png", svg)
 
+    def test_favicon_is_uncropped_miniature_of_the_official_brand(self):
+        from PIL import Image, ImageChops, ImageOps
+        from scripts.prepare_logo import prepare_logo
+
+        brand = Path(settings.BASE_DIR) / "static" / "brand"
+        prepare_logo()
+        with Image.open(brand / "kofad-logo-transparent.png") as display:
+            display = display.convert("RGBA")
+            complete = display.crop(display.getchannel("A").getbbox() or (0, 0, *display.size))
+        for size in (48, 96, 180):
+            with self.subTest(size=size), Image.open(brand / f"favicon-{size}.png") as actual_image:
+                actual = actual_image.convert("RGBA")
+                self.assertEqual(actual.size, (size, size))
+                safe = max(1, round(size * .92))
+                mark = ImageOps.contain(complete, (safe, safe), Image.Resampling.LANCZOS)
+                expected = Image.new("RGBA", (size, size))
+                expected.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
+                self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+
     def test_favicon_endpoint_delivers_correct_type(self):
         from django.test import Client
         from django.test import override_settings
