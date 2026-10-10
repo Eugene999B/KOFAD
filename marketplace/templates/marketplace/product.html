@@ -1,8 +1,6 @@
-{% extends "marketplace/base.html" %}{% block head %}
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"{{ listing.display_name|escapejs }}","description":"{{ listing.description|default:'Available to order from KOFAD IMPEX ENTERPRISE.'|escapejs }}","sku":"{{ listing.product.sku|escapejs }}","brand":{"@type":"Brand","name":"KOFAD IMPEX ENTERPRISE"},"offers":{"@type":"Offer","url":"{{ canonical_url|escapejs }}","priceCurrency":"GHS","price":"{{ listing.market_price_value|floatformat:2 }}","availability":"https://schema.org/{% if listing.available_sell_qty %}InStock{% else %}OutOfStock{% endif %}"}}</script>
-{% endblock %}{% block content %}
+{% extends "marketplace/base.html" %}{% block content %}
 <section class="commerce-product-page">
-<nav class="commerce-breadcrumb"><a href="/market/">Market</a><span>›</span><a href="/market/?category={{ listing.product.category|urlencode }}">{{ listing.product.category|default:"Products" }}</a><span>›</span><strong>{{ listing.display_name }}</strong></nav>
+<nav class="commerce-breadcrumb"><a href="/market/">Market</a><span>›</span><a href="{% if listing.product.category %}/market/categories/{{ listing.product.category|slugify }}/{% else %}/market/{% endif %}">{{ listing.product.category|default:"Products" }}</a><span>›</span><strong>{{ listing.display_name }}</strong></nav>
 <div class="commerce-product-detail">
 <div class="commerce-product-gallery" data-product-gallery>
 <div class="product-detail-image commerce-detail-image" data-gallery-main>{% if listing.image_data %}<img src="/market/products/{{ listing.pk }}/image/large/" alt="{{ listing.display_name }}">{% elif listing.image_url %}<img src="{{ listing.image_url }}" alt="{{ listing.display_name }}" referrerpolicy="no-referrer">{% else %}<span>KOFAD</span>{% endif %}</div>
