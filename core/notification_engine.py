@@ -3,6 +3,7 @@
 No marketing to customers; this module covers explicitly subscribed staff only.
 SMTP and SMS each have an independent production kill switch.
 """
+import hashlib
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -418,7 +419,8 @@ def queue_customer_email_verification(customer, confirmation_url):
     except ValidationError:
         return False
     bucket = timezone.now().strftime("%Y%m%d")
-    key = f"market-verify:{customer.pk}:{bucket}"
+    fingerprint = hashlib.sha256(customer.email.strip().lower().encode()).hexdigest()[:12]
+    key = f"market-verify:{customer.pk}:{bucket}:{fingerprint}"
     _, created = EmailNotice.objects.get_or_create(
         source_key=key,
         defaults={
@@ -442,7 +444,7 @@ def run_customer_personalised_promotions(now=None):
     if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
         return 0
     now = timezone.localtime(now or timezone.now())
-    if now.weekday() != 0 or now.hour < 9:
+    if now.weekday() != 0 or now.hour != 9:
         return 0
     from marketplace.models import CustomerAccount, WishlistItem
     created = 0
@@ -455,7 +457,7 @@ def run_customer_personalised_promotions(now=None):
         ).exclude(status="cancelled").exists():
             continue
         item = WishlistItem.objects.filter(
-            customer=customer, listing__active=True, listing__product__active=True
+            customer=customer, listing__enabled=True, listing__product__active=True
         ).select_related("listing", "listing__product").first()
         if item is None:
             continue
