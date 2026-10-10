@@ -110,6 +110,11 @@ class EmailLetter(models.Model):
         ],
     )
     delivery_updated_at = models.DateTimeField(null=True, blank=True)
+    trashed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    trashed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="kofad_trashed_emails",
+    )
 
     class Meta:
         ordering = ["-created_at", "-pk"]
