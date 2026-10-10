@@ -788,7 +788,8 @@ def create_order(customer, cart, cleaned):
         customer.email = order.email
         customer.marketing_email_opt_in = False
         customer.marketing_email_verified_at = None
-        customer.save(update_fields=["email", "marketing_email_opt_in", "marketing_email_verified_at"])
+        customer.marketing_email_challenge = ""
+        customer.save(update_fields=["email", "marketing_email_opt_in", "marketing_email_verified_at", "marketing_email_challenge"])
     return order
 
 
