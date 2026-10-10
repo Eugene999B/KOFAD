@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded",()=>{
  const root=document.querySelector("[data-kfd-rotator]");if(!root)return;
  const img=root.querySelector("[data-hero-image]"),c=root.querySelector("[data-hero-count]"),bar=root.querySelector("[data-hero-progress]");
- const local=img.dataset.fallback||"/static/marketplace/kofad-market-retail-hero.webp";
+ const local=img.dataset.fallback||"/static/marketplace/kofad-home-hero-sharp.webp";
  const photos=[local,
  "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1300&q=80",
  "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=1300&q=80",

@@ -658,7 +658,16 @@ with sync_playwright() as p:
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
     assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 365
-    assert "kofad-market-retail-hero" in market_page.locator("[data-hero-image]").get_attribute("src")
+    assert "kofad-home-hero-sharp" in market_page.locator("[data-hero-image]").get_attribute("src")
+    assert market_page.locator(".kfd-hero").evaluate("el => getComputedStyle(el).height !== 'auto'")
+    # The title and primary action must not be clipped behind the navigation or
+    # outside the actual slide viewport in the compact desktop composition.
+    assert market_page.locator(".kfd-hero").evaluate("""el => {
+        const hero = el.getBoundingClientRect();
+        const title = el.querySelector("h1").getBoundingClientRect();
+        const cta = el.querySelector(".kfd-cta.primary").getBoundingClientRect();
+        return title.top >= hero.top - 1 && cta.bottom <= hero.bottom - 10;
+    }""")
     assert market_page.get_by_role("button", name="Next photograph").is_visible()
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
