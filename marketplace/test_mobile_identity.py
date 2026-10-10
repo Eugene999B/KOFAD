@@ -252,7 +252,21 @@ class NativeIdentityTests(Fixtures, TestCase):
         consent = self.client.get(login_response["Location"], HTTP_HOST="staff.kofadimpex.com", secure=True)
         self.assertEqual(consent.status_code, 200)
         self.assertContains(consent, "Connect KOFAD Staff?", status_code=200)
+        self.assertContains(consent, "Choose your assigned branch", status_code=200)
         self.assertNotIn("staff_mobile_auth_return", self.client.session)
+        # Select an assigned branch explicitly before minting a device credential.
+        selection = self._params("staff", branch=str(self.branch.pk))
+        approved = self.client.post(
+            path, selection, HTTP_HOST="staff.kofadimpex.com", secure=True
+        )
+        self.assertEqual(approved.status_code, 302)
+        code = parse_qs(urlsplit(approved["Location"]).query)["code"][0]
+        token = self._exchange(code, "staff")
+        self.assertEqual(token.status_code, 200, token.content[:180])
+        self.assertEqual(
+            self._me(token.json()["access_token"], "staff").json()["branch"]["id"],
+            self.branch.pk,
+        )
 
     def test_staff_login_rejects_external_next_destination(self):
         page = self.client.get(
