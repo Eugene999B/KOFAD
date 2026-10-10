@@ -2,6 +2,7 @@
 <section class="shop-catalog">
 <div class="native-market-promo"><div><strong>{% if native_customer_app_released %}Get KOFAD Market for your device{% else %}KOFAD Market web app — ready to install{% endif %}</strong><p>{% if native_customer_app_released %}Official downloads are available for selected platforms.{% else %}Install a KOFAD Market browser app on Android or Windows now. Separately signed native installers will follow.{% endif %}</p></div><a href="{% if native_customer_app_released %}/apps/{% else %}/market/app/install/{% endif %}">{% if native_customer_app_released %}Explore app downloads →{% else %}Install the web app →{% endif %}</a></div>
 {% if not market_customer %}<aside class="market-guest-welcome" aria-label="Welcome to KOFAD Market"><div><h2>Welcome to KOFAD Market</h2><p>Browse products freely. Sign in or create a free account when you are ready to shop.</p></div><a href="{% url 'market_access' %}">Sign in or create account →</a></aside>{% endif %}
+{% if not q and not selected_category %}
 <section class="atelier-market-intro" aria-labelledby="atelier-market-title">
 <div class="atelier-market-intro-copy">
   <span class="atelier-kicker">KOFAD IMPEX ENTERPRISE / THE MARKET</span>
@@ -18,6 +19,7 @@
   <div class="atelier-market-art-plate"><span>CURATED FOR LIFE &amp; BUSINESS</span><strong>KOFAD<br>MARKET</strong><i></i></div>
 </div>
 </section>
+{% endif %}
 {% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="{% if q %}/market/?category={{ category|urlencode }}&amp;q={{ q|urlencode }}{% else %}/market/categories/{{ category|slugify }}/{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 
 <header class="shop-catalog-head">
