@@ -171,16 +171,16 @@ def queue_closing_reports(closing):
     if not actions:
         actions.append("No threshold-based exceptions identified in this closing.")
     body = (
-        f"{company.name} | VERIFIED BUSINESS LOCATION REPORT\\n"
-        f"Location: {closing.branch.name}\\nClosing: {closing.date:%d %B %Y}\\n"
-        f"Recorded sales: GHS {n['sales']:,.2f}\\n"
-        f"Expenses: GHS {n['expenses']:,.2f}\\n"
-        f"Debt collections: GHS {n['collections']:,.2f}\\n"
-        f"Expected cash: GHS {n['expected_cash']:,.2f}\\n"
-        f"Counted cash: GHS {n['counted_cash']:,.2f}\\n"
-        f"Cash variance: GHS {n['variance']:+,.2f}\\n\\n"
-        + "Attention / next actions:\\n" + "\\n".join("- " + a for a in actions)
-        + "\\n\\nSource: KOFAD daily closing records. Sales minus expenses is NOT net profit.\\n"
+        f"{company.name} | VERIFIED BUSINESS LOCATION REPORT\n"
+        f"Location: {closing.branch.name}\nClosing: {closing.date:%d %B %Y}\n"
+        f"Recorded sales: GHS {n['sales']:,.2f}\n"
+        f"Expenses: GHS {n['expenses']:,.2f}\n"
+        f"Debt collections: GHS {n['collections']:,.2f}\n"
+        f"Expected cash: GHS {n['expected_cash']:,.2f}\n"
+        f"Counted cash: GHS {n['counted_cash']:,.2f}\n"
+        f"Cash variance: GHS {n['variance']:+,.2f}\n\n"
+        + "Attention / next actions:\n" + "\n".join("- " + a for a in actions)
+        + "\n\nSource: KOFAD daily closing records. Sales minus expenses is NOT net profit.\n"
         + "Sign in to KOFAD to investigate. Do not reply with account passwords."
     )
     created = 0
@@ -246,15 +246,15 @@ def _period_report(branch, category, first, last):
     if not actions:
         actions.append("No automatic critical trend detected; review store-specific exceptions.")
     return (
-        f"{company.name} | {category.upper()} BUSINESS ANALYSIS\\n"
-        f"Location: {branch.name}\\nPeriod: {first:%d %b %Y} - {last:%d %b %Y}\\n"
-        f"Recorded daily closings: {now['days']}\\n"
-        f"Sales: GHS {now['sales']:,.2f}\\nExpenses: GHS {now['expenses']:,.2f}\\n"
-        f"Debt collections: GHS {now['collections']:,.2f}\\n"
-        f"Net cumulative cash variance: GHS {now['cash_variance']:+,.2f}\\n"
-        f"{comparison}\\n\\nRecommended follow-ups:\\n"
-        + "\\n".join("- " + item for item in actions)
-        + "\\n\\nAnalysis uses submitted closings, not a full P&L. Cash variance offsets may conceal daily exceptions.\\n"
+        f"{company.name} | {category.upper()} BUSINESS ANALYSIS\n"
+        f"Location: {branch.name}\nPeriod: {first:%d %b %Y} - {last:%d %b %Y}\n"
+        f"Recorded daily closings: {now['days']}\n"
+        f"Sales: GHS {now['sales']:,.2f}\nExpenses: GHS {now['expenses']:,.2f}\n"
+        f"Debt collections: GHS {now['collections']:,.2f}\n"
+        f"Net cumulative cash variance: GHS {now['cash_variance']:+,.2f}\n"
+        f"{comparison}\n\nRecommended follow-ups:\n"
+        + "\n".join("- " + item for item in actions)
+        + "\n\nAnalysis uses submitted closings, not a full P&L. Cash variance offsets may conceal daily exceptions.\n"
         + "Sign in to KOFAD for details."
     )
 
@@ -326,7 +326,7 @@ def process_email_outbox(limit=15):
             email = EmailMultiAlternatives(
                 notice.subject, notice.body, settings.DEFAULT_FROM_EMAIL, [notice.recipient]
             )
-            paragraphs = escape(notice.body).replace("\\n", "<br>")
+            paragraphs = escape(notice.body).replace("\n", "<br>")
             email.attach_alternative(
                 '<div style="background:#f1f5f9;padding:28px;font-family:Arial,sans-serif">'
                 '<div style="max-width:620px;margin:auto;background:white;border-top:6px solid #e9ac32;'
