@@ -81,7 +81,8 @@ def work(request):
         try:
             can_view = action in {"mark_read", "mark_unread", "star", "unstar"}
             if not can_view and action not in {
-                "archive", "restore", "snooze", "unsnooze", "close", "reopen", "assign_me"
+                "archive", "restore", "snooze", "unsnooze", "close", "reopen", "assign_me",
+                "set_deadline", "clear_deadline"
             }:
                 raise ValidationError("Unknown conversation action.")
             with transaction.atomic():
@@ -114,6 +115,12 @@ def work(request):
                             raise ValidationError("Choose a supported reminder interval.")
                         thread.snoozed_until = now + timedelta(hours=int(hours)) if action == "snooze" else None
                         thread.save(update_fields=["snoozed_until"])
+                    elif action in {"set_deadline", "clear_deadline"}:
+                        hours = request.POST.get("hours", "24")
+                        if action == "set_deadline" and hours not in {"1", "4", "24", "72", "168"}:
+                            raise ValidationError("Choose a supported follow-up interval.")
+                        thread.due_at = now + timedelta(hours=int(hours)) if action == "set_deadline" else None
+                        thread.save(update_fields=["due_at"])
                     elif action in {"close", "reopen"}:
                         thread.status = "closed" if action == "close" else "open"
                         thread.save(update_fields=["status"])
@@ -128,7 +135,7 @@ def work(request):
         return _back(request)
 
     scope = request.GET.get("scope", "active")
-    if scope not in {"active", "mine", "unassigned", "unread", "starred", "archived", "snoozed"}:
+    if scope not in {"active", "mine", "unassigned", "unread", "starred", "archived", "snoozed", "overdue"}:
         scope = "active"
     mailbox_id = request.GET.get("mailbox", "")
     if mailbox_id and mailbox_id.isdecimal() and int(mailbox_id) in allowed_ids:
@@ -155,7 +162,9 @@ def work(request):
         results = results.filter(archived_at__isnull=True).filter(
             models.Q(snoozed_until__isnull=True) | models.Q(snoozed_until__lte=now)
         )
-        if scope == "mine":
+        if scope == "overdue":
+            results = results.filter(due_at__lt=now).exclude(status="closed")
+        elif scope == "mine":
             results = results.filter(assigned_to=request.user)
         elif scope == "unassigned":
             results = results.filter(assigned_to__isnull=True)
