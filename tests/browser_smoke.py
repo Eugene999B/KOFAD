@@ -976,9 +976,24 @@ with sync_playwright() as p:
         ):
             admin_page.goto("http://127.0.0.1:8000" + path, wait_until="domcontentloaded")
             admin_page.wait_for_timeout(70)
-            assert admin_page.evaluate(
-                "document.documentElement.scrollWidth <= window.innerWidth"
-            ), f"Phase 3 mobile overflow: {section} at {width}px"
+            if not admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"):
+                offenders = admin_page.evaluate("""() => {
+                    const limit = document.documentElement.clientWidth;
+                    return Array.from(document.querySelectorAll("body *"))
+                        .filter(el => {
+                            const r = el.getBoundingClientRect();
+                            return r.width > 0 && r.right > limit + 1 &&
+                                getComputedStyle(el).display !== "none";
+                        })
+                        .slice(0, 16)
+                        .map(el => {
+                            const r = el.getBoundingClientRect();
+                            return {tag: el.tagName, cls: String(el.className).slice(0,85),
+                                width: Math.round(r.width), left: Math.round(r.left),
+                                right: Math.round(r.right)};
+                        });
+                }""")
+                raise AssertionError(f"Phase 3 mobile overflow: {section} at {width}px: {offenders}")
             if width == 390 and section in ("sales", "online-orders", "finance", "daily-closing", "email"):
                 admin_page.screenshot(path=str(out / ("audit-" + section + "-mobile.png")), full_page=True)
     admin_page.set_viewport_size({"width":390,"height":844})
