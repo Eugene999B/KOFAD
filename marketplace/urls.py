@@ -13,6 +13,7 @@ urlpatterns = [
     path("market/app/native-version.json", native_apps.customer_native_version, name="market_native_version"),
     path("market/app/catalog.json", native_api.public_native_catalog, name="market_native_catalog"),
     path("market/mobile/v1/bootstrap/", mobile_v1_api.bootstrap, name="market_mobile_bootstrap"),
+    path("market/mobile/v1/capabilities/", mobile_identity.capabilities, {"channel": "customer"}, name="market_mobile_capabilities"),
     path("market/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "customer"}, name="market_mobile_authorize"),
     path("market/mobile/v1/token/", mobile_identity.token, {"channel": "customer"}, name="market_mobile_token"),
     path("market/mobile/v1/me/", mobile_identity.me, {"channel": "customer"}, name="market_mobile_me"),
