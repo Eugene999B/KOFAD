@@ -42,6 +42,21 @@
     $("native-detail-stock").textContent=p.in_stock_snapshot===false?"Please check availability before ordering":"Stock is confirmed when you order";
     $("native-detail-save").textContent=favorites.includes(p.id)?"♥ Saved":"♡ Save item";
     view("product");
+    // The v1 endpoint enriches a public card without transmitting cookies or
+    // authentication. Order/payment actions never use a cached price.
+    if (navigator.onLine !== false) {
+      const detailId = p.id;
+      void fetch("https://market.kofadimpex.com/market/mobile/v1/products/" + detailId + "/", {
+        mode: "cors", credentials: "omit", cache: "no-store",
+      }).then(response => response.ok ? response.json() : null).then(data => {
+        if (!data || data.version !== 1 || selected?.id !== detailId || $("screen-product").hidden) return;
+        const fresh = data.product;
+        if (!fresh || fresh.id !== detailId) return;
+        $("native-detail-description").textContent=String(fresh.description||"Browse this product from KOFAD Market.").slice(0,1600);
+        $("native-detail-price").textContent="GH₵ "+String(fresh.price||"0.00")+" · "+String(fresh.selling_unit||"");
+        $("native-detail-stock").textContent=String(fresh.availability_note||"Stock is confirmed when you order").slice(0,150);
+      }).catch(() => { /* Keep the locally displayed public preview when offline. */ });
+    }
   }
   function saved() {
     const root=$("native-saved-items");root.replaceChildren();
