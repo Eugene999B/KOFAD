@@ -11,7 +11,9 @@ module.exports = {
   win: {
     icon: "build/icon.ico",
     target: [{ target: "nsis", arch: ["x64"] }],
-    publisherName: process.env.KOFAD_WINDOWS_CERT_SUBJECT,
+    signtoolOptions: process.env.KOFAD_WINDOWS_CERT_SUBJECT
+      ? { publisherName: process.env.KOFAD_WINDOWS_CERT_SUBJECT }
+      : undefined,
     verifyUpdateCodeSignature: true,
   },
   nsis: {

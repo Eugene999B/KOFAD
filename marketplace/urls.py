@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views, public_views, seo
 from core import native_apps
+from . import native_api
 from core import google_oauth as google
 
 urlpatterns = [
@@ -8,6 +9,7 @@ urlpatterns = [
     path("apps/", native_apps.customer_downloads, name="customer_native_downloads"),
     path("apps/releases.json", native_apps.customer_release_status, name="customer_native_releases"),
     path("market/app/releases.json", native_apps.customer_release_status, name="market_native_releases"),
+    path("market/app/catalog.json", native_api.public_native_catalog, name="market_native_catalog"),
     path("robots.txt", seo.robots, name="robots_txt"),
     path("sitemap.xml", seo.sitemap, name="sitemap_xml"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),

@@ -1,6 +1,6 @@
 # KOFAD native client release plan
 
-**Status:** distribution + native project foundations only. **No release APK/AAB, IPA, App Store record, Play Store record, or signed Windows installer has been built, reviewed or published.** The website must never indicate otherwise. Do not turn these links on merely to test a draft.
+**Status:** Native client source, local mobile screens, read-only catalog API and isolated QA build pipeline are being validated. **No approved production APK/AAB, iOS IPA/App Store listing, or signed Windows installer has been published.** A debug APK or simulator build is NOT a released customer download. Do not turn official download cards on for QA artifacts.
 
 ## Separate applications
 
@@ -37,17 +37,17 @@ Actual domain ownership, working links, publisher certificate validity and binar
 
 ## Android and iOS project generation
 
-The `native/mobile` directory contains a Capacitor 7 base scaffold for **two separate packages**. The selected channel changes the app ID and permitted start domain.
+The `native/mobile` directory contains Capacitor 7 native projects for **two separate packages**. Each package now starts a **locally bundled native storefront/shortcuts interface**, not a remotely bootstrapped Django webpage. The selected channel changes the app ID, app content, app branding and secure server handoff.
 
 1. Set up **separate build directories/checkouts for each app/channel**, rather than switching an already-generated Android or Xcode project between customer and staff. Once generated, native bundle IDs are stored in Gradle/Xcode and cannot safely be switched by editing only `capacitor.config.ts`.
 2. On each new checkout, `cd native/mobile && npm install` and run `npm run prepare:customer` or `npm run prepare:staff`.
-3. Generate real Android and iOS projects using `npx cap add android` (Android Studio) and `npx cap add ios` (macOS/Xcode), **with the matching channel selected for the configuration**.
+3. Generate the separate Android/iOS projects using `npx cap add android` (Android Studio) and `npx cap add ios` (macOS/Xcode), **with the matching channel selected for the configuration**. These are actual Android/iOS build projects with packaged local app screens and access to approved Capacitor native plugins.
 4. Complete native work before production: dedicated native screen(s) offering meaningful platform-native functionality; safe deep-link/Universal Link handling for Google login and payment gateway returns; reliable account/session isolation; offline UX and empty-state recovery; app-specific icons and splash assets; Play Integrity and iOS Keychain integration if needed; accessibility and large-text/device rotation checks.
 5. Android: create a **release-signed AAB** in Android Studio with an organization-owned protected Play signing account. Publish through Google Play internal/closed testing first, then production when approved. Update flow: official Play app updates.
 6. iOS: Apple Developer membership, App Store Connect, signing team, privacy disclosures, device/Simulator QA, TestFlight, and App Review. Update flow: iOS App Store versioning. **Apple 4.2 rejects a repackaged website without meaningful native value**; this scaffold is intentionally **not App-Store-ready**.
 7. Do not deploy remote content or use third-party HTML as a privileged native bridge with unrestricted plugins. Staff financial workflows and customer card/MoMo transactions need platform-specific acceptance before approval.
 
-Capacitor `server.url` currently points to the existing HTTPS backend to preserve behavior while native frontends are developed. Capacitor documents this as intended for live reload, not a full native production strategy. It is a **transition build** and should not be advertised as a completed high-quality native storefront or staff client until native UI and secure login/payment handoff are implemented. The local `www/index.html` is a packaged fallback, not a replacement for offline-safe server transactions.
+The packaged local app now displays its own native-styled product browser (customer) or staff module launchpad. The public catalog comes from `https://market.kofadimpex.com/market/app/catalog.json` with server-derived pricing and strict local Capacitor origin CORS. Only public catalog data is stored temporarily for offline browsing. **Customer login/checkout and staff business workflows deliberately open the official HTTPS site via platform secure browser controls**, retaining Django security and avoiding unsafe local banking/stock transactions. This is a genuine hybrid native app build, but full native staff POS/checkout and deep-link authenticated return flows are **not yet implemented**; it is not an approved final consumer-grade release.
 
 ## Windows desktop project
 
@@ -87,4 +87,10 @@ The updater checks only published/packaged client builds. It presents a user cho
 - [ ] Secure public verified link and release version configured only after publication
 - [ ] Review failure recovery and accessibility on small Android, iPhone and Windows screen sizes
 
-Native app project versions and download URLs are **NOT** evidence of live app availability. Signing and release activities require authorized owner developer accounts. Do not automate public release or post any credentials in the repo.
+## Automated QA binaries (not public releases)
+
+Opening a PR that changes `native/**` now launches `.github/workflows/native-qa.yml`: **six independent jobs** for customer + staff on Android, iOS Simulator and Windows. You can also run all six in GitHub Actions manually. QA builds are kept in GitHub Actions artifacts for four days; customer and staff remain separately named. The Android builds are **debug-signed**, the iOS build is **Simulator-only and unsigned for distribution**, and Windows builds are **unpacked unsigned QA applications**. They must **not** be put on `/apps/`, publicly distributed, or labeled as production installers. Android debug builds can be trialed on authorized test devices, and Windows unpacked applications can be run by technical QA personnel on a test machine.
+
+Only signed and reviewed App Store/Play Store releases and a separately signed Authenticode Windows installer may be promoted to the public or private staff download pages. App Store Connect, Google Play Console, Apple signing certificates, Android release signing credentials and Windows code-signing credentials must be held by authorized KOFAD publisher accounts or protected CI secrets; none is included in the repository. For a true native-only checkout or offline sales, dedicated audited transactional APIs and a security review are still needed.
+
+Native app project versions and download URLs are **NOT** evidence of live app availability. Do not post credentials in the repository or bypass app store/Authenticode verification.
