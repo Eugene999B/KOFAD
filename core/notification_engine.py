@@ -420,7 +420,8 @@ def queue_customer_email_verification(customer, confirmation_url):
         return False
     bucket = timezone.now().strftime("%Y%m%d")
     fingerprint = hashlib.sha256(customer.email.strip().lower().encode()).hexdigest()[:12]
-    key = f"market-verify:{customer.pk}:{bucket}:{fingerprint}"
+    challenge_id = hashlib.sha256(customer.marketing_email_challenge.encode()).hexdigest()[:12]
+    key = f"market-verify:{customer.pk}:{bucket}:{fingerprint}:{challenge_id}"
     _, created = EmailNotice.objects.get_or_create(
         source_key=key,
         defaults={
