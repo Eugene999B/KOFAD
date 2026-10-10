@@ -152,6 +152,18 @@ class EmailTrashTests(TestCase):
         self.assertIsNone(private.trashed_at)
         self.assertIsNone(item.trashed_at)
 
+    def test_staff_cannot_cancel_automated_financial_mail(self):
+        automated = self.letter(
+            status="queued", direction="outbound",
+            subject="System-issued transaction receipt",
+            source_key="receipt:system:2026",
+        )
+        self.login(self.staff)
+        self.assertEqual(self.post("trash_selected", [automated.pk]).status_code, 403)
+        automated.refresh_from_db()
+        self.assertEqual(automated.status, "queued")
+        self.assertIsNone(automated.trashed_at)
+
     def test_read_only_cannot_delete_owner_only_actions_blocked_for_staff(self):
         item = self.letter()
         self.login(self.reader)
