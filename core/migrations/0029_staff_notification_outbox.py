@@ -16,6 +16,7 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("source_key", models.CharField(max_length=180, unique=True)),
+                ("recipient_ref", models.CharField(blank=True, default="", max_length=64)),
                 ("recipient_user", models.ForeignKey(blank=True, null=True, on_delete=models.SET_NULL, to=settings.AUTH_USER_MODEL)),
                 ("branch", models.ForeignKey(blank=True, null=True, on_delete=models.PROTECT, to="core.branch")),
                 ("recipient", models.EmailField(max_length=254)),
