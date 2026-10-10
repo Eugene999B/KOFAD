@@ -53,7 +53,7 @@ def find_incoming_conversation(mailbox, sender, subject, reply_id="", references
 
 
 def record_incoming(mailbox, *, sender, subject, reply_id, references, body,
-                    message_id, fingerprint, attachments=False):
+                    message_id, fingerprint, attachments=False, recipient=None):
     with transaction.atomic():
         existing = EmailLetter.objects.filter(mailbox=mailbox, fingerprint=fingerprint,
                                                direction="inbound").first()
@@ -79,7 +79,7 @@ def record_incoming(mailbox, *, sender, subject, reply_id, references, body,
         return EmailLetter.objects.create(
             mailbox=mailbox, conversation=thread, fingerprint=fingerprint,
             direction="inbound", status="received", from_address=sender,
-            to_address=mailbox.address, subject=subject, body_text=body,
+            to_address=recipient or mailbox.address, subject=subject, body_text=body,
             message_id=message_id, in_reply_to=reply_id,
             had_attachments=attachments,
         )
