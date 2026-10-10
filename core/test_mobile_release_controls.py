@@ -43,6 +43,7 @@ class MobileControlTests(TestCase):
         self.assertContains(staff, "Team alert")
         self.assertNotContains(staff, "Service hours")
 
+    @override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com"])
     def test_control_dashboard_superuser_only(self):
         self.assertEqual(self.client.get("/staff/app/control/").status_code, 302)
         ordinary = User.objects.create_user("staffer", password="strong-test-secret")
