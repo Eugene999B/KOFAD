@@ -92,7 +92,7 @@ function nativeClient(channel, saved="") {
     throw Error("Unexpected URL "+url);
   };
   const sandbox={
-    window:{Capacitor:{Plugins:plugins,getPlatform:()=>"android"}},
+    window:{Capacitor:{Plugins:plugins,getPlatform:()=>"android"},crypto:webcrypto},
     crypto:webcrypto,
     TextEncoder,
     URL,
