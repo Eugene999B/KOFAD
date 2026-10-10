@@ -1,0 +1,162 @@
+name: Prepare KOFAD iPhone distribution build (review only)
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Customer or staff Apple developer identity
+        required: true
+        type: choice
+        options: [customer, staff]
+      version:
+        description: "App version X.Y.Z"
+        required: true
+        type: string
+      build_number:
+        description: "Increasing App Store Connect build number"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: kofad-native-publishing
+    env:
+      KOFAD_NATIVE_CHANNEL: ${{ inputs.channel }}
+      KOFAD_NATIVE_VERSION: ${{ inputs.version }}
+      KOFAD_NATIVE_BUILD: ${{ inputs.build_number }}
+      KOFAD_APPLE_TEAM_ID: ${{ secrets.KOFAD_APPLE_TEAM_ID }}
+      KOFAD_IOS_P12_BASE64: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_IOS_DISTRIBUTION_P12_B64 || secrets.KOFAD_STAFF_IOS_DISTRIBUTION_P12_B64 }}
+      KOFAD_IOS_P12_PASSWORD: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_IOS_DISTRIBUTION_P12_PASSWORD || secrets.KOFAD_STAFF_IOS_DISTRIBUTION_P12_PASSWORD }}
+      KOFAD_IOS_PROFILE_BASE64: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_IOS_APPSTORE_PROFILE_B64 || secrets.KOFAD_STAFF_IOS_APPSTORE_PROFILE_B64 }}
+    steps:
+      - name: Fail closed if Apple distribution identities are missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in KOFAD_APPLE_TEAM_ID KOFAD_IOS_P12_BASE64 KOFAD_IOS_P12_PASSWORD KOFAD_IOS_PROFILE_BASE64; do
+            if [[ -z "${!key:-}" ]]; then echo "::error::Missing protected Apple publisher key: $key"; exit 1; fi
+          done
+          if [[ ! "$KOFAD_NATIVE_VERSION" =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,3})$ ||
+                ! "$KOFAD_NATIVE_BUILD" =~ ^[1-9][0-9]{0,8}$ ||
+                ! "$KOFAD_APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "::error::Invalid Apple developer team, version or build number"
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Build the local native KOFAD iPhone application
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install Pillow
+          python scripts/prepare_logo.py
+          python native/scripts/branding.py --channel "$KOFAD_NATIVE_CHANNEL"
+          cd native/mobile
+          npm install --no-audit --no-fund
+          npm test
+          node scripts/write-profile.mjs
+          npx cap add ios
+          npx cap sync ios
+          npx capacitor-assets generate --ios
+      - name: Import Apple certificate and approved distribution profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          cert="$RUNNER_TEMP/kofad-ios-distribution.p12"
+          profile="$RUNNER_TEMP/kofad-profile.mobileprovision"
+          printf '%s' "$KOFAD_IOS_P12_BASE64" | base64 --decode > "$cert"
+          printf '%s' "$KOFAD_IOS_PROFILE_BASE64" | base64 --decode > "$profile"
+          test -s "$cert"
+          test -s "$profile"
+          security cms -D -i "$profile" > "$RUNNER_TEMP/kofad-profile.plist"
+          uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/kofad-profile.plist")"
+          name="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/kofad-profile.plist")"
+          appid="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$RUNNER_TEMP/kofad-profile.plist")"
+          if [[ "$KOFAD_NATIVE_CHANNEL" == "customer" ]]; then bundle_id="com.kofadimpex.market"; else bundle_id="com.kofadimpex.staff"; fi
+          if [[ "$appid" != "$KOFAD_APPLE_TEAM_ID.$bundle_id" ]]; then
+            echo "::error::Apple provisioning profile is not for approved KOFAD channel"
+            exit 1
+          fi
+          echo "KOFAD_IOS_BUNDLE_ID=$bundle_id" >> "$GITHUB_ENV"
+          echo "KOFAD_IOS_PROFILE_NAME=$name" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+          keychain="$RUNNER_TEMP/kofad-signing.keychain-db"
+          password="$(openssl rand -hex 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$cert" -k "$keychain" -P "$KOFAD_IOS_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+      - name: Archive and export Apple App Store distribution IPA
+        working-directory: native/mobile/ios/App
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>__TEAM_ID__</string>
+            <key>provisioningProfiles</key><dict><key>__BUNDLE_ID__</key><string>__PROFILE_NAME__</string></dict>
+          </dict></plist>
+          PLIST
+          python - <<'PY'
+          import os, pathlib, plistlib
+          p = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ExportOptions.plist"
+          raw = p.read_bytes().decode("utf8")
+          for token, env in (("__TEAM_ID__", "KOFAD_APPLE_TEAM_ID"), ("__BUNDLE_ID__", "KOFAD_IOS_BUNDLE_ID"), ("__PROFILE_NAME__", "KOFAD_IOS_PROFILE_NAME")):
+              raw = raw.replace(token, os.environ[env])
+          plistlib.loads(raw.encode())
+          p.write_text(raw, encoding="utf8")
+          PY
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/KOFAD.xcarchive" \
+            "DEVELOPMENT_TEAM=$KOFAD_APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual \
+            "PROVISIONING_PROFILE_SPECIFIER=$KOFAD_IOS_PROFILE_NAME" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            "MARKETING_VERSION=$KOFAD_NATIVE_VERSION" "CURRENT_PROJECT_VERSION=$KOFAD_NATIVE_BUILD" archive
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/KOFAD.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/kofad-ios-export"
+          mkdir -p "$GITHUB_WORKSPACE/native/release-candidates"
+          find "$RUNNER_TEMP/kofad-ios-export" -maxdepth 1 -name '*.ipa' -type f -exec cp {} "$GITHUB_WORKSPACE/native/release-candidates/" \;
+          python - <<'PY'
+          import os, zipfile, plistlib, pathlib
+          files=list((pathlib.Path(os.environ["GITHUB_WORKSPACE"])/"native/release-candidates").glob("*.ipa"))
+          if len(files)!=1: raise SystemExit("Missing or ambiguous signed iOS distribution IPA")
+          with zipfile.ZipFile(files[0]) as z:
+              infos=[n for n in z.namelist() if n.startswith("Payload/") and n.endswith(".app/Info.plist")]
+              if len(infos)!=1: raise SystemExit("Invalid app bundle")
+              info=plistlib.loads(z.read(infos[0]))
+          if info.get("CFBundleIdentifier")!=os.environ["KOFAD_IOS_BUNDLE_ID"]:
+              raise SystemExit("Wrong app bundle in iOS distribution IPA")
+          if info.get("CFBundleShortVersionString")!=os.environ["KOFAD_NATIVE_VERSION"]:
+              raise SystemExit("Wrong app version in iOS distribution IPA")
+          print("Verified signed KOFAD iOS app identity and release version.")
+          PY
+      - name: Remove temporary Apple signing identities
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/kofad-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/kofad-ios-distribution.p12" "$RUNNER_TEMP/kofad-profile.mobileprovision" "$RUNNER_TEMP/kofad-profile.plist"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: SIGNED-REVIEW-ONLY-${{ inputs.channel }}-ios-${{ inputs.version }}
+          path: native/release-candidates/*.ipa
+          retention-days: 7
+          if-no-files-found: error
