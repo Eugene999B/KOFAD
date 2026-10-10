@@ -43,4 +43,6 @@ jobs:
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - run: python manage.py check
       - run: python manage.py migrate --noinput
+      - run: python scripts/prepare_logo.py
+      - run: python manage.py collectstatic --noinput
       - run: python manage.py test core.test_mobile_release_controls core.test_native_apps --noinput
