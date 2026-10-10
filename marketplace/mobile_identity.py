@@ -164,6 +164,19 @@ def _bearer_session(request, channel):
     return session if _valid_device(session, channel) else None
 
 
+@require_http_methods(["GET"])
+def capabilities(request, channel):
+    """Anonymous, non-sensitive feature detection for the signed native clients."""
+    client = CLIENTS[channel]
+    return _public_response(request, {
+        "version": 1,
+        "channel": channel,
+        "native_mobile_token_login": bool(getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False)),
+        "client_id": client["id"],
+        "redirect_uri": client["uri"],
+    })
+
+
 @require_http_methods(["GET", "POST"])
 def authorize(request, channel):
     """Existing browser login and form CSRF precede the one-time app callback."""
