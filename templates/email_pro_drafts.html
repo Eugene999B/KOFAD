@@ -43,6 +43,18 @@
     </div>
     {% empty %}<div class="mail-queue-empty"><p>No drafts saved yet. Save a draft to return to it later.</p></div>{% endfor %}
     <div class="pro-hint">Need approved wording? <a href="{% url 'email_replies' %}">Open the Saved Replies library ↗</a></div>
+    <header class="mail-pane-head"><div><h3>Upcoming scheduled mail</h3><p>Only emails you have queued. Cancel before the sending worker claims them.</p></div></header>
+    {% for notice in scheduled %}
+      <div class="pro-saved-card">
+        <div><strong>{{ notice.subject|truncatechars:64 }}</strong>
+          <small>To {{ notice.to_address }} · {{ notice.mailbox.label }}</small>
+          <small>Scheduled {{ notice.next_attempt_at|date:"j M Y, H:i" }}</small></div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel_scheduled">
+          <input type="hidden" name="letter_id" value="{{ notice.pk }}">
+          <button type="submit" class="mail-button subtle" data-confirm-delete>Cancel</button>
+        </form>
+      </div>
+    {% empty %}<div class="pro-hint">There are no upcoming scheduled emails.</div>{% endfor %}
   </aside>
 </div>
 {% endblock %}
