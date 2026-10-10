@@ -8,6 +8,8 @@ from django.core.validators import validate_email
 from django.db import models, transaction
 from django.utils import timezone
 
+from .email_recipients import validate_copies
+
 logger = logging.getLogger(__name__)
 API_URL = "https://api.brevo.com/v3/smtp/email"
 
@@ -62,7 +64,7 @@ def usage_today():
 
 
 def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None,
-               return_message_id=False):
+               return_message_id=False, cc="", bcc=""):
     if not ready():
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
@@ -73,6 +75,7 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
     )
     for address in (recipient, requested_sender):
         validate_email(address)
+    cc, bcc = validate_copies(recipient, cc, bcc)
     if not requested_sender.lower().endswith("@kofadimpex.com"):
         raise ValidationError("Unverified KOFAD business sender.")
     # A domain can be authenticated while individual Brevo senders remain
@@ -103,6 +106,10 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         "to": [{"email": recipient}], "subject": subject, "textContent": body,
         "replyTo": {"email": requested_sender if requested_sender != sender else (reply or sender)},
     }
+    if cc:
+        payload["cc"] = [{"email": addr} for addr in cc.split(",")]
+    if bcc:
+        payload["bcc"] = [{"email": addr} for addr in bcc.split(",")]
     try:
         response = requests.post(
             API_URL, json=payload,
