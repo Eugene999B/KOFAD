@@ -22,6 +22,7 @@ from . import accounting_views, approval_views, creditor_views, payroll_views, w
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("staff/mobile/v1/bootstrap/", mobile_staff_api.bootstrap, name="staff_mobile_bootstrap"),
+    path("staff/mobile/v1/capabilities/", mobile_identity.capabilities, {"channel": "staff"}, name="staff_mobile_capabilities"),
     path("staff/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "staff"}, name="staff_mobile_authorize"),
     path("staff/mobile/v1/token/", mobile_identity.token, {"channel": "staff"}, name="staff_mobile_token"),
     path("staff/mobile/v1/me/", mobile_identity.me, {"channel": "staff"}, name="staff_mobile_me"),
