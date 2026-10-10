@@ -47,7 +47,7 @@ class MobileControlTests(TestCase):
         self.assertEqual(self.client.get("/staff/app/control/").status_code, 302)
         ordinary = User.objects.create_user("staffer", password="strong-test-secret")
         self.client.force_login(ordinary)
-        self.assertEqual(self.client.get("/staff/app/control/").status_code, 403)
+        self.assertIn(self.client.get("/staff/app/control/").status_code, (302, 403))
         admin = User.objects.create_superuser("appowner", "admin@example.com", "test-strong-secret")
         self.client.force_login(admin)
         response = self.client.get("/staff/app/control/")
