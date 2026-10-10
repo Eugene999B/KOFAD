@@ -121,8 +121,10 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         logger.warning("KOFAD email provider timeout; status uncertain")
         raise UncertainEmailDelivery from exc
     except requests.RequestException as exc:
-        EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
-        raise ValidationError("Email sending temporarily unavailable.") from exc
+        # Connection drops can happen after Brevo accepted a request. Without an
+        # HTTP rejection response the result is unknown; never auto-resend.
+        logger.warning("KOFAD email provider connection failed; status uncertain")
+        raise UncertainEmailDelivery from exc
     if response.status_code != 201:
         EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
         raise DefiniteEmailRejection("Email provider did not accept the message.")
