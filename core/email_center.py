@@ -669,11 +669,19 @@ def deliver_outgoing(limit=10):
                 attempts=models.F("attempts") - 1,
                 last_error="Daily send allowance reached; queued for tomorrow.",
             )
-        except Exception:
+        except __import__("core.brevo_email", fromlist=["DefiniteEmailRejection"]).DefiniteEmailRejection:
+            # Explicit non-accepted HTTP status is safe to retry within limit.
             EmailLetter.objects.filter(pk=pk).update(
                 status="failed", next_attempt_at=timezone.now()
                 + timedelta(minutes=min(60, 5 * row.attempts)),
-                last_error="Provider did not accept this email.",
+                last_error="Provider explicitly rejected this message.",
+            )
+        except Exception:
+            # Unknown errors after submission are ambiguous (including a worker
+            # interrupt). Never automatically send a possible duplicate.
+            EmailLetter.objects.filter(pk=pk).update(
+                status="uncertain",
+                last_error="Delivery outcome unknown; investigate before retry.",
             )
         else:
             EmailLetter.objects.filter(pk=pk).update(
