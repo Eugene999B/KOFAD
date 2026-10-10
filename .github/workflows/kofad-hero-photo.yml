@@ -21,43 +21,33 @@ jobs:
           PHOTO_PAGE: https://unsplash.com/photos/a-well-lit-grocery-store-aisle-with-produce-displays-2vgVRWpwKYE
         run: |
           python3 - <<'PY'
-          from html import unescape
-          from html.parser import HTMLParser
-          from urllib.parse import urlsplit, urlencode, urlunsplit
           from urllib.request import Request, urlopen
           from pathlib import Path
-          import re
-          import os
-          class MetaParser(HTMLParser):
-              def __init__(self):
-                  super().__init__()
-                  self.urls = []
-              def handle_starttag(self, tag, attrs):
-                  if tag != "meta":
-                      return
-                  meta = dict(attrs)
-                  if meta.get("property") in {"og:image", "og:image:secure_url"} or meta.get("name") == "twitter:image":
-                      if meta.get("content"):
-                          self.urls.append(unescape(meta["content"]))
-          page = os.environ["PHOTO_PAGE"]
-          headers = {"User-Agent":"Mozilla/5.0 (compatible; KOFADAssetBuild/1.0)"}
-          with urlopen(Request(page,headers=headers),timeout=40) as reply:
-              html = reply.read(700_000).decode("utf8","replace")
-          parser = MetaParser()
-          parser.feed(html)
-          images = [u for u in parser.urls if urlsplit(u).hostname == "images.unsplash.com"]
-          if not images:
-              raise RuntimeError("Unsplash did not provide a verified photo URL; keep existing hero unchanged")
-          src = urlsplit(images[0])
-          url = urlunsplit((src.scheme,src.netloc,src.path,urlencode({
-              "auto":"format","fm":"webp","fit":"crop","crop":"entropy",
-              "w":"2200","h":"1238","q":"88"
-          }),""))
-          with urlopen(Request(url, headers=headers), timeout=55) as reply:
-              image = reply.read(4_000_000)
-              content_type = reply.headers.get("Content-Type","").lower()
-          if not image.startswith(b"RIFF") or image[8:12] != b"WEBP" or len(image) < 90_000:
-              raise RuntimeError(f"Downloaded image failed quality check: {len(image)} bytes, {content_type}")
+          # Direct Unsplash image CDN avoids website anti-scraping/401 restrictions.
+          # Unique new scene, not one of the five existing carousel images.
+          candidates = [
+              "photo-1578916171728-46686eac8d58",
+              "photo-1601598851547-4302969d0614",
+              "photo-1542838132-92c53300491e",
+          ]
+          headers = {"User-Agent": "Mozilla/5.0"}
+          image = None
+          for photo_id in candidates:
+              url = (f"https://images.unsplash.com/{photo_id}"
+                     "?fm=webp&fit=crop&crop=entropy&w=2200&h=1238&q=88")
+              try:
+                  with urlopen(Request(url,headers=headers), timeout=45) as response:
+                      body = response.read(4_000_000)
+                      content_type = response.headers.get("Content-Type","").lower()
+                  if body[:4] != b"RIFF" or body[8:12] != b"WEBP" or len(body) < 90_000:
+                      raise RuntimeError(f"Wrong image format or too small: {len(body)} bytes; {content_type}")
+                  image = body
+                  print(f"Downloaded new {photo_id}: {len(body):,} bytes")
+                  break
+              except Exception as exc:
+                  print(f"Candidate {photo_id} failed: {exc}")
+          if image is None:
+              raise RuntimeError("No verified high-resolution photo downloaded")
           destination = Path("marketplace/static/marketplace/kofad-home-hero-sharp.webp")
           destination.parent.mkdir(parents=True,exist_ok=True)
           destination.write_bytes(image)
