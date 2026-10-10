@@ -121,6 +121,13 @@ def user_edit(request, branch, pk=None):
         "first_name": user.first_name if user else "",
         "last_name": user.last_name if user else "",
         "recovery_phone": user.access.recovery_phone if user else "",
+        "email": user.email if user else "",
+        "email_daily_closing": user.access.email_daily_closing if user else False,
+        "email_weekly_review": user.access.email_weekly_review if user else False,
+        "email_monthly_review": user.access.email_monthly_review if user else False,
+        "email_critical_alerts": user.access.email_critical_alerts if user else False,
+        "sms_daily_closing": user.access.sms_daily_closing if user else False,
+        "sms_critical_alerts": user.access.sms_critical_alerts if user else False,
         "role": str(selected_role),
         "active": True if creating else user.is_active,
         "branches": selected_branches,
@@ -132,6 +139,8 @@ def user_edit(request, branch, pk=None):
             "first_name": request.POST.get("first_name", "").strip()[:150],
             "last_name": request.POST.get("last_name", "").strip()[:150],
             "recovery_phone": request.POST.get("recovery_phone", "").strip()[:40],
+            "email": request.POST.get("email", "").strip().lower()[:254],
+            **{key: request.POST.get(key) == "on" for key in ("email_daily_closing", "email_weekly_review", "email_monthly_review", "email_critical_alerts", "sms_daily_closing", "sms_critical_alerts")},
             "role": request.POST.get("role", ""),
             "active": request.POST.get("active") == "on",
             "branches": {int(x) for x in request.POST.getlist("branches") if x.isdigit()},
@@ -146,6 +155,16 @@ def user_edit(request, branch, pk=None):
             errors.append("Choose valid active locations.")
         if not values["username"]:
             errors.append("Username is required.")
+        if values["email"]:
+            from django.core.validators import validate_email
+            try:
+                validate_email(values["email"])
+            except ValidationError:
+                errors.append("Enter a valid notification email address.")
+        if any(values[key] for key in ("email_daily_closing", "email_weekly_review", "email_monthly_review", "email_critical_alerts")) and not values["email"]:
+            errors.append("Set a verified staff email before enabling email notices.")
+        if any(values[key] for key in ("sms_daily_closing", "sms_critical_alerts")) and not values["recovery_phone"]:
+            errors.append("Set a staff recovery phone before enabling SMS alerts.")
         duplicate = User.objects.filter(username__iexact=values["username"])
         if user:
             duplicate = duplicate.exclude(pk=user.pk)
@@ -197,6 +216,7 @@ def user_edit(request, branch, pk=None):
                 if creating:
                     user = User.objects.create_user(username=values["username"], password=password)
                 user.username = values["username"]
+                user.email = values["email"]
                 user.first_name = values["first_name"]
                 user.last_name = values["last_name"]
                 user.is_active = values["active"]
@@ -207,7 +227,9 @@ def user_edit(request, branch, pk=None):
                 access, _ = Access.objects.get_or_create(user=user)
                 phone_changed = access.recovery_phone != phone
                 access.recovery_phone = phone
-                access.save(update_fields=["recovery_phone"])
+                for key in ("email_daily_closing", "email_weekly_review", "email_monthly_review", "email_critical_alerts", "sms_daily_closing", "sms_critical_alerts"):
+                    setattr(access, key, values[key])
+                access.save(update_fields=["recovery_phone", "email_daily_closing", "email_weekly_review", "email_monthly_review", "email_critical_alerts", "sms_daily_closing", "sms_critical_alerts"])
                 if phone_changed:
                     PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
                 if not user.is_superuser:

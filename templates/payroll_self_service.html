@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero-panel payroll-hero">
+  <div><p class="eyebrow">PRIVATE EMPLOYEE PORTAL</p><h2>My payroll and payslips</h2><p>View released salaries and download your own payroll statements. Other employees' records and payroll administration are not accessible here.</p></div>
+  <span class="pill">Read-only</span>
+</section>
+<section class="panel">
+  <div class="section-heading"><div><h2>{{ worker.full_name }}</h2><p class="muted">{{ worker.employee_code }} · {{ worker.job_title }} · {{ worker.branch.name }}</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Pay period</th><th>Status</th><th class="number">Gross</th><th class="number">Deductions</th><th class="number">Net</th><th class="number">Paid</th><th class="number">Outstanding</th><th>Download</th></tr></thead><tbody>
+  {% for entry in entries %}<tr><td><strong>{{ entry.period.label }}</strong></td><td><span class="pill">{{ entry.period.get_status_display }}</span></td><td class="number">{{ entry.gross_pay|floatformat:2 }}</td><td class="number">{{ entry.ssnit_employee|add:entry.paye_tax|add:entry.bonus_tax|add:entry.overtime_tax|add:entry.other_deductions|floatformat:2 }}</td><td class="number"><strong>{{ entry.net_pay|floatformat:2 }}</strong></td><td class="number">{{ entry.paid_amount|floatformat:2 }}</td><td class="number">{{ entry.balance|floatformat:2 }}</td><td><a href="{% url 'payslip' entry.period.pk entry.pk 'pdf' %}">PDF payslip</a></td></tr>
+  {% empty %}<tr><td colspan="8" class="empty">No approved payroll has been released for your account yet. Contact your administrator if your profile needs linking.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+<p class="hint">Amounts shown in {{ company.currency }}. Draft payroll is never displayed in personal accounts. Payroll corrections must be requested through management.</p>
+{% endblock %}

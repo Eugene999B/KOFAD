@@ -63,6 +63,7 @@ urlpatterns = [
     path("workers/<int:pk>/documents/<int:document_id>/", workforce_views.worker_document_download, name="worker_document_download"),
     path("workers/<int:pk>/profile.pdf", workforce_views.worker_profile_pdf, name="worker_profile_pdf"),
     path("workers/<int:pk>/id-card.pdf", workforce_views.worker_id_card, name="worker_id_card"),
+    path("workers/<int:pk>/reissue-card/", workforce_views.worker_id_card_reissue, name="worker_id_card_reissue"),
     path("workers/<int:pk>/id-card-print-sheet.pdf", workforce_views.worker_id_card_sheet, name="worker_id_card_sheet"),
     path("workers/export/<str:format>/", workforce_views.workers_export, name="workers_export"),
     path("payroll/", payroll_views.payroll, name="payroll"),

@@ -27,6 +27,13 @@
 </div>
 
 <aside class="account-v4-side">
+<section class="account-v4-card"><div class="account-v4-card-head"><h2>Email preferences</h2></div><p class="account-muted">Receive order updates at your chosen address. Promotional offers are separate and require your confirmation.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_preferences">
+<label>Email address<input type="email" name="notification_email" value="{{ market_customer.email }}" autocomplete="email" placeholder="you@example.com"></label>
+<label class="check-row"><input type="checkbox" name="transactional_email_enabled" {% if market_customer.transactional_email_enabled %}checked{% endif %}> Send essential order and payment status updates</label>
+<label class="check-row"><input type="checkbox" name="marketing_email_opt_in" {% if market_customer.marketing_email_opt_in %}checked{% endif %}> Receive occasional personalised offers and saved-item reminders (optional)</label>
+{% if market_customer.marketing_email_opt_in %}<p class="account-muted">Your email has been confirmed for promotions. Uncheck and save to unsubscribe.</p>{% else %}<p class="account-muted">Promotions stay off until you confirm the link sent to your inbox. You can unsubscribe at any time here.</p>{% endif %}
+<button class="market-button primary wide" type="submit">Save email preferences</button></form></section>
 <section class="account-v4-card"><div class="account-v4-profile"><span>{{ market_customer.full_name|first|upper }}</span><div><strong>{{ market_customer.full_name }}</strong><small>{{ market_customer.phone }}</small>{% if market_customer.email %}<small>{{ market_customer.email }}</small>{% endif %}</div></div><div class="account-v4-actions"><a href="/market/account/security/"><span>Password & security</span><b>›</b></a><a href="/market/messages/"><span>Customer support</span><b>›</b></a><a href="/market/account/returns/"><span>Returns & refunds</span><b>›</b></a></div></section>
 <section class="account-v4-card"><div class="account-v4-card-head"><h2>Delivery</h2></div>{% for address in addresses|slice:":1" %}<div class="saved-address"><strong>{{ address.label }}</strong><p>{{ address.address_line }}{% if address.town %}, {{ address.town }}{% endif %}</p></div>{% empty %}<p class="account-muted">Your latest delivery address will appear after checkout.</p>{% endfor %}</section>
 <form method="post" action="/market/account/logout/" class="account-v4-signout">{% csrf_token %}<button>Sign out</button></form>

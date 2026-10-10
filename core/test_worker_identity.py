@@ -150,3 +150,13 @@ class WorkerIdentityExperienceTests(TestCase):
         self.client.logout()
         response = self.client.get(f"/verify/worker/{self.worker.card_token}/")
         self.assertContains(response, "Credential not currently active")
+
+    def test_reissued_card_revokes_old_qr_and_preserves_new_one(self):
+        previous = self.worker.card_token
+        response = self.client.post(f"/workers/{self.worker.pk}/reissue-card/")
+        self.assertEqual(response.status_code, 302)
+        self.worker.refresh_from_db()
+        self.assertNotEqual(self.worker.card_token, previous)
+        self.client.logout()
+        self.assertEqual(self.client.get(f"/verify/worker/{previous}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/verify/worker/{self.worker.card_token}/").status_code, 200)

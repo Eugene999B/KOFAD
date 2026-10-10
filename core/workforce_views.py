@@ -1,12 +1,14 @@
 import hashlib
 import io
 import os
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -320,30 +322,51 @@ def worker_edit(request, branch, pk=None):
     if request.method == "POST":
         try:
             payload = _worker_payload(request)
+            # Account association is a privileged identity operation, not an HR field.
+            if request.user.is_superuser:
+                user_id = request.POST.get("staff_user", "").strip()
+                linked_user = None
+                if user_id:
+                    if not user_id.isdigit():
+                        raise ValidationError("Select a valid staff account.")
+                    linked_user = User.objects.filter(
+                        Q(is_superuser=True) | Q(access__branches=branch),
+                        pk=int(user_id), is_active=True,
+                    ).distinct().first()
+                    if linked_user is None:
+                        raise ValidationError("The staff account must be active and assigned to this location.")
+                    if Worker.objects.filter(user=linked_user).exclude(
+                        pk=worker.pk if worker else None
+                    ).exists():
+                        raise ValidationError("That staff account is already linked to another worker.")
+                payload["user"] = linked_user
             with transaction.atomic():
                 if worker:
-                    before = {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title}
+                    before = {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title, "user_id": worker.user_id}
                     for key, value in payload.items():
                         setattr(worker, key, value)
                     worker.save()
                     audit(request.user, branch, "worker.updated", worker.employee_code, {
-                        "before": before, "after": {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title},
+                        "before": before, "after": {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title, "user_id": worker.user_id},
                     })
                 else:
                     worker = Worker.objects.create(branch=branch, created_by=request.user, **payload)
                     audit(request.user, branch, "worker.created", worker.employee_code, {
-                        "name": worker.full_name, "job_title": worker.job_title,
+                        "name": worker.full_name, "job_title": worker.job_title, "user_id": worker.user_id,
                     })
             messages.success(request, "Worker profile saved.")
             return redirect("worker_profile", pk=worker.pk)
         except (ValidationError, ValueError, IntegrityError) as exc:
-            messages.error(request, "Employee code already exists." if isinstance(exc, IntegrityError) else problem(exc))
+            messages.error(request, "That worker code or staff link is already in use." if isinstance(exc, IntegrityError) else problem(exc))
     return render(request, "worker_form.html", {
         "title": "Edit worker" if worker else "Add worker",
         "worker": worker,
         "employment_types": Worker.EMPLOYMENT_TYPES, "statuses": Worker.STATUSES,
         "salary_basis": Worker.SALARY_BASIS, "tax_modes": Worker.TAX_MODES,
         "today": timezone.localdate().isoformat(),
+        "can_link_staff": request.user.is_superuser,
+        "staff_users": (User.objects.filter(Q(is_superuser=True) | Q(access__branches=branch), is_active=True)
+                        .distinct().order_by("username") if request.user.is_superuser else []),
     })
 
 
@@ -536,6 +559,7 @@ def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
 
 
 def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
+    """CR80 reverse: independent QR validation, scoped company contacts, no private HR data."""
     from .brand_art import print_fonts
     regular, bold = print_fonts()
     issue, expiry = _card_dates(worker)
@@ -544,36 +568,56 @@ def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
     pdf.translate(x, y)
     pdf.scale(scale, scale)
     width, height = 85.60 * mm, 53.98 * mm
-    pdf.setFillColor(colors.white)
+    pdf.setFillColor(colors.HexColor("#F7F9FC"))
     pdf.rect(0, 0, width, height, fill=1, stroke=0)
+
+    # Official brand band and controlled gold security motif.
     pdf.setFillColor(NAVY_DARK)
-    pdf.rect(0, height - 10 * mm, width, 10 * mm, fill=1, stroke=0)
+    pdf.rect(0, height - 11 * mm, width, 11 * mm, fill=1, stroke=0)
+    pdf.setFillColor(GOLD)
+    pdf.rect(0, height - 11.7 * mm, width, .7 * mm, fill=1, stroke=0)
+    _draw_logo(pdf, 4.4 * mm, height - 9 * mm, 7 * mm)
     pdf.setFillColor(colors.white)
-    pdf.setFont(bold, 7)
-    pdf.drawString(5 * mm, height - 6.2 * mm, "KOFAD IMPEX ENTERPRISE")
-    _draw_qr(pdf, _verification_url(request, worker), 56 * mm, 16.8 * mm, 24 * mm)
-    pdf.setFillColor(NAVY)
-    pdf.setFont(bold, 5.3)
-    pdf.drawCentredString(68 * mm, 13.5 * mm, "VERIFY STAFF STATUS")
-    pairs = [
-        ("CARD SERIAL", _card_serial(worker)),
-        ("ISSUED / VALID UNTIL", issue.strftime("%d %b %Y") + " / " + (expiry.strftime("%d %b %Y") if expiry else "While employed")),
-        ("EMERGENCY CONTACT", worker.emergency_name or "Contact the company"),
-        ("EMERGENCY PHONE", worker.emergency_phone or company.phone or "See company contact"),
+    _fit_text(pdf, company.name.upper(), 14 * mm, height - 5.5 * mm,
+              66 * mm, 8, 6, color=colors.white)
+    pdf.setFont(regular, 4.5)
+    pdf.drawString(14 * mm, height - 8.3 * mm, "OFFICIAL WORKFORCE CREDENTIAL")
+
+    label_value = [
+        ("CREDENTIAL SERIAL", _card_serial(worker)),
+        ("ISSUED ON", issue.strftime("%d %b %Y")),
+        ("VALID UNTIL", expiry.strftime("%d %b %Y") if expiry else "Valid while employed"),
+        ("ASSIGNED LOCATION", worker.branch.name),
     ]
-    for index, (label, value) in enumerate(pairs):
-        yy = (38.5 - index * 7.1) * mm
+    for idx, (label, value) in enumerate(label_value):
+        yy = (38.4 - idx * 7.7) * mm
         pdf.setFillColor(MUTED)
-        pdf.setFont(bold, 4.7)
-        pdf.drawString(5 * mm, yy, label)
-        _fit_text(pdf, value, 5 * mm, yy - 3 * mm, 47 * mm, 6.1, 5, font="Helvetica")
+        pdf.setFont(bold, 4.6)
+        pdf.drawString(4.7 * mm, yy, label)
+        _fit_text(pdf, value, 4.7 * mm, yy - 3.2 * mm, 50.5 * mm, 6.6, 5.1, color=NAVY)
+
+    pdf.setFillColor(colors.white)
+    pdf.roundRect(58.5 * mm, 15.3 * mm, 23.5 * mm, 23.5 * mm, 1.6 * mm, fill=1, stroke=0)
+    _draw_qr(pdf, _verification_url(request, worker), 60 * mm, 16.8 * mm, 20.5 * mm)
+    pdf.setFillColor(NAVY_DARK)
+    pdf.setFont(bold, 5)
+    pdf.drawCentredString(70.25 * mm, 12.8 * mm, "SCAN TO VERIFY")
+    pdf.setFont(regular, 4.1)
+    pdf.drawCentredString(70.25 * mm, 10.6 * mm, "LIVE EMPLOYMENT STATUS")
+
+    # Use the address configured in Settings for this company/location.
+    location = (worker.branch.address or company.address or company.delivery_origin_label or worker.branch.name).strip()
+    phone = (company.phone or company.secondary_phone or "Contact company administration").strip()
+    pdf.setFillColor(NAVY_DARK)
+    pdf.rect(0, 0, width, 8.5 * mm, fill=1, stroke=0)
+    _fit_text(pdf, "LOCATION: " + location, 4.5 * mm, 5.2 * mm, 76.4 * mm,
+              5.5, 4.3, font="Helvetica", color=colors.white)
+    _fit_text(pdf, "IF FOUND: " + phone + "  |  Property of " + company.name,
+              4.5 * mm, 2.4 * mm, 76.4 * mm, 5.1, 4.2,
+              font="Helvetica", color=colors.white)
+
     pdf.setStrokeColor(LINE)
-    pdf.line(5 * mm, 10.5 * mm, width - 5 * mm, 10.5 * mm)
-    _fit_text(pdf, "Company property. Return this card when employment ends.", 5 * mm, 7.5 * mm, width - 10 * mm, 5, 4.8, font="Helvetica", color=MUTED)
-    contact = "IF FOUND: " + (company.phone or "Return to KOFAD IMPEX ENTERPRISE")
-    _fit_text(pdf, contact, 5 * mm, 4 * mm, width - 10 * mm, 5.5, 5, color=NAVY)
-    pdf.setStrokeColor(LINE)
-    pdf.setLineWidth(.5)
+    pdf.setLineWidth(.45)
     pdf.rect(0, 0, width, height, fill=0, stroke=1)
     pdf.restoreState()
 
@@ -591,6 +635,25 @@ def _draw_cut_marks(pdf, x, y, width, height):
         direction = -1 if yy == y else 1
         pdf.line(x, yy + direction * gap, x, yy + direction * (gap + length))
         pdf.line(x + width, yy + direction * gap, x + width, yy + direction * (gap + length))
+
+
+@protected("manage_company")
+@require_POST
+def worker_id_card_reissue(request, branch, pk):
+    """Rotate the public verification secret; old printed IDs are no longer valid."""
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only a system administrator can reissue workforce credentials.")
+    worker = get_object_or_404(Worker, branch=branch, pk=pk)
+    old_serial = _card_serial(worker)
+    worker.card_token = uuid.uuid4()
+    worker.id_card_issue_date = timezone.localdate()
+    worker.save(update_fields=["card_token", "id_card_issue_date", "updated_at"])
+    audit(request.user, branch, "worker.id_card.reissued", worker.employee_code, {
+        "old_serial": old_serial, "new_serial": _card_serial(worker),
+        "previous_qr_revoked": True,
+    })
+    messages.success(request, "New ID credential issued. Earlier QR codes are now invalid.")
+    return redirect("worker_profile", pk=worker.pk)
 
 
 @protected("manage_company")

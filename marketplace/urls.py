@@ -23,6 +23,7 @@ urlpatterns = [
     path("market/gallery/<int:pk>/image/<str:size>/", views.gallery_image, name="market_gallery_image"),
     path("market/access/", views.customer_access, name="market_access"),
     path("market/account/", views.customer_account, name="market_account"),
+    path("market/account/email-confirm/<str:token>/", views.customer_email_confirm, name="market_email_confirm"),
     path("market/account/register/", views.account_start, name="market_register"),
     path("market/account/verify/", views.account_verify, name="market_verify"),
     path("market/account/finish/", views.account_finish, name="market_finish"),
