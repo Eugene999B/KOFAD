@@ -48,6 +48,8 @@ class Command(BaseCommand):
             if now - last_automation >= 60:
                 try:
                     run_scheduled_automations()
+                    from core.notification_engine import process_email_outbox
+                    process_email_outbox()
                 except Exception as exc:
                     self.stderr.write(f"Communication automation check failed safely: {exc}")
                 last_automation = now
