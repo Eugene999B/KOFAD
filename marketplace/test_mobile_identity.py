@@ -113,17 +113,14 @@ class NativeIdentityTests(Fixtures, TestCase):
         return tokens
 
     def client_request(self):
-        # Feed the same real Django session used by our integration client into
-        # the existing customer sign-in helper, without introducing mobile passwords.
-        from django.test import RequestFactory
-        request = RequestFactory().get("/", secure=True)
-        request.session = self.client.session
-        from django.contrib.auth.models import AnonymousUser
-        request.user = AnonymousUser()
-        # The helper calls session.cycle_key(); copy its rotated session cookie.
-        services.set_customer_session(request, self.market_customer)
-        self.client.cookies[__import__("django.conf", fromlist=["settings"]).settings.SESSION_COOKIE_NAME] = request.session.session_key
-        return request
+        # Persist the exact authentication stamps issued by KOFAD's customer
+        # sign-in service in Django's real integration-test browser session.
+        session = self.client.session
+        session["market_customer_id"] = self.market_customer.pk
+        session["market_credential_stamp"] = services.customer_credential_stamp(self.market_customer)
+        session["market_session_expires_at"] = (timezone.now().timestamp() + 7200)
+        session.save()
+
 
     def test_refresh_rotation_replay_rejection_and_device_revocation(self):
         self.client_request()
