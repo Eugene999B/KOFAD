@@ -167,6 +167,8 @@ def _bearer_session(request, channel):
 @require_http_methods(["GET", "POST"])
 def authorize(request, channel):
     """Existing browser login and form CSRF precede the one-time app callback."""
+    if not getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False):
+        return HttpResponse(status=404)
     client = CLIENTS[channel]
     params = request.GET if request.method == "GET" else request.POST
     challenge = params.get("code_challenge", "")
@@ -225,6 +227,8 @@ def authorize(request, channel):
 @csrf_exempt
 @require_http_methods(["POST", "OPTIONS"])
 def token(request, channel):
+    if not getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False):
+        return HttpResponse(status=404)
     if request.method == "OPTIONS":
         return _preflight(request)
     if not _request_allowed(request):
@@ -302,6 +306,8 @@ def token(request, channel):
 @csrf_exempt
 @require_http_methods(["GET", "OPTIONS"])
 def me(request, channel):
+    if not getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False):
+        return HttpResponse(status=404)
     if request.method == "OPTIONS":
         return _preflight(request)
     if not _request_allowed(request):
@@ -332,6 +338,8 @@ def me(request, channel):
 @csrf_exempt
 @require_http_methods(["POST", "OPTIONS"])
 def revoke(request, channel):
+    if not getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False):
+        return HttpResponse(status=404)
     if request.method == "OPTIONS":
         return _preflight(request)
     if not _request_allowed(request):

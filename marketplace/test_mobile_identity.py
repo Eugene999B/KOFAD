@@ -16,6 +16,7 @@ from marketplace.mobile_auth_models import MobileAuthorizationGrant, MobileDevic
 @override_settings(
     ALLOWED_HOSTS=["testserver", "market.kofadimpex.com", "staff.kofadimpex.com"],
     PRIVILEGED_MFA_ENFORCED=False,
+    KOFAD_NATIVE_AUTH_ENABLED=True,
 )
 class NativeIdentityTests(Fixtures, TestCase):
     verifier = "V" * 43
@@ -186,6 +187,12 @@ class NativeIdentityTests(Fixtures, TestCase):
         self.user.access.session_version += 1
         self.user.access.save(update_fields=["session_version"])
         self.assertEqual(self._me(credentials["access_token"], "staff").status_code, 401)
+
+    def test_auth_endpoints_remain_disabled_by_default(self):
+        with override_settings(KOFAD_NATIVE_AUTH_ENABLED=False):
+            self.assertEqual(self.client.get(self.customer_base + "authorize/").status_code, 404)
+            self.assertEqual(self.client.post(self.customer_base + "token/").status_code, 404)
+            self.assertEqual(self.client.get(self.staff_base + "me/").status_code, 404)
 
     def test_staff_auth_requires_mfa_when_enforced(self):
         with override_settings(PRIVILEGED_MFA_ENFORCED=True):

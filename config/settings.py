@@ -221,3 +221,7 @@ KOFAD_BREVO_WEBHOOK_TOKEN = os.environ.get("KOFAD_BREVO_WEBHOOK_TOKEN", "").stri
 
 # Optional public-site analytics is loaded only after the visitor opts in.
 KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip()
+
+# Native account authorization remains OFF until verified app deep links and
+# hardware-backed OS token storage are shipped and reviewed.
+KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
