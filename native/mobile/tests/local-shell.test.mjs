@@ -46,5 +46,6 @@ test("No offline transaction queue or unsafe application bridge", () => {
   const local = read("app-shell/native.js");
   const cfg = read("capacitor.config.ts");
   assert.doesNotMatch(local, /localStorage\.setItem\([^,]*payment/i);
-  assert.doesNotMatch(cfg, /server\.url|allowMixedContent:\s*true/);
+  assert.doesNotMatch(cfg, /^\s*url:\s*profile\.startUrl/m);
+  assert.doesNotMatch(cfg, /allowMixedContent:\s*true/);
 });
