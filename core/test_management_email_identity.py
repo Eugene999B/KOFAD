@@ -161,6 +161,7 @@ class ManagementMailboxRetirementTests(TestCase):
         KOFAD_EMAIL_ENABLED=True, KOFAD_EMAIL_PROVIDER="brevo",
         KOFAD_BREVO_API_KEY="FAKE-CI-ONLY",
         KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_SECURITY_FROM_EMAIL="transactions@kofadimpex.com",
         KOFAD_BREVO_REGISTERED_SENDERS="transactions@kofadimpex.com",
     )
     def test_disabled_mailbox_queue_cannot_submit_to_provider(self):
@@ -185,6 +186,7 @@ class ManagementMailboxRetirementTests(TestCase):
         KOFAD_EMAIL_ENABLED=True, KOFAD_EMAIL_PROVIDER="brevo",
         KOFAD_BREVO_API_KEY="FAKE-CI-ONLY",
         KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_SECURITY_FROM_EMAIL="transactions@kofadimpex.com",
         KOFAD_BREVO_REGISTERED_SENDERS="transactions@kofadimpex.com",
     )
     def test_direct_provider_rejects_retired_sender_and_recipient(self):
