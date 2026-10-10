@@ -93,35 +93,40 @@ def _json_body(request):
     return value if isinstance(value, dict) else None
 
 
-def _staff_context(user, session):
+def _staff_principal(user, session):
+    """Validate employee, session version and MFA before allowing branch selection."""
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return None
     access = Access.objects.filter(user=user).first()
     if not access or access.force_password_change:
         return None
-    if session is not None and session.get("access_version") != access.session_version:
+    if session is None or session.get("access_version") != access.session_version:
         return None
     mfa_at = None
     if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
-        raw = session.get("mfa_verified_at") if session is not None else None
         try:
-            mfa_at = float(raw)
+            mfa_at = float(session.get("mfa_verified_at"))
         except (TypeError, ValueError):
             return None
         if mfa_at + settings.MFA_SESSION_SECONDS <= timezone.now().timestamp():
             return None
-    authorized = Branch.objects.filter(active=True)
-    if not user.is_superuser:
-        authorized = authorized.filter(access__user=user)
-    # Never silently choose a branch for a privileged native authorization.
-    # The employee must have explicitly selected a currently assigned branch.
-    current = session.get("branch") if session is not None else None
-    if not current:
+    return access, mfa_at
+
+
+def _staff_branches(user):
+    assigned = Branch.objects.filter(active=True)
+    return assigned if user.is_superuser else assigned.filter(access__user=user)
+
+
+def _staff_context(user, session):
+    principal = _staff_principal(user, session)
+    if not principal:
         return None
-    branch = authorized.filter(pk=current).first()
-    if not branch:
-        return None
-    return (access, branch, mfa_at)
+    # Every native staff grant is explicitly bound to the selected, assigned
+    # branch; the app may not pick a default when this is missing.
+    current = session.get("branch")
+    branch = _staff_branches(user).filter(pk=current).first() if current else None
+    return (*principal[:1], branch, principal[1]) if branch else None
 
 
 def _valid_device(session, channel):
@@ -199,14 +204,39 @@ def authorize(request, channel):
     ):
         return HttpResponse("Invalid KOFAD app authorization request.", status=400)
     customer = services.customer_from_session(request) if channel == "customer" else None
+    if channel == "staff" and request.method == "POST" and params.get("branch"):
+        # CSRF remains enforced on this ordinary browser form submission.
+        principal = _staff_principal(request.user, request.session)
+        if not principal:
+            return HttpResponse("Complete staff authentication before selecting a branch.", status=403)
+        chosen = _staff_branches(request.user).filter(pk=params.get("branch")).first()
+        if not chosen:
+            return HttpResponse("That branch is not assigned to your account.", status=403)
+        request.session["branch"] = chosen.pk
     staff = _staff_context(request.user, request.session) if channel == "staff" else None
     if channel == "customer" and customer is None:
         if request.method != "GET":
             return HttpResponse("Sign in before authorizing.", status=401)
         return redirect("/market/access/?" + urlencode({"next": request.get_full_path()}))
     if channel == "staff" and staff is None:
+        principal = _staff_principal(request.user, request.session)
+        if principal and request.method == "GET":
+            # The verified employee chooses their branch on the consent page.
+            # Nothing is authorized until a CSRF-protected POST binds the branch.
+            response = render(request, "marketplace/mobile_native_authorize.html", {
+                "channel": channel,
+                "app_name": "KOFAD Staff",
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "state": state,
+                "challenge": challenge,
+                "select_branch": True,
+                "branches": _staff_branches(request.user).order_by("name"),
+            })
+            response["Cache-Control"] = "no-store"
+            return response
         if request.method != "GET":
-            return HttpResponse("Complete staff authentication and MFA first.", status=403)
+            return HttpResponse("Complete staff authentication and branch selection first.", status=403)
         request.session["staff_mobile_auth_return"] = request.get_full_path()
         if getattr(request.user, "is_authenticated", False):
             if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(request.user):
