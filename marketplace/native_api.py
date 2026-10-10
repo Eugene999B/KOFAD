@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import JsonResponse
+from django.utils.html import strip_tags
 from django.views.decorators.http import require_GET
 
 from core.models import Stock
@@ -77,6 +78,7 @@ def public_native_catalog(request):
         items.append({
             "id": listing.pk,
             "name": listing.display_name,
+            "description": " ".join(strip_tags(listing.description or "").split())[:500],
             "category": listing.product.category,
             "price": str(price.quantize(Decimal("0.01"))),
             "currency": "GHS",
