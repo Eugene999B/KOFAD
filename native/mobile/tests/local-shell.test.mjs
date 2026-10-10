@@ -27,7 +27,9 @@ test("Customer and staff are independently built, including branded pages", () =
     assert.match(html, new RegExp(channel === "customer" ? "KOFAD Market" : "KOFAD Staff"));
     assert.match(html, /Content-Security-Policy/);
     assert.match(js, new RegExp('const CHANNEL = "' + channel + '"'));
-    assert.doesNotMatch(html, /__APP_NAME__|__CHANNEL__|__WELCOME_/);
+    assert.doesNotMatch(html, /__APP_NAME__|__APP_ORIGIN__|__CHANNEL__|__WELCOME_/);
+    assert.match(html, new RegExp("connect-src https://" + (channel === "customer" ? "market" : "staff") + "\\.kofadimpex\\.com"));
+    assert.doesNotMatch(html, new RegExp("connect-src https://" + (channel === "customer" ? "staff" : "market") + "\\.kofadimpex\\.com"));
     assert.doesNotMatch(js, /__CHANNEL__/);
     assert.doesNotMatch(html, /password|api_key|secret_key/i);
   }
