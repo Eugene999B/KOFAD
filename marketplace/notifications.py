@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 @transaction.atomic
 def queue_order_sms(order, event, body):
+    try:
+        from core.notification_engine import queue_customer_order_email
+        queue_customer_order_email(order, event)
+    except Exception:
+        logger.exception("Transactional email could not be queued safely for order %s", order.pk)
     if not settings.SMS_ENABLED:
         return None
     from .services import _system_actor
