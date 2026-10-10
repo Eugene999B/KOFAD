@@ -558,6 +558,7 @@ def _draw_card_front(pdf, worker, company, width, height, x=0, y=0):
 
 
 def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
+    """CR80 reverse: independent QR validation, scoped company contacts, no private HR data."""
     from .brand_art import print_fonts
     regular, bold = print_fonts()
     issue, expiry = _card_dates(worker)
@@ -566,36 +567,56 @@ def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
     pdf.translate(x, y)
     pdf.scale(scale, scale)
     width, height = 85.60 * mm, 53.98 * mm
-    pdf.setFillColor(colors.white)
+    pdf.setFillColor(colors.HexColor("#F7F9FC"))
     pdf.rect(0, 0, width, height, fill=1, stroke=0)
+
+    # Official brand band and controlled gold security motif.
     pdf.setFillColor(NAVY_DARK)
-    pdf.rect(0, height - 10 * mm, width, 10 * mm, fill=1, stroke=0)
+    pdf.rect(0, height - 11 * mm, width, 11 * mm, fill=1, stroke=0)
+    pdf.setFillColor(GOLD)
+    pdf.rect(0, height - 11.7 * mm, width, .7 * mm, fill=1, stroke=0)
+    _draw_logo(pdf, 4.4 * mm, height - 9 * mm, 7 * mm)
     pdf.setFillColor(colors.white)
-    pdf.setFont(bold, 7)
-    pdf.drawString(5 * mm, height - 6.2 * mm, "KOFAD IMPEX ENTERPRISE")
-    _draw_qr(pdf, _verification_url(request, worker), 56 * mm, 16.8 * mm, 24 * mm)
-    pdf.setFillColor(NAVY)
-    pdf.setFont(bold, 5.3)
-    pdf.drawCentredString(68 * mm, 13.5 * mm, "VERIFY STAFF STATUS")
-    pairs = [
-        ("CARD SERIAL", _card_serial(worker)),
-        ("ISSUED / VALID UNTIL", issue.strftime("%d %b %Y") + " / " + (expiry.strftime("%d %b %Y") if expiry else "While employed")),
-        ("EMERGENCY CONTACT", worker.emergency_name or "Contact the company"),
-        ("EMERGENCY PHONE", worker.emergency_phone or company.phone or "See company contact"),
+    _fit_text(pdf, company.name.upper(), 14 * mm, height - 5.5 * mm,
+              66 * mm, 8, 6, color=colors.white)
+    pdf.setFont(regular, 4.5)
+    pdf.drawString(14 * mm, height - 8.3 * mm, "OFFICIAL WORKFORCE CREDENTIAL")
+
+    label_value = [
+        ("CREDENTIAL SERIAL", _card_serial(worker)),
+        ("ISSUED ON", issue.strftime("%d %b %Y")),
+        ("VALID UNTIL", expiry.strftime("%d %b %Y") if expiry else "Valid while employed"),
+        ("ASSIGNED LOCATION", worker.branch.name),
     ]
-    for index, (label, value) in enumerate(pairs):
-        yy = (38.5 - index * 7.1) * mm
+    for idx, (label, value) in enumerate(label_value):
+        yy = (38.4 - idx * 7.7) * mm
         pdf.setFillColor(MUTED)
-        pdf.setFont(bold, 4.7)
-        pdf.drawString(5 * mm, yy, label)
-        _fit_text(pdf, value, 5 * mm, yy - 3 * mm, 47 * mm, 6.1, 5, font="Helvetica")
+        pdf.setFont(bold, 4.6)
+        pdf.drawString(4.7 * mm, yy, label)
+        _fit_text(pdf, value, 4.7 * mm, yy - 3.2 * mm, 50.5 * mm, 6.6, 5.1, color=NAVY)
+
+    pdf.setFillColor(colors.white)
+    pdf.roundRect(58.5 * mm, 15.3 * mm, 23.5 * mm, 23.5 * mm, 1.6 * mm, fill=1, stroke=0)
+    _draw_qr(pdf, _verification_url(request, worker), 60 * mm, 16.8 * mm, 20.5 * mm)
+    pdf.setFillColor(NAVY_DARK)
+    pdf.setFont(bold, 5)
+    pdf.drawCentredString(70.25 * mm, 12.8 * mm, "SCAN TO VERIFY")
+    pdf.setFont(regular, 4.1)
+    pdf.drawCentredString(70.25 * mm, 10.6 * mm, "LIVE EMPLOYMENT STATUS")
+
+    # Use the address configured in Settings for this company/location.
+    location = (worker.branch.address or company.address or worker.branch.name).strip()
+    phone = (company.phone or company.secondary_phone or "Contact company administration").strip()
+    pdf.setFillColor(NAVY_DARK)
+    pdf.rect(0, 0, width, 8.5 * mm, fill=1, stroke=0)
+    _fit_text(pdf, "LOCATION: " + location, 4.5 * mm, 5.2 * mm, 76.4 * mm,
+              5.5, 4.3, font="Helvetica", color=colors.white)
+    _fit_text(pdf, "IF FOUND: " + phone + "  |  Property of " + company.name,
+              4.5 * mm, 2.4 * mm, 76.4 * mm, 5.1, 4.2,
+              font="Helvetica", color=colors.white)
+
     pdf.setStrokeColor(LINE)
-    pdf.line(5 * mm, 10.5 * mm, width - 5 * mm, 10.5 * mm)
-    _fit_text(pdf, "Company property. Return this card when employment ends.", 5 * mm, 7.5 * mm, width - 10 * mm, 5, 4.8, font="Helvetica", color=MUTED)
-    contact = "IF FOUND: " + (company.phone or "Return to KOFAD IMPEX ENTERPRISE")
-    _fit_text(pdf, contact, 5 * mm, 4 * mm, width - 10 * mm, 5.5, 5, color=NAVY)
-    pdf.setStrokeColor(LINE)
-    pdf.setLineWidth(.5)
+    pdf.setLineWidth(.45)
     pdf.rect(0, 0, width, height, fill=0, stroke=1)
     pdf.restoreState()
 
