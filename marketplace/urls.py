@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views, public_views, seo
-from core import native_apps
+from core import native_apps, pwa
 from . import native_api
 from core import google_oauth as google
 
@@ -11,6 +11,10 @@ urlpatterns = [
     path("market/app/releases.json", native_apps.customer_release_status, name="market_native_releases"),
     path("market/app/native-version.json", native_apps.customer_native_version, name="market_native_version"),
     path("market/app/catalog.json", native_api.public_native_catalog, name="market_native_catalog"),
+    path("market/app/manifest.webmanifest", pwa.manifest, {"kind": "customer"}, name="market_pwa_manifest"),
+    path("market/app/sw.js", pwa.worker, {"kind": "customer"}, name="market_pwa_sw"),
+    path("market/app/offline/", pwa.offline, {"kind": "customer"}, name="market_pwa_offline"),
+    path("market/app/install/", pwa.market_install, name="market_pwa_install"),
     path("robots.txt", seo.robots, name="robots_txt"),
     path("sitemap.xml", seo.sitemap, name="sitemap_xml"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),
