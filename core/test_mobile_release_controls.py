@@ -49,7 +49,16 @@ class MobileControlTests(TestCase):
         self.client.force_login(ordinary)
         self.assertIn(self.client.get("/staff/app/control/").status_code, (302, 403))
         admin = User.objects.create_superuser("appowner", "admin@example.com", "test-strong-secret")
+        from core.models import Branch
+        branch = Branch.objects.create(name="Main", code="main")
+        admin.access.branches.add(branch)
         self.client.force_login(admin)
+        # KOFAD requires both a valid login and its own MFA/branch session.
+        session = self.client.session
+        session["access_version"] = admin.access.session_version
+        session["mfa_ok"] = True
+        session["branch"] = branch.pk
+        session.save()
         response = self.client.get("/staff/app/control/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mobile App Control")
