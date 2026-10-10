@@ -67,26 +67,18 @@ def prepare_logo() -> None:
         f'href="data:image/png;base64,{encoded}"/></svg>\n', encoding="utf-8",
     )
 
-    # Use only the emblem for the square small-icon family, not tiny unreadable text.
-    # Preserve its original colours/appearance; crop approximately its upper region.
-    box = padded.getchannel("A").getbbox() or (0,0,width,height)
-    x0,y0,x1,y1 = box
-    W,H=x1-x0,y1-y0
-    if W > H * 1.3:
-        emblem = padded.crop((x0 + int(W*.28),y0,x0 + int(W*.72),y0 + int(H*.66)))
-    else:
-        emblem = padded.crop((x0,y0,x1,y0 + int(H*.65)))
-    square = max(emblem.size)
-    icon = Image.new("RGBA",(square,square))
-    icon.alpha_composite(emblem,((square-emblem.width)//2,(square-emblem.height)//2))
-    icon = ImageOps.contain(icon,(480,480),Image.Resampling.LANCZOS)
-    # Dark/navy tile keeps the mark legible even where PNG alpha is transparent.
-    for size in (16,32,48,96,180,192,512):
-        tile = Image.new("RGBA",(size,size),(10,40,61,255))
-        safe = max(1,int(size*.82))
-        mark = ImageOps.contain(icon,(safe,safe),Image.Resampling.LANCZOS)
-        tile.alpha_composite(mark,((size-mark.width)//2,(size-mark.height)//2))
-        tile.save(BRAND / f"favicon-{size}.png","PNG",optimize=True)
+    # Use the WHOLE owner-approved brand image, just as the website header does.
+    # Guessing an "emblem region" from the image dimensions previously cut the
+    # wrong part of some logos and produced an unrelated-looking Google favicon.
+    # Only trim empty transparency; never cut the logo itself.
+    bounds = padded.getchannel("A").getbbox() or (0, 0, width, height)
+    complete_logo = padded.crop(bounds)
+    for size in (16, 32, 48, 96, 180, 192, 512):
+        tile = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        safe = max(1, round(size * .92))
+        logo = ImageOps.contain(complete_logo, (safe, safe), Image.Resampling.LANCZOS)
+        tile.alpha_composite(logo, ((size - logo.width) // 2, (size - logo.height) // 2))
+        tile.save(BRAND / f"favicon-{size}.png", "PNG", optimize=True)
     (BRAND / "apple-touch-icon.png").write_bytes((BRAND / "favicon-180.png").read_bytes())
     fav = Image.open(BRAND / "favicon-96.png").convert("RGBA")
     fav.save(BRAND / "favicon.ico",format="ICO",sizes=[(16,16),(32,32),(48,48)])
