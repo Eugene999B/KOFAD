@@ -209,7 +209,10 @@ def authorize(request, channel):
         principal = _staff_principal(request.user, request.session)
         if not principal:
             return HttpResponse("Complete staff authentication before selecting a branch.", status=403)
-        chosen = _staff_branches(request.user).filter(pk=params.get("branch")).first()
+        branch_id = str(params.get("branch", ""))
+        if not branch_id.isascii() or not branch_id.isdecimal() or len(branch_id) > 12:
+            return HttpResponse("Invalid branch selection.", status=403)
+        chosen = _staff_branches(request.user).filter(pk=int(branch_id)).first()
         if not chosen:
             return HttpResponse("That branch is not assigned to your account.", status=403)
         request.session["branch"] = chosen.pk
