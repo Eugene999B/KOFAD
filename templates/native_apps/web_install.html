@@ -1,3 +1,15 @@
 {% extends "marketplace/base.html" %}{% load static %}
 {% block after_styles %}<link rel="stylesheet" href="{% static 'download-hub.css' %}">{% endblock %}
-{% block content %}<div class="kf-install-landing" data-kf-web-install>{% include "native_apps/_shared.html" %}</div>{% endblock %}
+{% block content %}
+<div class="kf-download kf-iphone-guide" data-pwa-install-page>
+  <img class="kf-download-logo" src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE" width="84" height="84">
+  <img class="kf-guide-apple" src="{% static 'native-brands/apple.svg' %}" alt="" width="40" height="40">
+  <h1>Use KOFAD on iPhone.</h1>
+  <p class="kf-download-intro">Add KOFAD Market to your Home Screen in Safari.</p>
+  <button type="button" class="kf-download-device-action kf-iphone-primary" data-pwa-install data-pwa-guide="iphone">Show iPhone steps <span aria-hidden="true">→</span></button>
+  <div class="kf-download-guide" data-pwa-install-steps hidden><div><strong>How to add KOFAD</strong><p data-pwa-device-steps>Open Safari, tap Share, then Add to Home Screen.</p></div><button type="button" data-pwa-close-steps aria-label="Close instructions">×</button></div>
+  <p class="kf-download-prompt" data-pwa-install-state role="status" aria-live="polite"></p>
+  <div class="kf-download-update" data-pwa-update hidden role="status"><span>A KOFAD update is ready.</span><button type="button" data-pwa-update-apply>Update now</button></div>
+  <p class="kf-download-back"><a href="/market/">Open KOFAD Market <span aria-hidden="true">→</span></a></p>
+</div>
+{% endblock %}
