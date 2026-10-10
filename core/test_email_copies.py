@@ -1,5 +1,6 @@
 """Business mail recipient privacy, CC/BCC delivery, and staff-reviewed forwarding."""
 from unittest.mock import Mock, patch
+import requests
 
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ValidationError
@@ -66,6 +67,17 @@ class EmailCopiesAndForwardTests(TestCase):
         self.assertNotIn("audit@example.org", str(body["to"]))
         queued.refresh_from_db()
         self.assertEqual(queued.status, "submitted")
+
+    @patch("core.brevo_email.requests.post", side_effect=requests.ConnectionError("broken socket"))
+    def test_provider_connection_drops_are_not_automatically_retried(self, post):
+        letter = compose(
+            self.support, "customer@example.org", "Order notice", "Body", self.admin
+        )
+        self.assertEqual(deliver_outgoing(limit=1), 0)
+        letter.refresh_from_db()
+        self.assertEqual(letter.status, "uncertain")
+        self.assertEqual(deliver_outgoing(limit=1), 0)
+        post.assert_called_once()
 
     def test_invalid_duplicate_or_injected_copies_never_enqueue(self):
         bad = [
