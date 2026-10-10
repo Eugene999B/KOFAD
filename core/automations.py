@@ -324,9 +324,11 @@ def run_low_stock_summary(now=None):
 
 
 def run_scheduled_automations(now=None):
+    from .notification_engine import run_staff_scheduled_reports
     return {
         "debt": run_debt_reminders(now),
         "low_stock": run_low_stock_summary(now),
+        "email_reports": run_staff_scheduled_reports(now),
     }
 
 
@@ -370,7 +372,13 @@ def safe_prepare_closing(closing_id, actor_id=None):
     if not closing:
         return []
     try:
-        return prepare_closing_notifications(closing, actor)
+        prepared = prepare_closing_notifications(closing, actor)
     except Exception as exc:
         _record_automation_failure(closing.branch, actor, "daily_closing", closing.pk, exc)
-        return []
+        prepared = []
+    try:
+        from .notification_engine import queue_closing_reports
+        queue_closing_reports(closing)
+    except Exception as exc:
+        _record_automation_failure(closing.branch, actor, "staff_closing_report", closing.pk, exc)
+    return prepared
