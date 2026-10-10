@@ -118,3 +118,27 @@ The public `/apps/` and authenticated `/staff/app/` pages deliberately show **In
 
 **Important operational rules:** GitHub Actions review artifacts expire after seven days. They are not public installers. CI never uploads release candidates to the public website or a store automatically. Android requires a stable signing identity forever if future versions are to update existing installs. The Windows app-update server on `downloads.kofadimpex.com/windows/{customer|staff}/` needs reliable hosting, the update metadata and signed setup bundles. iPhone builds require store-side review and distribution; there is no safe way to enable an iPhone download using an Android APK, an iOS Simulator archive, or a web shortcut.
 
+
+## KOFAD Market Android: public APK without an app store or R2 account
+
+The official public repository can distribute the signed APK using GitHub Releases. The protected Android workflow now has a **publish_customer** switch; its default is **false**. Staff APKs cannot be published by that job.
+
+**One-time organization-owner setup (not something to paste into ChatGPT):**
+
+1. Back up a permanent KOFAD-owned Android release keystore in an encrypted offline location. Never change the key between updates. Do **not** use the automatically generated Android debug signing key. The public package ID is `com.kofadimpex.market`.
+2. In GitHub > KOFAD repository > Settings > Environments, configure `kofad-native-publishing` with authorized reviewer protection. Configure its **environment secrets** using your secure publisher machine or GitHub's secrets UI:
+   - `KOFAD_CUSTOMER_ANDROID_KEYSTORE_B64` — Base64 of the actual release keystore
+   - `KOFAD_CUSTOMER_ANDROID_KEYSTORE_PASSWORD`
+   - `KOFAD_CUSTOMER_ANDROID_KEY_ALIAS`
+   - `KOFAD_CUSTOMER_ANDROID_KEY_PASSWORD`
+   - `KOFAD_CUSTOMER_ANDROID_CERT_SHA256` — signing certificate fingerprint, obtained from `keytool -list -v`
+3. The workflow must be launched manually from GitHub Actions on branch `railway-release`. Choose `channel=customer`, a new `version=X.Y.Z`, a unique increasing `version_code` (for example, `1` for the initial version), and **`publish_customer=false`**. Download the resulting private signed artifact for real-device acceptance tests.
+4. Verify on Android phones: KOFAD identity, first launch, real product catalog, HTTPS browser handoff for account/checkout, network loss, navigation and installs/updates. Existing customer transactions stay server-side. Do not activate a public download until this testing is approved.
+5. Run the same approved release source and version with **`publish_customer=true`**, after publisher approval, to create an immutable, public, signed GitHub Release. The publishing job rechecks the checksum, package identity, Android version, signature and certificate. It rejects a reused version tag.
+6. The resulting GitHub Actions summary contains the exact APK download URL, in this form:
+   `https://github.com/Eugene999B/KOFAD/releases/download/kofad-market-android-v1.0.0/KOFAD-customer-1.0.0-android.apk`
+7. Install the **public** URL on a clean Android phone. Only then set the Railway `kofad-web` variables `KOFAD_CUSTOMER_APP_VERSION` and `KOFAD_CUSTOMER_APP_ANDROID_URL` to the actual published version and its exact GitHub release URL. The public Android card then offers a real download. No extra domain, Play listing or R2 activation is needed.
+
+The GitHub repository and release assets are public; **never** upload signing material, keystore backups or passwords there. The release files contain only the APK and SHA-256 checksum. A future update must preserve the permanent signing identity and use a higher Android versionCode. App installation from a browser may require an Android "install unknown apps" confirmation. Google Play is optional for direct distribution.
+
+**Current status:** Publication automation is prepared, but no public APK exists until the private signing credentials are configured, on-device QA passes, and the owner approves publication. A debug APK or unsigned artifact is never a customer release.
