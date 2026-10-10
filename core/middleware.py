@@ -85,7 +85,7 @@ class AccessMiddleware:
                     mfa_valid = float(raw_verified) + settings.MFA_SESSION_SECONDS > now
                 except (TypeError, ValueError):
                     mfa_valid = False
-                if not mfa_valid and request.path not in ("/mfa/", "/logout/", "/account/password/", "/session/state/"):
+                if not mfa_valid and request.path not in ("/mfa/", "/logout/", "/account/password/", "/session/state/", "/staff/mobile/v1/authorize/"):
                     return redirect("mfa")
         response = self.get_response(request)
         geolocation_paths = ("/market/checkout/", "/market-settings/", "/online-orders/")
