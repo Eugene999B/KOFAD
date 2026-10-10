@@ -37,6 +37,11 @@ logger = logging.getLogger(__name__)
 MAX_INGEST_BYTES = 1024 * 1024
 MAX_BODY_CHARS = 100000
 
+# Historical management address is receive-only, not shown as a company identity.
+# Retain for messages from customers with old contacts/address books.
+LEGACY_MANAGEMENT_ADDRESS = "eugene@kofadimpex.com"
+MANAGEMENT_ADDRESS = "management@kofadimpex.com"
+
 
 def enabled():
     return getattr(settings, "KOFAD_EMAIL_CENTER_ENABLED", False)
@@ -241,6 +246,8 @@ def inbox(request, section="inbox"):
                 address = _address(request.POST.get("address"))
                 if not address.endswith("@kofadimpex.com"):
                     raise ValidationError("Use an @kofadimpex.com address.")
+                if address == LEGACY_MANAGEMENT_ADDRESS:
+                    raise ValidationError("This address is retired. Use management@kofadimpex.com.")
                 label = request.POST.get("label", "").strip()[:100]
                 if not label:
                     raise ValidationError("Enter a mailbox name.")
@@ -567,7 +574,11 @@ def ingest(request):
     expected = hmac.new(secret.encode(), material, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):
         return HttpResponse(status=403)
-    mailbox = EmailMailbox.objects.filter(address=recipient, active=True).first()
+    routed_to = (
+        MANAGEMENT_ADDRESS if recipient == LEGACY_MANAGEMENT_ADDRESS
+        else recipient
+    )
+    mailbox = EmailMailbox.objects.filter(address=routed_to, active=True).first()
     if not mailbox:
         return HttpResponse(status=404)
     try:
@@ -591,6 +602,7 @@ def ingest(request):
             references=str(parsed.get("References", ""))[:2048],
             body=content[:MAX_BODY_CHARS], message_id=message_id,
             fingerprint=fingerprint, attachments=attachments,
+            recipient=recipient,
         )
         result = JsonResponse({"accepted": True})
         result["Cache-Control"] = "no-store"
