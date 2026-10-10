@@ -7,4 +7,5 @@ class Migration(migrations.Migration):
         migrations.AddField(model_name="customeraccount", name="transactional_email_enabled", field=models.BooleanField(default=True)),
         migrations.AddField(model_name="customeraccount", name="marketing_email_opt_in", field=models.BooleanField(default=False)),
         migrations.AddField(model_name="customeraccount", name="marketing_email_verified_at", field=models.DateTimeField(blank=True, null=True)),
+        migrations.AddField(model_name="customeraccount", name="marketing_email_challenge", field=models.CharField(blank=True, default="", max_length=64)),
     ]
