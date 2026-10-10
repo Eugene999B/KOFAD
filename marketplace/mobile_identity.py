@@ -251,9 +251,7 @@ def token(request, channel):
             return _public_response(request, {"error": "invalid_grant"}, 400)
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
         with transaction.atomic():
-            grant = MobileAuthorizationGrant.objects.select_for_update().select_related(
-                "customer", "staff_user", "branch"
-            ).filter(code_hash=_digest(code), channel=channel).first()
+            grant = MobileAuthorizationGrant.objects.select_for_update().filter(code_hash=_digest(code), channel=channel).first()
             if (not grant or grant.consumed_at or grant.expires_at <= now
                 or grant.redirect_uri != client["uri"]
                 or grant.client_id != client["id"]
@@ -286,9 +284,7 @@ def token(request, channel):
         if not isinstance(provided, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", provided):
             return _public_response(request, {"error": "invalid_grant"}, 400)
         with transaction.atomic():
-            session = MobileDeviceSession.objects.select_for_update().select_related(
-                "customer", "staff_user", "branch"
-            ).filter(channel=channel, refresh_hash=_digest(provided)).first()
+            session = MobileDeviceSession.objects.select_for_update().filter(channel=channel, refresh_hash=_digest(provided)).first()
             if not _valid_device(session, channel):
                 return _public_response(request, {"error": "invalid_grant"}, 400)
             access = secrets.token_urlsafe(32)
