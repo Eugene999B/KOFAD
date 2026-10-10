@@ -105,7 +105,8 @@ def action(request):
         "trash_selected", "trash_all", "restore_selected",
         "purge_selected", "empty_trash",
     }:
-        raise ValidationError("Unknown email deletion action.")
+        messages.error(request, "Unknown email deletion action.")
+        return _return_to(request.POST, mailbox.pk)
     if action_name in {"trash_all", "purge_selected", "empty_trash"} and not is_owner:
         raise PermissionDenied("Only the system administrator can delete all or purge Trash.")
     if not can_modify:
@@ -128,6 +129,8 @@ def action(request):
                 if target.count() > MAX_ALL:
                     raise ValidationError("Too many messages in this selection. Narrow your filters.")
 
+            if action_name == "purge_selected":
+                _confirmation(request.POST, "DELETE PERMANENTLY")
             count = target.count()
             if count == 0:
                 raise ValidationError("No matching email records found.")
