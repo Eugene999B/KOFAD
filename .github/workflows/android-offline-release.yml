@@ -4,8 +4,22 @@ on:
     paths:
       - ".github/workflows/android-offline-release.yml"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Stable Android version X.Y.Z"
+        type: string
+        required: true
+        default: "1.0.0"
+      version_code:
+        description: "Unique increasing Android version code"
+        type: number
+        required: true
+        default: 1
 permissions:
   contents: read
+env:
+  RELEASE_VERSION: ${{ inputs.version || '1.0.0' }}
+  RELEASE_VERSION_CODE: ${{ inputs.version_code || 1 }}
 jobs:
   prepare-android:
     runs-on: ubuntu-latest
@@ -37,7 +51,9 @@ jobs:
           npx cap sync android
           npx capacitor-assets generate --android
           cd ../..
-          python native/scripts/set_android_version.py native/mobile/android/app/build.gradle 1.0.0 1
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,2})\\.(0|[1-9][0-9]{0,3})$ ]] || { echo "::error::Invalid version"; exit 1; }
+          [[ "$RELEASE_VERSION_CODE" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid version code"; exit 1; }
+          python native/scripts/set_android_version.py native/mobile/android/app/build.gradle "$RELEASE_VERSION" "$RELEASE_VERSION_CODE"
           grep -q 'applicationId "com.kofadimpex.market"' native/mobile/android/app/build.gradle
           cd native/mobile/android
           ./gradlew assembleRelease --no-daemon
@@ -51,13 +67,13 @@ jobs:
           unsigned=native/mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk
           test -s "$unsigned"
           mkdir -p release-candidate
-          "$tools/zipalign" -f 4 "$unsigned" release-candidate/KOFAD-Market-1.0.0-UNSIGNED-aligned.apk
+          "$tools/zipalign" -f 4 "$unsigned" "release-candidate/KOFAD-Market-${RELEASE_VERSION}-UNSIGNED-aligned.apk"
           cp "$tools/lib/apksigner.jar" release-candidate/apksigner.jar
           printf '%s\n' "unsigned release; do not publish before signing and validating certificate" > release-candidate/REVIEW_ONLY.txt
-          (cd release-candidate && sha256sum KOFAD-Market-1.0.0-UNSIGNED-aligned.apk > SHA256SUMS.txt)
+          (cd release-candidate && sha256sum "KOFAD-Market-${RELEASE_VERSION}-UNSIGNED-aligned.apk" > SHA256SUMS.txt)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: PRIVATE-OFFLINE-SIGNING-KOFAD-MARKET-1.0.0
+          name: PRIVATE-OFFLINE-SIGNING-KOFAD-MARKET-${{ inputs.version || '1.0.0' }}
           path: release-candidate/
           retention-days: 2
           if-no-files-found: error
