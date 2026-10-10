@@ -1,6 +1,26 @@
 """Public customer information. Policy version approved for launch on 7 October 2026."""
 POLICY_VERSION = "2026-10-07"
 PAGES = {
+    "wholesale": {
+        "title": "Wholesale & bulk supply in Ghana",
+        "eyebrow": "BUSINESS AND BULK ORDERS",
+        "intro": "Ask KOFAD about wholesale quantities, pack sizes, repeat purchasing and business restocking in Ghana.",
+        "sections": [
+            ("Wholesale products and business restocking", [
+                "KOFAD IMPEX ENTERPRISE serves buyers looking for larger quantities and repeat purchases of goods from the KOFAD Market catalogue. Explore currently listed items and selling units before you ask for a quotation.",
+                "A product visible online is not a guarantee of wholesale stock or a discounted bulk price. Please tell us the item, preferred quantity and delivery area so we can check what is possible.",
+            ]),
+            ("How to request a bulk quotation", [
+                "Send the product name or specification, quantity, preferred pack size, business contact and destination through our contact page. Our team will confirm availability, the applicable price and the fulfilment arrangement before you pay for a special order.",
+            ]),
+            ("Retail versus wholesale ordering", [
+                "For individual items and advertised pack prices, browse KOFAD Market. For larger quantities, ongoing supply or an item not currently in the catalogue, contact KOFAD to discuss the requirements first.",
+            ]),
+            ("Delivery, collection and trade enquiries", [
+                "Delivery and collection depend on the destination and available fulfilment options. Requests involving sourcing or import/export responsibilities are considered individually and require a written quotation. The public catalogue does not automatically provide international shipping, customs clearance or cargo insurance.",
+            ]),
+        ],
+    },
     "about": {
         "title": "About KOFAD",
         "eyebrow": "OUR BUSINESS",
