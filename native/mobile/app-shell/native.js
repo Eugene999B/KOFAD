@@ -85,7 +85,7 @@
     action.textContent = "View product ↗";
     const id = Number(product.id);
     if (Number.isSafeInteger(id) && id > 0) {
-      action.addEventListener("click", () => openOfficial("/market/products/" + id + "/"));
+      action.addEventListener("click", () => window.KofadNativeExperience?.showProduct(product));
     } else {
       action.disabled = true;
     }
@@ -138,6 +138,7 @@
       }
       nextPage = Number.isSafeInteger(value.next_page) && value.next_page > 0 ? value.next_page : null;
       showProducts(value.items, append);
+      window.KofadNativeExperience?.catalogLoaded(value.items, append);
       $("#more-products").hidden = !nextPage;
       updateStatus(
         value.items.length
@@ -158,6 +159,7 @@
       const cached = !query && !append ? readCachedCatalog() : null;
       if (cached) {
         showProducts(cached.items, false);
+        window.KofadNativeExperience?.catalogLoaded(cached.items, false);
         updateStatus("Showing a saved public catalog · prices and availability may have changed.");
       } else {
         if (!append) $("#products").replaceChildren();
@@ -168,8 +170,8 @@
 
   function setupCustomer() {
     $("#customer-content").hidden = false;
-    main.textContent = "Shop securely ↗";
-    main.addEventListener("click", () => openOfficial("/market/"));
+    main.textContent = "Explore products ↓";
+    main.addEventListener("click", () => $("#tab-catalog").click());
     $("#refresh").addEventListener("click", () => loadCatalog());
     $("#more-products").addEventListener("click", () => {
       if (nextPage) loadCatalog({append: true, page: nextPage});
@@ -179,8 +181,6 @@
       clearTimeout(delay);
       delay = setTimeout(() => loadCatalog(), 280);
     });
-    $("#tab-account").addEventListener("click", () => openOfficial("/market/account/"));
-    $("#tab-support").addEventListener("click", () => openOfficial("/market/messages/"));
     void loadCatalog();
   }
 
@@ -192,8 +192,6 @@
       const path = el.dataset.path;
       if (approvedUrl(path)) el.addEventListener("click", () => openOfficial(path));
     });
-    $("#tab-account").addEventListener("click", () => openOfficial("/account/"));
-    $("#tab-support").addEventListener("click", () => openOfficial("/email/"));
   }
 
   function newerStableVersion(installed, available) {
@@ -299,7 +297,8 @@
     }
   }
 
-  $("#tab-home").addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+  // Native view controller owns the bottom navigation.
+  window.KofadNativeBridge = Object.freeze({openOfficial});
   if (CHANNEL === "customer") setupCustomer();
   else setupStaff();
   void setupConnectivity();
