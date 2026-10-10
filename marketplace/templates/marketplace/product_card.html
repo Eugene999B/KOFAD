@@ -1,8 +1,8 @@
 <article class="market-product-card commerce-product-card {% if listing.featured %}featured{% endif %}">
 <div class="commerce-product-visual">
 <a class="product-image-shell commerce-product-image" href="/market/products/{{ listing.pk }}/">
-{% if listing.image_thumb %}<img src="/market/products/{{ listing.pk }}/image/thumb/" alt="{{ listing.display_name }}" loading="lazy">
-{% elif listing.image_url %}<img src="{{ listing.image_url }}" alt="{{ listing.display_name }}" loading="lazy" referrerpolicy="no-referrer">
+{% if listing.image_thumb %}<img src="/market/products/{{ listing.pk }}/image/thumb/" alt="{{ listing.display_name }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}"{% if forloop.first %} fetchpriority="high"{% endif %}>
+{% elif listing.image_url %}<img src="{{ listing.image_url }}" alt="{{ listing.display_name }}" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}"{% if forloop.first %} fetchpriority="high"{% endif %} referrerpolicy="no-referrer">
 {% else %}<span class="product-placeholder"><b>KOFAD</b><small>PRODUCT IMAGE</small></span>{% endif %}
 <div class="product-image-badges">{% if listing.featured %}<b>Featured</b>{% endif %}{% if listing.available_sell_qty > 0 %}<span>In stock</span>{% endif %}</div>
 </a>
