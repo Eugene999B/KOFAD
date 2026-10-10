@@ -20,18 +20,23 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertContains(response, "Android")
         self.assertContains(response, "Windows")
         self.assertNotContains(response, "KOFAD Staff")
-        self.assertContains(response, "Our dedicated apps are being prepared")
-        self.assertContains(response, "Not released yet", count=3)
+        self.assertContains(response, "Choose your platform")
+        self.assertContains(response, "Add as web app")
         self.assertContains(response, "native-brands/android")
         self.assertContains(response, "native-brands/apple")
         self.assertContains(response, "native-brands/windows")
-        self.assertContains(response, "Continue to Market")
+        self.assertContains(response, "Open KOFAD Market")
         self.assertNotContains(response, "Download staff app")
 
-    def test_public_and_market_have_customer_native_app_promotion(self):
-        self.assertContains(self.client.get("/"), "Install KOFAD web app")
-        self.assertContains(self.client.get("/market/"), "Install the web app")
-        self.assertNotContains(self.client.get("/"), "Download staff app")
+    def test_home_download_link_but_no_market_install_promotions(self):
+        home = self.client.get("/")
+        self.assertContains(home, "Download the app")
+        self.assertContains(home, 'href="/apps/"')
+        market = self.client.get("/market/")
+        self.assertNotContains(market, "native-market-promo")
+        self.assertNotContains(market, "Install the web app")
+        self.assertNotContains(market, 'href="/market/app/install/"')
+        self.assertNotContains(home, "Download staff app")
 
     def test_staff_page_requires_valid_staff_session(self):
         response = self.client.get("/staff/app/")
@@ -80,8 +85,11 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
     )
     def test_fake_download_links_never_activate(self):
         response = self.client.get("/apps/")
-        self.assertContains(response, "In preparation", count=3)
-        self.assertNotContains(response, "Get Android app")
+        self.assertContains(response, "Coming soon", count=2)
+        self.assertContains(response, "App Store edition coming soon")
+        self.assertNotContains(response, "Download for Android")
+        self.assertNotContains(response, "Download for Windows")
+        self.assertNotContains(response, "Get native iPhone app")
         self.assertFalse(app_metadata("customer")["released"])
 
     @override_settings(
@@ -91,15 +99,15 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
     def test_published_android_link_is_active_but_unreleased_ios_windows_remain_pending(self):
         page = self.client.get("/apps/")
         self.assertEqual(page.status_code, 200)
-        self.assertContains(page, "Get Android app")
-        self.assertContains(page, "Ready to download", count=1)
-        self.assertContains(page, "In preparation", count=2)
-        self.assertNotContains(page, "Get Windows installer")
-        self.assertNotContains(page, "View on the App Store")
+        self.assertContains(page, "Download for Android")
+        self.assertContains(page, "Choose your platform")
+        self.assertContains(page, "Add as web app")
+        self.assertNotContains(page, "Download for Windows")
+        self.assertNotContains(page, "Get native iPhone app")
         home = self.client.get("/")
-        self.assertContains(home, "Get the KOFAD app")
+        self.assertContains(home, "Download the app")
         market = self.client.get("/market/")
-        self.assertContains(market, "Explore app downloads")
+        self.assertNotContains(market, "Explore app downloads")
 
     @override_settings(
         KOFAD_CUSTOMER_APP_VERSION="1.3.2",
