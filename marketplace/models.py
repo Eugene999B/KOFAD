@@ -15,6 +15,7 @@ class CustomerAccount(models.Model):
     transactional_email_enabled = models.BooleanField(default=True)
     marketing_email_opt_in = models.BooleanField(default=False)
     marketing_email_verified_at = models.DateTimeField(null=True, blank=True)
+    marketing_email_challenge = models.CharField(max_length=64, blank=True, default="")
     password_hash = models.CharField(max_length=160)
     verified_at = models.DateTimeField(null=True, blank=True)
     active = models.BooleanField(default=True)
