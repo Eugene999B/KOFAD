@@ -71,7 +71,7 @@ class MobileReadabilityTests(SimpleTestCase):
         css = (root / "static/kofad-mobile-reachability.css").read_text(encoding="utf-8")
         self.assertIn('data-mobile-table="cards"', template)
         self.assertIn('class="table-wrap inventory-stock-table"', template)
-        self.assertIn("data-mobile-label", js)
+        self.assertIn("cell.dataset.mobileLabel", js)
         self.assertIn('table.dataset.mobileTable !== "cards"', js)
         self.assertIn("max-height:none!important", css)
         self.assertIn(".mobile-table-actions .row-actions", css)
