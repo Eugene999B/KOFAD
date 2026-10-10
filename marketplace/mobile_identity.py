@@ -404,4 +404,6 @@ def revoke(request, channel):
         return _public_response(request, {"error": "authentication_required"}, 401)
     session.revoked_at = timezone.now()
     session.save(update_fields=["revoked_at"])
+    from .mobile_push_models import MobilePushSubscription
+    MobilePushSubscription.objects.filter(device_session=session).delete()
     return _public_response(request, {"revoked": True})
