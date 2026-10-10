@@ -408,6 +408,10 @@ def reports(request):
         "received_count": letters.filter(direction="inbound").count(),
         "outbound_count": letters.filter(direction="outbound").count(),
         "submitted_count": letters.filter(status="submitted").count(),
+        "delivered_count": letters.filter(delivery_status="delivered").count(),
+        "bounced_count": letters.filter(delivery_status__in=[
+            "hard_bounce", "soft_bounce", "blocked", "spam", "invalid_email", "error",
+        ]).count(),
         "attention_count": letters.filter(status__in=["failed", "uncertain"]).count(),
         "staff_load": q.filter(status__in=["open", "pending"], assigned_to__isnull=False,
                                 archived_at__isnull=True).values(
