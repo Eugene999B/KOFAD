@@ -113,8 +113,12 @@ def _staff_context(user, session):
     authorized = Branch.objects.filter(active=True)
     if not user.is_superuser:
         authorized = authorized.filter(access__user=user)
+    # Never silently choose a branch for a privileged native authorization.
+    # The employee must have explicitly selected a currently assigned branch.
     current = session.get("branch") if session is not None else None
-    branch = authorized.filter(pk=current).first() if current else authorized.first()
+    if not current:
+        return None
+    branch = authorized.filter(pk=current).first()
     if not branch:
         return None
     return (access, branch, mfa_at)
