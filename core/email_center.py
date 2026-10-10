@@ -31,6 +31,7 @@ from .email_models import (EmailLetter, EmailMailbox, EmailMailboxMember,
                            EmailConversation, EmailConversationNote, EmailConversationReadState, EmailStaffSignature)
 from .email_threads import (record_incoming, new_outgoing_conversation, thread_subject,
                             record_outgoing_status)
+from .email_recipients import validate_copies
 
 logger = logging.getLogger(__name__)
 MAX_INGEST_BYTES = 1024 * 1024
@@ -69,7 +70,7 @@ def _address(value):
     return address
 
 
-def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None):
+def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None, cc="", bcc="):
     if not (getattr(settings, "KOFAD_EMAIL_ENABLED", False)
             and settings.KOFAD_EMAIL_PROVIDER == "brevo"
             and settings.KOFAD_BREVO_API_KEY):
@@ -80,6 +81,7 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
             defaults=dict(mailbox=mailbox, direction="outbound", status="queued",
                           from_address=mailbox.address, to_address=recipient,
                           subject=subject, body_text=body, created_by=user,
+                          cc_addresses=cc, bcc_addresses=bcc,
                           in_reply_to=reply_id, conversation=conversation,
                           next_attempt_at=timezone.now()),
         )
@@ -88,12 +90,14 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
         mailbox=mailbox, direction="outbound", status="queued",
         from_address=mailbox.address, to_address=recipient, subject=subject,
         body_text=body, created_by=user, in_reply_to=reply_id,
+        cc_addresses=cc, bcc_addresses=bcc,
         conversation=conversation, next_attempt_at=timezone.now(),
     )
 
 
-def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None):
+def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None, cc="", bcc="):
     recipient = _address(recipient)
+    cc, bcc = validate_copies(recipient, cc, bcc)
     subject = (subject or "").strip()
     body = (body or "").strip()
     if not subject or len(subject) > 255 or "\r" in subject or "\n" in subject:
@@ -104,6 +108,8 @@ def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversatio
         raise ValidationError("Invalid reply reference.")
     # Same-domain KOFAD mailboxes can exchange internal mail without external delivery.
     internal = EmailMailbox.objects.filter(address=recipient, active=True).first()
+    if internal and (cc or bcc):
+        raise ValidationError("Internal mailbox delivery cannot include copied recipients. Send separately.")
     with transaction.atomic():
         if not internal:
             if conversation is not None:
@@ -113,7 +119,7 @@ def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversatio
                 conversation = new_outgoing_conversation(mailbox, recipient, subject)
             final_subject = thread_subject(subject, conversation, reply=bool(reply_id))
             record = _queue_external(mailbox, recipient, final_subject, body, user,
-                                     reply_id=reply_id, conversation=conversation)
+                                     reply_id=reply_id, conversation=conversation, cc=cc, bcc=bcc)
             record_outgoing_status(conversation)
             return record
         sent = EmailLetter.objects.create(
@@ -306,7 +312,8 @@ def inbox(request, section="inbox"):
                     if signature and signature.body.strip():
                         message_body = message_body.rstrip() + "\n\n" + signature.body.strip()
                 created = compose(mailbox, recipient, subject, message_body, request.user,
-                                  reply_id=reply_id, conversation=conversation)
+                                  reply_id=reply_id, conversation=conversation,
+                                  cc=request.POST.get("cc", ""), bcc=request.POST.get("bcc", ""))
                 from .services import audit
                 audit(request.user, mailbox.branch, "email.message_created", created.pk,
                       {"mailbox": mailbox.address, "direction": created.direction,
@@ -646,7 +653,8 @@ def deliver_outgoing(limit=10):
             from .brevo_email import send_brevo
             provider_id = send_brevo(subject=row.subject, body=row.body_text,
                        recipient=row.to_address, purpose="transaction",
-                       sender_email=row.from_address, return_message_id=True)
+                       sender_email=row.from_address, return_message_id=True,
+                       cc=row.cc_addresses, bcc=row.bcc_addresses)
         except __import__("core.brevo_email", fromlist=["UncertainEmailDelivery"]).UncertainEmailDelivery:
             EmailLetter.objects.filter(pk=pk).update(
                 status="uncertain",
