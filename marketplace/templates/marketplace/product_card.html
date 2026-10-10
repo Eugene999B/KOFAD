@@ -1,11 +1,13 @@
 <article class="market-product-card commerce-product-card {% if listing.featured %}featured{% endif %}">
+<div class="commerce-product-visual">
 <a class="product-image-shell commerce-product-image" href="/market/products/{{ listing.pk }}/">
 {% if listing.image_thumb %}<img src="/market/products/{{ listing.pk }}/image/thumb/" alt="{{ listing.display_name }}" loading="lazy">
 {% elif listing.image_url %}<img src="{{ listing.image_url }}" alt="{{ listing.display_name }}" loading="lazy" referrerpolicy="no-referrer">
 {% else %}<span class="product-placeholder"><b>KOFAD</b><small>PRODUCT IMAGE</small></span>{% endif %}
 <div class="product-image-badges">{% if listing.featured %}<b>Featured</b>{% endif %}{% if listing.available_sell_qty > 0 %}<span>In stock</span>{% endif %}</div>
-{% if market_customer %}<form method="post" action="/market/wishlist/{{ listing.pk }}/toggle/" class="product-save-form">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button title="{% if listing.in_wishlist %}Remove from wishlist{% else %}Save product{% endif %}" aria-label="{% if listing.in_wishlist %}Remove from wishlist{% else %}Save product{% endif %}">{% if listing.in_wishlist %}♥{% else %}♡{% endif %}</button></form>{% endif %}
 </a>
+{% if market_customer %}<form method="post" action="/market/wishlist/{{ listing.pk }}/toggle/" class="product-save-form">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button title="{% if listing.in_wishlist %}Remove from wishlist{% else %}Save product{% endif %}" aria-label="{% if listing.in_wishlist %}Remove from wishlist{% else %}Save product{% endif %}">{% if listing.in_wishlist %}♥{% else %}♡{% endif %}</button></form>{% endif %}
+</div>
 <div class="product-card-body commerce-card-body">
 <div class="product-card-top"><span>{{ listing.product.category|default:"KOFAD Market" }}</span><small>SKU {{ listing.product.sku }}</small></div>
 <a href="/market/products/{{ listing.pk }}/"><h3>{{ listing.display_name }}</h3></a>
