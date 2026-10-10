@@ -358,9 +358,7 @@ def process_email_outbox(limit=15):
     sent = 0
     for pk in ids:
         with transaction.atomic():
-            notice = EmailNotice.objects.select_for_update().select_related(
-                "recipient_user", "branch"
-            ).filter(pk=pk, status__in=("queued", "failed"), attempts__lt=3).first()
+            notice = EmailNotice.objects.select_for_update().filter(pk=pk, status__in=("queued", "failed"), attempts__lt=3).first()
             if notice is None:
                 continue
             if now - notice.created_at > timedelta(days=7) or not _may_deliver(notice):
@@ -534,8 +532,8 @@ def queue_pos_transaction_email(document):
         f"Hello {customer.full_name},\n\n"
         f"Your in-store {kind_label} has been recorded at {document.branch.name}.\n"
         f"Reference: {document.reference}\n"
-        f"Amount: GHS {document.total:,.2f}\n"
-        f"Amount recorded as paid: GHS {document.paid:,.2f}\n\n"
+        f"Amount: GHS {Decimal(str(document.total)):,.2f}\n"
+        f"Amount recorded as paid: GHS {Decimal(str(document.paid)):,.2f}\n\n"
         "For detailed receipt records, sign in to KOFAD or contact the shop.\n"
         "This is a transactional notice. We never ask for your PIN or password by email."
     )
