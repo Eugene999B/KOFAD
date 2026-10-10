@@ -4,6 +4,7 @@
   <a href="{% url 'email_drafts' %}" class="{% if email_nav == 'drafts' %}active{% endif %}">✎ Drafts</a>
   <a href="{% url 'email_replies' %}" class="{% if email_nav == 'replies' %}active{% endif %}">▦ Saved Replies</a>
   <a href="{% url 'email_history' %}" class="{% if email_section == 'history' %}active{% endif %}">▤ History</a>
+  <a href="{% url 'email_trash' %}" class="{% if email_nav == 'trash' %}active{% endif %}">♲ Trash</a>
   {% if email_is_owner or is_mail_owner %}
   <a href="{% url 'email_reports' %}" class="{% if email_nav == 'reports' %}active{% endif %}">▥ Reports</a>
   <a href="{% url 'email_automations' %}" class="{% if email_section == 'automations' %}active{% endif %}">⚙ Automations</a>
