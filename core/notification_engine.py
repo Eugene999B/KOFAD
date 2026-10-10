@@ -285,6 +285,29 @@ def run_staff_scheduled_reports(now=None):
 
 
 def _may_deliver(notice):
+    if notice.category in ("order", "marketing_verify", "marketing"):
+        from marketplace.models import CustomerAccount, OnlineOrder
+        if notice.category == "order":
+            order = OnlineOrder.objects.select_related("customer").filter(pk=notice.recipient_ref).first()
+            if not order:
+                return False
+            event = notice.source_key.rsplit(":", 1)[-1]
+            return bool(
+                order.customer.active and order.customer.verified_at
+                and order.customer.transactional_email_enabled
+                and order.email.strip().lower() == notice.recipient.strip().lower()
+                and order.customer.email.strip().lower() == notice.recipient.strip().lower()
+                and order.payment_status == "paid"
+                and (event == "paid" or order.status == event)
+            )
+        customer = CustomerAccount.objects.filter(pk=notice.recipient_ref).first()
+        if not customer or not customer.active or not customer.verified_at:
+            return False
+        if customer.email.strip().lower() != notice.recipient.strip().lower():
+            return False
+        if notice.category == "marketing_verify":
+            return not customer.marketing_email_opt_in
+        return customer.marketing_email_opt_in and customer.marketing_email_verified_at is not None
     if notice.recipient_user_id is None or notice.branch_id is None:
         return False
     user = notice.recipient_user
@@ -349,3 +372,110 @@ def process_email_outbox(limit=15):
                 status="failed", last_error=str(exc)[:240]
             )
     return sent
+
+
+def queue_customer_order_email(order, event):
+    """Non-sensitive order status email to an account-associated checkout address."""
+    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+        return 0
+    customer = order.customer
+    if not (customer.active and customer.verified_at and customer.transactional_email_enabled):
+        return 0
+    if not order.email or order.email.strip().lower() != customer.email.strip().lower():
+        return 0
+    try:
+        validate_email(order.email)
+    except ValidationError:
+        return 0
+    label = dict(order.STATUSES).get(event, event.replace("_", " ").title())
+    subject = f"KOFAD order {order.customer_reference}: {label}"
+    body = (
+        f"Hello {customer.full_name},\\n\\n"
+        f"Your order {order.customer_reference} has a new update: {label}.\\n"
+        f"Total recorded order amount: GHS {order.total:,.2f}.\\n"
+        "Sign in to your KOFAD Market account to confirm current status and delivery details.\\n\\n"
+        "This is a transaction notification, not a promotional offer.\\n"
+        "For safety, we never ask for your password or payment PIN by email."
+    )
+    _, created = EmailNotice.objects.get_or_create(
+        source_key=f"market-email:{order.pk}:{event}",
+        defaults={
+            "recipient": order.email, "recipient_ref": str(order.pk),
+            "branch": order.branch, "category": "order",
+            "subject": subject[:180], "body": body,
+        },
+    )
+    return int(created)
+
+
+def queue_customer_email_verification(customer, confirmation_url):
+    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+        return False
+    if not customer.email or not customer.active or not customer.verified_at:
+        return False
+    try:
+        validate_email(customer.email)
+    except ValidationError:
+        return False
+    bucket = timezone.now().strftime("%Y%m%d")
+    key = f"market-verify:{customer.pk}:{bucket}"
+    _, created = EmailNotice.objects.get_or_create(
+        source_key=key,
+        defaults={
+            "recipient": customer.email, "recipient_ref": str(customer.pk),
+            "category": "marketing_verify",
+            "subject": "Confirm your KOFAD Market email preferences",
+            "body": (
+                f"Hello {customer.full_name},\\n\\n"
+                "Someone requested promotional updates for this address.\\n"
+                f"To confirm this choice, use the link below within seven days:\\n{confirmation_url}\\n\\n"
+                "If you did not request promotional messages, ignore this email.\\n"
+                "Order notifications are separate from promotional email."
+            ),
+        },
+    )
+    return created
+
+
+def run_customer_personalised_promotions(now=None):
+    """No speculative discount offers. Opted-in customers get saved-item reminders."""
+    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+        return 0
+    now = timezone.localtime(now or timezone.now())
+    if now.weekday() != 0 or now.hour < 9:
+        return 0
+    from marketplace.models import CustomerAccount, WishlistItem
+    created = 0
+    for customer in CustomerAccount.objects.filter(
+        active=True, marketing_email_opt_in=True, marketing_email_verified_at__isnull=False
+    ).exclude(email="").iterator():
+        if EmailNotice.objects.filter(
+            category="marketing", recipient_ref=str(customer.pk),
+            created_at__gte=now - timedelta(days=21),
+        ).exclude(status="cancelled").exists():
+            continue
+        item = WishlistItem.objects.filter(
+            customer=customer, listing__active=True, listing__product__active=True
+        ).select_related("listing", "listing__product").first()
+        if item is None:
+            continue
+        product_name = item.listing.display_name
+        source_key = f"promo:wishlist:{customer.pk}:{now:%Y%m%d}"
+        _, added = EmailNotice.objects.get_or_create(
+            source_key=source_key,
+            defaults={
+                "recipient": customer.email, "recipient_ref": str(customer.pk),
+                "category": "marketing",
+                "subject": "An item you saved at KOFAD Market",
+                "body": (
+                    f"Hello {customer.full_name},\\n\\n"
+                    f"You saved '{product_name}' at KOFAD Market. If you are still interested, "
+                    "sign in to check current availability and pricing.\\n"
+                    "No discount or stock availability is guaranteed.\\n\\n"
+                    "Manage or stop promotional emails from My Account > Email preferences.\\n"
+                    "This message is sent only to customers who explicitly confirmed their marketing email."
+                ),
+            },
+        )
+        created += int(added)
+    return created
