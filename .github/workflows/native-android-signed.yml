@@ -79,6 +79,7 @@ jobs:
           node scripts/write-profile.mjs
           npx cap add android
           npx cap sync android
+          node scripts/configure-auth-deeplink.mjs android
           npx capacitor-assets generate --android
       - name: Pin release version and compile unsigned artifact
         shell: bash
