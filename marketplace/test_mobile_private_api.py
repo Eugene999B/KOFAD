@@ -118,6 +118,8 @@ class NativePrivateDataTests(Fixtures, TestCase):
     def test_staff_without_permissions_cannot_read_operations_or_cross_roles(self):
         user=get_user_model().objects.create_user("unassigned",password="random-strong-password")
         user.access.branches.add(self.branch)
+        user.access.force_password_change = False
+        user.access.save(update_fields=["force_password_change"])
         token="c" * 43
         self._new_mobile(token=token,staff_user=user)
         resp=self._get("/staff/mobile/v1/overview/",token,staff=True)
