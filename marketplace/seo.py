@@ -76,6 +76,6 @@ def favicon(request):
         from scripts.prepare_logo import prepare_logo
         prepare_logo()
     response = FileResponse(path.open("rb"), content_type="image/x-icon")
-    response["Cache-Control"] = "public, max-age=86400"
+    response["Cache-Control"] = "public, max-age=3600, must-revalidate"
     response["X-Content-Type-Options"] = "nosniff"
     return response
