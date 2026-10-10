@@ -24,7 +24,8 @@
     <span data-mail-selected-count aria-live="polite">0 selected</span>
     <button type="submit" name="action" value="restore_selected" class="mail-button secondary" data-mail-verify="restore-selected">Restore selected</button>
     {% if email_is_owner %}<button type="submit" name="action" value="purge_selected" class="mail-button danger" data-mail-verify="purge-selected">Delete selected permanently</button>{% endif %}
-    <input name="confirmation" type="hidden" value="">
+    {% if email_is_owner %}<label class="mail-purge-confirm">For permanent deletion, type DELETE PERMANENTLY
+      <input name="confirmation" maxlength="20" autocomplete="off" placeholder="DELETE PERMANENTLY"></label>{% endif %}
   </form>
   {% endif %}
   {% if email_is_owner %}
