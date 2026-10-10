@@ -1,0 +1,351 @@
+"""Consent-aware business intelligence notifications.
+
+No marketing to customers; this module covers explicitly subscribed staff only.
+SMTP and SMS each have an independent production kill switch.
+"""
+import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.core.mail import EmailMultiAlternatives
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
+from django.utils.html import escape
+
+from .models import Access, Branch, Closing, Company, EmailNotice, ManagementContact
+from .sms.service import create_direct_draft, normalize_phone, send_automatic
+
+log = logging.getLogger(__name__)
+REPORT_PERMISSIONS = ("core.manage_company", "core.view_reports", "core.operate_finance")
+NOTICE_FLAGS = {
+    "daily": "email_daily_closing",
+    "weekly": "email_weekly_review",
+    "monthly": "email_monthly_review",
+    "critical": "email_critical_alerts",
+}
+ZERO = Decimal("0")
+
+
+def _amount(value):
+    try:
+        return Decimal(str(value or "0"))
+    except (InvalidOperation, ValueError, TypeError):
+        return ZERO
+
+
+def _company():
+    return Company.objects.first() or Company()
+
+
+def _authorised(user, branch):
+    return user.is_active and any(user.has_perm(p) for p in REPORT_PERMISSIONS) and (
+        user.is_superuser or Access.objects.filter(user=user, branches=branch).exists()
+    )
+
+
+def _recipients(branch, flag):
+    qs = User.objects.filter(is_active=True).exclude(email="").filter(
+        Q(is_superuser=True) | Q(access__branches=branch)
+    ).select_related("access").distinct().order_by("pk")
+    for user in qs:
+        access = getattr(user, "access", None)
+        if not access or not getattr(access, flag, False) or not _authorised(user, branch):
+            continue
+        try:
+            validate_email(user.email)
+        except ValidationError:
+            continue
+        yield user
+
+
+def _queue(user, branch, category, key, subject, body):
+    notice, created = EmailNotice.objects.get_or_create(
+        source_key=key,
+        defaults={
+            "recipient_user": user, "branch": branch, "recipient": user.email,
+            "category": category, "subject": subject[:180], "body": body,
+        },
+    )
+    return int(created)
+
+
+def _closing_numbers(closing):
+    summary = closing.summary or {}
+    expected = _amount((closing.expected or {}).get("cash"))
+    counted = _amount((closing.counted or {}).get("cash"))
+    return {
+        "sales": _amount(summary.get("sales_total")),
+        "expenses": _amount(summary.get("expenses_total")),
+        "collections": _amount(summary.get("debt_collections")),
+        "expected_cash": expected,
+        "counted_cash": counted,
+        "variance": counted - expected,
+    }
+
+
+def _short_cash_notice(closing, numbers, severe=False):
+    code = closing.branch.code.upper()[:12]
+    prefix = "CRITICAL" if severe else "Close"
+    return (
+        f"KOFAD {prefix} {code} {closing.date:%d/%m}: "
+        f"sales GHS {numbers['sales']:,.0f}; "
+        f"expenses {numbers['expenses']:,.0f}; "
+        f"cash variance {numbers['variance']:+,.0f}. Check dashboard."
+    )
+
+
+def _staff_sms(closing, users, numbers, severe):
+    if not (getattr(settings, "SMS_STAFF_NOTICES_ENABLED", False) and settings.SMS_ENABLED):
+        return 0
+    from .sms.service import estimate
+    sender = User.objects.filter(is_active=True, is_superuser=True).first()
+    if sender is None:
+        return 0
+    body = _short_cash_notice(closing, numbers, severe=severe)
+    _, segments = estimate(body)
+    if segments != 1:
+        log.warning("Skipping staff SMS that would require multiple credits")
+        return 0
+
+    current_contacts = ManagementContact.objects.filter(active=True, receive_closing=True).filter(
+        Q(branch=closing.branch) | Q(branch__isnull=True)
+    )
+    known = set()
+    for contact in current_contacts:
+        try:
+            known.add(normalize_phone(contact.phone))
+        except ValidationError:
+            pass
+
+    made = 0
+    for user in users:
+        access = getattr(user, "access", None)
+        if not access:
+            continue
+        selected = access.sms_critical_alerts if severe else access.sms_daily_closing
+        if not selected:
+            continue
+        try:
+            number = normalize_phone(access.recovery_phone)
+        except ValidationError:
+            continue
+        # Existing management closing SMS must not be billed twice.
+        if number in known:
+            continue
+        key = f"staff:{'critical' if severe else 'closing'}:{closing.pk}:{user.pk}"
+        try:
+            message = create_direct_draft(sender, closing.branch, body,
+                phone=number, label=user.get_full_name() or user.username, source_key=key)
+            if message.status == "draft":
+                send_automatic(message, sender)
+            made += 1
+            known.add(number)
+        except Exception:
+            log.exception("Staff SMS suppressed after provider/validation failure")
+    return made
+
+
+def queue_closing_reports(closing):
+    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False) and not getattr(settings, "SMS_STAFF_NOTICES_ENABLED", False):
+        return 0
+    company = _company()
+    n = _closing_numbers(closing)
+    min_critical = max(
+        _amount(company.closing_tolerance),
+        _amount(getattr(settings, "NOTIFICATION_CRITICAL_VARIANCE_GHS", 500)),
+    )
+    severe = abs(n["variance"]) >= min_critical and abs(n["variance"]) > 0
+    subject = f"KOFAD closing · {closing.branch.name} · {closing.date:%d %b %Y}"
+    actions = []
+    if severe:
+        actions.append("URGENT: Verify the material cash variance; review receipts and obtain independent approval.")
+    elif n["variance"] != 0:
+        actions.append("Review the cash difference against the configured closing tolerance.")
+    if n["expenses"] > n["sales"] and n["sales"] > 0:
+        actions.append("Expenses exceeded recorded sales today; examine transaction categories.")
+    if not actions:
+        actions.append("No threshold-based exceptions identified in this closing.")
+    body = (
+        f"{company.name} | VERIFIED BUSINESS LOCATION REPORT\\n"
+        f"Location: {closing.branch.name}\\nClosing: {closing.date:%d %B %Y}\\n"
+        f"Recorded sales: GHS {n['sales']:,.2f}\\n"
+        f"Expenses: GHS {n['expenses']:,.2f}\\n"
+        f"Debt collections: GHS {n['collections']:,.2f}\\n"
+        f"Expected cash: GHS {n['expected_cash']:,.2f}\\n"
+        f"Counted cash: GHS {n['counted_cash']:,.2f}\\n"
+        f"Cash variance: GHS {n['variance']:+,.2f}\\n\\n"
+        + "Attention / next actions:\\n" + "\\n".join("- " + a for a in actions)
+        + "\\n\\nSource: KOFAD daily closing records. Sales minus expenses is NOT net profit.\\n"
+        + "Sign in to KOFAD to investigate. Do not reply with account passwords."
+    )
+    created = 0
+    if getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+        for user in _recipients(closing.branch, "email_daily_closing"):
+            created += _queue(user, closing.branch, "daily",
+                f"close:{closing.pk}:daily:{user.pk}", subject, body)
+        if severe:
+            for user in _recipients(closing.branch, "email_critical_alerts"):
+                created += _queue(user, closing.branch, "critical",
+                    f"close:{closing.pk}:critical:{user.pk}", "ACTION REQUIRED · " + subject, body)
+    if getattr(settings, "SMS_STAFF_NOTICES_ENABLED", False):
+        # One SMS per opted-in number: critical takes priority over routine closing.
+        users = list(_recipients(closing.branch, "email_critical_alerts" if severe else "email_daily_closing"))
+        # Independently include SMS-only subscribers, who need no email address.
+        qs = User.objects.filter(is_active=True).filter(
+            Q(is_superuser=True) | Q(access__branches=closing.branch)
+        ).select_related("access").distinct()
+        candidates = {u.pk: u for u in users}
+        for user in qs:
+            access = getattr(user, "access", None)
+            flag = "sms_critical_alerts" if severe else "sms_daily_closing"
+            if access and getattr(access, flag, False) and _authorised(user, closing.branch):
+                candidates[user.pk] = user
+        created += _staff_sms(closing, candidates.values(), n, severe)
+    return created
+
+
+def _window_values(branch, first, last):
+    rows = list(Closing.objects.filter(branch=branch, date__gte=first, date__lte=last))
+    sales = expenses = collections = cash_variance = ZERO
+    flags = []
+    for closing in rows:
+        n = _closing_numbers(closing)
+        sales += n["sales"]
+        expenses += n["expenses"]
+        collections += n["collections"]
+        cash_variance += n["variance"]
+        if abs(n["variance"]) > _amount(_company().closing_tolerance):
+            flags.append(str(closing.date))
+    return {
+        "days": len(rows), "sales": sales, "expenses": expenses,
+        "collections": collections, "cash_variance": cash_variance, "variance_dates": flags,
+    }
+
+
+def _period_report(branch, category, first, last):
+    company = _company()
+    now = _window_values(branch, first, last)
+    days = (last - first).days + 1
+    previous = _window_values(branch, first - timedelta(days=days), first - timedelta(days=1))
+    comparison = "Previous period had no recorded sales."
+    if previous["sales"] > 0:
+        change = ((now["sales"] - previous["sales"]) / previous["sales"]) * 100
+        comparison = f"Recorded sales change: {change:+.1f}% versus comparable preceding period."
+    actions = []
+    if not now["days"]:
+        actions.append("No closings recorded for this period. Check whether reporting was completed.")
+    if now["variance_dates"]:
+        actions.append("Review cash variance on: " + ", ".join(now["variance_dates"][:12]))
+    if previous["sales"] > 0 and now["sales"] < previous["sales"] * Decimal("0.8"):
+        actions.append("Sales fell over 20%; investigate demand, availability and branch operations.")
+    if not actions:
+        actions.append("No automatic critical trend detected; review store-specific exceptions.")
+    return (
+        f"{company.name} | {category.upper()} BUSINESS ANALYSIS\\n"
+        f"Location: {branch.name}\\nPeriod: {first:%d %b %Y} - {last:%d %b %Y}\\n"
+        f"Recorded daily closings: {now['days']}\\n"
+        f"Sales: GHS {now['sales']:,.2f}\\nExpenses: GHS {now['expenses']:,.2f}\\n"
+        f"Debt collections: GHS {now['collections']:,.2f}\\n"
+        f"Net cumulative cash variance: GHS {now['cash_variance']:+,.2f}\\n"
+        f"{comparison}\\n\\nRecommended follow-ups:\\n"
+        + "\\n".join("- " + item for item in actions)
+        + "\\n\\nAnalysis uses submitted closings, not a full P&L. Cash variance offsets may conceal daily exceptions.\\n"
+        + "Sign in to KOFAD for details."
+    )
+
+
+def run_staff_scheduled_reports(now=None):
+    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+        return 0
+    now = timezone.localtime(now or timezone.now())
+    today = now.date()
+    if now.hour < 7:
+        return 0
+    windows = []
+    if today.weekday() == 0:
+        windows.append(("weekly", today - timedelta(days=7), today - timedelta(days=1), "email_weekly_review"))
+    if today.day == 1:
+        first = today.replace(day=1)
+        last = first - timedelta(days=1)
+        windows.append(("monthly", last.replace(day=1), last, "email_monthly_review"))
+    queued = 0
+    for branch in Branch.objects.filter(active=True):
+        for category, first, last, flag in windows:
+            body = _period_report(branch, category, first, last)
+            subject = f"KOFAD {category} analysis | {branch.name} | {last:%d %b %Y}"
+            for user in _recipients(branch, flag):
+                key = f"report:{category}:{branch.pk}:{first:%Y%m%d}:{user.pk}"
+                queued += _queue(user, branch, category, key, subject, body)
+    return queued
+
+
+def _may_deliver(notice):
+    if notice.recipient_user_id is None or notice.branch_id is None:
+        return False
+    user = notice.recipient_user
+    access = getattr(user, "access", None)
+    flag = NOTICE_FLAGS.get(notice.category)
+    return bool(
+        flag and access and getattr(access, flag, False)
+        and user.email.strip().lower() == notice.recipient.strip().lower()
+        and _authorised(user, notice.branch)
+    )
+
+
+def process_email_outbox(limit=15):
+    if not getattr(settings, "EMAIL_DELIVERY_ENABLED", False):
+        return 0
+    now = timezone.now()
+    ids = list(
+        EmailNotice.objects.filter(status__in=("queued", "failed"), attempts__lt=3)
+        .filter(Q(last_attempt_at__isnull=True) | Q(last_attempt_at__lt=now - timedelta(minutes=15)))
+        .order_by("created_at").values_list("pk", flat=True)[:limit]
+    )
+    sent = 0
+    for pk in ids:
+        with transaction.atomic():
+            notice = EmailNotice.objects.select_for_update().select_related(
+                "recipient_user", "branch"
+            ).filter(pk=pk, status__in=("queued", "failed"), attempts__lt=3).first()
+            if notice is None:
+                continue
+            if now - notice.created_at > timedelta(days=7) or not _may_deliver(notice):
+                notice.status = "cancelled"
+                notice.save(update_fields=["status"])
+                continue
+            notice.status = "sending"
+            notice.attempts += 1
+            notice.last_attempt_at = now
+            notice.save(update_fields=["status", "attempts", "last_attempt_at"])
+        try:
+            email = EmailMultiAlternatives(
+                notice.subject, notice.body, settings.DEFAULT_FROM_EMAIL, [notice.recipient]
+            )
+            paragraphs = escape(notice.body).replace("\\n", "<br>")
+            email.attach_alternative(
+                '<div style="background:#f1f5f9;padding:28px;font-family:Arial,sans-serif">'
+                '<div style="max-width:620px;margin:auto;background:white;border-top:6px solid #e9ac32;'
+                'padding:30px;border-radius:8px;color:#102b46">'
+                '<h1 style="font-size:23px;margin-top:0">KOFAD IMPEX ENTERPRISE</h1>'
+                '<div style="font-size:14px;line-height:1.65">' + paragraphs + '</div>'
+                '<hr style="border:0;border-top:1px solid #ddd">'
+                '<p style="font-size:11px;color:#64798b">Confidential business report. '
+                'Never send your password in a reply.</p></div></div>',
+                "text/html",
+            )
+            email.send(fail_silently=False)
+            EmailNotice.objects.filter(pk=pk, status="sending").update(
+                status="sent", sent_at=timezone.now(), last_error=""
+            )
+            sent += 1
+        except Exception as exc:
+            log.exception("Email delivery failed; outbox retained for controlled retry")
+            EmailNotice.objects.filter(pk=pk, status="sending").update(
+                status="failed", last_error=str(exc)[:240]
+            )
+    return sent
