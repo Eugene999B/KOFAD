@@ -7,6 +7,7 @@ from . import account as accounts
 from . import google_oauth as google
 from . import gmail_api as gmail_sender
 from . import email_center as business_email
+from . import email_delivery_events as email_events
 from . import customer_care as customer_care_views
 from . import email_campaigns as campaigns
 from . import email_productivity as pro_email
@@ -45,6 +46,7 @@ urlpatterns = [
     path("email/team/", business_email.inbox, {"section": "team"}, name="email_team"),
     path("email/campaigns/", campaigns.dashboard, name="email_campaigns"),
     path("email/ingest/", business_email.ingest, name="email_ingest"),
+    path("email/events/brevo/", email_events.brevo_delivery_callback, name="email_brevo_events"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
     path("api/approvals/summary/", approval_views.approval_summary, name="approval_summary"),
