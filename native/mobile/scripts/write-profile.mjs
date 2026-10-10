@@ -1,11 +1,28 @@
 import { createRequire } from "node:module";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
 import { resolve } from "node:path";
 const require = createRequire(import.meta.url);
 const { profileFor } = require("../profile.cjs");
 const channel = process.env.KOFAD_NATIVE_CHANNEL;
 const profile = profileFor(channel);
-mkdirSync(resolve("www"), { recursive: true });
-// Offline local screen is packaged in every build, rather than a white page.
-writeFileSync(resolve("www/index.html"), `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#10374c"><title>${profile.appName}</title><style>body{margin:0;font:16px system-ui;background:#0b3048;color:white;display:grid;place-items:center;min-height:100svh;padding:26px;text-align:center}main{max-width:440px}b{display:grid;place-items:center;background:#1e8c8a;border-radius:20px;width:64px;height:64px;margin:auto;font-size:38px}p{line-height:1.7;color:#deeff1}a{display:inline-block;background:#f6d59b;color:#17374a;border-radius:12px;padding:14px 18px;font-weight:bold}</style><main><b>K</b><h1>${profile.appName}</h1><p>Secure connection is needed to access KOFAD accounts, stock and payment information. Reconnect to the internet and open the app again.</p><a href="${profile.startUrl}">Try secure KOFAD connection</a></main></html>`, "utf8");
-console.log(`Prepared ${profile.appName} (${profile.appId}). Generate Android/iOS native projects with 'npx cap add android' and 'npx cap add ios' once, using this channel. Existing generated native project identifiers MUST match the selected channel before publishing.`);
+const sourceDir = resolve("app-shell");
+const outputDir = resolve("www");
+mkdirSync(outputDir, {recursive: true});
+const copyWithProfile = (filename) => {
+  let source = readFileSync(resolve(sourceDir, filename), "utf8");
+  source = source.replaceAll("__APP_NAME__", profile.appName)
+    .replaceAll("__CHANNEL__", channel)
+    .replaceAll("__WELCOME_TITLE__", channel === "customer"
+      ? "Discover, shop, stay connected."
+      : "Your business, one secure starting point.")
+    .replaceAll("__WELCOME_SUBTITLE__", channel === "customer"
+      ? "Explore live public products here. Sign in and complete orders securely through KOFAD Market."
+      : "Open sales, inventory and approvals on the authorized staff domain. Your existing permissions stay in control.")
+    .replaceAll("__MAIN_ACTION__", channel === "customer"
+      ? "Continue to secure Market" : "Open staff workspace");
+  writeFileSync(resolve(outputDir, filename), source, "utf8");
+};
+copyWithProfile("index.html");
+copyWithProfile("native.js");
+copyFileSync(resolve(sourceDir, "native.css"), resolve(outputDir, "native.css"));
+console.log(`Bundled offline-capable native ${profile.appName} (${profile.appId}) with local UI, not server.url.`);
