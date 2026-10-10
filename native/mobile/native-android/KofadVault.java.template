@@ -1,0 +1,124 @@
+package __PACKAGE__;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
+
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.SecureRandom;
+import java.util.regex.Pattern;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+
+/**
+ * Stores only a rotating mobile refresh credential encrypted with AndroidKeyStore AES-GCM.
+ * Android's app sandbox and per-package signing identity isolate Market from Staff.
+ * Never stores access tokens, PINs, passwords, account information or OAuth verifier.
+ * Does not claim hardware backing: this depends on the device Keystore provider.
+ */
+@CapacitorPlugin(name = "KofadVault")
+public class KofadVault extends Plugin {
+    private static final String PREFS = "kofad_native_session_v1";
+    private static final String ENTRY = "sealed_refresh";
+    private static final String ALIAS = "kofad_native_refresh_v1";
+    private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9_-]{43}");
+    private static final String ALGORITHM = "AES/GCM/NoPadding";
+
+    private SharedPreferences prefs() {
+        return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    private SecretKey key() throws Exception {
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+        KeyStore.Entry entry = store.getEntry(ALIAS, null);
+        if (entry != null) {
+            if (!(entry instanceof KeyStore.SecretKeyEntry)) throw new IllegalStateException("Invalid key");
+            return ((KeyStore.SecretKeyEntry) entry).getSecretKey();
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore"
+        );
+        generator.init(new KeyGenParameterSpec.Builder(
+                ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .setRandomizedEncryptionRequired(true)
+            .build());
+        return generator.generateKey();
+    }
+
+    @PluginMethod
+    public synchronized void save(PluginCall call) {
+        String value = call.getString("value");
+        if (value == null || !TOKEN.matcher(value).matches()) {
+            call.reject("Invalid credential");
+            return;
+        }
+        try {
+            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            cipher.init(Cipher.ENCRYPT_MODE, key(), new SecureRandom());
+            byte[] iv = cipher.getIV();
+            byte[] sealed = cipher.doFinal(value.getBytes(StandardCharsets.US_ASCII));
+            if (iv.length != 12) throw new IllegalStateException("Invalid IV");
+            String payload = Base64.encodeToString(iv, Base64.NO_WRAP) + ":" +
+                             Base64.encodeToString(sealed, Base64.NO_WRAP);
+            if (!prefs().edit().putString(ENTRY, payload).commit()) {
+                throw new IllegalStateException("Storage was not committed");
+            }
+            call.resolve();
+        } catch (Exception ignored) {
+            // Never log credential, ciphertext or sensitive exception details.
+            call.reject("Secure credential storage unavailable");
+        }
+    }
+
+    @PluginMethod
+    public synchronized void load(PluginCall call) {
+        String payload = prefs().getString(ENTRY, null);
+        JSObject result = new JSObject();
+        if (payload == null) {
+            result.put("value", JSObject.NULL);
+            call.resolve(result);
+            return;
+        }
+        try {
+            String[] parts = payload.split(":", -1);
+            if (parts.length != 2) throw new IllegalStateException("Invalid sealed token");
+            byte[] iv = Base64.decode(parts[0], Base64.NO_WRAP);
+            byte[] encrypted = Base64.decode(parts[1], Base64.NO_WRAP);
+            if (iv.length != 12 || encrypted.length < 16 || encrypted.length > 256) {
+                throw new IllegalStateException("Invalid token envelope");
+            }
+            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            cipher.init(Cipher.DECRYPT_MODE, key(), new GCMParameterSpec(128, iv));
+            String value = new String(cipher.doFinal(encrypted), StandardCharsets.US_ASCII);
+            if (!TOKEN.matcher(value).matches()) throw new IllegalStateException("Invalid token");
+            result.put("value", value);
+            call.resolve(result);
+        } catch (Exception ignored) {
+            // Android Keystore key can be lost after restore/device change; fail closed.
+            prefs().edit().remove(ENTRY).commit();
+            call.reject("Saved sign-in cannot be recovered; please sign in again");
+        }
+    }
+
+    @PluginMethod
+    public synchronized void remove(PluginCall call) {
+        if (prefs().edit().remove(ENTRY).commit()) call.resolve();
+        else call.reject("Secure sign-out could not erase stored credential");
+    }
+}

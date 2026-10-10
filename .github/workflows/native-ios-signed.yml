@@ -67,6 +67,7 @@ jobs:
           node scripts/write-profile.mjs
           npx cap add ios
           npx cap sync ios
+          node scripts/configure-auth-deeplink.mjs ios
           npx capacitor-assets generate --ios
       - name: Import Apple certificate and approved distribution profile
         shell: bash
