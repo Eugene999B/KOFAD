@@ -1,0 +1,177 @@
+/* KOFAD downloads — intentionally understated, native-first storefront. */
+.kf-download,.kf-download *{box-sizing:border-box}
+.kf-download{
+  --kd-navy:#112b48;--kd-navy-deep:#0b1f36;--kd-gold:#c89228;
+  --kd-text:#192d42;--kd-muted:#697c8c;--kd-border:#e3e8ed;
+  --kd-surface:#fff;--kd-softer:#f5f7f9;
+  width:min(100%,1050px);margin:0 auto;
+  padding:clamp(38px,5.4vw,76px) clamp(18px,3.5vw,36px) 68px;
+  color:var(--kd-text);font-family:inherit
+}
+.kf-download-hero{text-align:center;max-width:720px;margin:0 auto 49px}
+.kf-download-logo{
+  display:block;object-fit:contain;width:86px;height:86px;
+  margin:0 auto 22px;padding:8px;border-radius:19px;
+  background:#fff;border:1px solid #e6ebef;
+  box-shadow:0 8px 24px rgb(13 37 61 / 7%)
+}
+.kf-download-eyebrow{
+  margin:0 0 13px;color:var(--kd-gold)!important;
+  font-size:11px!important;line-height:1.5;font-weight:800;
+  letter-spacing:.21em;text-transform:uppercase
+}
+.kf-download-hero h1{
+  margin:0 0 13px;color:var(--kd-text);
+  font-size:clamp(34px,4.8vw,55px);font-weight:850;
+  line-height:1.13;letter-spacing:-.045em
+}
+.kf-download-intro{
+  max-width:490px;margin:0 auto;color:var(--kd-muted);
+  font-size:clamp(14px,1.5vw,16px);line-height:1.75
+}
+.kf-download-section-title{
+  margin:0 0 20px;text-align:center;
+  color:var(--kd-text);font-size:18px;font-weight:800;letter-spacing:-.025em
+}
+.kf-download-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.kf-download-device{
+  min-width:0;min-height:225px;display:flex;flex-direction:column;
+  padding:28px 24px 22px;border:1px solid var(--kd-border);
+  border-radius:20px;background:var(--kd-surface);
+  box-shadow:0 7px 28px rgb(10 29 49 / 5%);
+  transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease
+}
+.kf-download-device:hover{
+  transform:translateY(-2px);border-color:#dfc184;
+  box-shadow:0 16px 38px rgb(10 29 49 / 10%)
+}
+.kf-download-device-top{display:flex;align-items:center;gap:16px;min-height:64px}
+.kf-download-device-top>img{display:block;flex:0 0 44px;width:44px;height:44px;object-fit:contain}
+.kf-download-device-top h3{
+  color:var(--kd-text);margin:0 0 4px;font-size:21px;
+  font-weight:830;letter-spacing:-.04em;line-height:1.2
+}
+.kf-download-device-top p{
+  min-height:0!important;margin:0!important;color:var(--kd-muted);
+  font-size:12px;line-height:1.5
+}
+.kf-download-device-action{
+  display:inline-flex;align-items:center;justify-content:center;
+  gap:10px;width:100%;min-height:47px;margin-top:auto;
+  padding:11px 15px;border-radius:11px;
+  background:var(--kd-navy);border:1px solid var(--kd-navy);
+  color:#fff!important;font-size:13px;font-weight:780;
+  text-decoration:none!important;line-height:1.35;cursor:pointer;
+  transition:background .15s,border-color .15s,transform .15s
+}
+.kf-download-device-action:hover{
+  background:var(--kd-navy-deep);border-color:var(--kd-navy-deep);
+  color:#fff!important
+}
+.kf-download-device-action span{color:#edc776}
+.kf-download-device[data-native-platform="ios"] .kf-download-device-action{
+  background:#fcf4e5;border-color:#ecd9b8;color:#654b23!important
+}
+.kf-download-device[data-native-platform="ios"] .kf-download-device-action:hover{
+  background:#f9e8c6;border-color:#dcbb7c;color:#573b18!important
+}
+.kf-download-device[data-native-platform="ios"] .kf-download-device-action span{color:#8e6115}
+.kf-download-unavailable{
+  display:flex;align-items:center;justify-content:center;
+  min-height:47px;margin-top:auto;padding:11px 14px;
+  border:1px solid var(--kd-border);border-radius:11px;
+  background:var(--kd-softer);color:var(--kd-muted);
+  font-size:13px;font-weight:750;line-height:1.35
+}
+.kf-download-device-note{
+  min-height:0!important;margin:10px 0 0!important;
+  color:var(--kd-muted)!important;font-size:11px!important;
+  line-height:1.5;text-align:center
+}
+.kf-download-footnote{
+  margin:28px 0 0;color:var(--kd-muted);
+  text-align:center;font-size:12px;line-height:1.65
+}
+.kf-download-back{margin:17px 0 0;text-align:center;font-size:13px}
+.kf-download-back a{
+  text-decoration:none;color:var(--kd-navy);font-weight:750
+}
+.kf-download-back a:hover{text-decoration:underline;text-underline-offset:4px}
+.kf-download-guide{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;margin:24px auto 0;padding:17px 19px;
+  max-width:670px;border:1px solid #eedbbb;border-radius:14px;
+  background:#fff9ee;color:#423922
+}
+.kf-download-guide strong{display:block;font-size:14px;color:#493919}
+.kf-download-guide p{margin:5px 0 0;font-size:13px;line-height:1.7;color:#746042}
+.kf-download-guide>button{
+  flex:none;border:0;background:transparent;color:#796348;
+  font-size:24px;cursor:pointer
+}
+.kf-download-prompt{margin:11px auto 0;text-align:center;color:var(--kd-muted);font-size:11px}
+.kf-download-update{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:15px;margin:18px auto 0;padding:14px 18px;
+  max-width:670px;border-radius:12px;background:#eef4ec;
+  font-size:13px;font-weight:750
+}
+.kf-download-update button{
+  border:0;border-radius:9px;background:var(--kd-navy);
+  color:#fff;cursor:pointer;padding:10px 16px;font-weight:750
+}
+[data-pwa-install-steps][hidden],[data-pwa-update][hidden]{display:none!important}
+.kf-iphone-guide{text-align:center;max-width:670px}
+.kf-iphone-guide .kf-download-logo{margin-bottom:24px}
+.kf-guide-apple{display:block;object-fit:contain;margin:0 auto 13px}
+.kf-iphone-guide h1{
+  margin:0 0 14px;color:var(--kd-text);
+  font-size:clamp(33px,4vw,50px);font-weight:850;letter-spacing:-.045em
+}
+.kf-iphone-primary{max-width:340px;margin:27px auto 0}
+.kf-iphone-guide .kf-download-guide{text-align:left}
+.kf-iphone-guide .kf-download-prompt{margin-top:14px}
+.kf-download-device-action:focus-visible,.kf-download-back a:focus-visible,
+.kf-download-guide button:focus-visible{
+  outline:3px solid var(--kd-gold);outline-offset:3px
+}
+html[data-theme="dark"] .kf-download{
+  --kd-navy:#204364;--kd-navy-deep:#2a5277;
+  --kd-text:#eef4fb;--kd-muted:#b3c1d0;--kd-border:#31475b;
+  --kd-surface:#152a3e;--kd-softer:#21364a
+}
+html[data-theme="dark"] .kf-download-device{
+  box-shadow:0 8px 30px rgb(0 0 0 / 13%)
+}
+html[data-theme="dark"] .kf-download-device-top>img{
+  padding:7px;border-radius:11px;background:#f5f7fa
+}
+html[data-theme="dark"] .kf-download-device-action{
+  border-color:#446783;background:#24476b
+}
+html[data-theme="dark"] .kf-download-device-action:hover{background:#30597e}
+html[data-theme="dark"] .kf-download-back a{color:#f1c878}
+html[data-theme="dark"] .kf-download-guide{
+  background:#332d23;border-color:#5a4729;color:#f3e8d3
+}
+html[data-theme="dark"] .kf-download-guide strong{color:#ffe2ae}
+html[data-theme="dark"] .kf-download-guide p{color:#ddd0bb}
+html[data-theme="dark"] .kf-download-guide>button{color:#f3e8d3}
+html[data-theme="dark"] .kf-download-update{background:#203c37;color:#d9efe3}
+@media(max-width:760px){
+  .kf-download-grid{grid-template-columns:1fr;max-width:540px;margin:0 auto;gap:12px}
+  .kf-download-device{min-height:164px;padding:21px 23px}
+  .kf-download-device-action,.kf-download-unavailable{margin-top:20px}
+  .kf-download-hero{margin-bottom:35px}
+}
+@media(max-width:420px){
+  .kf-download{padding:29px 16px 43px}
+  .kf-download-logo{width:72px;height:72px;margin-bottom:20px}
+  .kf-download-hero h1{font-size:34px}
+  .kf-download-intro{font-size:14px}
+  .kf-download-device{min-height:154px;padding:19px 20px}
+  .kf-download-device-top h3{font-size:19px}
+  .kf-download-section-title{font-size:17px}
+  .kf-download-footnote{margin-top:23px}
+}
+@media(prefers-reduced-motion:reduce){.kf-download-device,.kf-download-device-action{transition:none}.kf-download-device:hover{transform:none}}

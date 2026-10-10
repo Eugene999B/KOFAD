@@ -1,4 +1,4 @@
-name: Prepare signed KOFAD Android release (review only)
+name: Build KOFAD Android APK (optional customer publication)
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +15,11 @@ on:
         description: "Unique increasing Android versionCode"
         required: true
         type: number
+      publish_customer:
+        description: "Publish verified CUSTOMER APK after device QA and publisher approval"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -124,7 +129,8 @@ jobs:
             exit 1
           fi
           "$tools/apksigner" verify --verbose "$target" >/dev/null
-          sha256sum "$target" | tee native/release-candidates/SHA256SUMS.txt
+          (cd native/release-candidates && sha256sum "$(basename "$target")" > SHA256SUMS.txt)
+          cat native/release-candidates/SHA256SUMS.txt
           echo "Signed APK verified against pinned channel-specific publisher certificate."
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -132,3 +138,69 @@ jobs:
           path: native/release-candidates/
           retention-days: 7
           if-no-files-found: error
+
+  publish_customer:
+    name: Publish independently verified KOFAD Market APK
+    needs: sign
+    if: github.ref == 'refs/heads/railway-release' && inputs.channel == 'customer' && inputs.publish_customer == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: kofad-native-publishing
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      VERSION_CODE: ${{ inputs.version_code }}
+      EXPECTED_SIGNER: ${{ secrets.KOFAD_CUSTOMER_ANDROID_CERT_SHA256 }}
+    steps:
+      - name: Download only the verified customer release candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: SIGNED-REVIEW-ONLY-customer-android-${{ inputs.version }}
+          path: release-candidate
+      - name: Check signature, package identity, version and checksum again
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$VERSION"
+          [[ "$version" =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,3})$ ]] || exit 1
+          apk="release-candidate/KOFAD-customer-${version}-android.apk"
+          test -s "$apk"
+          test -s release-candidate/SHA256SUMS.txt
+          test "$(find release-candidate -maxdepth 1 -type f | wc -l)" -eq 2
+          (cd release-candidate && sha256sum --check SHA256SUMS.txt)
+          tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -x "$tools/apksigner"
+          test -x "$tools/aapt"
+          signer="$("$tools/apksigner" verify --print-certs --verbose "$apk")"
+          actual="$(printf '%s\n' "$signer" | grep -m 1 -i 'Signer #1 certificate SHA-256 digest' | sed -E 's/.*digest: //;s/://g' | tr '[:lower:]' '[:upper:]')"
+          expected="$(printf '%s' "$EXPECTED_SIGNER" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          test -n "$expected"
+          test "$actual" = "$expected"
+          badging="$("$tools/aapt" dump badging "$apk")"
+          grep -F "name='com.kofadimpex.market'" <<< "$badging" >/dev/null
+          grep -F "versionCode='$VERSION_CODE'" <<< "$badging" >/dev/null
+          grep -F "versionName='$version'" <<< "$badging" >/dev/null
+          echo "The customer package, version, certificate and binary hash are valid."
+      - name: Publish an immutable GitHub release for KOFAD Market
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="kofad-market-android-v${VERSION}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            echo "::error::Version tag already exists. Never overwrite a signed release."
+            exit 1
+          fi
+          apk="release-candidate/KOFAD-customer-${VERSION}-android.apk"
+          gh release create "$tag" \
+            "$apk" \
+            "release-candidate/SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "KOFAD Market Android ${VERSION}" \
+            --notes "Official signed KOFAD Market Android release. Package: com.kofadimpex.market. SHA-256SUMS.txt provides the file checksum. Use only approved KOFAD download links. Customer and staff apps are separate." \
+            --latest=false
+          echo "### Official Android APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/KOFAD-customer-${VERSION}-android.apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "Approve this exact URL on the KOFAD website only after testing the installed APK." >> "$GITHUB_STEP_SUMMARY"

@@ -50,8 +50,8 @@ class OfficialDomainMiddleware:
             target = MARKET
         elif path in {
             "/apps/", "/apps/releases.json",
-            "/about/", "/faq/", "/delivery/", "/returns-policy/", "/terms/",
-            "/privacy/", "/contact/", "/robots.txt", "/sitemap.xml",
+            "/about/", "/wholesale/", "/faq/", "/delivery/", "/returns-policy/",
+            "/terms/", "/privacy/", "/contact/", "/robots.txt", "/sitemap.xml",
         } or path.startswith("/verify/worker/"):
             target = ROOT
         else:

@@ -1,0 +1,415 @@
+/* KOFAD ATELIER / COMMERCE 03
+   Transactional UI refinement over proven existing workflows. No semantic
+   colours, payment controls or hidden-state logic are replaced. */
+
+/* Editorial hero typography must fit under the header at every viewport. */
+body.is-kofad-home .kfd-hero{
+  background:#0b253b!important;
+}
+body.is-kofad-home .kfd-hero-inner{
+  height:100%;align-items:center!important;
+}
+body.is-kofad-home .kfd-hero-copy{
+  padding:8px 0 37px!important;max-width:690px!important;
+  min-height:0!important;
+}
+body.is-kofad-home .kfd-hero .kfd-eyebrow{
+  font-size:10px!important;margin-bottom:8px!important;
+  letter-spacing:.105em!important;line-height:1.25!important;
+}
+body.is-kofad-home .kfd-hero h1{
+  font-size:clamp(32px,3.25vw,47px)!important;
+  line-height:1.09!important;max-width:600px!important;
+  letter-spacing:-.043em!important;margin:0!important;
+}
+body.is-kofad-home .kfd-hero-copy>p:not(.kfd-eyebrow){
+  font-size:clamp(12px,.95vw,14px)!important;
+  line-height:1.47!important;max-width:550px!important;
+  margin:10px 0 14px!important;
+}
+body.is-kofad-home .kfd-hero-cta{gap:8px!important}
+body.is-kofad-home .kfd-hero .kfd-cta{
+  padding:8px 12px!important;min-height:37px!important;
+  border-radius:8px!important;font-size:12px!important;
+}
+body.is-kofad-home .kfd-hero-image{
+  object-position:center 49%;image-rendering:auto;
+  filter:saturate(1.06) contrast(1.025);
+}
+body.is-kofad-home .kfd-hero::after{
+  background:linear-gradient(90deg,rgba(7,22,37,.93) 0%,rgba(8,28,45,.86) 26%,rgba(8,28,45,.45) 57%,rgba(7,22,37,.07) 100%)!important;
+}
+body.is-kofad-home .kfd-hero-meta{bottom:12px!important}
+@media(max-width:640px){
+ body.is-kofad-home .kfd-hero{min-height:370px!important;max-height:395px!important;height:395px!important}
+ body.is-kofad-home .kfd-hero-inner{align-items:center!important}
+ body.is-kofad-home .kfd-hero-copy{padding:8px 0 38px!important}
+ body.is-kofad-home .kfd-hero .kfd-eyebrow{font-size:9px!important;margin-bottom:6px!important}
+ body.is-kofad-home .kfd-hero h1{font-size:clamp(30px,7.4vw,38px)!important;line-height:1.08!important}
+ body.is-kofad-home .kfd-hero-copy>p:not(.kfd-eyebrow){
+   font-size:12px!important;line-height:1.4!important;margin:9px 0 12px!important;
+   max-width:440px!important;
+ }
+ body.is-kofad-home .kfd-hero-cta{gap:6px!important}
+ body.is-kofad-home .kfd-hero .kfd-cta{min-height:34px!important;padding:7px 10px!important;font-size:11px!important}
+ body.is-kofad-home .kfd-hero::after{
+   background:linear-gradient(90deg,rgba(7,22,37,.95),rgba(7,22,37,.6))!important;
+ }
+}
+@media(max-width:375px){
+ body.is-kofad-home .kfd-hero .kfd-cta{padding:6px 9px!important;font-size:10px!important}
+ body.is-kofad-home .kfd-hero h1{font-size:30px!important}
+}
+/* Counter & POS: confident point-of-sale surfaces with protected button legibility. */
+body[data-session-zone="staff"] #pos{
+  --checkout-cream:#f6ecdb;
+  --checkout-ink:var(--ops-ink,var(--atelier-text));
+  --checkout-border:var(--ops-edge,var(--atelier-edge));
+  color:var(--checkout-ink);
+}
+body[data-session-zone="staff"] .atelier-counter-context,
+body[data-session-zone="staff"] .atelier-finance-context{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin:0 0 14px;padding:11px 16px;
+  border:1px solid var(--ops-edge,var(--atelier-edge));
+  border-left:3px solid #cea55c;
+  border-radius:12px;background:var(--ops-card,var(--atelier-surface));
+  box-shadow:0 5px 15px rgba(11,38,61,.04);
+}
+body[data-session-zone="staff"] .atelier-counter-context>strong,
+body[data-session-zone="staff"] .atelier-finance-context>strong{
+  font-size:12px;letter-spacing:.04em;color:var(--ops-ink,var(--atelier-text));
+}
+body[data-session-zone="staff"] .atelier-counter-context>span,
+body[data-session-zone="staff"] .atelier-finance-context>span{
+  font-size:12px;color:var(--ops-muted,var(--atelier-muted));
+}
+body[data-session-zone="staff"] .atelier-counter-context>a,
+body[data-session-zone="staff"] .atelier-finance-context>a{
+  text-decoration:none!important;font-size:12px;font-weight:750;
+  color:var(--ops-ink,var(--atelier-text));
+  border-radius:8px;background:var(--ops-glow,#f2e6ce);
+  padding:7px 12px;min-height:34px;display:inline-flex;align-items:center;
+}
+body[data-session-zone="staff"] .chalin-sale-builder,
+body[data-session-zone="staff"] .chalin-checkout-panel{
+  background:var(--ops-card,var(--atelier-surface))!important;
+  border:1px solid var(--ops-edge,var(--atelier-edge))!important;
+  border-radius:18px!important;min-width:0;
+}
+body[data-session-zone="staff"] .sale-search-shell{
+  background:var(--ops-card-soft,var(--atelier-subtle))!important;
+  border:1px solid var(--ops-edge,var(--atelier-edge))!important;border-radius:13px!important;
+}
+body[data-session-zone="staff"] #pos .sale-product-search input{
+  background:transparent!important;color:var(--ops-ink,var(--atelier-text))!important;
+}
+body[data-session-zone="staff"] #pos :is(.chalin-cart-panel,.purchase-product-source,.counter-customer){
+  background:var(--ops-card,var(--atelier-surface))!important;
+  border-color:var(--ops-edge,var(--atelier-edge))!important;
+  border-radius:15px!important;
+}
+body[data-session-zone="staff"] #pos :is(.counter-sale-head,.chalin-checkout-head) h2{
+  color:var(--ops-ink,var(--atelier-text))!important;
+  letter-spacing:-.025em;font-size:clamp(18px,1.7vw,23px);
+}
+body[data-session-zone="staff"] #pos .counter-cart .cart-line{
+  background:var(--ops-card-soft,var(--atelier-subtle))!important;
+  border-color:var(--ops-edge,var(--atelier-edge))!important;
+  border-radius:12px!important;box-shadow:none!important;
+}
+body[data-session-zone="staff"] #pos .customer-choice-button{
+  border-color:var(--ops-edge,var(--atelier-edge))!important;
+  background:var(--ops-card,var(--atelier-surface))!important;
+  color:var(--ops-ink,var(--atelier-text))!important;
+}
+body[data-session-zone="staff"] #pos .customer-choice-button.active,
+body[data-session-zone="staff"] #pos .customer-choice-button[aria-pressed="true"]{
+  border-color:#c49c50!important;
+  background:var(--ops-glow,#f4e9d0)!important;
+}
+body[data-session-zone="staff"] #pos :is(.counter-total,.chalin-cart-total){
+  font-variant-numeric:tabular-nums;
+}
+body[data-session-zone="staff"] #pos .sale-search-help kbd{
+  border:1px solid var(--ops-edge,var(--atelier-edge));
+  border-radius:6px;background:var(--ops-card,var(--atelier-surface));
+}
+html[data-theme="dark"] body[data-session-zone="staff"] #pos{
+  --checkout-cream:#302c25;
+}
+html[data-theme="dark"] body[data-session-zone="staff"] #pos .counter-finish-bar{
+  background:#29383f!important;border-color:#5e503a!important;
+}
+html[data-theme="dark"] body[data-session-zone="staff"] #pos .counter-finish-bar *{
+  color:#f4f0e5!important;
+}
+
+/* Financial intelligence & closing: calm evidence-first workspace. */
+body[data-session-zone="staff"] .finance-hero,
+body[data-session-zone="staff"] .accounting-hero{
+  border-radius:21px!important;
+  background:linear-gradient(115deg,#0e2a46,#1f4865)!important;
+  border:1px solid rgba(215,179,109,.26)!important;
+}
+body[data-session-zone="staff"] :is(.finance-hero,.accounting-hero) h2{
+  color:#f6f5ef!important;letter-spacing:-.038em;font-size:clamp(23px,2.4vw,34px)!important;
+}
+body[data-session-zone="staff"] :is(.finance-hero,.accounting-hero) p:not(.eyebrow){
+  color:#dee8ed!important;line-height:1.65!important;
+}
+body[data-session-zone="staff"] :is(.finance-hero,.accounting-hero) .eyebrow{
+  color:#edc980!important;
+}
+body[data-session-zone="staff"] .finance-hero .text-link{color:#f1ce91!important}
+body[data-session-zone="staff"] .finance-workspace{gap:16px}
+body[data-session-zone="staff"] .finance-workspace>.panel,
+body[data-session-zone="staff"] :is(.expense-funding-card,.accounting-filter,.accounting-statement-card,.accounting-control-centre){
+  background:var(--ops-card,var(--atelier-surface))!important;
+  border:1px solid var(--ops-edge,var(--atelier-edge))!important;
+  border-radius:17px!important;
+  box-shadow:0 8px 24px rgba(12,37,58,.045)!important;
+}
+body[data-session-zone="staff"] .expense-funding-card{
+  background:var(--ops-card-soft,var(--atelier-subtle))!important;
+  border-left:3px solid #c69b4e!important;
+}
+body[data-session-zone="staff"] .expense-entry-panel .button.wide{
+  min-height:47px;letter-spacing:.03em;font-weight:800;
+}
+body[data-session-zone="staff"] .accounting-tabs{
+  padding:7px;gap:5px;overflow-x:auto;overscroll-behavior-x:contain;
+  border:1px solid var(--ops-edge,var(--atelier-edge));
+  background:var(--ops-card,var(--atelier-surface))!important;
+  border-radius:13px!important;scrollbar-width:thin;
+}
+body[data-session-zone="staff"] .accounting-tabs a{
+  border-radius:8px!important;font-size:12px;
+  min-height:40px;white-space:nowrap;display:inline-flex;align-items:center;
+}
+body[data-session-zone="staff"] .accounting-tabs a.active{
+  border-color:#ceac6d!important;
+  background:var(--ops-glow,#f3e7ce)!important;
+  color:var(--ops-ink,var(--atelier-text))!important;
+}
+body[data-session-zone="staff"] .accounting-balance-status{
+  background:rgba(7,24,37,.34)!important;border:1px solid rgba(229,195,128,.28)!important;
+}
+body[data-session-zone="staff"] .accounting-balance-status :is(small,strong,span){
+  color:#f4f3ef!important;
+}
+body[data-session-zone="staff"] :is(.accounting-control-grid,.accounting-executive-metrics,.metric-grid) article{
+  min-width:0;border-color:var(--ops-edge,var(--atelier-edge))!important;
+  border-radius:13px!important;background:var(--ops-card,var(--atelier-surface))!important;
+  box-shadow:none!important;
+}
+body[data-session-zone="staff"] .metric-grid article strong{
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.15;
+}
+
+/* Online orders: status stays semantic, queues become easier to scan. */
+body[data-session-zone="staff"] .online-order-hero,
+body[data-session-zone="staff"] .online-order-command{
+  background:linear-gradient(116deg,#102d4a,#23506b)!important;
+  border:1px solid rgba(218,181,110,.32)!important;
+  border-radius:20px!important;
+  box-shadow:0 15px 32px rgba(12,40,64,.12)!important;
+}
+body[data-session-zone="staff"] :is(.online-order-hero,.online-order-command) h2,
+body[data-session-zone="staff"] :is(.online-order-hero,.online-order-command) p:not(.eyebrow){
+  color:#f3f2ed!important;
+}
+body[data-session-zone="staff"] :is(.online-order-hero,.online-order-command) .eyebrow{color:#ebc784!important}
+body[data-session-zone="staff"] .online-kpis{gap:12px}
+body[data-session-zone="staff"] .online-kpis article{
+  border-radius:14px!important;
+  background:var(--ops-card,var(--atelier-surface))!important;
+  border:1px solid var(--ops-edge,var(--atelier-edge))!important;
+  border-top:3px solid #cda155!important;
+  box-shadow:0 8px 25px rgba(14,40,61,.05)!important;
+}
+body[data-session-zone="staff"] .online-kpis strong{
+  font-variant-numeric:tabular-nums;color:var(--ops-ink,var(--atelier-text))!important;
+}
+body[data-session-zone="staff"] .order-filter-tabs{
+  display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;
+  padding:7px;border:1px solid var(--ops-edge,var(--atelier-edge));
+  border-radius:13px;background:var(--ops-card,var(--atelier-surface))!important;
+}
+body[data-session-zone="staff"] .order-filter-tabs a{
+  white-space:nowrap;border-radius:9px!important;min-height:39px;
+  display:inline-flex;align-items:center;
+}
+body[data-session-zone="staff"] .order-filter-tabs a.active{
+  background:var(--ops-glow,#f3e8d5)!important;
+  color:var(--ops-ink,var(--atelier-text))!important;
+  border-color:#c69a4e!important;
+}
+body[data-session-zone="staff"] :is(.staff-order-line,.staff-order-total,.staff-order-timeline article){
+  border-color:var(--ops-edge,var(--atelier-edge))!important;
+}
+body[data-session-zone="staff"] .online-order-detail-grid .panel{
+  min-width:0;border-radius:16px!important;
+}
+body[data-session-zone="staff"] .online-order-detail-grid .staff-order-line strong{
+  overflow-wrap:anywhere;
+}
+/* Market checkout & customer orders across light/dark without hiding conditional
+   pickup/delivery sections or changing any form action. */
+.market-body .commerce-checkout-page,
+.market-body .orders-v2-page{max-width:1320px}
+.market-body .commerce-flow-head,
+.market-body .orders-v2-head{
+  border-bottom:1px solid var(--atelier-edge);
+  padding-bottom:19px;margin-bottom:18px;
+}
+.market-body .commerce-flow-head h1,
+.market-body .orders-v2-head h1{
+  font-size:clamp(28px,2.8vw,40px)!important;letter-spacing:-.045em;
+}
+.market-body .commerce-checkout-steps{
+  border:1px solid var(--atelier-edge);border-radius:13px;
+  background:var(--atelier-surface)!important;padding:10px 15px;
+}
+.market-body .commerce-checkout-form,
+.market-body .commerce-checkout-summary,
+.market-body .order-history-card{
+  border:1px solid var(--atelier-edge)!important;
+  border-radius:17px!important;background:var(--atelier-surface)!important;
+  box-shadow:0 9px 27px rgba(13,39,59,.06)!important;
+}
+.market-body .checkout-v2-section{
+  border-color:var(--atelier-edge)!important;
+}
+.market-body .checkout-v2-number{
+  border-radius:9px!important;background:#f0e3c9!important;
+  color:#78541c!important;
+}
+.market-body .checkout-v2-section h2{
+  color:var(--atelier-text)!important;
+  font-size:clamp(18px,1.7vw,24px)!important;letter-spacing:-.027em;
+}
+.market-body .commerce-checkout-form :is(input,textarea,select):focus-visible{
+  outline:3px solid #cca559!important;outline-offset:2px;
+}
+.market-body .order-summary-tabs a{
+  border:1px solid var(--atelier-edge)!important;
+  background:var(--atelier-surface)!important;
+  border-radius:12px!important;
+}
+.market-body .order-summary-tabs a.active{
+  border-color:#cda764!important;background:#f5ecda!important;
+}
+.market-body .order-history-card:hover{border-color:#ceaa67!important}
+.market-body .order-history-search{
+  border:1px solid var(--atelier-edge);
+  border-radius:11px;background:var(--atelier-surface);
+  padding:6px;
+}
+.market-body .order-status-filter{
+  overflow-x:auto;scrollbar-width:thin;
+}
+.market-body .order-status-filter a{
+  white-space:nowrap;min-height:38px;display:inline-flex;align-items:center;
+}
+html[data-theme="dark"] .market-body :is(.commerce-checkout-steps,.commerce-checkout-form,.commerce-checkout-summary,.order-history-card,.order-summary-tabs a,.order-history-search){
+  background:#1d2428!important;border-color:#3b4448!important;
+}
+html[data-theme="dark"] .market-body .checkout-v2-number{
+  background:#493a23!important;color:#f3d49d!important;
+}
+html[data-theme="dark"] .market-body .order-summary-tabs a.active{
+  background:#413523!important;border-color:#9c7839!important;
+}
+@media(max-width:700px){
+ body[data-session-zone="staff"] :is(.atelier-counter-context,.atelier-finance-context){
+   padding:11px;gap:8px;
+ }
+ body[data-session-zone="staff"] .order-filter-tabs{flex-wrap:nowrap}
+ body[data-session-zone="staff"] .accounting-tabs{flex-wrap:nowrap}
+ body[data-session-zone="staff"] .online-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .market-body .commerce-checkout-steps{gap:6px;padding:9px}
+ .market-body .commerce-checkout-steps span{font-size:11px;white-space:nowrap}
+}
+@media(prefers-reduced-motion:reduce){
+ body[data-session-zone="staff"] .online-kpis article,
+ .market-body .order-history-card{transition:none!important}
+}
+
+
+/* Phase 3 visual audit corrections — photo depth and usable small-screen actions. */
+.market-body .atelier-market-intro-art{
+  background-color:#15374b;
+  background-size:cover;
+  background-position:center 48%;
+  background-repeat:no-repeat;
+  isolation:isolate;
+}
+.market-body .atelier-market-intro-art>img{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  object-position:center!important;
+}
+.market-body .atelier-market-intro-art:after{
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(8,30,50,.65),rgba(8,30,50,.08) 66%),
+             linear-gradient(0deg,rgba(8,25,40,.67),transparent 65%)!important;
+}
+html[data-theme="dark"] .market-body .atelier-market-intro-art:after{
+  background:linear-gradient(90deg,rgba(8,25,39,.75),rgba(8,25,39,.12) 75%),
+             linear-gradient(0deg,rgba(8,25,39,.76),transparent 70%)!important;
+}
+/* Make the remaining arrow-only controls large enough to use on phones. */
+body.is-kofad-home .kfd-hero-controls button{
+  width:38px!important;height:38px!important;min-width:38px;
+  font-size:20px!important;touch-action:manipulation;
+}
+@media(max-width:768px){
+  /* The previous forced full-width buttons filled the whole first screen on
+     sales, finance and administration. Preserve every action in one scroll row. */
+  body[data-session-zone="staff"] .page-heading>.actions{
+    display:flex!important;flex-direction:row!important;
+    width:100%;max-width:100%;min-width:0;flex-wrap:nowrap!important;
+    overflow-x:auto!important;overscroll-behavior-x:contain;
+    scrollbar-width:thin;gap:8px!important;
+    padding:2px 2px 8px;margin:0;
+  }
+  body[data-session-zone="staff"] .page-heading>.actions > :is(a,button,form){
+    flex:0 0 auto!important;
+    width:auto!important;min-width:0!important;
+    max-width:none!important;min-height:42px!important;
+    white-space:nowrap!important;
+    display:inline-flex;align-items:center;justify-content:center;
+    padding:10px 14px!important;border-radius:10px!important;
+    margin:0!important;
+  }
+  body[data-session-zone="staff"] .page-heading>.actions > form button{
+    min-height:42px!important;white-space:nowrap!important;
+  }
+  .market-body .commerce-checkout-form,
+  .market-body .commerce-checkout-summary,
+  .market-body .checkout-v2-content,
+  .market-body .orders-v2-page,
+  .market-body .order-history-card{min-width:0;max-width:100%}
+  .market-body .order-history-search input{min-width:0;flex:1 1 auto}
+  .market-body .order-status-filter{max-width:100%;overscroll-behavior-x:contain}
+  .market-body .commerce-checkout-steps{
+    max-width:100%;overflow-x:auto;scrollbar-width:thin;
+    overscroll-behavior-x:contain;
+  }
+  .market-body .commerce-checkout-steps span{flex-shrink:0}
+  .market-body .atelier-market-intro-art{background-position:center 42%}
+  body.is-kofad-home .kfd-hero-controls button{width:39px!important;height:39px!important}
+}
+@media(max-width:375px){
+  .market-body .commerce-checkout-steps{padding:8px!important;gap:3px!important}
+  body[data-session-zone="staff"] .page-heading>.actions > :is(a,button,form){
+    padding:9px 12px!important;font-size:12px!important;
+  }
+}

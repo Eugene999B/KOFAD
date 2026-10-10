@@ -7,11 +7,13 @@ from django.http import FileResponse, HttpResponse, HttpResponseNotFound
 from django.views.decorators.http import require_safe
 
 from .models import MarketListing
+from core.models import Product
+from django.utils.text import slugify
 
 COMPANY_HOST = "kofadimpex.com"
 MARKET_HOST = "market.kofadimpex.com"
 COMPANY_PAGES = (
-    "/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+    "/", "/about/", "/wholesale/", "/faq/", "/delivery/", "/returns-policy/",
     "/terms/", "/privacy/", "/contact/",
 )
 
@@ -30,6 +32,7 @@ def robots(request):
     elif host == MARKET_HOST:
         body = (
             "User-agent: *\nAllow: /market/\n"
+            "Allow: /favicon.ico\nAllow: /static/brand/\n"
             "Disallow: /market/account/\nDisallow: /market/access/\n"
             "Disallow: /market/cart/\nDisallow: /market/checkout/\n"
             "Disallow: /market/orders/\nDisallow: /market/payments/\n"
@@ -57,6 +60,12 @@ def sitemap(request):
         if host == COMPANY_HOST else [f"https://{MARKET_HOST}/market/"]
     )
     if host == MARKET_HOST:
+        categories = Product.objects.filter(
+            market_listing__enabled=True, active=True
+        ).exclude(category="").values_list("category", flat=True).distinct().order_by("category")
+        # Categories are real public catalogue departments, not invented SEO keywords.
+        slugs = sorted({slugify(name) for name in categories if slugify(name)})
+        urls.extend(f"https://{MARKET_HOST}/market/categories/{name}/" for name in slugs)
         ids = MarketListing.objects.filter(enabled=True, product__active=True).order_by("pk").values_list("pk", flat=True).iterator(chunk_size=500)
         urls.extend(f"https://{MARKET_HOST}/market/products/{pk}/" for pk in ids)
     for url in urls:

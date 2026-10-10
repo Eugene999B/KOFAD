@@ -146,5 +146,7 @@ or business records were stored for offline use. Reconnect before continuing.</p
 @require_GET
 def market_install(request):
     from marketplace.views import _market_context
+    from core.native_apps import app_metadata
     return render(request, "native_apps/web_install.html",
-                  _market_context(request, title="Install the KOFAD Market web app"))
+                  _market_context(request, title="Install KOFAD Market",
+                                  app=app_metadata("customer")))

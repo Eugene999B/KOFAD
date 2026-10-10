@@ -25,6 +25,7 @@
  data-paystack-pos-momo-ready="{{ paystack_pos_momo_ready|yesno:"true,false" }}"
  data-paystack-pos-momo-configured="{{ paystack_pos_momo_configured|yesno:"true,false" }}">
 
+<nav class="atelier-counter-context" aria-label="Sales workspace shortcuts"><strong>{% if purchase %}STOCK RECEIVING{% else %}COUNTER SALES{% endif %}</strong><span>{% if purchase %}Check items and supplier details before posting the delivery.{% else %}Search a product, review the cart, and verify the payment before completing a sale.{% endif %}</span><a href="/inventory/">Inventory ↗</a>{% if not purchase %}<a href="/online-orders/">Online orders ↗</a>{% endif %}</nav>
 <div id="pos-error" class="notice error hidden" role="alert"></div>
 
 <div class="counter-layout chalin-sale-layout">
