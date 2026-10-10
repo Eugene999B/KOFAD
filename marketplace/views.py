@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -425,15 +426,19 @@ def customer_account(request, customer):
                 customer.email = email
                 customer.marketing_email_opt_in = False
                 customer.marketing_email_verified_at = None
+                customer.marketing_email_challenge = ""
             customer.transactional_email_enabled = send_orders
             if not wants_promos:
                 customer.marketing_email_opt_in = False
                 customer.marketing_email_verified_at = None
+                customer.marketing_email_challenge = ""
                 messages.success(request, "Email preferences saved. Promotional messages are off.")
             elif not customer.marketing_email_opt_in:
                 from core.notification_engine import queue_customer_email_verification
+                if not customer.marketing_email_challenge:
+                    customer.marketing_email_challenge = secrets.token_urlsafe(24)
                 token = signing.dumps(
-                    {"customer": customer.pk, "email": email, "purpose": "marketing"},
+                    {"customer": customer.pk, "email": email, "purpose": "marketing", "challenge": customer.marketing_email_challenge},
                     salt="kofad-market-email-v1", compress=True,
                 )
                 link = request.build_absolute_uri(reverse("market_email_confirm", kwargs={"token": token}))
@@ -444,7 +449,7 @@ def customer_account(request, customer):
             else:
                 messages.success(request, "Your confirmed promotional preference remains active.")
             customer.save(update_fields=[
-                "email", "transactional_email_enabled", "marketing_email_opt_in", "marketing_email_verified_at",
+                "email", "transactional_email_enabled", "marketing_email_opt_in", "marketing_email_verified_at", "marketing_email_challenge",
             ])
         except ValidationError as exc:
             messages.error(request, problem(exc))
@@ -504,13 +509,16 @@ def customer_email_confirm(request, token):
         customer = CustomerAccount.objects.filter(pk=data.get("customer"), active=True).first()
         if not customer or not customer.email or customer.email.strip().lower() != data.get("email", "").strip().lower():
             raise signing.BadSignature("Email address has changed.")
+        if not customer.marketing_email_challenge or customer.marketing_email_challenge != data.get("challenge"):
+            raise signing.BadSignature("This confirmation was already used or revoked.")
     except (signing.BadSignature, ValueError, TypeError):
         return render(request, "marketplace/email_confirmed.html",
                       _market_context(request, title="Email verification", confirmed=False), status=400)
     if not customer.marketing_email_opt_in:
         customer.marketing_email_opt_in = True
         customer.marketing_email_verified_at = timezone.now()
-        customer.save(update_fields=["marketing_email_opt_in", "marketing_email_verified_at"])
+        customer.marketing_email_challenge = ""
+        customer.save(update_fields=["marketing_email_opt_in", "marketing_email_verified_at", "marketing_email_challenge"])
     return render(request, "marketplace/email_confirmed.html",
                   _market_context(request, title="Email verification", confirmed=True))
 
