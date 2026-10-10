@@ -5,7 +5,7 @@ SMTP and SMS each have an independent production kill switch.
 """
 import hashlib
 import logging
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
