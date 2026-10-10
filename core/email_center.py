@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 MAX_INGEST_BYTES = 1024 * 1024
 MAX_BODY_CHARS = 100000
 
-# Historical management address is receive-only, not shown as a company identity.
-# Retain for messages from customers with old contacts/address books.
-LEGACY_MANAGEMENT_ADDRESS = "eugene@kofadimpex.com"
-MANAGEMENT_ADDRESS = "management@kofadimpex.com"
+# This retired department must not be recreated or receive new KOFAD mail.
+RETIRED_MANAGEMENT_ADDRESSES = frozenset({
+    "eugene@kofadimpex.com", "management@kofadimpex.com",
+})
 
 
 def enabled():
@@ -76,6 +76,10 @@ def _address(value):
 
 
 def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None, cc="", bcc=""):
+    if not mailbox.active or mailbox.address.lower() in RETIRED_MANAGEMENT_ADDRESSES:
+        raise ValidationError("This departmental email account has been retired.")
+    if recipient.lower() in RETIRED_MANAGEMENT_ADDRESSES:
+        raise ValidationError("This recipient email address has been retired.")
     if not (getattr(settings, "KOFAD_EMAIL_ENABLED", False)
             and settings.KOFAD_EMAIL_PROVIDER == "brevo"
             and settings.KOFAD_BREVO_API_KEY):
@@ -102,9 +106,14 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
 
 def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None, cc="", bcc=""):
     recipient = _address(recipient)
-    if recipient == LEGACY_MANAGEMENT_ADDRESS:
-        recipient = MANAGEMENT_ADDRESS
+    if (recipient in RETIRED_MANAGEMENT_ADDRESSES
+            or not mailbox.active
+            or mailbox.address.lower() in RETIRED_MANAGEMENT_ADDRESSES):
+        raise ValidationError("Management email has been retired. Choose another active department.")
     cc, bcc = validate_copies(recipient, cc, bcc)
+    for other in (cc + "," + bcc).split(","):
+        if other in RETIRED_MANAGEMENT_ADDRESSES:
+            raise ValidationError("Management email has been retired. Remove this copied recipient.")
     subject = (subject or "").strip()
     body = (body or "").strip()
     if not subject or len(subject) > 255 or "\r" in subject or "\n" in subject:
@@ -248,8 +257,8 @@ def inbox(request, section="inbox"):
                 address = _address(request.POST.get("address"))
                 if not address.endswith("@kofadimpex.com"):
                     raise ValidationError("Use an @kofadimpex.com address.")
-                if address == LEGACY_MANAGEMENT_ADDRESS:
-                    raise ValidationError("This address is retired. Use management@kofadimpex.com.")
+                if address in RETIRED_MANAGEMENT_ADDRESSES:
+                    raise ValidationError("The Management email account has been retired.")
                 label = request.POST.get("label", "").strip()[:100]
                 if not label:
                     raise ValidationError("Enter a mailbox name.")
@@ -576,11 +585,10 @@ def ingest(request):
     expected = hmac.new(secret.encode(), material, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(signature, expected):
         return HttpResponse(status=403)
-    routed_to = (
-        MANAGEMENT_ADDRESS if recipient == LEGACY_MANAGEMENT_ADDRESS
-        else recipient
-    )
-    mailbox = EmailMailbox.objects.filter(address=routed_to, active=True).first()
+    # No alias forwarding for addresses removed by the business owner.
+    if recipient in RETIRED_MANAGEMENT_ADDRESSES:
+        return HttpResponse(status=404)
+    mailbox = EmailMailbox.objects.filter(address=recipient, active=True).first()
     if not mailbox:
         return HttpResponse(status=404)
     try:
