@@ -16,9 +16,6 @@ const copyWithProfile = (filename) => {
     .replaceAll("__WELCOME_TITLE__", channel === "customer"
       ? "Discover, shop, stay connected."
       : "Your business, one secure starting point.")
-    .replaceAll("__WELCOME_SUBTITLE__", channel === "customer"
-      ? "Explore live public products here. Sign in and complete orders securely through KOFAD Market."
-      : "Open sales, inventory and approvals on the authorized staff domain. Your existing permissions stay in control.")
     .replaceAll("__MAIN_ACTION__", channel === "customer"
       ? "Explore products" : "Enter secure workspace")
     .replaceAll("__HERO_KICKER__", channel === "customer" ? "THE MARKET, IN YOUR HAND" : "KOFAD STAFF")
