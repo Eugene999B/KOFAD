@@ -129,6 +129,13 @@ def action(request):
                 if target.count() > MAX_ALL:
                     raise ValidationError("Too many messages in this selection. Narrow your filters.")
 
+            if action_name in {"trash_selected", "restore_selected"} and not is_owner:
+                # A staff member must never cancel or restore financial,
+                # security or automated notices created by system workflows.
+                if target.exclude(Q(source_key__isnull=True) | Q(source_key="")).exists():
+                    raise PermissionDenied(
+                        "Only the system administrator can manage automated email records."
+                    )
             if action_name == "purge_selected":
                 _confirmation(request.POST, "DELETE PERMANENTLY")
             count = target.count()
