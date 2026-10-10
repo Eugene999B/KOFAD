@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -320,30 +321,51 @@ def worker_edit(request, branch, pk=None):
     if request.method == "POST":
         try:
             payload = _worker_payload(request)
+            # Account association is a privileged identity operation, not an HR field.
+            if request.user.is_superuser:
+                user_id = request.POST.get("staff_user", "").strip()
+                linked_user = None
+                if user_id:
+                    if not user_id.isdigit():
+                        raise ValidationError("Select a valid staff account.")
+                    linked_user = User.objects.filter(
+                        Q(is_superuser=True) | Q(access__branches=branch),
+                        pk=int(user_id), is_active=True,
+                    ).distinct().first()
+                    if linked_user is None:
+                        raise ValidationError("The staff account must be active and assigned to this location.")
+                    if Worker.objects.filter(user=linked_user).exclude(
+                        pk=worker.pk if worker else None
+                    ).exists():
+                        raise ValidationError("That staff account is already linked to another worker.")
+                payload["user"] = linked_user
             with transaction.atomic():
                 if worker:
-                    before = {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title}
+                    before = {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title, "user_id": worker.user_id}
                     for key, value in payload.items():
                         setattr(worker, key, value)
                     worker.save()
                     audit(request.user, branch, "worker.updated", worker.employee_code, {
-                        "before": before, "after": {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title},
+                        "before": before, "after": {"name": worker.full_name, "status": worker.status, "job_title": worker.job_title, "user_id": worker.user_id},
                     })
                 else:
                     worker = Worker.objects.create(branch=branch, created_by=request.user, **payload)
                     audit(request.user, branch, "worker.created", worker.employee_code, {
-                        "name": worker.full_name, "job_title": worker.job_title,
+                        "name": worker.full_name, "job_title": worker.job_title, "user_id": worker.user_id,
                     })
             messages.success(request, "Worker profile saved.")
             return redirect("worker_profile", pk=worker.pk)
         except (ValidationError, ValueError, IntegrityError) as exc:
-            messages.error(request, "Employee code already exists." if isinstance(exc, IntegrityError) else problem(exc))
+            messages.error(request, "That worker code or staff link is already in use." if isinstance(exc, IntegrityError) else problem(exc))
     return render(request, "worker_form.html", {
         "title": "Edit worker" if worker else "Add worker",
         "worker": worker,
         "employment_types": Worker.EMPLOYMENT_TYPES, "statuses": Worker.STATUSES,
         "salary_basis": Worker.SALARY_BASIS, "tax_modes": Worker.TAX_MODES,
         "today": timezone.localdate().isoformat(),
+        "can_link_staff": request.user.is_superuser,
+        "staff_users": (User.objects.filter(Q(is_superuser=True) | Q(access__branches=branch), is_active=True)
+                        .distinct().order_by("username") if request.user.is_superuser else []),
     })
 
 
