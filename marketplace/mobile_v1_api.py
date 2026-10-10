@@ -6,6 +6,7 @@ These are *not* replicas of the protected website endpoints.
 """
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -44,7 +45,8 @@ def bootstrap(request):
             "product_details": True,
             "device_local_favorites": True,
             "mobile_account_session": False,
-            "mobile_cart": False,
+            "mobile_cart": bool(getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False) and
+                                getattr(settings, "KOFAD_NATIVE_CART_ENABLED", False)),
             "mobile_checkout": False,
             "background_push": False,
         },
