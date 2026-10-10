@@ -1,6 +1,7 @@
 """Safe department-scoped Email Trash: bulk actions, permission and delivery gates."""
 from datetime import timedelta
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.contrib.auth.models import Permission, User
 from django.test import TestCase, override_settings
@@ -61,6 +62,7 @@ class EmailTrashTests(TestCase):
             from_address="client@example.net" if direction == "inbound" else self.support.address,
             to_address=self.support.address if direction == "inbound" else "client@example.net",
             subject=subject, body_text="Private customer letter",
+            fingerprint=uuid4().hex if direction == "inbound" else "",
             source_key=source_key, conversation=conversation,
             next_attempt_at=timezone.now() - timedelta(minutes=1)
             if status == "queued" else None,
