@@ -2,9 +2,13 @@
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from core.mobile_release_models import MobileReleasePolicy, MobileNotice
+from core.tests import Fixtures
 
 
-class MobileControlTests(TestCase):
+class MobileControlTests(Fixtures, TestCase):
+    def setUp(self):
+        self.setup_data()
+
     @override_settings(KOFAD_CUSTOMER_APP_VERSION="1.4.0")
     def test_no_forced_update_without_verified_android_link(self):
         MobileReleasePolicy.objects.create(
@@ -49,18 +53,11 @@ class MobileControlTests(TestCase):
         ordinary = User.objects.create_user("staffer", password="strong-test-secret")
         self.client.force_login(ordinary)
         self.assertIn(self.client.get("/staff/app/control/").status_code, (302, 403))
-        admin = User.objects.create_superuser("appowner", "admin@example.com", "test-strong-secret")
-        from core.models import Branch
-        branch = Branch.objects.create(name="Main", code="main")
-        admin.access.branches.add(branch)
-        self.client.force_login(admin)
-        # KOFAD requires both a valid login and its own MFA/branch session.
-        session = self.client.session
-        session["access_version"] = admin.access.session_version
+        # Use the same verified staff-session helper as the app download tests.
+        self.authenticate_client()
         from django.utils import timezone
+        session = self.client.session
         session["mfa_verified_at"] = timezone.now().timestamp()
-        session["mfa_ok"] = True
-        session["branch"] = branch.pk
         session.save()
         response = self.client.get("/staff/app/control/", HTTP_HOST="staff.kofadimpex.com", secure=True)
         self.assertEqual(response.status_code, 200, response.get("Location", ""))
