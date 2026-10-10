@@ -124,7 +124,7 @@ def _resume_mobile_staff_authorization(request):
     path = request.session.pop("staff_mobile_auth_return", None)
     if (isinstance(path, str) and len(path) <= 1024
             and path.startswith("/staff/mobile/v1/authorize/?")
-            and not any(ord(char) < 32 or char == "\\\\" for char in path)):
+            and not any(ord(char) < 32 or char == "\" for char in path)):
         return path
     return None
 
@@ -133,7 +133,7 @@ def login_view(request):
     pending = request.GET.get("next", "")
     if (pending.startswith("/staff/mobile/v1/authorize/?")
             and len(pending) <= 1024
-            and not any(ord(ch) < 32 or ch == "\\\\" for ch in pending)):
+            and not any(ord(ch) < 32 or ch == "\" for ch in pending)):
         request.session["staff_mobile_auth_return"] = pending
     # The sign-in gateway is an explicit new staff session boundary. If an
     # authenticated user intentionally revisits the private sign-in route, start fresh; stale
