@@ -14,14 +14,7 @@
     </div>
   </header>
 
-  <nav class="mail-tabs" aria-label="Email Centre sections">
-    <a href="{% url 'email_center' %}" class="{% if email_section == 'inbox' %}active{% endif %}" {% if email_section == 'inbox' %}aria-current="page"{% endif %}><span aria-hidden="true">▣</span> Inbox</a>
-    <a href="{% url 'email_history' %}" class="{% if email_section == 'history' %}active{% endif %}" {% if email_section == 'history' %}aria-current="page"{% endif %}><span aria-hidden="true">▤</span> Email History</a>
-    {% if is_mail_owner %}
-    <a href="{% url 'email_automations' %}" class="{% if email_section == 'automations' %}active{% endif %}" {% if email_section == 'automations' %}aria-current="page"{% endif %}><span aria-hidden="true">⚙</span> Automations</a>
-    <a href="{% url 'email_team' %}" class="{% if email_section == 'team' %}active{% endif %}" {% if email_section == 'team' %}aria-current="page"{% endif %}><span aria-hidden="true">♙</span> Staff Access</a>
-    {% endif %}
-  </nav>
+  {% include "email_pro_nav.html" %}
 
   {% if email_section == 'inbox' or email_section == 'history' %}
     {% if selected %}
