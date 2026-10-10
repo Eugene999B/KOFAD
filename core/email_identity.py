@@ -261,9 +261,9 @@ def deliver_pending(limit=20):
         if not claimed:
             continue
         notice = EmailNotice.objects.get(pk=pk)
+        from .brevo_email import DailyEmailLimitExceeded, DefiniteEmailRejection
         try:
             _send_kofad_mail(notice.subject, notice.body, [notice.email], purpose="transaction")
-    from .brevo_email import DailyEmailLimitExceeded, DefiniteEmailRejection
         except (DailyEmailLimitExceeded, DefiniteEmailRejection):
             # A known quota exhaustion or a concrete rejection is safe to retry.
             EmailNotice.objects.filter(pk=pk).update(
