@@ -43,6 +43,16 @@ def public_native_catalog(request):
             Q(title__icontains=query) | Q(description__icontains=query)
             | Q(product__name__icontains=query) | Q(product__category__icontains=query)
         )
+    category = request.GET.get("category", "").strip()[:60]
+    if category:
+        qs = qs.filter(product__category__iexact=category)
+    # Public departments only. Never expose private stock or staff information.
+    categories = list(
+        MarketListing.objects.filter(enabled=True, product__active=True)
+        .exclude(product__category="")
+        .values_list("product__category", flat=True)
+        .order_by("product__category").distinct()[:16]
+    )
     # Limit both database work and mobile bandwidth. Public prices follow
     # exactly the same server pricing/online markup as the website.
     size = 20
@@ -90,7 +100,7 @@ def public_native_catalog(request):
         })
     response = JsonResponse({
         "schema": 1, "page": page, "next_page": page + 1 if has_more else None,
-        "items": items,
+        "items": items, "categories": categories,
     })
     response["Cache-Control"] = "public, max-age=120"
     response["Vary"] = "Origin"
