@@ -1,0 +1,53 @@
+
+/* KOFAD download: minimal store-style layout shared by public and staff portals. */
+.kf-download,.kf-download *{box-sizing:border-box}
+.kf-install-landing{display:block}
+.kf-download{--kd-ink:#172f3c;--kd-muted:#607783;--kd-line:#dde7e9;--kd-accent:#0c5464;max-width:1080px;margin:0 auto;padding:clamp(28px,4vw,56px) clamp(15px,3vw,32px) 54px;color:var(--kd-ink);background:transparent}
+.kf-download-hero{text-align:center;max-width:740px;margin:0 auto 49px}
+.kf-download-logo{display:block;width:86px;height:86px;object-fit:contain;margin:0 auto 17px}
+.kf-download-eyebrow{font-size:11px!important;font-weight:900;letter-spacing:.15em;color:#17827d!important;margin:0 0 12px!important}
+.kf-download-hero h1{font-size:clamp(31px,4vw,51px);letter-spacing:-.05em;line-height:1.09;font-weight:900;margin:0 0 13px;color:var(--kd-ink)}
+.kf-download-intro{font-size:clamp(14px,1.5vw,16px);line-height:1.65;color:var(--kd-muted);margin:0 auto 20px;max-width:570px}
+.kf-download-hero-actions{display:flex;align-items:center;justify-content:center;gap:11px;flex-wrap:wrap}
+.kf-download-btn{border-radius:11px;border:1px solid var(--kd-line);min-height:47px;padding:11px 18px;display:inline-flex;justify-content:center;align-items:center;gap:9px;font-size:13px;font-weight:850;line-height:1.3;cursor:pointer;text-decoration:none!important}
+.kf-download-btn-main{background:#0d4659;color:#fff!important;border-color:#0d4659;box-shadow:0 5px 13px #073a4d1c}
+.kf-download-btn-main:hover{background:#146779;color:#fff}
+.kf-download-btn-outline{background:#fff;color:#1b4252!important}
+.kf-download-btn-outline:hover{background:#edf5f4}
+.kf-download-prompt{font-size:11px;color:#7c9099;line-height:1.5;margin:12px auto 0}
+.kf-download-devices{margin:0 auto}
+.kf-download-section-head{display:flex;justify-content:space-between;align-items:baseline;gap:15px;margin:0 0 17px}
+.kf-download-section-head h2{font-size:21px;font-weight:900;letter-spacing:-.025em;color:var(--kd-ink);margin:0}
+.kf-download-section-head p{font-size:12px;color:var(--kd-muted);margin:0}
+.kf-download-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.kf-download-device{min-width:0;display:flex;flex-direction:column;align-items:stretch;border:1px solid var(--kd-line);border-radius:17px;background:#fff;padding:24px 23px 20px;box-shadow:0 10px 30px #0d364408;transition:border-color .15s,box-shadow .15s}
+.kf-download-device:hover{border-color:#a3c4c7;box-shadow:0 12px 35px #0d364416}
+.kf-download-device-top{display:flex;align-items:center;gap:14px;min-height:44px}
+.kf-download-device-top>img{width:37px;height:37px;object-fit:contain;flex:none}
+.kf-download-device-label{font-size:17px;font-weight:900;color:#193747;letter-spacing:-.03em}
+.kf-download-desktop-icons{display:flex;align-items:center;gap:4px;flex:none;min-width:63px}
+.kf-download-desktop-icons img{width:30px;height:30px;object-fit:contain}
+.kf-download-device>p{min-height:44px;margin:15px 0 20px;color:#667b86;font-size:12px;line-height:1.7}
+.kf-download-device-action{margin-top:auto;display:inline-flex;align-items:center;justify-content:space-between;gap:7px;min-height:44px;width:100%;padding:11px 14px;border:1px solid #d4e2e4;border-radius:10px;background:#f5f9fa;color:#103f52!important;font-size:12px;line-height:1.3;text-decoration:none!important;font-weight:850;cursor:pointer}
+.kf-download-device-action:hover{background:#e6f2f3;border-color:#b6d4d5}
+.kf-download-secondary-link{display:block;margin-top:11px;font-size:12px;color:#0b6870;text-align:center;font-weight:750;text-decoration:underline;text-underline-offset:3px}
+.kf-download-guide{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:22px 0 0;padding:17px 19px;border:1px solid #b8d4d2;border-radius:13px;background:#eef7f5}
+.kf-download-guide strong{font-size:14px;color:#174c4c}
+.kf-download-guide p{font-size:12px;color:#4b6a71;line-height:1.7;margin:5px 0 0}
+.kf-download-guide>button{flex:none;border:0;background:none;color:#355c5a;font-size:22px;cursor:pointer}
+.kf-download-update{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding:14px 17px;border-radius:12px;background:#e8f5ee;font-size:13px;font-weight:800}
+.kf-download-update button{border:0;border-radius:9px;background:#0d6760;color:#fff;padding:10px 15px;font-weight:800;cursor:pointer}
+.kf-download-footnote{margin:24px 0 0;font-size:12px;color:#768992;text-align:center;line-height:1.6}
+[data-pwa-install-steps][hidden],[data-pwa-update][hidden]{display:none!important}
+.kf-download-btn:focus-visible,.kf-download-device-action:focus-visible,.kf-download-guide button:focus-visible{outline:3px solid #46b9b0;outline-offset:3px}
+html[data-theme="dark"] .kf-download{--kd-ink:#edf8fa;--kd-muted:#c6d7dc;--kd-line:#3b535c}
+html[data-theme="dark"] .kf-download-device{background:#203440}
+html[data-theme="dark"] .kf-download-device-label{color:#e9f5f7}
+html[data-theme="dark"] .kf-download-device>p{color:#c0d4da}
+html[data-theme="dark"] .kf-download-btn-outline,html[data-theme="dark"] .kf-download-device-action{background:#314b55;color:#e8f8f8!important;border-color:#496b72}
+html[data-theme="dark"] .kf-download-guide{background:#203f43;color:#e0f1ed;border-color:#426e6a}
+html[data-theme="dark"] .kf-download-guide strong{color:#e0f1ed}
+html[data-theme="dark"] .kf-download-guide p{color:#bed7d2}
+@media(max-width:860px){.kf-download-grid{gap:10px}.kf-download-device{padding:19px 15px 16px}.kf-download-device-label{font-size:15px}.kf-download-device-top{gap:9px}.kf-download-desktop-icons{min-width:55px}.kf-download-desktop-icons img{width:25px;height:25px}}
+@media(max-width:640px){.kf-download{padding:23px 15px 34px}.kf-download-hero{margin-bottom:31px}.kf-download-logo{height:69px;width:69px;margin-bottom:14px}.kf-download-hero h1{font-size:33px}.kf-download-intro{font-size:13px;margin-bottom:20px}.kf-download-btn{min-height:44px;padding:11px 14px}.kf-download-section-head{margin-bottom:13px}.kf-download-section-head h2{font-size:19px}.kf-download-section-head p{display:none}.kf-download-grid{grid-template-columns:1fr;gap:10px}.kf-download-device{padding:17px 19px}.kf-download-device-top{min-height:40px}.kf-download-device-top>img{height:32px;width:32px}.kf-download-device-label{font-size:17px}.kf-download-device>p{min-height:0;font-size:12px;margin:9px 0 14px}.kf-download-device-action{min-height:42px}.kf-download-footnote{margin-top:21px;font-size:11px}.kf-download-guide{margin-top:16px;padding:13px 15px}}
+@media(prefers-reduced-motion:reduce){.kf-download-device{transition:none}}
