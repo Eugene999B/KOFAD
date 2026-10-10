@@ -33,7 +33,7 @@ with sync_playwright() as tool:
             if attempt == 29:
                 raise
             time.sleep(1)
-    android.get_by_role("heading", name="KOFAD, wherever you are.").wait_for()
+    android.get_by_role("heading", name="Use KOFAD on iPhone.").wait_for()
     assert android.locator('link[rel="manifest"]').get_attribute("href") == "/market/app/manifest.webmanifest"
     manifest = android.evaluate('''async () => {
       const response = await fetch("/market/app/manifest.webmanifest");
@@ -50,12 +50,9 @@ with sync_playwright() as tool:
     }''')
     assert registration["scope"].endswith("/market/"), registration
     assert registration["script"].endswith("/market/app/sw.js"), registration
-    assert android.locator(".kf-download-device").count() == 3
-    android.get_by_role("button", name="Install for Android").click()
-    if android.locator("[data-pwa-install-steps]").is_visible():
-        assert android.get_by_text("In Chrome, open the browser menu", exact=False).is_visible()
-    else:
-        assert android.get_by_role("button", name="Install for Android").is_visible()
+    assert android.locator(".kf-download-device").count() == 0
+    android.get_by_role("button", name="Show iPhone steps").click()
+    assert android.get_by_text("Open this page in Safari", exact=False).is_visible()
     android.screenshot(path=str(shots / "market-android-web-install.png"), full_page=True)
 
     desktop = browser.new_page(
@@ -63,32 +60,28 @@ with sync_playwright() as tool:
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
     )
     desktop.goto(base + "/market/app/install/")
-    desktop.get_by_role("heading", name="KOFAD, wherever you are.").wait_for()
+    desktop.get_by_role("heading", name="Use KOFAD on iPhone.").wait_for()
     assert desktop.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     desktop.screenshot(path=str(shots / "market-windows-web-install.png"), full_page=True)
-    assert desktop.locator(".kf-download-device").count() == 3
-    assert desktop.locator(".kf-download-device").evaluate_all("(items) => items.length === 3")
-    desktop.get_by_role("button", name="Install desktop app").click()
-    if desktop.locator("[data-pwa-install-steps]").is_visible():
-        assert desktop.get_by_text("Install this site as an app", exact=False).is_visible()
-    else:
-        assert desktop.get_by_role("button", name="Install desktop app").is_visible()
+    assert desktop.locator(".kf-download-device").count() == 0
+    desktop.get_by_role("button", name="Show iPhone steps").click()
+    assert desktop.get_by_text("Open this page in Safari", exact=False).is_visible()
     iphone = browser.new_page(
         viewport={"width": 390, "height": 844}, device_scale_factor=3,
         is_mobile=True, has_touch=True,
         user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1"
     )
     iphone.goto(base + "/market/app/install/?device=iphone")
-    iphone.get_by_role("heading", name="KOFAD, wherever you are.").wait_for()
+    iphone.get_by_role("heading", name="Use KOFAD on iPhone.").wait_for()
     assert iphone.get_by_text("In Safari, choose", exact=False).is_visible() or iphone.get_by_text("Open this page in Safari", exact=False).is_visible()
-    assert iphone.get_by_role("button", name="Add to Home Screen").is_visible()
+    assert iphone.get_by_role("button", name="Show iPhone steps").is_visible()
     assert iphone.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     iphone.screenshot(path=str(shots / "market-iphone-home-screen-guide.png"), full_page=True)
     iphone.close()
 
     downloads = browser.new_page(viewport={"width": 390, "height": 844})
     downloads.goto(base + "/apps/")
-    assert downloads.get_by_role("link", name="Install KOFAD Market", exact=False).is_visible()
+    assert downloads.get_by_role("link", name="Add as web app", exact=False).is_visible()
     assert downloads.locator(".kf-download-device").count() == 3
     assert downloads.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     downloads.screenshot(path=str(shots / "market-real-app-available-vs-native-pending.png"), full_page=True)
