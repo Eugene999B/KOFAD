@@ -304,7 +304,7 @@ def inbox(request, section="inbox"):
                         mailbox=mailbox, user=request.user
                     ).first()
                     if signature and signature.body.strip():
-                        message_body = message_body.rstrip() + "\\n\\n" + signature.body.strip()
+                        message_body = message_body.rstrip() + "\n\n" + signature.body.strip()
                 created = compose(mailbox, recipient, subject, message_body, request.user,
                                   reply_id=reply_id, conversation=conversation)
                 from .services import audit
