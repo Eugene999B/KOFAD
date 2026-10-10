@@ -48,6 +48,11 @@ claiming that the main customer was delivered.
   a reply and never trusts a customer-controlled subject.
 - The callback only updates the main recipient's status when the event
   email equals EmailLetter.to_address. CC/BCC events do not change that field.
+- For email sent as an authorised promotional campaign, a verified
+  `unsubscribed`, `spam`, `hard_bounce` or `invalid_email` event disables
+  that customer's promotional opt-in. The campaign worker checks consent
+  again before delivering other queued promotional messages. Security,
+  invoices and other transactional communication are not disabled.
 - No email bodies, security codes, IP metadata or full Brevo webhook payloads
   are retained in EmailDeliveryEvent.
 - The endpoint intentionally does **not** call Brevo to configure the webhook;
