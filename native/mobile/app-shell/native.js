@@ -197,7 +197,7 @@
   }
 
   function newerStableVersion(installed, available) {
-    const valid = /^\\d+\\.\\d+\\.\\d+$/;
+    const valid = /^\d+\.\d+\.\d+$/;
     if (!valid.test(installed || "") || !valid.test(available || "")) return false;
     const a = installed.split(".").map(Number);
     const b = available.split(".").map(Number);
