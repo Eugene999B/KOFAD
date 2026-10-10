@@ -22,6 +22,12 @@ class KofadHeroAssetTests(SimpleTestCase):
         self.assertEqual(js.count('"https://images.unsplash.com/photo-'), 5)
         self.assertIn('data-hero-count', html)
         self.assertIn("01 / 06", html)
+        self.assertIn('id="kfd-hero-title"', html)
+        self.assertNotIn("data-slide-pause", html)
+        self.assertNotIn("data-slide-pause", js)
+        self.assertIn("setInterval", js)
+        self.assertIn("8500", js)
+        self.assertIn("prefers-reduced-motion", js)
 
     def test_phase_three_css_scoped_and_responsive(self):
         root = Path(settings.BASE_DIR)
