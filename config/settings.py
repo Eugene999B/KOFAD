@@ -102,6 +102,7 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "KOFAD Reports <no-rep
 
 # Staff SMS is INDEPENDENT of existing management-contact SMS.
 SMS_STAFF_NOTICES_ENABLED = os.environ.get("SMS_STAFF_NOTICES_ENABLED", "0") == "1"
+SMS_STAFF_DAILY_MAX_RECIPIENTS = int(os.environ.get("SMS_STAFF_DAILY_MAX_RECIPIENTS", "4"))
 NOTIFICATION_CRITICAL_VARIANCE_GHS = os.environ.get("NOTIFICATION_CRITICAL_VARIANCE_GHS", "500")
 
 # SMS credentials belong in deployment variables, never in database exports or the browser.
