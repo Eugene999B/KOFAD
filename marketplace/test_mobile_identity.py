@@ -2,7 +2,6 @@
 import base64
 import hashlib
 import json
-import re
 from urllib.parse import parse_qs, urlsplit
 
 from django.test import TestCase, override_settings
