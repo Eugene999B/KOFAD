@@ -1,0 +1,49 @@
+{% extends "email_pro_shell.html" %}
+{% block email_page_content %}
+<section class="mail-section-heading"><div><p class="mail-eyebrow">TEAM STANDARDS</p><h2>Saved Replies & Signatures</h2>
+  <p>Maintain clear, consistent customer communication. Shared responses can only be published by the system administrator.</p></div></section>
+<div class="pro-editor-layout">
+  <section class="pro-pane">
+    <header class="mail-pane-head"><div><h3>Approved reply library</h3><p>Copy an approved response into your composer, then personalise it before sending.</p></div></header>
+    {% for snippet in replies %}
+      <article class="pro-reply-card"><div class="pro-reply-head"><div><h4>{{ snippet.title }}</h4>
+        <small>{% if snippet.shared %}Company-approved{% else %}Private reply{% endif %}
+        · {% if snippet.mailbox %}{{ snippet.mailbox.label }}{% else %}All permitted departments{% endif %}</small></div>
+        <button class="mail-button secondary" type="button" data-copy-reply="{{ snippet.pk }}">Copy text</button></div>
+        <div class="pro-reply-body" id="reply-{{ snippet.pk }}">{{ snippet.body }}</div>
+        {% if snippet.author_id == request.user.pk or email_is_owner %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_reply">
+          <input type="hidden" name="reply_id" value="{{ snippet.pk }}"><button type="submit" class="pro-text-action" data-confirm-delete>Remove reply</button></form>{% endif %}
+      </article>
+    {% empty %}<div class="mail-queue-empty"><p>No saved responses yet. Add one from the panel alongside.</p></div>{% endfor %}
+  </section>
+  <aside class="pro-side-stack">
+    <section class="pro-pane">
+      <header class="mail-pane-head"><div><h3>Add saved reply</h3></div></header>
+      <form method="post" class="pro-editor-form">{% csrf_token %}
+        <input type="hidden" name="action" value="create_reply">
+        <label>Reply title<input name="title" maxlength="120" required placeholder="Delivery enquiry"></label>
+        <label>Department<select name="mailbox_id"><option value="">All my departments</option>
+          {% for mailbox in mailboxes %}<option value="{{ mailbox.pk }}">{{ mailbox.label }}</option>{% endfor %}
+        </select></label>
+        <label>Response<textarea name="body" rows="6" maxlength="10000" required placeholder="The approved response"></textarea></label>
+        {% if email_is_owner %}<label class="pro-check-line"><input type="checkbox" name="shared" value="yes"> Publish for authorised staff</label>{% endif %}
+        <button type="submit" class="mail-button primary">Save response</button>
+      </form>
+    </section>
+    <section class="pro-pane">
+      <header class="mail-pane-head"><div><h3>My signatures</h3><p>Set a distinct closing for each department.</p></div></header>
+      {% for mailbox in mailboxes %}{% if mailbox.pk in writable_ids %}
+      <details class="pro-signature">
+        <summary>{{ mailbox.label }} · {{ mailbox.address }}</summary>
+        <form method="post" class="pro-editor-form">{% csrf_token %}
+          <input type="hidden" name="action" value="save_signature">
+          <input type="hidden" name="mailbox_id" value="{{ mailbox.pk }}">
+          <label>Signature<textarea name="body" rows="4" maxlength="1200">{% for signature in signatures %}{% if signature.mailbox_id == mailbox.pk %}{{ signature.body }}{% endif %}{% endfor %}</textarea></label>
+          <button type="submit" class="mail-button secondary">Save signature</button>
+        </form>
+      </details>{% endif %}{% endfor %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

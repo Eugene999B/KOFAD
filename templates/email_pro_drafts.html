@@ -1,0 +1,60 @@
+{% extends "email_pro_shell.html" %}
+{% block email_page_content %}
+<section class="mail-section-heading"><div><p class="mail-eyebrow">PERSONAL CORRESPONDENCE</p>
+  <h2>Drafts & scheduled messages</h2><p>Drafts are private to their author. Saving never sends anything; scheduled messages use the outgoing queue.</p></div></section>
+<div class="pro-editor-layout">
+  <section class="pro-pane">
+    <header class="mail-pane-head"><div><h3>{% if editing %}Edit draft #{{ editing.pk }}{% else %}New customer email{% endif %}</h3>
+      <p>Use the verified sender and reply-to address of the selected department.</p></div>
+      {% if editing %}<a class="mail-button subtle" href="{% url 'email_drafts' %}">＋ New draft</a>{% endif %}</header>
+    {% if writable_ids %}
+    <form method="post" class="pro-editor-form">{% csrf_token %}
+      {% if editing %}<input type="hidden" name="draft_id" value="{{ editing.pk }}">{% endif %}
+      <label>From department<select name="mailbox_id" required>
+        {% for mailbox in mailboxes %}{% if mailbox.pk in writable_ids %}
+        <option value="{{ mailbox.pk }}"{% if editing and editing.mailbox_id == mailbox.pk %} selected{% endif %}>{{ mailbox.label }} — {{ mailbox.address }}</option>
+        {% endif %}{% endfor %}
+      </select></label>
+      <label>Customer email address<input type="email" name="recipient" maxlength="254" value="{{ editing.recipient|default:'' }}" placeholder="customer@example.com"></label>
+      <label>Subject<input name="subject" maxlength="255" value="{{ editing.subject|default:'' }}" placeholder="Subject of your message"></label>
+      <label>Message<textarea name="body" rows="12" maxlength="32000" placeholder="Write a professional message here…">{{ editing.body|default:'' }}</textarea></label>
+      <label>Optional scheduled delivery (local time)
+        <input type="datetime-local" name="scheduled_for" value="{% if editing.scheduled_for %}{{ editing.scheduled_for|date:'Y-m-d\TH:i' }}{% endif %}">
+      </label>
+      <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Append my saved department signature when sending</label>
+      <p class="mail-help">Scheduling is for external emails only. The employee selects Send or Schedule explicitly; provider delivery may still take time.</p>
+      <div class="pro-editor-actions">
+        <button type="submit" name="action" value="save" class="mail-button secondary">Save private draft</button>
+        <button type="submit" name="action" value="send" class="mail-button primary">Queue / schedule email ↗</button>
+      </div>
+    </form>
+    {% else %}<div class="mail-queue-empty"><p>You need Reply access to at least one business mailbox to draft outgoing email.</p></div>{% endif %}
+  </section>
+  <aside class="pro-pane">
+    <header class="mail-pane-head"><div><h3>My saved drafts</h3><p>Continue where you left off</p></div></header>
+    {% for draft in drafts %}
+    <div class="pro-saved-card">
+      <a href="?edit={{ draft.pk }}"><strong>{{ draft.subject|default:"(Untitled draft)"|truncatechars:65 }}</strong>
+        <small>To {{ draft.recipient|default:"Not addressed" }} · {{ draft.mailbox.label }}</small>
+        <small>Updated {{ draft.updated_at|date:"j M Y, H:i" }}</small></a>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete">
+        <input type="hidden" name="draft_id" value="{{ draft.pk }}">
+        <button type="submit" class="mail-button subtle" data-confirm-delete>Delete</button></form>
+    </div>
+    {% empty %}<div class="mail-queue-empty"><p>No drafts saved yet. Save a draft to return to it later.</p></div>{% endfor %}
+    <div class="pro-hint">Need approved wording? <a href="{% url 'email_replies' %}">Open the Saved Replies library ↗</a></div>
+    <header class="mail-pane-head"><div><h3>Upcoming scheduled mail</h3><p>Only emails you have queued. Cancel before the sending worker claims them.</p></div></header>
+    {% for notice in scheduled %}
+      <div class="pro-saved-card">
+        <div><strong>{{ notice.subject|truncatechars:64 }}</strong>
+          <small>To {{ notice.to_address }} · {{ notice.mailbox.label }}</small>
+          <small>Scheduled {{ notice.next_attempt_at|date:"j M Y, H:i" }}</small></div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel_scheduled">
+          <input type="hidden" name="letter_id" value="{{ notice.pk }}">
+          <button type="submit" class="mail-button subtle" data-confirm-delete>Cancel</button>
+        </form>
+      </div>
+    {% empty %}<div class="pro-hint">There are no upcoming scheduled emails.</div>{% endfor %}
+  </aside>
+</div>
+{% endblock %}

@@ -68,9 +68,14 @@ def record_incoming(mailbox, *, sender, subject, reply_id, references, body,
             )
         else:
             thread.status = "open"
+            thread.snoozed_until = None
+            thread.archived_at = None
             thread.last_customer_at = timezone.now()
             thread.last_activity_at = timezone.now()
-            thread.save(update_fields=["status", "last_customer_at", "last_activity_at"])
+            thread.save(update_fields=[
+                "status", "snoozed_until", "archived_at",
+                "last_customer_at", "last_activity_at",
+            ])
         return EmailLetter.objects.create(
             mailbox=mailbox, conversation=thread, fingerprint=fingerprint,
             direction="inbound", status="received", from_address=sender,

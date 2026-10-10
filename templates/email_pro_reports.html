@@ -1,0 +1,27 @@
+{% extends "email_pro_shell.html" %}
+{% block email_page_content %}
+<section class="mail-section-heading"><div><p class="mail-eyebrow">OWNER-ONLY AUDIT & WORKLOAD</p><h2>Email Operations Report</h2>
+<p>Track real queue status, team workload, unanswered conversations and provider attention.</p></div>
+<a class="mail-button secondary" href="?mailbox={{ mailbox_id }}&export=csv">↓ Export CSV (metadata only)</a></section>
+<form method="get" class="pro-report-filter"><label>Department<select name="mailbox">
+<option value="">All departments</option>{% for mailbox in mailboxes %}
+<option value="{{ mailbox.pk }}"{% if mailbox_id == mailbox.pk|stringformat:'s' %} selected{% endif %}>{{ mailbox.label }}</option>
+{% endfor %}</select></label><button type="submit" class="mail-button secondary">Apply</button></form>
+<section class="mail-quick-stats">
+  <div><span>All conversations</span><strong>{{ conversation_total }}</strong></div>
+  <div><span>Currently open</span><strong>{{ open_count }}</strong></div>
+  <div><span>Unassigned and unresolved</span><strong>{{ unassigned_count }}</strong></div>
+  <div><span>Past follow-up deadline</span><strong>{{ overdue_count }}</strong></div>
+  <div><span>Snoozed</span><strong>{{ snoozed_count }}</strong></div>
+  <div><span>Incoming records</span><strong>{{ received_count }}</strong></div>
+  <div><span>Outbound records</span><strong>{{ outbound_count }}</strong></div>
+  <div><span>Delivery needs review</span><strong>{{ attention_count }}</strong></div>
+</section>
+<section class="pro-pane"><header class="mail-pane-head"><div><h3>Team conversation workload</h3>
+<p>Current open or waiting conversations assigned to each employee; not a response-time score.</p></div></header>
+<div class="mail-table-scroll"><table class="mail-table"><thead><tr><th>Employee</th><th>Assigned open work</th></tr></thead>
+<tbody>{% for entry in staff_load %}<tr><td>{{ entry.assigned_to__username }}</td><td>{{ entry.total }}</td></tr>
+{% empty %}<tr><td colspan="2">No assigned active conversations yet.</td></tr>{% endfor %}</tbody></table></div>
+<p class="mail-help">Provider submitted ({{ submitted_count }}) does not mean inbox delivered. Analytics involving true delivery and response times require verified provider event history.</p>
+</section>
+{% endblock %}

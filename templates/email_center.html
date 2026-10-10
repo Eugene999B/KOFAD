@@ -14,14 +14,7 @@
     </div>
   </header>
 
-  <nav class="mail-tabs" aria-label="Email Centre sections">
-    <a href="{% url 'email_center' %}" class="{% if email_section == 'inbox' %}active{% endif %}" {% if email_section == 'inbox' %}aria-current="page"{% endif %}><span aria-hidden="true">▣</span> Inbox</a>
-    <a href="{% url 'email_history' %}" class="{% if email_section == 'history' %}active{% endif %}" {% if email_section == 'history' %}aria-current="page"{% endif %}><span aria-hidden="true">▤</span> Email History</a>
-    {% if is_mail_owner %}
-    <a href="{% url 'email_automations' %}" class="{% if email_section == 'automations' %}active{% endif %}" {% if email_section == 'automations' %}aria-current="page"{% endif %}><span aria-hidden="true">⚙</span> Automations</a>
-    <a href="{% url 'email_team' %}" class="{% if email_section == 'team' %}active{% endif %}" {% if email_section == 'team' %}aria-current="page"{% endif %}><span aria-hidden="true">♙</span> Staff Access</a>
-    {% endif %}
-  </nav>
+  {% include "email_pro_nav.html" %}
 
   {% if email_section == 'inbox' or email_section == 'history' %}
     {% if selected %}
@@ -69,6 +62,7 @@
       <label>Customer email<input name="to" type="email" maxlength="254" placeholder="customer@example.com" required></label></div>
       <label>Subject<input name="subject" maxlength="255" placeholder="How can we help?" required></label>
       <label>Message<textarea name="body" rows="5" maxlength="32000" required placeholder="Write a clear, helpful message…"></textarea></label>
+      <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Add my saved signature for this department (if configured)</label>
       <div class="mail-form-foot"><p>{% if email_uses_shared_sender %}Replies return to {{ selected.address }}. Brevo currently shows the verified KOFAD shared sender to customers. {% endif %}Messages are queued securely; acceptance is not confirmed delivery.</p>
         <button class="mail-button primary" type="submit">Queue customer email ↗</button></div>
     </form>
@@ -179,6 +173,7 @@
         <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
           <input type="hidden" name="action" value="thread_reply"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
           <label>Reply to {{ active_thread.customer_email }}<textarea name="body" rows="4" maxlength="32000" placeholder="Type your reply to the customer…" required></textarea></label>
+          <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Include my saved signature</label>
           <div class="mail-form-foot"><small>Your response will be queued for sending by email.</small>
           <button type="submit" class="mail-button primary">Queue reply ↗</button></div>
         </form>

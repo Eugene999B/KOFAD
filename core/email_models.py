@@ -41,6 +41,9 @@ class EmailConversation(models.Model):
                                     related_name="kofad_assigned_conversations", on_delete=models.SET_NULL)
     last_activity_at = models.DateTimeField(default=timezone.now)
     last_customer_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    snoozed_until = models.DateTimeField(null=True, blank=True)
+    due_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -131,3 +134,58 @@ class EmailCampaign(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_queued_at = models.DateTimeField(null=True, blank=True)
     completed_queuing_at = models.DateTimeField(null=True, blank=True)
+
+
+class EmailConversationReadState(models.Model):
+    """Per-employee read/star status, without changing other employees' inboxes."""
+    conversation = models.ForeignKey(EmailConversation, on_delete=models.CASCADE, related_name="read_states")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_read_states")
+    last_read_at = models.DateTimeField(null=True, blank=True)
+    starred = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["conversation", "user"], name="unique_mail_read_per_staff"
+        )]
+
+
+class EmailStaffDraft(models.Model):
+    """Private editable drafts; not handed to a provider until explicitly sent."""
+    mailbox = models.ForeignKey(EmailMailbox, on_delete=models.PROTECT, related_name="staff_drafts")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_staff_drafts")
+    conversation = models.ForeignKey(EmailConversation, null=True, blank=True, on_delete=models.SET_NULL)
+    recipient = models.EmailField(blank=True)
+    subject = models.CharField(max_length=255, blank=True)
+    body = models.TextField(blank=True)
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-pk"]
+
+
+class EmailSavedReply(models.Model):
+    """Owner-approved shared replies and private staff snippets, plain text only."""
+    mailbox = models.ForeignKey(EmailMailbox, null=True, blank=True, on_delete=models.PROTECT)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    title = models.CharField(max_length=120)
+    body = models.TextField()
+    shared = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["title", "pk"]
+
+
+class EmailStaffSignature(models.Model):
+    """A staff member's optional signature for a specific authorised mailbox."""
+    mailbox = models.ForeignKey(EmailMailbox, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    body = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["mailbox", "user"], name="unique_email_staff_signature"
+        )]
