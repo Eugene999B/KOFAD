@@ -151,6 +151,14 @@ def work(request):
     read_state = EmailConversationReadState.objects.filter(
         conversation_id=models.OuterRef("pk"), user=request.user
     )
+    active_messages = EmailLetter.objects.filter(
+        conversation_id=models.OuterRef("pk"), trashed_at__isnull=True,
+    )
+    any_messages = EmailLetter.objects.filter(conversation_id=models.OuterRef("pk"))
+    base_qs = base_qs.annotate(
+        has_live_mail=models.Exists(active_messages),
+        has_any_mail=models.Exists(any_messages),
+    ).filter(models.Q(has_live_mail=True) | models.Q(has_any_mail=False))
     results = base_qs.annotate(
         mine_last_read=models.Subquery(read_state.values("last_read_at")[:1]),
         mine_starred=models.Exists(read_state.filter(starred=True)),
@@ -200,7 +208,7 @@ def drafts(request):
                     letter = get_object_or_404(
                         EmailLetter.objects.select_for_update(), pk=request.POST.get("letter_id"),
                         created_by=request.user, mailbox__in=writable,
-                        direction="outbound", status="queued",
+                        direction="outbound", status="queued", trashed_at__isnull=True,
                         next_attempt_at__gt=timezone.now(),
                     )
                     letter.status = "suppressed"
@@ -280,6 +288,7 @@ def drafts(request):
         forward_source = get_object_or_404(
             EmailLetter.objects.select_related("mailbox"), pk=forward_id,
             mailbox__in=writable, direction="inbound",
+            trashed_at__isnull=True,
         )
     options = _base(request.user)
     options.update({"title": "Email Drafts", "email_nav": "drafts",
@@ -289,7 +298,7 @@ def drafts(request):
                     "forward_source": forward_source,
                     "scheduled": EmailLetter.objects.filter(
                         created_by=request.user, mailbox__in=writable,
-                        direction="outbound", status="queued",
+                        direction="outbound", status="queued", trashed_at__isnull=True,
                         next_attempt_at__gt=timezone.now(),
                     ).select_related("mailbox").order_by("next_attempt_at")[:40],
                     "signatures": EmailStaffSignature.objects.filter(user=request.user,
@@ -368,7 +377,7 @@ def reports(request):
     chosen = request.GET.get("mailbox", "")
     mb = available.filter(pk=chosen).first() if chosen.isdecimal() else None
     q = EmailConversation.objects.all()
-    letters = EmailLetter.objects.all()
+    letters = EmailLetter.objects.filter(trashed_at__isnull=True)
     if mb:
         q = q.filter(mailbox=mb)
         letters = letters.filter(mailbox=mb)
