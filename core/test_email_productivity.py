@@ -132,6 +132,14 @@ class ProfessionalEmailWorkflowTests(TestCase):
         notice = EmailLetter.objects.get(subject__icontains="Appointment reminder")
         self.assertEqual(notice.status, "queued")
         self.assertGreater(notice.next_attempt_at, timezone.now() + timedelta(days=1))
+        page = self.client.get(reverse("email_drafts"))
+        self.assertContains(page, "Upcoming scheduled mail")
+        cancelled = self.client.post(reverse("email_drafts"), {
+            "action": "cancel_scheduled", "letter_id": notice.pk
+        })
+        self.assertRedirects(cancelled, reverse("email_drafts"))
+        notice.refresh_from_db()
+        self.assertEqual(notice.status, "suppressed")
         r = self.client.post(reverse("email_drafts"), {
             "action": "send", "mailbox_id": self.support.pk,
             "recipient": self.accounts.address, "subject": "Don't schedule internal",
