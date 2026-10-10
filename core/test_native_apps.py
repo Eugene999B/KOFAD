@@ -101,6 +101,49 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         market = self.client.get("/market/")
         self.assertContains(market, "Explore app downloads")
 
+    @override_settings(
+        KOFAD_CUSTOMER_APP_VERSION="1.3.2",
+        KOFAD_CUSTOMER_APP_IOS_URL="https://apps.apple.com/gh/app/kofad-market/id1234567890",
+        KOFAD_STAFF_APP_VERSION="3.4.5",
+        KOFAD_STAFF_APP_ANDROID_URL="https://play.google.com/store/apps/details?id=com.kofadimpex.staff",
+    )
+    def test_local_native_app_update_feed_is_public_but_contains_no_staff_urls(self):
+        consumer = self.client.get(
+            "/market/app/native-version.json",
+            HTTP_HOST="market.kofadimpex.com",
+            HTTP_ORIGIN="capacitor://localhost", secure=True,
+        )
+        self.assertEqual(consumer.status_code, 200)
+        self.assertEqual(consumer["Access-Control-Allow-Origin"], "capacitor://localhost")
+        self.assertEqual(consumer.json(), {
+            "channel": "customer",
+            "version": "1.3.2",
+            "platforms": {"android": False, "ios": True, "windows": False},
+        })
+        staff = self.client.get(
+            "/staff/app/native-version.json",
+            HTTP_HOST="staff.kofadimpex.com",
+            HTTP_ORIGIN="https://localhost", secure=True,
+        )
+        self.assertEqual(staff.status_code, 200)
+        self.assertEqual(staff["Access-Control-Allow-Origin"], "https://localhost")
+        self.assertEqual(staff.json(), {
+            "channel": "staff",
+            "version": "3.4.5",
+            "platforms": {"android": True, "ios": False, "windows": False},
+        })
+        self.assertIn("noindex", staff["X-Robots-Tag"])
+        self.assertNotIn("play.google.com", staff.content.decode())
+        self.assertNotIn("apps.apple.com", consumer.content.decode())
+        untrusted = self.client.get(
+            "/staff/app/native-version.json",
+            HTTP_HOST="staff.kofadimpex.com",
+            HTTP_ORIGIN="https://evil.example", secure=True,
+        )
+        self.assertEqual(untrusted.status_code, 200)
+        self.assertNotIn("Access-Control-Allow-Origin", untrusted)
+        self.assertEqual(self.client.post("/staff/app/native-version.json").status_code, 405)
+
     def test_reject_fake_store_urls_redirectors_and_invalid_protocols(self):
         invalid = [
             ("http://downloads.kofadimpex.com/customer.apk", "android"),

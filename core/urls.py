@@ -20,6 +20,7 @@ from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("staff/app/", native_apps.staff_downloads, name="staff_native_downloads"),
     path("staff/app/releases.json", native_apps.staff_release_status, name="staff_native_releases"),
+    path("staff/app/native-version.json", native_apps.staff_native_version, name="staff_native_version"),
     path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     path("account/", accounts.account, name="account"),
     path("auth/google/staff/login/", google.start, {"kind": "staff", "mode": "login"}, name="google_staff_login"),

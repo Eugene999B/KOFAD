@@ -10,7 +10,8 @@ const outputDir = resolve("www");
 mkdirSync(outputDir, {recursive: true});
 const copyWithProfile = (filename) => {
   let source = readFileSync(resolve(sourceDir, filename), "utf8");
-  source = source.replaceAll("__APP_NAME__", profile.appName)
+  source = source.replaceAll("__APP_ORIGIN__", new URL(profile.startUrl).origin)
+    .replaceAll("__APP_NAME__", profile.appName)
     .replaceAll("__CHANNEL__", channel)
     .replaceAll("__WELCOME_TITLE__", channel === "customer"
       ? "Discover, shop, stay connected."
