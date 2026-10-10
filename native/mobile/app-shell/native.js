@@ -240,8 +240,28 @@
       ]);
       if (!response.ok) return;
       const published = await response.json();
-      if (published.channel !== CHANNEL || !published.platforms?.[platform]
+      if (published.channel !== CHANNEL) return;
+      window.KofadNativeAlerts?.show(published.notices);
+      if (!published.platforms?.[platform]
           || !newerStableVersion(installed.version, published.version)) return;
+      const criticalMinimum = published.android_policy?.minimum_version || "";
+      const isCritical = platform === "android" &&
+        newerStableVersion(installed.version, criticalMinimum);
+      if (isCritical) {
+        const banner = $("#native-update");
+        banner.setAttribute("role", "alert");
+        banner.setAttribute("aria-live", "assertive");
+        $("#native-update-details").textContent =
+          (published.android_policy?.reason || "An important compatibility update is required.") +
+          " Update the app before continuing.";
+        $("#native-update-action").textContent = "Update required ↗";
+        $("#native-update-action").onclick = openUpdateHub;
+        $("#native-update-dismiss").hidden = true;
+        $("#main").hidden = true;
+        document.querySelector(".native-bottom-nav").hidden = true;
+        banner.hidden = false;
+        return;
+      }
       const key = "kofad-app-update-dismissed-" + CHANNEL + "-" + published.version;
       try { if (sessionStorage.getItem(key)) return; } catch (_) {}
       const banner = $("#native-update");

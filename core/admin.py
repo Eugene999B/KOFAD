@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.db.models import F
 from .models import Access, Audit, Branch, CommunicationSettings, Company, DebtSettings, Document, Line, ManagementContact, Movement, Party, Payment, Product, Closing, Operation
 from .models import QuarantineItem, StockCount, StockCountLine, SupplierReturn, TransferReceipt
+from .mobile_release_models import MobileReleasePolicy, MobileNotice
 from .services import audit
 
 admin.site.site_header = "KOFAD administration"
@@ -84,3 +85,34 @@ for model in [Company, Product, Party, Document, Line, Payment, Movement, Audit,
               StockCount, StockCountLine, TransferReceipt, SupplierReturn, QuarantineItem,
               DebtSettings, CommunicationSettings, ManagementContact]:
     admin.site.register(model, ReadOnlyAdmin)
+
+# Only system administrators can change mobile release requirements or
+# publish global announcements. Never use these for personal/staff data.
+class MobileSuperuserAdmin(AuditedAdmin):
+    def has_module_permission(self, request):
+        return bool(request.user.is_active and request.user.is_superuser)
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user.is_active and request.user.is_superuser)
+    def has_add_permission(self, request):
+        return bool(request.user.is_active and request.user.is_superuser)
+    def has_change_permission(self, request, obj=None):
+        return bool(request.user.is_active and request.user.is_superuser)
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MobileReleasePolicy)
+class MobileReleasePolicyAdmin(MobileSuperuserAdmin):
+    list_display = ("channel", "minimum_android_version", "updated_at")
+    fields = ("channel", "minimum_android_version", "critical_update_reason")
+    readonly_fields = ()
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj)
+
+
+@admin.register(MobileNotice)
+class MobileNoticeAdmin(MobileSuperuserAdmin):
+    list_display = ("channel", "title", "priority", "enabled", "created_at", "expires_at")
+    list_filter = ("channel", "priority", "enabled")
+    fields = ("channel", "title", "message", "priority", "enabled", "expires_at")
+    search_fields = ("title", "message")

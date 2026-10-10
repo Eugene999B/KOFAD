@@ -3,3 +3,5 @@
 .native-update>div{flex:1;min-width:160px}.native-update strong{color:#174d3c;font-size:13px}.native-update p{font-size:11px;color:#436d62;line-height:1.5;margin:4px 0 0}
 .native-update button:not(.native-update-close){border:0;background:#0c7068;border-radius:10px;color:#fff;font-weight:850;font-size:12px;padding:11px 13px;min-height:42px}
 .native-update-close{border:0;background:transparent;color:#36675a;font-size:21px;padding:4px;line-height:1}
+
+.native-notifications{margin:12px 0;padding:18px;border:1px solid #d8e4e8;background:#fff;border-radius:18px;color:#17374b}.native-notifications h2{margin:0;font-size:18px}.native-notifications p{font-size:12px;line-height:1.65}.native-announcement-list{display:grid;gap:9px}.native-announcement{padding:12px 14px;background:#f4f7fa;border-radius:12px;border-left:3px solid #c49b3d}.native-announcement strong{display:block;font-size:13px}.native-announcement p{margin:5px 0 0}.native-update[role="alert"]{border:2px solid #bb552e;background:#fff2e9;color:#672b1a}.native-update[role="alert"] button{font-weight:800}.native-shell [hidden]{display:none!important}

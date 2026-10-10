@@ -39,6 +39,7 @@
     <p class="kf-download-prompt" data-pwa-install-state role="status" aria-live="polite"></p>
     <div class="kf-download-update" data-pwa-update hidden role="status"><span>A KOFAD update is ready.</span><button type="button" data-pwa-update-apply>Update now</button></div>
   {% endif %}
+  {% if app.kind == 'staff' and request.user.is_superuser %}<p class="kf-download-back"><a href="/staff/app/control/">Manage mobile apps →</a></p>{% endif %}
   <p class="kf-download-footnote">{% if app.kind == 'staff' %}For authorised KOFAD team members only.{% else %}Official downloads appear here when each app is released.{% endif %}</p>
   <p class="kf-download-back"><a href="{% if app.kind == 'staff' %}/workspace/{% else %}/market/{% endif %}">{% if app.kind == 'staff' %}Open workspace{% else %}Open KOFAD Market{% endif %} <span aria-hidden="true">→</span></a></p>
 </div>

@@ -127,6 +127,8 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
             "channel": "customer",
             "version": "1.3.2",
             "platforms": {"android": False, "ios": True, "windows": False},
+            "android_policy": {"minimum_version": "", "reason": ""},
+            "notices": [],
         })
         staff = self.client.get(
             "/staff/app/native-version.json",
@@ -139,6 +141,8 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
             "channel": "staff",
             "version": "3.4.5",
             "platforms": {"android": True, "ios": False, "windows": False},
+            "android_policy": {"minimum_version": "", "reason": ""},
+            "notices": [],
         })
         self.assertIn("noindex", staff["X-Robots-Tag"])
         self.assertNotIn("play.google.com", staff.content.decode())

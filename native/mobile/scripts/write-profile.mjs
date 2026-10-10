@@ -25,5 +25,6 @@ const copyWithProfile = (filename) => {
 };
 copyWithProfile("index.html");
 copyWithProfile("native.js");
+copyWithProfile("alerts.js");
 copyFileSync(resolve(sourceDir, "native.css"), resolve(outputDir, "native.css"));
 console.log(`Bundled offline-capable native ${profile.appName} (${profile.appId}) with local UI, not server.url.`);

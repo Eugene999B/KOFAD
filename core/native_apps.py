@@ -8,6 +8,10 @@ import re
 from urllib.parse import parse_qs, urlsplit
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
+from django.db.models import Q
+from django.utils import timezone
+from .mobile_release_models import MobileReleasePolicy, MobileNotice, SEMVER
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -159,10 +163,35 @@ NATIVE_LOCAL_ORIGINS = frozenset({
 
 def _native_version_response(request, kind):
     app = app_metadata(kind)
+    policy = MobileReleasePolicy.objects.filter(channel=kind).first()
+    minimum = ""
+    reason = ""
+    # Fail safely: mandatory updates are NEVER advertised without a verified,
+    # published Android release that is at least the required minimum version.
+    published_android = next((p for p in app["platforms"] if p["id"] == "android"), None)
+    if policy and published_android and published_android["available"]:
+        latest = app["version"]
+        expected = policy.minimum_android_version
+        if SEMVER.fullmatch(latest) and SEMVER.fullmatch(expected or ""):
+            v_latest = tuple(map(int, latest.split(".")))
+            v_min = tuple(map(int, expected.split(".")))
+            if v_min <= v_latest:
+                minimum = expected
+                reason = policy.critical_update_reason
+    live = timezone.now()
+    notices = MobileNotice.objects.filter(
+        channel=kind, enabled=True, created_at__lte=live
+    ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=live))[:6]
     response = JsonResponse({
         "channel": kind,
         "version": app["version"],
         "platforms": {entry["id"]: entry["available"] for entry in app["platforms"]},
+        "android_policy": {"minimum_version": minimum, "reason": reason},
+        "notices": [
+            {"id": item.pk, "title": item.title, "message": item.message,
+             "priority": item.priority, "created_at": item.created_at.isoformat()}
+            for item in notices
+        ],
     })
     response["Cache-Control"] = "public, max-age=120"
     response["Vary"] = "Origin"
@@ -184,3 +213,26 @@ def customer_native_version(request):
 @require_GET
 def staff_native_version(request):
     return _native_version_response(request, "staff")
+
+@require_GET
+@login_required
+def mobile_operations_dashboard(request):
+    """Superuser-only monitoring and control entry point; no signing keys."""
+    if not request.user.is_active or not request.user.is_superuser:
+        raise PermissionDenied
+    policies = {p.channel: p for p in MobileReleasePolicy.objects.all()}
+    active_counts = {
+        channel: MobileNotice.objects.filter(channel=channel, enabled=True).count()
+        for channel in ("customer", "staff")
+    }
+    response = render(request, "native_apps/operations.html", {
+        "title": "KOFAD Mobile App Control",
+        "customer_app": app_metadata("customer"),
+        "staff_app": app_metadata("staff"),
+        "policies": policies,
+        "notice_counts": active_counts,
+        "admin_prefix": settings.STAFF_LOGIN_SLUG,
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    return response
