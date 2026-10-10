@@ -77,7 +77,7 @@ def product_detail(request, pk):
     for photo in listing.gallery_images.order_by("sort_order", "pk")[:8]:
         if photo.image_data or photo.image_thumb:
             gallery.append({
-                "image_path": f"/market/gallery/{photo.pk}/image/thumb/",
+                "image_path": f"/market/gallery/{photo.pk}/image/{'thumb' if photo.image_thumb else 'full'}/",
                 "alt": str(photo.alt_text or listing.display_name)[:160],
             })
     tags = [tag.strip()[:45] for tag in (listing.tags or "").split(",") if tag.strip()][:12]
