@@ -20,12 +20,12 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertContains(response, "Android")
         self.assertContains(response, "Windows")
         self.assertNotContains(response, "KOFAD Staff")
-        self.assertContains(response, "Our dedicated apps are being prepared")
-        self.assertContains(response, "Not released yet", count=3)
+        self.assertContains(response, "Choose your device")
+        self.assertContains(response, "Add to Home Screen")
         self.assertContains(response, "native-brands/android")
         self.assertContains(response, "native-brands/apple")
         self.assertContains(response, "native-brands/windows")
-        self.assertContains(response, "Continue to Market")
+        self.assertContains(response, "Open Market")
         self.assertNotContains(response, "Download staff app")
 
     def test_public_and_market_have_customer_native_app_promotion(self):
@@ -80,8 +80,8 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
     )
     def test_fake_download_links_never_activate(self):
         response = self.client.get("/apps/")
-        self.assertContains(response, "In preparation", count=3)
-        self.assertNotContains(response, "Get Android app")
+        self.assertNotContains(response, "Get signed Android app")
+        self.assertNotContains(response, "Get native iPhone app")
         self.assertFalse(app_metadata("customer")["released"])
 
     @override_settings(
@@ -91,11 +91,11 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
     def test_published_android_link_is_active_but_unreleased_ios_windows_remain_pending(self):
         page = self.client.get("/apps/")
         self.assertEqual(page.status_code, 200)
-        self.assertContains(page, "Get Android app")
-        self.assertContains(page, "Ready to download", count=1)
-        self.assertContains(page, "In preparation", count=2)
-        self.assertNotContains(page, "Get Windows installer")
-        self.assertNotContains(page, "View on the App Store")
+        self.assertContains(page, "Get signed Android app")
+        self.assertContains(page, "Choose your device")
+        self.assertContains(page, "Add to Home Screen")
+        self.assertNotContains(page, "Get signed Windows installer")
+        self.assertNotContains(page, "Get native iPhone app")
         home = self.client.get("/")
         self.assertContains(home, "Get the KOFAD app")
         market = self.client.get("/market/")
