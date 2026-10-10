@@ -411,7 +411,10 @@ def inbox(request, section="inbox"):
     if thread_owner not in {"all", "mine", "unassigned"}:
         thread_owner = "all"
     conversation_qs = (
-        EmailConversation.objects.filter(mailbox=chosen)
+        EmailConversation.objects.filter(mailbox=chosen, archived_at__isnull=True).filter(
+            models.Q(snoozed_until__isnull=True) |
+            models.Q(snoozed_until__lte=timezone.now())
+        )
         if chosen else EmailConversation.objects.none()
     )
     open_conversations = conversation_qs.filter(status="open").count()
