@@ -8,7 +8,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.email_center import deliver_outgoing
-from core.email_models import EmailDeliveryEvent, EmailLetter, EmailMailbox
+from core.email_models import EmailDailyUsage, EmailDeliveryEvent, EmailLetter, EmailMailbox
+from core.brevo_email import DailyEmailLimitExceeded, send_brevo
 
 TOKEN = "only-for-tests-brevo-event-token-long-enough-123456789"
 
@@ -141,6 +142,24 @@ class BrevoDeliveryEventsTests(TestCase):
         self.assertTrue(result.json()["tracked"])
         queued.refresh_from_db()
         self.assertEqual(queued.delivery_status, "delivered")
+
+    @patch("core.brevo_email.requests.post")
+    def test_multi_recipient_credits_count_copies_and_respect_daily_limit(self, post):
+        post.return_value = Mock(status_code=201)
+        self.assertEqual(send_brevo(
+            subject="Notice", body="Body", recipient="customer@example.org",
+            cc="manager@example.org", bcc="audit@example.org"
+        ), 1)
+        usage = EmailDailyUsage.objects.get(day=timezone.localdate())
+        self.assertEqual(usage.attempted, 3)
+        self.assertEqual(usage.accepted, 3)
+        with override_settings(KOFAD_BREVO_DAILY_LIMIT=4):
+            with self.assertRaises(DailyEmailLimitExceeded):
+                send_brevo(
+                    subject="Notice", body="Body", recipient="another@example.org",
+                    cc="manager@example.org",
+                )
+        post.assert_called_once()
 
     def test_unrecognised_activity_and_bad_timestamp_do_not_create_record(self):
         self.assertFalse(self.event(self.payload(event="opened")).json()["tracked"])
