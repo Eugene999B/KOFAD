@@ -1,0 +1,80 @@
+{% extends "email_pro_shell.html" %}
+{% block email_page_content %}
+<section class="mail-section-heading">
+  <div><p class="mail-eyebrow">RECOVERABLE MAIL · DEPARTMENT-SCOPED</p>
+    <h2>Trash</h2><p>Deleted messages remain recoverable here. Restoring a cancelled outgoing email does not send it again.</p></div>
+  <a class="mail-button subtle" href="{% url 'email_history' %}{% if selected %}?mailbox={{ selected.pk }}{% endif %}">← Mail history</a>
+</section>
+<div class="pro-pane">
+  <form method="get" action="{% url 'email_trash' %}" class="pro-toolbar pro-toolbar-filter" role="search">
+    <label>Department<select name="mailbox">
+      {% for m in mailboxes %}<option value="{{ m.pk }}"{% if selected.pk == m.pk %} selected{% endif %}>{{ m.label }} · {{ m.address }}</option>{% endfor %}
+    </select></label>
+    <label>Search deleted mail<input type="search" name="q" value="{{ search }}" maxlength="100" placeholder="Subject or address"></label>
+    <button type="submit" class="mail-button secondary">Find in Trash</button>
+  </form>
+  {% if selected %}
+  <div class="mail-trash-intro"><strong>{{ trash_count }} records in Trash</strong>
+    <span>Only this department is shown. Replies and forwarded email cannot be sent from Trash.</span></div>
+  {% if selected.pk in writable_ids or email_is_owner %}
+  <form id="mail-trash-selected" method="post" action="{% url 'email_trash_action' %}" class="mail-delete-tools" data-mail-bulk-form>{% csrf_token %}
+    <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+    <input type="hidden" name="q" value="{{ search }}">
+    <label class="mail-select-toggle"><input type="checkbox" data-mail-select-all> Select this page</label>
+    <span data-mail-selected-count aria-live="polite">0 selected</span>
+    <button type="submit" name="action" value="restore_selected" class="mail-button secondary" data-mail-verify="restore-selected">Restore selected</button>
+    {% if email_is_owner %}<button type="submit" name="action" value="purge_selected" class="mail-button danger" data-mail-verify="purge-selected">Delete selected permanently</button>{% endif %}
+    <input name="confirmation" type="hidden" value="">
+  </form>
+  {% endif %}
+  {% if email_is_owner %}
+  <details class="mail-delete-all">
+    <summary>Empty this department's Trash (protected records remain)</summary>
+    <form method="post" action="{% url 'email_trash_action' %}" data-mail-bulk-form>{% csrf_token %}
+      <input type="hidden" name="action" value="empty_trash">
+      <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+      <p>This permanently removes ordinary messages in Trash, including messages on other pages. Automated accounting and provider-tracked delivery evidence are retained for audit.</p>
+      <label>Type EMPTY TRASH<input type="text" name="confirmation" required maxlength="20" placeholder="EMPTY TRASH" autocomplete="off"></label>
+      <button type="submit" class="mail-button danger" data-mail-verify="empty-trash">Empty Trash</button>
+    </form>
+  </details>
+  {% endif %}
+  <div class="mail-history-list mail-trash-list">
+    {% for letter in rows %}
+    <article class="mail-history-item">
+      {% if selected.pk in writable_ids or email_is_owner %}
+      <label class="mail-history-select"><input type="checkbox" form="mail-trash-selected" name="letter_ids" value="{{ letter.pk }}" data-mail-select-row> Select</label>
+      {% endif %}
+      <div class="mail-record-head"><div>
+        <span class="mail-direction">{% if letter.direction == "inbound" %}↙ Incoming{% else %}↗ Outgoing{% endif %}</span>
+        <h4>{{ letter.subject|default:"(No subject)" }}</h4>
+        <p>{% if letter.direction == "inbound" %}From {{ letter.from_address }}{% else %}To {{ letter.to_address }}{% endif %}</p>
+      </div><span class="mail-status state-{{ letter.status }}">{{ letter.get_status_display }}</span></div>
+      <div class="mail-record-meta"><span>Deleted {{ letter.trashed_at|date:"j M Y, H:i" }}</span>
+        {% if letter.trashed_by %}<span>By {{ letter.trashed_by.get_full_name|default:letter.trashed_by.username }}</span>{% endif %}
+        {% if letter.source_key %}<span>Retained automated record</span>{% endif %}
+      </div>
+      <details class="mail-record-detail"><summary>Read deleted message <span aria-hidden="true">⌄</span></summary>
+        <div class="mail-record-addresses"><span><b>From</b>{{ letter.from_address }}</span><span><b>To</b>{{ letter.to_address }}</span></div>
+        {% if letter.cc_addresses %}<p class="mail-help">CC: {{ letter.cc_addresses }}</p>{% endif %}
+        {% if letter.bcc_addresses and letter.created_by_id == request.user.pk or letter.bcc_addresses and email_is_owner %}<p class="mail-help">BCC: {{ letter.bcc_addresses }}</p>{% endif %}
+        <div class="mail-record-body">{{ letter.body_text|linebreaksbr }}</div>
+        {% if letter.last_error %}<p class="mail-help">{{ letter.last_error }}</p>{% endif %}
+      </details>
+    </article>
+    {% empty %}
+    <div class="mail-queue-empty"><strong>Trash is empty for this search</strong>
+      <p>Deleted messages will appear here and can be restored. Try another department or clear your search.</p></div>
+    {% endfor %}
+  </div>
+  {% if rows.paginator.num_pages > 1 %}
+  <nav class="mail-pagination" aria-label="Trash pages">
+    {% if rows.has_previous %}<a class="mail-button subtle" href="?mailbox={{ selected.pk }}&q={{ search|urlencode }}&page={{ rows.previous_page_number }}">← Previous</a>{% endif %}
+    <span>Page {{ rows.number }} of {{ rows.paginator.num_pages }}</span>
+    {% if rows.has_next %}<a class="mail-button subtle" href="?mailbox={{ selected.pk }}&q={{ search|urlencode }}&page={{ rows.next_page_number }}">Next →</a>{% endif %}
+  </nav>{% endif %}
+  {% else %}
+  <div class="mail-queue-empty"><strong>No assigned departmental mailboxes</strong><p>Ask the system administrator for access.</p></div>
+  {% endif %}
+</div>
+{% endblock %}
