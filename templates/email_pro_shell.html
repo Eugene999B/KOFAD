@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load static %}
+{% block after_styles %}
+<link rel="stylesheet" href="{% static 'email-workspace.css' %}">
+<link rel="stylesheet" href="{% static 'email-productivity.css' %}">
+{% endblock %}
+{% block content %}
+<main class="mail-workspace">
+<header class="mail-banner">
+  <div class="mail-brand">
+    <img class="mail-brand-image" src="{% static 'brand/kofad-logo-transparent.png' %}" alt="KOFAD IMPEX ENTERPRISE">
+    <div><p class="mail-eyebrow">KOFAD IMPEX · BUSINESS COMMUNICATIONS</p>
+      <h1>Email Centre</h1><p class="mail-subtitle">The right message, the right employee, the right time.</p></div>
+  </div>
+  <a class="mail-button subtle" href="{% url 'email_center' %}">← Inbox</a>
+</header>
+{% include "email_pro_nav.html" %}
+{% block email_page_content %}{% endblock %}
+</main>
+{% endblock %}
