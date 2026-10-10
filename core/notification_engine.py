@@ -124,11 +124,14 @@ def _staff_sms(closing, users, numbers, severe):
             pass
 
     made = 0
+    recipient_limit = max(0, getattr(settings, "SMS_STAFF_DAILY_MAX_RECIPIENTS", 4))
     for user in users:
+        if made >= recipient_limit:
+            break
         access = getattr(user, "access", None)
         if not access:
             continue
-        selected = access.sms_critical_alerts if severe else access.sms_daily_closing
+        selected = (access.sms_critical_alerts or access.sms_daily_closing) if severe else access.sms_daily_closing
         if not selected:
             continue
         try:
@@ -204,7 +207,10 @@ def queue_closing_reports(closing):
         for user in qs:
             access = getattr(user, "access", None)
             flag = "sms_critical_alerts" if severe else "sms_daily_closing"
-            if access and getattr(access, flag, False) and _authorised(user, closing.branch):
+            selected = bool(access and getattr(access, flag, False))
+            if severe and access:
+                selected = selected or access.sms_daily_closing
+            if selected and _authorised(user, closing.branch):
                 candidates[user.pk] = user
         created += _staff_sms(closing, candidates.values(), n, severe)
     return created
@@ -307,7 +313,10 @@ def _may_deliver(notice):
         if customer.email.strip().lower() != notice.recipient.strip().lower():
             return False
         if notice.category == "marketing_verify":
-            return not customer.marketing_email_opt_in
+            import hashlib
+            challenge_id = hashlib.sha256(customer.marketing_email_challenge.encode()).hexdigest()[:12]
+            return bool(customer.marketing_email_challenge and not customer.marketing_email_opt_in
+                        and notice.source_key.endswith(":" + challenge_id))
         return customer.marketing_email_opt_in and customer.marketing_email_verified_at is not None
     if notice.recipient_user_id is None or notice.branch_id is None:
         return False
