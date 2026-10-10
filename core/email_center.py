@@ -102,6 +102,8 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
 
 def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None, cc="", bcc=""):
     recipient = _address(recipient)
+    if recipient == LEGACY_MANAGEMENT_ADDRESS:
+        recipient = MANAGEMENT_ADDRESS
     cc, bcc = validate_copies(recipient, cc, bcc)
     subject = (subject or "").strip()
     body = (body or "").strip()
