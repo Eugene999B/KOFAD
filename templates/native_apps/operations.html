@@ -20,8 +20,8 @@
       <p>Enabled notices: {{ notice_counts.staff }}</p>
     </section>
   </div>
-  <p><a href="/{{ admin_prefix }}/technical-admin/core/mobilereleasepolicy/">Manage update policies →</a></p>
-  <p><a href="/{{ admin_prefix }}/technical-admin/core/mobilenotice/">Manage app announcements →</a></p>
+  <p><a href="{% url 'admin:core_mobilereleasepolicy_changelist' %}">Manage update policies →</a></p>
+  <p><a href="{% url 'admin:core_mobilenotice_changelist' %}">Manage app announcements →</a></p>
   <p><a href="https://github.com/Eugene999B/KOFAD/actions" target="_blank" rel="noopener noreferrer">Android builds and release checks on GitHub ↗</a></p>
   <p><a href="/staff/app/">Back to staff app downloads</a></p>
   <p><small>Announcements are general notices and must not include customer information, staff records, authentication codes, or financial details. Actual push notifications and device installations are not yet tracked here.</small></p>
