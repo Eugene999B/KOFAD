@@ -109,6 +109,118 @@
     render();
     return true;
   }
+  let syncing = false;
+  const message = text => {
+    const status = $("native-basket-sync-status");
+    if (status) status.textContent = text;
+  };
+  const estimate = data => {
+    const node = $("native-basket-server-estimate");
+    if (!node) return;
+    if (data?.currency !== "GHS" || typeof data?.estimated_subtotal !== "string") {
+      node.hidden = true;
+      return;
+    }
+    node.textContent = "Account basket estimate: GH₵ " + data.estimated_subtotal +
+      ". Delivery, stock and payment are confirmed at checkout.";
+    node.hidden = false;
+  };
+  function merge(remoteItems) {
+    if (!Array.isArray(remoteItems)) return null;
+    const source = normalize(remoteItems);
+    const combined = new Map(source.map(item => [item.id, item]));
+    for (const item of rows) {
+      const previous = combined.get(item.id);
+      // Take the larger saved quantity. Addition here would double item counts
+      // on every repeated manual sync from the same device.
+      if (previous) previous.quantity = Math.max(previous.quantity, item.quantity);
+      else combined.set(item.id, {...item});
+    }
+    return combined.size <= MAX_LINES ? [...combined.values()] : null;
+  }
+  async function accountReady() {
+    const auth = window.KofadMobileAuth;
+    if (!auth?.isAuthenticated?.()) {
+      message("Sign in through your Account tab to synchronize this basket.");
+      return false;
+    }
+    try {
+      const reply = await fetch("https://market.kofadimpex.com/market/mobile/v1/bootstrap/", {
+        method: "GET", mode: "cors", credentials: "omit", cache: "no-store",
+      });
+      if (!reply.ok || (await reply.json())?.features?.mobile_cart !== true) {
+        message("Secure account basket synchronization is not available yet.");
+        return false;
+      }
+    } catch (_) {
+      message("Cannot check KOFAD account sync right now. Your device basket is safe.");
+      return false;
+    }
+    return true;
+  }
+  function busy(value) {
+    syncing = value;
+    for (const id of ["native-basket-account-load", "native-basket-account-save"]) {
+      const button = $(id);
+      if (button) button.disabled = value;
+    }
+  }
+  async function loadAccount() {
+    if (syncing || !await accountReady()) return;
+    busy(true);
+    message("Loading your verified KOFAD account basket…");
+    try {
+      const data = await window.KofadMobileAuth.readMobile("cart/");
+      if (!data || data.error || !Array.isArray(data.items)) {
+        message("Account basket could not be loaded. Your device basket is unchanged.");
+        return;
+      }
+      const combined = merge(data.items);
+      if (!combined) {
+        message("Both baskets exceed 40 different products. Remove items before merging.");
+        return;
+      }
+      rows = combined;
+      persist();
+      render();
+      estimate(data);
+      message("Account items loaded and merged on this device. Choose 'Merge & save' to synchronize both devices.");
+    } finally { busy(false); }
+  }
+  async function syncAccount() {
+    if (syncing || !await accountReady()) return;
+    busy(true);
+    message("Checking your saved account basket…");
+    try {
+      const remote = await window.KofadMobileAuth.readMobile("cart/");
+      if (!remote || remote.error || !Array.isArray(remote.items)) {
+        message("The saved account basket is unavailable. Nothing was changed.");
+        return;
+      }
+      const combined = merge(remote.items);
+      if (!combined) {
+        message("Too many different products to synchronize. Remove items before trying again.");
+        return;
+      }
+      const saved = await window.KofadMobileAuth.saveMobileCart(
+        combined.map(item => ({id:item.id, quantity:item.quantity})),
+      );
+      if (!saved || saved.error || !Array.isArray(saved.items)) {
+        message(saved?.error === "listing_unavailable"
+          ? "A product is no longer available. Remove it and try again."
+          : "KOFAD could not save the basket. Your device basket was not deleted.");
+        return;
+      }
+      rows = normalize(saved.items);
+      persist();
+      render();
+      estimate(saved);
+      message("Basket synchronized with your KOFAD account. No order or payment has been placed.");
+    } finally { busy(false); }
+  }
+  $("native-basket-account-load")?.addEventListener("click",()=>void loadAccount());
+  $("native-basket-account-save")?.addEventListener("click",()=>void syncAccount());
+
   $("native-basket-clear")?.addEventListener("click", () => {
     rows = [];
     persist();
