@@ -63,6 +63,7 @@ jobs:
           for file in test-results/documents/*.pdf; do pdftoppm -r 110 -png "$file" "${file%.pdf}"; done
       - run: python tests/browser_smoke.py
       - run: python tests/native_app_smoke.py
+      - run: python tests/native_pwa_smoke.py
       - run: python tests/cookie_smoke.py
       - run: python manage.py test --noinput
       - name: Verify production container
