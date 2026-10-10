@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import models, transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -65,10 +65,10 @@ def _match_letter(payload, provider_id, address):
             }:
                 return candidate
     # Older messages sent before tags existed can be matched via Brevo's ID.
-    exact = [provider_id, "<" + provider_id + ">"]
     for row in EmailLetter.objects.filter(
-        direction="outbound", message_id__in=exact,
-        status__in=["submitted", "uncertain"],
+        models.Q(message_id__iexact=provider_id)
+        | models.Q(message_id__iexact="<" + provider_id + ">"),
+        direction="outbound", status__in=["submitted", "uncertain"],
     )[:10]:
         if address in {
             row.to_address.lower(),
@@ -101,7 +101,7 @@ def brevo_delivery_callback(request):
     if not isinstance(payload, dict):
         return HttpResponse(status=400)
     event = payload.get("event")
-    if event not in EVENT_TYPES:
+    if not isinstance(event, str) or event not in EVENT_TYPES:
         return JsonResponse({"accepted": True, "tracked": False})
     recipient = payload.get("email", "")
     provider_id = _provider_id(payload.get("message-id"))
