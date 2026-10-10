@@ -1,0 +1,9 @@
+{% extends "marketplace/base.html" %}
+{% block content %}
+<section class="simple-customer-access"><div class="simple-access-card">
+{% include "marketplace/_auth_logo.html" %}
+{% if confirmed %}<h1>Email confirmed</h1><p>You are subscribed to optional KOFAD Market promotions. You can unsubscribe from your account whenever you want.</p>
+{% else %}<h1>Confirmation link unavailable</h1><p>The link expired, was changed or is invalid. Sign in to your account to request a fresh confirmation.</p>{% endif %}
+<a class="market-button primary wide" href="/market/account/">Go to my account</a>
+</div></section>
+{% endblock %}
