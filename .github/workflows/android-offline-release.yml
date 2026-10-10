@@ -49,7 +49,7 @@ jobs:
           KOFAD_NATIVE_CHANNEL=customer node scripts/write-profile.mjs
           npx cap add android
           npx cap sync android
-          node scripts/configure-auth-deeplink.mjs android
+          KOFAD_NATIVE_CHANNEL=customer node scripts/configure-auth-deeplink.mjs android
           npx capacitor-assets generate --android
           cd ../..
           [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]{0,3})$ ]] || { echo "::error::Invalid version"; exit 1; }
