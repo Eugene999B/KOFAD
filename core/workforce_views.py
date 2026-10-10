@@ -1,13 +1,14 @@
 import hashlib
 import io
 import os
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -634,6 +635,25 @@ def _draw_cut_marks(pdf, x, y, width, height):
         direction = -1 if yy == y else 1
         pdf.line(x, yy + direction * gap, x, yy + direction * (gap + length))
         pdf.line(x + width, yy + direction * gap, x + width, yy + direction * (gap + length))
+
+
+@protected("manage_company")
+@require_POST
+def worker_id_card_reissue(request, branch, pk):
+    """Rotate the public verification secret; old printed IDs are no longer valid."""
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only a system administrator can reissue workforce credentials.")
+    worker = get_object_or_404(Worker, branch=branch, pk=pk)
+    old_serial = _card_serial(worker)
+    worker.card_token = uuid.uuid4()
+    worker.id_card_issue_date = timezone.localdate()
+    worker.save(update_fields=["card_token", "id_card_issue_date", "updated_at"])
+    audit(request.user, branch, "worker.id_card.reissued", worker.employee_code, {
+        "old_serial": old_serial, "new_serial": _card_serial(worker),
+        "previous_qr_revoked": True,
+    })
+    messages.success(request, "New ID credential issued. Earlier QR codes are now invalid.")
+    return redirect("worker_profile", pk=worker.pk)
 
 
 @protected("manage_company")
