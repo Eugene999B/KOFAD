@@ -32,7 +32,7 @@ with sync_playwright() as browser_tool:
     assert customer.get_by_role("link", name="Install KOFAD Market", exact=False).is_visible()
     assert customer.get_by_role("link", name="Open Market", exact=False).is_visible()
     for platform in ("android", "apple", "windows"):
-        icon = customer.locator(f".kf-download-device img[src*=\\'native-brands/{platform}\\']")
+        icon = customer.locator(f'.kf-download-device img[src*="native-brands/{platform}"]')
         assert icon.count() >= 1
         assert icon.first.evaluate("(img) => img.complete && img.naturalWidth > 0")
     assert "KOFAD Staff" not in customer.content()
