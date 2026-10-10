@@ -15,11 +15,9 @@ from datetime import timedelta
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.contrib.auth.models import AnonymousUser
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
