@@ -11,6 +11,7 @@ from . import email_delivery_events as email_events
 from . import customer_care as customer_care_views
 from . import email_campaigns as campaigns
 from . import email_productivity as pro_email
+from . import email_trash as email_trash
 from . import count_views
 from . import admin_views
 from . import staff_invites
@@ -39,6 +40,8 @@ urlpatterns = [
     path("auth/google/gmail/send-test/", gmail_sender.send_test, name="gmail_sender_test"),
     path("email/", business_email.inbox, name="email_center"),
     path("email/work/", pro_email.work, name="email_work"),
+    path("email/trash/", email_trash.trash, name="email_trash"),
+    path("email/trash/action/", email_trash.action, name="email_trash_action"),
     path("email/drafts/", pro_email.drafts, name="email_drafts"),
     path("email/replies/", pro_email.library, name="email_replies"),
     path("email/reports/", pro_email.reports, name="email_reports"),

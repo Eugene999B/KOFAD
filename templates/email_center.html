@@ -221,7 +221,7 @@
     <a href="?mailbox={{ selected.pk }}&status=attention"><span>Delivery attention</span><strong>{{ attention_count }}</strong></a>
   </section>
   <section class="mail-history-panel">
-    <header class="mail-pane-head"><div><h3>All correspondence</h3><p>{{ letters.paginator.count }} matching records</p></div></header>
+    <header class="mail-pane-head"><div><h3>All correspondence</h3><p>{{ letters.paginator.count }} matching records</p></div><a class="mail-button subtle" href="{% url 'email_trash' %}?mailbox={{ selected.pk }}">♲ Open Trash</a></header>
     <form method="get" action="{% url 'email_history' %}" class="mail-history-filters" role="search">
       <input type="hidden" name="mailbox" value="{{ selected.pk }}">
       <label>Search<input name="q" type="search" value="{{ mail_query }}" maxlength="100" placeholder="Subject, address or message text"></label>
@@ -243,9 +243,34 @@
       <button class="mail-button secondary" type="submit">Search history</button>
       {% if mail_query or mail_direction != 'all' or mail_status != 'all' %}<a class="mail-clear" href="?mailbox={{ selected.pk }}">Clear</a>{% endif %}
     </form>
+    {% if can_delete_mail %}
+    <form id="mail-history-bulk" method="post" action="{% url 'email_trash_action' %}" class="mail-delete-tools" data-mail-bulk-form>{% csrf_token %}
+      <input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+      <input type="hidden" name="q" value="{{ mail_query }}">
+      <input type="hidden" name="direction" value="{{ mail_direction }}">
+      <input type="hidden" name="status" value="{{ mail_status }}">
+      <label class="mail-select-toggle"><input type="checkbox" data-mail-select-all> Select this page</label>
+      <span data-mail-selected-count aria-live="polite">0 selected</span>
+      <button type="submit" name="action" value="trash_selected" class="mail-button subtle" data-mail-verify="trash-selected">Move selected to Trash</button>
+    </form>
+    {% endif %}
+    {% if is_mail_owner %}
+    <details class="mail-delete-all">
+      <summary>Delete all {{ letters.paginator.count }} matching messages from {{ selected.label }} (including other pages)</summary>
+      <form method="post" action="{% url 'email_trash_action' %}" data-mail-bulk-form>{% csrf_token %}
+        <input type="hidden" name="action" value="trash_all"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+        <input type="hidden" name="q" value="{{ mail_query }}"><input type="hidden" name="direction" value="{{ mail_direction }}">
+        <input type="hidden" name="status" value="{{ mail_status }}">
+        <p>Moves every matching message in this department to Trash, not just the current page. Pending sends will be cancelled. You can restore emails later.</p>
+        <label>Type DELETE ALL to confirm<input name="confirmation" required autocomplete="off" placeholder="DELETE ALL" aria-label="Type DELETE ALL" maxlength="20"></label>
+        <button type="submit" class="mail-button danger" data-mail-verify="trash-all">Move all matching to Trash</button>
+      </form>
+    </details>
+    {% endif %}
     <div class="mail-history-list">
     {% for letter in letters %}
       <article class="mail-history-item">
+        {% if can_delete_mail %}<label class="mail-history-select"><input type="checkbox" form="mail-history-bulk" name="letter_ids" value="{{ letter.pk }}" data-mail-select-row> Select</label>{% endif %}
         <div class="mail-record-head"><div><span class="mail-direction">{% if letter.direction == 'inbound' %}↙ Incoming{% else %}↗ Outgoing{% endif %}</span>
           <h4>{{ letter.subject|default:"(No subject)" }}</h4>
           <p>{% if letter.direction == 'inbound' %}From {{ letter.from_address }}{% else %}To {{ letter.to_address }}{% endif %}</p></div>

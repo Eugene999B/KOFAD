@@ -55,3 +55,30 @@
  .mail-workspace .pro-editor-form{padding:14px 12px}
  .mail-workspace .pro-reply-head{flex-wrap:wrap}
 }
+
+
+/* Compact, accessible bulk-action controls; no overlay on scrolling mobile lists. */
+.mail-workspace .mail-delete-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 18px;background:var(--mail-wash);border-bottom:1px solid var(--mail-line)}
+.mail-workspace .mail-delete-tools .mail-select-toggle{display:flex;align-items:center;gap:8px;margin:0;font-size:.79rem}
+.mail-workspace .mail-delete-tools [data-mail-selected-count]{font-size:.76rem;color:var(--mail-muted);font-weight:700;min-width:80px}
+.mail-workspace .mail-history-select{display:inline-flex;align-items:center;gap:8px;font-size:.76rem;color:var(--mail-muted);cursor:pointer;margin-bottom:11px;min-height:28px}
+.mail-workspace .mail-history-select input{accent-color:var(--mail-accent);width:18px;height:18px}
+.mail-workspace .mail-button.danger{background:#a02c38;color:#fff!important;border-color:#a02c38}
+.mail-workspace .mail-button.danger:hover{background:#82232b}
+.mail-workspace .mail-delete-all{margin:12px 18px;border:1px solid #ebccce;border-radius:13px;overflow:hidden;background:#fff}
+.mail-workspace .mail-delete-all summary{padding:13px 16px;cursor:pointer;font-size:.82rem;color:#87303a;font-weight:740;background:#fff8f8}
+.mail-workspace .mail-delete-all form{display:flex;flex-wrap:wrap;align-items:end;gap:13px;padding:15px;border-top:1px solid #ebccce}
+.mail-workspace .mail-delete-all p{width:100%;font-size:.78rem!important;color:var(--mail-muted);line-height:1.5}
+.mail-workspace .mail-delete-all label{flex:1 1 220px;max-width:340px}
+.mail-workspace .mail-trash-intro{display:flex;gap:8px 18px;justify-content:space-between;flex-wrap:wrap;align-items:center;padding:18px 20px;color:var(--mail-ink);border-bottom:1px solid var(--mail-line)}
+.mail-workspace .mail-trash-intro span{font-size:.77rem;color:var(--mail-muted)}
+.mail-workspace .mail-purge-confirm{flex:1 1 250px;max-width:285px;font-size:.7rem}
+.mail-workspace .mail-trash-list .mail-history-item{overflow-wrap:anywhere}
+@media(max-width:640px){
+ .mail-workspace .mail-delete-tools{gap:9px;padding:12px}
+ .mail-workspace .mail-delete-tools .mail-button{flex:1 1 140px}
+ .mail-workspace .mail-delete-all{margin:10px}
+ .mail-workspace .mail-delete-all form{display:flex;flex-direction:column;align-items:stretch}
+ .mail-workspace .mail-delete-all label{max-width:none;width:100%}
+ .mail-workspace .mail-trash-intro{padding:14px}
+}

@@ -301,7 +301,8 @@ def inbox(request, section="inbox"):
                 conversation = None
                 if action == "reply":
                     original = get_object_or_404(EmailLetter, pk=request.POST.get("reply_to"),
-                                                 mailbox=mailbox, direction="inbound")
+                                                 mailbox=mailbox, direction="inbound",
+                                                 trashed_at__isnull=True)
                     recipient, subject, reply_id = original.from_address, original.subject, original.message_id
                     conversation = original.conversation
                     if conversation is None:
@@ -320,7 +321,7 @@ def inbox(request, section="inbox"):
                                                      pk=request.POST.get("conversation_id"),
                                                      mailbox=mailbox)
                     recipient, subject = conversation.customer_email, conversation.subject
-                    latest_customer = conversation.letters.filter(direction="inbound").order_by("-created_at").first()
+                    latest_customer = conversation.letters.filter(direction="inbound", trashed_at__isnull=True).order_by("-created_at").first()
                     reply_id = latest_customer.message_id if latest_customer else ""
                 message_body = request.POST.get("body", "")
                 if request.POST.get("append_signature") == "yes":
@@ -408,7 +409,7 @@ def inbox(request, section="inbox"):
     known_statuses = {value for value, _ in EmailLetter.STATUS}
     if status not in known_statuses | {"all", "attention"}:
         status = "all"
-    letters_qs = EmailLetter.objects.filter(mailbox=chosen) if chosen else EmailLetter.objects.none()
+    letters_qs = EmailLetter.objects.filter(mailbox=chosen, trashed_at__isnull=True) if chosen else EmailLetter.objects.none()
     inbox_count = letters_qs.filter(direction="inbound").count()
     sent_count = letters_qs.filter(direction="outbound").count()
     draft_count = letters_qs.filter(status="draft").count()
@@ -442,6 +443,14 @@ def inbox(request, section="inbox"):
         )
         if chosen else EmailConversation.objects.none()
     )
+    active_messages = EmailLetter.objects.filter(
+        conversation_id=models.OuterRef("pk"), trashed_at__isnull=True,
+    )
+    any_messages = EmailLetter.objects.filter(conversation_id=models.OuterRef("pk"))
+    conversation_qs = conversation_qs.annotate(
+        has_live_mail=models.Exists(active_messages),
+        has_any_mail=models.Exists(any_messages),
+    ).filter(models.Q(has_live_mail=True) | models.Q(has_any_mail=False))
     open_conversations = conversation_qs.filter(status="open").count()
     unassigned_conversations = conversation_qs.filter(assigned_to__isnull=True).exclude(status="closed").count()
     if thread_status != "all":
@@ -460,6 +469,7 @@ def inbox(request, section="inbox"):
     unthreaded_letters = (
         EmailLetter.objects.filter(
             mailbox=chosen, direction="inbound", conversation__isnull=True,
+            trashed_at__isnull=True,
         ).order_by("-created_at", "-pk")[:12]
         if chosen else EmailLetter.objects.none()
     )
@@ -475,8 +485,8 @@ def inbox(request, section="inbox"):
             conversation=active_thread, user=request.user,
             defaults={"last_read_at": timezone.now()},
         )
-        thread_letters = list(active_thread.letters.select_related("created_by")
-                              .order_by("created_at", "pk")[:200])
+        thread_letters = list(active_thread.letters.filter(trashed_at__isnull=True)
+                              .select_related("created_by").order_by("created_at", "pk")[:200])
         thread_notes = list(active_thread.notes.select_related("author")
                             .order_by("created_at", "pk")[:100])
         if chosen.pk in can_write:
@@ -535,6 +545,7 @@ def inbox(request, section="inbox"):
         "letters": letters, "writable_ids": can_write,
         "conversations": conversations, "active_thread": active_thread,
         "thread_letters": thread_letters, "thread_notes": thread_notes,
+        "can_delete_mail": chosen is not None and (owner(request.user) or chosen.pk in can_write),
         "latest_inbound_letter": next(
             (letter for letter in reversed(thread_letters) if letter.direction == "inbound"),
             None,
@@ -637,6 +648,7 @@ def deliver_outgoing(limit=10):
     ).update(status="uncertain", last_error="Interrupted send; review before retry.")
     ids = list(EmailLetter.objects.filter(
         direction="outbound", status__in=["queued", "failed"], attempts__lt=3,
+        trashed_at__isnull=True,
         next_attempt_at__lte=now,
     ).order_by("created_at").values_list("pk", flat=True)[:limit])
     submitted = 0
@@ -644,13 +656,14 @@ def deliver_outgoing(limit=10):
         with transaction.atomic():
             claimed = EmailLetter.objects.filter(
                 pk=pk, direction="outbound", status__in=["queued", "failed"],
+                trashed_at__isnull=True,
                 attempts__lt=3, next_attempt_at__lte=timezone.now(),
             ).update(status="sending", attempts=models.F("attempts") + 1,
                      next_attempt_at=timezone.now())
         if not claimed:
             continue
         row = EmailLetter.objects.select_related("mailbox").get(pk=pk)
-        if not row.mailbox.active or row.mailbox.address.lower() in RETIRED_MANAGEMENT_ADDRESSES:
+        if row.trashed_at is not None or not row.mailbox.active or row.mailbox.address.lower() in RETIRED_MANAGEMENT_ADDRESSES:
             EmailLetter.objects.filter(pk=pk).update(
                 status="suppressed",
                 last_error="Sending mailbox has been decommissioned.",
