@@ -75,8 +75,8 @@ test("Native mandatory Android updates and opt-in app notices have isolated cont
   assert.match(js, /Update required/);
   assert.match(js, /native-update-dismiss/);
   assert.match(js, /KofadNativeAlerts/);
-  assert.match(alerts, /LocalNotifications.requestPermissions/);
-  assert.match(alerts, /LocalNotifications.checkPermissions/);
+  assert.match(alerts, /OS.requestPermissions/);
+  assert.match(alerts, /OS.checkPermissions/);
   assert.match(alerts, /document.createElement/);
   assert.match(html, /id="native-alerts-toggle"/);
   assert.match(packager, /copyWithProfile\\("alerts.js"\\)/);
