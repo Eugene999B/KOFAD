@@ -143,6 +143,9 @@ html[data-theme="dark"] .kf-download{
 html[data-theme="dark"] .kf-download-device{
   box-shadow:0 8px 30px rgb(0 0 0 / 13%)
 }
+html[data-theme="dark"] .kf-download-device-top>img{
+  padding:7px;border-radius:11px;background:#f5f7fa
+}
 html[data-theme="dark"] .kf-download-device-action{
   border-color:#446783;background:#24476b
 }
