@@ -35,6 +35,31 @@ class AtelierPublicTests(TestCase):
 
 
 class AtelierAssetsTests(SimpleTestCase):
+    def test_catalogue_product_card_has_no_forms_inside_links(self):
+        """Wishlist is an independent action, never nested in a product link."""
+        from html.parser import HTMLParser
+
+        class CardHTMLInspector(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.link_depth = 0
+                self.nested_forms = []
+
+            def handle_starttag(self, tag, attrs):
+                if tag == "a":
+                    self.link_depth += 1
+                elif tag == "form" and self.link_depth:
+                    self.nested_forms.append(attrs)
+
+            def handle_endtag(self, tag):
+                if tag == "a":
+                    self.link_depth = max(0, self.link_depth - 1)
+
+        path = Path(settings.BASE_DIR) / "marketplace/templates/marketplace/product_card.html"
+        inspector = CardHTMLInspector()
+        inspector.feed(path.read_text(encoding="utf-8"))
+        self.assertEqual(inspector.nested_forms, [], "Product-card forms must not be nested inside links.")
+
     def test_unified_theme_defines_light_dark_and_responsive_rules(self):
         file = Path(settings.BASE_DIR) / "static" / "kofad-atelier.css"
         css = file.read_text(encoding="utf-8")

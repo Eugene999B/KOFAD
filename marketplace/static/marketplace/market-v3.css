@@ -92,3 +92,6 @@ html[data-theme="dark"] .simple-access-card label{color:#c7d6df}
 html[data-theme="dark"] .contact-method-chat{background:linear-gradient(145deg,#071d2d,#0e3a50);border-color:#315d70}
 @media(max-width:900px){.contact-method-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.simple-customer-access{min-height:auto;padding:30px 14px 60px}.simple-access-card{padding:22px;border-radius:18px}.simple-access-card h1{font-size:25px}.commerce-home-hero-simple{padding-top:42px;padding-bottom:42px}.commerce-home-hero-simple .commerce-home-copy h1{font-size:39px}.commerce-contact-simple{width:calc(100% - 28px);margin-bottom:58px}.contact-method-grid{grid-template-columns:1fr}.contact-method-card{min-height:110px}}
+
+/* Keep wishlist action separate from the product-navigation link (valid accessible HTML). */
+.commerce-product-visual{position:relative;isolation:isolate}

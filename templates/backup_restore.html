@@ -11,6 +11,17 @@
   <span class="pill">System administrator only</span>
 </section>
 
+<section class="panel" aria-labelledby="backup-disaster-recovery-warning">
+  <div class="notice" role="note">
+    <strong id="backup-disaster-recovery-warning">Disaster-recovery protection is not automated yet.</strong>
+    KOFAD can generate encrypted backups, but this installation has not verified automatic off-site backup storage,
+    a retention schedule, or a successful restoration rehearsal. Downloading a backup is not proof that a safe,
+    separate copy exists. Until those controls are verified, keep encrypted copies outside Railway,
+    store the passphrase separately, and periodically test a restore into an isolated database.
+    Do not store confidential backup files in the public GitHub repository.
+  </div>
+</section>
+
 <section class="panel">
   <div class="section-heading">
     <div>
