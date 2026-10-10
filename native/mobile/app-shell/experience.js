@@ -2,7 +2,7 @@
 (() => {
   const CUSTOMER = "__CHANNEL__" === "customer";
   const $ = id => document.getElementById(id);
-  const screens = ["home","product","saved","notifications","account","orders","work"];
+  const screens = ["home","product","saved","basket","notifications","account","orders","work"];
   const key = "kofad-" + (CUSTOMER?"customer":"staff") + "-welcome-v3";
   const favoritesKey = "kofad-customer-favorites-v3";
   let products=[],selected=null,favorites=[];
@@ -14,8 +14,8 @@
   };
   function view(name) {
     screens.forEach(s => $("screen-"+s).hidden=s!==name);
-    const active = name==="product"?"catalog":name==="saved"||name==="orders"?"account":name==="work"?"catalog":name==="notifications"?"notices":name;
-    ["home","catalog","notices","account"].forEach(id=>{
+    const active = name==="basket"?"basket":name==="product"?"catalog":name==="saved"||name==="orders"?"account":name==="work"?"catalog":name==="notifications"?"notices":name;
+    ["home","catalog","basket","notices","account"].forEach(id=>{
       const node=$("tab-"+id);
       node.classList.toggle("selected",id===active);
       if(id===active)node.setAttribute("aria-current","page");else node.removeAttribute("aria-current");
@@ -37,6 +37,7 @@
   function detail(p) {
     if(!CUSTOMER||!Number.isSafeInteger(p?.id)||p.id<=0)return;
     selected=p;
+    $("native-detail-feedback").textContent="";
     $("native-detail-photo").replaceChildren(thumb(p));
     $("native-detail-category").textContent=String(p.category||"KOFAD Market").slice(0,70);
     $("native-detail-name").textContent=String(p.name||"Product").slice(0,160);
@@ -201,6 +202,11 @@
   }
   $("tab-home").addEventListener("click",()=>view("home"));
   $("tab-catalog").addEventListener("click",()=>{if(CUSTOMER)browse();else void showWork();});
+  $("tab-basket").addEventListener("click",()=>{
+    if(!CUSTOMER)return;
+    window.KofadNativeBasket?.render?.();
+    view("basket");
+  });
   $("tab-notices").addEventListener("click",()=>view("notifications"));
   $("native-bell").addEventListener("click",()=>view("notifications"));
   $("tab-account").addEventListener("click",()=>view("account"));
@@ -210,6 +216,24 @@
     favorites=favorites.includes(selected.id)?favorites.filter(x=>x!==selected.id):[...favorites,selected.id].slice(0,100);
     try{localStorage.setItem(favoritesKey,JSON.stringify(favorites));}catch(_){}
     $("native-detail-save").textContent=favorites.includes(selected.id)?"♥ Saved":"♡ Save item";
+  });
+  $("native-detail-basket").addEventListener("click",()=>{
+    if (!CUSTOMER || !selected) return;
+    const added = window.KofadNativeBasket?.addProduct?.(selected);
+    $("native-detail-feedback").textContent = added
+      ? "Added to your basket on this device. You can adjust quantities in the Basket tab."
+      : "This item cannot be added right now; check availability or the basket limit.";
+  });
+  $("native-detail-share").addEventListener("click", async()=>{
+    if (!CUSTOMER || !Number.isSafeInteger(selected?.id) || selected.id <= 0) return;
+    const url = "https://market.kofadimpex.com/market/products/" + selected.id + "/";
+    const title = String(selected.name || "KOFAD product").slice(0,110);
+    try {
+      const plugin = window.Capacitor?.Plugins?.Share;
+      if (typeof plugin?.share === "function") await plugin.share({title, text:"Discover this KOFAD product",url});
+      else if (typeof navigator.share === "function") await navigator.share({title,url});
+      else $("native-detail-feedback").textContent="Sharing is not available on this device.";
+    } catch (_) { /* Android share sheet dismissal is not an app error. */ }
   });
   $("native-detail-buy").addEventListener("click",()=>{
     if(selected)open("/market/access/?next="+encodeURIComponent("/market/products/"+selected.id+"/"));
@@ -253,6 +277,7 @@
   }
   window.KofadNativeExperience=Object.freeze({
     showProduct:detail,
+    openStaffOverview:showWork,
     showCategories,
     catalogLoaded(items,append){
       if(!CUSTOMER||!Array.isArray(items))return;

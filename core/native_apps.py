@@ -189,7 +189,7 @@ def _native_version_response(request, kind):
         "android_policy": {"minimum_version": minimum, "reason": reason},
         "notices": [
             {"id": item.pk, "title": item.title, "message": item.message,
-             "priority": item.priority, "created_at": item.created_at.isoformat()}
+             "kind": item.kind, "priority": item.priority, "created_at": item.created_at.isoformat()}
             for item in notices
         ],
     })
