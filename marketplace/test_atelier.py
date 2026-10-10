@@ -20,7 +20,10 @@ class AtelierPublicTests(TestCase):
     def test_market_uses_live_catalogue_and_keeps_checkout_paths(self):
         response = self.client.get("/market/", HTTP_HOST="market.kofadimpex.com")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="atelier-market-intro"')
+        self.assertContains(response, 'class="market-shop-lead"')
+        self.assertContains(response, "market-discover")
+        self.assertNotContains(response, 'class="atelier-market-intro"')
+        self.assertNotContains(response, 'class="market-guest-welcome"')
         self.assertContains(response, "kofad-atelier")
         self.assertContains(response, "<h1>All products</h1>", html=True)
         self.assertContains(response, 'href="/wholesale/"')
