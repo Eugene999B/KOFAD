@@ -12,10 +12,17 @@
   const CLIENT = CUSTOMER ? "kofad-market" : "kofad-staff";
   const CALLBACK = CUSTOMER ? "kofadmarket://auth/callback" : "kofadstaff://auth/callback";
   const NATIVE = window.Capacitor?.Plugins || {};
+  const ANDROID = window.Capacitor?.getPlatform?.() === "android";
+  // The native bridge is the ONLY persistent home for a refresh token.
+  const VAULT = NATIVE.KofadVault;
   let pending = null;
   let session = null;
   let supported = null;
   let busy = false;
+  let renewal = null;
+  let restoring = null;
+  let restoreChecked = false;
+  let blocked = false;
 
   const encode64 = bytes => {
     let raw = "";
@@ -27,7 +34,9 @@
   async function readiness() {
     if (supported !== null) return supported;
     if (typeof NATIVE.Browser?.open !== "function" || typeof NATIVE.App?.addListener !== "function"
-        || !window.crypto?.subtle || !window.crypto?.getRandomValues) return false;
+        || !window.crypto?.subtle || !window.crypto?.getRandomValues
+        || (ANDROID && (typeof VAULT?.save !== "function" || typeof VAULT?.load !== "function"
+                        || typeof VAULT?.remove !== "function"))) return false;
     try {
       const reply = await fetch(ORIGIN + ROOT + "capabilities/", {
         method: "GET", mode: "cors", credentials: "omit", cache: "no-store",
@@ -43,6 +52,7 @@
   }
 
   async function start() {
+    if (!blocked) await restore();
     if (busy) return true;
     if (session) {
       if (!session.profile) await profile();
@@ -87,29 +97,67 @@
     return data;
   }
 
-  function adopt(issued) {
-    // Memory only. Persisting a refresh token requires a reviewed Android Keystore
-    // or iOS Keychain implementation. Never use localStorage for credentials.
+  async function installIssued(issued) {
+    // Persist the newly rotated refresh credential BEFORE trusting it in RAM.
+    // If the keystore is unavailable, Android fails closed, not into web storage.
+    if (ANDROID) {
+      if (typeof VAULT?.save !== "function") throw new Error("Device vault unavailable");
+      await VAULT.save({value:issued.refresh_token});
+    }
     session = {
       access: issued.access_token, refresh: issued.refresh_token,
       expires: Date.now() + (Number(issued.expires_in) || 900) * 1000,
       profile: null,
     };
+    blocked = false;
+    restoreChecked = true;
   }
 
-  function clear() {
+  async function clear() {
+    blocked = true;
+    restoreChecked = true;
     session = null;
     pending = null;
+    let erased = true;
+    if (ANDROID) {
+      try {await VAULT?.remove?.();} catch (_) {erased = false;}
+    }
     updateAccount();
+    if (!erased) {
+      const notice = document.getElementById("native-account-copy");
+      if (notice) notice.textContent = "Secure sign-out could not clear the device vault. Reinstall the app if this persists.";
+    }
+    return erased;
+  }
+
+  async function restore() {
+    if (!ANDROID || restoreChecked || blocked) return;
+    if (restoring) return restoring;
+    restoring = (async () => {
+      if (!await readiness()) return;
+      const stored = await VAULT.load();
+      if (typeof stored?.value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(stored.value)) return;
+      const issued = await token({grant_type:"refresh_token", refresh_token:stored.value});
+      await installIssued(issued);
+      await profile();
+    })().catch(async () => {await clear();}).finally(() => {
+      restoreChecked = true;
+      restoring = null;
+    });
+    return restoring;
   }
 
   async function accessToken() {
+    if (!session && !blocked) await restore();
     if (!session) return "";
     if (Date.now() + 30000 >= session.expires) {
-      try {
-        const renewed = await token({grant_type: "refresh_token", refresh_token: session.refresh});
-        adopt(renewed);
-      } catch (_) {clear();return "";}
+      if (!renewal) {
+        renewal = (async () => {
+          const renewed = await token({grant_type:"refresh_token", refresh_token:session.refresh});
+          await installIssued(renewed);
+        })().finally(() => {renewal = null;});
+      }
+      try {await renewal;} catch (_) {await clear();return "";}
     }
     return session?.access || "";
   }
@@ -122,7 +170,7 @@
         method: "GET", mode: "cors", credentials: "omit", cache: "no-store",
         headers: {Authorization: "Bearer " + access},
       });
-      if (!response.ok) {if (response.status === 401 || response.status === 403) clear();return null;}
+      if (!response.ok) {if (response.status === 401 || response.status === 403) await clear();return null;}
       const data = await response.json();
       if (data.channel !== CHANNEL) return null;
       if (session) session.profile = data;
@@ -170,12 +218,12 @@
         grant_type: "authorization_code", code,
         code_verifier: current.verifier, redirect_uri: CALLBACK,
       });
-      adopt(issued);
+      await installIssued(issued);
       try {await NATIVE.Browser?.close?.();} catch (_) {}
       await profile();
       const tab = document.getElementById("tab-account");
       tab?.click();
-    } catch (_) {clear();}
+    } catch (_) {await clear();}
   }
 
   async function readMobile(resource) {
@@ -191,7 +239,7 @@
         headers: {Authorization: "Bearer " + access},
       });
       if (reply.status === 401 || reply.status === 403) {
-        clear();
+        await clear();
         return {error: "session_expired"};
       }
       if (!reply.ok) return {error: "temporarily_unavailable"};
@@ -214,7 +262,7 @@
         body: JSON.stringify({items: items.map(item => ({id:item.id, quantity:item.quantity}))}),
       });
       if (reply.status === 401 || reply.status === 403) {
-        clear();
+        await clear();
         return {error:"session_expired"};
       }
       if (reply.status === 404) return {error:"feature_unavailable"};
@@ -227,17 +275,20 @@
   }
 
   async function signOut() {
+    // A freshly rotated credential is never silently restored after logout.
     const access = await accessToken();
-    clear();
-    if (!access) return;
+    const erased = await clear();
+    if (!access) return erased;
     try {
-      await fetch(ORIGIN + ROOT + "revoke/", {
+      const reply = await fetch(ORIGIN + ROOT + "revoke/", {
         method: "POST", mode: "cors", credentials: "omit", cache: "no-store",
         headers: {Authorization: "Bearer " + access, "Content-Type": "application/json"}, body: "{}",
       });
+      return erased && reply.ok;
     } catch (_) {
-      // Tokens still expire server-side. If offline, try again from the server's
-      // account/device management before treating remote session as revoked.
+      // A disconnected device cannot prove server revocation. The local vault
+      // remains removed; the account's server-side device session will expire.
+      return false;
     }
   }
 
@@ -245,6 +296,10 @@
     void NATIVE.App.addListener("appUrlOpen", event => void callback(event?.url));
     void NATIVE.App.getLaunchUrl?.().then(event => {if(event?.url) void callback(event.url);}).catch(() => {});
   }
+
+  // Restore only on an officially signed native Android client with the vault.
+  // The server feature gate still has to allow KOFAD native authentication.
+  if (ANDROID) void restore();
 
   window.KofadMobileAuth = Object.freeze({
     start, profile, signOut, readMobile, saveMobileCart,
