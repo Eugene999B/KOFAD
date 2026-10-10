@@ -1080,4 +1080,5 @@ class CustomerServiceContact(models.Model):
 # Department mailboxes are imported so Django discovers their migrations.
 from .email_models import (EmailMailbox, EmailMailboxMember, EmailConversation, EmailConversationNote,
                            EmailLetter, EmailDailyUsage, EmailCampaign, EmailConversationReadState,
-                           EmailStaffDraft, EmailSavedReply, EmailStaffSignature)  # noqa: E402, F401
+                           EmailStaffDraft, EmailSavedReply, EmailStaffSignature,
+                           EmailDeliveryEvent)  # noqa: E402, F401

@@ -658,7 +658,8 @@ def deliver_outgoing(limit=10):
             provider_id = send_brevo(subject=row.subject, body=row.body_text,
                        recipient=row.to_address, purpose="transaction",
                        sender_email=row.from_address, return_message_id=True,
-                       cc=row.cc_addresses, bcc=row.bcc_addresses)
+                       cc=row.cc_addresses, bcc=row.bcc_addresses,
+                       event_tag=f"kofad-letter-{row.pk}")
         except __import__("core.brevo_email", fromlist=["UncertainEmailDelivery"]).UncertainEmailDelivery:
             EmailLetter.objects.filter(pk=pk).update(
                 status="uncertain",

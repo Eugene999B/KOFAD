@@ -38,14 +38,17 @@ def ready():
     )
 
 
-def _reserve():
+def _reserve(recipient_count=1):
+    # Brevo credits count recipients, including CC and blind copies.
+    if not 1 <= recipient_count <= 11:
+        raise ValidationError("Invalid business email recipient count.")
     from .email_models import EmailDailyUsage
     with transaction.atomic():
         row, _ = EmailDailyUsage.objects.get_or_create(day=timezone.localdate())
         row = EmailDailyUsage.objects.select_for_update().get(pk=row.pk)
-        if row.attempted >= daily_limit():
+        if row.attempted + recipient_count > daily_limit():
             raise DailyEmailLimitExceeded("KOFAD daily outgoing email allowance has been reached.")
-        row.attempted += 1
+        row.attempted += recipient_count
         row.save(update_fields=["attempted"])
         return row.pk
 
@@ -64,7 +67,7 @@ def usage_today():
 
 
 def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=None,
-               return_message_id=False, cc="", bcc=""):
+               return_message_id=False, cc="", bcc="", event_tag=""):
     if not ready():
         raise ValidationError("Business email sending is not configured.")
     if purpose not in {"security", "transaction"}:
@@ -99,13 +102,19 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
 
     # Reserve before calling Brevo: concurrent services cannot exceed our cap.
     # Attempts remain counted on timeouts because delivery status is unknown.
-    pk = _reserve()
+    recipients = 1 + (len(cc.split(",")) if cc else 0) + (len(bcc.split(",")) if bcc else 0)
+    pk = _reserve(recipients)
     from .email_models import EmailDailyUsage
     payload = {
         "sender": {"name": "KOFAD IMPEX ENTERPRISE", "email": sender},
         "to": [{"email": recipient}], "subject": subject, "textContent": body,
         "replyTo": {"email": requested_sender if requested_sender != sender else (reply or sender)},
     }
+    if event_tag:
+        # Opaque system ID only, no customer data in provider tags.
+        if not event_tag.startswith("kofad-letter-") or not event_tag[13:].isdigit():
+            raise ValidationError("Invalid KOFAD email event identifier.")
+        payload["tags"] = [event_tag]
     if cc:
         payload["cc"] = [{"email": addr} for addr in cc.split(",")]
     if bcc:
@@ -126,9 +135,9 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         logger.warning("KOFAD email provider connection failed; status uncertain")
         raise UncertainEmailDelivery from exc
     if response.status_code != 201:
-        EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
+        EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + recipients)
         raise DefiniteEmailRejection("Email provider did not accept the message.")
-    EmailDailyUsage.objects.filter(pk=pk).update(accepted=models.F("accepted") + 1)
+    EmailDailyUsage.objects.filter(pk=pk).update(accepted=models.F("accepted") + recipients)
     if return_message_id:
         try:
             provider_id = str(response.json().get("messageId") or "")[:255]

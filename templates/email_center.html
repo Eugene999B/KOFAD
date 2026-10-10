@@ -162,7 +162,7 @@
             <strong>{% if entry.direction == 'outbound' %}KOFAD · {{ entry.created_by.get_full_name|default:entry.created_by.username|default:"System automation" }}{% else %}{{ entry.from_address }}{% endif %}</strong>
             <span>{{ entry.created_at|date:"j M Y, H:i" }}</span>
           </div>
-          <small class="mail-message-state">{{ entry.get_status_display }}</small>
+          <small class="mail-message-state">{{ entry.get_status_display }}{% if entry.direction == 'outbound' and entry.delivery_status != 'unknown' %} · {{ entry.get_delivery_status_display }}{% endif %}</small>
           {% if entry.cc_addresses %}<small class="mail-message-state">CC: {{ entry.cc_addresses }}</small>{% endif %}
           {% if entry.bcc_addresses and entry.created_by_id == request.user.pk or entry.bcc_addresses and is_mail_owner %}<small class="mail-message-state">BCC (private): {{ entry.bcc_addresses }}</small>{% endif %}
           <p class="mail-message-subject">{{ entry.subject }}</p>
@@ -254,6 +254,7 @@
           <span>{% if letter.source_key %}System automation{% elif letter.created_by %}Sent by {{ letter.created_by.get_full_name|default:letter.created_by.username }}{% else %}External correspondent{% endif %}</span>
           {% if letter.approved_by %}<span>Approved by {{ letter.approved_by.get_full_name|default:letter.approved_by.username }}</span>{% endif %}
           {% if letter.submitted_at %}<span>Brevo accepted at {{ letter.submitted_at|date:"j M, H:i" }}</span>{% endif %}
+          {% if letter.direction == 'outbound' and letter.delivery_status != 'unknown' %}<span>Provider delivery: {{ letter.get_delivery_status_display }}</span>{% endif %}
         </div>
         <details class="mail-record-detail"><summary>View email and technical details <span aria-hidden="true">⌄</span></summary>
           <div class="mail-record-addresses"><span><b>From</b>{{ letter.from_address }}</span><span><b>To</b>{{ letter.to_address }}</span>
@@ -301,7 +302,7 @@
   <section class="mail-section-heading"><div><p class="mail-eyebrow">OWNER CONTROLS</p><h2>Automations & delivery</h2>
     <p>Manage customer notices, review sending activity, and control who receives automated communication.</p></div></section>
   <section class="mail-quick-stats" aria-label="Email sending summary">
-    <div><span>Attempts today</span><strong>{{ daily_email_usage.attempted }}<small> / {{ daily_email_usage.limit }}</small></strong></div>
+    <div><span>Recipients attempted today</span><strong>{{ daily_email_usage.attempted }}<small> / {{ daily_email_usage.limit }}</small></strong></div>
     <div><span>Provider accepted</span><strong>{{ daily_email_usage.accepted }}</strong></div>
     <div><span>Allowance remaining</span><strong>{{ daily_email_usage.remaining }}</strong></div>
     <div><span>Queued or retrying</span><strong>{{ email_queued_count }}</strong></div>

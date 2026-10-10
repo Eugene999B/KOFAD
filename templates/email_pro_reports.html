@@ -16,12 +16,14 @@
   <div><span>Incoming records</span><strong>{{ received_count }}</strong></div>
   <div><span>Outbound records</span><strong>{{ outbound_count }}</strong></div>
   <div><span>Delivery needs review</span><strong>{{ attention_count }}</strong></div>
+  <div><span>Provider confirmed delivered</span><strong>{{ delivered_count }}</strong></div>
+  <div><span>Bounces / blocks</span><strong>{{ bounced_count }}</strong></div>
 </section>
 <section class="pro-pane"><header class="mail-pane-head"><div><h3>Team conversation workload</h3>
 <p>Current open or waiting conversations assigned to each employee; not a response-time score.</p></div></header>
 <div class="mail-table-scroll"><table class="mail-table"><thead><tr><th>Employee</th><th>Assigned open work</th></tr></thead>
 <tbody>{% for entry in staff_load %}<tr><td>{{ entry.assigned_to__username }}</td><td>{{ entry.total }}</td></tr>
 {% empty %}<tr><td colspan="2">No assigned active conversations yet.</td></tr>{% endfor %}</tbody></table></div>
-<p class="mail-help">Provider submitted ({{ submitted_count }}) does not mean inbox delivered. Analytics involving true delivery and response times require verified provider event history.</p>
+<p class="mail-help">Provider accepted ({{ submitted_count }}) is not confirmed delivery. Verified provider events appear only after the Brevo transactional webhook has been securely configured and exercised.</p>
 </section>
 {% endblock %}
