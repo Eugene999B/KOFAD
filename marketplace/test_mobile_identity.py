@@ -176,6 +176,27 @@ class NativeIdentityTests(Fixtures, TestCase):
         self.assertNotIn("Access-Control-Allow-Origin", evil_origin)
         self.assertEqual(self._exchange(code).status_code, 200)
 
+    def test_staff_native_consent_requires_selected_assigned_branch(self):
+        self.authenticate_client()
+        path = self.staff_base + "authorize/"
+        params = self._params("staff")
+        session = self.client.session
+        session.pop("branch", None)
+        session.save()
+        no_branch = self.client.post(
+            path, params, HTTP_HOST="staff.kofadimpex.com", secure=True
+        )
+        self.assertEqual(no_branch.status_code, 403)
+        self.assertEqual(MobileAuthorizationGrant.objects.filter(channel="staff").count(), 0)
+        session = self.client.session
+        session["branch"] = 99999999
+        session.save()
+        other_branch = self.client.post(
+            path, params, HTTP_HOST="staff.kofadimpex.com", secure=True
+        )
+        self.assertEqual(other_branch.status_code, 403)
+        self.assertEqual(MobileAuthorizationGrant.objects.filter(channel="staff").count(), 0)
+
     def test_staff_identity_requires_active_role_mfa_scope_and_version(self):
         self.authenticate_client()
         code = self._grant("staff")
