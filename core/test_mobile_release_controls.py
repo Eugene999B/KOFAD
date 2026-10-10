@@ -61,7 +61,7 @@ class MobileControlTests(TestCase):
         session["mfa_ok"] = True
         session["branch"] = branch.pk
         session.save()
-        response = self.client.get("/staff/app/control/")
-        self.assertEqual(response.status_code, 200)
+        response = self.client.get("/staff/app/control/", HTTP_HOST="staff.kofadimpex.com", secure=True)
+        self.assertEqual(response.status_code, 200, response.get("Location", ""))
         self.assertContains(response, "Mobile App Control")
         self.assertIn("no-store", response["Cache-Control"])
