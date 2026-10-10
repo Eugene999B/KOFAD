@@ -44,8 +44,8 @@
 
 <section class="panel inventory-ledger" id="atelier-inventory-ledger">
   <div class="section-heading"><div><h2>Stock overview</h2><p class="muted">Restock always adds to the current balance. Recounts, damage, transfers and write-offs remain separate controlled workflows.</p></div><div class="actions"><a href="/stock-counts/">Stock counts →</a><a href="/operations/">Stock operations →</a></div></div>
-  <div class="table-wrap">
-    <table>
+  <div class="table-wrap inventory-stock-table" role="region" aria-label="Inventory stock register" tabindex="0">
+    <table data-mobile-table="cards">
       <thead><tr><th>Product</th><th>Sellable</th><th>Pack position</th><th>Quarantine</th><th class="number">Cost</th><th class="number">Retail</th><th>Status</th><th></th></tr></thead>
       <tbody>
       {% for row in rows %}
