@@ -85,7 +85,8 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
     )
     def test_fake_download_links_never_activate(self):
         response = self.client.get("/apps/")
-        self.assertContains(response, "Coming soon", count=3)
+        self.assertContains(response, "Coming soon", count=2)
+        self.assertContains(response, "App Store edition coming soon")
         self.assertNotContains(response, "Download for Android")
         self.assertNotContains(response, "Download for Windows")
         self.assertNotContains(response, "Get native iPhone app")
