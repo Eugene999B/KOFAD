@@ -70,7 +70,7 @@ def _address(value):
     return address
 
 
-def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None, cc="", bcc="):
+def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=None, reply_id="", conversation=None, cc="", bcc=""):
     if not (getattr(settings, "KOFAD_EMAIL_ENABLED", False)
             and settings.KOFAD_EMAIL_PROVIDER == "brevo"
             and settings.KOFAD_BREVO_API_KEY):
@@ -95,7 +95,7 @@ def _queue_external(mailbox, recipient, subject, body, user=None, *, source_key=
     )
 
 
-def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None, cc="", bcc="):
+def compose(mailbox, recipient, subject, body, user, *, reply_id="", conversation=None, cc="", bcc=""):
     recipient = _address(recipient)
     cc, bcc = validate_copies(recipient, cc, bcc)
     subject = (subject or "").strip()
