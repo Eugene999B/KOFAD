@@ -494,6 +494,8 @@ class Message(models.Model):
 class EmailNotice(models.Model):
     """Deduplicated email outbox. Never send sensitive reports from web requests."""
     source_key = models.CharField(max_length=180, unique=True)
+    recipient_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.PROTECT)
     recipient = models.EmailField()
     category = models.CharField(max_length=40)
     subject = models.CharField(max_length=180)
