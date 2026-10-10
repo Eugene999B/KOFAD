@@ -517,6 +517,10 @@ def inbox(request, section="inbox"):
         "letters": letters, "writable_ids": can_write,
         "conversations": conversations, "active_thread": active_thread,
         "thread_letters": thread_letters, "thread_notes": thread_notes,
+        "latest_inbound_letter": next(
+            (letter for letter in reversed(thread_letters) if letter.direction == "inbound"),
+            None,
+        ),
         "eligible_assignees": eligible_assignees,
         "mail_query": query, "mail_direction": direction, "mail_status": status,
         "thread_status_filter": thread_status, "thread_owner_filter": thread_owner,
