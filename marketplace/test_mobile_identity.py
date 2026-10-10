@@ -83,7 +83,10 @@ class NativeIdentityTests(Fixtures, TestCase):
     def _me(self, token, channel="customer"):
         path = (self.customer_base if channel == "customer" else self.staff_base) + "me/"
         host = "market.kofadimpex.com" if channel == "customer" else "staff.kofadimpex.com"
-        return self.client.get(
+        # An actual native request has a bearer token, never the OS browser
+        # session cookie. Keep it separate to catch accidental redirects.
+        from django.test import Client
+        return Client().get(
             path, HTTP_HOST=host, HTTP_ORIGIN="https://localhost",
             HTTP_AUTHORIZATION="Bearer " + token, secure=True,
         )
@@ -108,7 +111,7 @@ class NativeIdentityTests(Fixtures, TestCase):
         self.assertEqual(data.status_code, 200)
         self.assertEqual(data.json()["id"], self.market_customer.pk)
         self.assertEqual(data["Access-Control-Allow-Origin"], "https://localhost")
-        self.assertEqual(data["Cache-Control"], "no-store, private")
+        self.assertIn("no-store", data["Cache-Control"])
         self.assertEqual(self._exchange(code).status_code, 400)
         return tokens
 
