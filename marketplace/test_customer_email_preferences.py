@@ -4,9 +4,9 @@ from django.core import signing
 from django.test import override_settings
 from django.utils import timezone
 
-from core.models import EmailNotice
+from core.models import Document, EmailNotice, Party
 from core.notification_engine import (
-    process_email_outbox, queue_customer_order_email,
+    process_email_outbox, queue_customer_order_email, queue_pos_transaction_email,
     run_customer_personalised_promotions,
 )
 from .models import WishlistItem
@@ -84,3 +84,24 @@ class CustomerEmailTests(MarketFixtures):
         self.assertEqual(run_customer_personalised_promotions(monday), 1)
         self.assertEqual(run_customer_personalised_promotions(monday), 0)
         self.assertEqual(EmailNotice.objects.filter(category="marketing").count(), 1)
+
+    def test_in_store_receipt_uses_verified_customer_phone_and_idempotency(self):
+        party = Party.objects.create(
+            branch=self.branch, kind="customer", name="Market Customer",
+            phone=self.customer.phone, email=self.customer.email,
+        )
+        document = Document.objects.create(
+            branch=self.branch, party=party, kind="sale",
+            reference="KFD-TEST-POS-01", total="200.00", paid="200.00",
+            created_by=self.staff,
+        )
+        self.assertEqual(queue_pos_transaction_email(document), 1)
+        self.assertEqual(queue_pos_transaction_email(document), 0)
+        notice = EmailNotice.objects.get(category="pos_transaction")
+        self.assertEqual(notice.recipient, self.customer.email)
+        self.customer.email = "different@example.test"
+        self.customer.save(update_fields=["email"])
+        with override_settings(EMAIL_DELIVERY_ENABLED=True):
+            with patch("core.notification_engine.EmailMultiAlternatives.send") as sender:
+                self.assertEqual(process_email_outbox(), 0)
+                sender.assert_not_called()
