@@ -21,6 +21,7 @@
       <label>Optional scheduled delivery (local time)
         <input type="datetime-local" name="scheduled_for" value="{% if editing.scheduled_for %}{{ editing.scheduled_for|date:'Y-m-d\TH:i' }}{% endif %}">
       </label>
+      <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Append my saved department signature when sending</label>
       <p class="mail-help">Scheduling is for external emails only. The employee selects Send or Schedule explicitly; provider delivery may still take time.</p>
       <div class="pro-editor-actions">
         <button type="submit" name="action" value="save" class="mail-button secondary">Save private draft</button>
