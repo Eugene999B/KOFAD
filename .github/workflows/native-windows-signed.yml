@@ -1,0 +1,113 @@
+name: Prepare signed KOFAD Windows installer (review only)
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Separate customer or staff Windows application
+        required: true
+        type: choice
+        options: [customer, staff]
+      version:
+        description: "Increasing app SemVer X.Y.Z"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    if: github.ref == 'refs/heads/railway-release' && github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: kofad-native-publishing
+    env:
+      KOFAD_NATIVE_CHANNEL: ${{ inputs.channel }}
+      KOFAD_NATIVE_VERSION: ${{ inputs.version }}
+      KOFAD_NATIVE_SIGNED_RELEASE: "1"
+      WIN_CSC_LINK: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_WINDOWS_CERT_BASE64 || secrets.KOFAD_STAFF_WINDOWS_CERT_BASE64 }}
+      WIN_CSC_KEY_PASSWORD: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_WINDOWS_CERT_PASSWORD || secrets.KOFAD_STAFF_WINDOWS_CERT_PASSWORD }}
+      KOFAD_WINDOWS_CERT_SUBJECT: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_WINDOWS_CERT_SUBJECT || secrets.KOFAD_STAFF_WINDOWS_CERT_SUBJECT }}
+    steps:
+      - name: Fail closed if Windows trusted signing is not configured
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($key in @("WIN_CSC_LINK", "WIN_CSC_KEY_PASSWORD", "KOFAD_WINDOWS_CERT_SUBJECT")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($key))) {
+              throw "Required protected Windows signing secret missing: $key"
+            }
+          }
+          if ($env:KOFAD_NATIVE_VERSION -notmatch '^(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,3})$') {
+            throw "Invalid signed release version"
+          }
+          Write-Host "Publisher signing inputs present; no private key values logged."
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Generate channel-specific brand identity
+        shell: pwsh
+        run: |
+          python -m pip install Pillow
+          python scripts/prepare_logo.py
+          python native/scripts/branding.py --channel $env:KOFAD_NATIVE_CHANNEL
+      - name: Set the actual Windows app installer version
+        working-directory: native/desktop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $package = Get-Content package.json -Raw | ConvertFrom-Json
+          $package.version = $env:KOFAD_NATIVE_VERSION
+          $package | ConvertTo-Json -Depth 30 | Set-Content package.json -Encoding utf8
+      - name: Build publisher-signed Windows setup
+        working-directory: native/desktop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm dependency installation failed" }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "Windows security tests failed" }
+          node scripts/guard-release.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows publisher guard failed" }
+          npx electron-builder --win --x64 --config build.config.cjs --publish never
+          if ($LASTEXITCODE -ne 0) { throw "Windows signed installer build failed" }
+      - name: Reject missing or invalid Windows Authenticode signatures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = "native/desktop/dist/$env:KOFAD_NATIVE_CHANNEL"
+          $installers = @(Get-ChildItem -LiteralPath $root -Filter "*.exe" -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one independently signed Windows installer, found $($installers.Count)"
+          }
+          foreach ($file in $installers) {
+            $sig = Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($sig.Status -ne 'Valid' -or -not $sig.SignerCertificate) {
+              throw "Installer signature is missing, invalid or not trusted: $($file.Name)"
+            }
+            if ($sig.SignerCertificate.Subject -notlike "*$env:KOFAD_WINDOWS_CERT_SUBJECT*") {
+              throw "Windows installer signer identity differs from pinned publisher"
+            }
+          }
+          $app = Get-ChildItem -LiteralPath "$root/win-unpacked" -Filter "KOFAD*.exe" -File | Select-Object -First 1
+          if (-not $app) { throw "Signed Windows application executable missing" }
+          $appSig = Get-AuthenticodeSignature -FilePath $app.FullName
+          if ($appSig.Status -ne 'Valid') {
+            throw "The installed Windows executable itself is not Authenticode signed"
+          }
+          New-Item -ItemType Directory -Force -Path native/release-candidates | Out-Null
+          Copy-Item -LiteralPath $installers[0].FullName -Destination native/release-candidates/
+          $hash = Get-FileHash -LiteralPath $installers[0].FullName -Algorithm SHA256
+          "$($hash.Hash.ToLower())  $($installers[0].Name)" | Out-File -FilePath native/release-candidates/SHA256SUMS.txt -Encoding ascii
+          Write-Host "Windows installer and internal EXE verified with approved publisher certificate."
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: SIGNED-REVIEW-ONLY-${{ inputs.channel }}-windows-${{ inputs.version }}
+          path: native/release-candidates/
+          retention-days: 7
+          if-no-files-found: error
