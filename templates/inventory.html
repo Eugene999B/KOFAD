@@ -19,7 +19,13 @@
   <article class="metric-card danger-tone"><small>Quarantined units</small><strong>{{ quarantine_units }}</strong><span>Held outside sellable stock</span></article>
 </div>
 
-<section class="panel inventory-toolbar-panel">
+<nav class="atelier-stock-jump" aria-label="Inventory workspace sections">
+<a href="#atelier-inventory-search"><span>01</span> Find &amp; filter</a>
+<a href="#atelier-inventory-ledger"><span>02</span> Stock overview</a>
+<a href="#atelier-inventory-movement"><span>03</span> Recent movement</a>
+<a href="/stock-counts/"><span>↗</span> Stock counts</a>
+</nav>
+<section class="panel inventory-toolbar-panel" id="atelier-inventory-search">
   <form class="inventory-search" method="get">
     <input type="hidden" name="status" value="{{ status }}">
     <span aria-hidden="true">⌕</span>
@@ -36,7 +42,7 @@
   </div>
 </section>
 
-<section class="panel inventory-ledger">
+<section class="panel inventory-ledger" id="atelier-inventory-ledger">
   <div class="section-heading"><div><h2>Stock overview</h2><p class="muted">Restock always adds to the current balance. Recounts, damage, transfers and write-offs remain separate controlled workflows.</p></div><div class="actions"><a href="/stock-counts/">Stock counts →</a><a href="/operations/">Stock operations →</a></div></div>
   <div class="table-wrap">
     <table>
@@ -66,7 +72,7 @@
   </div>
 </section>
 
-<section class="panel inventory-history">
+<section class="panel inventory-history" id="atelier-inventory-movement">
   <div class="section-heading"><div><h2>Recent stock movement</h2><p class="muted">A quick audit trail of what changed sellable stock.</p></div><a href="/exports/?dataset=movements">Export movements →</a></div>
   <div class="movement-list">
     {% for movement in movements %}
