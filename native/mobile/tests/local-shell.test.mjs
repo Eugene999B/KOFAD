@@ -65,3 +65,20 @@ test("Native app updates compare installed versions and use only fixed official 
   assert.match(src, /cache: "no-store"/);
   assert.doesNotMatch(src, /eval\(|document\.write\(/);
 });
+
+test("Native mandatory Android updates and opt-in app notices have isolated controls", () => {
+  const js = read("app-shell/native.js");
+  const alerts = read("app-shell/alerts.js");
+  const html = read("app-shell/index.html");
+  const packager = read("scripts/write-profile.mjs");
+  assert.match(js, /criticalMinimum/);
+  assert.match(js, /Update required/);
+  assert.match(js, /native-update-dismiss/);
+  assert.match(js, /KofadNativeAlerts/);
+  assert.match(alerts, /LocalNotifications.requestPermissions/);
+  assert.match(alerts, /LocalNotifications.checkPermissions/);
+  assert.match(alerts, /document.createElement/);
+  assert.match(html, /id="native-alerts-toggle"/);
+  assert.match(packager, /copyWithProfile\\("alerts.js"\\)/);
+  assert.doesNotMatch(alerts, /Contacts.getContacts|READ_CONTACTS|READ_MEDIA_IMAGES/);
+});
