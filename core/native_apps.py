@@ -37,6 +37,18 @@ def approved_release_url(value, platform, kind=None):
         if platform == "ios":
             return value.strip() if hostname == "apps.apple.com" and re.search(r"/id\d+(?:/)?$", path) else ""
         if platform == "android":
+            # Accept only version-matched customer APKs from KOFAD's public
+            # release repository, never arbitrary GitHub attachments or forks.
+            if hostname == "github.com" and kind == "customer" and not parsed.query:
+                match = re.fullmatch(
+                    r"/Eugene999B/KOFAD/releases/download/"
+                    r"kofad-market-android-v(?P<v>(?:0|[1-9]\d{0,2})\."
+                    r"(?:0|[1-9]\d{0,2})\.(?:0|[1-9]\d{0,3}))/"
+                    r"KOFAD-customer-(?P=v)-android\.apk",
+                    path,
+                )
+                if match:
+                    return value.strip()
             identifier = parse_qs(parsed.query).get("id", [""])[0]
             expected = "com.kofadimpex." + ("market" if kind == "customer" else "staff") if kind else ""
             if hostname == "play.google.com" and path == "/store/apps/details" and (

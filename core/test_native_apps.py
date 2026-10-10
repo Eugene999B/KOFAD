@@ -179,6 +179,40 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertTrue(all(not item["available"] for item in public["platforms"]))
         self.assertTrue(all(not item["available"] for item in staff["platforms"]))
 
+    def test_pinned_public_customer_android_apk_release_urls(self):
+        url = (
+            "https://github.com/Eugene999B/KOFAD/releases/download/"
+            "kofad-market-android-v1.0.0/KOFAD-customer-1.0.0-android.apk"
+        )
+        self.assertEqual(approved_release_url(url, "android", "customer"), url)
+        self.assertEqual(approved_release_url(url, "android", "staff"), "")
+        for invalid in (
+            url.replace("github.com/", "github.com.evil.example/"),
+            url.replace("v1.0.0/", "v1.1.0/"),
+            url.replace("KOFAD-customer-", "KOFAD-staff-"),
+            url.replace(".apk", ".apk?download=1"),
+            url.replace("Eugene999B", "OtherOwner"),
+            url.replace(".apk", ".apk#fragment"),
+            url.replace("v1.0.0", "v01.0.0"),
+        ):
+            self.assertEqual(
+                approved_release_url(invalid, "android", "customer"), "", invalid
+            )
+
+    @override_settings(
+        KOFAD_CUSTOMER_APP_ANDROID_URL=(
+            "https://github.com/Eugene999B/KOFAD/releases/download/"
+            "kofad-market-android-v1.0.0/KOFAD-customer-1.0.0-android.apk"
+        ),
+        KOFAD_CUSTOMER_APP_VERSION="1.0.0",
+    )
+    def test_published_customer_apk_enables_android_download_card(self):
+        response = self.client.get("/apps/")
+        self.assertContains(response, "Download for Android")
+        self.assertContains(response, "kofad-market-android-v1.0.0")
+        self.assertNotContains(response, "Download for Windows")
+        self.assertTrue(app_metadata("customer")["platforms"][0]["available"])
+
     def test_market_host_redirects_public_app_link_to_canonical_home(self):
         response = self.client.get("/apps/", HTTP_HOST="market.kofadimpex.com", secure=True)
         self.assertEqual(response.status_code, 302)
