@@ -82,3 +82,53 @@ test("Native mandatory Android updates and opt-in app notices have isolated cont
   assert.ok(packager.includes('copyWithProfile("alerts.js")'));
   assert.doesNotMatch(alerts, /Contacts.getContacts|READ_CONTACTS|READ_MEDIA_IMAGES/);
 });
+
+test("Both Android channels bundle a genuine native home, welcome and separate notifications screen", () => {
+  const html = read("app-shell/index.html");
+  const experience = read("app-shell/experience.js");
+  const native = read("app-shell/native.js");
+  const alerts = read("app-shell/alerts.js");
+  const packager = read("scripts/write-profile.mjs");
+  for (const id of ["native-welcome", "native-welcome-signin", "native-welcome-guest", "native-bell", "screen-home", "screen-product", "screen-saved", "screen-notifications", "screen-account"]) {
+    assert.ok(html.includes('id="' + id + '"'), id);
+  }
+  assert.ok(html.includes('id="native-alerts-toggle"'));
+  assert.ok(html.includes('id="native-notice-list"'));
+  assert.match(experience, /KofadNativeExperience/);
+  assert.match(experience, /showProduct:detail/);
+  assert.match(native, /KofadNativeExperience\?\.showProduct/);
+  assert.match(native, /KofadNativeBridge/);
+  assert.match(alerts, /OS.requestPermissions/);
+  assert.doesNotMatch(experience, /READ_CONTACTS|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|eval\(/);
+  assert.ok(packager.includes('copyWithProfile("experience.js")'));
+  assert.ok(packager.includes('kofad-original-logo.png'));
+  for (const channel of ["customer", "staff"]) {
+    execFileSync("node", ["scripts/write-profile.mjs"], {cwd:root,env:{...process.env,KOFAD_NATIVE_CHANNEL:channel}});
+    const out = read("www/index.html");
+    assert.doesNotMatch(out, /__(WELCOME|MAIN_ACTION|HERO_KICKER|SIGNIN_ACTION|SECONDARY_ACTION|APP_NAME)/);
+    assert.ok(existsSync(resolve(root, "www/kofad-logo.png")));
+    assert.ok(existsSync(resolve(root, "www/experience.js")));
+  }
+});
+
+test("Native welcome, catalogue details and OS-permission prompts stay within the app", () => {
+  const html=read("app-shell/index.html");
+  const experience=read("app-shell/experience.js");
+  const core=read("app-shell/native.js");
+  const alerts=read("app-shell/alerts.js");
+  const packaging=read("scripts/write-profile.mjs");
+  assert.match(html,/id="native-welcome-signin"/);
+  assert.match(html,/id="native-welcome-guest"/);
+  assert.match(html,/id="screen-product"/);
+  assert.match(html,/id="screen-notifications"/);
+  assert.match(html,/id="native-bell"/);
+  assert.match(experience,/view\("product"\)/);
+  assert.match(experience,/localStorage\.setItem\(favoritesKey/);
+  assert.match(experience,/showCategories/);
+  assert.match(core,/KofadNativeExperience\?\.showProduct/);
+  assert.match(core,/url\.searchParams\.set\("category"/);
+  assert.match(alerts,/OS\.requestPermissions/);
+  assert.match(packaging,/copyWithProfile\("experience\.js"\)/);
+  assert.match(packaging,/kofad-logo\.png/);
+  assert.doesNotMatch(experience,/document\.write|eval\(/);
+});

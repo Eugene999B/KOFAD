@@ -40,6 +40,15 @@ class NativeCatalogTests(Fixtures, TestCase):
         self.assertEqual(product["product_path"], f"/market/products/{self.listing.pk}/")
         self.assertFalse({"phone", "customer", "branch", "secret", "cost", "password"} & product.keys())
 
+    def test_native_description_is_plain_text_and_bounded(self):
+        self.listing.description = "<b>Kitchen</b> essentials and &amp; supplies " + "x" * 900
+        self.listing.save(update_fields=["description"])
+        response = self.client.get("/market/app/catalog.json")
+        description = response.json()["items"][0]["description"]
+        self.assertIn("Kitchen", description)
+        self.assertNotIn("<b>", description)
+        self.assertLessEqual(len(description), 500)
+
     def test_malicious_website_cannot_receive_native_cors_permission(self):
         for origin in (
             "https://malicious.example", "https://localhost.evil.example",

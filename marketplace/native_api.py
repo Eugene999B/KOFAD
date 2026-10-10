@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import JsonResponse
+from django.utils.html import strip_tags
 from django.views.decorators.http import require_GET
 
 from core.models import Stock
@@ -42,6 +43,16 @@ def public_native_catalog(request):
             Q(title__icontains=query) | Q(description__icontains=query)
             | Q(product__name__icontains=query) | Q(product__category__icontains=query)
         )
+    category = request.GET.get("category", "").strip()[:60]
+    if category:
+        qs = qs.filter(product__category__iexact=category)
+    # Public departments only. Never expose private stock or staff information.
+    categories = list(
+        MarketListing.objects.filter(enabled=True, product__active=True)
+        .exclude(product__category="")
+        .values_list("product__category", flat=True)
+        .order_by("product__category").distinct()[:16]
+    )
     # Limit both database work and mobile bandwidth. Public prices follow
     # exactly the same server pricing/online markup as the website.
     size = 20
@@ -77,6 +88,7 @@ def public_native_catalog(request):
         items.append({
             "id": listing.pk,
             "name": listing.display_name,
+            "description": " ".join(strip_tags(listing.description or "").split())[:500],
             "category": listing.product.category,
             "price": str(price.quantize(Decimal("0.01"))),
             "currency": "GHS",
@@ -88,7 +100,7 @@ def public_native_catalog(request):
         })
     response = JsonResponse({
         "schema": 1, "page": page, "next_page": page + 1 if has_more else None,
-        "items": items,
+        "items": items, "categories": categories,
     })
     response["Cache-Control"] = "public, max-age=120"
     response["Vary"] = "Origin"
