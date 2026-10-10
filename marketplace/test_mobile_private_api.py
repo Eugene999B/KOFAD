@@ -120,6 +120,8 @@ class NativePrivateDataTests(Fixtures, TestCase):
         user.access.branches.add(self.branch)
         user.access.force_password_change = False
         user.access.save(update_fields=["force_password_change"])
+        # Branch membership changes invalidate older sessions via access_version.
+        user.access.refresh_from_db()
         token="c" * 43
         mobile_session = self._new_mobile(token=token,staff_user=user)
         from marketplace.mobile_identity import _valid_device
