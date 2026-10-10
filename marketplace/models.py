@@ -645,3 +645,4 @@ class PaymentConfiguration(models.Model):
 
 # Keep mobile identity models registered without mixing them into checkout models.
 from .mobile_auth_models import MobileAuthorizationGrant, MobileDeviceSession  # noqa: E402,F401
+from .mobile_push_models import MobilePushSubscription  # noqa: E402,F401
