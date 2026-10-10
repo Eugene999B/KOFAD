@@ -99,6 +99,17 @@ class EmailLetter(models.Model):
     last_error = models.CharField(max_length=160, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
+    delivery_status = models.CharField(
+        max_length=20, default="unknown", choices=[
+            ("unknown", "Not confirmed"), ("requested", "Sent to provider"),
+            ("delivered", "Delivered"), ("deferred", "Deferred"),
+            ("soft_bounce", "Temporary bounce"), ("hard_bounce", "Hard bounce"),
+            ("blocked", "Blocked"), ("spam", "Spam complaint"),
+            ("invalid_email", "Invalid email"), ("error", "Delivery error"),
+            ("unsubscribed", "Unsubscribed"),
+        ],
+    )
+    delivery_updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-pk"]
@@ -193,3 +204,21 @@ class EmailStaffSignature(models.Model):
         constraints = [models.UniqueConstraint(
             fields=["mailbox", "user"], name="unique_email_staff_signature"
         )]
+
+
+class EmailDeliveryEvent(models.Model):
+    """Minimal authenticated provider receipt, idempotent per event/recipient/time."""
+    letter = models.ForeignKey(EmailLetter, on_delete=models.CASCADE,
+                               related_name="delivery_events")
+    fingerprint = models.CharField(max_length=64, unique=True)
+    provider_message_id = models.CharField(max_length=255)
+    recipient = models.EmailField()
+    event = models.CharField(max_length=32)
+    event_at = models.DateTimeField()
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-event_at", "-pk"]
+        indexes = [
+            models.Index(fields=["letter", "event_at"], name="kofad_mail_event_lookup"),
+        ]
