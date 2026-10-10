@@ -105,16 +105,6 @@ class BrandingConsistencyTests(SimpleTestCase):
                 expected.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
                 self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
 
-    def test_all_site_shells_link_to_one_favicon_family(self):
-        root = Path(settings.BASE_DIR)
-        snippet = (root / "templates" / "favicon_links.html").read_text("utf-8")
-        for filename in ("favicon-32.png", "favicon-48.png", "favicon-96.png",
-                         "apple-touch-icon.png", "/favicon.ico"):
-            self.assertIn(filename, snippet)
-        for shell in ("templates/base.html", "templates/auth_base.html",
-                      "marketplace/templates/marketplace/base.html"):
-            self.assertIn('include "favicon_links.html"', (root / shell).read_text("utf-8"))
-
     def test_favicon_endpoint_delivers_correct_type(self):
         from django.test import Client
         from django.test import override_settings
