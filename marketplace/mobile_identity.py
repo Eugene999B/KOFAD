@@ -190,7 +190,12 @@ def authorize(request, channel):
     if channel == "staff" and staff is None:
         if request.method != "GET":
             return HttpResponse("Complete staff authentication and MFA first.", status=403)
-        return redirect(settings.STAFF_LOGIN_PATH)
+        request.session["staff_mobile_auth_return"] = request.get_full_path()
+        if getattr(request.user, "is_authenticated", False):
+            if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(request.user):
+                return redirect("mfa")
+            return redirect("dashboard")
+        return redirect(settings.STAFF_LOGIN_PATH + "?" + urlencode({"next": request.get_full_path()}))
 
     if request.method == "POST":
         raw = secrets.token_urlsafe(32)
