@@ -24,6 +24,8 @@
   try { rows = normalize(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch (_) {}
   const count = () => rows.reduce((n, row) => n + row.quantity, 0);
   function persist() {
+    const preview = $("native-basket-server-estimate");
+    if (preview) preview.hidden = true;
     try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch (_) {}
     const badge = $("native-basket-count");
     if (badge) {
