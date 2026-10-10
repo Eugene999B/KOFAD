@@ -12,7 +12,7 @@
 <div class="kfd-hero-cta">
 <a class="kfd-cta primary" href="/market/">Shop the Market <span aria-hidden="true">→</span></a>
 <a class="kfd-cta secondary" href="/contact/?topic=wholesale">Wholesale enquiries <span aria-hidden="true">↗</span></a>
-<a class="kfd-cta kfd-app-cta" href="/market/app/install/">Install KOFAD web app <span aria-hidden="true">↗</span></a>
+<a class="kfd-cta kfd-app-cta" href="{% if native_customer_app_released %}/apps/{% else %}/market/app/install/{% endif %}">{% if native_customer_app_released %}Get the KOFAD app{% else %}Install KOFAD web app{% endif %} <span aria-hidden="true">↗</span></a>
 </div>
 </div></div>
 <div class="kfd-hero-meta"><span class="kfd-caption" data-photo-caption>Retail and supply imagery</span><div class="kfd-hero-controls" aria-label="Photo slideshow controls">
@@ -22,7 +22,7 @@
 </div></div>
 <div class="kfd-hero-progress" aria-hidden="true"><i data-hero-progress></i></div>
 </section>
-<div class="native-market-promo"><div><strong>{% if native_customer_app_released %}KOFAD Market for your device{% else %}KOFAD Market web app — install now{% endif %}</strong><p>{% if native_customer_app_released %}Get the official app for a released platform; all other editions will follow.{% else %}Install KOFAD Market on Android or Windows from your browser today. Separate signed Android, iPhone and Windows releases remain in preparation.{% endif %}</p></div><a href="/market/app/install/">{% if native_customer_app_released %}View official app downloads →{% else %}Install web app →{% endif %}</a></div>
+<div class="native-market-promo"><div><strong>{% if native_customer_app_released %}KOFAD Market for your device{% else %}KOFAD Market web app — install now{% endif %}</strong><p>{% if native_customer_app_released %}Get the official app for a released platform; all other editions will follow.{% else %}Install KOFAD Market on Android or Windows from your browser today. Separate signed Android, iPhone and Windows releases remain in preparation.{% endif %}</p></div><a href="{% if native_customer_app_released %}/apps/{% else %}/market/app/install/{% endif %}">{% if native_customer_app_released %}View official app downloads →{% else %}Install web app →{% endif %}</a></div>
 <section class="kfd-service-bar" aria-label="What you can do with KOFAD">
 <article><span class="kfd-service-icon" aria-hidden="true">◈</span><div><strong>Retail essentials</strong><p>Shop individual products and practical supplies.</p></div></article>
 <article><span class="kfd-service-icon" aria-hidden="true">▣</span><div><strong>Bulk and wholesale</strong><p>Get the quantities your business needs.</p></div></article>
