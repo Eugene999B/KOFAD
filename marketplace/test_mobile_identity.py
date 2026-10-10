@@ -195,6 +195,22 @@ class NativeIdentityTests(Fixtures, TestCase):
             self.assertEqual(self.client.get(self.staff_base + "me/").status_code, 404)
 
 
+    def test_native_clients_can_detect_disabled_auth_without_ever_exposing_staff_data(self):
+        for channel in ("customer", "staff"):
+            base = self.customer_base if channel == "customer" else self.staff_base
+            host = "market.kofadimpex.com" if channel == "customer" else "staff.kofadimpex.com"
+            with override_settings(KOFAD_NATIVE_AUTH_ENABLED=False):
+                disabled = self.client.get(base + "capabilities/", HTTP_HOST=host, secure=True)
+                self.assertEqual(disabled.status_code, 200)
+                self.assertFalse(disabled.json()["native_mobile_token_login"])
+                self.assertNotIn("Access-Control-Allow-Credentials", disabled)
+            enabled = self.client.get(base + "capabilities/", HTTP_HOST=host, secure=True)
+            self.assertEqual(enabled.status_code, 200)
+            self.assertTrue(enabled.json()["native_mobile_token_login"])
+            self.assertIn("redirect_uri", enabled.json())
+            self.assertNotIn("permissions", enabled.json())
+            self.assertNotIn("email", enabled.json())
+
     def test_staff_browser_login_resumes_pending_mobile_authorization(self):
         """An employee does not lose the app handoff after password sign-in."""
         path = self.staff_base + "authorize/"
