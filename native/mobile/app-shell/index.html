@@ -9,6 +9,7 @@
   <title>__APP_NAME__</title>
   <link rel="stylesheet" href="native.css">
   <script defer src="alerts.js"></script>
+  <script defer src="basket.js"></script>
   <script defer src="mobile-auth.js"></script>
   <script defer src="experience.js"></script>
   <script defer src="native.js"></script>
@@ -82,20 +83,31 @@
       <p id="native-detail-stock" class="native-detail-stock"></p>
       <div class="native-detail-actions">
         <button id="native-detail-save" type="button" class="native-outline-action">♡ Save item</button>
+        <button id="native-detail-basket" type="button" class="native-solid-action">＋ Add to basket</button>
+        <button id="native-detail-share" type="button" class="native-outline-action">Share product</button>
         <button id="native-detail-buy" type="button" class="native-solid-action">Sign in to order →</button>
       </div>
-      <p class="native-caption">Prices and availability are confirmed by KOFAD when an order is placed.</p>
+      <p id="native-detail-feedback" class="native-caption" role="status" aria-live="polite"></p>
+      <p class="native-caption">Your local basket is a shopping draft. Prices, stock and payment are always confirmed by KOFAD on the server.</p>
     </section>
     <section id="screen-saved" class="native-screen" hidden aria-label="Saved products">
       <p class="native-overline">YOUR SHORTLIST</p><h1>Saved items</h1>
       <p class="native-caption">These favourites are saved on this device. Sign in on KOFAD Market for account-linked lists.</p>
       <div id="native-saved-items" class="native-products"></div>
     </section>
+    <section id="screen-basket" class="native-screen" hidden aria-label="Shopping basket">
+      <p class="native-overline">KOFAD MARKET</p><h1>My basket</h1>
+      <p class="native-caption">Build a shopping list right here in the app. This device-only draft does not reserve items, synchronize accounts or create an order.</p>
+      <div class="native-section-head native-basket-head"><strong id="native-basket-summary">No products added</strong><button type="button" id="native-basket-clear" class="native-back-link">Clear basket</button></div>
+      <div id="native-basket-items" class="native-basket-list" aria-live="polite"></div>
+      <div class="native-basket-next"><strong>Secure checkout</strong><p>Native payment and order APIs are not yet enabled. No charge will be made from this basket; the existing verified KOFAD website is available for purchases, but this draft is not transferred automatically.</p><button type="button" id="native-basket-secure-site" class="native-solid-action">Visit secure KOFAD Market ↗</button></div>
+    </section>
     <section id="screen-notifications" class="native-screen" hidden aria-label="Notifications">
       <div class="native-section-head"><div><p class="native-overline">KOFAD UPDATES</p><h1>Notifications</h1></div></div>
       <div id="native-notice-list" class="native-announcement-list" aria-live="polite"><p>Checking for notices…</p></div>
       <div class="native-permission-row"><div><strong>Device notifications</strong><p id="native-alerts-explainer">Choose whether Android can display KOFAD alerts. This is optional.</p></div><button id="native-alerts-toggle" type="button" class="native-outline-action">Enable alerts</button></div>
-      <p class="native-caption">Android displays its own permission prompt when you enable alerts. Messages shown here are in-app notices, not background push.</p>
+      <div class="native-permission-row"><div><strong>Product offers and promotions</strong><p>Optional marketing notices are off by default. Control promotional messages in this app independently of service alerts.</p></div><button id="native-promotions-toggle" type="button" class="native-outline-action" aria-pressed="false">Enable offers</button></div>
+      <p class="native-caption">Android displays its own permission prompt when you enable alerts. Background push notifications are not active yet; these messages are checked when the app opens or resumes.</p>
     </section>
     <section id="screen-orders" class="native-screen" hidden aria-label="My orders">
       <button type="button" id="native-orders-back" class="native-back-link">← Account</button>
@@ -124,6 +136,7 @@
   <nav class="native-bottom-nav" aria-label="Application tabs">
     <button type="button" id="tab-home" class="selected" aria-current="page"><span aria-hidden="true">⌂</span><span>Home</span></button>
     <button type="button" id="tab-catalog"><span aria-hidden="true">▦</span><span data-catalog-label>Browse</span></button>
+    <button type="button" id="tab-basket"><span aria-hidden="true">▢</span><span>Basket <small id="native-basket-count" hidden>0</small></span></button>
     <button type="button" id="tab-notices"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>Notices</span></button>
     <button type="button" id="tab-account"><span aria-hidden="true">◯</span><span>Account</span></button>
   </nav>
