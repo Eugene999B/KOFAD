@@ -225,3 +225,5 @@ KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip(
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
 KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
+# Native basket is independent of browser checkout; keep OFF until mobile QA.
+KOFAD_NATIVE_CART_ENABLED = os.environ.get("KOFAD_NATIVE_CART_ENABLED", "0") == "1"

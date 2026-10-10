@@ -186,6 +186,24 @@ class MarketListing(models.Model):
         return self.display_name
 
 
+class NativeCartItem(models.Model):
+    """A customer's native basket draft; never a sale, reservation or payment."""
+
+    customer = models.ForeignKey(
+        CustomerAccount, related_name="mobile_cart_items", on_delete=models.CASCADE,
+    )
+    listing = models.ForeignKey(MarketListing, related_name="+", on_delete=models.CASCADE)
+    quantity = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(20)],
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["customer", "listing"], name="unique_kofad_mobile_cart_line",
+        )]
+
+
 class MarketListingImage(models.Model):
     listing = models.ForeignKey(MarketListing, related_name="gallery_images", on_delete=models.CASCADE)
     image_data = models.BinaryField(null=True, blank=True, editable=False)
