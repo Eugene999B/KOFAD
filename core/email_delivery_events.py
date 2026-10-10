@@ -137,6 +137,18 @@ def brevo_delivery_callback(request):
         )
         # A BCC/CC delivery event does not prove delivery to the main customer.
         if created and recipient == locked.to_address.lower():
+            # Honor verified marketing unsubscribes and hard failures before
+            # any queued campaign can reach the same customer again.
+            if event in {"unsubscribed", "spam", "hard_bounce", "invalid_email"}:
+                key_parts = (locked.source_key or "").split(":")
+                if (len(key_parts) == 4 and key_parts[0] == "campaign"
+                        and key_parts[2] == "customer"
+                        and key_parts[1].isdigit() and key_parts[3].isdigit()):
+                    from marketplace.models import EmailIdentity
+                    EmailIdentity.objects.filter(
+                        kind="customer", owner_id=int(key_parts[3]),
+                        email__iexact=recipient, marketing_emails_enabled=True,
+                    ).update(marketing_emails_enabled=False)
             newer = (
                 locked.delivery_updated_at is None
                 or when >= locked.delivery_updated_at
