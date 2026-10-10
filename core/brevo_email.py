@@ -78,7 +78,12 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
     )
     for address in (recipient, requested_sender):
         validate_email(address)
+    retired_addresses = {"management@kofadimpex.com", "eugene@kofadimpex.com"}
+    if recipient.strip().lower() in retired_addresses or requested_sender.strip().lower() in retired_addresses:
+        raise ValidationError("The KOFAD Management email account has been retired.")
     cc, bcc = validate_copies(recipient, cc, bcc)
+    if any(address in retired_addresses for address in (cc + "," + bcc).split(",")):
+        raise ValidationError("The KOFAD Management email account cannot receive copies.")
     if not requested_sender.lower().endswith("@kofadimpex.com"):
         raise ValidationError("Unverified KOFAD business sender.")
     # A domain can be authenticated while individual Brevo senders remain
