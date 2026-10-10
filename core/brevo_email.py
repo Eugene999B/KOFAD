@@ -16,6 +16,10 @@ class DailyEmailLimitExceeded(ValidationError):
     pass
 
 
+class DefiniteEmailRejection(ValidationError):
+    """Brevo returned an explicit non-accepted HTTP status; no acceptance was recorded."""
+
+
 class UncertainEmailDelivery(Exception):
     """A timeout after request submission may still have delivered the email."""
 
@@ -114,7 +118,7 @@ def send_brevo(*, subject, body, recipient, purpose="transaction", sender_email=
         raise ValidationError("Email sending temporarily unavailable.") from exc
     if response.status_code != 201:
         EmailDailyUsage.objects.filter(pk=pk).update(failed=models.F("failed") + 1)
-        raise ValidationError("Email provider did not accept the message.")
+        raise DefiniteEmailRejection("Email provider did not accept the message.")
     EmailDailyUsage.objects.filter(pk=pk).update(accepted=models.F("accepted") + 1)
     if return_message_id:
         try:
