@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   sign:
+    if: github.ref == 'refs/heads/railway-release' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: kofad-native-publishing
