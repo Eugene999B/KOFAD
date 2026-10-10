@@ -196,6 +196,68 @@
     $("#tab-support").addEventListener("click", () => openOfficial("/email/"));
   }
 
+  function newerStableVersion(installed, available) {
+    const valid = /^\\d+\\.\\d+\\.\\d+$/;
+    if (!valid.test(installed || "") || !valid.test(available || "")) return false;
+    const a = installed.split(".").map(Number);
+    const b = available.split(".").map(Number);
+    for (let i = 0; i < 3; i++) {
+      if (!Number.isSafeInteger(a[i]) || !Number.isSafeInteger(b[i])) return false;
+      if (b[i] > a[i]) return true;
+      if (b[i] < a[i]) return false;
+    }
+    return false;
+  }
+
+  async function openUpdateHub() {
+    // The update manifest cannot provide a redirect or download URL.
+    // App installation is always delegated to KOFAD's fixed official hub.
+    const url = CHANNEL === "staff"
+      ? "https://staff.kofadimpex.com/staff/app/"
+      : "https://kofadimpex.com/apps/";
+    try {
+      if (typeof native.Browser?.open === "function") {
+        await native.Browser.open({url});
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch (_) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
+
+  async function checkForMobileUpdate() {
+    const platform = window.Capacitor?.getPlatform?.();
+    if (!["android", "ios"].includes(platform) || typeof native.App?.getInfo !== "function") return;
+    const route = CHANNEL === "staff"
+      ? "/staff/app/native-version.json" : "/market/app/native-version.json";
+    try {
+      const [installed, response] = await Promise.all([
+        native.App.getInfo(),
+        fetch(OFFICIAL_ROOT + route, {
+          mode: "cors", credentials: "omit", cache: "no-store",
+        }),
+      ]);
+      if (!response.ok) return;
+      const published = await response.json();
+      if (published.channel !== CHANNEL || !published.platforms?.[platform]
+          || !newerStableVersion(installed.version, published.version)) return;
+      const key = "kofad-app-update-dismissed-" + CHANNEL + "-" + published.version;
+      try { if (sessionStorage.getItem(key)) return; } catch (_) {}
+      const banner = $("#native-update");
+      $("#native-update-details").textContent =
+        "Version " + published.version + " is ready. Finish any open work before installing an update.";
+      $("#native-update-action").onclick = openUpdateHub;
+      $("#native-update-dismiss").onclick = () => {
+        banner.hidden = true;
+        try { sessionStorage.setItem(key, "1"); } catch (_) {}
+      };
+      banner.hidden = false;
+    } catch (_) {
+      // On network problems never suggest a guessed version or install source.
+    }
+  }
+
   async function setupConnectivity() {
     setNetwork(online);
     window.addEventListener("online", () => {
@@ -221,4 +283,10 @@
   if (CHANNEL === "customer") setupCustomer();
   else setupStaff();
   void setupConnectivity();
+  void checkForMobileUpdate();
+  if (typeof native.App?.addListener === "function") {
+    native.App.addListener("appStateChange", evt => {
+      if (evt.isActive) void checkForMobileUpdate();
+    }).catch(() => {});
+  }
 })();
