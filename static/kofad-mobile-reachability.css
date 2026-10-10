@@ -1,0 +1,270 @@
+/* KOFAD mobile reachability and stock-register audit — official navy/gold theme.
+   Only presentation. Stock figures, permissions, links and approvals stay intact. */
+
+/* Floating approvals have a JS-measured safe zone between the sticky header
+   and bottom navigation. Keep it on top only within that safe zone. */
+.approval-attention {
+  z-index: 135!important;
+  max-width:calc(100vw - 24px);
+  touch-action:none;
+}
+.approval-attention.is-dragging {
+  transition:none!important;
+  cursor:grabbing!important;
+}
+@media(max-width:900px){
+  /* Without JavaScript's drag positioning, the default remains above the dock. */
+  .approval-attention:not([style*="top:"]){
+    bottom:calc(94px + env(safe-area-inset-bottom))!important;
+    right:14px!important;
+  }
+}
+
+/* Desktop: keep column titles readable when scrolling the register itself. */
+.inventory-ledger .inventory-stock-table {
+  position:relative;
+  max-width:100%;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+}
+.inventory-ledger .inventory-stock-table thead th {
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#f4f5f0!important;
+  color:#435768!important;
+  box-shadow:inset 0 -1px var(--ops-edge,#e0e5e7);
+}
+html[data-theme="dark"] .inventory-ledger .inventory-stock-table thead th{
+  background:#283036!important;
+  color:#e4e9e7!important;
+  box-shadow:inset 0 -1px #4d5559;
+}
+.inventory-ledger .inventory-stock-table tbody td{
+  vertical-align:top;
+}
+.inventory-ledger .inventory-stock-table tbody td:first-child{
+  min-width:160px;
+}
+.inventory-ledger .inventory-stock-table tbody td:first-child a{
+  color:var(--ops-ink,#0b2947);
+  text-decoration-thickness:1px;
+  text-underline-offset:3px;
+}
+.inventory-ledger .inventory-stock-table tbody td:first-child small{
+  color:var(--ops-muted,#677b82);
+  line-height:1.55;
+}
+
+/* On phones and smaller tablets, one entire product per card.
+   No nested vertical-scroll box, permanently lost column names, or partially
+   hidden product titles. Existing financial values, stock statuses and actions
+   are shown as labelled fields rather than suppressed columns. */
+@media(max-width:900px){
+  .inventory-ledger{
+    padding:clamp(12px,3.4vw,20px)!important;
+    min-width:0!important;
+    overflow:visible!important;
+  }
+  .inventory-ledger .section-heading{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:12px!important;
+    align-items:start!important;
+  }
+  .inventory-ledger .section-heading>.actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 15px;
+    margin-bottom:3px;
+  }
+  .inventory-ledger .section-heading>.actions a{
+    font-size:13px!important;
+    line-height:1.5;
+    padding:3px 0;
+  }
+  .inventory-ledger .inventory-stock-table,
+  .inventory-ledger .inventory-stock-table:has(>table.mobile-card-table){
+    max-height:none!important;
+    height:auto!important;
+    overflow:visible!important;
+    width:100%!important;
+    max-width:100%!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  .inventory-ledger .inventory-stock-table>table{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    border-collapse:separate!important;
+    border-spacing:0!important;
+  }
+  .inventory-ledger .inventory-stock-table>table>thead{
+    position:absolute!important;
+    width:1px!important;
+    height:1px!important;
+    overflow:hidden!important;
+    clip:rect(0 0 0 0)!important;
+    white-space:nowrap!important;
+    border:0!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:12px!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody tr{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    min-width:0!important;
+    width:100%!important;
+    border:1px solid var(--ops-edge,#dfe5e7)!important;
+    border-radius:15px!important;
+    padding:14px clamp(12px,3.8vw,19px)!important;
+    background:var(--ops-card,#fff)!important;
+    box-shadow:0 7px 20px rgba(12,39,62,.055)!important;
+    gap:0!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td{
+    display:grid!important;
+    grid-template-columns:minmax(96px,38%) minmax(0,1fr)!important;
+    align-items:start!important;
+    gap:10px!important;
+    min-width:0!important;
+    width:100%!important;
+    padding:10px 0!important;
+    border:0!important;
+    border-bottom:1px solid var(--ops-edge,#e0e5e7)!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere!important;
+    text-align:left!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td::before{
+    display:block!important;
+    content:attr(data-mobile-label)!important;
+    font-weight:750!important;
+    font-size:11px!important;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    line-height:1.5!important;
+    color:var(--ops-muted,#6b7a85)!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td:first-child{
+    display:block!important;
+    min-width:0!important;
+    border-bottom:2px solid var(--ops-edge,#e0e5e7)!important;
+    padding:3px 0 12px!important;
+    margin-bottom:3px!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td:first-child::before{
+    display:none!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td:first-child strong{
+    display:block!important;
+    font-size:clamp(15px,3.5vw,18px)!important;
+    font-weight:800!important;
+    line-height:1.4!important;
+    color:var(--ops-ink,#102b44)!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td:first-child small{
+    display:block!important;
+    color:var(--ops-muted,#62717c)!important;
+    font-size:12px!important;
+    margin-top:5px!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td strong{
+    color:var(--ops-ink,#102b44);
+    font-size:14px;
+    line-height:1.45;
+  }
+  .inventory-ledger .inventory-stock-table tbody td small{
+    line-height:1.55!important;
+    margin:4px 0 0!important;
+    color:var(--ops-muted,#6c7d85)!important;
+    font-size:12px!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.number{
+    font-variant-numeric:tabular-nums;
+    text-align:left!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td:last-child{
+    border-bottom:0!important;
+    padding-bottom:2px!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.mobile-table-actions{
+    display:block!important;
+    padding-top:12px!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.mobile-table-actions::before{
+    display:none!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.mobile-table-actions .row-actions{
+    display:flex!important;
+    gap:8px!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    flex-wrap:wrap!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.mobile-table-actions :is(button,a){
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    flex:1 1 100px!important;
+    min-height:41px!important;
+    padding:9px 13px!important;
+    border-radius:10px!important;
+    background:var(--ops-card-soft,#f4f3ee)!important;
+    border:1px solid var(--ops-edge,#dce2e4)!important;
+    color:var(--ops-ink,#142d43)!important;
+    text-decoration:none!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.mobile-table-message{
+    display:block!important;
+    padding:10px!important;
+    border:0!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody td.mobile-table-message::before{
+    display:none!important;
+  }
+  .inventory-ledger .inventory-stock-table .stock-state{
+    display:inline-flex!important;
+    width:max-content;
+    max-width:100%;
+    white-space:normal!important;
+    border-radius:8px!important;
+  }
+  .inventory-ledger .inventory-stock-table tbody tr:focus-within{
+    outline:2px solid #c6a165;
+    outline-offset:2px;
+  }
+  html[data-theme="dark"] .inventory-ledger .inventory-stock-table tbody tr{
+    background:#1c2226!important;
+    border-color:#3d464a!important;
+  }
+  html[data-theme="dark"] .inventory-ledger .inventory-stock-table tbody td,
+  html[data-theme="dark"] .inventory-ledger .inventory-stock-table tbody td:first-child{
+    border-bottom-color:#3c4448!important;
+  }
+  html[data-theme="dark"] .inventory-ledger .inventory-stock-table tbody td.mobile-table-actions :is(button,a){
+    background:#30373b!important;
+    border-color:#515a5e!important;
+    color:#f0ede7!important;
+  }
+}
+@media(max-width:370px){
+  .inventory-ledger .inventory-stock-table tbody td{
+    grid-template-columns:minmax(78px,34%) minmax(0,1fr)!important;
+    gap:8px!important;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .inventory-ledger .inventory-stock-table tbody tr{transition:none!important}
+}

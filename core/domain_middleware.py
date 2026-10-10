@@ -20,7 +20,7 @@ class OfficialDomainMiddleware:
         path = request.path
         # Preserve signed provider endpoints and public assets on saved origins.
         shared = (
-            path in {"/health/", "/robots.txt", "/sitemap.xml", "/favicon.ico"} or path.startswith("/static/")
+            path in {"/health/", "/robots.txt", "/sitemap.xml", "/favicon.ico", "/favicon-96.png"} or path.startswith("/static/")
             or path.startswith("/sms/callback/") or path == "/sms/delivery/"
             or path == "/whatsapp/webhook/"
             or path == "/market/payments/paystack/webhook/"

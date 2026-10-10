@@ -380,6 +380,19 @@ with sync_playwright() as p:
     assert abs(after["height"] - before["height"]) < 1
     assert admin_page.evaluate("Boolean(localStorage.getItem(\'kofad-approval-position-v2\'))")
     assert approval.evaluate("el => getComputedStyle(el).animationName") != "none"
+    # Deliberately drag toward the phone dock: approval must remain reachable.
+    dragged = approval.bounding_box()
+    admin_page.mouse.move(dragged["x"] + dragged["width"] / 2, dragged["y"] + dragged["height"] / 2)
+    admin_page.mouse.down()
+    admin_page.mouse.move(389, 840, steps=10)
+    admin_page.mouse.up()
+    safe = approval.bounding_box()
+    dock = admin_page.locator(".mobile-dock").bounding_box()
+    bar = admin_page.locator(".topbar").bounding_box()
+    assert safe["y"] + safe["height"] <= dock["y"] - 6, "Approval control hidden by mobile dock"
+    assert safe["y"] >= bar["y"] + bar["height"] + 6, "Approval control overlaps sticky header"
+    assert safe["x"] >= 8 and safe["x"] + safe["width"] <= 390 - 8, "Approval control offscreen"
+    admin_page.screenshot(path=str(out / "approval-safe-mobile.png"), full_page=True)
 
     admin_page.goto("http://127.0.0.1:8000/settings/communications/")
     assert admin_page.locator('[role="switch"]').count() == 10
@@ -483,6 +496,31 @@ with sync_playwright() as p:
     assert staff_table.evaluate("el => parseFloat(getComputedStyle(el).minWidth) == 0")
     admin_page.screenshot(path=str(out / "staff-users-mobile-hardened.png"), full_page=True)
 
+    # Mobile stock should be labelled cards without a second vertical scrollbar.
+    for phone_width in (320, 390, 768):
+        admin_page.set_viewport_size({"width":phone_width,"height":844})
+        admin_page.goto("http://127.0.0.1:8000/inventory/")
+        cards_table = admin_page.locator(".inventory-stock-table > table.mobile-card-table")
+        cards_table.wait_for()
+        assert cards_table.evaluate(
+            "el => getComputedStyle(el).minWidth === '0px'"
+        ), f"Inventory forces a wide table at {phone_width}px"
+        first_row = cards_table.locator("tbody tr").first
+        assert first_row.locator("td").first.get_attribute("data-mobile-label") == "Product"
+        assert first_row.locator("td").nth(1).get_attribute("data-mobile-label") == "Sellable"
+        assert first_row.locator("td").nth(2).get_attribute("data-mobile-label") == "Pack position"
+        assert admin_page.locator(".inventory-stock-table").evaluate(
+            "el => getComputedStyle(el).maxHeight === 'none' && getComputedStyle(el).overflowY === 'visible'"
+        ), f"Inventory still has inner scrolling at {phone_width}px"
+        assert admin_page.evaluate(
+            "document.documentElement.scrollWidth <= window.innerWidth"
+        ), f"Inventory overflows at {phone_width}px"
+        if phone_width == 390:
+            admin_page.screenshot(path=str(out / "inventory-product-cards-390.png"), full_page=True)
+        admin_page.evaluate("window.scrollTo(0,document.body.scrollHeight)")
+        admin_page.evaluate("window.scrollTo(0,0)")
+        assert admin_page.locator(".inventory-ledger h2").is_visible()
+    admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.goto("http://127.0.0.1:8000/settings/payments/")
     form_actions = admin_page.locator(".form-actions")
     form_actions.wait_for()
