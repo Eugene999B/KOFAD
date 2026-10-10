@@ -275,6 +275,40 @@
     } catch (_) {return {error:"connection_unavailable"};}
   }
 
+  async function pushDeviceRegistration(token, serviceOptIn, marketingOptIn) {
+    if (typeof token !== "string" || !/^[A-Za-z0-9_:.-]{20,512}$/.test(token)
+        || typeof serviceOptIn !== "boolean" || typeof marketingOptIn !== "boolean"
+        || (!CUSTOMER && marketingOptIn)) return {error:"invalid_request"};
+    const access=await accessToken();
+    if (!access) return {error:"authentication_required"};
+    try {
+      const reply=await fetch(ORIGIN + ROOT + "push/devices/", {
+        method:"POST",mode:"cors",credentials:"omit",cache:"no-store",
+        headers:{Authorization:"Bearer "+access,"Content-Type":"application/json"},
+        body:JSON.stringify({token, service_opt_in:serviceOptIn, marketing_opt_in:marketingOptIn}),
+      });
+      if (reply.status===404) return {error:"feature_unavailable"};
+      if (reply.status===401 || reply.status===403) {await clear();return {error:"session_expired"};}
+      if (!reply.ok) return {error:"registration_rejected"};
+      return await reply.json();
+    } catch (_) {return {error:"connection_unavailable"};}
+  }
+
+  async function pushDeviceUnsubscribe() {
+    const access=await accessToken();
+    if (!access) return {error:"authentication_required"};
+    try {
+      const reply=await fetch(ORIGIN + ROOT + "push/devices/", {
+        method:"DELETE",mode:"cors",credentials:"omit",cache:"no-store",
+        headers:{Authorization:"Bearer "+access},
+      });
+      if (reply.status===404) return {error:"feature_unavailable"};
+      if (reply.status===401 || reply.status===403) {await clear();return {error:"session_expired"};}
+      if (!reply.ok) return {error:"unsubscribe_rejected"};
+      return await reply.json();
+    } catch (_) {return {error:"connection_unavailable"};}
+  }
+
   async function signOut() {
     // A freshly rotated credential is never silently restored after logout.
     const access = await accessToken();
@@ -304,6 +338,7 @@
 
   window.KofadMobileAuth = Object.freeze({
     start, profile, signOut, readMobile, saveMobileCart,
+    pushDeviceRegistration, pushDeviceUnsubscribe,
     isAuthenticated: () => Boolean(session?.profile),
     isSupported: readiness,
   });
