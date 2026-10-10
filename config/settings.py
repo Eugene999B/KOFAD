@@ -227,3 +227,5 @@ KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip(
 KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
 # Native basket is independent of browser checkout; keep OFF until mobile QA.
 KOFAD_NATIVE_CART_ENABLED = os.environ.get("KOFAD_NATIVE_CART_ENABLED", "0") == "1"
+# Device push registration is disabled until signed apps + Firebase device QA.
+KOFAD_NATIVE_PUSH_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_ENABLED", "0") == "1"
