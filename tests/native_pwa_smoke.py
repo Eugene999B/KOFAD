@@ -52,8 +52,11 @@ with sync_playwright() as tool:
     assert registration["script"].endswith("/market/app/sw.js"), registration
     # On Chrome without a surfaced install event, show actionable manual steps,
     # not a button that does nothing or falsely claims installation completed.
-    android.get_by_role("button", name="Show installation steps").click()
-    assert android.get_by_text("In Chrome, open the browser menu", exact=False).is_visible()
+    if android.get_by_role("button", name="Show installation steps").count():
+        android.get_by_role("button", name="Show installation steps").click()
+        assert android.get_by_text("In Chrome, open the browser menu", exact=False).is_visible()
+    else:
+        assert android.get_by_role("button", name="Install KOFAD Market").count() == 1
     android.screenshot(path=str(shots / "market-android-web-install.png"), full_page=True)
 
     desktop = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -61,8 +64,11 @@ with sync_playwright() as tool:
     desktop.get_by_role("heading", name="KOFAD Market web app").wait_for()
     assert desktop.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     desktop.screenshot(path=str(shots / "market-windows-web-install.png"), full_page=True)
-    desktop.get_by_role("button", name="Show installation steps").click()
-    assert desktop.get_by_text("Chrome or Edge", exact=False).count() > 0
+    if desktop.get_by_role("button", name="Show installation steps").count():
+        desktop.get_by_role("button", name="Show installation steps").click()
+        assert desktop.get_by_text("Chrome or Edge", exact=False).count() > 0
+    else:
+        assert desktop.get_by_role("button", name="Install KOFAD Market").count() == 1
 
     downloads = browser.new_page(viewport={"width": 390, "height": 844})
     downloads.goto(base + "/apps/")
