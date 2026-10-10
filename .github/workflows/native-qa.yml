@@ -65,6 +65,7 @@ jobs:
           npx cap add android
           npx cap sync android
           node scripts/configure-auth-deeplink.mjs android
+          node scripts/configure-keystore.mjs
           npx capacitor-assets generate --android
       - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v4
         if: matrix.platform == 'android'
