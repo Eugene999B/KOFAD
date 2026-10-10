@@ -20,6 +20,24 @@
     </div>
   </section>
 
+  <section class="native-web-ready" aria-label="Installable web app available now">
+    <div class="native-web-ready-icon" aria-hidden="true">✓</div>
+    <div class="native-web-ready-text">
+      <p class="native-kicker">AVAILABLE NOW · ANDROID &amp; WINDOWS</p>
+      <h3>{% if app.kind == 'staff' %}Install KOFAD Staff as a web app{% else %}Install KOFAD Market as a web app{% endif %}</h3>
+      <p>{% if app.kind == 'staff' %}Install an app shortcut for your authorized business workspace on Android or Windows. You must still sign in, and financial permissions stay enforced by the server.{% else %}Use KOFAD Market in its own app window, with a home-screen or Windows Start-menu icon and automatic website updates. No APK or app store needed.{% endif %}</p>
+      {% if app.kind == 'staff' %}
+        <button type="button" class="native-web-install" data-pwa-install>Install Staff web app</button>
+        <p class="native-web-status" data-pwa-install-state role="status">Checking browser installation support…</p>
+        <div class="native-web-steps" data-pwa-install-steps hidden><strong>How to install</strong><p data-pwa-device-steps>Choose Install app from your browser menu.</p></div>
+        <div class="native-web-steps" data-pwa-update hidden><strong>A newer web-app version is ready</strong><button data-pwa-update-apply type="button">Update now</button></div>
+      {% else %}
+        <a class="native-web-install" href="https://market.kofadimpex.com/market/app/install/">Install Market web app <span aria-hidden="true">↗</span></a>
+      {% endif %}
+      <small>This is the installable browser edition. Separate signed Android and Windows installers are shown below only when officially released.</small>
+    </div>
+  </section>
+
   <section class="native-release-overview" aria-label="App release status">
     <div class="native-overview-mark" aria-hidden="true">✦</div>
     <div>
