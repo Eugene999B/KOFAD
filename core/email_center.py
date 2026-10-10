@@ -649,7 +649,13 @@ def deliver_outgoing(limit=10):
                      next_attempt_at=timezone.now())
         if not claimed:
             continue
-        row = EmailLetter.objects.get(pk=pk)
+        row = EmailLetter.objects.select_related("mailbox").get(pk=pk)
+        if not row.mailbox.active or row.mailbox.address.lower() in RETIRED_MANAGEMENT_ADDRESSES:
+            EmailLetter.objects.filter(pk=pk).update(
+                status="suppressed",
+                last_error="Sending mailbox has been decommissioned.",
+            )
+            continue
         # Preserve part of today's limited free allowance for security codes,
         # receipts and staff correspondence instead of exhausting it on campaigns.
         if row.source_key and (row.source_key.startswith("campaign:") or ":reminder:" in row.source_key and row.source_key.startswith("debtmail:")):
