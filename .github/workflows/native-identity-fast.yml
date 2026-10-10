@@ -5,6 +5,8 @@ on:
       - "marketplace/mobile_identity.py"
       - "marketplace/mobile_auth_models.py"
       - "marketplace/test_mobile_identity.py"
+      - "marketplace/mobile_private_api.py"
+      - "marketplace/test_mobile_private_api.py"
       - "marketplace/models.py"
       - "marketplace/migrations/0025_native_mobile_identity.py"
       - "marketplace/urls.py"
@@ -53,4 +55,4 @@ jobs:
           python native/scripts/branding.py --channel staff
           python manage.py collectstatic --noinput
       - name: Run mobile API and security integration tests
-        run: python manage.py test marketplace.test_mobile_identity marketplace.test_mobile_v1_api core.test_mobile_staff_api --noinput
+        run: python manage.py test marketplace.test_mobile_identity marketplace.test_mobile_v1_api marketplace.test_mobile_private_api core.test_mobile_staff_api --noinput
