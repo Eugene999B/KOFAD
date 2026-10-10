@@ -274,8 +274,8 @@ body.is-kofad-home .kfd-home{background:var(--atelier-paper)!important;color:var
 body.is-kofad-home .kfd-hero{
   border-radius:0 0 26px 26px;
   box-shadow:0 20px 55px rgba(10,32,54,.16);
-  max-height:none!important;min-height:390px!important;
-  height:clamp(390px,32vw,505px)!important;
+  min-height:345px!important;max-height:360px!important;
+  height:clamp(345px,27vw,360px)!important;
 }
 body.is-kofad-home .kfd-hero::after{
   background:linear-gradient(90deg,rgba(7,24,41,.95) 0%,rgba(7,24,41,.82) 34%,rgba(7,24,41,.29) 74%,rgba(7,24,41,.1))!important;
@@ -421,12 +421,12 @@ html[data-theme="dark"] body.is-kofad-home .public-desktop-nav>a:not(.public-mar
 }
 @media(max-width:700px){
  body.is-kofad-home .kfd-hero{
-   height:clamp(440px,78vh,560px)!important;min-height:440px!important;
+   height:clamp(370px,55vh,395px)!important;min-height:370px!important;max-height:395px!important;
    border-radius:0 0 18px 18px!important;
  }
  body.is-kofad-home .kfd-hero-inner{width:calc(100% - 40px)!important}
- body.is-kofad-home .kfd-hero-copy{padding:28px 0 80px!important}
- body.is-kofad-home .kfd-hero h1{font-size:clamp(36px,8.2vw,52px)!important}
+ body.is-kofad-home .kfd-hero-copy{padding:16px 0 47px!important}
+ body.is-kofad-home .kfd-hero h1{font-size:clamp(32px,7.9vw,44px)!important}
  body.is-kofad-home .kfd-hero-copy>p:not(.kfd-eyebrow){font-size:14px!important;line-height:1.55!important}
  body.is-kofad-home .kfd-hero::after{
    background:linear-gradient(90deg,rgba(7,24,41,.92),rgba(7,24,41,.63))!important;
