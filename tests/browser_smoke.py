@@ -669,7 +669,36 @@ with sync_playwright() as p:
         return title.top >= hero.top - 1 && cta.bottom <= hero.bottom - 10;
     }""")
     assert market_page.get_by_role("button", name="Next photograph").is_visible()
+    assert market_page.locator("[data-slide-pause]").count() == 0
+    # The slideshow must advance without anybody touching play/pause. Remote
+    # image requests are mocked above so this remains deterministic in CI.
+    market_page.wait_for_function(
+        "() => document.querySelector('[data-hero-count]')?.textContent.trim() === '02 / 06'",
+        timeout=12500,
+    )
+    assert market_page.locator("[data-hero-image]").get_attribute("src").startswith("https://images.unsplash.com/")
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
+
+    # Visual audit on real rendered viewports rather than source-only CSS checks.
+    # The headline/CTA must be wholly inside the image, not clipped under nav.
+    for width in (320, 360, 390, 768, 1024, 1440):
+        market_page.set_viewport_size({"width":width,"height":900})
+        market_page.goto("http://127.0.0.1:8000/")
+        assert market_page.locator("[data-slide-pause]").count() == 0
+        assert market_page.evaluate(
+            "document.documentElement.scrollWidth <= window.innerWidth"
+        ), f"Homepage overflow at {width}px"
+        assert market_page.locator(".kfd-hero").evaluate("""el => {
+            const hero = el.getBoundingClientRect();
+            const head = el.querySelector("h1").getBoundingClientRect();
+            const action = el.querySelector(".kfd-cta.primary").getBoundingClientRect();
+            return head.top >= hero.top - 1
+                && head.right <= hero.right + 1
+                && action.bottom <= hero.bottom - 4
+                && action.right <= hero.right + 1;
+        }"""), f"Homepage title or shop button clipped at {width}px"
+        if width in (320, 390, 768):
+            market_page.screenshot(path=str(out / f"homepage-layout-review-{width}.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/")
 
@@ -927,6 +956,37 @@ with sync_playwright() as p:
     assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     admin_page.screenshot(path=str(out / "market-catalog-dark-mobile.png"), full_page=True)
     admin_page.evaluate("localStorage.setItem('kofad-theme','light'); document.documentElement.dataset.theme='light'")
+
+    # Page-by-page staff/mobile audit. Wide data tables may scroll within their
+    # own containers, but the page itself may not leak horizontally off screen.
+    # Check core jobs of a real employee, not only dashboard/card demos.
+    for width in (320, 390, 768):
+        admin_page.set_viewport_size({"width":width,"height":900})
+        for section, path in (
+            ("sales", "/sales/new/"),
+            ("online-orders", "/online-orders/"),
+            ("inventory", "/inventory/"),
+            ("finance", "/finance/"),
+            ("daily-closing", "/closings/"),
+            ("accounting", "/accounting/"),
+            ("reports", "/reports/"),
+            ("email", "/email/"),
+            ("settings", "/settings/"),
+            ("customers", "/parties/?kind=customer"),
+        ):
+            admin_page.goto("http://127.0.0.1:8000" + path, wait_until="domcontentloaded")
+            admin_page.wait_for_timeout(70)
+            assert admin_page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            ), f"Phase 3 mobile overflow: {section} at {width}px"
+            if width == 390 and section in ("sales", "online-orders", "finance", "daily-closing", "email"):
+                admin_page.screenshot(path=str(out / ("audit-" + section + "-mobile.png")), full_page=True)
+    admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.goto("http://127.0.0.1:8000/settings/")
+    assert admin_page.locator(".atelier-settings-index").is_visible()
+    assert admin_page.locator("[data-theme-choice]").count() >= 3
+    admin_page.goto("http://127.0.0.1:8000/online-orders/")
+    assert admin_page.locator(".order-filter-tabs").is_visible()
 
     # A sale-history row opens from its body, not only from the receipt reference.
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
