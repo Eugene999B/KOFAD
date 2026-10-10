@@ -87,7 +87,7 @@ jobs:
         if: matrix.platform == 'ios'
         working-directory: native/mobile/ios/App
         run: |
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../../build-ios CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ../../build-ios CODE_SIGNING_ALLOWED=NO build
       - name: Install Windows dependencies
         if: matrix.platform == 'windows'
         working-directory: native/desktop
