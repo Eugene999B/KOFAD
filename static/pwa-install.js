@@ -55,11 +55,13 @@
         : platform === "Windows" ? "Install on Windows" : "Install KOFAD " + (isStaff ? "Staff" : "Market");
     }
   };
-  const showSteps = () => {
+  const showSteps = (preferIPhone = false) => {
     if (steps) {
       steps.hidden = false;
       const item = steps.querySelector("[data-pwa-device-steps]");
-      if (item) item.textContent = advice();
+      if (item) item.textContent = preferIPhone
+        ? "Open this page in Safari. Tap Share (the square with an arrow), select Add to Home Screen, then tap Add."
+        : advice();
       steps.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
   };
@@ -75,6 +77,7 @@
     refresh();
   });
   buttons.forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.pwaGuide === "iphone") { showSteps(true); return; }
     if (!deferredInstall) { showSteps(); return; }
     const prompt = deferredInstall;
     deferredInstall = null;
