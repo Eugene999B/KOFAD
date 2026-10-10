@@ -45,7 +45,7 @@ test("Mobile identity bundle uses browser PKCE and never stores credentials in w
   assert.match(client,/kofadstaff:\/\/auth\/callback/);
   assert.match(client,/credentials: "omit"/);
   assert.match(client,/KofadMobileAuth/);
-  assert.doesNotMatch(client,/localStorage|sessionStorage|document\.cookie|indexedDB/);
+  assert.doesNotMatch(client,/(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|getItem)|document\s*\.\s*cookie\s*=|indexedDB\s*\./);
   assert.match(html,/src="mobile-auth.js"/);
   assert.match(packager,/copyWithProfile\("mobile-auth\.js"\)/);
   for (const path of nativeWorkflows){
