@@ -1,6 +1,24 @@
-{% extends "marketplace/base.html" %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}{% block content %}
 <section class="shop-catalog">
 {% if not market_customer %}<aside class="market-guest-welcome" aria-label="Welcome to KOFAD Market"><div><h2>Welcome to KOFAD Market</h2><p>Browse products freely. Sign in or create a free account when you are ready to shop.</p></div><a href="{% url 'market_access' %}">Sign in or create account →</a></aside>{% endif %}
+{% if not q and not selected_category %}
+<section class="atelier-market-intro" aria-labelledby="atelier-market-title">
+<div class="atelier-market-intro-copy">
+  <span class="atelier-kicker">KOFAD IMPEX ENTERPRISE / THE MARKET</span>
+  <h2 id="atelier-market-title">Good things for every day. <em>Supply for what comes next.</em></h2>
+  <p>Browse the live KOFAD catalogue, see today's published prices in Ghana cedis, and choose individual items or available packs. Buying for your business? Ask us about larger quantities.</p>
+  <div class="atelier-market-intro-actions">
+    <a href="#market-products" class="atelier-action-gold">Explore products <span aria-hidden="true">↘</span></a>
+    <a href="/wholesale/" class="atelier-action-outline">Wholesale enquiries <span aria-hidden="true">↗</span></a>
+  </div>
+  <div class="atelier-market-quicklinks" aria-label="Shopping assistance"><a href="/delivery/">Delivery &amp; collection</a><a href="/faq/">Shopping help</a><a href="/contact/">Contact our team</a></div>
+</div>
+<div class="atelier-market-intro-art" aria-hidden="true">
+  <img src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" width="1600" height="900" alt="" loading="eager" decoding="async">
+  <div class="atelier-market-art-plate"><span>CURATED FOR LIFE &amp; BUSINESS</span><strong>KOFAD<br>MARKET</strong><i></i></div>
+</div>
+</section>
+{% endif %}
 {% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="{% if q %}/market/?category={{ category|urlencode }}&amp;q={{ q|urlencode }}{% else %}/market/categories/{{ category|slugify }}/{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 
 <header class="shop-catalog-head">
@@ -13,7 +31,7 @@
 {% if q or selected_category or in_stock or featured_only or price_min or price_max %}<div class="shop-active-filter"><span>Showing a filtered view</span><a href="/market/">Clear all ×</a></div>{% endif %}
 
 {% if listings %}
-<div class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
+<div id="market-products" class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
 {% if page_obj.paginator.num_pages > 1 %}
 <nav class="shop-pagination" aria-label="Product pages">
   {% if page_obj.has_previous %}<a href="?q={{ q|urlencode }}&category={{ selected_category|urlencode }}&sort={{ selected_sort }}{% if in_stock %}&stock=available{% endif %}{% if featured_only %}&featured=1{% endif %}{% if price_min %}&min_price={{ price_min }}{% endif %}{% if price_max %}&max_price={{ price_max }}{% endif %}&page={{ page_obj.previous_page_number }}">← Previous</a>{% else %}<span></span>{% endif %}
@@ -22,4 +40,8 @@
 </nav>
 {% endif %}
 {% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
+<aside class="atelier-market-help" aria-label="Need help shopping">
+<div><span class="atelier-kicker">PERSONAL SERVICE</span><h2>Shopping for more than one?</h2><p>For large quantities, repeat purchases, or a product you cannot find, our team can discuss availability and a quotation before you order.</p></div>
+<a href="/wholesale/">Ask about wholesale supply <span aria-hidden="true">↗</span></a>
+</aside>
 </section>{% endblock %}
