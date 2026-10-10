@@ -100,6 +100,15 @@
       <p class="native-caption">Build a shopping list right here in the app. This device-only draft does not reserve items, synchronize accounts or create an order.</p>
       <div class="native-section-head native-basket-head"><strong id="native-basket-summary">No products added</strong><button type="button" id="native-basket-clear" class="native-back-link">Clear basket</button></div>
       <div id="native-basket-items" class="native-basket-list" aria-live="polite"></div>
+      <section class="native-basket-account" aria-label="Account basket sync">
+        <div><strong>My KOFAD account basket</strong><p>Connect your verified account to keep shopping choices across your devices. Account sync is available only after secure native sign-in is enabled.</p></div>
+        <p id="native-basket-sync-status" class="native-caption" role="status" aria-live="polite">Sign in to connect your basket.</p>
+        <div class="native-basket-sync-actions">
+          <button id="native-basket-account-load" type="button" class="native-outline-action">Load account basket</button>
+          <button id="native-basket-account-save" type="button" class="native-solid-action">Merge & save to account</button>
+        </div>
+        <p id="native-basket-server-estimate" class="native-caption" hidden></p>
+      </section>
       <div class="native-basket-next"><strong>Secure checkout</strong><p>Native payment and order APIs are not yet enabled. No charge will be made from this basket; the existing verified KOFAD website is available for purchases, but this draft is not transferred automatically.</p><button type="button" id="native-basket-secure-site" class="native-solid-action">Visit secure KOFAD Market ↗</button></div>
     </section>
     <section id="screen-notifications" class="native-screen" hidden aria-label="Notifications">
