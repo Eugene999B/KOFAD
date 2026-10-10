@@ -40,6 +40,22 @@
 <article><div><p class="kfd-eyebrow">SIMPLE ORDERING</p><h3>Choose the pack size that works.</h3><p>Find current products and review the available selling units before you place an order.</p><a href="/market/">Explore products →</a></div><span class="kfd-proof-icon" aria-hidden="true">▧</span></article>
 <article><div><p class="kfd-eyebrow">HERE TO HELP</p><h3>Questions? Talk to our team.</h3><p>Ask about a product, wholesale quantities, delivery options or an order already placed.</p><a href="/contact/">Contact KOFAD →</a></div><span class="kfd-proof-icon" aria-hidden="true">☏</span></article>
 </section>
+<section class="atelier-home-story" aria-labelledby="atelier-home-story-title">
+<div class="atelier-story-photo">
+<img src="{% static 'marketplace/kofad-market-retail-hero.webp' %}" width="1600" height="900" loading="lazy" decoding="async" alt="Illustrative retail and supply products">
+<span>RETAIL · WHOLESALE · GHANA</span>
+</div>
+<div class="atelier-story-copy">
+  <p class="atelier-kicker">SHOPPING ON YOUR TERMS</p>
+  <h2 id="atelier-home-story-title">One market.<br><em>Many ways to buy.</em></h2>
+  <p>From a single item for home to a larger business requirement, the KOFAD team helps you find the right pack size and understand your fulfilment options.</p>
+  <div class="atelier-story-steps">
+    <a href="/market/"><b>01</b><span><strong>Find your products</strong><small>Browse published listings and selling units.</small></span><i aria-hidden="true">↗</i></a>
+    <a href="/wholesale/"><b>02</b><span><strong>Discuss bulk supply</strong><small>Request a quotation when you need more.</small></span><i aria-hidden="true">↗</i></a>
+    <a href="/delivery/"><b>03</b><span><strong>Plan collection or delivery</strong><small>Check options for your order and location.</small></span><i aria-hidden="true">↗</i></a>
+  </div>
+</div>
+</section>
 {% if listings %}<section class="home-featured-v7 home-featured-v9">
 <header class="home-featured-head"><div><span>CURATED FROM THE MARKET</span><h2>Featured picks</h2><p>A quick look at products currently available in KOFAD.</p></div><a href="/market/" aria-label="Shop all products">Shop all <b>→</b></a></header>
 <div class="market-grid commerce-product-grid home-featured-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
