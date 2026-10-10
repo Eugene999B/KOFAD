@@ -47,6 +47,23 @@ class MobileControlTests(Fixtures, TestCase):
         self.assertContains(staff, "Team alert")
         self.assertNotContains(staff, "Service hours")
 
+    def test_marketing_notices_are_typed_and_service_default_is_preserved(self):
+        MobileNotice.objects.create(
+            channel="customer", kind="promotion",
+            title="Featured product", message="See this week's public collection", enabled=True,
+        )
+        MobileNotice.objects.create(
+            channel="customer", title="Service window",
+            message="Shop opening hours", enabled=True,
+        )
+        payload = self.client.get("/market/app/native-version.json").json()
+        notices = {notice["title"]: notice for notice in payload["notices"]}
+        self.assertEqual(notices["Featured product"]["kind"], "promotion")
+        self.assertEqual(notices["Service window"]["kind"], "service")
+        # These public notices must not carry customer records or private staff details.
+        self.assertNotIn("customer_id", notices["Featured product"])
+        self.assertNotIn("branch_id", notices["Featured product"])
+
     @override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com"])
     def test_control_dashboard_superuser_only(self):
         self.assertEqual(self.client.get("/staff/app/control/").status_code, 302)
