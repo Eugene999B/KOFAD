@@ -104,6 +104,20 @@ class BrevoDeliveryEventsTests(TestCase):
         self.message.refresh_from_db()
         self.assertEqual(self.message.delivery_status, "unknown")
 
+    def test_verified_campaign_unsubscribe_disables_promotional_email_consent(self):
+        from marketplace.models import EmailIdentity
+        identity = EmailIdentity.objects.create(
+            kind="customer", owner_id=737373,
+            email="customer@example.org", verified_at=timezone.now(),
+            marketing_emails_enabled=True,
+        )
+        self.message.source_key = "campaign:321:customer:737373"
+        self.message.save(update_fields=["source_key"])
+        result = self.event(self.payload(event="unsubscribed"))
+        self.assertTrue(result.json()["tracked"])
+        identity.refresh_from_db()
+        self.assertFalse(identity.marketing_emails_enabled)
+
     @patch("core.brevo_email.requests.post")
     def test_sending_request_carries_opaque_reconciliation_tag(self, post):
         queued = EmailLetter.objects.create(
