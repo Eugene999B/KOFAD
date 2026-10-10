@@ -145,3 +145,13 @@ body[data-channel="staff"] #tab-basket{display:none!important}
 #native-basket-sync-status{padding:10px 12px;background:#f1f7f7;border-radius:10px}
 #native-basket-server-estimate{font-weight:700;color:#145e61}
 @media(max-width:355px){.native-basket-sync-actions{grid-template-columns:1fr}}
+
+/* Native remote push consent is visually separate from on-device notices. */
+.native-push-card{padding:18px;margin:18px 0 16px;border:1px solid #cce0e3;background:#fff;border-radius:18px}
+.native-push-card>strong{font-size:15px;color:#163f52}
+.native-push-card>p{font-size:12px;line-height:1.7;color:#54707a}
+.native-push-card label{display:flex;gap:10px;align-items:center;font-size:12px;color:#244c5d;margin:13px 0}
+.native-push-card input[type=checkbox]{accent-color:#137d79;width:18px;height:18px}
+.native-push-card .native-basket-sync-actions{margin-top:13px}
+.native-push-card .native-basket-sync-actions button{font-size:11px}
+@media(max-width:400px){.native-push-card .native-basket-sync-actions{grid-template-columns:1fr}}

@@ -11,6 +11,7 @@
   <script defer src="alerts.js"></script>
   <script defer src="basket.js"></script>
   <script defer src="mobile-auth.js"></script>
+  <script defer src="push.js"></script>
   <script defer src="experience.js"></script>
   <script defer src="native.js"></script>
 </head>
@@ -116,7 +117,17 @@
       <div id="native-notice-list" class="native-announcement-list" aria-live="polite"><p>Checking for notices…</p></div>
       <div class="native-permission-row"><div><strong>Device notifications</strong><p id="native-alerts-explainer">Choose whether Android can display KOFAD alerts. This is optional.</p></div><button id="native-alerts-toggle" type="button" class="native-outline-action">Enable alerts</button></div>
       <div class="native-permission-row"><div><strong>Product offers and promotions</strong><p>Optional marketing notices are off by default. Control promotional messages in this app independently of service alerts.</p></div><button id="native-promotions-toggle" type="button" class="native-outline-action" aria-pressed="false">Enable offers</button></div>
-      <p class="native-caption">Android displays its own permission prompt when you enable alerts. Background push notifications are not active yet; these messages are checked when the app opens or resumes.</p>
+      <section class="native-push-card" aria-label="Background push notifications">
+        <strong>Android background notifications</strong>
+        <p>For delivery, stock and order updates, opt in only after your KOFAD account is verified. Promotional offers require separate consent. Real background messages are not available until Firebase is activated.</p>
+        <label id="native-push-marketing-wrap" hidden><input id="native-push-marketing" type="checkbox"> Also receive promotional offers (optional)</label>
+        <p id="native-push-status" class="native-caption" role="status" aria-live="polite">Checking Android messaging availability…</p>
+        <div class="native-basket-sync-actions">
+          <button id="native-push-enable" type="button" class="native-solid-action">Enable background notifications</button>
+          <button id="native-push-disable" type="button" class="native-outline-action">Remove device</button>
+        </div>
+      </section>
+      <p class="native-caption">In-app notices and local Android alerts are separate from Firebase background push. Android permission alone does not activate remote delivery.</p>
     </section>
     <section id="screen-orders" class="native-screen" hidden aria-label="My orders">
       <button type="button" id="native-orders-back" class="native-back-link">← Account</button>
