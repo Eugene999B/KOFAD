@@ -24,12 +24,17 @@ class SearchCrawlTests(SimpleTestCase):
         self.assertIn("https://kofadimpex.com/sitemap.xml", rules)
         xml = sitemap(self._request("/sitemap.xml", "kofadimpex.com")).content.decode()
         self.assertIn("<loc>https://kofadimpex.com/about/</loc>", xml)
+        self.assertIn("<loc>https://kofadimpex.com/wholesale/</loc>", xml)
         self.assertNotIn("/login/", xml)
 
+    @patch("marketplace.seo.Product.objects.filter")
     @patch("marketplace.seo.MarketListing.objects.filter")
-    def test_market_sitemap_exposes_only_listed_product_ids(self, queryset):
+    def test_market_sitemap_exposes_only_listed_product_ids(self, queryset, product_categories):
+        product_categories.return_value.exclude.return_value.values_list.return_value.distinct.return_value.order_by.return_value = ["Home & Cleaning", "Food & Drinks"]
         queryset.return_value.order_by.return_value.values_list.return_value.iterator.return_value = iter([21, 45])
         xml = sitemap(self._request("/sitemap.xml", "market.kofadimpex.com")).content.decode()
+        self.assertIn("https://market.kofadimpex.com/market/categories/home-cleaning/", xml)
+        self.assertIn("https://market.kofadimpex.com/market/categories/food-drinks/", xml)
         self.assertIn("https://market.kofadimpex.com/market/products/21/", xml)
         self.assertIn("https://market.kofadimpex.com/market/products/45/", xml)
         self.assertNotIn("/market/account/", xml)
