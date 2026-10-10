@@ -12,6 +12,7 @@
   let requestSerial = 0;
   let activeRequest = null;
   let nextPage = null;
+  let activeCategory = "";
   let online = navigator.onLine !== false;
 
   function approvedUrl(path) {
@@ -123,6 +124,7 @@
     activeRequest = new AbortController();
     const url = new URL(OFFICIAL_MARKET + "/market/app/catalog.json");
     url.searchParams.set("page", String(page));
+    if (activeCategory) url.searchParams.set("category", activeCategory);
     if (query) url.searchParams.set("q", query);
     updateStatus("Refreshing official KOFAD products…");
     try {
@@ -139,13 +141,14 @@
       nextPage = Number.isSafeInteger(value.next_page) && value.next_page > 0 ? value.next_page : null;
       showProducts(value.items, append);
       window.KofadNativeExperience?.catalogLoaded(value.items, append);
+      if (Array.isArray(value.categories)) window.KofadNativeExperience?.showCategories(value.categories);
       $("#more-products").hidden = !nextPage;
       updateStatus(
         value.items.length
           ? "Live public prices · confirmed again at checkout"
           : append ? "All products shown." : "No products match this search."
       );
-      if (!append && !query) {
+      if (!append && !query && !activeCategory) {
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             savedAt: Date.now(), items: value.items,
@@ -156,7 +159,7 @@
       if (error.name === "AbortError" || serial !== requestSerial) return;
       nextPage = null;
       $("#more-products").hidden = true;
-      const cached = !query && !append ? readCachedCatalog() : null;
+      const cached = !query && !append && !activeCategory ? readCachedCatalog() : null;
       if (cached) {
         showProducts(cached.items, false);
         window.KofadNativeExperience?.catalogLoaded(cached.items, false);
@@ -298,7 +301,15 @@
   }
 
   // Native view controller owns the bottom navigation.
-  window.KofadNativeBridge = Object.freeze({openOfficial});
+  window.KofadNativeBridge = Object.freeze({
+    openOfficial,
+    setCategory: value => {
+      if (CHANNEL !== "customer") return;
+      activeCategory = typeof value === "string" ? value.slice(0,60) : "";
+      void loadCatalog();
+    },
+    currentCategory: () => activeCategory,
+  });
   if (CHANNEL === "customer") setupCustomer();
   else setupStaff();
   void setupConnectivity();
