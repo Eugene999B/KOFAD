@@ -32,7 +32,7 @@ def robots(request):
     elif host == MARKET_HOST:
         body = (
             "User-agent: *\nAllow: /market/\n"
-            "Allow: /favicon.ico\nAllow: /static/brand/\n"
+            "Allow: /favicon.ico\nAllow: /favicon-96.png\nAllow: /static/brand/\n"
             "Disallow: /market/account/\nDisallow: /market/access/\n"
             "Disallow: /market/cart/\nDisallow: /market/checkout/\n"
             "Disallow: /market/orders/\nDisallow: /market/payments/\n"
@@ -74,6 +74,19 @@ def sitemap(request):
     payload = b'<?xml version="1.0" encoding="UTF-8"?>\n' + tostring(root, encoding="utf-8")
     response = HttpResponse(payload, content_type="application/xml; charset=utf-8")
     response["Cache-Control"] = "public, max-age=1800"
+    return response
+
+
+@require_safe
+def favicon_png(request):
+    """Stable same-origin 96px official KOFAD brand icon for Googlebot-Image."""
+    path = Path(settings.BASE_DIR) / "static" / "brand" / "favicon-96.png"
+    if not path.exists():
+        from scripts.prepare_logo import prepare_logo
+        prepare_logo()
+    response = FileResponse(path.open("rb"), content_type="image/png")
+    response["Cache-Control"] = "public, max-age=86400"
+    response["X-Content-Type-Options"] = "nosniff"
     return response
 
 
