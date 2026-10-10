@@ -1,0 +1,73 @@
+name: Bundle sharp KOFAD homepage hero
+on:
+  push:
+    branches:
+      - design/phase3-hero-commerce-20261010
+    paths:
+      - .github/workflows/kofad-hero-photo.yml
+permissions:
+  contents: write
+jobs:
+  bundle-homepage-photo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: design/phase3-hero-commerce-20261010
+          persist-credentials: true
+      - name: Download and verify high-resolution Unsplash photograph
+        env:
+          PHOTO_PAGE: https://unsplash.com/photos/a-well-lit-grocery-store-aisle-with-produce-displays-2vgVRWpwKYE
+        run: |
+          python3 - <<'PY'
+          from html import unescape
+          from html.parser import HTMLParser
+          from urllib.parse import urlsplit, urlencode, urlunsplit
+          from urllib.request import Request, urlopen
+          from pathlib import Path
+          import re
+          import os
+          class MetaParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.urls = []
+              def handle_starttag(self, tag, attrs):
+                  if tag != "meta":
+                      return
+                  meta = dict(attrs)
+                  if meta.get("property") in {"og:image", "og:image:secure_url"} or meta.get("name") == "twitter:image":
+                      if meta.get("content"):
+                          self.urls.append(unescape(meta["content"]))
+          page = os.environ["PHOTO_PAGE"]
+          headers = {"User-Agent":"Mozilla/5.0 (compatible; KOFADAssetBuild/1.0)"}
+          with urlopen(Request(page,headers=headers),timeout=40) as reply:
+              html = reply.read(700_000).decode("utf8","replace")
+          parser = MetaParser()
+          parser.feed(html)
+          images = [u for u in parser.urls if urlsplit(u).hostname == "images.unsplash.com"]
+          if not images:
+              raise RuntimeError("Unsplash did not provide a verified photo URL; keep existing hero unchanged")
+          src = urlsplit(images[0])
+          url = urlunsplit((src.scheme,src.netloc,src.path,urlencode({
+              "auto":"format","fm":"webp","fit":"crop","crop":"entropy",
+              "w":"2200","h":"1238","q":"88"
+          }),""))
+          with urlopen(Request(url, headers=headers), timeout=55) as reply:
+              image = reply.read(4_000_000)
+              content_type = reply.headers.get("Content-Type","").lower()
+          if not image.startswith(b"RIFF") or image[8:12] != b"WEBP" or len(image) < 90_000:
+              raise RuntimeError(f"Downloaded image failed quality check: {len(image)} bytes, {content_type}")
+          destination = Path("marketplace/static/marketplace/kofad-home-hero-sharp.webp")
+          destination.parent.mkdir(parents=True,exist_ok=True)
+          destination.write_bytes(image)
+          print(f"Bundled {len(image):,} bytes to {destination}")
+          PY
+      - name: Commit bundled image into the feature branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add marketplace/static/marketplace/kofad-home-hero-sharp.webp
+          git diff --cached --quiet && exit 0
+          git commit -m "Bundle sharp first KOFAD hero image locally (2200px)"
+          git push origin HEAD:design/phase3-hero-commerce-20261010
