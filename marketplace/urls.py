@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views, public_views, seo
 from core import native_apps, pwa
-from . import native_api, mobile_v1_api
+from . import native_api, mobile_v1_api, mobile_identity
 from core import google_oauth as google
 
 urlpatterns = [
@@ -13,6 +13,10 @@ urlpatterns = [
     path("market/app/native-version.json", native_apps.customer_native_version, name="market_native_version"),
     path("market/app/catalog.json", native_api.public_native_catalog, name="market_native_catalog"),
     path("market/mobile/v1/bootstrap/", mobile_v1_api.bootstrap, name="market_mobile_bootstrap"),
+    path("market/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "customer"}, name="market_mobile_authorize"),
+    path("market/mobile/v1/token/", mobile_identity.token, {"channel": "customer"}, name="market_mobile_token"),
+    path("market/mobile/v1/me/", mobile_identity.me, {"channel": "customer"}, name="market_mobile_me"),
+    path("market/mobile/v1/revoke/", mobile_identity.revoke, {"channel": "customer"}, name="market_mobile_revoke"),
     path("market/mobile/v1/products/<int:pk>/", mobile_v1_api.product_detail, name="market_mobile_product_detail"),
     path("market/app/manifest.webmanifest", pwa.manifest, {"kind": "customer"}, name="market_pwa_manifest"),
     path("market/app/sw.js", pwa.worker, {"kind": "customer"}, name="market_pwa_sw"),
