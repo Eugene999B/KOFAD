@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from marketplace.models import EmailNotice
 from core.email_identity import deliver_pending
-from core.brevo_email import UncertainEmailDelivery
+from core.brevo_email import UncertainEmailDelivery, DefiniteEmailRejection
 
 
 @override_settings(
@@ -44,6 +44,15 @@ class UncertainTransactionalNoticeTests(TestCase):
         self.assertEqual(row.attempts, 2)
         self.assertEqual(deliver_pending(limit=5), 0)
         self.assertEqual(send.call_count, 1)
+
+    @patch("core.email_identity._send_kofad_mail", side_effect=DefiniteEmailRejection("Explicit rejection"))
+    def test_known_provider_rejection_can_retry_safely(self, send):
+        row = self.notice()
+        self.assertEqual(deliver_pending(limit=5), 0)
+        row.refresh_from_db()
+        self.assertEqual(row.status, "failed")
+        self.assertGreater(row.next_attempt_at, timezone.now())
+        send.assert_called_once()
 
     @patch("core.email_identity._send_kofad_mail", return_value=1)
     def test_successful_delivery_remains_unchanged(self, send):
