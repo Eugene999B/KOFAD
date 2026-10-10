@@ -34,6 +34,7 @@ copyWithProfile("native.js");
 copyWithProfile("alerts.js");
 copyWithProfile("basket.js");
 copyWithProfile("mobile-auth.js");
+copyWithProfile("push.js");
 copyWithProfile("experience.js");
 copyFileSync(resolve(sourceDir, "native.css"), resolve(outputDir, "native.css"));
 copyFileSync(resolve("../../static/brand/kofad-original-logo.png"), resolve(outputDir, "kofad-logo.png"));
