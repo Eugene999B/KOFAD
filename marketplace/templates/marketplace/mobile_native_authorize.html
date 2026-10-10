@@ -20,6 +20,15 @@
       <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
       <input type="hidden" name="client_id" value="{{ client_id }}">
       <input type="hidden" name="state" value="{{ state }}">
+      {% if select_branch %}
+        <label for="kofad-branch" class="branch-label">Choose your assigned branch</label>
+        <select name="branch" id="kofad-branch" required>
+          <option value="">Select a branch…</option>
+          {% for branch in branches %}
+            <option value="{{ branch.pk }}">{{ branch.name }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
       <button type="submit">Continue to {{ app_name }}</button>
     </form>
     <p class="fine">Never approve a connection you didn't initiate. Closing this page cancels authorization. KOFAD never sends your password back to the app.</p>
