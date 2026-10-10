@@ -37,10 +37,12 @@ class MobileReleasePolicy(models.Model):
 class MobileNotice(models.Model):
     """Generic opt-in mobile announcements; NEVER store private account data."""
     PRIORITIES = (("info", "Information"), ("important", "Important"), ("urgent", "Urgent"))
+    KINDS = (("service", "Service / operational notice"), ("promotion", "Optional product promotion"))
     channel = models.CharField(max_length=12, choices=CHANNELS, db_index=True)
     title = models.CharField(max_length=90)
     message = models.CharField(max_length=280)
     priority = models.CharField(max_length=12, choices=PRIORITIES, default="info")
+    kind = models.CharField(max_length=12, choices=KINDS, default="service", help_text="Tag product advertising as a promotion so customers may opt out independently.")
     enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     expires_at = models.DateTimeField(null=True, blank=True)
