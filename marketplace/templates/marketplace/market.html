@@ -1,4 +1,4 @@
-{% extends "marketplace/base.html" %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}{% block content %}
 <section class="shop-catalog">
 <div class="native-market-promo"><div><strong>{% if native_customer_app_released %}Get KOFAD Market for your device{% else %}KOFAD Market web app — ready to install{% endif %}</strong><p>{% if native_customer_app_released %}Official downloads are available for selected platforms.{% else %}Install a KOFAD Market browser app on Android or Windows now. Separately signed native installers will follow.{% endif %}</p></div><a href="{% if native_customer_app_released %}/apps/{% else %}/market/app/install/{% endif %}">{% if native_customer_app_released %}Explore app downloads →{% else %}Install the web app →{% endif %}</a></div>
 {% if not market_customer %}<aside class="market-guest-welcome" aria-label="Welcome to KOFAD Market"><div><h2>Welcome to KOFAD Market</h2><p>Browse products freely. Sign in or create a free account when you are ready to shop.</p></div><a href="{% url 'market_access' %}">Sign in or create account →</a></aside>{% endif %}
