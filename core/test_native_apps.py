@@ -29,8 +29,8 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
         self.assertNotContains(response, "Download staff app")
 
     def test_public_and_market_have_customer_native_app_promotion(self):
-        self.assertContains(self.client.get("/"), "Explore the upcoming app")
-        self.assertContains(self.client.get("/market/"), "View app release status")
+        self.assertContains(self.client.get("/"), "Install KOFAD web app")
+        self.assertContains(self.client.get("/market/"), "Install the web app")
         self.assertNotContains(self.client.get("/"), "Download staff app")
 
     def test_staff_page_requires_valid_staff_session(self):
