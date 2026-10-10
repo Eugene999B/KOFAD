@@ -130,6 +130,9 @@ class BrevoDeliveryEventsTests(TestCase):
 
     def test_unrecognised_activity_and_bad_timestamp_do_not_create_record(self):
         self.assertFalse(self.event(self.payload(event="opened")).json()["tracked"])
+        bad_type = self.payload()
+        bad_type["event"] = ["delivered"]
+        self.assertFalse(self.event(bad_type).json()["tracked"])
         bad = self.payload()
         bad["ts_event"] = "invalid"
         self.assertEqual(self.event(bad).status_code, 400)
