@@ -605,7 +605,7 @@ def _draw_card_back(pdf, request, worker, company, width, height, x=0, y=0):
     pdf.drawCentredString(70.25 * mm, 10.6 * mm, "LIVE EMPLOYMENT STATUS")
 
     # Use the address configured in Settings for this company/location.
-    location = (worker.branch.address or company.address or worker.branch.name).strip()
+    location = (worker.branch.address or company.address or company.delivery_origin_label or worker.branch.name).strip()
     phone = (company.phone or company.secondary_phone or "Contact company administration").strip()
     pdf.setFillColor(NAVY_DARK)
     pdf.rect(0, 0, width, 8.5 * mm, fill=1, stroke=0)
