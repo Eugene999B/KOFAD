@@ -335,3 +335,81 @@ html[data-theme="dark"] .market-body .order-summary-tabs a.active{
  body[data-session-zone="staff"] .online-kpis article,
  .market-body .order-history-card{transition:none!important}
 }
+
+
+/* Phase 3 visual audit corrections — photo depth and usable small-screen actions. */
+.market-body .atelier-market-intro-art{
+  background-color:#15374b;
+  background-size:cover;
+  background-position:center 48%;
+  background-repeat:no-repeat;
+  isolation:isolate;
+}
+.market-body .atelier-market-intro-art>img{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  object-position:center!important;
+}
+.market-body .atelier-market-intro-art:after{
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(8,30,50,.65),rgba(8,30,50,.08) 66%),
+             linear-gradient(0deg,rgba(8,25,40,.67),transparent 65%)!important;
+}
+html[data-theme="dark"] .market-body .atelier-market-intro-art:after{
+  background:linear-gradient(90deg,rgba(8,25,39,.75),rgba(8,25,39,.12) 75%),
+             linear-gradient(0deg,rgba(8,25,39,.76),transparent 70%)!important;
+}
+/* Make the remaining arrow-only controls large enough to use on phones. */
+body.is-kofad-home .kfd-hero-controls button{
+  width:38px!important;height:38px!important;min-width:38px;
+  font-size:20px!important;touch-action:manipulation;
+}
+@media(max-width:768px){
+  /* The previous forced full-width buttons filled the whole first screen on
+     sales, finance and administration. Preserve every action in one scroll row. */
+  body[data-session-zone="staff"] .page-heading>.actions{
+    display:flex!important;flex-direction:row!important;
+    width:100%;max-width:100%;min-width:0;flex-wrap:nowrap!important;
+    overflow-x:auto!important;overscroll-behavior-x:contain;
+    scrollbar-width:thin;gap:8px!important;
+    padding:2px 2px 8px;margin:0;
+  }
+  body[data-session-zone="staff"] .page-heading>.actions > :is(a,button,form){
+    flex:0 0 auto!important;
+    width:auto!important;min-width:0!important;
+    max-width:none!important;min-height:42px!important;
+    white-space:nowrap!important;
+    display:inline-flex;align-items:center;justify-content:center;
+    padding:10px 14px!important;border-radius:10px!important;
+    margin:0!important;
+  }
+  body[data-session-zone="staff"] .page-heading>.actions > form button{
+    min-height:42px!important;white-space:nowrap!important;
+  }
+  .market-body .commerce-checkout-form,
+  .market-body .commerce-checkout-summary,
+  .market-body .checkout-v2-content,
+  .market-body .orders-v2-page,
+  .market-body .order-history-card{min-width:0;max-width:100%}
+  .market-body .order-history-search input{min-width:0;flex:1 1 auto}
+  .market-body .order-status-filter{max-width:100%;overscroll-behavior-x:contain}
+  .market-body .commerce-checkout-steps{
+    max-width:100%;overflow-x:auto;scrollbar-width:thin;
+    overscroll-behavior-x:contain;
+  }
+  .market-body .commerce-checkout-steps span{flex-shrink:0}
+  .market-body .atelier-market-intro-art{background-position:center 42%}
+  body.is-kofad-home .kfd-hero-controls button{width:39px!important;height:39px!important}
+}
+@media(max-width:375px){
+  .market-body .commerce-checkout-steps{padding:8px!important;gap:3px!important}
+  body[data-session-zone="staff"] .page-heading>.actions > :is(a,button,form){
+    padding:9px 12px!important;font-size:12px!important;
+  }
+}
