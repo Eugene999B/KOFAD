@@ -6,6 +6,7 @@ from core import google_oauth as google
 
 urlpatterns = [
     path("favicon.ico", seo.favicon, name="site_favicon"),
+    path("favicon-96.png", seo.favicon_png, name="site_favicon_png"),
     path("apps/", native_apps.customer_downloads, name="customer_native_downloads"),
     path("apps/releases.json", native_apps.customer_release_status, name="customer_native_releases"),
     path("market/app/releases.json", native_apps.customer_release_status, name="market_native_releases"),
