@@ -20,6 +20,7 @@ from . import accounting_views, approval_views, creditor_views, payroll_views, w
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("staff/app/", native_apps.staff_downloads, name="staff_native_downloads"),
+    path("staff/app/control/", native_apps.mobile_operations_dashboard, name="mobile_operations_dashboard"),
     path("staff/app/releases.json", native_apps.staff_release_status, name="staff_native_releases"),
     path("staff/app/native-version.json", native_apps.staff_native_version, name="staff_native_version"),
     path("staff/app/manifest.webmanifest", pwa.manifest, {"kind": "staff"}, name="staff_pwa_manifest"),

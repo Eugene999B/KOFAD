@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:920px;margin:28px auto;padding:0 18px">
+  <p style="color:#c79a35;font-weight:800;letter-spacing:.12em;font-size:12px">KOFAD · SYSTEM ADMINISTRATION</p>
+  <h1>Mobile App Control</h1>
+  <p>Manage release requirements and channel announcements. Installer signing, analytics and deployment status remain in the protected GitHub and Railway consoles.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:16px;margin:24px 0">
+    <section style="border:1px solid #c6d1dc;border-radius:15px;padding:22px">
+      <h2>KOFAD Market</h2>
+      <p>Public Android: {% if customer_app.platforms.0.available %}Download configured{% else %}Not published{% endif %}</p>
+      <p>Latest: {{ customer_app.version|default:"Not released" }}</p>
+      <p>Mandatory below: {{ policies.customer.minimum_android_version|default:"Not set" }}</p>
+      <p>Enabled notices: {{ notice_counts.customer }}</p>
+    </section>
+    <section style="border:1px solid #c6d1dc;border-radius:15px;padding:22px">
+      <h2>KOFAD Staff</h2>
+      <p>Private Android: {% if staff_app.platforms.0.available %}Download configured{% else %}Not published{% endif %}</p>
+      <p>Latest: {{ staff_app.version|default:"Not released" }}</p>
+      <p>Mandatory below: {{ policies.staff.minimum_android_version|default:"Not set" }}</p>
+      <p>Enabled notices: {{ notice_counts.staff }}</p>
+    </section>
+  </div>
+  <p><a href="/{{ admin_prefix }}/technical-admin/core/mobilereleasepolicy/">Manage update policies →</a></p>
+  <p><a href="/{{ admin_prefix }}/technical-admin/core/mobilenotice/">Manage app announcements →</a></p>
+  <p><a href="https://github.com/Eugene999B/KOFAD/actions" target="_blank" rel="noopener noreferrer">Android builds and release checks on GitHub ↗</a></p>
+  <p><a href="/staff/app/">Back to staff app downloads</a></p>
+  <p><small>Announcements are general notices and must not include customer information, staff records, authentication codes, or financial details. Actual push notifications and device installations are not yet tracked here.</small></p>
+</div>
+{% endblock %}

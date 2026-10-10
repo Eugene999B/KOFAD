@@ -1081,3 +1081,6 @@ class CustomerServiceContact(models.Model):
 from .email_models import (EmailMailbox, EmailMailboxMember, EmailConversation, EmailConversationNote,
                            EmailLetter, EmailDailyUsage, EmailCampaign, EmailConversationReadState,
                            EmailStaffDraft, EmailSavedReply, EmailStaffSignature)  # noqa: E402, F401
+
+# Imported as a separate module to keep the core business ledger models stable.
+from .mobile_release_models import MobileReleasePolicy, MobileNotice  # noqa: E402, F401
