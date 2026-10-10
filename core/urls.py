@@ -16,11 +16,17 @@ from . import admin_views
 from . import staff_invites
 from . import export_views
 from . import native_apps, pwa, mobile_staff_api
+from marketplace import mobile_identity
 from . import maintenance_views
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("staff/mobile/v1/bootstrap/", mobile_staff_api.bootstrap, name="staff_mobile_bootstrap"),
+    path("staff/mobile/v1/capabilities/", mobile_identity.capabilities, {"channel": "staff"}, name="staff_mobile_capabilities"),
+    path("staff/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "staff"}, name="staff_mobile_authorize"),
+    path("staff/mobile/v1/token/", mobile_identity.token, {"channel": "staff"}, name="staff_mobile_token"),
+    path("staff/mobile/v1/me/", mobile_identity.me, {"channel": "staff"}, name="staff_mobile_me"),
+    path("staff/mobile/v1/revoke/", mobile_identity.revoke, {"channel": "staff"}, name="staff_mobile_revoke"),
     path("staff/app/", native_apps.staff_downloads, name="staff_native_downloads"),
     path("staff/app/control/", native_apps.mobile_operations_dashboard, name="mobile_operations_dashboard"),
     path("staff/app/releases.json", native_apps.staff_release_status, name="staff_native_releases"),

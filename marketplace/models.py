@@ -623,3 +623,7 @@ class PaymentConfiguration(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         return super().save(*args, **kwargs)
+
+
+# Keep mobile identity models registered without mixing them into checkout models.
+from .mobile_auth_models import MobileAuthorizationGrant, MobileDeviceSession  # noqa: E402,F401

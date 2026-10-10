@@ -119,7 +119,22 @@ def resolve_login_identifier(identifier):
 
 
 @sensitive_post_parameters("password")
+def _resume_mobile_staff_authorization(request):
+    """Only resume our own staff app authorization route, never external URLs."""
+    path = request.session.pop("staff_mobile_auth_return", None)
+    if (isinstance(path, str) and len(path) <= 1024
+            and path.startswith("/staff/mobile/v1/authorize/?")
+            and not any(ord(char) < 32 or char == "\\" for char in path)):
+        return path
+    return None
+
+
 def login_view(request):
+    pending = request.GET.get("next", "")
+    if (pending.startswith("/staff/mobile/v1/authorize/?")
+            and len(pending) <= 1024
+            and not any(ord(ch) < 32 or ch == "\\" for ch in pending)):
+        request.session["staff_mobile_auth_return"] = pending
     # The sign-in gateway is an explicit new staff session boundary. If an
     # authenticated user intentionally revisits the private sign-in route, start fresh; stale
     # duplicate login POSTs are recovered by csrf_failure before reaching here.
@@ -191,7 +206,7 @@ def login_view(request):
                         return redirect("password_change")
                     if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
                         return redirect("mfa")
-                    return redirect("dashboard")
+                    return redirect(_resume_mobile_staff_authorization(request) or "dashboard")
 
                 source.failures += 1
                 if source.failures >= 5:
@@ -279,7 +294,7 @@ def mfa(request):
                         "mfa.enrolled" if was_enrolling else "mfa.verified",
                         request.user.pk,
                     )
-                    return redirect("dashboard")
+                    return redirect(_resume_mobile_staff_authorization(request) or "dashboard")
                 attempt.failures += 1
                 if attempt.failures >= 6:
                     attempt.blocked_until = now + timedelta(minutes=15)
