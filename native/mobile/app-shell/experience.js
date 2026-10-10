@@ -89,7 +89,7 @@
     $("native-detail-save").textContent=favorites.includes(selected.id)?"♥ Saved":"♡ Save item";
   });
   $("native-detail-buy").addEventListener("click",()=>{
-    if(selected)open("/market/products/"+selected.id+"/");
+    if(selected)open("/market/access/?next="+encodeURIComponent("/market/products/"+selected.id+"/"));
   });
   $("native-account-login").addEventListener("click",login);
   $("staff-secure-entry").addEventListener("click",()=>open("/workspace/"));
@@ -102,8 +102,29 @@
     accountRow("Staff account ↗",()=>open("/account/"));
     accountRow("Communications ↗",()=>open("/email/"));
   }
+  function showCategories(names) {
+    if (!CUSTOMER) return;
+    const root = $("native-category-filters");
+    if (!root || !Array.isArray(names)) return;
+    const selected = window.KofadNativeBridge?.currentCategory?.() || "";
+    const options = ["",...new Set(names.filter(x => typeof x === "string" && x.trim().length < 65).slice(0,16))];
+    root.replaceChildren();
+    options.forEach(name => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "native-filter-pill";
+      button.textContent = name || "All";
+      button.setAttribute("aria-pressed", String(name === selected));
+      button.addEventListener("click", () => {
+        window.KofadNativeBridge?.setCategory(name);
+        showCategories(names);
+      });
+      root.append(button);
+    });
+  }
   window.KofadNativeExperience=Object.freeze({
     showProduct:detail,
+    showCategories,
     catalogLoaded(items,append){
       if(!CUSTOMER||!Array.isArray(items))return;
       products=append?[...products,...items].slice(0,150):items.slice(0,20);
