@@ -324,11 +324,12 @@ def run_low_stock_summary(now=None):
 
 
 def run_scheduled_automations(now=None):
-    from .notification_engine import run_staff_scheduled_reports
+    from .notification_engine import run_staff_scheduled_reports, run_customer_personalised_promotions
     return {
         "debt": run_debt_reminders(now),
         "low_stock": run_low_stock_summary(now),
         "email_reports": run_staff_scheduled_reports(now),
+        "customer_email": run_customer_personalised_promotions(now),
     }
 
 
