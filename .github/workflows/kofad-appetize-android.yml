@@ -11,10 +11,10 @@ on:
           - staff
         default: customer
       source_run_id:
-        description: "Successful native QA workflow run ID containing the customer Android debug APK"
+        description: "Successful native QA workflow run ID containing the chosen Android debug APK"
         required: true
         type: string
-        default: "38054211091"
+        default: "38071767692"
 
 permissions:
   contents: read
