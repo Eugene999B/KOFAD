@@ -62,8 +62,8 @@ class StaffPayrollIsolationTests(TestCase):
         response = self.client.get("/payroll/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Ama Worker")
-        self.assertContains(response, "1,300")
-        self.assertNotContains(response, "8,000")
+        self.assertContains(response, "1300.00")
+        self.assertNotContains(response, "8000.00")
         self.assertNotContains(response, "KFD-SELF-2")
         own = self.client.get(f"/payroll/{self.period.pk}/payslip/{self.own_entry.pk}/pdf/")
         self.assertEqual(own.status_code, 200)
@@ -81,7 +81,7 @@ class StaffPayrollIsolationTests(TestCase):
         self.login(self.staff)
         response = self.client.get("/payroll/")
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "1,300")
+        self.assertNotContains(response, "1300.00")
         self.assertEqual(
             self.client.get(f"/payroll/{self.period.pk}/payslip/{self.own_entry.pk}/pdf/").status_code, 404
         )
