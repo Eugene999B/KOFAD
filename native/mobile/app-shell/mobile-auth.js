@@ -45,6 +45,7 @@
   async function start() {
     if (busy) return true;
     if (session) {
+      if (!session.profile) await profile();
       updateAccount();
       return true;
     }
@@ -178,7 +179,7 @@
   }
 
   async function signOut() {
-    const access = session?.access;
+    const access = await accessToken();
     clear();
     if (!access) return;
     try {
