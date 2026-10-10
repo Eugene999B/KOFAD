@@ -98,7 +98,7 @@ class EmailNotice(models.Model):
     status = models.CharField(
         max_length=12, default="queued",
         choices=[("queued", "Queued"), ("sending", "Sending"),
-                 ("sent", "Sent"), ("failed", "Failed")],
+                 ("sent", "Sent"), ("failed", "Failed"), ("uncertain", "Needs review")],
         db_index=True,
     )
     attempts = models.PositiveSmallIntegerField(default=0)

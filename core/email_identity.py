@@ -241,13 +241,18 @@ def deliver_pending(limit=20):
         return 0
     now = timezone.now()
     delivered = 0
+    # An interrupted HTTPS POST may have reached the provider. Never resend
+    # an abandoned "sending" row without reconciliation with the provider.
+    EmailNotice.objects.filter(
+        status="sending", next_attempt_at__lt=now - timedelta(minutes=20),
+    ).update(status="uncertain")
     keys = list(EmailNotice.objects.filter(
-        status__in=["queued", "failed", "sending"], next_attempt_at__lte=now, attempts__lt=5,
+        status__in=["queued", "failed"], next_attempt_at__lte=now, attempts__lt=5,
     ).order_by("created_at").values_list("pk", flat=True)[:limit])
     for pk in keys:
         with transaction.atomic():
             claimed = EmailNotice.objects.filter(
-                pk=pk, status__in=["queued", "failed", "sending"], next_attempt_at__lte=now,
+                pk=pk, status__in=["queued", "failed"], next_attempt_at__lte=now,
                 attempts__lt=5,
             ).update(
                 status="sending", attempts=models.F("attempts") + 1,
@@ -256,14 +261,26 @@ def deliver_pending(limit=20):
         if not claimed:
             continue
         notice = EmailNotice.objects.get(pk=pk)
+        from .brevo_email import DailyEmailLimitExceeded, DefiniteEmailRejection
         try:
             _send_kofad_mail(notice.subject, notice.body, [notice.email], purpose="transaction")
-        except Exception:
-            # Retry only after a bounded delay; no credentials or email body in logs.
+        except (DailyEmailLimitExceeded, DefiniteEmailRejection):
+            # A known quota exhaustion or a concrete rejection is safe to retry.
             EmailNotice.objects.filter(pk=pk).update(
-                status="failed", next_attempt_at=timezone.now() + timedelta(minutes=min(60, 5 * notice.attempts))
+                status="failed",
+                next_attempt_at=timezone.now() + timedelta(
+                    minutes=min(60, 5 * notice.attempts)
+                ),
             )
-            logger.warning("KOFAD email notice could not be delivered")
+            logger.warning("KOFAD email provider rejected a notice; retry scheduled")
+        except Exception:
+            # After provider submission starts, a timeout or dropped response can
+            # still mean the recipient was sent the email. Leave it for an
+            # authorised manual investigation, never automatically send twice.
+            EmailNotice.objects.filter(pk=pk).update(
+                status="uncertain",
+            )
+            logger.warning("KOFAD email notice needs delivery reconciliation")
         else:
             EmailNotice.objects.filter(pk=pk).update(
                 status="sent", sent_at=timezone.now()
