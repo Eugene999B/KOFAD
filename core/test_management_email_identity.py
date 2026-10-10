@@ -157,6 +157,51 @@ class ManagementMailboxRetirementTests(TestCase):
         mgmt.refresh_from_db()
         self.assertFalse(mgmt.active)
 
+    @override_settings(
+        KOFAD_EMAIL_ENABLED=True, KOFAD_EMAIL_PROVIDER="brevo",
+        KOFAD_BREVO_API_KEY="FAKE-CI-ONLY",
+        KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_REGISTERED_SENDERS="transactions@kofadimpex.com",
+    )
+    def test_disabled_mailbox_queue_cannot_submit_to_provider(self):
+        from unittest.mock import patch
+        from core.email_center import deliver_outgoing
+        mgmt = EmailMailbox.objects.create(
+            address=NEW, label="Management", active=False
+        )
+        letter = EmailLetter.objects.create(
+            mailbox=mgmt, direction="outbound", status="queued",
+            from_address=NEW, to_address="client@example.net",
+            subject="Do not send", body_text="Company retired this address",
+            next_attempt_at=timezone.now(),
+        )
+        with patch("core.brevo_email.requests.post") as post:
+            self.assertEqual(deliver_outgoing(limit=10), 0)
+            post.assert_not_called()
+        letter.refresh_from_db()
+        self.assertEqual(letter.status, "suppressed")
+
+    @override_settings(
+        KOFAD_EMAIL_ENABLED=True, KOFAD_EMAIL_PROVIDER="brevo",
+        KOFAD_BREVO_API_KEY="FAKE-CI-ONLY",
+        KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_REGISTERED_SENDERS="transactions@kofadimpex.com",
+    )
+    def test_direct_provider_rejects_retired_sender_and_recipient(self):
+        from unittest.mock import patch
+        from core.brevo_email import send_brevo
+        with patch("core.brevo_email.requests.post") as post:
+            with self.assertRaises(ValidationError):
+                send_brevo(
+                    subject="Test", body="Body", recipient="client@example.net",
+                    sender_email=NEW,
+                )
+            with self.assertRaises(ValidationError):
+                send_brevo(
+                    subject="Test", body="Body", recipient=OLD,
+                )
+            post.assert_not_called()
+
     def test_old_name_is_also_deleted_if_present_after_renaming(self):
         original = EmailMailbox.objects.create(address=OLD, label="Former management")
         rename = importlib.import_module("core.migrations.0042_management_email_identity")
