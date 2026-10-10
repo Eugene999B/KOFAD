@@ -27,7 +27,7 @@
           <span class="kf-download-device-label">iPhone &amp; iPad</span>
         </div>
         <p>Add KOFAD to your Home Screen with Safari.</p>
-        {% if app.kind == 'staff' %}
+        {% if app.kind == 'staff' or request.path != '/apps/' %}
           <button type="button" class="kf-download-device-action" data-pwa-install>Use on iPhone <span aria-hidden="true">↗</span></button>
         {% else %}
           <a class="kf-download-device-action" href="https://market.kofadimpex.com/market/app/install/?device=iphone">Add to Home Screen <span aria-hidden="true">↗</span></a>
@@ -40,7 +40,7 @@
           <span class="kf-download-device-label">Android</span>
         </div>
         <p>Install from Chrome and launch like any app.</p>
-        {% if app.kind == 'staff' %}
+        {% if app.kind == 'staff' or request.path != '/apps/' %}
           <button type="button" class="kf-download-device-action" data-pwa-install>Install for Android <span aria-hidden="true">↗</span></button>
         {% else %}
           <a class="kf-download-device-action" href="https://market.kofadimpex.com/market/app/install/?device=android">Install for Android <span aria-hidden="true">↗</span></a>
@@ -53,7 +53,7 @@
           <span class="kf-download-device-label">Mac &amp; Windows</span>
         </div>
         <p>Install in your Dock, Start menu or desktop.</p>
-        {% if app.kind == 'staff' %}
+        {% if app.kind == 'staff' or request.path != '/apps/' %}
           <button type="button" class="kf-download-device-action" data-pwa-install>Install desktop app <span aria-hidden="true">↗</span></button>
         {% else %}
           <a class="kf-download-device-action" href="https://market.kofadimpex.com/market/app/install/?device=desktop">Install desktop app <span aria-hidden="true">↗</span></a>
