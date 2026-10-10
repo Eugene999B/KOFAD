@@ -218,6 +218,12 @@ def drafts(request):
                         raise ValidationError("To send an email, enter recipient, subject and message.")
                     if scheduled and EmailMailbox.objects.filter(address=recipient, active=True).exists():
                         raise ValidationError("Scheduling internal business messages is not yet supported.")
+                    if request.POST.get("append_signature") == "yes":
+                        signature = EmailStaffSignature.objects.filter(
+                            mailbox=mailbox, user=request.user
+                        ).first()
+                        if signature and signature.body.strip():
+                            body = body.rstrip() + "\n\n" + signature.body.strip()
                     with transaction.atomic():
                         sent = compose(mailbox, recipient, subject, body, request.user,
                                        conversation=draft.conversation)
