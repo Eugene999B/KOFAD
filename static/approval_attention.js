@@ -189,7 +189,12 @@
   }
 
   refresh();
-  window.setInterval(refresh, 12000);
+  // One low-cost summary refresh per 30 seconds while a staff tab is visible.
+  // Background tabs never poll; returning to the tab refreshes immediately.
+  // Approval decisions still use their own live server endpoints.
+  window.setInterval(() => {
+    if (!document.hidden) refresh();
+  }, 30000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });

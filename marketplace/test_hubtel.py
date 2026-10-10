@@ -312,6 +312,12 @@ class HubtelPaymentTests(MarketFixtures):
         self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=40))
         attempt.created_at = timezone.now() - timedelta(minutes=10)
         self.assertEqual(hubtel._retry_delay(attempt), timedelta(seconds=40))
+        attempt.created_at = timezone.now() - timedelta(minutes=12)
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(minutes=2))
+        attempt.created_at = timezone.now() - timedelta(minutes=40)
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(minutes=5))
+        attempt.created_at = timezone.now() - timedelta(hours=3)
+        self.assertEqual(hubtel._retry_delay(attempt), timedelta(minutes=20))
 
     def test_paystack_data_cannot_settle_hubtel_attempt(self):
         attempt = self.pending()
