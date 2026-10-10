@@ -16,8 +16,9 @@ python scripts/prepare_logo.py
 The script builds the official transparent-padded full wordmark PNG and the
 legacy-compatible SVG path from **only** the master PNG. It also generates
 `favicon.ico`, square PNG icons at 16/32/48/96/180/192/512, and
-`apple-touch-icon.png` from the emblem region. The favicon uses a navy tile to
-keep detail visible at small browser-tab sizes.
+`apple-touch-icon.png` from the same complete official logo used in the brand
+header. The favicon is square with transparent padding and preserves the
+whole logo instead of making an unreliable crop.
 
 The same generated `kofad-official-logo.svg` appears in all KOFAD customer,
 staff and public templates. The print and PDF source is the generated
