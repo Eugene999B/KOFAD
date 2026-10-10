@@ -155,3 +155,22 @@ html[data-theme="dark"] .native-next-step p:not(.native-kicker) { color:#c3dce1;
 .native-device-hint { display:inline-block;margin-bottom:6px;padding:3px 7px;border-radius:50px;background:#e9f5f0;color:#137466;font-size:10px;line-height:1.5;font-weight:800; }
 .native-device-match { border-color:#a9cfc7; }
 html[data-theme="dark"] .native-device-hint { background:#315f57;color:#c2f3e6; }
+
+/* Immediate installable Android/Windows browser app, distinct from signed native releases. */
+.native-web-ready{display:flex;align-items:flex-start;gap:17px;border:1px solid #9ccec5;background:linear-gradient(112deg,#e7f5ef 0%,#f5fbf9 100%);border-radius:19px;padding:23px 24px;margin:0 0 16px;color:#1a4c4f}
+.native-web-ready-icon{display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:13px;background:#157b66;color:#fff;font-size:24px;font-weight:900}
+.native-web-ready-text{min-width:0;flex:1}
+.native-web-ready-text .native-kicker{font-size:10px;font-weight:900;color:#17776e;letter-spacing:.11em;margin:0 0 5px}
+.native-web-ready h3{margin:0 0 6px;font-size:19px;font-weight:900;letter-spacing:-.025em;color:#123b47}
+.native-web-ready-text>p:not(.native-kicker){margin:0 0 14px;font-size:12px;line-height:1.65;color:#507375;max-width:710px}
+.native-web-install{display:inline-flex;align-items:center;gap:8px;justify-content:center;min-height:46px;padding:12px 17px;background:#0a4e58;border:0;border-radius:11px;text-decoration:none;color:#fff!important;font-weight:900;font-size:12px;line-height:1.4;cursor:pointer}
+.native-web-install:hover{background:#146f70}
+.native-web-ready small{display:block;color:#627f80;margin-top:12px;font-size:11px;line-height:1.5}
+.native-web-status{margin:10px 0 0!important}
+.native-web-steps{padding:12px 14px;margin:11px 0;background:#fff;border:1px solid #cce5dd;border-radius:10px;color:#25565a;font-size:12px;line-height:1.6}
+.native-web-steps p{margin:5px 0;font-size:12px}
+.native-web-steps button{border:0;border-radius:8px;background:#157c69;color:#fff;padding:8px 13px;font-weight:800}
+html[data-theme="dark"] .native-web-ready{background:#173c3d;border-color:#3b8d78;color:#dcefe8}
+html[data-theme="dark"] .native-web-ready h3{color:#f0fdf5}
+html[data-theme="dark"] .native-web-ready-text>p:not(.native-kicker),html[data-theme="dark"] .native-web-ready small{color:#c0d8d4}
+@media(max-width:640px){.native-web-ready{padding:16px 15px;gap:11px;margin-bottom:13px}.native-web-ready-icon{flex-basis:34px;height:34px;border-radius:10px}.native-web-ready h3{font-size:16px}.native-web-install{width:100%}.native-web-ready small{font-size:10px}}
