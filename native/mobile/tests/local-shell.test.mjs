@@ -49,3 +49,17 @@ test("No offline transaction queue or unsafe application bridge", () => {
   assert.doesNotMatch(cfg, /^\s*url:\s*profile\.startUrl/m);
   assert.doesNotMatch(cfg, /allowMixedContent:\s*true/);
 });
+
+test("Native app updates compare installed versions and use only fixed official hubs", () => {
+  const src = read("app-shell/native.js");
+  const html = read("app-shell/index.html");
+  assert.match(src, /native\.App\.getInfo/);
+  assert.match(src, /native-version\.json/);
+  assert.match(src, /newerStableVersion/);
+  assert.match(src, /appStateChange/);
+  assert.match(src, /https:\/\/kofadimpex\.com\/apps\//);
+  assert.match(src, /https:\/\/staff\.kofadimpex\.com\/staff\/app\//);
+  assert.match(html, /id="native-update"/);
+  assert.match(src, /cache: "no-store"/);
+  assert.doesNotMatch(src, /eval\(|document\.write\(/);
+});
