@@ -347,8 +347,8 @@ def _retry_delay(attempt, now=None):
     # The customer checkout and independent provider callback still verify
     # promptly. Long-lived unresolved references should not repeatedly hit
     # Hubtel's missing/expired-reference endpoint or fill evidence logs.
-    # Keep the existing fast first 10 minutes (and never auto-approve).
-    if age < timedelta(minutes=10):
+    # Keep the existing fast first 12 minutes (and never auto-approve).
+    if age < timedelta(minutes=12):
         return timedelta(seconds=40)
     if age < timedelta(minutes=30):
         return timedelta(minutes=2)
