@@ -140,11 +140,14 @@ def action(request):
                 now = timezone.now()
                 # Cancel queued/deferred messages before they are claimed by the
                 # worker; restore never queues the old send again automatically.
-                target.filter(status__in=CANCEL_STATUSES).update(
+                target.update(trashed_at=now, trashed_by=request.user)
+                EmailLetter.objects.filter(
+                    mailbox=mailbox, trashed_at=now, trashed_by=request.user,
+                    status__in=CANCEL_STATUSES,
+                ).update(
                     status="suppressed",
                     last_error="Moved to Trash; any pending send was cancelled.",
                 )
-                target.update(trashed_at=now, trashed_by=request.user)
                 verb = "moved to Trash"
             elif action_name == "restore_selected":
                 target.update(trashed_at=None, trashed_by=None)
