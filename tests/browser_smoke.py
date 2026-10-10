@@ -974,7 +974,13 @@ with sync_playwright() as p:
             ("settings", "/settings/"),
             ("customers", "/parties/?kind=customer"),
         ):
-            admin_page.goto("http://127.0.0.1:8000" + path, wait_until="domcontentloaded")
+            response = admin_page.goto("http://127.0.0.1:8000" + path, wait_until="domcontentloaded")
+            # The Email Centre deliberately returns 404 while unconfigured in
+            # isolated CI. Do not audit Django's oversized DEBUG traceback as UI.
+            if section == "email" and response.status == 404:
+                assert "Email Centre is not enabled yet." in admin_page.content()
+                continue
+            assert response.status == 200, f"Audit route error: {section} {response.status}"
             admin_page.wait_for_timeout(70)
             if not admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"):
                 offenders = admin_page.evaluate("""() => {
