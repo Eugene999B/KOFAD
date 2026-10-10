@@ -181,6 +181,8 @@ def capabilities(request, channel):
         "version": 1,
         "channel": channel,
         "native_mobile_token_login": bool(getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False)),
+        "native_mobile_push": bool(getattr(settings, "KOFAD_NATIVE_AUTH_ENABLED", False) and
+                                   getattr(settings, "KOFAD_NATIVE_PUSH_ENABLED", False)),
         "client_id": client["id"],
         "redirect_uri": client["uri"],
     })
