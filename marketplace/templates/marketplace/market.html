@@ -1,28 +1,22 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/market-discover.css' %}">{% endblock %}{% block content %}
 <section class="shop-catalog">
-{% if not market_customer %}<aside class="market-guest-welcome" aria-label="Welcome to KOFAD Market"><div><h2>Welcome to KOFAD Market</h2><p>Browse products freely. Sign in or create a free account when you are ready to shop.</p></div><a href="{% url 'market_access' %}">Sign in or create account →</a></aside>{% endif %}
+{% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="{% if q %}/market/?category={{ category|urlencode }}&amp;q={{ q|urlencode }}{% else %}/market/categories/{{ category|slugify }}/{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 {% if not q and not selected_category %}
-<section class="atelier-market-intro" aria-labelledby="atelier-market-title">
-<div class="atelier-market-intro-copy">
-  <span class="atelier-kicker">KOFAD IMPEX ENTERPRISE / THE MARKET</span>
-  <h2 id="atelier-market-title">Good things for every day. <em>Supply for what comes next.</em></h2>
-  <p>Browse the live KOFAD catalogue, see today's published prices in Ghana cedis, and choose individual items or available packs. Buying for your business? Ask us about larger quantities.</p>
-  <div class="atelier-market-intro-actions">
-    <a href="#market-products" class="atelier-action-gold">Explore products <span aria-hidden="true">↘</span></a>
-    <a href="/wholesale/" class="atelier-action-outline">Wholesale enquiries <span aria-hidden="true">↗</span></a>
+<section class="market-shop-lead" aria-labelledby="market-shop-title">
+  <div class="market-shop-lead-copy">
+    <span class="market-shop-lead-kicker">KOFAD MARKET · RETAIL &amp; WHOLESALE</span>
+    <h2 id="market-shop-title">Everything you need, easier to find.</h2>
+    <p>Browse everyday essentials, compare published prices in Ghana cedis, and shop available units or packs.</p>
   </div>
-  <div class="atelier-market-quicklinks" aria-label="Shopping assistance"><a href="/delivery/">Delivery &amp; collection</a><a href="/faq/">Shopping help</a><a href="/contact/">Contact our team</a></div>
-</div>
-<div class="atelier-market-intro-art" aria-hidden="true" style="background-image:url('{% static 'marketplace/kofad-home-hero-sharp.webp' %}')">
-  <img src="{% static 'marketplace/kofad-home-hero-sharp.webp' %}" width="1600" height="900" alt="" loading="eager" decoding="async">
-  <div class="atelier-market-art-plate"><span>CURATED FOR LIFE &amp; BUSINESS</span><strong>KOFAD<br>MARKET</strong><i></i></div>
-</div>
+  <div class="market-shop-lead-actions">
+    <a href="#market-products" class="market-shop-lead-primary">Explore products <span aria-hidden="true">↗</span></a>
+    <a href="/wholesale/" class="market-shop-lead-secondary">Buying in bulk? <span aria-hidden="true">→</span></a>
+  </div>
 </section>
 {% endif %}
-{% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="{% if q %}/market/?category={{ category|urlencode }}&amp;q={{ q|urlencode }}{% else %}/market/categories/{{ category|slugify }}/{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 
 <header class="shop-catalog-head">
-<div><p>KOFAD MARKET</p><h1>{% if selected_category %}{{ selected_category }}{% elif q %}Search results{% else %}All products{% endif %}</h1><span>{{ listings|length }} item{{ listings|length|pluralize }}{% if q %} for “{{ q }}”{% endif %}</span>{% if not selected_category and not q %}<p>Explore current products, prices in Ghana cedis and available selling units or packs. Delivery and collection options depend on checkout coverage.</p>{% endif %}</div>
+<div><p>KOFAD MARKET</p><h1>{% if selected_category %}{{ selected_category }}{% elif q %}Search results{% else %}All products{% endif %}</h1><span>{{ listings|length }} item{{ listings|length|pluralize }}{% if q %} for “{{ q }}”{% endif %}</span></div>
 <form method="get" class="shop-catalog-filters">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
 <label class="shop-sort"><span>Sort products</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Recommended</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low to high</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high to low</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Product name</option></select></label>
 </form>
