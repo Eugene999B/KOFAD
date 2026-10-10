@@ -194,7 +194,21 @@ def drafts(request):
     if request.method == "POST":
         action = request.POST.get("action", "")
         try:
-            if action == "delete":
+            if action == "cancel_scheduled":
+                with transaction.atomic():
+                    letter = get_object_or_404(
+                        EmailLetter.objects.select_for_update(), pk=request.POST.get("letter_id"),
+                        created_by=request.user, mailbox__in=writable,
+                        direction="outbound", status="queued",
+                        next_attempt_at__gt=timezone.now(),
+                    )
+                    letter.status = "suppressed"
+                    letter.last_error = "Scheduled message cancelled by its sender."
+                    letter.save(update_fields=["status", "last_error"])
+                    audit(request.user, letter.mailbox.branch, "email.scheduled_cancelled",
+                          letter.pk, {"mailbox": letter.mailbox.address})
+                messages.success(request, "Scheduled email cancelled before sending.")
+            elif action == "delete":
                 draft = get_object_or_404(EmailStaffDraft, pk=request.POST.get("draft_id"),
                                           author=request.user, mailbox__in=writable)
                 draft.delete()
@@ -258,6 +272,11 @@ def drafts(request):
                     "drafts": EmailStaffDraft.objects.filter(author=request.user,
                                                             mailbox__in=writable).select_related("mailbox")[:60],
                     "editing": current,
+                    "scheduled": EmailLetter.objects.filter(
+                        created_by=request.user, mailbox__in=writable,
+                        direction="outbound", status="queued",
+                        next_attempt_at__gt=timezone.now(),
+                    ).select_related("mailbox").order_by("next_attempt_at")[:40],
                     "signatures": EmailStaffSignature.objects.filter(user=request.user,
                                                                    mailbox__in=writable)})
     return render(request, "email_pro_drafts.html", options)
