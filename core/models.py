@@ -125,6 +125,8 @@ class DebtSettings(models.Model):
     GRACE_UNITS = [("days", "Days"), ("weeks", "Weeks"), ("months", "Months (30 days)")]
 
     delivery_mode = models.CharField(max_length=8, choices=DELIVERY, default="off")
+    EMAIL_DELIVERY = [("off", "Off"), ("draft", "Prepare for review"), ("send", "Send automatically")]
+    email_delivery_mode = models.CharField(max_length=8, choices=EMAIL_DELIVERY, default="off")
     reminder_time = models.TimeField(default=time(9, 0))
     due_soon_enabled = models.BooleanField(default=True)
     due_soon_days = models.CharField(max_length=80, default="7,3,1")
@@ -239,6 +241,7 @@ class Party(models.Model):
     name = models.CharField(max_length=120)
     phone = models.CharField(max_length=40)
     email = models.EmailField(blank=True)
+    debt_email_opt_in = models.BooleanField(default=False)
     address = models.TextField(blank=True)
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0, validators=[MinValueValidator(0)])
     consent = models.BooleanField(default=False)
@@ -801,6 +804,8 @@ class PasswordRecovery(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     phone = models.CharField(max_length=20)
+    email = models.EmailField(blank=True)
+    channel = models.CharField(max_length=10, default="sms", choices=[("sms", "SMS"), ("email", "Email")])
     code_digest = models.CharField(max_length=64)
     password_stamp = models.CharField(max_length=64)
     expires_at = models.DateTimeField()
@@ -1055,3 +1060,56 @@ class WhatsAppBotReply(models.Model):
     error = models.CharField(max_length=240, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class StaffInvitation(models.Model):
+    """One-time, expiring onboarding grant for an owner-created staff account."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="staff_invitation",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+",
+    )
+    token_digest = models.CharField(max_length=64)
+    channel = models.CharField(max_length=12, choices=[
+        ("sms", "SMS"), ("email", "Email"), ("whatsapp", "WhatsApp"),
+    ])
+    destination = models.CharField(max_length=254)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    delivery_state = models.CharField(max_length=12, default="pending", choices=[
+        ("pending", "Pending"), ("submitted", "Submitted"), ("failed", "Failed"),
+    ])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class CustomerServiceContact(models.Model):
+    """Public support contact controlled from KOFAD company settings."""
+    CHANNELS = [("call", "Customer care phone"), ("whatsapp", "Customer care WhatsApp")]
+    label = models.CharField(max_length=70)
+    channel = models.CharField(max_length=12, choices=CHANNELS)
+    number = models.CharField(max_length=20)
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "pk"]
+
+    @property
+    def contact_url(self):
+        if self.channel == "whatsapp":
+            return "https://wa.me/" + "".join(c for c in self.number if c.isdecimal())
+        return "tel:" + self.number
+
+
+
+
+# Department mailboxes are imported so Django discovers their migrations.
+from .email_models import (EmailMailbox, EmailMailboxMember, EmailConversation, EmailConversationNote,
+                           EmailLetter, EmailDailyUsage, EmailCampaign, EmailConversationReadState,
+                           EmailStaffDraft, EmailSavedReply, EmailStaffSignature,
+                           EmailDeliveryEvent)  # noqa: E402, F401
+
+# KOFAD mobile app update and announcement management.
+from .mobile_release_models import MobileReleasePolicy, MobileNotice  # noqa: E402, F401
