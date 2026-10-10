@@ -83,6 +83,7 @@ class InstallableWebAppTests(Fixtures, TestCase):
         self.assertContains(install, "KOFAD, wherever you are.")
         self.assertContains(install, "Install KOFAD Market")
         self.assertContains(install, "Add to Home Screen")
+        self.assertContains(install, '<button type="button" class="kf-download-device-action" data-pwa-install>', count=3)
         self.assertContains(install, 'rel="manifest"')
         self.assertNotContains(install, "Install KOFAD Staff")
         public = self.client.get("/apps/")
