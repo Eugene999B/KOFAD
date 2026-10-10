@@ -178,6 +178,27 @@
     } catch (_) {clear();}
   }
 
+  async function readMobile(resource) {
+    const allowed = CUSTOMER
+      ? /^orders\/(?:[0-9a-fA-F-]{36}\/)?$/.test(resource)
+      : resource === "overview/";
+    if (!allowed) return {error: "unsupported_mobile_resource"};
+    const access = await accessToken();
+    if (!access) return {error: "authentication_required"};
+    try {
+      const reply = await fetch(ORIGIN + ROOT + resource, {
+        method: "GET", mode: "cors", credentials: "omit", cache: "no-store",
+        headers: {Authorization: "Bearer " + access},
+      });
+      if (reply.status === 401 || reply.status === 403) {
+        clear();
+        return {error: "session_expired"};
+      }
+      if (!reply.ok) return {error: "temporarily_unavailable"};
+      return await reply.json();
+    } catch (_) {return {error: "connection_unavailable"};}
+  }
+
   async function signOut() {
     const access = await accessToken();
     clear();
@@ -199,7 +220,7 @@
   }
 
   window.KofadMobileAuth = Object.freeze({
-    start, profile, signOut,
+    start, profile, signOut, readMobile,
     isAuthenticated: () => Boolean(session?.profile),
     isSupported: readiness,
   });
