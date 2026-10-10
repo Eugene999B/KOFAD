@@ -452,3 +452,168 @@ html[data-theme="dark"] body.is-kofad-home .public-desktop-nav>a:not(.public-mar
  .market-body .commerce-product-card,
  .market-body .commerce-product-image img{transition:none!important}
 }
+
+
+/* Distinct editorial components: purposeful images and genuine customer paths. */
+.atelier-kicker{
+  color:#9d721f;font-size:11px;font-weight:800;letter-spacing:.16em;
+  text-transform:uppercase;
+}
+.market-body .atelier-market-intro{
+  max-width:1400px;min-width:0;margin:16px auto 28px;
+  display:grid;grid-template-columns:1fr .88fr;
+  align-items:stretch;overflow:hidden;border-radius:23px;
+  background:#0d2b47;border:1px solid rgba(224,192,124,.27);
+  box-shadow:0 20px 42px rgba(13,37,56,.13);
+  color:#fff;
+}
+.market-body .atelier-market-intro-copy{
+  display:flex;flex-direction:column;align-items:flex-start;
+  justify-content:center;gap:0;padding:clamp(26px,3.8vw,55px);
+  position:relative;z-index:1;
+}
+.market-body .atelier-market-intro .atelier-kicker{color:#e5c57f}
+.market-body .atelier-market-intro h2{
+  color:#fff!important;font-size:clamp(28px,3vw,46px);
+  line-height:1.13;letter-spacing:-.043em;
+  font-weight:760;margin:13px 0 16px;max-width:600px;
+}
+.market-body .atelier-market-intro h2 em{
+  font-style:normal;color:#e5c57f;display:block;
+}
+.market-body .atelier-market-intro-copy>p{
+  color:#dae5ea;line-height:1.67;font-size:14px;
+  max-width:530px;margin:0;
+}
+.atelier-market-intro-actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:25px}
+.atelier-market-intro-actions a{
+  min-height:44px;padding:10px 18px;border-radius:10px;
+  font-weight:750;font-size:13px;text-decoration:none!important;
+  display:inline-flex;align-items:center;gap:14px;
+  transition:transform .15s ease;
+}
+.atelier-market-intro-actions a:hover{transform:translateY(-2px)}
+.atelier-action-gold{color:#1c2b34!important;background:#e5ba64;border:1px solid #e5ba64}
+.atelier-action-outline{color:#fff!important;border:1px solid rgba(255,255,255,.44)}
+.atelier-market-quicklinks{
+  display:flex;flex-wrap:wrap;gap:9px 18px;margin-top:30px;
+  padding-top:20px;border-top:1px solid rgba(255,255,255,.15);
+}
+.atelier-market-quicklinks a{color:#e7edf0!important;text-decoration:underline;text-decoration-color:#8c97a2;font-size:12px;text-underline-offset:4px}
+.atelier-market-intro-art{min-height:360px;position:relative;overflow:hidden}
+.atelier-market-intro-art:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,#0d2b47,transparent 40%),linear-gradient(0deg,rgba(7,27,48,.75),transparent 70%);
+}
+.atelier-market-intro-art>img{
+  width:100%;height:100%;object-fit:cover;position:absolute;inset:0;
+  filter:saturate(.93) contrast(1.07);
+}
+.atelier-market-art-plate{
+  position:absolute;z-index:1;right:26px;bottom:24px;
+  color:#fff;background:rgba(7,27,45,.79);
+  border:1px solid rgba(238,204,128,.43);
+  backdrop-filter:blur(9px);padding:16px 19px;border-radius:12px;
+}
+.atelier-market-art-plate span{font-size:9px;letter-spacing:.12em;color:#ead09a;display:block}
+.atelier-market-art-plate strong{font-size:23px;line-height:1.12;letter-spacing:.055em;display:block;margin-top:8px}
+.atelier-market-art-plate i{width:45px;height:3px;background:#e5ba64;display:block;margin-top:13px}
+.market-body .atelier-market-help{
+  margin:36px 0 8px;border-radius:18px;background:#efe7d7;
+  border:1px solid #e6d7b6;padding:30px clamp(22px,3vw,40px);
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+}
+.atelier-market-help h2{color:#21364a;font-size:clamp(20px,2vw,29px);margin:6px 0}
+.atelier-market-help p{font-size:13px;line-height:1.55;max-width:650px;color:#5c6469;margin:0}
+.atelier-market-help>a{
+  border-radius:10px;background:#10324f;color:#fff!important;
+  padding:12px 18px;display:inline-flex;gap:14px;white-space:nowrap;
+  font-size:13px;font-weight:750;text-decoration:none!important;
+}
+.atelier-home-story{
+  width:min(1320px,calc(100% - 60px));margin:18px auto 50px;
+  display:grid;grid-template-columns:.86fr 1fr;min-height:380px;
+  background:var(--atelier-surface);
+  border:1px solid var(--atelier-edge);
+  border-radius:23px;box-shadow:var(--atelier-shadow);overflow:hidden;
+}
+.atelier-story-photo{position:relative;min-height:385px;overflow:hidden;background:#11324a}
+.atelier-story-photo:after{
+  content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(8,29,47,.57),transparent 45%);
+}
+.atelier-story-photo img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+.atelier-story-photo>span{
+  position:absolute;bottom:22px;left:28px;z-index:1;
+  color:#fff;font-weight:800;letter-spacing:.16em;font-size:11px;
+  text-shadow:0 2px 9px rgba(0,0,0,.4);
+}
+.atelier-story-copy{padding:clamp(25px,3.4vw,48px);align-self:center;min-width:0}
+.atelier-story-copy h2{
+  color:var(--atelier-text)!important;font-size:clamp(29px,3vw,44px);
+  line-height:1.13;letter-spacing:-.043em;font-weight:750;margin:12px 0;
+}
+.atelier-story-copy h2 em{font-style:normal;color:#b58328}
+.atelier-story-copy>p:not(.atelier-kicker){
+  font-size:14px;line-height:1.65;color:var(--atelier-muted);
+  max-width:510px;margin:0 0 15px;
+}
+.atelier-story-steps{display:grid;gap:2px}
+.atelier-story-steps>a{
+  display:grid;grid-template-columns:28px minmax(0,1fr) 20px;
+  align-items:center;gap:12px;text-decoration:none!important;color:var(--atelier-text)!important;
+  border-bottom:1px solid var(--atelier-edge);padding:13px 0;
+}
+.atelier-story-steps>a:hover span strong{color:#b58328}
+.atelier-story-steps>a>b{
+  color:#b58328;font-variant-numeric:tabular-nums;font-size:13px;
+}
+.atelier-story-steps>a span{min-width:0}
+.atelier-story-steps>a strong{display:block;font-size:14px;line-height:1.35}
+.atelier-story-steps>a small{display:block;color:var(--atelier-muted);font-size:12px;line-height:1.5;margin-top:3px}
+.atelier-story-steps>a i{font-style:normal;color:#ba8939}
+html[data-theme="dark"] .market-body .atelier-market-intro{
+  background:#172839;border-color:#5a4b35;
+}
+html[data-theme="dark"] .market-body .atelier-market-intro-art:after{
+  background:linear-gradient(90deg,#172839,transparent 40%),linear-gradient(0deg,rgba(7,21,29,.8),transparent);
+}
+html[data-theme="dark"] .market-body .atelier-market-help{
+  background:#272724!important;border-color:#59503a!important;
+}
+html[data-theme="dark"] .market-body .atelier-market-help h2,
+html[data-theme="dark"] .market-body .atelier-story-copy h2{color:#f2f1ec!important}
+html[data-theme="dark"] .market-body .atelier-market-help p{color:#b5bdc0!important}
+html[data-theme="dark"] .market-body .atelier-market-help>a{
+  color:#232725!important;background:#e2b65e!important;
+}
+html[data-theme="dark"] .market-body .atelier-home-story{
+  background:#1c2226!important;border-color:#394248!important;
+}
+html[data-theme="dark"] .market-body .atelier-story-copy h2 em{color:#ecc178}
+html[data-theme="dark"] .market-body .atelier-story-steps>a strong{color:#f0f1ed}
+@media(max-width:950px){
+ .market-body .atelier-market-intro{grid-template-columns:1fr 38%}
+ .market-body .atelier-market-intro-art{min-height:300px}
+ .market-body .atelier-market-intro-copy{padding:29px}
+ .market-body .atelier-market-intro h2{font-size:30px}
+ .atelier-home-story{grid-template-columns:42% 1fr}
+}
+@media(max-width:700px){
+ .market-body .atelier-market-intro{grid-template-columns:1fr;margin:10px 12px 22px;border-radius:17px}
+ .market-body .atelier-market-intro-copy{padding:26px 23px 23px}
+ .market-body .atelier-market-intro h2{font-size:clamp(26px,7vw,37px)}
+ .market-body .atelier-market-intro-art{min-height:176px;order:-1}
+ .market-body .atelier-market-art-plate{padding:11px 13px;right:16px;bottom:14px}
+ .market-body .atelier-market-art-plate strong{font-size:17px}
+ .market-body .atelier-market-art-plate span{font-size:8px}
+ .market-body .atelier-market-quicklinks{margin-top:20px;padding-top:16px;gap:10px 16px}
+ .market-body .atelier-market-help{margin-top:26px;padding:21px;display:block}
+ .market-body .atelier-market-help>a{margin-top:18px;white-space:normal}
+ .atelier-home-story{width:calc(100% - 34px);grid-template-columns:1fr;margin:15px auto 38px;border-radius:17px}
+ .atelier-story-photo{min-height:220px}
+ .atelier-story-copy{padding:24px}
+ .atelier-story-copy h2{font-size:31px}
+}
+@media(prefers-reduced-motion:reduce){
+ .atelier-market-intro-actions a{transition:none}
+}
