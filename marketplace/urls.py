@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views, public_views, seo
 from core import native_apps, pwa
-from . import native_api, mobile_v1_api, mobile_identity
+from . import native_api, mobile_v1_api, mobile_identity, mobile_private_api
 from core import google_oauth as google
 
 urlpatterns = [
@@ -17,6 +17,8 @@ urlpatterns = [
     path("market/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "customer"}, name="market_mobile_authorize"),
     path("market/mobile/v1/token/", mobile_identity.token, {"channel": "customer"}, name="market_mobile_token"),
     path("market/mobile/v1/me/", mobile_identity.me, {"channel": "customer"}, name="market_mobile_me"),
+    path("market/mobile/v1/orders/", mobile_private_api.customer_orders, name="market_mobile_orders"),
+    path("market/mobile/v1/orders/<uuid:order_id>/", mobile_private_api.customer_order_detail, name="market_mobile_order_detail"),
     path("market/mobile/v1/revoke/", mobile_identity.revoke, {"channel": "customer"}, name="market_mobile_revoke"),
     path("market/mobile/v1/products/<int:pk>/", mobile_v1_api.product_detail, name="market_mobile_product_detail"),
     path("market/app/manifest.webmanifest", pwa.manifest, {"kind": "customer"}, name="market_pwa_manifest"),
