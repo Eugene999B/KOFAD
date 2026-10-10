@@ -71,7 +71,8 @@ def dashboard(request):
         owner_id__in=CustomerAccount.objects.filter(active=True).values("pk"),
     ).count()
     return render(request, "email_campaigns.html", {
-        "title": "Email Campaigns", "campaigns": EmailCampaign.objects.order_by("-created_at")[:30],
+        "title": "Email Campaigns", "email_is_owner": True,
+        "campaigns": EmailCampaign.objects.order_by("-created_at")[:30],
         "usage": usage_today(), "provider_ready": bool(settings.KOFAD_EMAIL_ENABLED and ready()),
         "opted_in": opted_in, "pending": EmailLetter.objects.filter(
             direction="outbound", status__in=["queued", "failed"]).count(),
