@@ -33,7 +33,7 @@ class AtelierPublicTests(TestCase):
 
 class AtelierAssetsTests(SimpleTestCase):
     def test_unified_theme_defines_light_dark_and_responsive_rules(self):
-        file = Path(settings.BASE_DIR) / "static" / "kofad-atelier"
+        file = Path(settings.BASE_DIR) / "static" / "kofad-atelier.css"
         css = file.read_text(encoding="utf-8")
         self.assertIn('html[data-theme="dark"]', css)
         self.assertIn('body[data-session-zone="staff"]', css)
