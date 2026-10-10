@@ -9,53 +9,62 @@ The email system is **disabled until authenticated provider credentials are
 configured in Railway**, and messages are only queued for verified recipients
 with notification consent. No Google/Brevo account can be created by code.
 
-## Current KOFAD management identity
+## Current KOFAD departmental addresses (9 active senders)
 
-The management departmental mailbox is **management@kofadimpex.com**.
-The old personal address `eugene@kofadimpex.com` is retired as a visible
-department name and a new send-from identity. KOFAD maps authenticated
-incoming messages and internal KOFAD mail for that historic address to the
-same Management inbox when its Cloudflare routing continues to deliver them.
+As of **10 October 2026**, the connected Brevo account confirms the following
+sender identities all registered with `active=true`:
 
-The database migration renames the existing management mailbox **in place**:
-message history, assigned staff, saved signatures, private drafts, notes,
-conversations and permissions keep their original mailbox ID. In case
-`management@` and `eugene@` are already distinct populated mailboxes,
-migration deliberately stops rather than merging confidential records or
-permissions without review.
+- `transactions@kofadimpex.com` — Transactions
+- `business@kofadimpex.com` — Business
+- `sales@kofadimpex.com` — Sales
+- `accounts@kofadimpex.com` — Accounts
+- `orders@kofadimpex.com` — Orders
+- `staff@kofadimpex.com` — Staff
+- `reports@kofadimpex.com` — Reports (Brevo sender display-name
+  currently says **Staff**, even though the verified address is reports@)
+- `info@kofadimpex.com` — Information
+- `support@kofadimpex.com` — Customer Support
 
-### External address verification
+Brevo sender registration is confirmed; individual incoming routing and
+end-to-end received/delivered results are separate checks. Keep the
+`KOFAD_BREVO_REGISTERED_SENDERS` value on KOFAD's Railway services limited
+to this actually registered nine-address inventory.
 
-KOFAD's internal departmental mailbox address does not automatically mean
-the external address is hosted, routable or authorised as a Brevo sender.
+### Management mailbox permanently decommissioned
 
-**To enable every department to send as itself:**
+At the business owner's request, **both**
+`management@kofadimpex.com` and `eugene@kofadimpex.com`
+have been retired from the KOFAD Email Centre. Neither is an authorised
+new mailbox, sender, copied recipient, or incoming target in the application.
 
-1. In Brevo, verify/authenticate the `kofadimpex.com` sender domain
-   using the actual account-specific DKIM and DMARC records. Do not alter
-   Cloudflare MX settings or paste arbitrary DNS records into the domain.
-2. Under Brevo **Settings > Senders, Domains, IPs > Senders**, add one
-   sender each for `business@`, `management@`, `info@`, `support@`,
-   `sales@`, `accounts@`, `orders@`, `staff@`, `reports@` and the
-   already-used `transactions@`. Keep the company name clearly visible;
-   select the appropriate department name for each.
-3. Check that Brevo marks every address **active** (a domain can be
-   authenticated while an individual sender record is still missing).
-4. Only after those sender records are verified, update the Railway
-   `KOFAD_BREVO_REGISTERED_SENDERS` variable on the sending worker and web
-   service to include the real, verified addresses. Unverified addresses
-   must continue using the existing verified transactional sender with
-   a departmental Reply-To.
-5. For incoming mail, confirm each address is routed to the KOFAD Cloudflare
-   Worker (or the approved fallback Gmail). Test external inbound and
-   separate real outbound delivery using company-owned test inboxes.
-6. If migration has retired `eugene@`, retain an inbound Cloudflare rule
-   or catch-all for historic mail, **not** a separate newly created KOFAD
-   departmental mailbox. It routes to `management@` for continuity.
+The retirement migration first disables Management, cancels its unsent
+messages and revokes mailbox staff grants. If it has no historic letters,
+conversations, private drafts or saved replies, the unused database mailbox
+is removed. If linked business correspondence exists, KOFAD retains only
+an **inactive historical tombstone** plus the underlying protected records
+for audit and financial integrity. Nothing from it appears in the active
+inbox, assignment, reports or sending controls. It cannot be recreated
+through the KOFAD administrator UI.
 
-An internal Django migration **cannot** register external senders in Brevo,
-authenticate DNS or activate a Cloudflare Email Routing rule. Those steps
-must be confirmed with the actually connected provider/domain accounts.
+**External routing:** If Cloudflare Email Routing still has a rule or catch-all
+for a removed management address, its Worker may send that mail to the
+company's fallback Gmail when KOFAD returns 404. This is **not** the
+KOFAD Management inbox. Update the domain's real Cloudflare Email Routing
+rules separately if those addresses should stop accepting mail at the
+domain level. The connected Cloudflare domain account must be accessible
+before making such changes.
+
+### Verify the nine addresses end-to-end
+
+1. Check domain authentication (DKIM/DMARC) under the correct Brevo account,
+   without changing active Cloudflare MX or creating duplicate SPF records.
+2. Check each active Brevo sender against the exact nine-account list above.
+3. Confirm Cloudflare inbound routing for each address points to the intended
+   KOFAD Worker and/or authorised company Gmail fallback.
+4. Use company-controlled test inboxes to verify external delivery, replying
+   and departmental staff access. Brevo API acceptance alone is not
+   customer inbox delivery.
+5. Do not repurpose `management@` or `eugene@` for a new department.
 
 ## Recommended role addresses
 
