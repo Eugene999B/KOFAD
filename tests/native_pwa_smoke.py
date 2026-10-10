@@ -1,4 +1,4 @@
-"""Check real Chromium registration and responsive Android/Windows PWA install UX."""
+"""Verify isolated market manifest and the iPhone fallback installation guide."""
 import os
 import sys
 import time
@@ -86,4 +86,4 @@ with sync_playwright() as tool:
     assert downloads.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     downloads.screenshot(path=str(shots / "market-real-app-available-vs-native-pending.png"), full_page=True)
     browser.close()
-print("KOFAD browser-installable Android/Windows PWA manifests, worker and page smoke OK")
+print("KOFAD manifest, service worker, and iPhone fallback smoke OK")
