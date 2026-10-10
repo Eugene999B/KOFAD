@@ -263,6 +263,16 @@ def deliver_pending(limit=20):
         notice = EmailNotice.objects.get(pk=pk)
         try:
             _send_kofad_mail(notice.subject, notice.body, [notice.email], purpose="transaction")
+    from .brevo_email import DailyEmailLimitExceeded, DefiniteEmailRejection
+        except (DailyEmailLimitExceeded, DefiniteEmailRejection):
+            # A known quota exhaustion or a concrete rejection is safe to retry.
+            EmailNotice.objects.filter(pk=pk).update(
+                status="failed",
+                next_attempt_at=timezone.now() + timedelta(
+                    minutes=min(60, 5 * notice.attempts)
+                ),
+            )
+            logger.warning("KOFAD email provider rejected a notice; retry scheduled")
         except Exception:
             # After provider submission starts, a timeout or dropped response can
             # still mean the recipient was sent the email. Leave it for an
