@@ -6,6 +6,7 @@ on:
     branches: [main]
 permissions:
   contents: write
+  issues: write
 concurrency:
   group: railway-release-promotion
   cancel-in-progress: false
@@ -26,6 +27,23 @@ jobs:
           if [ "$current" != "$VERIFIED_SHA" ]; then
             echo "Main advanced; waiting for its own successful verification."
             exit 0
+          fi
+          # GitHub's non-force update cannot advance a diverged branch. Never
+          # force-push or replace production content with a stale main tree.
+          lineage="$(gh api "repos/$GH_REPO/compare/railway-release...$VERIFIED_SHA" --jq .status)"
+          if [ "$lineage" = "identical" ]; then
+            echo "Production release already points at this verified commit."
+            exit 0
+          fi
+          if [ "$lineage" != "ahead" ]; then
+            title="Release promotion blocked: reconcile main and railway-release"
+            echo "::error::Cannot promote safely: main is $lineage relative to railway-release."
+            echo "::error::Merge and review histories on a separate branch; NEVER force-push production."
+            existing="$(gh issue list --repo "$GH_REPO" --state open --limit 100 --json number,title --jq '.[] | select(.title == "Release promotion blocked: reconcile main and railway-release") | .number' | head -n 1 || true)"
+            if [ -z "$existing" ]; then
+              gh issue create --repo "$GH_REPO" --title "$title" --body "Automatic release promotion stopped because main and railway-release are not a fast-forward lineage. Do not force-push, reset production, or blindly merge Android feature branches. Review both trees, reconcile through a tested release PR, then restore normal promotion. Last verified main SHA: $VERIFIED_SHA" || true
+            fi
+            exit 1
           fi
           gh api "repos/$GH_REPO/git/refs/heads/railway-release" \
             --method PATCH --field sha="$VERIFIED_SHA" --field force=false \
