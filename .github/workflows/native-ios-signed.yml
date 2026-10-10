@@ -74,8 +74,8 @@ jobs:
           umask 077
           cert="$RUNNER_TEMP/kofad-ios-distribution.p12"
           profile="$RUNNER_TEMP/kofad-profile.mobileprovision"
-          printf '%s' "$KOFAD_IOS_P12_BASE64" | base64 --decode > "$cert"
-          printf '%s' "$KOFAD_IOS_PROFILE_BASE64" | base64 --decode > "$profile"
+          printf '%s' "$KOFAD_IOS_P12_BASE64" | base64 -D > "$cert"
+          printf '%s' "$KOFAD_IOS_PROFILE_BASE64" | base64 -D > "$profile"
           test -s "$cert"
           test -s "$profile"
           security cms -D -i "$profile" > "$RUNNER_TEMP/kofad-profile.plist"
