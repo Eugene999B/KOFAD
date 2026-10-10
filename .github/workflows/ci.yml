@@ -38,6 +38,7 @@ jobs:
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - run: ruff check .
       - run: node --test native/mobile/tests/profiles.test.mjs native/desktop/tests/security.test.cjs
+      - run: python native/scripts/test_set_android_version.py
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput

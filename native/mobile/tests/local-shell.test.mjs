@@ -27,7 +27,9 @@ test("Customer and staff are independently built, including branded pages", () =
     assert.match(html, new RegExp(channel === "customer" ? "KOFAD Market" : "KOFAD Staff"));
     assert.match(html, /Content-Security-Policy/);
     assert.match(js, new RegExp('const CHANNEL = "' + channel + '"'));
-    assert.doesNotMatch(html, /__APP_NAME__|__CHANNEL__|__WELCOME_/);
+    assert.doesNotMatch(html, /__APP_NAME__|__APP_ORIGIN__|__CHANNEL__|__WELCOME_/);
+    assert.match(html, new RegExp("connect-src https://" + (channel === "customer" ? "market" : "staff") + "\\.kofadimpex\\.com"));
+    assert.doesNotMatch(html, new RegExp("connect-src https://" + (channel === "customer" ? "staff" : "market") + "\\.kofadimpex\\.com"));
     assert.doesNotMatch(js, /__CHANNEL__/);
     assert.doesNotMatch(html, /password|api_key|secret_key/i);
   }
@@ -48,4 +50,18 @@ test("No offline transaction queue or unsafe application bridge", () => {
   assert.doesNotMatch(local, /localStorage\.setItem\([^,]*payment/i);
   assert.doesNotMatch(cfg, /^\s*url:\s*profile\.startUrl/m);
   assert.doesNotMatch(cfg, /allowMixedContent:\s*true/);
+});
+
+test("Native app updates compare installed versions and use only fixed official hubs", () => {
+  const src = read("app-shell/native.js");
+  const html = read("app-shell/index.html");
+  assert.match(src, /native\.App\.getInfo/);
+  assert.match(src, /native-version\.json/);
+  assert.match(src, /newerStableVersion/);
+  assert.match(src, /appStateChange/);
+  assert.match(src, /https:\/\/kofadimpex\.com\/apps\//);
+  assert.match(src, /https:\/\/staff\.kofadimpex\.com\/staff\/app\//);
+  assert.match(html, /id="native-update"/);
+  assert.match(src, /cache: "no-store"/);
+  assert.doesNotMatch(src, /eval\(|document\.write\(/);
 });

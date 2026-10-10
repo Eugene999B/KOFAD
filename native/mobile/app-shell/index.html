@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#103c50">
   <meta name="color-scheme" content="light">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://market.kofadimpex.com; img-src 'self' https://market.kofadimpex.com data:; style-src 'self'; script-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src __APP_ORIGIN__; img-src 'self' __APP_ORIGIN__ data:; style-src 'self'; script-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'">
   <title>__APP_NAME__</title>
   <link rel="stylesheet" href="native.css">
   <script defer src="native.js"></script>
@@ -19,6 +19,11 @@
       </div>
       <div class="native-connection" id="network-status" role="status" aria-live="polite"><span class="native-led"></span><span id="network-label">Connecting</span></div>
     </header>
+    <aside id="native-update" class="native-update" hidden role="status" aria-live="polite">
+      <div><strong>New KOFAD app version available</strong><p id="native-update-details">An official update is ready for your device.</p></div>
+      <button type="button" id="native-update-action">View update ↗</button>
+      <button type="button" class="native-update-close" id="native-update-dismiss" aria-label="Dismiss app update notice">×</button>
+    </aside>
     <main id="main">
       <section class="native-hero">
         <p class="native-overline">OFFICIAL KOFAD APPLICATION</p>

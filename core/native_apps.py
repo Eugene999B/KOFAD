@@ -135,3 +135,40 @@ def staff_release_status(request):
     response["Cache-Control"] = "private, no-store"
     response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     return response
+
+
+# The installed Capacitor app has its own local security origin, unlike a
+# Django page. Version metadata is deliberately public and intentionally
+# contains no direct staff installer link, staff account data or credentials.
+NATIVE_LOCAL_ORIGINS = frozenset({
+    "capacitor://localhost", "https://localhost", "http://localhost",
+})
+
+
+def _native_version_response(request, kind):
+    app = app_metadata(kind)
+    response = JsonResponse({
+        "channel": kind,
+        "version": app["version"],
+        "platforms": {entry["id"]: entry["available"] for entry in app["platforms"]},
+    })
+    response["Cache-Control"] = "public, max-age=120"
+    response["Vary"] = "Origin"
+    response["X-Content-Type-Options"] = "nosniff"
+    origin = request.headers.get("Origin", "").strip()
+    if origin in NATIVE_LOCAL_ORIGINS:
+        response["Access-Control-Allow-Origin"] = origin
+        response["Access-Control-Allow-Methods"] = "GET"
+    if kind == "staff":
+        response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    return response
+
+
+@require_GET
+def customer_native_version(request):
+    return _native_version_response(request, "customer")
+
+
+@require_GET
+def staff_native_version(request):
+    return _native_version_response(request, "staff")
