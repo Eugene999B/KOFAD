@@ -79,6 +79,6 @@ test("Native mandatory Android updates and opt-in app notices have isolated cont
   assert.match(alerts, /OS.checkPermissions/);
   assert.match(alerts, /document.createElement/);
   assert.match(html, /id="native-alerts-toggle"/);
-  assert.match(packager, /copyWithProfile\\("alerts.js"\\)/);
+  assert.ok(packager.includes('copyWithProfile("alerts.js")'));
   assert.doesNotMatch(alerts, /Contacts.getContacts|READ_CONTACTS|READ_MEDIA_IMAGES/);
 });
