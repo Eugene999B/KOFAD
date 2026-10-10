@@ -1,37 +1,3 @@
 {% extends "marketplace/base.html" %}{% load static %}
-{% block after_styles %}
-<link rel="stylesheet" href="{% static 'pwa-install.css' %}">
-{% endblock %}
-{% block content %}
-<div class="kfd-install-page" data-pwa-install-page>
-  <nav class="kfd-install-breadcrumb"><a href="/market/">← Back to Market</a><span>Official web app</span></nav>
-  <section class="kfd-install-hero" aria-labelledby="kfd-install-title">
-    <span class="kfd-install-kicker">KOFAD IMPEX ENTERPRISE · INSTALL ON YOUR DEVICE</span>
-    <div class="kfd-install-head">
-      <img src="{% static 'brand/favicon-192.png' %}" width="82" height="82" alt="KOFAD Market app icon">
-      <div><h1 id="kfd-install-title">KOFAD Market web app</h1><p>Shop from your home screen or Windows Start menu, without needing an APK or an app-store listing.</p></div>
-    </div>
-    <div class="kfd-install-tags"><span><span aria-hidden="true">✓</span> Available now</span><span>Android Chrome</span><span>Windows Chrome / Edge</span></div>
-    <div class="kfd-install-actions">
-      <button class="kfd-install-primary" type="button" data-pwa-install>Install KOFAD Market</button>
-      <a href="/market/" class="kfd-install-secondary">Continue shopping →</a>
-    </div>
-    <p class="kfd-install-state" data-pwa-install-state role="status" aria-live="polite">Checking installation support…</p>
-    <div class="kfd-install-steps" data-pwa-install-steps hidden>
-      <strong>Install through your browser</strong><p data-pwa-device-steps>Open your browser menu and choose Install app.</p>
-      <p>For best results, use Chrome on Android or Chrome/Edge on Windows. Installability also depends on your browser settings.</p>
-    </div>
-    <div class="kfd-install-update" data-pwa-update hidden role="status"><strong>A new version is ready.</strong><button type="button" data-pwa-update-apply>Update web app</button></div>
-  </section>
-  <section class="kfd-install-benefits">
-    <h2>What you get</h2>
-    <div class="kfd-install-benefit-grid">
-      <article><strong><span aria-hidden="true">⌂</span> Home-screen access</strong><p>Launch KOFAD Market in its own app window without typing the website address.</p></article>
-      <article><strong><span aria-hidden="true">↻</span> Website-synced updates</strong><p>New website features arrive without downloading a fresh installer. Updates activate safely.</p></article>
-      <article><strong><span aria-hidden="true">◈</span> Secure shopping</strong><p>Products, checkout, payments and accounts continue to use KOFAD’s official server and existing protections.</p></article>
-      <article><strong><span aria-hidden="true">◌</span> Offline notice</strong><p>When disconnected, the app displays a connection screen. Purchases and private records are never stored for offline use.</p></article>
-    </div>
-  </section>
-  <section class="kfd-install-distinction"><div><strong>Looking for the separate Android APK or Windows installer?</strong><p>The official native packages are still being prepared for signed distribution. The web app above is a fully installable browser edition available in the meantime.</p></div><a href="/apps/">View native release status ↗</a></section>
-</div>
-{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'download-hub.css' %}">{% endblock %}
+{% block content %}<div class="kf-install-landing" data-kf-web-install>{% include "native_apps/_shared.html" %}</div>{% endblock %}

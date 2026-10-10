@@ -27,34 +27,32 @@ with sync_playwright() as browser_tool:
             if attempt == 29:
                 raise
             time.sleep(1)
-    customer.get_by_role("heading", name="Your KOFAD Market, wherever you go.").wait_for()
-    assert customer.locator(".native-platform").count() == 3
-    assert customer.locator(".native-platform-not-ready").count() == 3
-    assert customer.get_by_role("link", name="Continue to Market").is_visible()
+    customer.get_by_role("heading", name="KOFAD, wherever you are.").wait_for()
+    assert customer.locator(".kf-download-device").count() == 3
+    assert customer.get_by_role("link", name="Install KOFAD Market", exact=False).is_visible()
+    assert customer.get_by_role("link", name="Open Market", exact=False).is_visible()
     for platform in ("android", "apple", "windows"):
-        icon = customer.locator(f".native-platform-visual img[src*=\'native-brands/{platform}\']")
-        assert icon.count() == 1, f"Missing actual brand icon: {platform}"
-        assert icon.evaluate("(img) => img.complete && img.naturalWidth > 0"), f"Icon not loaded: {platform}"
-    assert "Download staff app" not in customer.content()
+        icon = customer.locator(f'.kf-download-device img[src*="native-brands/{platform}"]')
+        assert icon.count() >= 1
+        assert icon.first.evaluate("(img) => img.complete && img.naturalWidth > 0")
+    assert "KOFAD Staff" not in customer.content()
     customer.screenshot(path=str(out / "customer-native-app-desktop.png"), full_page=True)
     for width in (320, 390, 768):
         customer.set_viewport_size({"width": width, "height": 800})
         assert customer.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), f"Customer download layout overflow: {width}"
-        assert customer.locator(".native-platform").first.is_visible()
+        assert customer.locator(".kf-download-device").first.is_visible()
         if width == 390:
             customer.screenshot(path=str(out / "customer-native-app-mobile.png"), full_page=True)
 
-    # On an iPhone the Apple logo/edition should be first, never Android.
     iphone = browser.new_page(
         viewport={"width": 390, "height": 844},
-        device_scale_factor=3,
-        is_mobile=True, has_touch=True,
+        device_scale_factor=3, is_mobile=True, has_touch=True,
         user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     )
     iphone.goto(base + "/apps/")
-    iphone.locator(".native-device-hint").wait_for()
-    assert iphone.locator(".native-platform").first.get_attribute("data-native-platform") == "ios"
-    assert iphone.locator(".native-platform").first.get_by_text("Your device").is_visible()
+    iphone.get_by_role("heading", name="KOFAD, wherever you are.").wait_for()
+    assert iphone.locator(".kf-download-device").first.get_attribute("data-native-platform") == "ios"
+    assert iphone.get_by_role("link", name="Add to Home Screen", exact=False).is_visible()
     assert iphone.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "iPhone horizontal overflow"
     iphone.screenshot(path=str(out / "customer-native-app-iphone.png"), full_page=True)
     iphone.close()
@@ -72,9 +70,9 @@ with sync_playwright() as browser_tool:
     staff.get_by_role("button", name="Sign in", exact=False).click()
     staff.wait_for_url(base + "/workspace/")
     staff.get_by_role("link", name="Download staff app", exact=True).click()
-    staff.get_by_role("heading", name="Your workspace, beyond the desk.").wait_for()
-    assert staff.locator(".native-platform").count() == 3
-    assert staff.locator(".native-platform-not-ready").count() == 3
+    staff.get_by_role("heading", name="Work from anywhere.").wait_for()
+    assert staff.locator(".kf-download-device").count() == 3
+    assert staff.get_by_role("button", name="Use on iPhone", exact=False).is_visible()
     assert staff.get_by_role("link", name="Open workspace").is_visible()
     assert "KOFAD Staff" in staff.content()
     staff.screenshot(path=str(out / "staff-native-app-desktop.png"), full_page=True)
