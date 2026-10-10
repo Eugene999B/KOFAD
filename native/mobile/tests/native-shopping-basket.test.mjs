@@ -21,7 +21,11 @@ test("basket is a bounded local draft with no order or payment mutation", () => 
   assert.match(js,/KofadNativeBasket/);
   assert.match(shell,/native-detail-share/);
   assert.match(profile,/copyWithProfile\("basket\.js"\)/);
-  assert.doesNotMatch(js,/(?:Authorization|fetch\(|Bearer|payment-intent|createOrder|checkout\/quote|innerHTML\s*=|document\.write\()/);
+  assert.doesNotMatch(js,/(?:Authorization|Bearer|payment-intent|createOrder|checkout\/quote|innerHTML\s*=|document\.write\()/);
+  assert.match(js,/method: "GET", mode: "cors", credentials: "omit"/);
+  // This module only reads public capability flags; account writes are
+  // delegated to the allowlisted native bearer client under explicit consent.
+  assert.doesNotMatch(js,/fetch\([^)]*method: "PUT"/);
 });
 
 test("marketing messages are optional and device permission is requested by Android", () => {

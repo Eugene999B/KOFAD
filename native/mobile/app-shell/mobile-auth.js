@@ -180,7 +180,7 @@
 
   async function readMobile(resource) {
     const allowed = CUSTOMER
-      ? /^orders\/(?:[0-9a-fA-F-]{36}\/)?$/.test(resource)
+      ? (/^orders\/(?:[0-9a-fA-F-]{36}\/)?$/.test(resource) || resource === "cart/")
       : resource === "overview/";
     if (!allowed) return {error: "unsupported_mobile_resource"};
     const access = await accessToken();
@@ -197,6 +197,33 @@
       if (!reply.ok) return {error: "temporarily_unavailable"};
       return await reply.json();
     } catch (_) {return {error: "connection_unavailable"};}
+  }
+
+  async function saveMobileCart(items) {
+    if (!CUSTOMER || !Array.isArray(items) || items.length > 40 ||
+        items.some(row =>
+          !Number.isSafeInteger(row?.id) || row.id <= 0 ||
+          !Number.isInteger(row?.quantity) || row.quantity < 1 || row.quantity > 20
+        )) return {error: "invalid_cart"};
+    const access = await accessToken();
+    if (!access) return {error: "authentication_required"};
+    try {
+      const reply = await fetch(ORIGIN + ROOT + "cart/", {
+        method: "PUT", mode: "cors", credentials: "omit", cache: "no-store",
+        headers: {Authorization: "Bearer " + access, "Content-Type": "application/json"},
+        body: JSON.stringify({items: items.map(item => ({id:item.id, quantity:item.quantity}))}),
+      });
+      if (reply.status === 401 || reply.status === 403) {
+        clear();
+        return {error:"session_expired"};
+      }
+      if (reply.status === 404) return {error:"feature_unavailable"};
+      if (reply.status === 409) return {error:"listing_unavailable"};
+      if (!reply.ok) return {error:"server_rejected"};
+      const result = await reply.json();
+      return result.version === 1 && result.channel === "customer" ? result
+        : {error:"invalid_server_response"};
+    } catch (_) {return {error:"connection_unavailable"};}
   }
 
   async function signOut() {
@@ -220,7 +247,7 @@
   }
 
   window.KofadMobileAuth = Object.freeze({
-    start, profile, signOut, readMobile,
+    start, profile, signOut, readMobile, saveMobileCart,
     isAuthenticated: () => Boolean(session?.profile),
     isSupported: readiness,
   });
