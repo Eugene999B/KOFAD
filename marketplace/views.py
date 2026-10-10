@@ -456,7 +456,16 @@ def customer_account(request, customer):
         return redirect("market_account")
     profile_form = CustomerProfileForm(request.POST or None, instance=customer)
     if request.method == "POST" and profile_form.is_valid():
+        original_email = customer.email.strip().lower()
         profile_form.save()
+        if customer.email.strip().lower() != original_email:
+            customer.marketing_email_opt_in = False
+            customer.marketing_email_verified_at = None
+            customer.marketing_email_challenge = ""
+            customer.save(update_fields=[
+                "marketing_email_opt_in", "marketing_email_verified_at",
+                "marketing_email_challenge",
+            ])
         messages.success(request, "Your account details were updated.")
         return redirect("market_account")
 
