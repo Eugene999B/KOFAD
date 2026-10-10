@@ -1,60 +1,16 @@
 from . import whatsapp_bot_views
-from django.conf import settings
 from django.urls import path
 from . import views as v
-from . import pos_payment_views as momo_payments
 from . import account as accounts
-from . import google_oauth as google
-from . import gmail_api as gmail_sender
-from . import email_center as business_email
-from . import email_delivery_events as email_events
-from . import customer_care as customer_care_views
-from . import email_campaigns as campaigns
-from . import email_productivity as pro_email
 from . import count_views
 from . import admin_views
-from . import staff_invites
 from . import export_views
-from . import native_apps, pwa, mobile_staff_api
-from marketplace import mobile_identity
 from . import maintenance_views
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
-    path("staff/mobile/v1/bootstrap/", mobile_staff_api.bootstrap, name="staff_mobile_bootstrap"),
-    path("staff/mobile/v1/capabilities/", mobile_identity.capabilities, {"channel": "staff"}, name="staff_mobile_capabilities"),
-    path("staff/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "staff"}, name="staff_mobile_authorize"),
-    path("staff/mobile/v1/token/", mobile_identity.token, {"channel": "staff"}, name="staff_mobile_token"),
-    path("staff/mobile/v1/me/", mobile_identity.me, {"channel": "staff"}, name="staff_mobile_me"),
-    path("staff/mobile/v1/revoke/", mobile_identity.revoke, {"channel": "staff"}, name="staff_mobile_revoke"),
-    path("staff/app/", native_apps.staff_downloads, name="staff_native_downloads"),
-    path("staff/app/control/", native_apps.mobile_operations_dashboard, name="mobile_operations_dashboard"),
-    path("staff/app/releases.json", native_apps.staff_release_status, name="staff_native_releases"),
-    path("staff/app/native-version.json", native_apps.staff_native_version, name="staff_native_version"),
-    path("staff/app/manifest.webmanifest", pwa.manifest, {"kind": "staff"}, name="staff_pwa_manifest"),
-    path("staff/app/sw.js", pwa.worker, {"kind": "staff"}, name="staff_pwa_sw"),
-    path("staff/app/offline/", pwa.offline, {"kind": "staff"}, name="staff_pwa_offline"),
     path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     path("account/", accounts.account, name="account"),
-    path("auth/google/staff/login/", google.start, {"kind": "staff", "mode": "login"}, name="google_staff_login"),
-    path("auth/google/staff/link/", google.start, {"kind": "staff", "mode": "link"}, name="google_staff_link"),
-    path("auth/google/staff/callback/", google.callback, {"kind": "staff"}, name="google_staff_callback"),
-    path("auth/google/staff/unlink/", google.unlink, {"kind": "staff"}, name="google_staff_unlink"),
-    path("auth/google/gmail/connect/", gmail_sender.connect_start, name="gmail_sender_connect"),
-    path("auth/google/gmail/callback/", gmail_sender.connect_callback, name="gmail_sender_callback"),
-    path("auth/google/gmail/disconnect/", gmail_sender.disconnect, name="gmail_sender_disconnect"),
-    path("auth/google/gmail/send-test/", gmail_sender.send_test, name="gmail_sender_test"),
-    path("email/", business_email.inbox, name="email_center"),
-    path("email/work/", pro_email.work, name="email_work"),
-    path("email/drafts/", pro_email.drafts, name="email_drafts"),
-    path("email/replies/", pro_email.library, name="email_replies"),
-    path("email/reports/", pro_email.reports, name="email_reports"),
-    path("email/history/", business_email.inbox, {"section": "history"}, name="email_history"),
-    path("email/automations/", business_email.inbox, {"section": "automations"}, name="email_automations"),
-    path("email/team/", business_email.inbox, {"section": "team"}, name="email_team"),
-    path("email/campaigns/", campaigns.dashboard, name="email_campaigns"),
-    path("email/ingest/", business_email.ingest, name="email_ingest"),
-    path("email/events/brevo/", email_events.brevo_delivery_callback, name="email_brevo_events"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
     path("api/approvals/summary/", approval_views.approval_summary, name="approval_summary"),
@@ -70,20 +26,16 @@ urlpatterns = [
     path("message-templates/", v.message_templates, name="message_templates"),
     path("account/password/", v.password_change, name="password_change"),
     path("search/", v.search, name="search"),
-    path("health/", v.health, name="health"), path(settings.STAFF_LOGIN_SLUG + "/", v.login_view, name="login"),
+    path("health/", v.health, name="health"), path("login/", v.login_view, name="login"),
     path("logout/", v.logout_view, name="logout"), path("session/state/", v.staff_session_state, name="staff_session_state"), path("mfa/", v.mfa, name="mfa"),
     path("branch/", v.switch_branch, name="switch_branch"), path("workspace/", v.dashboard, name="dashboard"),
     path("sales/new/", v.pos, name="pos"), path("purchasing/", v.purchasing, name="purchasing"),
     path("api/trades/", v.complete_trade),
     path("api/pos/paystack-momo/<str:reference>/otp/", v.pos_paystack_momo_otp, name="pos_paystack_momo_otp"),
     path("api/pos/paystack-momo/start/", v.pos_paystack_momo_start, name="pos_paystack_momo_start"),
-    path("payments/momo/", momo_payments.payments_history, name="pos_momo_payments"),
-    path("payments/momo/<str:reference>/", momo_payments.payment_detail, name="pos_momo_payment"),
-    path("payments/momo/<str:reference>/verify/", momo_payments.manual_verify, name="pos_momo_verify"),
     path("api/pos/paystack-momo/<str:reference>/status/", v.pos_paystack_momo_status, name="pos_paystack_momo_status"),
     path("api/documents/<uuid:pk>/send-sms/", v.send_transaction_message_api, name="send_transaction_message_api"),
     path("api/customers/", v.customer_search, name="customer_search"),
-    path("api/customers/check-duplicate/", v.customer_duplicate_check, name="customer_duplicate_check"),
     path("api/suppliers/", creditor_views.supplier_search, name="supplier_search"), path("api/held/", v.hold),
     path("api/held/<int:pk>/", v.held),
     path("documents/", v.documents, name="documents"), path("documents/<uuid:pk>/", v.document, name="document"),
@@ -111,6 +63,7 @@ urlpatterns = [
     path("workers/<int:pk>/documents/<int:document_id>/", workforce_views.worker_document_download, name="worker_document_download"),
     path("workers/<int:pk>/profile.pdf", workforce_views.worker_profile_pdf, name="worker_profile_pdf"),
     path("workers/<int:pk>/id-card.pdf", workforce_views.worker_id_card, name="worker_id_card"),
+    path("workers/<int:pk>/reissue-card/", workforce_views.worker_id_card_reissue, name="worker_id_card_reissue"),
     path("workers/<int:pk>/id-card-print-sheet.pdf", workforce_views.worker_id_card_sheet, name="worker_id_card_sheet"),
     path("workers/export/<str:format>/", workforce_views.workers_export, name="workers_export"),
     path("payroll/", payroll_views.payroll, name="payroll"),
@@ -130,16 +83,12 @@ urlpatterns = [
     path("administration/", admin_views.administration, name="administration"),
     path("administration/users/", admin_views.users, name="admin_users"),
     path("administration/users/new/", admin_views.user_edit, name="admin_user_new"),
-    path("administration/users/<int:pk>/invite/resend/", admin_views.resend_staff_invitation, name="staff_invite_resend"),
-    path("staff-invite/<int:pk>/<str:token>/", staff_invites.open_invitation, name="staff_invitation_open"),
-    path("staff-invite/complete/", staff_invites.complete_invitation, name="staff_invitation_complete"),
     path("administration/users/<int:pk>/", admin_views.user_edit, name="admin_user_edit"),
     path("administration/roles/", admin_views.roles, name="admin_roles"),
     path("administration/roles/new/", admin_views.role_edit, name="admin_role_new"),
     path("administration/roles/<int:pk>/", admin_views.role_edit, name="admin_role_edit"),
     path("settings/", admin_views.settings_center, name="settings"),
     path("settings/company/", v.settings_view, name="company_settings"),
-    path("settings/customer-care/", customer_care_views.settings, name="customer_care_settings"),
     path("settings/location/", v.location_settings, name="location_settings"),
     path("settings/debt/", v.debt_settings, name="debt_settings"),
     path("settings/communications/", v.communication_settings, name="communication_settings"),

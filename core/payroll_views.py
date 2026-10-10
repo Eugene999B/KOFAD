@@ -1,10 +1,13 @@
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from functools import wraps
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -14,7 +17,30 @@ from .context import shell
 from .exports import export
 from .models import Payment, PayrollEntry, PayrollPeriod, PayrollRule, Worker
 from .services import audit, permit
-from .views import protected, problem
+from .views import protected, problem, branch_for
+
+
+RELEASED_PAYROLL_STATUSES = ("approved", "locked", "reconciled")
+
+
+def _full_payroll_access(user):
+    return any(user.has_perm("core." + permission) for permission in (
+        "operate_finance", "view_reports", "manage_company",
+    ))
+
+
+def payroll_portal(view):
+    """A linked worker may access ONLY their own released records."""
+    @login_required
+    @wraps(view)
+    def inner(request, *args, **kwargs):
+        branch = branch_for(request)
+        if not _full_payroll_access(request.user) and not Worker.objects.filter(
+            branch=branch, user=request.user
+        ).exists():
+            raise PermissionDenied("Your staff account is not linked to a worker here.")
+        return view(request, branch, *args, **kwargs)
+    return inner
 
 
 ENTRY_FIELDS = [
@@ -52,8 +78,19 @@ def _period_summary(period):
     }
 
 
-@protected("operate_finance|view_reports|manage_company")
+@payroll_portal
 def payroll(request, branch):
+    if not _full_payroll_access(request.user):
+        if request.method != "GET":
+            raise PermissionDenied("Personal payroll access is read-only.")
+        worker = get_object_or_404(Worker, branch=branch, user=request.user)
+        entries = PayrollEntry.objects.filter(
+            worker=worker, period__branch=branch,
+            period__status__in=RELEASED_PAYROLL_STATUSES,
+        ).select_related("period", "period__rule").order_by("-period__year", "-period__month")[:36]
+        return render(request, "payroll_self_service.html", {
+            "title": "My payslips", "worker": worker, "entries": entries,
+        })
     if request.method == "POST":
         permit(request.user, branch, "operate_finance")
         try:
@@ -258,10 +295,13 @@ def payroll_export(request, branch, pk, format):
     )
 
 
-@protected("operate_finance|view_reports|manage_company")
+@payroll_portal
 def payslip(request, branch, pk, entry_id, format="pdf"):
     period = get_object_or_404(PayrollPeriod, pk=pk, branch=branch)
     entry = get_object_or_404(PayrollEntry.objects.select_related("worker", "period__rule"), pk=entry_id, period=period)
+    if not _full_payroll_access(request.user):
+        if entry.worker.user_id != request.user.pk or period.status not in RELEASED_PAYROLL_STATUSES:
+            raise Http404("Payslip not available.")
     rows = [
         {"item": "Basic salary", "earning": entry.basic_salary, "deduction": ""},
         {"item": "Allowances", "earning": entry.allowances, "deduction": ""},

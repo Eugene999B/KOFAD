@@ -3,118 +3,19 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
 
-
-
-class EmailIdentity(models.Model):
-    """Verified email login alias, never inferred from an editable profile field."""
-
-    kind = models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])
-    owner_id = models.PositiveBigIntegerField()
-    email = models.EmailField(blank=True)
-    verified_at = models.DateTimeField(null=True, blank=True)
-    pending_email = models.EmailField(blank=True)
-    code_digest = models.CharField(max_length=64, blank=True)
-    requested_at = models.DateTimeField(null=True, blank=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-    last_sent_at = models.DateTimeField(null=True, blank=True)
-    sends_window_start = models.DateTimeField(null=True, blank=True)
-    sends_in_window = models.PositiveSmallIntegerField(default=0)
-    code_attempts = models.PositiveSmallIntegerField(default=0)
-    notifications_enabled = models.BooleanField(default=False)
-    marketing_emails_enabled = models.BooleanField(default=False)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["kind", "owner_id"], name="unique_kofad_email_identity"),
-            models.UniqueConstraint(
-                fields=["kind", "email"],
-                condition=models.Q(verified_at__isnull=False),
-                name="unique_verified_email_per_account_type",
-            ),
-        ]
-
-
-
-class CustomerEmailRecovery(models.Model):
-    """Hashed, short-lived one-time email recovery for a verified customer address."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    customer = models.ForeignKey("CustomerAccount", on_delete=models.CASCADE)
-    email = models.EmailField()
-    code_digest = models.CharField(max_length=64)
-    password_stamp = models.CharField(max_length=64)
-    attempts = models.PositiveSmallIntegerField(default=0)
-    expires_at = models.DateTimeField()
-    verified_at = models.DateTimeField(null=True, blank=True)
-    sent = models.BooleanField(default=False)
-    used = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-
-class GoogleIdentity(models.Model):
-    """Explicit Google account binding; immutable OIDC subject is the login key."""
-
-    kind = models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])
-    owner_id = models.PositiveBigIntegerField()
-    subject = models.CharField(max_length=255)
-    email = models.EmailField()
-    linked_at = models.DateTimeField(auto_now_add=True)
-    last_login_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["kind", "owner_id"], name="kofad_google_one_owner"),
-            models.UniqueConstraint(fields=["kind", "subject"], name="kofad_google_unique_subject"),
-        ]
-
-
-
-class GmailSenderConnection(models.Model):
-    """Encrypted offline Gmail API consent for the designated business sender."""
-
-    email = models.EmailField()
-    google_subject = models.CharField(max_length=255)
-    encrypted_refresh_token = models.TextField(editable=False)
-    connected_by_id = models.PositiveBigIntegerField()
-    connected_at = models.DateTimeField(auto_now=True)
-    last_send_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = "Authorised business Gmail sender"
-
-
-
-class EmailNotice(models.Model):
-    """Durable, opt-in email outbox. A separate worker delivers after SMTP setup."""
-
-    event_key = models.CharField(max_length=160, unique=True)
-    email = models.EmailField()
-    subject = models.CharField(max_length=200)
-    body = models.TextField()
-    status = models.CharField(
-        max_length=12, default="queued",
-        choices=[("queued", "Queued"), ("sending", "Sending"),
-                 ("sent", "Sent"), ("failed", "Failed"), ("uncertain", "Needs review")],
-        db_index=True,
-    )
-    attempts = models.PositiveSmallIntegerField(default=0)
-    next_attempt_at = models.DateTimeField(default=timezone.now)
-    sent_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-
-
 class CustomerAccount(models.Model):
-    phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    phone = models.CharField(max_length=20, unique=True)
     full_name = models.CharField(max_length=140)
     email = models.EmailField(blank=True)
+    transactional_email_enabled = models.BooleanField(default=True)
+    marketing_email_opt_in = models.BooleanField(default=False)
+    marketing_email_verified_at = models.DateTimeField(null=True, blank=True)
+    marketing_email_challenge = models.CharField(max_length=64, blank=True, default="")
     password_hash = models.CharField(max_length=160)
     verified_at = models.DateTimeField(null=True, blank=True)
     active = models.BooleanField(default=True)
@@ -131,7 +32,7 @@ class CustomerAccount(models.Model):
         return check_password(raw, self.password_hash)
 
     def __str__(self):
-        return f"{self.full_name} · {self.phone or self.email or 'Google account'}"
+        return f"{self.full_name} · {self.phone}"
 
 
 class MarketListing(models.Model):
@@ -167,12 +68,8 @@ class MarketListing(models.Model):
 
     @property
     def market_price(self):
-        from .pricing import all_in_unit_price, online_markup_percent
         value = getattr(self.product, self.price_source, None)
-        if value is None:
-            return Decimal("0")
-        rate = getattr(self, "_online_price_percent", None)
-        return all_in_unit_price(value, rate if rate is not None else online_markup_percent())
+        return value if value is not None else Decimal("0")
 
     @property
     def factor(self):
@@ -381,32 +278,6 @@ class MarketPaymentAttempt(models.Model):
         ordering = ["-created_at"]
 
 
-
-
-class HubtelEvidence(models.Model):
-    """Encrypted byte-for-byte evidence of Hubtel HTTP callbacks/status responses."""
-
-    attempt = models.ForeignKey(
-        MarketPaymentAttempt, related_name="hubtel_evidence", null=True,
-        blank=True, on_delete=models.PROTECT,
-    )
-    reference = models.CharField(max_length=100, db_index=True)
-    direction = models.CharField(
-        max_length=16, choices=[("callback", "Callback"), ("status_check", "Status check")]
-    )
-    http_status = models.PositiveSmallIntegerField(null=True, blank=True)
-    encrypted_body = models.TextField(editable=False)
-    body_sha256 = models.CharField(max_length=64, editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at", "-pk"]
-        indexes = [
-            models.Index(fields=["reference", "-created_at"], name="market_hubtel_ref_time_idx"),
-        ]
-
-
-
 class OrderEvent(models.Model):
     order = models.ForeignKey(OnlineOrder, related_name="events", on_delete=models.CASCADE)
     status = models.CharField(max_length=32)
@@ -576,7 +447,7 @@ class ConversationAttachment(models.Model):
 
 
 class OtpThrottle(models.Model):
-    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login"), ("change_phone", "Change phone"), ("momo", "First Mobile Money payment")]
+    PURPOSES = [("register", "Register"), ("reset", "Reset password"), ("login", "Customer login"), ("change_phone", "Change phone")]
     phone = models.CharField(max_length=20)
     purpose = models.CharField(max_length=12, choices=PURPOSES)
     send_count = models.PositiveIntegerField(default=0)
@@ -591,26 +462,9 @@ class OtpThrottle(models.Model):
         constraints = [models.UniqueConstraint(fields=["phone", "purpose"], name="one_market_otp_throttle")]
 
 
-class VerifiedMomoPhone(models.Model):
-    """Customer-specific proof of phone control; never wallet-name verification."""
-    customer = models.ForeignKey(
-        CustomerAccount, on_delete=models.CASCADE, related_name="verified_momo_phones"
-    )
-    phone = models.CharField(max_length=20)
-    verified_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["customer", "phone"], name="one_verified_momo_phone_per_customer"
-            )
-        ]
-
-
 class PaymentConfiguration(models.Model):
     """One company-wide checkout provider; secrets stay in environment variables."""
     provider = models.CharField(max_length=24, choices=[("paystack", "Paystack"), ("hubtel", "Hubtel")], default="paystack")
-    online_price_markup_percent = models.DecimalField(max_digits=6, decimal_places=3, default=Decimal("0"), validators=[MinValueValidator(0), MaxValueValidator(100)], help_text="Built into customer-visible Market and provider-backed POS MoMo product prices.")
 
     bank_account_name = models.CharField(max_length=140, blank=True)
     bank_account_number = models.CharField(max_length=40, blank=True)
@@ -623,7 +477,3 @@ class PaymentConfiguration(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         return super().save(*args, **kwargs)
-
-
-# Keep mobile identity models registered without mixing them into checkout models.
-from .mobile_auth_models import MobileAuthorizationGrant, MobileDeviceSession  # noqa: E402,F401

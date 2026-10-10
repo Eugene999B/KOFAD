@@ -1,5 +1,4 @@
 import os
-import re
 from pathlib import Path
 
 import dj_database_url
@@ -31,7 +30,7 @@ TEMPLATES = [{
     "DIRS": [BASE_DIR / "templates"], "APP_DIRS": True,
     "OPTIONS": {"context_processors": [
         "django.template.context_processors.request", "django.contrib.auth.context_processors.auth",
-        "django.contrib.messages.context_processors.messages", "core.context.shell", "core.cookie_preferences.context",
+        "django.contrib.messages.context_processors.messages", "core.context.shell",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -56,25 +55,9 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
             "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-STAFF_LOGIN_SLUG = os.environ.get("STAFF_LOGIN_SLUG", "login").strip("/")
-if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,80}", STAFF_LOGIN_SLUG):
-    raise RuntimeError("STAFF_LOGIN_SLUG must contain only lowercase letters, digits and hyphens.")
-STAFF_LOGIN_PATH = f"/{STAFF_LOGIN_SLUG}/"
-PUBLIC_SITE_ORIGIN = os.environ.get("PUBLIC_SITE_ORIGIN", "https://kofadimpex.com").rstrip("/")
-MARKET_SITE_ORIGIN = os.environ.get("MARKET_SITE_ORIGIN", "https://market.kofadimpex.com").rstrip("/")
-GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()
-# Approved native app release destinations; empty until externally signed/published.
-# Two physically independent app identities and version channels.
-for _native_kind in ("CUSTOMER", "STAFF"):
-    _native_prefix = "KOFAD_" + _native_kind + "_APP_"
-    for _native_field in ("VERSION", "ANDROID_URL", "IOS_URL", "WINDOWS_URL"):
-        globals()[_native_prefix + _native_field] = os.environ.get(
-            _native_prefix + _native_field, ""
-        ).strip()
-
-LOGIN_URL = STAFF_LOGIN_PATH
+LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/workspace/"
-LOGOUT_REDIRECT_URL = STAFF_LOGIN_PATH
+LOGOUT_REDIRECT_URL = "/login/"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_DOMAIN = None
 SESSION_COOKIE_PATH = "/"
@@ -103,6 +86,24 @@ LOGGING = {"version": 1, "disable_existing_loggers": False, "handlers": {"consol
            "root": {"handlers": ["console"], "level": "INFO"}}
 
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+
+# Staff digest email is OFF until verified SMTP/DNS, recipients and consent are configured.
+EMAIL_AUTOMATIONS_ENABLED = os.environ.get("EMAIL_AUTOMATIONS_ENABLED", "0") == "1"
+EMAIL_DELIVERY_ENABLED = os.environ.get("EMAIL_DELIVERY_ENABLED", "0") == "1"
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "0") == "1"
+EMAIL_TIMEOUT = 15
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "KOFAD Reports <no-reply@kofadimpex.com>")
+
+# Staff SMS is INDEPENDENT of existing management-contact SMS.
+SMS_STAFF_NOTICES_ENABLED = os.environ.get("SMS_STAFF_NOTICES_ENABLED", "0") == "1"
+SMS_STAFF_DAILY_MAX_RECIPIENTS = int(os.environ.get("SMS_STAFF_DAILY_MAX_RECIPIENTS", "4"))
+NOTIFICATION_CRITICAL_VARIANCE_GHS = os.environ.get("NOTIFICATION_CRITICAL_VARIANCE_GHS", "500")
 
 # SMS credentials belong in deployment variables, never in database exports or the browser.
 SMS_ENABLED = os.environ.get("SMS_ENABLED","0") == "1"
@@ -157,71 +158,5 @@ HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"
 
 # Independent kill switch. Enable only after verified-number configuration and a delivery test.
 WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"
-# Staff invitation WhatsApp requires a separate Meta-approved template with one URL placeholder.
-KOFAD_STAFF_INVITE_WHATSAPP_TEMPLATE = os.environ.get("KOFAD_STAFF_INVITE_WHATSAPP_TEMPLATE", "").strip()
-KOFAD_STAFF_INVITE_WHATSAPP_LANGUAGE = os.environ.get("KOFAD_STAFF_INVITE_WHATSAPP_LANGUAGE", "en").strip()
 
 PAYSTACK_CUSTOMER_MOMO_ENABLED = os.environ.get("PAYSTACK_CUSTOMER_MOMO_ENABLED", "0") == "1"
-
-
-# Optional email verification and notifications. Disabled until merchant-domain
-# SMTP credentials and SPF/DKIM/DMARC are validated by the administrator.
-KOFAD_EMAIL_ENABLED = os.environ.get("KOFAD_EMAIL_ENABLED", "0") == "1"
-KOFAD_EMAIL_NOTIFICATIONS_ENABLED = os.environ.get("KOFAD_EMAIL_NOTIFICATIONS_ENABLED", "0") == "1"
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("KOFAD_SMTP_HOST", "")
-EMAIL_PORT = int(os.environ.get("KOFAD_SMTP_PORT", "587"))
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = os.environ.get("KOFAD_SMTP_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("KOFAD_SMTP_PASSWORD", "")
-EMAIL_TIMEOUT = 12
-DEFAULT_FROM_EMAIL = os.environ.get("KOFAD_FROM_EMAIL", "")
-
-
-# Google OIDC is separate from Gmail SMTP. Keep disabled until a Google Cloud
-# Web OAuth client has both canonical KOFAD callback URIs allowlisted.
-KOFAD_GOOGLE_OAUTH_ENABLED = os.environ.get("KOFAD_GOOGLE_OAUTH_ENABLED", "0") == "1"
-KOFAD_GOOGLE_CLIENT_ID = os.environ.get("KOFAD_GOOGLE_CLIENT_ID", "").strip()
-KOFAD_GOOGLE_CLIENT_SECRET = os.environ.get("KOFAD_GOOGLE_CLIENT_SECRET", "").strip()
-KOFAD_STAFF_SITE_ORIGIN = os.environ.get(
-    "KOFAD_STAFF_SITE_ORIGIN", "https://staff.kofadimpex.com"
-).rstrip("/")
-KOFAD_MARKET_SITE_ORIGIN = os.environ.get(
-    "KOFAD_MARKET_SITE_ORIGIN", "https://market.kofadimpex.com"
-).rstrip("/")
-
-
-# Railways Hobby does not permit SMTP. Use Gmail's HTTPS API for the
-# designated business sender, authorised by company management via OAuth.
-# This is independent of public/customer Google sign-in credentials.
-KOFAD_GMAIL_API_ENABLED = os.environ.get("KOFAD_GMAIL_API_ENABLED", "0") == "1"
-KOFAD_GMAIL_CLIENT_ID = os.environ.get("KOFAD_GMAIL_CLIENT_ID", "").strip()
-KOFAD_GMAIL_CLIENT_SECRET = os.environ.get("KOFAD_GMAIL_CLIENT_SECRET", "").strip()
-
-
-# Provider-neutral KOFAD transactional email setup:
-# "gmail_api" for authorised company Gmail OAuth over HTTPS,
-# "brevo" for Brevo's larger free email allowance using HTTPS,
-# "smtp" for environments where SMTP is permitted.
-KOFAD_EMAIL_PROVIDER = os.environ.get("KOFAD_EMAIL_PROVIDER", "auto").strip().lower()
-KOFAD_BREVO_API_KEY = os.environ.get("KOFAD_BREVO_API_KEY", "").strip()
-# Conservative KOFAD-wide daily cap for Brevo HTTPS sending (enforced in database).
-KOFAD_BREVO_DAILY_LIMIT = int(os.environ.get("KOFAD_BREVO_DAILY_LIMIT", "300"))
-# Business senders confirmed as active in Brevo (others use the verified transactional sender).
-KOFAD_BREVO_REGISTERED_SENDERS = os.environ.get("KOFAD_BREVO_REGISTERED_SENDERS", "transactions@kofadimpex.com")
-KOFAD_BREVO_SECURITY_FROM_EMAIL = os.environ.get("KOFAD_BREVO_SECURITY_FROM_EMAIL", "").strip()
-KOFAD_BREVO_TRANSACTION_FROM_EMAIL = os.environ.get("KOFAD_BREVO_TRANSACTION_FROM_EMAIL", "").strip()
-KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", "").strip()
-# Feature remains private until inbound Worker and HTTPS outbound sender are verified.
-KOFAD_EMAIL_CENTER_ENABLED = os.environ.get("KOFAD_EMAIL_CENTER_ENABLED", "0") == "1"
-KOFAD_EMAIL_INGEST_SECRET = os.environ.get("KOFAD_EMAIL_INGEST_SECRET", "").strip()
-KOFAD_BREVO_WEBHOOK_TOKEN = os.environ.get("KOFAD_BREVO_WEBHOOK_TOKEN", "").strip()
-
-
-# Optional public-site analytics is loaded only after the visitor opts in.
-KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip()
-
-# Native account authorization remains OFF until verified app deep links and
-# hardware-backed OS token storage are shipped and reviewed.
-KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"

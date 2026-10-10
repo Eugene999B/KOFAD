@@ -9,17 +9,6 @@ from core.whatsapp_delivery import process_whatsapp_queue, recover_stale_whatsap
 from marketplace.notifications import process_order_sms
 
 
-def recover_pending_deliveries(error_stream):
-    """Keep one failed provider recovery from stopping the whole payment/message worker."""
-    for label, recover in (("SMS", recover_stale), ("WhatsApp", recover_stale_whatsapp)):
-        try:
-            recover()
-        except Exception:
-            # A transient DB/provider failure must not block independent recovery
-            # or terminate reconciliation of payments and customer messages.
-            error_stream.write(f"{label} recovery failed safely; will retry.")
-
-
 class Command(BaseCommand):
     help = "Run communication automations and Arkesel delivery tracking."
 
@@ -50,11 +39,6 @@ class Command(BaseCommand):
                 except Exception:
                     self.stderr.write("Paystack POS reconciliation check failed; will retry.")
                 try:
-                    from core.pos_hubtel import reconcile_due as reconcile_pos_hubtel
-                    reconcile_pos_hubtel()
-                except Exception:
-                    self.stderr.write("Hubtel POS reconciliation check failed; will retry.")
-                try:
                     from marketplace.paystack_reconciliation import reconcile_due as reconcile_market_paystack
                     reconcile_market_paystack()
                 except Exception:
@@ -62,19 +46,10 @@ class Command(BaseCommand):
                 last_payment_check = now
 
             if now - last_automation >= 60:
-                # Reuse the existing communications worker: no extra Railway
-                # service, cron deployment or container charges for email.
-                try:
-                    from core.email_identity import deliver_pending
-                    deliver_pending(limit=15)
-                    from core.email_center import deliver_outgoing
-                    deliver_outgoing(limit=15)
-                    from core.email_campaigns import queue_active_campaigns
-                    queue_active_campaigns(limit=75)
-                except Exception:
-                    self.stderr.write("Email notification queue check failed safely; will retry.")
                 try:
                     run_scheduled_automations()
+                    from core.notification_engine import process_email_outbox
+                    process_email_outbox()
                 except Exception as exc:
                     self.stderr.write(f"Communication automation check failed safely: {exc}")
                 last_automation = now
@@ -112,7 +87,8 @@ class Command(BaseCommand):
             # Payment checks and receipt delivery both run independently of any customer browser.
             # Stale-message recovery remains less frequent because those records need time to age.
             if last_recovery is None or now - last_recovery >= 30:
-                recover_pending_deliveries(self.stderr)
+                recover_stale()
+                recover_stale_whatsapp()
                 last_recovery = now
 
             if not options["loop"]:

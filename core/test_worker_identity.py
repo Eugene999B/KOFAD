@@ -142,7 +142,7 @@ class WorkerIdentityExperienceTests(TestCase):
         self.assertNotContains(response, self.worker.ssnit_number)
         self.assertNotContains(response, self.worker.bank_account_number)
         self.assertNotContains(response, self.worker.residential_address)
-        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow, noarchive")
+        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
 
     def test_expired_card_is_not_reported_as_current(self):
         self.worker.id_card_expiry_date = date(2026, 1, 1)
@@ -150,3 +150,13 @@ class WorkerIdentityExperienceTests(TestCase):
         self.client.logout()
         response = self.client.get(f"/verify/worker/{self.worker.card_token}/")
         self.assertContains(response, "Credential not currently active")
+
+    def test_reissued_card_revokes_old_qr_and_preserves_new_one(self):
+        previous = self.worker.card_token
+        response = self.client.post(f"/workers/{self.worker.pk}/reissue-card/")
+        self.assertEqual(response.status_code, 302)
+        self.worker.refresh_from_db()
+        self.assertNotEqual(self.worker.card_token, previous)
+        self.client.logout()
+        self.assertEqual(self.client.get(f"/verify/worker/{previous}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/verify/worker/{self.worker.card_token}/").status_code, 200)

@@ -1,13 +1,7 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}{% block content %}
+{% extends "marketplace/base.html" %}{% block content %}
 <section class="account-v4-page">
 <header class="account-v4-head"><div><p class="market-eyebrow">MY ACCOUNT</p><h1>Hi, {{ market_customer.full_name|default:"there" }}.</h1><p>Orders, saved items and support — all in one place.</p></div><a class="market-button ghost" href="/market/">Continue shopping</a></header>
 
-<section class="experience-customer-pulse" aria-label="Your account at a glance">
-<article><small>Total orders</small><strong>{{ summary.orders }}</strong></article>
-<article><small>Active orders</small><strong>{{ summary.active_orders }}</strong></article>
-<article><small>Paid order value</small><strong>GHS {{ summary.spend|floatformat:2 }}</strong></article>
-<article><small>Saved products</small><strong>{{ summary.wishlist }}</strong></article>
-</section>
 <nav class="account-v4-grid" aria-label="Account shortcuts">
 <a class="account-v4-tile" href="/market/orders/"><span>▤</span><div><strong>Your orders</strong><small>{{ summary.orders }} total · {{ summary.active_orders }} active</small></div></a>
 <a class="account-v4-tile" href="/market/account/wishlist/"><span>♡</span><div><strong>Saved items</strong><small>{{ summary.wishlist }} saved</small></div></a>
@@ -33,14 +27,14 @@
 </div>
 
 <aside class="account-v4-side">
-<section class="experience-email-card"><p class="market-eyebrow">LINKED SIGN-IN</p><h2>Your account security</h2>
-<p class="helper">Mobile number: <strong>{{ market_customer.phone|default:"Not linked (optional)" }}</strong></p>
-{% if email_identity.verified_at %}<p class="verified">✓ Verified email: {{ email_identity.email }}</p>{% else %}<p class="waiting">Email sign-in not linked yet</p>{% endif %}
-<p class="helper">Use Google to sign in, or set a password for verified email and phone sign-in. Adding a phone number is optional.</p>
-<a class="market-button ghost" href="/market/account/security/">Manage email & security →</a>
-</section>
-
-<section class="account-v4-card"><div class="account-v4-profile"><span>{{ market_customer.full_name|first|upper }}</span><div><strong>{{ market_customer.full_name }}</strong>{% if market_customer.phone %}<small>{{ market_customer.phone }}</small>{% endif %}{% if market_customer.email %}<small>{{ market_customer.email }}</small>{% endif %}</div></div><div class="account-v4-actions"><a href="/market/account/security/"><span>Password & security</span><b>›</b></a><a href="/market/messages/"><span>Customer support</span><b>›</b></a><a href="/market/account/returns/"><span>Returns & refunds</span><b>›</b></a></div></section>
+<section class="account-v4-card"><div class="account-v4-card-head"><h2>Email preferences</h2></div><p class="account-muted">Receive order updates at your chosen address. Promotional offers are separate and require your confirmation.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="email_preferences">
+<label>Email address<input type="email" name="notification_email" value="{{ market_customer.email }}" autocomplete="email" placeholder="you@example.com"></label>
+<label class="check-row"><input type="checkbox" name="transactional_email_enabled" {% if market_customer.transactional_email_enabled %}checked{% endif %}> Send essential order and payment status updates</label>
+<label class="check-row"><input type="checkbox" name="marketing_email_opt_in" {% if market_customer.marketing_email_opt_in %}checked{% endif %}> Receive occasional personalised offers and saved-item reminders (optional)</label>
+{% if market_customer.marketing_email_opt_in %}<p class="account-muted">Your email has been confirmed for promotions. Uncheck and save to unsubscribe.</p>{% else %}<p class="account-muted">Promotions stay off until you confirm the link sent to your inbox. You can unsubscribe at any time here.</p>{% endif %}
+<button class="market-button primary wide" type="submit">Save email preferences</button></form></section>
+<section class="account-v4-card"><div class="account-v4-profile"><span>{{ market_customer.full_name|first|upper }}</span><div><strong>{{ market_customer.full_name }}</strong><small>{{ market_customer.phone }}</small>{% if market_customer.email %}<small>{{ market_customer.email }}</small>{% endif %}</div></div><div class="account-v4-actions"><a href="/market/account/security/"><span>Password & security</span><b>›</b></a><a href="/market/messages/"><span>Customer support</span><b>›</b></a><a href="/market/account/returns/"><span>Returns & refunds</span><b>›</b></a></div></section>
 <section class="account-v4-card"><div class="account-v4-card-head"><h2>Delivery</h2></div>{% for address in addresses|slice:":1" %}<div class="saved-address"><strong>{{ address.label }}</strong><p>{{ address.address_line }}{% if address.town %}, {{ address.town }}{% endif %}</p></div>{% empty %}<p class="account-muted">Your latest delivery address will appear after checkout.</p>{% endfor %}</section>
 <form method="post" action="/market/account/logout/" class="account-v4-signout">{% csrf_token %}<button>Sign out</button></form>
 </aside>

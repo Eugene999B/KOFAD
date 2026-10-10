@@ -4,6 +4,7 @@
   <a class="button secondary" href="/workers/{{ worker.pk }}/profile.pdf">⇩ Worker profile PDF</a>
   <a class="button secondary" href="/workers/{{ worker.pk }}/id-card-print-sheet.pdf">▣ ID print sheet</a>
   <a class="button secondary" href="/workers/{{ worker.pk }}/id-card.pdf">⇩ CR80 ID card</a>
+  {% if request.user.is_superuser %}<details><summary class="button secondary">Replace lost ID</summary><form method="post" action="/workers/{{ worker.pk }}/reissue-card/">{% csrf_token %}<p class="muted">This revokes all previous verification QR codes.</p><button class="button">Reissue &amp; revoke old ID</button></form></details>{% endif %}
   <a class="button" href="/workers/{{ worker.pk }}/edit/">Edit worker</a>
 </div>
 {% endblock %}

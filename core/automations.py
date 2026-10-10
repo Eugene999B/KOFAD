@@ -117,14 +117,6 @@ def management_contacts(branch, field):
 
 
 def prepare_closing_notifications(closing, actor=None):
-    # Queue authorized email notices in the same transaction as the closing.
-    # Email failures must never prevent a finalized closing or SMS alerts.
-    try:
-        from .email_center import enqueue_closing_report
-        enqueue_closing_report(closing)
-    except Exception:
-        import logging
-        logging.getLogger(__name__).exception('Could not queue a closing email report')
     policy = _communication_policy()
     if policy.daily_closing_mode == "off" and policy.whatsapp_daily_closing_mode == "off":
         return []
@@ -332,17 +324,12 @@ def run_low_stock_summary(now=None):
 
 
 def run_scheduled_automations(now=None):
-    from .debt_email import run_debt_email_reminders
-    try:
-        email_count = run_debt_email_reminders(now)
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).exception("Debt email scheduler failed safely")
-        email_count = 0
+    from .notification_engine import run_staff_scheduled_reports, run_customer_personalised_promotions
     return {
         "debt": run_debt_reminders(now),
-        "debt_email": email_count,
         "low_stock": run_low_stock_summary(now),
+        "email_reports": run_staff_scheduled_reports(now),
+        "customer_email": run_customer_personalised_promotions(now),
     }
 
 
@@ -362,10 +349,16 @@ def safe_prepare_sale_receipt(document_id, actor_id=None):
     if not document:
         return None
     try:
-        return prepare_sale_receipt(document, actor)
+        result = prepare_sale_receipt(document, actor)
     except Exception as exc:
         _record_automation_failure(document.branch, actor, "sale_receipt", document.reference, exc)
-        return None
+        result = None
+    try:
+        from .notification_engine import queue_pos_transaction_email
+        queue_pos_transaction_email(document)
+    except Exception as exc:
+        _record_automation_failure(document.branch, actor, "sale_receipt_email", document.reference, exc)
+    return result
 
 
 def safe_prepare_payment_confirmation(document_id, actor_id=None):
@@ -374,10 +367,16 @@ def safe_prepare_payment_confirmation(document_id, actor_id=None):
     if not document:
         return None
     try:
-        return prepare_payment_confirmation(document, actor)
+        result = prepare_payment_confirmation(document, actor)
     except Exception as exc:
         _record_automation_failure(document.branch, actor, "payment_confirmation", document.reference, exc)
-        return None
+        result = None
+    try:
+        from .notification_engine import queue_pos_transaction_email
+        queue_pos_transaction_email(document)
+    except Exception as exc:
+        _record_automation_failure(document.branch, actor, "payment_confirmation_email", document.reference, exc)
+    return result
 
 
 def safe_prepare_closing(closing_id, actor_id=None):
@@ -386,7 +385,13 @@ def safe_prepare_closing(closing_id, actor_id=None):
     if not closing:
         return []
     try:
-        return prepare_closing_notifications(closing, actor)
+        prepared = prepare_closing_notifications(closing, actor)
     except Exception as exc:
         _record_automation_failure(closing.branch, actor, "daily_closing", closing.pk, exc)
-        return []
+        prepared = []
+    try:
+        from .notification_engine import queue_closing_reports
+        queue_closing_reports(closing)
+    except Exception as exc:
+        _record_automation_failure(closing.branch, actor, "staff_closing_report", closing.pk, exc)
+    return prepared
