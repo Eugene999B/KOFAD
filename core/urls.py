@@ -9,6 +9,7 @@ from . import gmail_api as gmail_sender
 from . import email_center as business_email
 from . import customer_care as customer_care_views
 from . import email_campaigns as campaigns
+from . import email_productivity as pro_email
 from . import count_views
 from . import admin_views
 from . import staff_invites
@@ -31,6 +32,10 @@ urlpatterns = [
     path("auth/google/gmail/disconnect/", gmail_sender.disconnect, name="gmail_sender_disconnect"),
     path("auth/google/gmail/send-test/", gmail_sender.send_test, name="gmail_sender_test"),
     path("email/", business_email.inbox, name="email_center"),
+    path("email/work/", pro_email.work, name="email_work"),
+    path("email/drafts/", pro_email.drafts, name="email_drafts"),
+    path("email/replies/", pro_email.library, name="email_replies"),
+    path("email/reports/", pro_email.reports, name="email_reports"),
     path("email/history/", business_email.inbox, {"section": "history"}, name="email_history"),
     path("email/automations/", business_email.inbox, {"section": "automations"}, name="email_automations"),
     path("email/team/", business_email.inbox, {"section": "team"}, name="email_team"),
