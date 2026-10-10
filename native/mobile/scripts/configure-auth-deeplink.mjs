@@ -4,10 +4,6 @@ import {createRequire} from "node:module";
 
 const require = createRequire(import.meta.url);
 const {profileFor} = require("../profile.cjs");
-const channel = process.env.KOFAD_NATIVE_CHANNEL;
-const profile = profileFor(channel);
-const scheme = channel === "customer" ? "kofadmarket" : "kofadstaff";
-
 export function androidDeepLink(xml, appScheme) {
   if (xml.includes('android:scheme="' + appScheme + '"')) return xml;
   if (!xml.includes("</activity>")) throw new Error("Capacitor Android activity missing; cannot set up KOFAD login callback");
@@ -40,6 +36,9 @@ export function iosDeepLink(plist, appScheme) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
+  const channel = process.env.KOFAD_NATIVE_CHANNEL;
+  const profile = profileFor(channel);
+  const scheme = channel === "customer" ? "kofadmarket" : "kofadstaff";
   const platform = process.argv[2];
   const file = platform === "android"
     ? resolve("android/app/src/main/AndroidManifest.xml")
