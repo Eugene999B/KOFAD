@@ -43,6 +43,11 @@ from . import services, hubtel, paystack_momo
 
 
 def _market_context(request, **extra):
+    # Customer login/access templates only render their Google button when
+    # this server-side readiness flag is provided. Keep the OAuth capability
+    # check centralised and fail closed when Google setup is incomplete.
+    from core.google_oauth import enabled as google_oauth_enabled
+
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
     market_auth_page = request.path in {
@@ -67,6 +72,7 @@ def _market_context(request, **extra):
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
+        "google_ready": google_oauth_enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
