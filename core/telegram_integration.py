@@ -294,3 +294,53 @@ def queue_periodic_digest(now=None):
             sent += int(queue_notice(identity, "digest",
                                      f"tg:digest:{label}:{first.isoformat()}:{user.pk}", body))
     return sent
+
+
+
+def queue_inventory_alerts(now=None):
+    """Deduplicated once-daily low/out-of-stock notices to opted-in staff only."""
+    if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+        return 0
+    from django.contrib.auth.models import User
+    from .models import Access, Branch, Product, Stock
+
+    now = timezone.localtime(now or timezone.now())
+    if now.hour != 8:
+        return 0
+    today = now.date()
+    count = 0
+    for branch in Branch.objects.filter(active=True):
+        stock = dict(Stock.objects.filter(branch=branch).values_list("product_id", "quantity"))
+        products = Product.objects.filter(active=True)
+        out_count = 0
+        low_count = 0
+        for p in products.iterator():
+            qty = stock.get(p.pk, 0)
+            if qty <= 0:
+                out_count += 1
+            elif qty <= p.reorder_level:
+                low_count += 1
+        if not (out_count or low_count):
+            continue
+        body = (
+            f"KOFAD INVENTORY ALERT\n"
+            f"Branch: {branch.name}\n"
+            f"Out of stock: {out_count} product(s)\n"
+            f"At or below reorder level: {low_count} product(s)\n"
+            "Sign into your authorized KOFAD inventory workspace to review, "
+            "approve and execute any restock. This message does not authorize purchases."
+        )
+        for user in User.objects.filter(is_active=True):
+            if not (user.is_superuser or user.has_perm("core.operate_inventory")
+                    or user.has_perm("core.manage_company")):
+                continue
+            access = Access.objects.filter(user=user).first()
+            if not access or not (user.is_superuser or access.branches.filter(pk=branch.pk).exists()):
+                continue
+            identity = linked_identity("staff", user.pk)
+            if identity:
+                count += int(queue_notice(
+                    identity, "stock", f"tg:stock:{branch.pk}:{today.isoformat()}:{user.pk}",
+                    body, branch=branch,
+                ))
+    return count
