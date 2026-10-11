@@ -68,9 +68,12 @@ class MarketSettlementRecoveryTests(MarketFixtures):
         with self.assertRaisesMessage(ValidationError, "channel"):
             services.finalize_payment(attempt.reference, self.provider_data(order, channel="mobile_money"))
         attempt.refresh_from_db()
-        self.assertEqual(attempt.status, "attention")
+        # finalize_payment is atomic: its ValidationError rolls back attempted
+        # status changes; the safety invariant is no paid order or ledger entry.
+        self.assertEqual(attempt.status, "pending")
         order.refresh_from_db()
         self.assertNotEqual(order.payment_status, "paid")
+        self.assertIsNone(order.sale_document_id)
 
     def test_missing_verification_summary_does_not_crash(self):
         order = self.order()
