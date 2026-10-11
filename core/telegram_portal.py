@@ -37,7 +37,7 @@ def _portal(request, kind, account, bot_kind=None):
         elif action == "disconnect":
             TelegramIdentity.objects.filter(kind=kind, owner_id=account.pk, bot_kind=bot_kind).delete()
             TelegramLinkChallenge.objects.filter(kind=kind, owner_id=account.pk, bot_kind=bot_kind).delete()
-            request.session.pop(f"telegram_pair_url_{kind}", None)
+            request.session.pop(f"telegram_pair_url_{kind}_{bot_kind}", None)
             messages.success(request, "Your Telegram account was disconnected.")
         elif action == "preferences" and identity:
             # Never silently subscribe to messaging. Require explicit opt-in.
@@ -68,7 +68,7 @@ def _portal(request, kind, account, bot_kind=None):
         "kind": kind, "telegram_bot_kind": bot_kind,
         "telegram_bot_url": bot_link(bot_kind), "telegram_identity": identity,
         "telegram_active": active,
-        "telegram_pair_url": request.session.get(f"telegram_pair_url_{kind}", ""),
+        "telegram_pair_url": request.session.get(f"telegram_pair_url_{kind}_{bot_kind}", ""),
         "is_inventory": kind == "staff" and (account.is_superuser or
             account.has_perm("core.manage_company") or account.has_perm("core.operate_inventory")),
         "is_management": kind == "staff" and (account.is_superuser or any(
