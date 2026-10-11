@@ -32,6 +32,7 @@ const copyWithProfile = (filename) => {
 copyWithProfile("index.html");
 copyWithProfile("native.js");
 copyWithProfile("alerts.js");
+copyWithProfile("mobile-auth.js");
 copyWithProfile("experience.js");
 copyFileSync(resolve(sourceDir, "native.css"), resolve(outputDir, "native.css"));
 copyFileSync(resolve("../../static/brand/kofad-original-logo.png"), resolve(outputDir, "kofad-logo.png"));

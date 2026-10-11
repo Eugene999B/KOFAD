@@ -8,7 +8,10 @@
   let products=[],selected=null,favorites=[];
   try { const v=JSON.parse(localStorage.getItem(favoritesKey)||"[]");if(Array.isArray(v))favorites=v.filter(x=>Number.isSafeInteger(x)&&x>0).slice(0,100); }catch(_){}
   function open(path) { window.KofadNativeBridge?.openOfficial(path); }
-  const login = () => open(CUSTOMER?"/market/access/":"/workspace/");
+  const login = async () => {
+    const started = await window.KofadMobileAuth?.start?.();
+    if (!started) open(CUSTOMER?"/market/access/":"/workspace/");
+  };
   function view(name) {
     screens.forEach(s => $("screen-"+s).hidden=s!==name);
     const active = name==="product"?"catalog":name==="saved"?"account":name==="notifications"?"notices":name;
@@ -106,7 +109,11 @@
   $("native-detail-buy").addEventListener("click",()=>{
     if(selected)open("/market/access/?next="+encodeURIComponent("/market/products/"+selected.id+"/"));
   });
-  $("native-account-login").addEventListener("click",login);
+  $("native-account-login").addEventListener("click",async()=>{
+    if (window.KofadMobileAuth?.isAuthenticated?.()) {
+      await window.KofadMobileAuth.signOut();
+    } else await login();
+  });
   $("staff-secure-entry").addEventListener("click",()=>open("/workspace/"));
   if(CUSTOMER){
     accountRow("Saved products",()=>{saved();view("saved");});
