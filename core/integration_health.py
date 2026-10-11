@@ -133,7 +133,15 @@ CATALOG = (
                        ("Security sender configured", "brevo_security")),
          repair="Check Brevo sender verification, free daily quota, outbox failures and provider delivery events. API acceptance is not proof of inbox delivery.",
          manage="/communications/"),
-    dict(id="brevo_webhook", group="communications", name="Brevo delivery reporting", mark="EV",
+    dict(id="brevo_reporting", group="communications", name="Brevo provider event reports", mark="BR",
+         purpose="Read-only authenticated reporting for sent, delivered, bounced, deferred and blocked transactional email.",
+         steps=("KOFAD sends email through Brevo when configured.",
+                "Brevo records events even if KOFAD has not installed its webhook.",
+                "A read-only provider report checks recent event samples without sending mail."),
+         requirements=(("Brevo transactional API key configured", "brevo_api"),),
+         repair="Run Verify provider API. If verified, reporting works in Brevo, while KOFAD webhook sync must be diagnosed separately. For recent delivery evidence check event samples and matching KOFAD outbox.",
+         manage="/communications/"),
+    dict(id="brevo_webhook", group="communications", name="Brevo → KOFAD webhook receipts", mark="EV",
          purpose="Receives authenticated delivered/bounce/spam signals from Brevo.",
          steps=("Brevo posts an event to the KOFAD HTTPS webhook.",
                 "A private bearer token authenticates the event.",
@@ -355,8 +363,9 @@ def _evidence(now):
     return observations
 
 
-def catalog():
+def catalog(probes=None):
     now = timezone.now()
+    probes = probes or {}
     config = _configuration()
     # Prevent a temporary DB issue from crashing the diagnostics screen.
     try:
@@ -391,6 +400,8 @@ def catalog():
             active = config.get(enabled_flags.get(spec["id"], ""), False)
             if spec["id"] == "brevo":
                 active = config["brevo_transaction"] or config["brevo_security"]
+            if spec["id"] == "brevo_webhook":
+                active = config["brevo_api"]
             state = "issue" if active else "not_connected"
             details.append("Incomplete prerequisites: " + "; ".join(missing) + ".")
         else:
@@ -443,12 +454,35 @@ def catalog():
         if spec["id"] == "arkesel":
             metrics.append("Mode: " + ("Sandbox" if settings.SMS_SANDBOX else "Live") +
                            " · sender configured: " + ("Yes" if settings.SMS_SENDER_ID else "No") + ".")
+        # A recent manually initiated authenticated provider check is distinct
+        # from local event evidence. Results are expiring, server-side session
+        # summaries, not permanent claims of provider health.
+        probe = probes.get(spec["id"], {})
+        if probe and not spec.get("planned"):
+            verified_state = probe.get("state")
+            if verified_state == "verified":
+                if not missing:
+                    state = "working"
+                details.append("Manually checked provider API or routing; scope is documented in the verification evidence.")
+            elif verified_state == "failed":
+                state = "issue"
+                details.append("Latest read-only verification failed. See provider-level diagnosis below.")
+            elif verified_state == "partial":
+                if state not in {"issue", "not_connected"}:
+                    state = "warning"
+                details.append("Only part of the connection could be verified; see the exact probe scope.")
+            elif verified_state == "not_configured":
+                state = "not_connected"
+        if spec["id"] == "brevo_webhook" and not config["brevo_webhook"] and config["brevo_api"]:
+            state = "issue"
+            details.append("Brevo outbound API can operate, but KOFAD has no authenticated delivery-receipt token. This does NOT imply that Brevo's independent event reporting API is unavailable.")
         rows.append({
             **spec,
             "status": state, "status_label": STATUS[state][0],
             "status_style": STATUS[state][1],
             "checks": checks, "missing": missing, "issues": details,
             "proof": proof if proof.get("at") else None,
+            "probe": probe if probe else None,
             "metrics": metrics,
             "requirements_count": len(checks),
             "requirements_ok": len(checks) - len(missing),
