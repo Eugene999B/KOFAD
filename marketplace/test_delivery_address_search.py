@@ -86,3 +86,21 @@ class GhanaLocationTests(TestCase):
         })
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["ghana_post_gps"], "AK-039-5028")
+
+class GhanaLocationEndpointTests(MarketFixtures):
+    def sign_in(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    def test_guests_do_not_access_customer_address_search(self):
+        self.assertEqual(self.client.get("/market/location/suggest/?q=Accra").status_code, 401)
+        self.assertEqual(self.client.post("/market/location/ghana-post/", {"code": "AK-039-5028"}).status_code, 401)
+
+    @patch("marketplace.delivery_locations.suggest_landmarks")
+    def test_customer_can_find_landmarks(self, suggest):
+        self.sign_in()
+        suggest.return_value = [{"label": "KNUST", "latitude": 6.6, "longitude": -1.5}]
+        response = self.client.get("/market/location/suggest/?q=KNUST")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["label"], "KNUST")
