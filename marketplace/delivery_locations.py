@@ -190,7 +190,7 @@ def resolve_digital_address(value):
                    details.get("District") or "Ghana")[:100]
         return {
             "code": code, "latitude": lat, "longitude": lng,
-            "label": f"{code} · {area}", "source": "ghanapost_gps",
+            "label": f"{code} · {area}", "area": area, "source": "ghanapost_gps",
             "verified": True,
         }
     except (requests.RequestException, ValueError, TypeError, AttributeError, KeyError) as exc:
