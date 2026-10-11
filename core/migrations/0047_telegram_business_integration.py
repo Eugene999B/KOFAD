@@ -35,6 +35,7 @@ class Migration(migrations.Migration):
                 ("owner_id", models.PositiveBigIntegerField()),
                 ("token_digest", models.CharField(max_length=64, unique=True)),
                 ("confirmation_digest", models.CharField(blank=True, max_length=64)),
+                ("attempts", models.PositiveSmallIntegerField(default=0)),
                 ("telegram_user_id", models.BigIntegerField(blank=True, null=True)),
                 ("chat_id", models.BigIntegerField(blank=True, null=True)),
                 ("expires_at", models.DateTimeField()),
