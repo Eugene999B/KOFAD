@@ -51,3 +51,38 @@ class GhanaLocationTests(TestCase):
         response.json.return_value["addressComponents"][0]["shortText"] = "US"
         with self.assertRaises(ValidationError):
             select_landmark("ChIJabcdefgh1234")
+
+    @override_settings(GHANAPOST_GPS_LOOKUP_URL="")
+    @patch("marketplace.delivery_locations.requests.get")
+    def test_unconfigured_gps_provider_does_not_invent_coordinates(self, get):
+        with self.assertRaisesMessage(ValidationError, "not connected"):
+            resolve_digital_address("AK-039-5028")
+        get.assert_not_called()
+
+    @override_settings(GHANAPOST_GPS_LOOKUP_URL="https://api.afrihex.com/v1/lookup")
+    @patch("marketplace.delivery_locations.requests.get")
+    def test_verifies_postal_code_against_provider_coordinates(self, get):
+        response = Mock(is_redirect=False)
+        response.json.return_value = {"success": True, "data": {
+            "GPSName": "AK0395028", "CenterLatitude": 6.68,
+            "CenterLongitude": -1.57, "District": "Kumasi",
+        }}
+        get.return_value = response
+        location = resolve_digital_address("ak-039-5028")
+        self.assertTrue(location["verified"])
+        self.assertEqual(location["area"], "Kumasi")
+        self.assertEqual(get.call_args.kwargs["params"], {"address": "AK-039-5028"})
+        response.json.return_value["data"]["GPSName"] = "AK0000000"
+        with self.assertRaisesMessage(ValidationError, "different digital address"):
+            resolve_digital_address("AK-039-5028")
+
+    def test_customer_checkout_normalizes_postal_code_without_map_picker(self):
+        form = CheckoutForm(data={
+            "fulfilment": "delivery", "recipient_name": "Ama Mensah",
+            "phone": "0241234567", "email": "ama@example.test",
+            "town": "Kumasi", "address_line": "Near hospital",
+            "ghana_post_gps": "ak-039-5028",
+            "latitude": "6.680000", "longitude": "-1.570000",
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["ghana_post_gps"], "AK-039-5028")
