@@ -11,10 +11,11 @@ class Migration(migrations.Migration):
             name="TelegramIdentity",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("bot_kind", models.CharField(max_length=12, default="official", choices=[("official", "Official/security"), ("customer", "Customer"), ("staff", "Staff")])),
                 ("kind", models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])),
                 ("owner_id", models.PositiveBigIntegerField()),
-                ("telegram_user_id", models.BigIntegerField(unique=True)),
-                ("chat_id", models.BigIntegerField(unique=True)),
+                ("telegram_user_id", models.BigIntegerField()),
+                ("chat_id", models.BigIntegerField()),
                 ("auth_stamp", models.CharField(default="", max_length=64)),
                 ("notifications_enabled", models.BooleanField(default=False)),
                 ("marketing_opt_in", models.BooleanField(default=False)),
@@ -27,12 +28,13 @@ class Migration(migrations.Migration):
             ],
             options={
                 "indexes": [models.Index(fields=["kind", "owner_id"], name="tg_account_lookup")],
-                "constraints": [models.UniqueConstraint(fields=["kind", "owner_id"], name="tg_one_identity_per_kofad_account")],
+                "constraints": [models.UniqueConstraint(fields=["bot_kind", "kind", "owner_id"], name="tg_one_account_per_bot"), models.UniqueConstraint(fields=["bot_kind", "telegram_user_id"], name="tg_one_telegram_user_per_bot"), models.UniqueConstraint(fields=["bot_kind", "chat_id"], name="tg_one_telegram_chat_per_bot")],
             },
         ),
         migrations.CreateModel(
             name="TelegramLinkChallenge",
             fields=[
+                ("bot_kind", models.CharField(max_length=12, default="official")),
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("kind", models.CharField(max_length=12)),
                 ("owner_id", models.PositiveBigIntegerField()),
@@ -49,10 +51,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TelegramUpdate",
             fields=[
+                ("bot_kind", models.CharField(max_length=12, default="official")),
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("update_id", models.BigIntegerField(unique=True)),
+                ("update_id", models.BigIntegerField()),
                 ("received_at", models.DateTimeField(auto_now_add=True)),
             ],
+            options={"constraints": [models.UniqueConstraint(fields=["bot_kind", "update_id"], name="tg_webhook_update_per_bot")]},
         ),
         migrations.CreateModel(
             name="TelegramOutbound",
