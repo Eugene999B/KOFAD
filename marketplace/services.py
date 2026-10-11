@@ -176,7 +176,7 @@ def delivery_quote(latitude=None, longitude=None):
     if mode == "distance" and not origin:
         raise ValidationError("Delivery pricing is not ready yet. Please choose pickup or contact us.")
     if mode == "distance" and not destination:
-        raise ValidationError("Pin your delivery location to calculate the delivery fee.")
+        raise ValidationError("Confirm a delivery location to calculate the delivery fee.")
 
     distance = route["distance_km"] if route else None
     if distance is not None:
