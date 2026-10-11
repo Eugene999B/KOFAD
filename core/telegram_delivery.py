@@ -22,11 +22,18 @@ def _still_authorized(notice):
         return False
     if notice.category == "critical" and not identity.critical_opt_in:
         return False
+    if notice.category == "stock" and not identity.stock_opt_in:
+        return False
     if identity.kind == "staff":
         from django.contrib.auth.models import User
         u = User.objects.filter(pk=identity.owner_id, is_active=True).first()
         if not u:
             return False
+        if notice.category == "stock":
+            return (bool(u.is_superuser or u.has_perm("core.operate_inventory")
+                         or u.has_perm("core.manage_company")) and
+                    (u.is_superuser or bool(notice.branch_id and
+                    Access.objects.filter(user=u, branches=notice.branch).exists())))
         if notice.category in {"closing", "critical", "digest"}:
             authorized = bool(u.is_superuser or u.has_perm("core.manage_company")
                               or u.has_perm("core.view_reports") or u.has_perm("core.operate_finance"))
