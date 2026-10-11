@@ -23,10 +23,10 @@ def _still_authorized(notice):
         if not u:
             return False
         if notice.category in {"closing", "critical"}:
-            return (bool(u.is_superuser or u.has_perm("core.manage_company")
-                         or u.has_perm("core.view_reports") or u.has_perm("core.operate_finance"))
-                    and Access.objects.filter(user=u, branches=notice.branch).exists() if not u.is_superuser
-                    else bool(u.is_active))
+            authorized = bool(u.is_superuser or u.has_perm("core.manage_company")
+                              or u.has_perm("core.view_reports") or u.has_perm("core.operate_finance"))
+            return authorized and (u.is_superuser or bool(notice.branch_id and
+                    Access.objects.filter(user=u, branches=notice.branch).exists()))
         return True
     if identity.kind == "customer":
         from marketplace.models import CustomerAccount
@@ -35,7 +35,8 @@ def _still_authorized(notice):
 
 
 def deliver_pending(limit=20):
-    if not settings.TELEGRAM_BOT_ENABLED or not settings.TELEGRAM_BOT_TOKEN:
+    if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_NOTIFICATIONS_ENABLED
+            and settings.TELEGRAM_BOT_TOKEN):
         return 0
     delivered = 0
     for _ in range(min(max(int(limit), 0), 100)):
