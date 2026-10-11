@@ -1,6 +1,26 @@
 """Public customer information. Policy version approved for launch on 7 October 2026."""
 POLICY_VERSION = "2026-10-07"
 PAGES = {
+    "wholesale": {
+        "title": "Wholesale & bulk supply in Ghana",
+        "eyebrow": "BUSINESS AND BULK ORDERS",
+        "intro": "Ask KOFAD about wholesale quantities, pack sizes, repeat purchasing and business restocking in Ghana.",
+        "sections": [
+            ("Wholesale products and business restocking", [
+                "KOFAD IMPEX ENTERPRISE serves buyers looking for larger quantities and repeat purchases of goods from the KOFAD Market catalogue. Explore currently listed items and selling units before you ask for a quotation.",
+                "A product visible online is not a guarantee of wholesale stock or a discounted bulk price. Please tell us the item, preferred quantity and delivery area so we can check what is possible.",
+            ]),
+            ("How to request a bulk quotation", [
+                "Send the product name or specification, quantity, preferred pack size, business contact and destination through our contact page. Our team will confirm availability, the applicable price and the fulfilment arrangement before you pay for a special order.",
+            ]),
+            ("Retail versus wholesale ordering", [
+                "For individual items and advertised pack prices, browse KOFAD Market. For larger quantities, ongoing supply or an item not currently in the catalogue, contact KOFAD to discuss the requirements first.",
+            ]),
+            ("Delivery, collection and trade enquiries", [
+                "Delivery and collection depend on the destination and available fulfilment options. Requests involving sourcing or import/export responsibilities are considered individually and require a written quotation. The public catalogue does not automatically provide international shipping, customs clearance or cargo insurance.",
+            ]),
+        ],
+    },
     "about": {
         "title": "About KOFAD",
         "eyebrow": "OUR BUSINESS",
@@ -79,7 +99,10 @@ PAGES = {
             ("Information we collect", ["Account and order information can include your name, telephone number, email, delivery address, order history, payment reference and support messages. If you choose map-based location assistance, your selected coordinates are used for delivery planning. Security and service logs may include technical request information."]),
             ("Why it is used", ["We use this information to create and protect accounts, verify access, process orders and refunds, arrange fulfilment, provide customer support, maintain transaction records and prevent fraud. Information supplied in the feedback form is used to respond to that enquiry."]),
             ("Service providers", ["Where needed for the requested service, information is shared with payment processors, messaging providers, hosting providers and delivery personnel. Payment details are handled by the selected payment provider; do not send full card details or payment PINs in a support message. If an optional map service is used, it may receive your search or selected location under its own privacy terms. Service providers may process information outside Ghana."]),
-            ("Cookies and browser storage", ["The site uses session and security cookies to support sign-in, shopping and safe form submissions. Browser storage remembers preferences such as your theme. These functional technologies are needed for the features you use; blocking them may prevent sign-in or checkout."]),
+            ("Google sign-in", ["Google sign-in is optional. When you link a Google account, we receive its verified email address and permanent Google account identifier to connect it to your existing KOFAD account and authenticate later sign-ins. Linking requires your KOFAD password. It does not grant staff permissions or give KOFAD access to your personal Gmail inbox. You can disconnect Google in account security and revoke KOFAD access in your Google Account. Existing phone/password access remains available."]),
+            ("Company email connection", ["A company manager may separately authorise a business Gmail sender with send-only permission. KOFAD stores the encrypted connection token and sender identity to send account verification and opted-in service notifications. This does not request permission to read the mailbox or connect customer Gmail inboxes. Managers can disconnect the sender; revoke access in the connected Google Account as well. KOFAD uses Google API information only for the disclosed account and email features and follows the Google API Services User Data Policy, including its Limited Use requirements."]),
+            ("Cookies and browser storage", ["The site uses session and security cookies to support sign-in, shopping and safe form submissions. Choose Essential only, accept the available optional cookies, or select individual choices in the cookie panel. You can reopen Cookie choices at the bottom of the page. Optional theme and sound preferences are stored only when you allow preferences. Your choice is remembered on that website address for up to 180 days. Blocking essential cookies may prevent sign-in or checkout. Optional public-site analytics, when configured, loads only after you allow it; account pages and staff pages are excluded. We do not send customer identifiers, payment references, search terms or private page addresses to analytics, and do not enable advertising tracking."]),
+            ("Website analytics", ["If you allow website analytics, KOFAD uses Google Analytics 4 to understand visits to its public website. Google receives basic page-view, browser and device information and may process cookie identifiers, network information and approximate location. We send public page categories without search terms or private account and payment addresses. Google Signals and advertising personalisation are disabled. Essential only keeps analytics off; you can withdraw permission through Cookie choices. Previously collected records are subject to Google Analytics retention settings."]),
             ("Messages", ["Order, delivery, account-security and support communications use the contact details you provide and the channels available for your account. Optional promotional communications should be distinguishable from service messages. Contact us to object to direct marketing or update your communication preferences."]),
             ("Retention and protection", ["Access to business records is restricted by staff permissions. Passwords are stored as hashes. Transaction and audit records may need to be retained for accounting, dispute resolution and legal obligations. Support chat history may be cleared when a conversation closes, so keep important correspondence. Contact us about the retention or deletion of your information; some records cannot be deleted while required for those purposes."]),
             ("Your choices and rights", ["You can update available profile details in your account and contact us to request access, correction or deletion of personal information, or raise an objection to its use, subject to applicable law. We may need to verify your identity before acting. You may also raise a privacy concern with Ghana’s Data Protection Commission at dpc.gov.gh."]),

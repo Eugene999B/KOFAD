@@ -95,6 +95,55 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["currency"], "GHS")
         self.assertEqual(post.call_args.kwargs["json"]["mobile_money"]["provider"], "mtn")
 
+
+    @patch("core.pos_paystack.requests.post")
+    def test_walk_in_momo_without_customer_email_uses_processor_only_alias(self, post):
+        self.customer.email = ""
+        self.customer.save(update_fields=["email"])
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        post.return_value = self.charge_response(reference)
+        payload = self.payload()
+        result = pos_paystack.start(
+            self.user, self.branch, payload, key, "0551234567", "mtn", "",
+        )
+        sent_email = post.call_args.kwargs["json"]["email"]
+        self.assertTrue(sent_email.startswith("momo-"))
+        self.assertTrue(sent_email.endswith("@kofadimpex.com"))
+        self.assertTrue(result["waiting"])
+        stored = HeldSale.objects.get(label=pos_paystack.LABEL_PREFIX + reference)
+        self.assertFalse(stored.cart["sale_payload"].get("customer_email"))
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.email, "")
+        # Retries must keep their original reference and never issue a second prompt.
+        result_again = pos_paystack.start(
+            self.user, self.branch, self.payload(), key, "0551234567", "mtn", "",
+        )
+        self.assertEqual(result_again["reference"], reference)
+        self.assertEqual(post.call_count, 1)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_invalid_explicit_customer_email_is_rejected_not_silently_replaced(self, post):
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(
+                self.user, self.branch, self.payload(), uuid.uuid4(),
+                "0551234567", "mtn", "not-an-email",
+            )
+        post.assert_not_called()
+
+    @patch("core.pos_paystack.requests.post")
+    def test_real_customer_email_is_still_used_for_paystack(self, post):
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        post.return_value = self.charge_response(reference)
+        pos_paystack.start(
+            self.user, self.branch, self.payload(), key,
+            "0551234567", "mtn", "customer@example.test",
+        )
+        self.assertEqual(
+            post.call_args.kwargs["json"]["email"], "customer@example.test"
+        )
+
     @patch("core.pos_paystack.requests.post")
     def test_start_is_idempotent_for_same_sale_key(self, post):
         key = uuid.uuid4()
@@ -210,12 +259,64 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         payload = self.payload()
         payload["payments"][0]["amount"] = "10"
         payload["payments"][1]["amount"] = "40"
-        with self.assertRaisesMessage(ValidationError, "full MoMo payment"):
+        with self.assertRaisesMessage(ValidationError, "one positive Mobile Money amount"):
             pos_paystack.start(
                 self.user, self.branch, payload, uuid.uuid4(),
                 "0551234567", "mtn", "customer@example.test",
             )
         post.assert_not_called()
+
+    @patch("core.pos_paystack.requests.get")
+    @patch("core.pos_paystack.requests.post")
+    def test_verified_partial_momo_posts_deposit_and_customer_debt_once(self, post, get):
+        from datetime import timedelta
+        from django.utils import timezone
+        from core import services
+        key = uuid.uuid4()
+        reference = pos_paystack._reference_from_key(key)
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "20.00"
+        payload["due_date"] = str(timezone.localdate() + timedelta(days=1))
+        post.return_value = self.charge_response(reference)
+        created = pos_paystack.start(
+            self.user, self.branch, payload, key,
+            "0551234567", "mtn", "customer@example.test",
+        )
+        self.assertTrue(created["waiting"])
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], "2000")
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(Movement.objects.count(), 0)
+        get.return_value = self.verify_response(reference, amount=2000)
+        doc = pos_paystack.reconcile(reference, force=True)
+        self.assertEqual(doc.total, Decimal("50.00"))
+        self.assertEqual(doc.paid, Decimal("20.00"))
+        self.assertEqual(services.balance(doc), Decimal("30.00"))
+        self.assertEqual(doc.party_id, self.customer.pk)
+        self.assertIsNotNone(doc.due_date)
+        self.assertEqual(Payment.objects.get(document=doc, method="momo").amount, Decimal("20.00"))
+        self.assertEqual(pos_paystack.reconcile(reference, force=True).pk, doc.pk)
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(Movement.objects.count(), 1)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_partial_momo_cannot_create_debt_without_due_date(self, post):
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "20.00"
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(self.user, self.branch, payload, uuid.uuid4(),
+                               "0551234567", "mtn", "")
+        post.assert_not_called()
+        self.assertEqual(Document.objects.count(), 0)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_deposit_not_accepted_over_sale_total(self, post):
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "60.00"
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(self.user, self.branch, payload, uuid.uuid4(),
+                               "0551234567", "mtn", "")
+        post.assert_not_called()
+        self.assertEqual(Document.objects.count(), 0)
 
     @patch("core.pos_paystack.requests.post")
     @patch("core.paystack_challenges.charge_step")
@@ -263,3 +364,40 @@ class PosPaystackMomoTests(Fixtures, TestCase):
         self.assertEqual(state["status"], "pending")
         self.assertEqual(state["charge_status"], "send_otp")
         self.assertEqual(Document.objects.count(), 0)
+
+    @patch("core.pos_paystack.requests.get")
+    @patch("core.pos_paystack.requests.post")
+    def test_online_markup_is_built_into_verified_momo_sale_and_frozen(self, post, get):
+        from marketplace.models import PaymentConfiguration
+        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
+        payload = self.payload()
+        payload["payments"][1]["amount"] = "51.25"
+        key = uuid.uuid4()
+        reference = "KFD-POS-" + key.hex[:20]
+        post.return_value = self.charge_response(reference)
+        result = pos_paystack.start(self.user, self.branch, payload, key,
+            "0551234567", "mtn", "customer@example.test")
+        self.assertEqual(result["reference"], reference)
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], "5125")
+        held = HeldSale.objects.get(label=pos_paystack.LABEL_PREFIX + reference)
+        self.assertEqual(held.cart["payment_request"]["online_markup_percent"], "2.500")
+        self.assertEqual(held.cart["payment_request"]["sale_total"], "51.25")
+        self.assertEqual(Document.objects.count(), 0)
+        # New settings must not reprice a payment already initiated.
+        PaymentConfiguration.objects.filter(pk=1).update(online_price_markup_percent=Decimal("8.000"))
+        get.return_value = self.verify_response(reference, amount=5125)
+        doc = pos_paystack.reconcile(reference, force=True)
+        self.assertEqual(doc.total, Decimal("51.25"))
+        self.assertEqual(doc.paid, Decimal("51.25"))
+        self.assertEqual(doc.lines.get().unit_price, Decimal("51.25"))
+        self.assertEqual(Payment.objects.get(document=doc, method="momo").amount, Decimal("51.25"))
+        self.assertEqual(pos_paystack.reconcile(reference, force=True).pk, doc.pk)
+
+    @patch("core.pos_paystack.requests.post")
+    def test_provider_amount_not_matching_all_in_price_is_rejected_before_charge(self, post):
+        from marketplace.models import PaymentConfiguration
+        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
+        with self.assertRaises(ValidationError):
+            pos_paystack.start(self.user, self.branch, self.payload(), uuid.uuid4(),
+                "0551234567", "mtn", "customer@example.test")
+        post.assert_not_called()

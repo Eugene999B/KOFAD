@@ -1,0 +1,45 @@
+{% load static %}
+<div class="kf-download" data-native-download-kind="{{ app.kind }}">
+  <header class="kf-download-hero">
+    <img class="kf-download-logo" src="{% static 'brand/kofad-official-logo.svg' %}" alt="KOFAD IMPEX ENTERPRISE" width="90" height="90">
+    <p class="kf-download-eyebrow">{% if app.kind == 'staff' %}KOFAD STAFF{% else %}KOFAD MARKET{% endif %}</p>
+    <h1>{% if app.kind == 'staff' %}KOFAD for your workday.{% else %}KOFAD on your device.{% endif %}</h1>
+    <p class="kf-download-intro">{% if app.kind == 'staff' %}Your workspace, wherever you work.{% else %}Shop and manage orders, wherever you go.{% endif %}</p>
+  </header>
+  <section aria-labelledby="kf-platform-heading">
+    <h2 class="kf-download-section-title" id="kf-platform-heading">Choose your platform</h2>
+    <div class="kf-download-grid">
+      <article class="kf-download-device" data-native-platform="android">
+        <div class="kf-download-device-top"><img src="{% static 'native-brands/android.svg' %}" alt="" width="43" height="43"><div><h3>Android</h3><p>Phones and tablets</p></div></div>
+        {% for entry in app.platforms %}{% if entry.id == 'android' %}
+          {% if entry.available %}<a class="kf-download-device-action" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer">Download for Android <span aria-hidden="true">↗</span></a>
+          {% else %}<span class="kf-download-unavailable" aria-label="Android app coming soon">Coming soon</span>{% endif %}
+        {% endif %}{% endfor %}
+      </article>
+      <article class="kf-download-device" data-native-platform="windows">
+        <div class="kf-download-device-top"><img src="{% static 'native-brands/windows.svg' %}" alt="" width="43" height="43"><div><h3>Windows</h3><p>Desktop and laptop</p></div></div>
+        {% for entry in app.platforms %}{% if entry.id == 'windows' %}
+          {% if entry.available %}<a class="kf-download-device-action" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer">Download for Windows <span aria-hidden="true">↗</span></a>
+          {% else %}<span class="kf-download-unavailable" aria-label="Windows app coming soon">Coming soon</span>{% endif %}
+        {% endif %}{% endfor %}
+      </article>
+      <article class="kf-download-device" data-native-platform="ios">
+        <div class="kf-download-device-top"><img src="{% static 'native-brands/apple.svg' %}" alt="" width="43" height="43"><div><h3>iPhone &amp; iPad</h3><p>Apple devices</p></div></div>
+        {% for entry in app.platforms %}{% if entry.id == 'ios' %}
+          {% if entry.available %}<a class="kf-download-device-action" href="{{ entry.url }}" target="_blank" rel="noopener noreferrer">Get on the App Store <span aria-hidden="true">↗</span></a>
+          {% elif app.kind == 'staff' %}<button type="button" class="kf-download-device-action" data-pwa-install data-pwa-guide="iphone">Add as web app <span aria-hidden="true">↗</span></button>
+          {% else %}<a class="kf-download-device-action" href="https://market.kofadimpex.com/market/app/install/?device=iphone">Add as web app <span aria-hidden="true">↗</span></a>{% endif %}
+        {% endif %}{% endfor %}
+        {% for entry in app.platforms %}{% if entry.id == 'ios' and not entry.available %}<p class="kf-download-device-note">App Store edition coming soon</p>{% endif %}{% endfor %}
+      </article>
+    </div>
+  </section>
+  {% if app.kind == 'staff' %}
+    <div class="kf-download-guide" data-pwa-install-steps hidden><div><strong>Add KOFAD to iPhone</strong><p data-pwa-device-steps>Open Safari, tap Share, then Add to Home Screen.</p></div><button type="button" data-pwa-close-steps aria-label="Close instructions">×</button></div>
+    <p class="kf-download-prompt" data-pwa-install-state role="status" aria-live="polite"></p>
+    <div class="kf-download-update" data-pwa-update hidden role="status"><span>A KOFAD update is ready.</span><button type="button" data-pwa-update-apply>Update now</button></div>
+  {% endif %}
+  {% if app.kind == 'staff' and request.user.is_superuser %}<p class="kf-download-back"><a href="/staff/app/control/">Manage mobile apps →</a></p>{% endif %}
+  <p class="kf-download-footnote">{% if app.kind == 'staff' %}For authorised KOFAD team members only.{% else %}Official downloads appear here when each app is released.{% endif %}</p>
+  <p class="kf-download-back"><a href="{% if app.kind == 'staff' %}/workspace/{% else %}/market/{% endif %}">{% if app.kind == 'staff' %}Open workspace{% else %}Open KOFAD Market{% endif %} <span aria-hidden="true">→</span></a></p>
+</div>

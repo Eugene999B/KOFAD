@@ -6,7 +6,11 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET, require_POST
 
 from . import services as s
 from .models import Access, Branch, PasswordRecovery
@@ -100,6 +104,7 @@ def users(request, branch):
             "user": user,
             "role": "System administrator" if user.is_superuser else (_assigned_role(user).name if _assigned_role(user) else "No role"),
             "phone": user.access.recovery_phone,
+            "invite": getattr(user, "staff_invitation", None),
         })
     return render(request, "admin_users.html", {"title": "Staff & users", "rows": rows})
 
@@ -122,6 +127,8 @@ def user_edit(request, branch, pk=None):
         "last_name": user.last_name if user else "",
         "recovery_phone": user.access.recovery_phone if user else "",
         "email": user.email if user else "",
+        "invite_channel": "sms",
+        "whatsapp_opt_in": False,
         "email_daily_closing": user.access.email_daily_closing if user else False,
         "email_weekly_review": user.access.email_weekly_review if user else False,
         "email_monthly_review": user.access.email_monthly_review if user else False,
@@ -140,6 +147,8 @@ def user_edit(request, branch, pk=None):
             "last_name": request.POST.get("last_name", "").strip()[:150],
             "recovery_phone": request.POST.get("recovery_phone", "").strip()[:40],
             "email": request.POST.get("email", "").strip().lower()[:254],
+            "invite_channel": request.POST.get("invite_channel", "sms").strip(),
+            "whatsapp_opt_in": request.POST.get("whatsapp_opt_in") == "on",
             **{key: request.POST.get(key) == "on" for key in ("email_daily_closing", "email_weekly_review", "email_monthly_review", "email_critical_alerts", "sms_daily_closing", "sms_critical_alerts")},
             "role": request.POST.get("role", ""),
             "active": request.POST.get("active") == "on",
@@ -183,9 +192,25 @@ def user_edit(request, branch, pk=None):
             phone = ""
             errors.extend(exc.messages)
 
-        password = request.POST.get("password", "")
-        if creating and not password:
-            errors.append("Set an initial password for the new staff account.")
+        # New employees select their own password from a private, single-use link.
+        # Never allow a password supplied in the create-account POST to bypass onboarding.
+        password = "" if creating else request.POST.get("password", "")
+        invite_destination = ""
+        if creating:
+            from . import staff_invites
+            channel = values["invite_channel"]
+            if channel in {"sms", "whatsapp"} and not phone:
+                errors.append("Enter the new staff member's phone number for the invitation.")
+            elif channel == "email" and not values["email"]:
+                errors.append("Enter the staff email address to send the invitation.")
+            else:
+                try:
+                    invite_destination = staff_invites.validate_delivery(
+                        channel, values["email"] if channel == "email" else phone,
+                        whatsapp_opt_in=values["whatsapp_opt_in"],
+                    )
+                except ValidationError as exc:
+                    errors.extend(exc.messages)
         if password:
             candidate = user or User(username=values["username"], first_name=values["first_name"], last_name=values["last_name"])
             try:
@@ -214,12 +239,13 @@ def user_edit(request, branch, pk=None):
                         "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                     }
                 if creating:
-                    user = User.objects.create_user(username=values["username"], password=password)
+                    user = User.objects.create_user(username=values["username"])
+                    user.set_unusable_password()
                 user.username = values["username"]
                 user.email = values["email"]
                 user.first_name = values["first_name"]
                 user.last_name = values["last_name"]
-                user.is_active = values["active"]
+                user.is_active = False if creating else values["active"]
                 user.save()
                 if password and not creating:
                     user.set_password(password)
@@ -247,10 +273,25 @@ def user_edit(request, branch, pk=None):
                     "recovery_phone": phone,
                     "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                 }
+                if creating:
+                    invitation, invitation_url = staff_invites.issue(
+                        user, request.user, values["invite_channel"], invite_destination,
+                    )
                 s.audit(request.user, branch, "staff.created" if creating else "staff.updated", user.pk, {
-                    "before": before, "after": after, "password_reset": bool(password and not creating)
+                    "before": before, "after": after, "password_reset": bool(password and not creating),
+                    "invitation_channel": values["invite_channel"] if creating else "",
                 })
-            messages.success(request, "Staff account created." if creating else "Staff account updated.")
+            if creating:
+                try:
+                    staff_invites.deliver(invitation, invitation_url)
+                    messages.success(
+                        request, "Staff account created inactive. A private activation link was submitted via "
+                        + values["invite_channel"] + ".",
+                    )
+                except ValidationError as exc:
+                    messages.warning(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, "Staff account updated.")
             return redirect("admin_users")
 
     return render(request, "admin_user_form.html", {
@@ -341,3 +382,118 @@ def settings_center(request, branch):
         "title": "Settings",
         "single_branch": Branch.objects.filter(active=True).count() == 1,
     })
+
+
+@company_admin
+@never_cache
+@require_GET
+def connections_center(request, branch):
+    """Private, read-only external services inventory; no provider probes."""
+    from .integration_health import catalog
+    from .integration_live import recent_probes
+    snapshot = catalog(probes=recent_probes(request.session))
+    category = request.GET.get("group", "")[:32]
+    state = request.GET.get("state", "")[:32]
+    allowed_groups = {code for code, _label in snapshot["groups"]}
+    if category not in allowed_groups:
+        category = ""
+    if state not in {"working", "ready", "warning", "issue", "not_connected", "external", "planned"}:
+        state = ""
+    visible = [row for row in snapshot["items"]
+               if (not category or row["group"] == category)
+               and (not state or row["status"] == state)]
+    return render(request, "connections_center.html", {
+        "title": "Connections & integration health",
+        "snapshot": snapshot,
+        "visible_connections": visible,
+        "connection_priorities": [row for row in snapshot["items"]
+                                  if row["status"] == "issue"][:7],
+        "active_group": category,
+        "active_state": state,
+    })
+
+
+@company_admin
+@never_cache
+@require_GET
+def connections_detail(request, branch, connection_id):
+    """Detailed explanation with evidence and specific missing prerequisites."""
+    from .integration_health import catalog
+    from .integration_live import recent_probes, VALID
+    snapshot = catalog(probes=recent_probes(request.session))
+    item = next((row for row in snapshot["items"] if row["id"] == connection_id), None)
+    if item is None:
+        raise Http404("Connection not found")
+    return render(request, "connections_detail.html", {
+        "title": item["name"] + " · Connection diagnostics",
+        "item": item, "snapshot": snapshot,
+        "can_live_verify": connection_id in VALID,
+    })
+
+@company_admin
+@never_cache
+@require_POST
+def connections_live_verify(request, branch, connection_id):
+    """Explicit, cost-controlled read-only external verification (CSRF-protected)."""
+    from django.http import HttpResponseBadRequest
+    from .integration_live import VALID, verify, recent_probes
+    if connection_id not in VALID:
+        return HttpResponseBadRequest("This provider has no safe read-only live check.")
+    values = recent_probes(request.session)
+    if connection_id not in values:
+        try:
+            result = verify(connection_id)
+        except Exception:
+            # Do not send tokens, provider responses or private identifiers to
+            # the user; keep existing provider configurations untouched.
+            import logging
+            logging.getLogger(__name__).warning(
+                "Connections verification unavailable: provider=%s", connection_id
+            )
+            result = {
+                "state": "partial",
+                "summary": "Live verification encountered an internal issue; provider health could not be confirmed.",
+                "checks": [{
+                    "name": "Diagnostic request",
+                    "state": "unknown",
+                    "detail": "Inspect the server logs and retry after the 15-minute result expires.",
+                }],
+                "scope": "Safe read-only provider check",
+                "checked_at": timezone.now().isoformat(),
+            }
+        values[connection_id] = result
+        request.session["kofad_integration_live_checks"] = values
+        request.session.modified = True
+    return redirect("connections_detail", connection_id=connection_id)
+
+
+@company_admin
+@require_POST
+def resend_staff_invitation(request, branch, pk):
+    """Owner can renew the token for a still-unactivated account."""
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only the system administrator can invite staff.")
+    from . import staff_invites
+    from .models import StaffInvitation
+    user = get_object_or_404(User, pk=pk, is_active=False)
+    invitation = StaffInvitation.objects.filter(user=user, consumed_at__isnull=True).first()
+    if not invitation:
+        messages.error(request, "This staff member has no pending invitation.")
+        return redirect("admin_users")
+    if invitation.delivered_at and invitation.created_at and (
+        timezone.now() - invitation.delivered_at
+    ).total_seconds() < 60:
+        messages.error(request, "Wait at least a minute before resending an invitation.")
+        return redirect("admin_users")
+    try:
+        recipient = staff_invites.validate_delivery(
+            invitation.channel, invitation.destination,
+            whatsapp_opt_in=request.POST.get("whatsapp_opt_in") == "on",
+        )
+        renewed, link = staff_invites.issue(user, request.user, invitation.channel, recipient)
+        staff_invites.deliver(renewed, link)
+        s.audit(request.user, branch, "staff.invitation_renewed", user.pk)
+        messages.success(request, "A new private activation link was submitted. The old link no longer works.")
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    return redirect("admin_users")

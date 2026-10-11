@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% load static %}
 {% block head %}<script defer src="{% static 'pos.js' %}"></script>{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}">{% endblock %}
 {% block actions %}
 <div class="actions">
 {% if purchase %}<a class="button secondary" href="/parties/?kind=supplier">Suppliers</a><a class="button secondary" href="/creditors/">Creditors</a><a class="button secondary" href="/inventory/">Inventory</a>
@@ -19,9 +20,12 @@
  data-allow-price-overrides="{{ allow_price_overrides|yesno:"true,false" }}"
  data-max-discount="{{ max_discount }}"
  data-max-price-reduction="{{ max_price_reduction }}"
+ data-momo-gateway="{{ pos_momo_gateway }}"
+ data-online-markup-percent="{{ pos_online_markup_percent }}"
  data-paystack-pos-momo-ready="{{ paystack_pos_momo_ready|yesno:"true,false" }}"
  data-paystack-pos-momo-configured="{{ paystack_pos_momo_configured|yesno:"true,false" }}">
 
+<nav class="atelier-counter-context" aria-label="Sales workspace shortcuts"><strong>{% if purchase %}STOCK RECEIVING{% else %}COUNTER SALES{% endif %}</strong><span>{% if purchase %}Check items and supplier details before posting the delivery.{% else %}Search a product, review the cart, and verify the payment before completing a sale.{% endif %}</span><a href="/inventory/">Inventory ↗</a>{% if not purchase %}<a href="/online-orders/">Online orders ↗</a>{% endif %}</nav>
 <div id="pos-error" class="notice error hidden" role="alert"></div>
 
 <div class="counter-layout chalin-sale-layout">
@@ -135,14 +139,24 @@
         <button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button>
         <button type="button" class="text-button hidden" id="clear-customer">Change</button>
       </div>
-      <input id="customer-search" type="search" autocomplete="off" placeholder="Search saved customer by name or Ghana phone">
-      <div id="customer-results" class="customer-results counter-customer-results" role="listbox" aria-label="Customer search results"></div>
+      <div class="customer-choice" id="customer-mode-picker" role="group" aria-label="Choose customer type">
+        <button type="button" class="customer-choice-button active" data-customer-mode="walkin" aria-pressed="true">Walk-in sale<small>No customer record</small></button>
+        <button type="button" class="customer-choice-button" data-customer-mode="saved" aria-pressed="false">Saved customer<small>History and debts</small></button>
+        <button type="button" class="customer-choice-button" data-customer-mode="new" aria-pressed="false">New customer<small>Keep future records</small></button>
+      </div>
+      <p class="customer-choice-note" id="walkin-explanation">Walk-in is for eligible fully paid sales only. Choose a saved or new customer for any unpaid balance.</p>
+      <div id="customer-search-wrap" class="hidden">
+        <label for="customer-search" class="customer-field-label">Find a saved customer</label>
+        <input id="customer-search" type="search" autocomplete="off" placeholder="Search by name or Ghana phone">
+        <div id="customer-results" class="customer-results counter-customer-results" role="listbox" aria-label="Customer search results"></div>
+      </div>
       <div id="selected-customer" class="selected-customer hidden" aria-live="polite"></div>
       <div id="new-customer-fields" class="new-customer-fields hidden counter-new-customer">
         <input id="customer-name" maxlength="120" autocomplete="name" placeholder="Customer name">
         <div class="phone-input"><span>+233</span><input id="customer-phone" inputmode="numeric" autocomplete="tel" maxlength="10" placeholder="241234567"></div>
-        <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email · required for Paystack MoMo">
+        <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email (optional for direct MoMo)">
       </div>
+      <div id="customer-duplicate-alert" class="customer-duplicate-alert hidden" role="alert" aria-live="assertive"></div>
       <label class="checkout-consent compact-consent" id="customer-consent-wrap">
         <input id="customer-consent" type="checkbox" checked>
         <span><strong>Send receipt by SMS</strong></span>
@@ -194,11 +208,11 @@
       {% if not purchase %}
       <section id="paystack-momo-panel" class="notice subtle hidden" aria-live="polite">
         <div>
-          <strong>Direct Mobile Money approval</strong>
+          <strong>{% if pos_momo_gateway == "hubtel" %}Hubtel secure Mobile Money checkout{% else %}Paystack direct Mobile Money approval{% endif %}</strong>
           {% if paystack_pos_momo_ready %}
-          <p>Choose or enter the customer first. Paystack will send the approval request to their phone, and KOFAD will complete the sale only after Paystack independently confirms the payment.</p>
+          <p>{% if pos_momo_gateway == "hubtel" %}Create a secure Hubtel payment link for this sale. KOFAD records the sale only after independent verification.{% else %}Enter the MoMo number and send the approval prompt. A full payment can be a walk-in sale; for part payment, choose a customer and due date so the unpaid balance becomes debt. KOFAD posts the sale only after Paystack confirms the deposit.{% endif %}</p>
           <div class="two-column">
-            <label>Network
+            <label{% if pos_momo_gateway == "hubtel" %} class="hidden"{% endif %}>Network
               <select id="paystack-momo-provider">
                 <option value="mtn">MTN MoMo</option>
                 <option value="atl">AT Money</option>
@@ -209,9 +223,14 @@
               <input id="paystack-momo-phone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="0551234567">
             </label>
           </div>
-          <label>Customer email
+          <label>Customer email (optional for direct MoMo)
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          {% if pos_momo_gateway == "paystack" %}
+          <p class="hint"><a href="{% url 'pos_momo_payments' %}">View previous MoMo payments and receipts →</a></p>
+          {% endif %}
+          {% if pos_momo_gateway != "hubtel" %}<p class="hint">No email? Paystack receives a unique processor-only address for this wallet. It is not saved as the customer's email; consented receipts still use KOFAD's SMS/WhatsApp options.</p>{% endif %}
+          <a id="hubtel-momo-checkout-link" class="button hidden" target="_blank" rel="noopener noreferrer" href="#">Open secure Hubtel checkout ↗</a>
           <div id="paystack-momo-challenge" class="hidden">
             <label>One-time payment code
               <input id="paystack-momo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code sent for this payment">
@@ -219,9 +238,10 @@
             <p class="hint">Only enter the code sent for this payment. Never ask for or enter the customer's MoMo PIN.</p>
             <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
           </div>
-          <p id="paystack-momo-status" class="hint">When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.</p>
+          {% if pos_momo_gateway == "paystack" %}<div id="momo-deposit-summary" class="momo-deposit-summary" aria-live="polite"><div><span>MoMo to collect now</span><strong id="momo-deposit-amount">GHS 0.00</strong></div><div><span>Balance to customer debt</span><strong id="momo-balance-amount">GHS 0.00</strong></div></div><p class="hint">Paystack cannot identify the wallet holder by name. Confirm the number directly with the customer. The MoMo PIN is entered only on their phone.</p>{% endif %}
+          <p id="paystack-momo-status" class="hint" role="status">{% if pos_momo_gateway == "hubtel" %}When you continue, KOFAD will create a hosted Hubtel checkout and wait for independently confirmed payment.{% else %}When you continue, KOFAD will send the MoMo approval request and wait for verified payment.{% endif %}</p>
           {% else %}
-          <p>Direct MoMo approval is prepared but not active yet. It will become available after Paystack live access is enabled for KOFAD.</p>
+          <p>{{ pos_momo_gateway|title }} Mobile Money payment is not activated yet. Check gateway credentials and activation in Payment Settings.</p>
           {% endif %}
         </div>
       </section>
@@ -230,6 +250,17 @@
       <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
         <label for="due-date">Due date <small>Required while a balance remains</small></label>
         <input id="due-date" type="date" max="9999-12-31">
+        {% if not purchase %}
+        <div class="credit-email-capture">
+          <label for="credit-customer-email">Customer email for credit records <small>Optional</small></label>
+          <input id="credit-customer-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
+          <label class="checkout-consent compact-consent" for="credit-debt-email-consent">
+            <input id="credit-debt-email-consent" type="checkbox">
+            <span><strong>Customer agrees to receive credit statements and debt reminders by email</strong></span>
+          </label>
+          <p class="hint">Confirm this address with the customer. Reminders follow Debt Settings, not marketing preferences. Without this choice, no debt emails are sent.</p>
+        </div>
+        {% endif %}
         {% if not purchase %}<p class="hint">Credit policy allows up to {{ max_credit_days }} days.</p>{% endif %}
       </div>
 

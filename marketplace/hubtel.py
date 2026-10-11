@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from . import services
 from .models import MarketPaymentAttempt, OnlineOrder, OrderEvent, PaymentConfiguration
+from .hubtel_evidence import save_exchange
 
 INITIATE_URL = "https://payproxyapi.hubtel.com/items/initiate"
 STATUS_ORIGIN = "https://rmsc.hubtel.com/v1/merchantaccount/merchants/"
@@ -167,10 +168,30 @@ def verify(reference):
             params={"clientReference": reference}, headers=headers(),
             timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
-        body = response.json()
-    except (requests.RequestException, ValueError) as exc:
+    except requests.RequestException as exc:
         logger.warning("Hubtel status request failed ref_suffix=%s", str(reference)[-6:])
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
+
+    # Preserve the original HTTP response bytes BEFORE parsing or normalizing it.
+    # Even Hubtel's 400/429 responses are evidence for the merchant onboarding team.
+    raw_body = response.content if isinstance(response.content, bytes) else None
+    try:
+        body = response.json()
+    except ValueError as exc:
+        save_exchange(
+            reference=reference, direction="status_check",
+            raw_body=raw_body if raw_body is not None else b"",
+            http_status=response.status_code,
+        )
+        raise services.PaymentVerificationUnavailable("Hubtel returned an invalid status response.") from exc
+    if raw_body is None:
+        # Some test fakes supply json() without response.content.
+        import json
+        raw_body = json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    save_exchange(
+        reference=reference, direction="status_check",
+        raw_body=raw_body, http_status=response.status_code,
+    )
 
     body = _normalise_keys(body)
     raw_data = body.get("data") if isinstance(body, dict) else None
@@ -230,7 +251,9 @@ def verify(reference):
     elif transaction_status == "success" and invoice_status in {"success", "paid"}:
         status = "Paid"
     elif transaction_status in {"failed", "failure", "declined", "cancelled", "canceled"}:
-        status = "Unpaid"
+        # A definite failed provider transaction is different from an unpaid/
+        # still-pending checkout; stop waiting only for this terminal result.
+        status = "Failed"
     elif invoice_status in {"refunded", "refund"}:
         status = "Refunded"
     else:
@@ -264,6 +287,26 @@ def reconcile(reference):
         )}
         summary = {key: str(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(verification_summary=summary)
+        if data["status"] == "Failed":
+            # Do not leave an independently verified Failed transaction Pending
+            # indefinitely. Preserve the existing independent raw JSON evidence.
+            with transaction.atomic():
+                current = MarketPaymentAttempt.objects.select_for_update().get(pk=attempt.pk)
+                order = OnlineOrder.objects.select_for_update().get(pk=current.order_id)
+                if current.status != "success" and order.payment_status != "paid":
+                    current.status = "failed"
+                    current.next_check_at = None
+                    current.provider_message = "Hubtel confirmed this transaction failed."
+                    current.save(update_fields=["status", "next_check_at", "provider_message"])
+                    if order.payment_reference == reference:
+                        order.payment_status = "failed"
+                        order.save(update_fields=["payment_status", "updated_at"])
+                    OrderEvent.objects.get_or_create(
+                        order=order, status="payment_failed",
+                        title="Hubtel payment unsuccessful",
+                        defaults={"note": "Hubtel independently confirmed the payment failed; no sale was posted."},
+                    )
+            raise services.PaymentVerificationUnavailable("Hubtel confirmed this transaction failed. No payment was recorded.")
         if data["status"] != "Paid":
             raise services.PaymentVerificationUnavailable("Payment is not confirmed. If you were debited, do not pay again.")
         try:
@@ -301,14 +344,17 @@ def reconcile(reference):
 def _retry_delay(attempt, now=None):
     now = now or timezone.now()
     age = now - attempt.created_at
-    if age < timedelta(minutes=30):
-        # Hubtel allows at most 10 status checks per transaction in 300 seconds.
-        # Keep routine polling comfortably below that limit; callbacks still trigger
-        # an immediate verification when the customer actually completes payment.
+    # The customer checkout and independent provider callback still verify
+    # promptly. Long-lived unresolved references should not repeatedly hit
+    # Hubtel's missing/expired-reference endpoint or fill evidence logs.
+    # Keep the existing fast first 12 minutes (and never auto-approve).
+    if age < timedelta(minutes=12):
         return timedelta(seconds=40)
-    if age < timedelta(hours=2):
+    if age < timedelta(minutes=30):
         return timedelta(minutes=2)
-    return timedelta(minutes=5)
+    if age < timedelta(hours=2):
+        return timedelta(minutes=5)
+    return timedelta(minutes=20)
 
 
 def reconcile_due(limit=10):

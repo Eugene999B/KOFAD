@@ -1,20 +1,31 @@
-{% extends "marketplace/base.html" %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/market-discover.css' %}">{% endblock %}{% block content %}
 <section class="shop-catalog">
-{% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="/market/?category={{ category|urlencode }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
+{% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="{% if q %}/market/?category={{ category|urlencode }}&amp;q={{ q|urlencode }}{% else %}/market/categories/{{ category|slugify }}/{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
+{% if not q and not selected_category %}
+<section class="market-shop-lead" aria-labelledby="market-shop-title">
+  <div class="market-shop-lead-copy">
+    <span class="market-shop-lead-kicker">KOFAD MARKET · RETAIL &amp; WHOLESALE</span>
+    <h2 id="market-shop-title">Everything you need, easier to find.</h2>
+    <p>Browse everyday essentials, compare published prices in Ghana cedis, and shop available units or packs.</p>
+  </div>
+  <div class="market-shop-lead-actions">
+    <a href="#market-products" class="market-shop-lead-primary">Explore products <span aria-hidden="true">↗</span></a>
+    <a href="/wholesale/" class="market-shop-lead-secondary">Buying in bulk? <span aria-hidden="true">→</span></a>
+  </div>
+</section>
+{% endif %}
 
 <header class="shop-catalog-head">
 <div><p>KOFAD MARKET</p><h1>{% if selected_category %}{{ selected_category }}{% elif q %}Search results{% else %}All products{% endif %}</h1><span>{{ listings|length }} item{{ listings|length|pluralize }}{% if q %} for “{{ q }}”{% endif %}</span></div>
 <form method="get" class="shop-catalog-filters">{% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
-<label class="shop-sort"><span>Sort</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Featured</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low to high</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high to low</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Product name</option></select></label>
-<label class="shop-filter-check"><input type="checkbox" name="stock" value="available" {% if in_stock %}checked{% endif %} onchange="this.form.submit()"><span>In stock</span></label>
-<label class="shop-filter-check"><input type="checkbox" name="featured" value="1" {% if featured_only %}checked{% endif %} onchange="this.form.submit()"><span>Featured</span></label>
+<label class="shop-sort"><span>Sort products</span><select name="sort" onchange="this.form.submit()"><option value="featured" {% if selected_sort == 'featured' %}selected{% endif %}>Recommended</option><option value="price_low" {% if selected_sort == 'price_low' %}selected{% endif %}>Price: low to high</option><option value="price_high" {% if selected_sort == 'price_high' %}selected{% endif %}>Price: high to low</option><option value="name" {% if selected_sort == 'name' %}selected{% endif %}>Product name</option></select></label>
 </form>
 </header>
 
 {% if q or selected_category or in_stock or featured_only or price_min or price_max %}<div class="shop-active-filter"><span>Showing a filtered view</span><a href="/market/">Clear all ×</a></div>{% endif %}
 
 {% if listings %}
-<div class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
+<div id="market-products" class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
 {% if page_obj.paginator.num_pages > 1 %}
 <nav class="shop-pagination" aria-label="Product pages">
   {% if page_obj.has_previous %}<a href="?q={{ q|urlencode }}&category={{ selected_category|urlencode }}&sort={{ selected_sort }}{% if in_stock %}&stock=available{% endif %}{% if featured_only %}&featured=1{% endif %}{% if price_min %}&min_price={{ price_min }}{% endif %}{% if price_max %}&max_price={{ price_max }}{% endif %}&page={{ page_obj.previous_page_number }}">← Previous</a>{% else %}<span></span>{% endif %}
@@ -23,4 +34,8 @@
 </nav>
 {% endif %}
 {% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
+<aside class="atelier-market-help" aria-label="Need help shopping">
+<div><span class="atelier-kicker">PERSONAL SERVICE</span><h2>Shopping for more than one?</h2><p>For large quantities, repeat purchases, or a product you cannot find, our team can discuss availability and a quotation before you order.</p></div>
+<a href="/wholesale/">Ask about wholesale supply <span aria-hidden="true">↗</span></a>
+</aside>
 </section>{% endblock %}

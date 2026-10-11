@@ -105,3 +105,37 @@ class CustomerEmailTests(MarketFixtures):
             with patch("core.notification_engine.EmailMultiAlternatives.send") as sender:
                 self.assertEqual(process_email_outbox(), 0)
                 sender.assert_not_called()
+
+    @override_settings(
+        EMAIL_DELIVERY_ENABLED=True,
+        KOFAD_EMAIL_ENABLED=True,
+        KOFAD_EMAIL_PROVIDER="brevo",
+        KOFAD_BREVO_API_KEY="safe-test-key",
+        KOFAD_BREVO_SECURITY_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+    )
+    @patch("core.brevo_email.send_brevo", return_value=1)
+    def test_customer_transactions_require_a_verified_email_address(self, send):
+        from .models import EmailIdentity
+        order = self.order()
+        order.status = "paid"
+        order.payment_status = "paid"
+        order.save(update_fields=["status", "payment_status"])
+        self.assertEqual(queue_customer_order_email(order, "paid"), 1)
+        self.assertEqual(process_email_outbox(), 0)
+        send.assert_not_called()
+        notice = EmailNotice.objects.get(category="order")
+        self.assertEqual(notice.status, "cancelled")
+
+        # Once the current mailbox is verified, a different paid order is safe to send.
+        EmailIdentity.objects.create(
+            kind="customer", owner_id=self.customer.pk, email=self.customer.email,
+            verified_at=timezone.now(), notifications_enabled=True,
+        )
+        next_order = self.order()
+        next_order.status = "paid"
+        next_order.payment_status = "paid"
+        next_order.save(update_fields=["status", "payment_status"])
+        self.assertEqual(queue_customer_order_email(next_order, "paid"), 1)
+        self.assertEqual(process_email_outbox(), 1)
+        send.assert_called_once()

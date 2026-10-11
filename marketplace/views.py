@@ -1,5 +1,7 @@
+import re
 import json
 import secrets
+import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -35,14 +37,17 @@ from .forms import (
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
+    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence,
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
-from . import services, hubtel, paystack_momo
+from . import services, hubtel, paystack_momo, momo_security
+from .hubtel_evidence import decrypt_exchange, save_exchange
 
 
 def _market_context(request, **extra):
+    # Keep customer Google authentication visibility behind the readiness check.
+    from core.google_oauth import enabled as google_oauth_enabled
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
     market_auth_page = request.path in {
@@ -61,16 +66,66 @@ def _market_context(request, **extra):
             sender_type="staff",
             read_by_customer=False,
         ).count()
+    path = request.path
+    seo_indexable = path in {
+        "/", "/apps/", "/about/", "/wholesale/", "/faq/", "/delivery/",
+        "/returns-policy/", "/terms/", "/privacy/", "/contact/", "/market/",
+    } or bool(re.fullmatch(r"/market/(?:products/\d+|categories/[a-z0-9-]+)/", path))
+    page = extra.get("page") or {}
+    listing = extra.get("listing")
+    default_description = (
+        "KOFAD IMPEX ENTERPRISE — retail and wholesale shopping in Ghana, "
+        "with delivery, collection and customer care."
+    )
+    from .discovery import description as discovery_description, page_title, structured_data
+    category_name = extra.get("category_name")
+    if request.GET and (path == "/market/" or category_name):
+        # Faceted search/sort/pagination should not produce duplicate index pages.
+        seo_indexable = False
+    seo_description = discovery_description(
+        path, page if isinstance(page, dict) else None, listing, category_name
+    ) or default_description
+    seo_title = page_title(path, extra.get("title"), category_name, listing)
+    canonical_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else settings.PUBLIC_SITE_ORIGIN
+    canonical_url = canonical_origin + path if seo_indexable else ""
+    seo_json_ld = structured_data(
+        path, canonical_url, seo_title, seo_description, listing, category_name
+    ) if seo_indexable else ""
+    seo_image = (
+        settings.MARKET_SITE_ORIGIN + f"/market/products/{listing.pk}/image/large/"
+        if listing and listing.image_data else
+        settings.PUBLIC_SITE_ORIGIN + "/static/brand/kofad-logo-transparent.png"
+    )
+    from core.native_apps import app_metadata
+    app_release = app_metadata("customer")
+    released_platforms = {
+        entry["id"]: entry["available"] for entry in app_release["platforms"]
+    }
     context = {
+        "native_customer_app_released": app_release["released"],
+        "native_customer_app_android": released_platforms.get("android", False),
+        "native_customer_app_ios": released_platforms.get("ios", False),
+        "native_customer_app_windows": released_platforms.get("windows", False),
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
+        "google_ready": google_oauth_enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
+        "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
+        "seo_indexable": seo_indexable,
+        "seo_title": seo_title,
+        "seo_description": seo_description,
+        "seo_json_ld": seo_json_ld,
+        "seo_image": seo_image,
+        "canonical_url": canonical_url,
+        "public_site_origin": settings.PUBLIC_SITE_ORIGIN,
+        "market_site_origin": settings.MARKET_SITE_ORIGIN,
+        "google_site_verification": settings.GOOGLE_SITE_VERIFICATION,
         **extra,
     }
     return context
@@ -215,10 +270,21 @@ def home(request):
         listings=listings,
     ))
 
-def market(request):
+def market(request, category_slug=None):
     customer = services.customer_from_session(request)
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:80]
+    if category_slug:
+        from django.http import Http404
+        from django.utils.text import slugify
+        # Resolve only currently public categories, not arbitrary user input.
+        public_categories = Product.objects.filter(
+            market_listing__enabled=True, active=True
+        ).exclude(category="").values_list("category", flat=True).distinct()
+        category = next((name for name in public_categories
+                         if slugify(name) == category_slug), None)
+        if category is None:
+            raise Http404("This catalogue category is not available.")
     sort = request.GET.get("sort", "featured")
     in_stock = request.GET.get("stock") == "available"
     featured_only = request.GET.get("featured") == "1"
@@ -237,9 +303,12 @@ def market(request):
     except ValidationError:
         branch = None
 
+    from .pricing import online_markup_percent
+    from django.db.models.functions import Round
+    rate = online_markup_percent()
     price_field = DecimalField(max_digits=14, decimal_places=2)
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product").annotate(
-        market_price_sort=Coalesce(
+        market_base_price=Coalesce(
             Case(
                 When(price_source="retail_unit", then=F("product__retail_unit")),
                 When(price_source="retail_pack", then=F("product__retail_pack")),
@@ -250,6 +319,11 @@ def market(request):
             ),
             Value(Decimal("0.00")),
             output_field=price_field,
+        )
+    ).annotate(
+        market_price_sort=Round(
+            F("market_base_price") * Value(Decimal("1") + rate / Decimal("100")),
+            precision=2, output_field=price_field,
         )
     )
     if branch:
@@ -395,14 +469,25 @@ def customer_access(request):
     if request.method == "POST" and form.is_valid():
         phone = form.cleaned_data["phone"]
         try:
-            # Use the same phone-ownership challenge whether the account exists or not.
-            # This prevents the gateway from becoming an account-enumeration oracle.
-            services.send_otp(phone, "login", request=request)
+            # Returning customers authenticate with their password; do not charge
+            # the business for another SMS merely because they opened sign-in.
+            matching = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            if matching and not __import__("django.contrib.auth.hashers", fromlist=["is_password_usable"]).is_password_usable(matching.password_hash):
+                messages.info(request, "This mobile number belongs to a Google-only account. Continue with Google or set a password in Account Security.")
+            elif matching:
+                request.session["market_login_phone"] = phone
+                request.session.pop("market_pending_phone", None)
+                request.session.pop("market_pending_otp_purpose", None)
+                request.session.pop("market_verified_phone", None)
+                return redirect("market_login")
+            if matching:
+                return render(request, "marketplace/access.html", _market_context(request, title="Sign in or create your account", form=form))
+            services.send_otp(phone, "register", request=request)
             request.session.pop("market_login_phone", None)
             request.session.pop("market_verified_phone", None)
             request.session["market_pending_phone"] = phone
-            request.session["market_pending_otp_purpose"] = "login"
-            messages.success(request, "We sent a six-digit verification code to your phone.")
+            request.session["market_pending_otp_purpose"] = "register"
+            messages.success(request, "We sent a six-digit registration code to your phone.")
             return redirect("market_verify")
         except ValidationError as exc:
             messages.error(request, problem(exc))
@@ -505,6 +590,9 @@ def customer_account(request, customer):
         conversations=customer.conversations.all()[:5],
         wishlist=customer.wishlist_items.select_related("listing__product")[:6],
         recent_views=customer.recent_views.select_related("listing__product")[:6],
+        email_identity=__import__("marketplace.models", fromlist=["EmailIdentity"]).EmailIdentity.objects.filter(
+            kind="customer", owner_id=customer.pk,
+        ).first(),
         return_requests=customer.return_requests.select_related("order")[:5],
     ))
 
@@ -578,8 +666,12 @@ def account_finish(request):
         return redirect("market_access")
     existing = CustomerAccount.objects.filter(phone=phone).first()
     if existing and existing.active:
-        services.set_customer_session(request, existing)
-        return redirect("market")
+        # Verified registration phone ownership never bypasses an existing password.
+        # Account creation may have raced with the prior OTP-check lookup.
+        request.session["market_login_phone"] = phone
+        request.session.pop("market_verified_phone", None)
+        request.session.pop("market_pending_phone", None)
+        return redirect("market_login")
     form = CustomerRegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         data = form.cleaned_data
@@ -603,27 +695,78 @@ def account_finish(request):
 def customer_password_reset_start(request):
     if services.customer_from_session(request):
         return redirect("market")
-    phone = request.POST.get("phone", "").strip()
+    identifier = request.POST.get("identifier", request.POST.get("phone", "")).strip()
+    channel = request.POST.get("channel", "sms")
     if request.method == "POST":
-        try:
-            canonical = normalize_ghana_phone(phone)
-            if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
-                # Do not disclose whether a number owns an account.
-                messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
-                return redirect("market_login")
-            services.send_otp(canonical, "reset", request=request)
-            request.session["market_reset_phone"] = canonical
-            request.session.pop("market_reset_verified_phone", None)
-            messages.success(request, "Verification code sent by SMS.")
-            return redirect("market_password_reset_verify")
-        except ValidationError as exc:
-            messages.error(request, problem(exc))
+        if channel == "whatsapp":
+            messages.error(request, "WhatsApp OTP is not enabled yet. Use verified email or SMS instead.")
+        elif channel == "email":
+            from . import email_recovery
+            try:
+                challenge_id = email_recovery.issue(identifier, request)
+                request.session["market_reset_method"] = "email"
+                request.session["market_reset_email_id"] = str(challenge_id) if challenge_id else str(uuid.uuid4())
+                request.session["market_reset_email_input"] = identifier[:254]
+                request.session.pop("market_reset_verified_email_id", None)
+                request.session.pop("market_reset_phone", None)
+                request.session.pop("market_reset_verified_phone", None)
+                messages.success(request, "If this verified email belongs to a KOFAD account, a recovery code has been sent.")
+                return redirect("market_password_reset_verify")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        elif channel == "sms":
+            try:
+                canonical = normalize_ghana_phone(identifier)
+                if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
+                    messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
+                    return redirect("market_login")
+                services.send_otp(canonical, "reset", request=request)
+                request.session["market_reset_method"] = "sms"
+                request.session["market_reset_phone"] = canonical
+                request.session.pop("market_reset_verified_phone", None)
+                request.session.pop("market_reset_email_id", None)
+                request.session.pop("market_reset_verified_email_id", None)
+                messages.success(request, "Verification code sent by SMS.")
+                return redirect("market_password_reset_verify")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        else:
+            messages.error(request, "Choose SMS, email or WhatsApp.")
+    from core.email_identity import delivery_ready
     return render(request, "marketplace/password_reset_start.html", _market_context(
-        request, title="Reset customer password", phone=phone,
+        request, title="Reset customer password", identifier=identifier,
+        email_recovery_ready=delivery_ready(),
     ))
 
 
 def customer_password_reset_verify(request):
+    method = request.session.get("market_reset_method", "sms")
+    if method == "email":
+        from . import email_recovery
+        if request.session.get("market_reset_verified_email_id"):
+            return redirect("market_password_reset_finish")
+        challenge_id = request.session.get("market_reset_email_id")
+        if not challenge_id:
+            return redirect("market_password_reset")
+        if request.method == "POST":
+            if request.POST.get("action") == "resend":
+                try:
+                    new_id = email_recovery.issue(request.session.get("market_reset_email_input", ""), request)
+                    request.session["market_reset_email_id"] = str(new_id) if new_id else str(uuid.uuid4())
+                    messages.success(request, "If the address is verified, a new recovery code was requested.")
+                except ValidationError as exc:
+                    messages.error(request, problem(exc))
+                return redirect("market_password_reset_verify")
+            try:
+                email_recovery.verify(challenge_id, request.POST.get("code"))
+                request.session["market_reset_verified_email_id"] = challenge_id
+                return redirect("market_password_reset_finish")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        return render(request, "marketplace/password_reset_verify.html", _market_context(
+            request, title="Verify email reset", recovery_channel="email",
+            recovery_destination="your verified email address", phone="",
+        ))
     verified_phone = request.session.get("market_reset_verified_phone")
     if verified_phone:
         return redirect("market_password_reset_finish")
@@ -645,11 +788,33 @@ def customer_password_reset_verify(request):
         except ValidationError as exc:
             messages.error(request, problem(exc))
     return render(request, "marketplace/password_reset_verify.html", _market_context(
-        request, title="Verify password reset", phone=phone,
+        request, title="Verify password reset", phone=phone, recovery_channel="sms",
+        recovery_destination=phone,
     ))
 
 
 def customer_password_reset_finish(request):
+    if request.session.get("market_reset_method") == "email":
+        email_id = request.session.get("market_reset_verified_email_id")
+        if not email_id:
+            return redirect("market_password_reset")
+        form = CustomerPasswordResetForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            from . import email_recovery
+            try:
+                customer = email_recovery.finish(email_id, form.cleaned_data["password"])
+                for key in ("market_reset_email_id", "market_reset_email_input",
+                            "market_reset_verified_email_id", "market_reset_method",
+                            "market_reset_phone", "market_reset_verified_phone"):
+                    request.session.pop(key, None)
+                services.set_customer_session(request, customer)
+                messages.success(request, "Your KOFAD password has been changed.")
+                return redirect("market")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        return render(request, "marketplace/password_reset_finish.html", _market_context(
+            request, title="Choose a new password", form=form,
+        ))
     phone = request.session.get("market_reset_verified_phone")
     if not phone:
         return redirect("market_password_reset")
@@ -664,6 +829,7 @@ def customer_password_reset_finish(request):
         customer.save(update_fields=["password_hash"])
         request.session.pop("market_reset_phone", None)
         request.session.pop("market_reset_verified_phone", None)
+        request.session.pop("market_reset_method", None)
         services.set_customer_session(request, customer)
         messages.success(request, "Your KOFAD Market password has been changed.")
         return redirect("market")
@@ -683,16 +849,31 @@ def customer_login(request):
     initial_phone = request.session.get("market_login_phone", "")
     form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
     if request.method == "POST" and form.is_valid():
-        phone = form.cleaned_data["phone"]
+        identifier = form.cleaned_data["phone"]
         now = timezone.now()
+        # Use a stable opaque throttle key for email attempts; never store an
+        # untrusted, arbitrarily long email inside the 20-char phone field.
+        if "@" in identifier:
+            import hashlib
+            throttle_phone = "email:" + hashlib.sha256(identifier.encode()).hexdigest()[:14]
+        else:
+            throttle_phone = identifier
         with transaction.atomic():
-            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=phone, purpose="login")
+            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=throttle_phone, purpose="login")
             if throttle.blocked_until and throttle.blocked_until > now:
                 messages.error(request, "Too many sign-in attempts. Try again in a few minutes.")
                 return render(request, "marketplace/login.html", _market_context(
                     request, title="Customer sign in", form=form,
                 ))
-            customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            if "@" in identifier:
+                from core.email_identity import verified_identity
+                identity = verified_identity("customer", identifier)
+                customer = (
+                    CustomerAccount.objects.filter(pk=identity.owner_id, active=True).first()
+                    if identity else None
+                )
+            else:
+                customer = CustomerAccount.objects.filter(phone=identifier, active=True).first()
             valid = bool(customer and customer.check_password(form.cleaned_data["password"]))
             if valid:
                 throttle.attempts = 0
@@ -716,15 +897,50 @@ def customer_login(request):
 
 @market_customer_required
 def customer_security(request, customer):
+    from core import email_identity
+    from django.contrib.auth.hashers import is_password_usable
+    google_only = not is_password_usable(customer.password_hash)
+    recent_google_auth = bool(
+        google_only and request.session.get("market_google_authenticated_at")
+        and timezone.now().timestamp() - request.session["market_google_authenticated_at"] < 900
+    )
     action = request.POST.get("action", "password")
+    if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications", "email_marketing"}:
+        try:
+            if not (recent_google_auth or customer.check_password(request.POST.get("current_password", ""))):
+                raise ValidationError("Sign in with Google again or enter your current password to update email access.")
+            if action == "email_start":
+                email_identity.request_code("customer", customer.pk, request.POST.get("email"))
+                messages.success(request, "A six-digit verification code was sent to your email.")
+            elif action == "email_verify":
+                verified = email_identity.confirm_code("customer", customer.pk, request.POST.get("email_code"))
+                if not verified:
+                    raise ValidationError("The email code is incorrect.")
+                messages.success(request, "Email verified. You can now sign in with your email or phone.")
+            elif action == "email_marketing":
+                from marketplace.models import EmailIdentity
+                changed = EmailIdentity.objects.filter(
+                    kind="customer", owner_id=customer.pk, verified_at__isnull=False,
+                ).update(marketing_emails_enabled=request.POST.get("marketing_emails") == "on")
+                if not changed:
+                    raise ValidationError("Verify your email before setting promotional email preferences.")
+                messages.success(request, "Promotional email preference saved.")
+            else:
+                email_identity.set_notifications(
+                    "customer", customer.pk, request.POST.get("email_notifications") == "on"
+                )
+                messages.success(request, "Email notification preference saved.")
+        except ValidationError as exc:
+            messages.error(request, problem(exc))
+        return redirect("market_security")
     if request.method == "POST" and action == "phone_cancel":
         request.session.pop("market_change_phone", None)
         return redirect("market_security")
     if request.method == "POST" and action in {"phone_start", "phone_verify"}:
         try:
             password = request.POST.get("current_password", "")
-            if not customer.check_password(password):
-                raise ValidationError("Your current password is incorrect.")
+            if not (recent_google_auth or customer.check_password(password)):
+                raise ValidationError("Sign in with Google again or enter your current password.")
             if action == "phone_start":
                 phone = normalize_ghana_phone(request.POST.get("new_phone", ""))
                 if phone == customer.phone:
@@ -742,7 +958,7 @@ def customer_security(request, customer):
                 services.verify_otp(phone, request.POST.get("code"), "change_phone")
                 with transaction.atomic():
                     locked = CustomerAccount.objects.select_for_update().get(pk=customer.pk)
-                    if not locked.check_password(password):
+                    if not (recent_google_auth and not is_password_usable(locked.password_hash)) and not locked.check_password(password):
                         raise ValidationError("Your password changed. Start again.")
                     locked.phone = phone
                     locked.verified_at = timezone.now()
@@ -755,7 +971,7 @@ def customer_security(request, customer):
         except (ValidationError, IntegrityError) as exc:
             messages.error(request, "That phone number is already linked to an account." if isinstance(exc, IntegrityError) else problem(exc))
         return redirect("market_security")
-    form = CustomerPasswordChangeForm(request.POST if request.method == "POST" and action == "password" else None, customer=customer)
+    form = CustomerPasswordChangeForm(request.POST if request.method == "POST" and action == "password" else None, customer=customer, fresh_google_auth=recent_google_auth)
     if request.method == "POST" and form.is_valid():
         customer.set_password(form.cleaned_data["password"])
         customer.save(update_fields=["password_hash"])
@@ -764,6 +980,10 @@ def customer_security(request, customer):
         return redirect("market_account")
     return render(request, "marketplace/security.html", _market_context(
         request, title="Account security", form=form, pending_phone=(request.session.get("market_change_phone") or {}).get("phone"),
+        verified_email=email_identity.EmailIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
+        email_ready=email_identity.delivery_ready(),
+        google_identity=__import__("marketplace.models", fromlist=["GoogleIdentity"]).GoogleIdentity.objects.filter(kind="customer", owner_id=customer.pk).first(),
+        google_only=google_only, recent_google_auth=recent_google_auth,
     ))
 
 
@@ -949,7 +1169,7 @@ def checkout(request, customer):
     payment_ready = hubtel.ready()
     momo_available = hubtel.selected_provider() == "paystack" and paystack_momo.ready()
     payment_form = CheckoutPaymentForm(request.POST or None,
-        initial={"momo_phone": customer.phone}, momo_available=momo_available)
+        initial={"momo_phone": customer.phone or ""}, momo_available=momo_available)
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
     if request.method == "POST" and payment_ready and form.is_valid() and payment_form.is_valid():
@@ -969,10 +1189,18 @@ def checkout(request, customer):
             request.session.modified = True
             try:
                 if payment_form.cleaned_data["payment_method"] == "momo":
-                    paystack_momo.initialize(order, payment_form.cleaned_data["momo_phone"],
-                                             payment_form.cleaned_data["momo_network"])
+                    # First use: verify control of the number before requesting a
+                    # charge; subsequent verified numbers can proceed directly.
+                    momo_security.begin(
+                        request, customer, order,
+                        payment_form.cleaned_data["momo_phone"],
+                        payment_form.cleaned_data["momo_network"],
+                    )
                     return redirect("market_order", pk=order.pk)
-                hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+                if hubtel.selected_provider() == "paystack":
+                    services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+                else:
+                    hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
                 return redirect("market_payment_launch", pk=order.pk)
             except ValidationError as exc:
                 messages.error(request, problem(exc))
@@ -1016,9 +1244,17 @@ def order_pay(request, customer, pk):
         return redirect("market_order", pk=order.pk)
     try:
         if form.cleaned_data["payment_method"] == "momo":
-            paystack_momo.initialize(order, form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"])
+            momo_security.begin(
+                request, customer, order,
+                form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"],
+            )
             return redirect("market_order", pk=order.pk)
-        hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+        # Hosted card checkout follows the merchant-selected provider;
+        # unresolved attempts are already blocked above.
+        if hubtel.selected_provider() == "paystack":
+            services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+        else:
+            hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
         return redirect("market_payment_launch", pk=order.pk)
     except ValidationError as exc:
         messages.error(request, problem(exc))
@@ -1171,6 +1407,27 @@ def customer_orders(request, customer):
 
 @market_customer_required
 @require_POST
+def customer_momo_phone_verify(request, customer, pk):
+    """A verified first-time SMS must precede any Paystack direct MoMo charge."""
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    try:
+        action = request.POST.get("action", "verify")
+        if action not in {"verify", "resend"}:
+            raise ValidationError("Invalid verification action.")
+        submitted = momo_security.complete(
+            request, customer, order, code=request.POST.get("code"), resend=action == "resend",
+        )
+        if submitted:
+            messages.info(request, "Phone confirmed. Approve the Mobile Money prompt on your phone. Your PIN stays private.")
+        else:
+            messages.info(request, "We sent a new phone verification code.")
+    except ValidationError as exc:
+        messages.error(request, problem(exc))
+    return redirect("market_order", pk=order.pk)
+
+
+@market_customer_required
+@require_POST
 def customer_payment_otp(request, customer, pk):
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
     try:
@@ -1199,6 +1456,7 @@ def customer_order(request, customer, pk):
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel.ready(),
+        momo_phone_verification=momo_security.pending_for_order(request, customer, order),
         payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
             momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
         momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready(),
@@ -1262,27 +1520,36 @@ def customer_messages(request, customer, conversation_id=None):
             messages.info(request, "That chat has ended. Start a new conversation if you still need help.")
             return redirect("market_messages")
         if form.is_valid():
-            if not conversation:
-                order = None
-                order_id = request.POST.get("order")
-                if order_id:
-                    order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
-                subject = request.POST.get("subject", "").strip()[:180] or (
-                    f"Order support · {order.public_reference}" if order else "Customer support"
-                )
-                conversation = Conversation.objects.create(
-                    branch=order.branch if order else services.market_branch(),
-                    customer=customer, public_name=customer.full_name,
-                    public_phone=customer.phone, order=order, subject=subject,
-                )
+            starting_new_conversation = conversation is None
             try:
-                _save_conversation_message(
-                    conversation, "customer",
-                    body=form.cleaned_data.get("message", ""),
-                    attachment=form.cleaned_data.get("attachment"),
-                )
+                # Treat creation and the first message as ONE write. An invalid
+                # attachment or unavailable market branch must not leave an
+                # empty, unreplyable support conversation in the staff queue.
+                with transaction.atomic():
+                    if not conversation:
+                        order = None
+                        order_id = request.POST.get("order")
+                        if order_id:
+                            order = OnlineOrder.objects.filter(pk=order_id, customer=customer).first()
+                        subject = request.POST.get("subject", "").strip()[:180] or (
+                            f"Order support · {order.public_reference}" if order else "Customer support"
+                        )
+                        conversation = Conversation.objects.create(
+                            branch=order.branch if order else services.market_branch(),
+                            customer=customer, public_name=customer.full_name,
+                            public_phone=customer.phone or "", order=order, subject=subject,
+                        )
+                    _save_conversation_message(
+                        conversation, "customer",
+                        body=form.cleaned_data.get("message", ""),
+                        attachment=form.cleaned_data.get("attachment"),
+                    )
             except ValidationError as exc:
-                form.add_error("attachment", problem(exc))
+                # The transaction rolled back creation. Do not render a
+                # phantom detail view for an unsaved/newly rolled-back row.
+                if starting_new_conversation:
+                    conversation = None
+                form.add_error(None, problem(exc))
             else:
                 return redirect("market_message_thread", conversation_id=conversation.pk)
 
@@ -2288,7 +2555,14 @@ def hubtel_callback(request):
     attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
     if attempt:
         from .models import OrderEvent
-        # Keep callback data only as redacted evidence; a callback never marks an order paid.
+        # Store each original callback separately, encrypted and owner-only.
+        # A callback is always UNTRUSTED evidence; independent status checks
+        # remain the only way to confirm settlement.
+        save_exchange(
+            reference=reference, direction="callback", raw_body=request.body,
+            attempt=attempt,
+        )
+        # Staff event data is redacted; a callback never marks an order paid.
         def callback_value(pascal, camel):
             return data.get(pascal, data.get(camel, ""))
         safe = {
@@ -2302,9 +2576,12 @@ def hubtel_callback(request):
             order=attempt.order, status="hubtel_callback", title="Hubtel callback received (unverified)",
             defaults={"note": json.dumps(safe, sort_keys=True), "customer_visible": False},
         )
-        if attempt.status != "success":
-            # Every valid callback is a reason to re-check immediately, even if an earlier poll was still unpaid.
-            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+        if attempt.status in {"initializing", "submission_unknown", "pending"}:
+            # Only unresolved payments may be rescheduled. A late callback
+            # must never reopen a terminal failed, settled or disputed attempt.
+            MarketPaymentAttempt.objects.filter(
+                pk=attempt.pk, status__in=["initializing", "submission_unknown", "pending"],
+            ).update(
                 next_check_at=timezone.now(),
                 provider_message="Hubtel callback received; final status verification queued.",
             )
@@ -2360,6 +2637,26 @@ def online_payments(request, branch):
             core_services.audit(request.user, branch, "market.receiving_accounts_saved", "1", {"fields": account_form.changed_data})
             messages.success(request, "Receiving details saved for owner reference. Provider payout settings have not changed.")
             return redirect("online_payments")
+    elif request.method == "POST" and request.POST.get("action") == "online_price_markup":
+        from .pricing import parse_rate
+        try:
+            rate = parse_rate(request.POST.get("percentage", ""))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            # A first-ever price edit must preserve the live gateway instead
+            # of silently using a model's default provider.
+            with transaction.atomic():
+                current, _ = PaymentConfiguration.objects.select_for_update().get_or_create(
+                    pk=1, defaults={"provider": hubtel.selected_provider()},
+                )
+                current.online_price_markup_percent = rate
+                current.save(update_fields=["online_price_markup_percent"])
+            core_services.audit(request.user, branch, "market.online_price_markup_saved", "1", {
+                "percentage": str(rate),
+            })
+            messages.success(request, "All-inclusive online product prices updated. Existing orders and payment requests are unchanged.")
+        return redirect("online_payments")
     elif request.method == "POST":
         provider = request.POST.get("provider")
         if provider not in {"hubtel", "paystack"}:
@@ -2386,6 +2683,12 @@ def online_payments(request, branch):
     if query:
         rows = rows.filter(Q(reference__icontains=query) | Q(order__public_reference__icontains=query))
     page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
+    from core.models import HeldSale
+    from core.pos_paystack import LABEL_PREFIX
+    from core.pos_payment_views import _snapshot
+    pos_rows = [_snapshot(item) for item in HeldSale.objects.filter(
+        branch=branch, label__startswith=LABEL_PREFIX,
+    ).select_related("user").order_by("-created_at")[:12]]
     return render(request, "marketplace/online_payments.html", {
         "title": "Online payments", "account_form": account_form,
         "payment_provider": hubtel.selected_provider(),
@@ -2394,6 +2697,8 @@ def online_payments(request, branch):
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
         "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
+        "pos_momo_rows": pos_rows,
+        "online_price_markup_percent": configuration.online_price_markup_percent,
     })
 
 
@@ -2413,4 +2718,41 @@ def customer_payment_status(request, customer, pk):
         "needs_otp": bool(latest and latest.status == "pending" and (latest.verification_summary or {}).get("charge_status") == "send_otp"),
     })
     response["Cache-Control"] = "no-store, private"
+    return response
+
+
+
+@protected("manage_company")
+def hubtel_evidence_list(request, branch, attempt_id):
+    """Owner-only evidence inventory; never expose payloads in HTML or logs."""
+    attempt = get_object_or_404(
+        MarketPaymentAttempt, pk=attempt_id, provider="hubtel", order__branch=branch,
+    )
+    entries = Paginator(
+        HubtelEvidence.objects.filter(attempt=attempt).order_by("-created_at", "-pk"), 40
+    ).get_page(request.GET.get("page"))
+    response = render(request, "marketplace/hubtel_evidence.html", {
+        "title": "Hubtel transaction evidence",
+        "attempt": attempt,
+        "entries": entries,
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@protected("manage_company")
+def hubtel_evidence_download(request, branch, evidence_id):
+    """Only authorised managers of the order's location can retrieve original bodies."""
+    evidence = get_object_or_404(
+        HubtelEvidence.objects.select_related("attempt__order"),
+        pk=evidence_id, attempt__order__branch=branch,
+    )
+    raw = decrypt_exchange(evidence)
+    filename = f"hubtel-{evidence.direction}-{evidence.pk}-{evidence.reference[-6:]}.json"
+    response = HttpResponse(raw, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["X-Content-Type-Options"] = "nosniff"
     return response

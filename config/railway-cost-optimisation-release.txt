@@ -1,0 +1,5 @@
+KOFAD Railway runtime optimisation release
+2026-10-10
+GitHub PR #155 merged; this marker triggers an actual deployment after correcting Railway watch patterns.
+The deployed runtime must include 30-second visible approval polling and conservative Hubtel retry backoff.
+No business data, schema, or secrets are changed by this text file.

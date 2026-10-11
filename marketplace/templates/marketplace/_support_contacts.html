@@ -1,0 +1,18 @@
+{% if customer_service_contacts or company.phone or company.whatsapp_phone %}
+<div class="kofad-contact-links" aria-label="Customer care contact options">
+  <strong>Need help? Contact KOFAD Customer Care</strong>
+  {% for contact in customer_service_contacts %}
+    <a href="{{ contact.contact_url }}" {% if contact.channel == "whatsapp" %}target="_blank" rel="noopener noreferrer"{% endif %}>
+      {% if contact.channel == "whatsapp" %}WhatsApp{% else %}Call{% endif %} {{ contact.label }} · {{ contact.number }}
+    </a>
+  {% empty %}
+    {% if company.phone %}<a href="tel:{{ company.phone }}">Call customer care · {{ company.phone }}</a>{% endif %}
+    {% if company.whatsapp_phone %}<a href="https://wa.me/{{ company.whatsapp_phone|cut:'+' }}" target="_blank" rel="noopener noreferrer">Chat on WhatsApp · {{ company.whatsapp_phone }}</a>{% endif %}
+  {% endfor %}
+  <a href="/contact/">Send an enquiry through our website</a>
+</div>
+<style>
+.kofad-contact-links{display:grid;gap:8px;margin:18px 0 0;padding:14px;border:1px solid var(--border,#d9dfe6);border-radius:12px;text-align:left;font-size:.88rem}
+.kofad-contact-links a{overflow-wrap:anywhere;text-decoration:underline;text-underline-offset:3px}
+</style>
+{% endif %}

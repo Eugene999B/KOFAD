@@ -1,0 +1,21 @@
+/* Final-layer mobile containment and accessible contrast on navy staff surfaces. */
+html,body{max-width:100%;overflow-x:clip}
+:is(.debt-hero,.market-intelligence-hero,.intelligence-command,.executive-hero,.hero-panel,.experience-identity-head){color:#eef8fc}
+:is(.debt-hero,.market-intelligence-hero,.intelligence-command,.executive-hero,.hero-panel,.experience-identity-head) :is(h1,h2,h3,h4,strong){color:#fff!important}
+:is(.debt-hero,.market-intelligence-hero,.intelligence-command,.executive-hero,.hero-panel,.experience-identity-head) :is(p,small,.muted){color:#d1e5ef!important}
+:is(.debt-hero,.market-intelligence-hero,.intelligence-command,.executive-hero,.hero-panel,.experience-identity-head) .eyebrow{color:#f8cc78!important}
+@media(max-width:760px){
+ .login-page .login-layout,.login-page .premium-login-layout{display:block!important;width:100%!important;max-width:100%!important;padding:14px!important;margin:0 auto!important;box-sizing:border-box!important;overflow:visible!important}
+ .login-page .login-story{display:none!important}
+ .login-page .premium-login-card{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;overflow:hidden!important;padding:clamp(18px,5vw,28px)!important}
+ .login-page .premium-login-card :is(.login-card-top,.login-input-shell,.premium-login-form,.login-form-row,.login-assurance){min-width:0!important;max-width:100%!important}
+ .login-page .premium-login-card input{box-sizing:border-box;min-width:0!important;width:100%!important;font-size:16px}
+ .login-page .premium-login-card .password-field input{padding-right:70px!important}
+ .login-page .premium-login-card :is(h1,h2,p,span,strong){overflow-wrap:break-word}
+ .login-page .login-card-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+ .login-page .premium-login-card h2{font-size:clamp(25px,7vw,36px)!important;line-height:1.15}
+ .login-page .login-header{max-width:100%;padding-inline:16px}
+ .login-page .login-access-chip{display:flex;flex-wrap:wrap;max-width:100%}
+ .login-page .premium-login-form .button{min-width:0;max-width:100%}
+ .login-page .login-form-row{flex-wrap:wrap;gap:9px}
+}

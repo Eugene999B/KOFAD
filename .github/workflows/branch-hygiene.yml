@@ -1,0 +1,68 @@
+name: Archive and prune obsolete KOFAD branches
+on:
+  push:
+    branches: [railway-release]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Audit only, or archive then prune"
+        required: true
+        type: choice
+        options: [audit, prune]
+        default: audit
+      confirm:
+        description: "To prune, type exactly PRUNE KOFAD BRANCHES"
+        required: false
+        type: string
+permissions:
+  contents: write
+  pull-requests: read
+concurrency:
+  group: kofad-branch-hygiene
+  cancel-in-progress: false
+jobs:
+  prune:
+    if: >-
+      github.repository == 'Eugene999B/KOFAD' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' &&
+        (inputs.mode == 'audit' || inputs.confirm == 'PRUNE KOFAD BRANCHES')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: true
+      - run: python -m py_compile scripts/github_branch_cleanup.py
+      - name: Safely archive & prune, or dry-run audit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_CONFIRM: ${{ inputs.confirm }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+            if [ "$INPUT_MODE" = 'prune' ] && [ "$INPUT_CONFIRM" = 'PRUNE KOFAD BRANCHES' ]; then
+              python scripts/github_branch_cleanup.py --apply
+            else
+              python scripts/github_branch_cleanup.py
+            fi
+          elif [[ "$COMMIT_MESSAGE" == *"KOFAD branch hygiene: first guarded cleanup"* ]]; then
+            # Only this particular first release promotion can prune older orphan branches.
+            python scripts/github_branch_cleanup.py --apply
+          else
+            # On later releases only remove already-merged branches.
+            python scripts/github_branch_cleanup.py --apply --merged-only
+          fi
+      - name: Keep 90-day artifact with exact archived branch SHA values
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kofad-branch-cleanup-audit
+          path: branch-cleanup-report.json
+          if-no-files-found: warn
+          retention-days: 90

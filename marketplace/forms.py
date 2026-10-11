@@ -252,11 +252,15 @@ class CustomerRegistrationForm(forms.Form):
 
 
 class CustomerLoginForm(forms.Form):
-    phone = forms.CharField(max_length=30, label="Phone number")
+    phone = forms.CharField(max_length=254, label="Mobile number or verified email")
     password = forms.CharField(widget=forms.PasswordInput, label="Password")
 
     def clean_phone(self):
-        return normalize_ghana_phone(self.cleaned_data["phone"])
+        identifier = self.cleaned_data["phone"].strip()
+        if "@" in identifier:
+            from core.email_identity import normalize_email
+            return normalize_email(identifier)
+        return normalize_ghana_phone(identifier)
 
 
 class CheckoutForm(forms.Form):
@@ -320,12 +324,22 @@ class CustomerPasswordChangeForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, label="New password")
     password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm new password")
 
-    def __init__(self, *args, customer=None, **kwargs):
+    def __init__(self, *args, customer=None, fresh_google_auth=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.customer = customer
+        self.fresh_google_auth = fresh_google_auth
+        if customer and not customer.check_password(""):
+            from django.contrib.auth.hashers import is_password_usable
+            if not is_password_usable(customer.password_hash):
+                self.fields["current_password"].required = False
 
     def clean_current_password(self):
-        value = self.cleaned_data["current_password"]
+        value = self.cleaned_data.get("current_password", "")
+        from django.contrib.auth.hashers import is_password_usable
+        if self.customer and not is_password_usable(self.customer.password_hash):
+            if not self.fresh_google_auth:
+                raise forms.ValidationError("Sign in with Google again before setting a password.")
+            return ""
         if not self.customer or not self.customer.check_password(value):
             raise forms.ValidationError("The current password is incorrect.")
         return value
@@ -447,7 +461,7 @@ class ReceivingAccountForm(forms.ModelForm):
 
 class CheckoutPaymentForm(forms.Form):
     payment_method = forms.ChoiceField(
-        choices=[("momo", "Mobile Money prompt"), ("hosted", "Secure checkout (card or other methods)")],
+        choices=[("momo", "Mobile Money prompt"), ("hosted", "Pay by card (secure checkout)")],
         required=False, initial="momo",
     )
     momo_phone = forms.CharField(required=False, max_length=30, label="Mobile Money number",
@@ -459,7 +473,7 @@ class CheckoutPaymentForm(forms.Form):
         self.momo_available = momo_available
         super().__init__(*args, **kwargs)
         if not momo_available:
-            self.fields["payment_method"].choices = [("hosted", "Secure checkout")]
+            self.fields["payment_method"].choices = [("hosted", "Pay by card (secure checkout)")]
             self.fields["payment_method"].initial = "hosted"
 
     def clean(self):

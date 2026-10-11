@@ -101,9 +101,9 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Shop the Market")
         self.assertContains(response, "Featured picks")
-        self.assertContains(response, "home-hero-v9")
-        self.assertContains(response, "Everyday essentials.")
-        self.assertContains(response, "Wholesale quantities")
+        self.assertContains(response, "kfd-hero")
+        self.assertContains(response, "Everything for today.")
+        self.assertContains(response, "Bulk and wholesale")
         self.assertNotContains(response, "home-hero-products")
         self.assertNotContains(response, "SHOP BY DEPARTMENT")
         self.assertNotContains(response, "Browse categories.")
@@ -121,8 +121,9 @@ class MarketPublicExperienceTests(MarketFixtures):
         self.assertNotContains(response, "Live stock · Secure checkout · Tracked fulfilment")
         self.assertNotContains(response, "commerce-global-search")
         self.assertContains(response, 'class="market-contact-link"')
-        self.assertContains(response, 'class="market-staff-link"')
-        self.assertContains(response, 'href="/login/"')
+        self.assertNotContains(response, 'class="market-staff-link"')
+        self.assertNotContains(response, "Staff login")
+        self.assertNotContains(response, "Staff access")
         self.assertEqual(self.client.get("/workspace/").status_code, 302)
 
     def test_guests_and_customers_can_browse_the_catalog(self):
@@ -189,7 +190,7 @@ class MarketPublicExperienceTests(MarketFixtures):
         session = self.client.session
         session["market_customer_id"] = self.customer.pk
         session.save()
-        response = self.client.post("/login/", {
+        response = self.client.post(settings.LOGIN_URL, {
             "username": self.staff.username,
             "password": "market-owner-password",
         })
@@ -201,10 +202,10 @@ class MarketPublicExperienceTests(MarketFixtures):
         response = self.client.get("/market/access/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sign in or create account")
-        self.assertContains(response, "Enter your mobile number.")
+        self.assertContains(response, "Choose Google for fast access")
         self.assertContains(response, 'class="market-auth-header"')
         self.assertContains(response, 'class="premium-access-logo"')
-        self.assertContains(response, "kofad-emblem")
+        self.assertContains(response, "kofad-official-logo")
         self.assertNotContains(response, 'aria-label="Search KOFAD Market"')
         self.assertNotContains(response, 'class="shop-shell-cart"')
         self.assertNotContains(response, 'class="shop-shell-footer"')
@@ -446,6 +447,53 @@ class MarketFulfilmentTests(MarketFixtures):
             "channel": "card",
         })
 
+    @override_settings(SMS_ENABLED=True)
+    def test_verified_payment_sms_contains_customer_handover_code(self):
+        from core.models import Message
+        order = self.order()
+        self.assertFalse(Message.objects.filter(
+            source_key=f"market-event:{order.pk}:paid",
+        ).exists())
+        reference = "KFD-SMS-HANDOVER"
+        MarketPaymentAttempt.objects.create(
+            order=order, reference=reference, amount=order.total,
+            currency="GHS", status="pending",
+        )
+        order = services.finalize_payment(reference, {
+            "status": "success", "amount": int(order.total * 100),
+            "currency": "GHS", "channel": "card",
+        })
+        message = Message.objects.get(source_key=f"market-event:{order.pk}:paid")
+        code = services.handover_code(order)
+        self.assertEqual(len(code), 6)
+        self.assertTrue(code.isdigit())
+        self.assertIn(f"collection/delivery code is {code}", message.body)
+        self.assertIn("when you receive your items", message.body)
+        self.assertIn("Received GHS", message.body)
+        self.assertEqual(message.recipient, order.phone)
+        self.assertEqual(message.status, "draft")
+        services.finalize_payment(reference, {
+            "status": "success", "amount": int(order.total * 100),
+            "currency": "GHS", "channel": "card",
+        })
+        self.assertEqual(Message.objects.filter(
+            source_key=f"market-event:{order.pk}:paid",
+        ).count(), 1)
+
+    def test_staff_order_detail_requires_customer_code_without_revealing_it(self):
+        order = self.paid_order()
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session["mfa_ok"] = True
+        session.save()
+        response = self.client.get(f"/online-orders/{order.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ask the customer for their 6-digit code")
+        self.assertNotContains(response, services.handover_code(order))
+
     def test_pickup_cannot_complete_without_customer_handover_code(self):
         order = self.paid_order()
         order = services.advance_order(self.staff, order, "prepare", {
@@ -531,16 +579,13 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertEqual(self.client.get("/workspace/").status_code, 200)
 
     @patch("marketplace.views.services.send_otp")
-    def test_unified_access_does_not_reveal_existing_accounts(self, send_otp):
+    def test_unified_access_routes_existing_accounts_to_password_without_sms(self, send_otp):
         send_otp.return_value = "+233241234567"
         response = self.client.post("/market/access/", {"phone": "0241234567"})
-        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
-        send_otp.assert_called_once()
-        args, kwargs = send_otp.call_args
-        self.assertEqual(args[:2], ("+233241234567", "login"))
-        self.assertIs(kwargs["request"], response.wsgi_request)
-        self.assertEqual(self.client.session["market_pending_phone"], "+233241234567")
-        self.assertNotIn("market_login_phone", self.client.session)
+        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
+        send_otp.assert_not_called()
+        self.assertEqual(self.client.session["market_login_phone"], "+233241234567")
+        self.assertNotIn("market_pending_phone", self.client.session)
 
     @patch("marketplace.views.services.send_otp")
     def test_unified_access_uses_same_challenge_for_new_number(self, send_otp):
@@ -548,7 +593,7 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         response = self.client.post("/market/access/", {"phone": "0245550001"})
         self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
         args, kwargs = send_otp.call_args
-        self.assertEqual(args[:2], ("+233245550001", "login"))
+        self.assertEqual(args[:2], ("+233245550001", "register"))
         self.assertIs(kwargs["request"], response.wsgi_request)
         self.assertEqual(self.client.session["market_pending_phone"], "+233245550001")
 
@@ -868,6 +913,74 @@ class MarketV2SupportTests(MarketFixtures):
         session["access_version"] = self.staff.access.session_version
         session["branch"] = self.branch.pk
         session.save()
+
+    def test_customer_can_start_chat_and_staff_can_reply_live(self):
+        self.customer_session()
+        created = self.client.post("/market/messages/", {
+            "subject": "Where is my order?",
+            "message": "Hello, can I get help with delivery?",
+        })
+        conversation = Conversation.objects.get(customer=self.customer)
+        self.assertRedirects(created, f"/market/messages/{conversation.pk}/", fetch_redirect_response=False)
+        self.assertEqual(conversation.branch, self.branch)
+        self.assertEqual(conversation.messages.count(), 1)
+        waiting_page = self.client.get(f"/market/messages/{conversation.pk}/")
+        self.assertContains(waiting_page, "Waiting for customer care")
+        self.client.post("/market/account/logout/")
+        self.staff_session()
+        queue = self.client.get("/online-inbox/?status=waiting")
+        self.assertContains(queue, conversation.subject)
+        self.assertContains(queue, "support-inbox-live.")
+        self.assertEqual(self.client.post(
+            f"/online-inbox/{conversation.pk}/", {"action": "accept"}
+        ).status_code, 302)
+        response = self.client.post(
+            f"/online-inbox/{conversation.pk}/", {"action": "reply", "message": "We're here to help."}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(conversation.messages.filter(
+            sender_type="staff", body="We're here to help."
+        ).exists())
+        self.client.logout()
+        self.customer_session()
+        update = self.client.get(
+            f"/market/support/conversations/{conversation.pk}/updates/?after=0"
+        )
+        self.assertEqual(update.status_code, 200)
+        payload = update.json()
+        self.assertTrue(payload["agent_connected"])
+        self.assertEqual([row["sender"] for row in payload["messages"]], ["customer", "staff"])
+        self.assertEqual(payload["messages"][-1]["body"], "We're here to help.")
+        answer = self.client.post(f"/market/messages/{conversation.pk}/", {
+            "message": "Thanks, please keep me posted."
+        })
+        self.assertEqual(answer.status_code, 302)
+        self.assertEqual(conversation.messages.count(), 3)
+
+    def test_start_chat_without_active_store_shows_error_without_ghost_thread(self):
+        self.branch.active = False
+        self.branch.save(update_fields=["active"])
+        self.customer_session()
+        page = self.client.post("/market/messages/", {
+            "subject": "Customer care",
+            "message": "I need help",
+        })
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "waiting for an active shop location")
+        self.assertEqual(Conversation.objects.count(), 0)
+
+    @patch("marketplace.services.prepare_support_attachment")
+    def test_failed_support_attachment_does_not_create_empty_conversation(self, prepare):
+        prepare.side_effect = ValidationError("This attachment could not be accepted.")
+        self.customer_session()
+        page = self.client.post("/market/messages/", {
+            "subject": "Broken attachment",
+            "message": "Please check",
+            "attachment": SimpleUploadedFile("photo.png", b"not an actual image", content_type="image/png"),
+        })
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "This attachment could not be accepted.")
+        self.assertEqual(Conversation.objects.count(), 0)
 
     def test_customer_support_accepts_and_hashes_document_attachment(self):
         self.customer_session()
@@ -1456,15 +1569,13 @@ class CustomerOtpProviderTests(MarketFixtures):
 
 class CustomerPhoneOnboardingTests(MarketFixtures):
     @patch("marketplace.views.services.send_otp")
-    def test_existing_number_uses_same_private_phone_challenge(self, send_otp):
+    def test_existing_number_does_not_receive_sms(self, send_otp):
         send_otp.return_value = "+233241234567"
         response = self.client.post("/market/access/", {"phone": "0241234567"})
-        self.assertRedirects(response, "/market/account/verify/", fetch_redirect_response=False)
-        args, kwargs = send_otp.call_args
-        self.assertEqual(args[:2], ("+233241234567", "login"))
-        self.assertIs(kwargs["request"], response.wsgi_request)
-        self.assertEqual(self.client.session["market_pending_phone"], "+233241234567")
-        self.assertNotIn("market_login_phone", self.client.session)
+        self.assertRedirects(response, "/market/account/login/", fetch_redirect_response=False)
+        send_otp.assert_not_called()
+        self.assertEqual(self.client.session["market_login_phone"], "+233241234567")
+        self.assertNotIn("market_pending_phone", self.client.session)
 
     @patch("marketplace.views.services.send_otp")
     def test_new_number_moves_to_otp_then_name_and_password(self, send_otp):
@@ -1623,3 +1734,260 @@ class MarketOtpReliabilityTests(MarketFixtures):
         response = self.client.post("/market/account/verify/", {"code": "123456"})
         self.assertRedirects(response, "/market/account/finish/", fetch_redirect_response=False)
         verify_otp.assert_not_called()
+
+
+class DirectMomoPhoneVerificationTests(MarketFixtures):
+    """Prevent unsolicited first-time requests and keep hosted cards separate."""
+
+    def sign_in(self):
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+
+    @override_settings(
+        PAYSTACK_SECRET_KEY="sk_test_example",
+        PAYSTACK_CUSTOMER_MOMO_ENABLED=True,
+        CUSTOMER_OTP_ENABLED=True,
+    )
+    @patch("marketplace.paystack_momo.requests.post")
+    @patch("marketplace.momo_security.services.send_otp")
+    def test_first_momo_payment_sends_sms_before_any_charge(self, send_otp, charge):
+        self.sign_in()
+        order = self.order()
+        result = self.client.post(f"/market/orders/{order.pk}/pay/", {
+            "payment_method": "momo", "momo_phone": "0241234567",
+            "momo_network": "mtn",
+        })
+        self.assertRedirects(result, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        send_otp.assert_called_once()
+        self.assertEqual(send_otp.call_args.args, (self.customer.phone, "momo"))
+        charge.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
+        self.assertContains(self.client.get(f"/market/orders/{order.pk}/"), "Verify your Mobile Money number")
+
+    @override_settings(
+        PAYSTACK_SECRET_KEY="sk_test_example",
+        PAYSTACK_CUSTOMER_MOMO_ENABLED=True,
+        CUSTOMER_OTP_ENABLED=True,
+    )
+    @patch("marketplace.momo_security.services.send_otp")
+    @patch("marketplace.momo_security.services.verify_otp")
+    @patch("marketplace.paystack_momo.requests.post")
+    def test_sms_verified_number_starts_one_direct_charge(self, charge, verify_otp, send_otp):
+        from .models import VerifiedMomoPhone
+        self.sign_in()
+        order = self.order()
+        send_otp.return_value = self.customer.phone
+        first = self.client.post(f"/market/orders/{order.pk}/pay/", {
+            "payment_method": "momo", "momo_phone": "0241234567",
+            "momo_network": "mtn",
+        })
+        self.assertEqual(first.status_code, 302)
+        def charge_response(*args, **kwargs):
+            reference = kwargs["json"]["reference"]
+            return Mock(status_code=200, json=Mock(return_value={
+                "status": True, "data": {
+                    "reference": reference, "status": "pay_offline",
+                    "display_text": "Approve on your phone.",
+                },
+            }))
+        charge.side_effect = charge_response
+        result = self.client.post(f"/market/orders/{order.pk}/momo-phone/verify/", {
+            "action": "verify", "code": "123456",
+        })
+        self.assertRedirects(result, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        verify_otp.assert_called_once_with(self.customer.phone, "123456", "momo")
+        self.assertTrue(VerifiedMomoPhone.objects.filter(
+            customer=self.customer, phone=self.customer.phone,
+        ).exists())
+        self.assertEqual(charge.call_count, 1)
+        self.assertEqual(order.payment_attempts.count(), 1)
+        self.assertEqual(order.payment_attempts.get().verification_summary["flow"], "mobile_money")
+        self.assertEqual(order.payment_attempts.get().status, "pending")
+        self.assertEqual(self.client.session.get("market_momo_phone_pending"), None)
+        # An old SMS code cannot generate another attempt while the first is pending.
+        self.client.post(f"/market/orders/{order.pk}/momo-phone/verify/", {
+            "action": "verify", "code": "123456",
+        })
+        self.assertEqual(charge.call_count, 1)
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example", PAYSTACK_CUSTOMER_MOMO_ENABLED=True)
+    @patch("marketplace.paystack_momo.requests.post")
+    def test_direct_api_rejects_unverified_phone_even_when_called_directly(self, charge):
+        from .paystack_momo import initialize
+        order = self.order()
+        with self.assertRaises(ValidationError):
+            initialize(order, self.customer.phone, "mtn")
+        charge.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    @patch("marketplace.views.hubtel.initialize_payment")
+    @patch("marketplace.views.services.initialize_paystack")
+    def test_card_checkout_never_invokes_hubtel(self, card, hubtel_charge):
+        self.sign_in()
+        order = self.order()
+        result = self.client.post(f"/market/orders/{order.pk}/pay/", {
+            "payment_method": "hosted",
+        })
+        self.assertRedirects(result, f"/market/orders/{order.pk}/payment/launch/",
+                             fetch_redirect_response=False)
+        card.assert_called_once()
+        hubtel_charge.assert_not_called()
+
+    def test_card_attempt_rejects_mobile_money_success_even_with_matching_amount(self):
+        order = self.order()
+        reference = "CARD-CHANNEL-TEST"
+        order.payment_reference = reference
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        attempt = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=reference,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "card"},
+        )
+        with self.assertRaises(ValidationError):
+            services.finalize_payment(reference, {
+                "status": "success", "amount": int(order.total * 100),
+                "currency": "GHS", "channel": "mobile_money",
+            })
+        order.refresh_from_db()
+        attempt.refresh_from_db()
+        self.assertNotEqual(order.payment_status, "paid")
+        self.assertIsNone(order.sale_document_id)
+
+
+class MarketLateDuplicateSettlementTests(MarketFixtures):
+    """A second independently verified charge must not disappear or post stock twice."""
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    def test_second_verified_reference_is_flagged_without_duplicate_sale(self):
+        order = self.order()
+        first_ref = "KFD-SETTLED-FIRST"
+        order.payment_reference = first_ref
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        first = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=first_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "card"},
+        )
+        card_receipt = {
+            "status": "success", "reference": first_ref, "channel": "card",
+            "currency": "GHS", "amount": int(order.total * 100),
+        }
+        paid = services.finalize_payment(first_ref, card_receipt)
+        self.assertEqual(paid.payment_status, "paid")
+        first.refresh_from_db()
+        self.assertEqual(first.status, "success")
+        sale_pk = paid.sale_document_id
+        stock_after_first = Stock.objects.get(branch=self.branch, product=self.product).quantity
+
+        second_ref = "KFD-LATE-SECOND"
+        second = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=second_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "mobile_money"},
+        )
+        momo_receipt = {
+            "status": "success", "reference": second_ref, "id": 98765,
+            "channel": "mobile_money", "currency": "GHS",
+            "amount": int(order.total * 100),
+        }
+        result = services.finalize_payment(second_ref, momo_receipt)
+        result.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(result.payment_status, "paid")
+        self.assertEqual(result.payment_reference, first_ref)
+        self.assertEqual(result.sale_document_id, sale_pk)
+        self.assertEqual(result.confirmed_reference, paid.confirmed_reference)
+        self.assertEqual(second.status, "attention")
+        self.assertIsNotNone(second.verified_at)
+        self.assertIn("Additional provider payment", second.provider_message)
+        self.assertEqual(
+            Stock.objects.get(branch=self.branch, product=self.product).quantity,
+            stock_after_first,
+        )
+        self.assertEqual(
+            order.events.filter(status="payment_attention", customer_visible=False).count(), 1
+        )
+        services.finalize_payment(second_ref, momo_receipt)
+        self.assertEqual(
+            order.events.filter(status="payment_attention", customer_visible=False).count(), 1
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.status, "success")
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    def test_unsuccessful_late_attempt_does_not_raise_second_payment_alarm(self):
+        order = self.order()
+        first_ref = "KFD-SETTLED-ONLY"
+        order.payment_reference = first_ref
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=first_ref,
+            amount=order.total, currency="GHS", status="pending",
+        )
+        services.finalize_payment(first_ref, {
+            "status": "success", "channel": "mobile_money",
+            "currency": "GHS", "amount": int(order.total * 100),
+        })
+        late = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference="KFD-LATE-FAILED",
+            amount=order.total, currency="GHS", status="pending",
+        )
+        services.finalize_payment(late.reference, {
+            "status": "failed", "channel": "mobile_money",
+            "currency": "GHS", "amount": int(order.total * 100),
+        })
+        late.refresh_from_db()
+        self.assertEqual(late.status, "pending")
+        self.assertFalse(order.events.filter(status="payment_attention").exists())
+
+
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    def test_late_payment_cannot_reopen_an_already_refunded_order(self):
+        order = self.order()
+        original_ref = "KFD-REFUNDED-ORIGINAL"
+        order.payment_reference = original_ref
+        order.payment_status = "pending"
+        order.save(update_fields=["payment_reference", "payment_status"])
+        MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=original_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "card"},
+        )
+        receipt = {
+            "status": "success", "reference": original_ref, "channel": "card",
+            "currency": "GHS", "amount": int(order.total * 100),
+        }
+        paid = services.finalize_payment(original_ref, receipt)
+        original_document_id = paid.sale_document_id
+        stock_after_first = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        OnlineOrder.objects.filter(pk=order.pk).update(
+            payment_status="refunded", status="refunded",
+        )
+        late_ref = "KFD-REFUND-LATE"
+        late = MarketPaymentAttempt.objects.create(
+            order=order, provider="paystack", reference=late_ref,
+            amount=order.total, currency="GHS", status="pending",
+            verification_summary={"flow": "mobile_money"},
+        )
+        services.finalize_payment(late_ref, {
+            "status": "success", "reference": late_ref, "id": 6438,
+            "channel": "mobile_money", "currency": "GHS",
+            "amount": int(order.total * 100),
+        })
+        order.refresh_from_db()
+        late.refresh_from_db()
+        self.assertEqual(order.payment_status, "refunded")
+        self.assertEqual(order.status, "refunded")
+        self.assertEqual(order.sale_document_id, original_document_id)
+        self.assertEqual(order.payment_reference, original_ref)
+        self.assertEqual(late.status, "attention")
+        self.assertEqual(
+            Stock.objects.get(branch=self.branch, product=self.product).quantity,
+            stock_after_first,
+        )
+        self.assertEqual(order.events.filter(status="payment_attention").count(), 1)

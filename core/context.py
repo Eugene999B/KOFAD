@@ -1,3 +1,4 @@
+from django.conf import settings
 from .models import Branch, Company
 
 
@@ -26,4 +27,5 @@ def shell(request):
         "current_branch": current,
         "online_order_attention": online_order_attention,
         "market_unread": market_unread,
+        "email_center_enabled": settings.KOFAD_EMAIL_CENTER_ENABLED,
     }

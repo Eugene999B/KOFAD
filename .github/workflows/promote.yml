@@ -7,10 +7,8 @@ jobs:
   safe-instructions:
     runs-on: ubuntu-latest
     steps:
-      - name: Reject unattended or outdated main promotion
-        shell: bash
+      - name: Reject unattended promotion
         run: |
-          echo 'Automatic main -> railway-release promotion has been intentionally retired.'
-          echo 'Do NOT force-push, reset, or use a stale branch to replace production.'
-          echo 'Open a reviewed, fully tested pull request against railway-release instead.'
-          echo 'Only railway-release is deployed to Railway production.'
+          echo 'Automatic main-to-railway-release promotion has been retired.'
+          echo 'Never replace Railway production from a stale branch.'
+          echo 'Review and test a PR targeted at railway-release instead.'

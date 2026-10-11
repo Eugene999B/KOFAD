@@ -53,11 +53,12 @@ def market_branch():
     return branch
 
 
-def listing_price(listing):
+def listing_price(listing, rate=None):
+    from .pricing import all_in_unit_price, online_markup_percent
     value = getattr(listing.product, listing.price_source, None)
     if value is None or value <= 0:
         raise ValidationError(f"{listing.display_name} does not currently have a valid Market price.")
-    return value
+    return all_in_unit_price(value, online_markup_percent() if rate is None else rate)
 
 
 def active_reserved_units(branch, product, exclude_order=None):
@@ -549,6 +550,29 @@ def _consume_customer_otp_budget(request=None):
             row.save(update_fields=["failures", "blocked_until"])
 
 
+def _consume_phone_otp_hour(phone):
+    """At most two SMS sends per phone across registration, reset and phone change.
+
+    DB-backed and locked so the allowance survives service restarts and concurrent
+    browser sessions. Each hour begins with the first send, not the last resend.
+    """
+    identity = hashlib.sha256(("customer-otp-phone-v2:" + phone).encode()).hexdigest()
+    now = timezone.now()
+    with transaction.atomic():
+        LoginAttempt.objects.get_or_create(key=identity)
+        budget = LoginAttempt.objects.select_for_update().get(key=identity)
+        if not budget.blocked_until or budget.blocked_until <= now:
+            budget.failures = 0
+            budget.blocked_until = now + timedelta(hours=1)
+        if budget.failures >= 2:
+            raise ValidationError(
+                "Two verification SMS messages have already been requested. "
+                "Please try again one hour after your first request."
+            )
+        budget.failures += 1
+        budget.save(update_fields=["failures", "blocked_until"])
+
+
 def send_otp(phone, purpose="register", request=None):
     phone = normalize_ghana_phone(phone)
     if not settings.CUSTOMER_OTP_ENABLED:
@@ -568,6 +592,7 @@ def send_otp(phone, purpose="register", request=None):
             raise ValidationError("Please wait one minute before requesting another code.")
         if row.send_count >= 8:
             raise ValidationError("Daily verification-code limit reached. Try again later.")
+        _consume_phone_otp_hour(phone)
         # Hold only this phone/purpose lock during the bounded provider call.
         # Concurrent resend requests cannot deliver two different usable codes.
         code = f"{secrets.randbelow(1000000):06d}"
@@ -646,7 +671,7 @@ def customer_from_session(request):
 
 
 def customer_credential_stamp(customer):
-    return hmac.new(settings.SECRET_KEY.encode(), (customer.phone + ":" + customer.password_hash).encode(), hashlib.sha256).hexdigest()
+    return hmac.new(settings.SECRET_KEY.encode(), ((customer.phone or "") + ":" + customer.password_hash).encode(), hashlib.sha256).hexdigest()
 
 
 def set_customer_session(request, customer):
@@ -790,6 +815,15 @@ def create_order(customer, cart, cleaned):
         customer.marketing_email_verified_at = None
         customer.marketing_email_challenge = ""
         customer.save(update_fields=["email", "marketing_email_opt_in", "marketing_email_verified_at", "marketing_email_challenge"])
+    # Restore the order-created notification lost in the 2026-10-10 promotion.
+    # The newer notice engine independently enforces verified-account email
+    # eligibility, current delivery consent, and an idempotent source key.
+    # This callback runs only after a committed order, never before.
+    def _queue_order_confirmation():
+        from core.notification_engine import queue_customer_order_email
+        queue_customer_order_email(order, "awaiting_payment")
+
+    transaction.on_commit(_queue_order_confirmation, robust=True)
     return order
 
 
@@ -855,6 +889,7 @@ def initialize_paystack(order, callback_url):
         attempt = MarketPaymentAttempt.objects.create(
             order=order, provider="paystack", reference=reference, amount=order.total,
             currency="GHS", status="initializing",
+            verification_summary={"flow": "card"},
             next_check_at=timezone.now() + timedelta(minutes=1),
         )
         order.payment_status = "initializing"
@@ -866,7 +901,7 @@ def initialize_paystack(order, callback_url):
         "currency": "GHS",
         "reference": reference,
         "callback_url": callback_url,
-        "channels": ["card", "mobile_money", "bank_transfer"],
+        "channels": ["card"],
         "metadata": json.dumps({
             "order_reference": order.public_reference,
             "customer_phone": order.phone,
@@ -1076,6 +1111,24 @@ def post_order_to_ledger(order, actor=None):
     return order
 
 
+
+def _queue_staff_verified_payment_alert_safely(order_id):
+    """Restore opted-in, branch-authorised online-payment alerts after DB commit.
+
+    A mail failure must never undo a verified payment or return a provider error
+    that could cause repeated payment callbacks.
+    """
+    try:
+        from core.email_identity import enqueue_staff_payment_alerts
+
+        order = OnlineOrder.objects.select_related("branch").get(pk=order_id)
+        enqueue_staff_payment_alerts(order)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "KOFAD staff payment notification could not be queued for order %s", order_id
+        )
+
+
 @transaction.atomic
 def finalize_payment(reference, provider_data, expected_provider="paystack"):
     attempt = MarketPaymentAttempt.objects.select_for_update().select_related("order").filter(reference=reference).first()
@@ -1084,7 +1137,33 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     if attempt.provider != expected_provider:
         raise ValidationError("Payment provider does not match the saved attempt.")
     order = OnlineOrder.objects.select_for_update().get(pk=attempt.order_id)
-    if order.payment_status == "paid":
+    if order.payment_status in {"paid", "refunded"}:
+        # A separate transaction may settle after an order was paid or refunded.
+        # Never reopen a refunded order or post a second sale; do not ignore a confirmed
+        # provider receipt: operations must reconcile or refund the extra charge.
+        if (order.payment_reference != reference
+                and str(provider_data.get("status", "")).lower() == "success"):
+            notice = "Additional provider payment detected after order settlement. Manager reconciliation required."
+            if attempt.provider_message != notice:
+                attempt.status = "attention"
+                attempt.provider_message = notice
+                attempt.next_check_at = None
+                attempt.verified_at = timezone.now()
+                attempt.save(update_fields=[
+                    "status", "provider_message", "next_check_at", "verified_at",
+                ])
+                OrderEvent.objects.create(
+                    order=order,
+                    status="payment_attention",
+                    title="Additional payment requires reconciliation",
+                    note=(
+                        f"A different {expected_provider} transaction {reference} was confirmed "
+                        f"after this order was already {order.payment_status} using {order.payment_reference}. "
+                        "Investigate the provider account and arrange a refund when appropriate. "
+                        "Do not post a second sale or release stock twice."
+                    ),
+                    customer_visible=False,
+                )
         return order
 
     provider_status = str(provider_data.get("status", "")).lower()
@@ -1104,7 +1183,14 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
                 order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("The payment has not been completed.")
 
-    direct_momo = attempt.verification_summary.get("flow") == "mobile_money"
+    flow = (attempt.verification_summary or {}).get("flow")
+    direct_momo = flow == "mobile_money"
+    if expected_provider == "paystack" and flow == "card" and provider_data.get("channel") != "card":
+        attempt.status = "attention"
+        attempt.next_check_at = None
+        attempt.provider_message = "Verified payment channel differs from the requested card channel."
+        attempt.save(update_fields=["status", "next_check_at", "provider_message"])
+        raise ValidationError("The payment channel does not match the saved card request.")
     if expected_provider == "paystack" and (
         (str(settings.PAYSTACK_SECRET_KEY).startswith("sk_live_") and provider_data.get("domain") != "live")
         or (direct_momo and (provider_data.get("channel") != "mobile_money" or not provider_data.get("id")))
@@ -1166,11 +1252,25 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
             )
 
     from .notifications import queue_order_sms
+    payment_channel_label = {
+        "mobile_money": "Mobile Money", "card": "bank card",
+        "bank": "bank payment", "bank_transfer": "bank transfer",
+    }.get(channel, "online payment")
+    # The customer alone receives the six-digit pickup/delivery code.
+    # Staff must request it at physical handover; the staff dashboard never shows it.
     queue_order_sms(
         order, "paid",
-        f"KOFAD: Payment confirmed for {order.customer_reference}. "
-        f"Amount: GHS {order.total:.2f}. Follow your order status in your account. "
-        "Track it in your KOFAD Market account.",
+        f"KOFAD: Payment verified for order {order.customer_reference}. "
+        f"Received GHS {order.total:.2f} via {payment_channel_label}. "
+        f"Your 6-digit collection/delivery code is {handover_code(order)}. "
+        "Show this code to KOFAD staff only when you receive your items; "
+        "they must enter it to confirm handover. Never share your MoMo PIN. "
+        "Track your order in KOFAD Market.",
+    )
+    # Notifications are deliberately queued only on the first verified
+    # settlement; late duplicate webhooks must not send another alert.
+    transaction.on_commit(
+        lambda order_id=order.pk: _queue_staff_verified_payment_alert_safely(order_id)
     )
     return order
 

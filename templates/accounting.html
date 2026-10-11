@@ -15,6 +15,7 @@
   <a href="?view=pnl&start={{ start }}&end={{ end }}" class="{% if view == 'pnl' %}active{% endif %}">Profit & loss</a>
   <a href="?view=balance&start={{ start }}&end={{ end }}" class="{% if view == 'balance' %}active{% endif %}">Balance sheet</a>
   <a href="?view=cashflow&start={{ start }}&end={{ end }}" class="{% if view == 'cashflow' %}active{% endif %}">Cash flow</a>
+  <a href="?view=integrity&start={{ start }}&end={{ end }}" class="{% if view == 'integrity' %}active{% endif %}">Financial integrity</a>
   <a href="?view=journals&start={{ start }}&end={{ end }}" class="{% if view == 'journals' %}active{% endif %}">Journals</a>
 </nav>
 
@@ -113,6 +114,20 @@
 <section class="panel"><div class="section-heading"><div><h2>Statement of financial position</h2><p class="muted">Assets, liabilities and equity accounts generated from the ledger.</p></div><span class="pill">{% if report.balance_check == 0 %}Balanced{% else %}Difference {{ report.balance_check|floatformat:2 }}{% endif %}</span></div><div class="statement-table">{% for row in balance_rows %}<a href="?view=ledger&start={{ start }}&end={{ end }}&account={{ row.code }}"><span><small>{{ row.code }}</small> {{ row.name }} · {{ row.type|title }}</span><strong>{{ row.statement_balance|floatformat:2 }}</strong></a>{% endfor %}<div class="statement-total"><span>Current-period profit / (loss) included in equity</span><strong>{{ report.profit|floatformat:2 }}</strong></div></div></section>
 {% elif view == "cashflow" %}
 <section class="panel"><div class="section-heading"><div><h2>Cash-flow classification</h2><p class="muted">Cash and cash-equivalent movement classified into operating, investing and financing activity.</p></div></div><div class="cashflow-grid"><article><small>Operating</small><strong>{{ report.cash_flow.operating|floatformat:2 }}</strong></article><article><small>Investing</small><strong>{{ report.cash_flow.investing|floatformat:2 }}</strong></article><article><small>Financing</small><strong>{{ report.cash_flow.financing|floatformat:2 }}</strong></article><article><small>Net change</small><strong>{{ report.cash_flow.net_change|floatformat:2 }}</strong></article></div></section>
+{% elif view == "integrity" %}
+<section class="panel finance-integrity-dashboard">
+  <div class="section-heading"><div><p class="eyebrow">READ-ONLY MONEY CONTROLS</p><h2>Financial integrity &amp; reconciliation</h2>
+  <p class="muted">Cross-check document totals, saved product lines, payment directions, debt allocations, customer online orders, provider requests and daily closings. This report never changes a transaction.</p></div>
+  <a class="button secondary" href="/accounting/export/xlsx/?view=integrity&amp;start={{ start }}&amp;end={{ end }}">Download every check</a></div>
+  <div class="kpi-grid">
+    <article><small>Controls examined</small><strong>{{ integrity_checked }}</strong><p>Across ledger, provider and closing sources</p></article>
+    <article><small>Exceptions requiring review</small><strong>{{ integrity_count }}</strong><p>Only exceptions are shown below; the export includes all checks.</p></article>
+  </div>
+  <div class="accounting-integrity-notes"><strong>Reconciliation is evidence, not a guarantee:</strong> a zero-variance ledger still requires independent provider settlement statements, physical cash counts, bank statements and manager sign-off. Do not repeat a pending or uncertain payment while investigating.</div>
+  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Area</th><th>Reference</th><th>Check</th><th class="number">Expected</th><th class="number">Recorded</th><th class="number">Difference</th><th>Status</th><th>Investigation</th></tr></thead>
+  <tbody>{% for item in integrity_page.object_list %}<tr><td>{{ item.date }}</td><td>{{ item.source }}</td><td>{{ item.reference }}</td><td>{{ item.check }}</td><td class="number">{{ item.expected|floatformat:2 }}</td><td class="number">{{ item.actual|floatformat:2 }}</td><td class="number">{{ item.difference|floatformat:2 }}</td><td><span class="pill amber">{{ item.status }}</span></td><td>{{ item.details }}</td></tr>{% empty %}<tr><td colspan="9" class="empty">No mismatches detected among the checks performed for this date range. Confirm provider statements and cash counts separately.</td></tr>{% endfor %}</tbody></table></div>
+  <nav class="actions">{% if integrity_page.has_previous %}<a class="button secondary" href="?view=integrity&amp;start={{ start }}&amp;end={{ end }}&amp;page={{ integrity_page.previous_page_number }}">Previous</a>{% endif %}<span>Page {{ integrity_page.number }} of {{ integrity_page.paginator.num_pages }} · {{ integrity_count }} exceptions</span>{% if integrity_page.has_next %}<a class="button secondary" href="?view=integrity&amp;start={{ start }}&amp;end={{ end }}&amp;page={{ integrity_page.next_page_number }}">Next</a>{% endif %}</nav>
+</section>
 {% elif view == "journals" %}
 {% if can_journal %}
 <section class="panel journal-builder"><div class="section-heading"><div><h2>Controlled manual journal</h2><p class="muted">Use only for valid accounting events that do not come from normal KOFAD workflows. Debits must equal credits.</p></div><span class="pill">{% if owner_direct %}Owner direct post{% else %}Approval required{% endif %}</span></div>

@@ -1,0 +1,51 @@
+name: Verify KOFAD Connections Center
+on:
+  pull_request:
+    paths:
+      - 'core/integration_health.py'
+      - 'core/integration_live.py'
+      - 'core/test_integration_live.py'
+      - 'config/settings.py'
+      - 'core/test_integration_health.py'
+      - 'core/admin_views.py'
+      - 'core/urls.py'
+      - 'templates/connections_center.html'
+      - 'templates/connections_detail.html'
+      - 'templates/settings_center.html'
+      - 'templates/base.html'
+      - 'static/connections-center.css'
+      - '.github/workflows/connections-center-check.yml'
+permissions:
+  contents: read
+jobs:
+  connections:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env:
+          POSTGRES_USER: kofad
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kofad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kofad"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kofad:test-only@localhost:5432/kofad
+      DJANGO_SECRET_KEY: test-only-kofad-secret-of-at-least-32-characters
+      DJANGO_DEBUG: "1"
+      SECURE_SSL_REDIRECT: "0"
+      DJANGO_ALLOWED_HOSTS: "testserver,staff.kofadimpex.com,market.kofadimpex.com,kofadimpex.com"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt -c requirements.lock
+      - run: python manage.py check
+      - run: python manage.py migrate --noinput
+      - run: python scripts/prepare_logo.py
+      - run: python manage.py collectstatic --noinput
+      - run: python manage.py test core.test_integration_health core.test_integration_live --noinput

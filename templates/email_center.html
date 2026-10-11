@@ -1,0 +1,398 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<script defer src="{% static 'email-workspace.js' %}"></script>{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'email-workspace.css' %}">{% endblock %}
+{% block content %}
+<main class="mail-workspace">
+  <header class="mail-banner">
+    <div class="mail-brand">
+      <img class="mail-brand-image" src="{% static 'brand/kofad-logo-transparent.png' %}" alt="KOFAD IMPEX ENTERPRISE">
+      <div><p class="mail-eyebrow">KOFAD IMPEX · BUSINESS COMMUNICATIONS</p><h1>Email Centre</h1>
+      <p class="mail-subtitle">Customer correspondence, organised for your team.</p></div>
+    </div>
+    <div class="mail-connection" role="status"><span class="mail-live-dot {% if external_ready %}on{% endif %}"></span>
+      {% if external_ready %}Outgoing email enabled{% else %}External email unavailable{% endif %}
+    </div>
+  </header>
+
+  {% include "email_pro_nav.html" %}
+
+  {% if email_section == 'inbox' or email_section == 'history' %}
+    {% if selected %}
+    <section class="mail-mailboxes" aria-label="Choose departmental mailbox">
+      <div class="mail-mailboxes-heading">
+        <strong>Departmental mailboxes</strong><span>Switch to the inbox you need</span>
+      </div>
+      <nav class="mail-mailbox-tabs" aria-label="Mailboxes">
+      {% for m in mailboxes %}
+        <a href="{% if email_section == 'history' %}{% url 'email_history' %}{% else %}{% url 'email_center' %}{% endif %}?mailbox={{ m.pk }}"
+           class="mail-mailbox-tab {% if selected.pk == m.pk %}selected{% endif %}" {% if selected.pk == m.pk %}aria-current="page"{% endif %}>
+          <span class="mail-mailbox-initial">{{ m.label|first|upper }}</span><span><strong>{{ m.label }}</strong><small>{{ m.address }}</small></span>
+        </a>
+      {% endfor %}
+      </nav>
+    </section>
+    {% else %}
+    <section class="mail-empty-panel"><h2>No assigned mailboxes</h2><p>Your administrator can give you read or reply access on the Staff Access page.</p></section>
+    {% endif %}
+  {% endif %}
+
+  {% if email_section == 'inbox' and selected %}
+  <section class="mail-section-heading">
+    <div><p class="mail-eyebrow">SHARED INBOX</p><h2>{{ selected.label }} conversations</h2>
+    <p>Find a customer, respond from the correct department, and track follow-ups.</p></div>
+    <div class="mail-actions">
+      {% if selected.pk in writable_ids %}<a class="mail-button primary" href="#new-email">＋ New email</a>{% endif %}
+      <a class="mail-button subtle" href="{% url 'email_history' %}?mailbox={{ selected.pk }}">View history ↗</a>
+    </div>
+  </section>
+
+  <section class="mail-quick-stats" aria-label="Mailbox overview">
+    <a href="{% url 'email_center' %}?mailbox={{ selected.pk }}&thread_status=open"><span>Open conversations</span><strong>{{ open_conversations }}</strong><small>Needs team attention</small></a>
+    <a href="{% url 'email_center' %}?mailbox={{ selected.pk }}&thread_owner=unassigned"><span>Unassigned</span><strong>{{ unassigned_conversations }}</strong><small>Ready to allocate</small></a>
+    <a href="{% url 'email_history' %}?mailbox={{ selected.pk }}&status=draft"><span>Needs approval</span><strong>{{ draft_count }}</strong><small>Review before sending</small></a>
+    <a href="{% url 'email_history' %}?mailbox={{ selected.pk }}&status=attention"><span>Delivery attention</span><strong>{{ attention_count }}</strong><small>Failed or uncertain</small></a>
+  </section>
+
+  {% if selected.pk in writable_ids %}
+  <details class="mail-compose" id="new-email">
+    <summary><span>＋ Compose a new customer email</span><small>Opens a new tracked conversation</small></summary>
+    <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
+      <input type="hidden" name="action" value="send"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}">
+      <div class="mail-fields two"><label>Visible sender<input value="{% if email_uses_shared_sender %}{{ email_shared_sender }}{% else %}{{ selected.address }}{% endif %}" readonly aria-label="Verified sending address"></label>
+      <label>Customer email<input name="to" type="email" maxlength="254" placeholder="customer@example.com" required></label></div>
+      <details class="mail-private-note"><summary>＋ Add CC or BCC recipients</summary>
+        <div class="mail-fields two">
+          <label>CC (visible)<input name="cc" maxlength="1600" placeholder="colleague@example.com"></label>
+          <label>BCC (hidden)<input name="bcc" maxlength="1600" placeholder="manager@example.com"></label>
+        </div>
+        <p class="mail-help">Up to five addresses in each field. Copies are delivered with this message.</p>
+      </details>
+      <label>Subject<input name="subject" maxlength="255" placeholder="How can we help?" required></label>
+      <label>Message<textarea name="body" rows="5" maxlength="32000" required placeholder="Write a clear, helpful message…"></textarea></label>
+      <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Add my saved signature for this department (if configured)</label>
+      <div class="mail-form-foot"><p>{% if email_uses_shared_sender %}Replies return to {{ selected.address }}. Brevo currently shows the verified KOFAD shared sender to customers. {% endif %}Messages are queued securely; acceptance is not confirmed delivery.</p>
+        <button class="mail-button primary" type="submit">Queue customer email ↗</button></div>
+    </form>
+  </details>{% endif %}
+
+  <div class="mail-inbox-columns">
+    <section class="mail-queue" aria-label="Customer conversation queue">
+      <div class="mail-pane-head"><div><h3>Conversations</h3><p>{{ conversations|length }} matching recent conversations</p></div></div>
+      <form method="get" action="{% url 'email_center' %}" class="mail-queue-filters" role="search">
+        <input type="hidden" name="mailbox" value="{{ selected.pk }}">
+        <label class="mail-search"><span class="sr-only">Search customer or subject</span>
+          <input name="thread_q" value="{{ thread_search }}" type="search" maxlength="100" placeholder="⌕  Search customer or subject"></label>
+        <div class="mail-filter-row">
+          <label><span class="sr-only">Conversation status</span><select name="thread_status" aria-label="Conversation status">
+            <option value="all"{% if thread_status_filter == 'all' %} selected{% endif %}>All statuses</option>
+            <option value="open"{% if thread_status_filter == 'open' %} selected{% endif %}>Open</option>
+            <option value="pending"{% if thread_status_filter == 'pending' %} selected{% endif %}>Waiting</option>
+            <option value="closed"{% if thread_status_filter == 'closed' %} selected{% endif %}>Closed</option>
+          </select></label>
+          <label><span class="sr-only">Assignment</span><select name="thread_owner" aria-label="Assignment">
+            <option value="all"{% if thread_owner_filter == 'all' %} selected{% endif %}>All staff</option>
+            <option value="mine"{% if thread_owner_filter == 'mine' %} selected{% endif %}>Assigned to me</option>
+            <option value="unassigned"{% if thread_owner_filter == 'unassigned' %} selected{% endif %}>Unassigned</option>
+          </select></label>
+          <button class="mail-button secondary" type="submit">Apply</button>
+        </div>
+        {% if thread_search or thread_status_filter != 'all' or thread_owner_filter != 'all' %}
+        <a class="mail-clear" href="{% url 'email_center' %}?mailbox={{ selected.pk }}">Clear filters</a>{% endif %}
+      </form>
+      <nav class="mail-conversation-list" aria-label="Conversations">
+        {% for thread in conversations %}
+        <a href="{% url 'email_center' %}?mailbox={{ selected.pk }}&thread={{ thread.pk }}&thread_status={{ thread_status_filter }}&thread_owner={{ thread_owner_filter }}&thread_q={{ thread_search|urlencode }}#conversation"
+           class="mail-conversation {% if active_thread.pk == thread.pk %}current{% endif %}" {% if active_thread.pk == thread.pk %}aria-current="page"{% endif %}>
+          <span class="mail-avatar">{{ thread.customer_email|first|upper }}</span>
+          <span class="mail-conversation-copy"><strong>{{ thread.customer_email|truncatechars:32 }}</strong>
+            <span>{{ thread.subject|truncatechars:58 }}</span>
+            <small>{% if thread.assigned_to %}{{ thread.assigned_to.get_full_name|default:thread.assigned_to.username }}{% else %}Not assigned{% endif %} · {{ thread.last_activity_at|date:"j M, H:i" }}</small>
+          </span>
+          <span class="mail-status state-{{ thread.status }}">{{ thread.get_status_display }}</span>
+        </a>
+        {% empty %}
+        <div class="mail-queue-empty"><span aria-hidden="true">✉</span><strong>Nothing to show</strong>
+        <p>New customer emails will appear here. Try clearing filters if you're looking for an earlier conversation.</p></div>
+        {% endfor %}
+      </nav>
+      {% if unthreaded_letters %}
+      <section class="mail-older-letters" aria-label="Older incoming emails">
+        <h4>Unfiled incoming emails <span>Earlier correspondence</span></h4>
+        {% for letter in unthreaded_letters %}
+        <a href="{% url 'email_history' %}?mailbox={{ selected.pk }}&q={{ letter.subject|urlencode }}"
+           class="mail-older-letter"><strong>{{ letter.subject|default:"(No subject)" }}</strong>
+          <small>{{ letter.from_address }} · {{ letter.created_at|date:"j M, H:i" }}</small></a>
+        {% endfor %}
+      </section>
+      {% endif %}
+    </section>
+
+    <section class="mail-thread-pane" id="conversation" aria-label="Selected customer conversation">
+    {% if active_thread %}
+      <header class="mail-thread-header"><div class="mail-thread-title">
+        <p class="mail-eyebrow">CUSTOMER CONVERSATION #{{ active_thread.pk }}</p><h3>{{ active_thread.subject }}</h3>
+        <p>{{ active_thread.customer_email }}</p>
+        </div><span class="mail-status state-{{ active_thread.status }}">{{ active_thread.get_status_display }}</span>
+      </header>
+
+      {% if selected.pk in writable_ids %}
+      <details class="mail-thread-settings">
+        <summary>⚙ Manage conversation <span aria-hidden="true">⌄</span></summary>
+        <form method="post" action="{% url 'email_center' %}" class="mail-thread-settings-form">{% csrf_token %}
+          <input type="hidden" name="action" value="thread_update"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
+          <div class="mail-fields three">
+            <label>Status<select name="thread_status">
+              <option value="open"{% if active_thread.status == 'open' %} selected{% endif %}>Open</option>
+              <option value="pending"{% if active_thread.status == 'pending' %} selected{% endif %}>Waiting for customer</option>
+              <option value="closed"{% if active_thread.status == 'closed' %} selected{% endif %}>Closed</option>
+            </select></label>
+            <label>Priority<select name="priority"><option value="normal"{% if active_thread.priority == 'normal' %} selected{% endif %}>Normal</option>
+              <option value="high"{% if active_thread.priority == 'high' %} selected{% endif %}>High</option></select></label>
+            <label>Assigned staff<select name="assigned_to"><option value="">Unassigned</option>
+              {% for staff in eligible_assignees %}<option value="{{ staff.pk }}"{% if active_thread.assigned_to_id == staff.pk %} selected{% endif %}>{{ staff.get_full_name|default:staff.username }}</option>{% endfor %}
+            </select></label>
+          </div><button class="mail-button secondary" type="submit">Save conversation</button>
+        </form>
+      </details>{% endif %}
+
+      <div class="mail-thread-timeline" role="log" aria-label="Conversation messages">
+        {% for entry in thread_letters %}
+        <article class="mail-message {% if entry.direction == 'outbound' %}outgoing{% else %}incoming{% endif %}">
+          <div class="mail-message-meta">
+            <strong>{% if entry.direction == 'outbound' %}KOFAD · {{ entry.created_by.get_full_name|default:entry.created_by.username|default:"System automation" }}{% else %}{{ entry.from_address }}{% endif %}</strong>
+            <span>{{ entry.created_at|date:"j M Y, H:i" }}</span>
+          </div>
+          <small class="mail-message-state">{{ entry.get_status_display }}{% if entry.direction == 'outbound' and entry.delivery_status != 'unknown' %} · {{ entry.get_delivery_status_display }}{% endif %}</small>
+          {% if entry.cc_addresses %}<small class="mail-message-state">CC: {{ entry.cc_addresses }}</small>{% endif %}
+          {% if entry.bcc_addresses and entry.created_by_id == request.user.pk or entry.bcc_addresses and is_mail_owner %}<small class="mail-message-state">BCC (private): {{ entry.bcc_addresses }}</small>{% endif %}
+          <p class="mail-message-subject">{{ entry.subject }}</p>
+          <div class="mail-message-body">{{ entry.body_text|linebreaksbr }}</div>
+          {% if entry.last_error %}<p class="mail-error">{{ entry.last_error }}</p>{% endif %}
+        </article>
+        {% empty %}<div class="mail-queue-empty">No messages have been recorded in this conversation.</div>{% endfor %}
+      </div>
+
+      {% if thread_notes %}
+      <section class="mail-internal-notes"><h4>Internal staff notes <span>Not emailed to customers</span></h4>
+      {% for note in thread_notes %}<div class="mail-note"><strong>{{ note.author.get_full_name|default:note.author.username }}</strong>
+        <small>{{ note.created_at|date:"j M, H:i" }}</small><p>{{ note.body|linebreaksbr }}</p></div>{% endfor %}
+      </section>{% endif %}
+      {% if selected.pk in writable_ids %}
+      <div class="mail-thread-composer">
+        <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
+          <input type="hidden" name="action" value="thread_reply"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
+          <label>Reply to {{ active_thread.customer_email }}<textarea name="body" rows="4" maxlength="32000" placeholder="Type your reply to the customer…" required></textarea></label>
+          <details class="mail-private-note"><summary>＋ Add CC or BCC</summary>
+            <div class="mail-fields two">
+              <label>CC<input name="cc" maxlength="1600" placeholder="Visible copies"></label>
+              <label>BCC<input name="bcc" maxlength="1600" placeholder="Hidden copies"></label>
+            </div>
+          </details>
+          <label class="pro-check-line"><input type="checkbox" name="append_signature" value="yes"> Include my saved signature</label>
+          <div class="mail-form-foot"><small>Your response will be queued for sending by email.</small>
+          <button type="submit" class="mail-button primary">Queue reply ↗</button></div>
+        </form>
+        {% if latest_inbound_letter %}
+          <a class="mail-button subtle" href="{% url 'email_drafts' %}?forward={{ latest_inbound_letter.pk }}">↗ Forward latest customer message</a>
+        {% endif %}
+        <details class="mail-private-note"><summary>＋ Add private staff note</summary>
+          <form method="post" action="{% url 'email_center' %}">{% csrf_token %}
+            <input type="hidden" name="action" value="thread_note"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="conversation_id" value="{{ active_thread.pk }}">
+            <label>Visible only to authorised staff<textarea name="note" rows="3" maxlength="4000" required placeholder="Follow-up, handover, or internal instructions"></textarea></label>
+            <button class="mail-button secondary" type="submit">Save private note</button>
+          </form>
+        </details>
+      </div>{% else %}<div class="mail-readonly">You can read this conversation. Ask an administrator for reply access to respond.</div>{% endif %}
+    {% else %}
+      <div class="mail-thread-placeholder"><span aria-hidden="true">✉</span><h3>Select a conversation</h3>
+      <p>Choose a customer on the left to read messages, view staff activity, and respond where authorised.</p></div>
+    {% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% if email_section == 'history' and selected %}
+  <section class="mail-section-heading"><div><p class="mail-eyebrow">MESSAGE RECORDS</p><h2>Mail history</h2><p>Find incoming and outgoing emails, approvals, and delivery issues for {{ selected.address }}.</p></div>
+    <a class="mail-button subtle" href="{% url 'email_center' %}?mailbox={{ selected.pk }}">← Return to inbox</a></section>
+  <section class="mail-quick-stats" aria-label="History summary">
+    <a href="?mailbox={{ selected.pk }}&direction=inbound"><span>Received</span><strong>{{ inbox_count }}</strong></a>
+    <a href="?mailbox={{ selected.pk }}&direction=outbound"><span>Outgoing records</span><strong>{{ sent_count }}</strong></a>
+    <a href="?mailbox={{ selected.pk }}&status=draft"><span>Awaiting review</span><strong>{{ draft_count }}</strong></a>
+    <a href="?mailbox={{ selected.pk }}&status=attention"><span>Delivery attention</span><strong>{{ attention_count }}</strong></a>
+  </section>
+  <section class="mail-history-panel">
+    <header class="mail-pane-head"><div><h3>All correspondence</h3><p>{{ letters.paginator.count }} matching records</p></div></header>
+    <form method="get" action="{% url 'email_history' %}" class="mail-history-filters" role="search">
+      <input type="hidden" name="mailbox" value="{{ selected.pk }}">
+      <label>Search<input name="q" type="search" value="{{ mail_query }}" maxlength="100" placeholder="Subject, address or message text"></label>
+      <label>Direction<select name="direction"><option value="all"{% if mail_direction == 'all' %} selected{% endif %}>All directions</option>
+        <option value="inbound"{% if mail_direction == 'inbound' %} selected{% endif %}>Received</option>
+        <option value="outbound"{% if mail_direction == 'outbound' %} selected{% endif %}>Outgoing</option></select></label>
+      <label>Status<select name="status">
+        <option value="all"{% if mail_status == 'all' %} selected{% endif %}>All statuses</option>
+        <option value="received"{% if mail_status == 'received' %} selected{% endif %}>Received</option>
+        <option value="draft"{% if mail_status == 'draft' %} selected{% endif %}>Awaiting approval</option>
+        <option value="queued"{% if mail_status == 'queued' %} selected{% endif %}>Queued</option>
+        <option value="submitted"{% if mail_status == 'submitted' %} selected{% endif %}>Provider accepted</option>
+        <option value="internal"{% if mail_status == 'internal' %} selected{% endif %}>Internal delivery</option>
+        <option value="attention"{% if mail_status == 'attention' %} selected{% endif %}>Failed or needs review</option>
+        <option value="failed"{% if mail_status == 'failed' %} selected{% endif %}>Failed</option>
+        <option value="uncertain"{% if mail_status == 'uncertain' %} selected{% endif %}>Needs review</option>
+        <option value="suppressed"{% if mail_status == 'suppressed' %} selected{% endif %}>Suppressed</option>
+      </select></label>
+      <button class="mail-button secondary" type="submit">Search history</button>
+      {% if mail_query or mail_direction != 'all' or mail_status != 'all' %}<a class="mail-clear" href="?mailbox={{ selected.pk }}">Clear</a>{% endif %}
+    </form>
+    <div class="mail-history-list">
+    {% for letter in letters %}
+      <article class="mail-history-item">
+        <div class="mail-record-head"><div><span class="mail-direction">{% if letter.direction == 'inbound' %}↙ Incoming{% else %}↗ Outgoing{% endif %}</span>
+          <h4>{{ letter.subject|default:"(No subject)" }}</h4>
+          <p>{% if letter.direction == 'inbound' %}From {{ letter.from_address }}{% else %}To {{ letter.to_address }}{% endif %}</p></div>
+          <span class="mail-status state-{{ letter.status }}">{{ letter.get_status_display }}</span></div>
+        <div class="mail-record-meta"><span>{{ letter.created_at|date:"j M Y, H:i" }}</span>
+          <span>{% if letter.source_key %}System automation{% elif letter.created_by %}Sent by {{ letter.created_by.get_full_name|default:letter.created_by.username }}{% else %}External correspondent{% endif %}</span>
+          {% if letter.approved_by %}<span>Approved by {{ letter.approved_by.get_full_name|default:letter.approved_by.username }}</span>{% endif %}
+          {% if letter.submitted_at %}<span>Brevo accepted at {{ letter.submitted_at|date:"j M, H:i" }}</span>{% endif %}
+          {% if letter.direction == 'outbound' and letter.delivery_status != 'unknown' %}<span>Provider delivery: {{ letter.get_delivery_status_display }}</span>{% endif %}
+        </div>
+        <details class="mail-record-detail"><summary>View email and technical details <span aria-hidden="true">⌄</span></summary>
+          <div class="mail-record-addresses"><span><b>From</b>{{ letter.from_address }}</span><span><b>To</b>{{ letter.to_address }}</span>
+            {% if letter.message_id %}<span><b>Message ID</b>{{ letter.message_id }}</span>{% endif %}</div>
+          {% if letter.cc_addresses %}<p class="mail-help">CC: {{ letter.cc_addresses }}</p>{% endif %}
+          {% if letter.bcc_addresses and letter.created_by_id == request.user.pk or letter.bcc_addresses and is_mail_owner %}<p class="mail-help">BCC (private): {{ letter.bcc_addresses }}</p>{% endif %}
+          <div class="mail-record-body">{{ letter.body_text|linebreaksbr }}</div>
+          {% if letter.last_error %}<p class="mail-error">{{ letter.last_error }}</p>{% endif %}
+          {% if letter.had_attachments %}<p class="mail-help">Attachments are not stored in the Email Centre.</p>{% endif %}
+        </details>
+        {% if letter.status == 'draft' %}
+        {% if selected.pk in writable_ids and is_mail_owner or selected.pk in writable_ids and perms.core.operate_finance %}
+          <form method="post" action="{% url 'email_history' %}" class="mail-record-action">{% csrf_token %}
+          <input type="hidden" name="action" value="approve_draft"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="letter_id" value="{{ letter.pk }}">
+          <button type="submit" class="mail-button secondary">Review and queue</button></form>
+        {% endif %}{% endif %}
+        {% if letter.direction == 'inbound' and selected.pk in writable_ids %}
+        <a class="mail-button subtle" href="{% url 'email_drafts' %}?forward={{ letter.pk }}">↗ Forward as draft</a>
+        {% endif %}
+        {% if letter.direction == 'inbound' and selected.pk in writable_ids %}
+        <details class="mail-record-reply"><summary>↶ Reply to this message</summary>
+          <form method="post" action="{% url 'email_history' %}">{% csrf_token %}
+            <input type="hidden" name="action" value="reply"><input type="hidden" name="mailbox_id" value="{{ selected.pk }}"><input type="hidden" name="reply_to" value="{{ letter.pk }}">
+            <label>Reply to {{ letter.from_address }}<textarea name="body" maxlength="32000" rows="4" required></textarea></label>
+            <details class="mail-private-note"><summary>＋ Add CC or BCC</summary>
+              <div class="mail-fields two"><label>CC<input name="cc" maxlength="1600"></label>
+                <label>BCC<input name="bcc" maxlength="1600"></label></div>
+            </details>
+            <button class="mail-button primary" type="submit">Queue reply</button>
+          </form>
+        </details>{% endif %}
+      </article>
+    {% empty %}<div class="mail-queue-empty"><strong>No matching records</strong><p>Try clearing the search or changing your filters.</p></div>{% endfor %}
+    </div>
+    {% if letters.paginator.num_pages > 1 %}
+    <nav class="mail-pagination" aria-label="History pages">
+      {% if letters.has_previous %}<a class="mail-button subtle" href="?mailbox={{ selected.pk }}&q={{ mail_query|urlencode }}&direction={{ mail_direction }}&status={{ mail_status }}&page={{ letters.previous_page_number }}">← Previous</a>{% endif %}
+      <span>Page {{ letters.number }} of {{ letters.paginator.num_pages }}</span>
+      {% if letters.has_next %}<a class="mail-button subtle" href="?mailbox={{ selected.pk }}&q={{ mail_query|urlencode }}&direction={{ mail_direction }}&status={{ mail_status }}&page={{ letters.next_page_number }}">Next →</a>{% endif %}
+    </nav>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if email_section == 'automations' and is_mail_owner %}
+  <section class="mail-section-heading"><div><p class="mail-eyebrow">OWNER CONTROLS</p><h2>Automations & delivery</h2>
+    <p>Manage customer notices, review sending activity, and control who receives automated communication.</p></div></section>
+  <section class="mail-quick-stats" aria-label="Email sending summary">
+    <div><span>Recipients attempted today</span><strong>{{ daily_email_usage.attempted }}<small> / {{ daily_email_usage.limit }}</small></strong></div>
+    <div><span>Provider accepted</span><strong>{{ daily_email_usage.accepted }}</strong></div>
+    <div><span>Allowance remaining</span><strong>{{ daily_email_usage.remaining }}</strong></div>
+    <div><span>Queued or retrying</span><strong>{{ email_queued_count }}</strong></div>
+  </section>
+  <div class="mail-card-grid">
+    <article class="mail-feature-card"><span class="mail-feature-icon">◇</span><h3>Debt reminder rules</h3>
+      <p>Use the existing Debt Settings for due dates, overdue reminders, consent and approval mode. Nothing here overrides your policies.</p>
+      <a class="mail-button secondary" href="{% url 'debt_settings' %}">Open Debt Settings ↗</a></article>
+    <article class="mail-feature-card"><span class="mail-feature-icon">✉</span><h3>Email campaigns</h3>
+      <p>Create and manage promotional mail only for customers who explicitly opted in.</p>
+      <a class="mail-button secondary" href="{% url 'email_campaigns' %}">Campaigns & allowance ↗</a></article>
+    <article class="mail-feature-card"><span class="mail-feature-icon">▤</span><h3>Delivery investigations</h3>
+      <p>Review failed, uncertain, suppressed and queued messages without accidentally sending a duplicate financial receipt.</p>
+      <a class="mail-button secondary" href="{% url 'email_history' %}?status=attention">Review delivery issues ↗</a></article>
+  </div>
+  <section class="mail-history-panel"><header class="mail-pane-head"><div><h3>Automated notification activity</h3>
+    <p>Recent receipts, order notices and system-triggered emails</p></div></header>
+    <div class="mail-table-scroll"><table class="mail-table"><thead><tr><th>Time</th><th>Message</th><th>Recipient</th><th>Status</th><th>Attempts</th></tr></thead>
+    <tbody>{% for notice in system_notice_history %}
+      <tr><td>{{ notice.created_at|date:"j M, H:i" }}</td><td><strong>{{ notice.subject }}</strong><small>{{ notice.event_key|truncatechars:50 }}</small></td>
+      <td>{{ notice.email }}</td><td>{{ notice.get_status_display }}</td><td>{{ notice.attempts }}</td></tr>
+      {% empty %}<tr><td colspan="5">No automated email activity recorded yet.</td></tr>{% endfor %}</tbody></table></div>
+    <p class="mail-help">Provider acceptance is not proof of inbox delivery. One-time security codes are not displayed.</p>
+  </section>
+  {% endif %}
+
+  {% if email_section == 'team' and is_mail_owner %}
+  <section class="mail-section-heading"><div><p class="mail-eyebrow">OWNER CONTROLS</p><h2>Staff mailbox access</h2>
+    <p>Give one employee access to several department inboxes at once. Reading and replying are separate privileges.</p></div></section>
+  <div class="mail-team-layout">
+    <section class="mail-history-panel">
+      <header class="mail-pane-head"><div><h3>Assign mailboxes</h3><p>Choose a staff member, then tick the access level for every department.</p></div></header>
+      {% if email_selected_staff %}
+      <form method="get" action="{% url 'email_team' %}" class="mail-staff-picker">
+        <label>Staff member<select name="staff" required>
+          {% for staff in staff_users %}<option value="{{ staff.pk }}"{% if staff.pk == email_selected_staff.pk %} selected{% endif %}>{{ staff.get_full_name|default:staff.username }} ({{ staff.username }})</option>{% endfor %}
+        </select></label><button class="mail-button secondary" type="submit">Load permissions</button>
+      </form>
+      <div class="mail-staff-context"><span class="mail-avatar">{{ email_selected_staff.username|first|upper }}</span>
+        <div><strong>{{ email_selected_staff.get_full_name|default:email_selected_staff.username }}</strong>
+        <p>Permissions follow this employee's staff role. {% if not email_staff_can_reply %}This role cannot send email yet; assign the email sending permission before enabling Reply.{% else %}This role can read and reply to authorised department mailboxes.{% endif %}</p></div></div>
+      <form method="post" action="{% url 'email_team' %}" class="mail-bulk-form">{% csrf_token %}
+        <input type="hidden" name="action" value="bulk_assign"><input type="hidden" name="user_id" value="{{ email_selected_staff.pk }}">
+        <div class="mail-permission-tools">
+          <button type="button" class="mail-button subtle" data-mail-action="read-all">Select all read</button>
+          <button type="button" class="mail-button subtle" data-mail-action="clear">Clear selections</button>
+          <span class="mail-permission-count" aria-live="polite" data-permission-count></span>
+        </div>
+        <div class="mail-permission-head"><strong>Department mailbox</strong><strong>Read</strong><strong>Reply</strong></div>
+        {% for row in email_permission_rows %}
+        <div class="mail-permission-row">
+          <div class="mail-permission-name"><span class="mail-mailbox-initial">{{ row.mailbox.label|first|upper }}</span>
+            <span><strong>{{ row.mailbox.label }}</strong><small>{{ row.mailbox.address }}{% if row.mailbox.branch %} · {{ row.mailbox.branch.name }}{% endif %}{% if not row.assignable %} · Branch access required{% endif %}</small></span>
+          </div>
+          <label class="mail-check"><input type="checkbox" name="read_mailboxes" value="{{ row.mailbox.pk }}"{% if row.can_read %} checked{% endif %}{% if not row.assignable %} disabled{% endif %}><span class="sr-only">Read {{ row.mailbox.address }}</span></label>
+          <label class="mail-check"><input type="checkbox" name="send_mailboxes" value="{{ row.mailbox.pk }}"{% if row.can_send %} checked{% endif %}{% if not row.assignable or not email_staff_can_reply %} disabled{% endif %}><span class="sr-only">Reply from {{ row.mailbox.address }}</span></label>
+        </div>
+        {% endfor %}
+        <p class="mail-help">Tick Reply to allow reading and responding. Mailboxes outside this employee's branches cannot be selected. Saving replaces this employee's active mailbox assignments; other employees are unaffected. Unticking all removes access.</p>
+        <label class="mail-confirm"><input type="checkbox" name="confirm_replace" value="yes" required>
+          <span>I have reviewed the selected mailboxes for this staff member.</span></label>
+        <div class="mail-form-foot"><span>Changes are recorded in the audit history.</span>
+          <button type="submit" class="mail-button primary">Save all mailbox permissions</button></div>
+      </form>
+      {% else %}
+      <div class="mail-queue-empty"><h3>No active staff accounts</h3><p>Create staff accounts first, then return to assign their inboxes.</p></div>
+      {% endif %}
+    </section>
+    <aside class="mail-team-aside">
+      <article class="mail-feature-card"><h3>Permission guide</h3>
+        <div class="mail-legend"><strong>Read</strong><p>Can view messages and customer history in the selected mailbox, without replying.</p></div>
+        <div class="mail-legend"><strong>Reply</strong><p>Can send and respond in the selected mailbox if their staff role also permits email sending.</p></div>
+        <div class="mail-legend"><strong>Branches</strong><p>Access remains limited to the branches the employee is authorised to serve.</p></div>
+      </article>
+      <article class="mail-feature-card"><h3>Create a departmental mailbox</h3><p>Add a new address for a team. You must also connect its Cloudflare inbound routing before it can receive customer mail.</p>
+        <form method="post" action="{% url 'email_team' %}">{% csrf_token %}
+          <input type="hidden" name="action" value="new_mailbox">
+          <label>Department name<input name="label" maxlength="100" placeholder="Procurement" required></label>
+          <label>Email address<input name="address" type="email" maxlength="254" placeholder="procurement@kofadimpex.com" required></label>
+          <button type="submit" class="mail-button secondary">Create mailbox</button>
+        </form></article>
+    </aside>
+  </div>
+  <section class="mail-history-panel mail-current-access"><header class="mail-pane-head"><div><h3>Current access overview</h3><p>Existing grants across all KOFAD departmental mailboxes.</p></div></header>
+    <div class="mail-table-scroll"><table class="mail-table"><thead><tr><th>Staff account</th><th>Department</th><th>Rights</th></tr></thead><tbody>
+      {% for grant in memberships %}<tr><td>{{ grant.user.get_full_name|default:grant.user.username }}</td><td>{{ grant.mailbox.address }}</td>
+        <td>{% if grant.can_read %}Read{% endif %}{% if grant.can_send %} / Reply{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="3">No mailbox grants recorded yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

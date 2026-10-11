@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/settings/online-payments/">← Online payments</a><a class="button secondary" href="/online-orders/{{ attempt.order_id }}/">Open order</a></div>{% endblock %}
+{% block content %}
+<section class="panel">
+  <p class="eyebrow">PRIVATE · HUBTEL CERTIFICATION</p>
+  <h2>Original callback and status-check responses</h2>
+  <p>Client reference: <code style="overflow-wrap:anywhere">{{ attempt.reference }}</code></p>
+  <p>Order: {{ attempt.order.public_reference }} · GHS {{ attempt.amount|floatformat:2 }} · {{ attempt.status|title }}</p>
+  <p class="notice">Each download contains the original Hubtel JSON body (not a reconstructed example). Status checks include failed and rate-limited responses. These records are encrypted on the server; download only to a trusted device and share privately with Hubtel. No API credentials or authorization headers are stored.</p>
+</section>
+<section class="panel">
+  <h2>Saved evidence</h2>
+  <div class="payment-attempt-list">
+  {% for item in entries %}
+    <article>
+      <div>
+        <strong>{% if item.direction == "callback" %}Incoming callback{% else %}Status-check response{% endif %}</strong>
+        <small>{{ item.created_at|date:"d M Y, H:i:s" }} GMT · HTTP {{ item.http_status|default:"Unknown" }}</small>
+        <small>SHA-256: <code>{{ item.body_sha256 }}</code></small>
+      </div>
+      <div><a class="button secondary" href="{% url 'hubtel_evidence_download' item.pk %}">Download original JSON</a></div>
+    </article>
+  {% empty %}
+    <p class="empty">No captured callback or status-check response yet. New test payments will appear here after Hubtel sends them.</p>
+  {% endfor %}
+  </div>
+  {% if entries.has_other_pages %}
+  <nav class="actions">
+  {% if entries.has_previous %}<a class="button secondary" href="?page={{ entries.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ entries.number }} of {{ entries.paginator.num_pages }}</span>
+  {% if entries.has_next %}<a class="button secondary" href="?page={{ entries.next_page_number }}">Next</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}

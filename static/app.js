@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const mediaDark = matchMedia("(prefers-color-scheme: dark)");
   function themePreference() {
-    try { return localStorage.getItem("kofad-theme") || "light"; } catch (_) { return "light"; }
+    try { return (window.KofadPrivacy ? window.KofadPrivacy.getPreference("kofad-theme", "light") : (localStorage.getItem("kofad-theme") || "light")); } catch (_) { return "light"; }
   }
   function applyTheme(preference) {
     const resolved = preference === "system" ? (mediaDark.matches ? "dark" : "light") : preference;
@@ -27,23 +27,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (themePreference() === "system") applyTheme("system");
   });
   document.querySelectorAll("[data-theme-choice]").forEach(button => button.addEventListener("click", () => {
-    try { localStorage.setItem("kofad-theme", button.dataset.themeChoice); } catch (_) {}
+    try { window.KofadPrivacy?.setPreference("kofad-theme", button.dataset.themeChoice); } catch (_) {}
     applyTheme(button.dataset.themeChoice);
   }));
   document.querySelectorAll("[data-theme-toggle]").forEach(button => button.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    try { localStorage.setItem("kofad-theme", next); } catch (_) {}
+    try { window.KofadPrivacy?.setPreference("kofad-theme", next); } catch (_) {}
     applyTheme(next);
   }));
 
   const soundToggles = document.querySelectorAll("[data-welcome-sound]");
   let soundEnabled = true;
-  try { soundEnabled = localStorage.getItem("kofad-welcome-sound") !== "off"; } catch (_) {}
+  try { soundEnabled = (window.KofadPrivacy ? window.KofadPrivacy.getPreference("kofad-welcome-sound", "on") : localStorage.getItem("kofad-welcome-sound")) !== "off"; } catch (_) {}
   soundToggles.forEach(toggle => {
     toggle.checked = soundEnabled;
     toggle.addEventListener("change", () => {
       soundEnabled = toggle.checked;
-      try { localStorage.setItem("kofad-welcome-sound", soundEnabled ? "on" : "off"); } catch (_) {}
+      try { window.KofadPrivacy?.setPreference("kofad-welcome-sound", soundEnabled ? "on" : "off"); } catch (_) {}
     });
   });
   function welcomeChime() {

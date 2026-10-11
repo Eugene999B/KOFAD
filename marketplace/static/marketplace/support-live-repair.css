@@ -1,0 +1,57 @@
+/* KOFAD support mobile chat creation fix.
+   Legacy support-v3 hid the entire composer when there was no selected thread.
+   This stylesheet is intentionally placed last on the customer support page. */
+@media (max-width:680px) {
+  .market-body .support-v3-page .support-v3-customer-layout:not(.has-thread) {
+    display:flex!important;
+    flex-direction:column!important;
+    height:auto!important;
+    min-height:0!important;
+    overflow:visible!important;
+  }
+  .market-body .support-v3-page .support-v3-customer-layout:not(.has-thread) .support-thread-list-v3 {
+    display:block!important;
+    flex:none!important;
+    height:auto!important;
+    max-height:172px!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    border-right:0!important;
+    border-bottom:1px solid var(--v2-line,#dce6eb)!important;
+  }
+  .market-body .support-v3-page .support-v3-customer-layout:not(.has-thread) .support-conversation-v3 {
+    display:block!important;
+    flex:auto!important;
+    width:100%!important;
+    height:auto!important;
+    min-height:430px!important;
+    overflow:visible!important;
+  }
+  .market-body .support-v3-page .support-v3-customer-layout:not(.has-thread) .support-new-panel-v3 {
+    display:block!important;
+    height:auto!important;
+    min-height:430px!important;
+    overflow:visible!important;
+    padding:22px 18px 28px!important;
+  }
+  .market-body .support-v3-page .support-v3-customer-layout.has-thread {
+    height:calc(100dvh - 230px)!important;
+    min-height:430px!important;
+    overflow:hidden!important;
+  }
+  .market-body .support-v3-page .support-v3-customer-layout.has-thread .support-thread-list-v3 {
+    display:none!important;
+  }
+  .market-body .support-v3-page .support-v3-customer-layout.has-thread .support-conversation-v3 {
+    display:grid!important;
+    height:100%!important;
+    overflow:hidden!important;
+  }
+}
+@media (max-width:420px) {
+  .market-body .support-v3-page .support-v3-customer-head { flex-wrap:wrap;gap:9px!important; }
+  .market-body .support-v3-page .support-v3-customer-layout:not(.has-thread) .support-new-panel-v3 { padding:20px 14px 24px!important; }
+  .market-body .support-v3-page .support-new-panel-v3 :is(input,textarea) { box-sizing:border-box;max-width:100%;font-size:16px; }
+  .market-body .support-v3-page .support-new-panel-v3 .market-button { width:100%;min-height:45px; }
+}
+.market-body .support-v3-page .support-new-panel-v3 form button:disabled { opacity:.65;cursor:wait; }

@@ -27,6 +27,11 @@
   let momoPollTimer = null;
 
   const storageKey = "kofad-cart:" + root.dataset.user + ":" + root.dataset.branch + ":" + root.dataset.kind;
+  // Leaving the status screen must not trap the cashier in an old cart;
+  // the original charge remains in the database and worker reconciliation.
+  if (new URLSearchParams(location.search).get("new") === "1") {
+    try { sessionStorage.removeItem(storageKey); } catch (_) {}
+  }
   try {
     restoredState = JSON.parse(sessionStorage.getItem(storageKey) || "null");
     if (restoredState && Array.isArray(restoredState.cart) && restoredState.cart.length <= 100) {
@@ -55,6 +60,10 @@
   const partyInput = document.querySelector("#party");
   const customerSearch = document.querySelector("#customer-search");
   const customerResults = document.querySelector("#customer-results");
+  const customerSearchWrap = document.querySelector("#customer-search-wrap");
+  const customerChoiceButtons = [...document.querySelectorAll("[data-customer-mode]")];
+  const walkinExplanation = document.querySelector("#walkin-explanation");
+  const customerDuplicateAlert = document.querySelector("#customer-duplicate-alert");
   const selectedCustomerBox = document.querySelector("#selected-customer");
   const newCustomerFields = document.querySelector("#new-customer-fields");
   const newCustomerToggle = document.querySelector("#new-customer-toggle");
@@ -75,6 +84,8 @@
   const paymentPlan = document.querySelector("#payment-plan");
   const creditFields = document.querySelector("#credit-fields");
   const dueDate = document.querySelector("#due-date");
+  const creditCustomerEmail = document.querySelector("#credit-customer-email");
+  const creditDebtEmailConsent = document.querySelector("#credit-debt-email-consent");
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
   const paystackMomoPanel = document.querySelector("#paystack-momo-panel");
@@ -85,6 +96,7 @@
   const completeButton = document.querySelector("#complete");
   const completeSaleHint = document.querySelector("#complete-sale-hint");
   const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
+  const momoGateway = root.dataset.momoGateway === "hubtel" ? "hubtel" : "paystack";
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
@@ -122,10 +134,17 @@
     if (!Number.isSafeInteger(points) || points < 0 || points > 10000) throw new Error("Enter a percentage from 0 to 100.");
     return points;
   };
+  // Server-managed online percentage is given only to the authorised POS.
+  // Monetary calculations use integer pesewas; the markup is applied once to
+  // the effective unit, AFTER an allowed discount, exactly as on the server.
+  const onlineMarkupThousandths = Math.round(Number(root.dataset.onlineMarkupPercent || "0") * 1000);
   const effectiveUnit = line => {
     const price = cents(line.price);
     const discount = percentBasisPoints(line.discount || "0");
-    return Math.round(price * (10000 - discount) / 10000);
+    const discounted = Math.round(price * (10000 - discount) / 10000);
+    return !purchase && directMomoSelected() && onlineMarkupThousandths > 0
+      ? Math.round(discounted * (100000 + onlineMarkupThousandths) / 100000)
+      : discounted;
   };
   const fail = msg => {
     errorBox.textContent = msg;
@@ -205,6 +224,8 @@
         paystackMomoEmail: paystackMomoEmail?.value || "",
         paymentPlan: paymentPlan?.value || "",
         dueDate: dueDate?.value || "",
+        creditCustomerEmail: creditCustomerEmail?.value || "",
+        creditDebtEmailConsent: Boolean(creditDebtEmailConsent?.checked),
         customerConsent: Boolean(customerConsent?.checked),
         customerWhatsApp: Boolean(customerWhatsApp?.checked),
         purchaseReference: purchaseReference?.value || "",
@@ -224,11 +245,16 @@
     if (!cart.length) container.append(el("div", "Choose a product to start.", "empty cart-empty"));
     cart.forEach((line, index) => {
       const row = el("div", undefined, "cart-line");
-      const top = el("div", undefined, "section-heading");
-      top.append(el("strong", line.name));
-      const remove = el("button", "×", "text-button");
+      const top = el("div", undefined, "cart-line-header");
+      const title = el("strong", line.name, "cart-product-name");
+      top.append(title);
+      const remove = el("button", "Remove", "cart-remove-button");
       remove.type = "button";
-      remove.setAttribute("aria-label", "Remove " + line.name);
+      remove.setAttribute("aria-label", "Remove " + line.name + " from sale");
+      remove.title = "Remove " + line.name;
+      const removeSymbol = el("span", "✕", "cart-remove-symbol");
+      removeSymbol.setAttribute("aria-hidden", "true");
+      remove.prepend(removeSymbol);
       remove.addEventListener("click", () => {
         changed();
         cart.splice(index, 1);
@@ -237,7 +263,7 @@
       top.append(remove);
       row.append(
         top,
-        el("small", modeLabel(line) + " · " + line.factor + " base unit" + (line.factor === 1 ? "" : "s") + " each", "muted")
+        el("small", modeLabel(line) + " · " + line.factor + " base unit" + (line.factor === 1 ? "" : "s") + " each", "cart-line-meta muted")
       );
       const controls = el("div", undefined, "cart-controls");
       const quantity = el("input");
@@ -257,11 +283,13 @@
         line.quantity = n;
         render();
       });
-      controls.append(quantity);
+      const quantityWrap = el("label", undefined, "cart-quantity-field");
+      quantityWrap.append(el("span", "Qty"), quantity);
+      controls.append(quantityWrap);
 
       if (purchase || allowPriceOverrides) {
         const priceWrap = el("label", undefined, "cart-control-field");
-        priceWrap.append(el("small", purchase ? "Purchase price" : "Selling price"));
+        priceWrap.append(el("small", purchase ? "Purchase price" : "Base selling price"));
         const price = el("input");
         price.type = "number";
         price.min = "0";
@@ -312,7 +340,9 @@
         discountWrap.append(discount);
         controls.append(discountWrap);
       }
-      controls.append(el("strong", formatted(effectiveUnit(line) * line.quantity)));
+      const lineTotal = el("div", undefined, "cart-line-value");
+      lineTotal.append(el("span", "Line total"), el("strong", root.dataset.currency + " " + formatted(effectiveUnit(line) * line.quantity)));
+      controls.append(lineTotal);
       row.append(controls);
       container.append(row);
     });
@@ -686,41 +716,69 @@
   }
 
 
+  function setCustomerMode(mode) {
+    customerChoiceButtons.forEach(button => {
+      const active = button.dataset.customerMode === mode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    customerSearchWrap?.classList.toggle("hidden", mode !== "saved");
+    walkinExplanation?.classList.toggle("hidden", mode !== "walkin");
+    if (mode !== "new") customerDuplicateAlert?.classList.add("hidden");
+  }
+
   function showSelectedCustomer(customer) {
+    setCustomerMode("saved");
     selectedCustomer = customer;
     newCustomerMode = false;
     if (partyInput) partyInput.value = customer.id;
     selectedCustomerBox?.classList.remove("hidden");
     if (selectedCustomerBox) {
+      const debtAmount = Number(customer.outstanding || 0);
       selectedCustomerBox.replaceChildren();
       selectedCustomerBox.append(
         el("strong", customer.name),
         el("small", customer.phone + " · Outstanding " + root.dataset.currency + " " + customer.outstanding, "muted")
       );
+      if (Number.isFinite(debtAmount) && debtAmount > 0) {
+        selectedCustomerBox.append(el("strong", "Existing debt account — check credit terms before adding more debt.", "customer-debt-warning"));
+      }
     }
     customerResults?.replaceChildren();
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.add("hidden");
     clearCustomerButton?.classList.remove("hidden");
     if (customerSearch) customerSearch.value = "";
-    if (paystackMomoPhone && customer.phone) paystackMomoPhone.value = customer.phone;
-    if (paystackMomoEmail && customer.email) paystackMomoEmail.value = customer.email;
+    if (paystackMomoPhone && !momoReference) paystackMomoPhone.value = customer.phone || "";
+    if (paystackMomoEmail && !momoReference) paystackMomoEmail.value = customer.email || "";
+    if (creditCustomerEmail) creditCustomerEmail.value = customer.email || "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = customer.debt_email_opt_in === true;
     changed();
     updateConsentAvailability();
     persist();
   }
 
   function clearCustomer() {
+    setCustomerMode("walkin");
     selectedCustomer = null;
     newCustomerMode = false;
     if (partyInput) partyInput.value = "";
     selectedCustomerBox?.classList.add("hidden");
     selectedCustomerBox?.replaceChildren();
     customerResults?.replaceChildren();
+    if (customerSearch) customerSearch.value = "";
     newCustomerFields?.classList.add("hidden");
     newCustomerToggle?.classList.remove("hidden");
     clearCustomerButton?.classList.add("hidden");
     if (customerEmail) customerEmail.value = "";
+    if (customerName) customerName.value = "";
+    if (customerPhone) customerPhone.value = "";
+    // Never carry a previous customer's wallet or email into a new sale.
+    if (!momoReference && paystackMomoPhone) paystackMomoPhone.value = "";
+    if (!momoReference && paystackMomoEmail) paystackMomoEmail.value = "";
+    customerDuplicateAlert?.classList.add("hidden");
+    if (creditCustomerEmail) creditCustomerEmail.value = "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
     changed();
     updateConsentAvailability();
     persist();
@@ -728,6 +786,7 @@
 
   function beginNewCustomer() {
     clearCustomer();
+    setCustomerMode("new");
     newCustomerMode = true;
     newCustomerFields?.classList.remove("hidden");
     newCustomerToggle?.classList.add("hidden");
@@ -769,7 +828,13 @@
     }, 180);
   });
   newCustomerToggle?.addEventListener("click", beginNewCustomer);
-  clearCustomerButton?.addEventListener("click", clearCustomer);
+  clearCustomerButton?.addEventListener("click", () => { clearCustomer(); });
+  customerChoiceButtons.forEach(button => button.addEventListener("click", () => {
+    const mode = button.dataset.customerMode;
+    if (mode === "new") beginNewCustomer();
+    else if (mode === "saved") { clearCustomer(); setCustomerMode("saved"); customerSearch?.focus(); }
+    else clearCustomer();
+  }));
   function showSelectedSupplier(supplier) {
     selectedSupplier = supplier;
     if (partyInput) partyInput.value = supplier.id;
@@ -846,12 +911,65 @@
     // A customer lookup must never overwrite the cashier\u0027s choice.
   }
 
+  creditCustomerEmail?.addEventListener("input", () => { changed(); persist(); });
+  creditDebtEmailConsent?.addEventListener("change", () => { changed(); persist(); });
   customerConsent?.addEventListener("change", () => {
     changed();
     persist();
   });
   customerWhatsApp?.addEventListener("change", () => { changed(); persist(); });
   customerName?.addEventListener("input", updateConsentAvailability);
+  let duplicateLookupSequence = 0;
+  let duplicateLookupTimer = null;
+  async function checkNewCustomerDuplicate() {
+    if (!newCustomerMode || !customerDuplicateAlert) return [];
+    const name = customerName?.value.trim() || "";
+    const phone = customerPhone?.value.trim() || "";
+    if (name.length < 2 && !phone) { customerDuplicateAlert.classList.add("hidden"); return []; }
+    const sequence = ++duplicateLookupSequence;
+    const response = await fetch("/api/customers/check-duplicate/?name=" +
+      encodeURIComponent(name) + "&phone=" + encodeURIComponent(phone), {
+        credentials: "same-origin", cache: "no-store", headers: {Accept:"application/json"}
+      });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Could not check saved customers. Try again before completing the sale.");
+    }
+    const result = await response.json();
+    if (sequence !== duplicateLookupSequence || !newCustomerMode) return [];
+    customerDuplicateAlert.replaceChildren();
+    if (!result.duplicate) { customerDuplicateAlert.classList.add("hidden"); return []; }
+    customerDuplicateAlert.classList.remove("hidden");
+    customerDuplicateAlert.append(
+      el("strong", "Existing customer found — don't create a duplicate."),
+      el("p", "Confirm their identity, then choose the saved record. If this is a different person with the same name, ask a manager to review.")
+    );
+    for (const match of result.matches) {
+      const button = el("button", undefined, "customer-duplicate-match");
+      button.type = "button";
+      button.append(
+        el("strong", "Use existing: " + match.name),
+        el("small", match.phone + " · Outstanding " + root.dataset.currency + " " + match.outstanding +
+          (match.phone_match ? " · matching number" : " · matching name"), "muted")
+      );
+      button.addEventListener("click", () => showSelectedCustomer(match));
+      customerDuplicateAlert.append(button);
+    }
+    return result.matches;
+  }
+  for (const field of [customerName, customerPhone]) {
+    field?.addEventListener("input", () => {
+      clearTimeout(duplicateLookupTimer);
+      duplicateLookupSequence++;
+      if (newCustomerMode) duplicateLookupTimer = setTimeout(() => {
+        checkNewCustomerDuplicate().catch(error => {
+          customerDuplicateAlert?.classList.remove("hidden");
+          customerDuplicateAlert?.replaceChildren(el("strong", error.message));
+        });
+      }, 350);
+    });
+  }
+
   customerPhone?.addEventListener("input", () => {
     updateConsentAvailability();
     if (paystackMomoPhone && !momoReference) paystackMomoPhone.value = customerPhone.value;
@@ -881,13 +999,25 @@
   }
 
   function directMomoSelected() {
-    return !purchase
-      && selectedPaymentMethod === "momo"
-      && (paymentPlan?.value || "full") === "full";
+    return !purchase && selectedPaymentMethod === "momo"
+      && ((paymentPlan?.value || "full") === "full"
+          || (momoGateway === "paystack" && paymentPlan?.value === "part"));
   }
 
   function syncPaystackMomoPanel() {
     const active = directMomoSelected();
+    const deposit = document.querySelector("#momo-deposit-amount");
+    const balance = document.querySelector("#momo-balance-amount");
+    if (deposit && balance) {
+      try {
+        const depositCents = cents(document.querySelector("#pay-momo")?.value || "0");
+        deposit.textContent = root.dataset.currency + " " + formatted(depositCents);
+        balance.textContent = root.dataset.currency + " " + formatted(Math.max(0, total() - depositCents));
+      } catch (_) {
+        deposit.textContent = "Check amount";
+        balance.textContent = "—";
+      }
+    }
     paystackMomoPanel?.classList.toggle("hidden", !active);
     if (active) {
       if (paystackMomoPhone && !paystackMomoPhone.value) {
@@ -899,12 +1029,14 @@
     }
     if (completeButton && !purchase) {
       completeButton.textContent = active && paystackMomoReady
-        ? "Send MoMo Approval Request"
+        ? (momoGateway === "hubtel" ? "Create secure Hubtel checkout" : "Send MoMo Approval Request")
         : "Complete Sale & Generate Receipt";
     }
     if (completeSaleHint && !purchase) {
       completeSaleHint.textContent = active && paystackMomoReady
-        ? "KOFAD will wait for Paystack to verify the payment before posting stock, recording the sale or issuing the receipt."
+        ? (momoGateway === "hubtel"
+          ? "The customer pays on Hubtel's secure checkout. KOFAD waits for independently verified payment before posting the sale and issuing a receipt."
+          : "KOFAD verifies the MoMo deposit with Paystack before recording the sale and any remaining customer debt. The receipt shows paid and balance due.")
         : "One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.";
     }
   }
@@ -928,6 +1060,9 @@
       }
       syncSinglePayment();
     }
+    // Switching cash ↔ provider-backed MoMo must immediately recalculate
+    // every displayed line and the exact full-payment amount.
+    render();
     syncPaystackMomoPanel();
     persist();
   }
@@ -966,12 +1101,14 @@
   singlePaymentValue?.addEventListener("input", () => {
     changed();
     syncSinglePayment();
+    syncPaystackMomoPanel();
     persist();
   });
   paymentMethods.forEach(method => {
     document.querySelector("#pay-" + method)?.addEventListener("input", () => {
       changed();
       renderCheckoutSummary();
+      syncPaystackMomoPanel();
       persist();
     });
   });
@@ -1120,10 +1257,15 @@
     let newPhone = "";
 
     if (!purchase) {
+      if (!party && customerChoiceButtons.some(button =>
+        button.dataset.customerMode === "saved" && button.getAttribute("aria-pressed") === "true")) {
+        throw new Error("Choose a saved customer from the search results, or switch to Walk-in sale.");
+      }
       if (!party) {
         const rawName = customerName?.value.trim() || "";
         const rawPhone = customerPhone?.value.trim() || "";
-        const wantsNamedCustomer = newCustomerMode || rawName || rawPhone;
+        // Walk-ins must never create an accidental customer record.
+        const wantsNamedCustomer = newCustomerMode;
         if (wantsNamedCustomer) {
           if (rawName.length < 2) throw new Error("Enter the new customer's name.");
           newName = rawName;
@@ -1147,6 +1289,9 @@
       if ((plan === "part" || plan === "credit") && !dueDate?.value) {
         throw new Error("Choose a due date for the unpaid balance.");
       }
+      if ((plan === "part" || plan === "credit") && creditDebtEmailConsent?.checked && !(creditCustomerEmail?.value.trim() || customerEmail?.value.trim())) {
+        throw new Error("Enter the customer email before enabling credit email updates.");
+      }
     } else {
       if (!party) throw new Error("Search and choose a supplier before posting this purchase.");
       if (!purchaseDocumentDate?.value) throw new Error("Choose the supplier invoice date.");
@@ -1169,6 +1314,10 @@
         customer_phone: newPhone,
         customer_email: customerEmail?.value.trim() || ""
       } : {}),
+      ...(!purchase && (paymentPlan?.value === "part" || paymentPlan?.value === "credit") ? {
+        customer_email: creditCustomerEmail?.value.trim() || customerEmail?.value.trim() || selectedCustomer?.email || "",
+        customer_debt_email_opt_in: Boolean(creditDebtEmailConsent?.checked)
+      } : {}),
       ...(!purchase ? {
         customer_consent: Boolean((party || newName) && (customerConsent?.checked || customerWhatsApp?.checked)),
         send_sms: Boolean((party || newName) && customerConsent?.checked),
@@ -1190,10 +1339,33 @@
     paystackMomoStatus.classList.toggle("error", tone === "error");
   }
 
+  function syncHubtelCheckoutLink(result) {
+    const link = document.querySelector("#hubtel-momo-checkout-link");
+    if (!link) return;
+    const url = typeof result?.authorization_url === "string" ? result.authorization_url : "";
+    let safe = false;
+    try {
+      const parsed = new URL(url);
+      safe = result?.provider === "hubtel" && parsed.protocol === "https:"
+        && parsed.hostname === "pay.hubtel.com" && !parsed.username && !parsed.password;
+    } catch (_) { /* A missing or malformed link is never rendered. */ }
+    if (safe) link.href = url;
+    else link.removeAttribute("href");
+    link.classList.toggle("hidden", !safe);
+  }
+
   function syncMomoChallenge(result) {
     const panel = document.querySelector("#paystack-momo-challenge");
-    panel?.classList.toggle("hidden", !result?.needs_otp);
-    panel?.querySelectorAll("input,button").forEach(control => {control.disabled = !result?.needs_otp;});
+    if (!panel) return;
+    const needsCode = Boolean(momoReference && result?.needs_otp);
+    const newlyRequested = needsCode && panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !needsCode);
+    panel.querySelectorAll("input,button").forEach(control => { control.disabled = !needsCode; });
+    if (newlyRequested) {
+      setMomoStatus("Ask the customer for the one-time Paystack verification code sent for this payment. Never ask for their MoMo PIN.");
+      panel.querySelector("input")?.focus({preventScroll: true});
+      panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }
   }
 
   document.querySelector("#paystack-momo-otp-submit")?.addEventListener("click", async () => {
@@ -1219,9 +1391,15 @@
 
   function lockCheckoutForMomo(locked) {
     root.querySelectorAll("input,select,textarea,button").forEach(control => {
+      // Keep a provider-requested one-time code available while the sale is locked.
+      // No other cart or payment details can be changed until verification finishes.
+      if (control.closest("#paystack-momo-challenge")) return;
       control.disabled = locked;
     });
-    if (!locked) applyPaymentPlan();
+    if (!locked) {
+      syncMomoChallenge(null);
+      applyPaymentPlan();
+    }
   }
 
   async function fetchMomoStatus() {
@@ -1249,10 +1427,12 @@
       if (!result || !momoReference) return;
       setMomoStatus(result.display_text || result.message || "Checking payment…");
       syncMomoChallenge(result);
+      syncHubtelCheckoutLink(result);
       if (result.paid && result.sale) {
         completed = true;
         momoReference = null;
         pendingBody = null;
+        syncHubtelCheckoutLink(null);
         clearStored();
         lockCheckoutForMomo(false);
         showSaleSuccess(result.sale);
@@ -1291,9 +1471,8 @@
     const email = paystackMomoEmail?.value.trim() || selectedCustomer?.email || customerEmail?.value.trim() || "";
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
-    if (!email || !email.includes("@")) throw new Error("Enter the customer's email for the Paystack payment request.");
-
-    setMomoStatus("Sending Mobile Money approval request…");
+    if (momoGateway === "paystack" && email && !email.includes("@")) throw new Error("Enter a valid customer email or leave it blank for a walk-in MoMo payment.");
+    setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
     lockCheckoutForMomo(true);
     try {
       const result = await api("/api/pos/paystack-momo/start/", {
@@ -1301,12 +1480,20 @@
         phone,
         email,
         provider,
+        payment_gateway: momoGateway,
         request_key: requestKey
       }, requestKey);
       momoReference = result.reference || momoReference;
-      if (!momoReference) throw new Error("Paystack did not return a payment reference.");
+      if (!momoReference) throw new Error("The payment provider did not return a payment reference.");
       setMomoStatus(result.message || result.display_text || "Approve the payment on the customer's phone.");
+      syncMomoChallenge(result);
+      syncHubtelCheckoutLink(result);
       persist();
+      if (momoGateway === "paystack") {
+        // Track a durable provider reference, not a fragile payment modal.
+        location.assign("/payments/momo/" + encodeURIComponent(momoReference) + "/");
+        return true;
+      }
       if (result.paid && result.sale) {
         completed = true;
         momoReference = null;
@@ -1328,11 +1515,20 @@
       pollMomoPayment();
       return true;
     } catch (error) {
-      if (!momoReference) {
+      if (!momoReference && error.rejected === true) {
+        // Server validation rejected this intent before the provider accepted
+        // it. Begin a new review rather than reusing its signed token.
         pendingBody = null;
         requestKey = crypto.randomUUID();
         lockCheckoutForMomo(false);
         persist();
+      } else if (!momoReference) {
+        // The network/browser may have lost a successful POST response.
+        // NEVER issue a fresh request key: the backend could already hold a
+        // Paystack request. Its original reference will be reconciled.
+        lockCheckoutForMomo(true);
+        persist();
+        setMomoStatus("Payment request outcome is uncertain. Do NOT send another prompt. Check MoMo payment history or contact your manager.", "error");
       }
       throw error;
     }
@@ -1429,6 +1625,7 @@
     cart.splice(0, cart.length);
     selectedCustomer = null;
     newCustomerMode = false;
+    setCustomerMode("walkin");
     if (partyInput) partyInput.value = "";
     selectedCustomerBox?.classList.add("hidden");
     selectedCustomerBox?.replaceChildren();
@@ -1440,6 +1637,8 @@
     if (customerName) customerName.value = "";
     if (customerPhone) customerPhone.value = "";
     if (customerEmail) customerEmail.value = "";
+    if (creditCustomerEmail) creditCustomerEmail.value = "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
     if (paystackMomoPhone) paystackMomoPhone.value = "";
     if (paystackMomoEmail) paystackMomoEmail.value = "";
     if (paystackMomoProvider) paystackMomoProvider.value = "mtn";
@@ -1488,6 +1687,11 @@
     const button = document.querySelector("#complete");
     clearError();
     try {
+      if (!pendingBody && !purchase && newCustomerMode) {
+        const matches = await checkNewCustomerDuplicate();
+        if (!newCustomerMode) return;
+        if (matches.length) throw new Error("Customer already exists. Select the saved record instead of creating a duplicate.");
+      }
       if (!pendingBody) pendingBody = buildCheckoutBody();
       persist();
 
@@ -1495,10 +1699,10 @@
         const momoAmount = cents(document.querySelector("#pay-momo")?.value || "0");
         if (momoAmount > 0) {
           if (!paystackMomoReady) {
-            throw new Error("Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now.");
+            throw new Error("Mobile Money payments through " + (momoGateway === "hubtel" ? "Hubtel" : "Paystack") + " are awaiting activation.");
           }
           if (!directMomoSelected()) {
-            throw new Error("Verified Mobile Money is currently available only as a full single-method payment. Remove split or part-payment amounts and try again.");
+            throw new Error("Choose Mobile Money as the single payment method. For a smaller deposit, select Part payment so the balance is recorded as customer debt.");
           }
           await startPaystackMomo();
           return;
@@ -1544,7 +1748,8 @@
         customer: selectedCustomer,
         customer_name: customerName?.value.trim() || "",
         customer_phone: customerPhone?.value || "",
-        customer_email: customerEmail?.value.trim() || "",
+        customer_email: creditCustomerEmail?.value.trim() || customerEmail?.value.trim() || "",
+        customer_debt_email_opt_in: Boolean(creditDebtEmailConsent?.checked),
         customer_consent: Boolean(customerConsent?.checked),
         send_whatsapp: Boolean(customerWhatsApp?.checked),
         payment_plan: paymentPlan?.value || "full",
@@ -1593,6 +1798,8 @@
       }
       if (paymentPlan && saved.payment_plan) paymentPlan.value = saved.payment_plan;
       if (dueDate) dueDate.value = saved.due_date || "";
+      if (creditCustomerEmail) creditCustomerEmail.value = saved.customer_email || "";
+      if (creditDebtEmailConsent) creditDebtEmailConsent.checked = saved.customer_debt_email_opt_in === true;
       if (customerWhatsApp) customerWhatsApp.checked = saved.send_whatsapp === true;
       if (customerConsent) {
         if (Object.prototype.hasOwnProperty.call(saved, "customer_consent")) {
@@ -1618,6 +1825,7 @@
 
   if (selectedCustomer?.id) showSelectedCustomer(selectedCustomer);
   else if (newCustomerMode) beginNewCustomer();
+  else setCustomerMode("walkin");
   if (selectedSupplier?.id) showSelectedSupplier(selectedSupplier);
   if (restoredState) {
     if (customerName && restoredState.customerName) customerName.value = restoredState.customerName;
@@ -1628,6 +1836,8 @@
     if (paystackMomoEmail && restoredState.paystackMomoEmail) paystackMomoEmail.value = restoredState.paystackMomoEmail;
     if (paymentPlan && restoredState.paymentPlan) paymentPlan.value = restoredState.paymentPlan;
     if (dueDate && restoredState.dueDate) dueDate.value = restoredState.dueDate;
+    if (creditCustomerEmail && restoredState.creditCustomerEmail) creditCustomerEmail.value = restoredState.creditCustomerEmail;
+    if (creditDebtEmailConsent && restoredState.creditDebtEmailConsent === true) creditDebtEmailConsent.checked = true;
     if (customerWhatsApp) customerWhatsApp.checked = restoredState.customerWhatsApp === true;
     if (customerConsent) {
       if (Object.prototype.hasOwnProperty.call(restoredState, "customerConsent")) {
@@ -1663,6 +1873,8 @@
       updateConsentAvailability();
     }
     if (customerWhatsApp) customerWhatsApp.checked = pendingBody.send_whatsapp === true;
+    if (creditCustomerEmail) creditCustomerEmail.value = pendingBody.customer_email || "";
+    if (creditDebtEmailConsent) creditDebtEmailConsent.checked = pendingBody.customer_debt_email_opt_in === true;
     if (dueDate) dueDate.value = pendingBody.due_date || "";
     if (purchaseReference) purchaseReference.value = pendingBody.external_reference || "";
     if (purchaseDocumentDate) purchaseDocumentDate.value = pendingBody.document_date || purchaseDocumentDate.value;

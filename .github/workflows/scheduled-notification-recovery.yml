@@ -1,0 +1,37 @@
+name: Verify restored notification scheduling
+on:
+  pull_request:
+    paths:
+      - core/automations.py
+      - core/test_scheduled_automation_recovery.py
+      - .github/workflows/scheduled-notification-recovery.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env:
+          POSTGRES_USER: kofad
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kofad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kofad"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kofad:test-only@localhost:5432/kofad
+      DJANGO_SECRET_KEY: test-only-notification-recovery-secret-123456789
+      DJANGO_DEBUG: "1"
+      SECURE_SSL_REDIRECT: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt -c requirements.lock
+      - run: python manage.py check
+      - run: python manage.py test core.test_scheduled_automation_recovery --noinput

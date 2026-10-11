@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
+from django.urls import reverse
 
 from .models import Access, Branch, PasswordRecovery
 from .sms.providers import Submission
@@ -138,7 +139,7 @@ class AccountRecoveryTests(TestCase):
         challenge = self.request_code()
         self.client.post("/login/", {"username":"ADMIN","password":"ADMIN"})
         access = Access.objects.get(user=self.user)
-        response = self.client.post(f"/technical-admin/core/access/{access.pk}/change/", {
+        response = self.client.post(reverse("admin:core_access_change", args=[access.pk]), {
             "user":self.user.pk, "branches":[Branch.objects.get(code="main").pk],
             "recovery_phone":"0241234568", "_save":"Save"})
         self.assertEqual(response.status_code, 302)

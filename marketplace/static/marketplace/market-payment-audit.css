@@ -1,0 +1,13 @@
+/* Payment status clarity on KOFAD Market order pages and staff detail. */
+.market-payment-audit{border:1px solid #bedbd8!important;background:linear-gradient(135deg,#fff,#f1f8f9);border-radius:18px;margin:16px 0}
+.market-payment-audit h2{margin:0 0 12px}
+.market-payment-audit>p{line-height:1.6}
+.market-payment-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.market-payment-facts>div{padding:14px 12px;background:#fff;border:1px solid #d3e6e5;border-radius:12px;min-width:0}
+.market-payment-facts small{display:block;font-size:11px;letter-spacing:.03em;color:#647e8a;margin-bottom:8px}
+.market-payment-facts strong{display:block;color:#17364b;font-size:13px;overflow-wrap:anywhere}
+.market-payment-audit .order-status{flex:none}
+.staff-payment-truth{display:grid;gap:7px;padding:12px 14px;border:1px solid #d3e6e5;background:#eff6f6;border-radius:12px;margin:12px 0;font-size:13px;line-height:1.5}
+.staff-payment-truth strong{color:#17364b}
+@media(max-width:900px){.market-payment-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:530px){.market-payment-audit{padding:16px!important}.market-payment-facts{gap:8px}.market-payment-facts>div{padding:10px}.market-payment-facts strong{font-size:12px}.staff-payment-truth{padding:10px}}

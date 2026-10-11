@@ -24,6 +24,8 @@ from marketplace import services as market_services
 from marketplace.models import Conversation, CustomerAccount, MarketListing, MarketPaymentAttempt
 if not settings.DEBUG:
     raise RuntimeError("Browser fixtures are forbidden outside DEBUG environments.")
+staff_login_url = f"http://127.0.0.1:8000/{settings.STAFF_LOGIN_SLUG}/"
+staff_admin_url = f"http://127.0.0.1:8000/{settings.STAFF_LOGIN_SLUG}/technical-admin/"
 warehouse, _ = Branch.objects.get_or_create(code="browser-wh", defaults={"name": "Browser warehouse"})
 demo_user = User.objects.get(username="demo")
 demo_user.access.branches.add(warehouse)
@@ -132,18 +134,22 @@ with sync_playwright() as p:
     page.on("pageerror", lambda error: errors.append(str(error)))
     for attempt in range(30):
         try:
-            page.goto("http://127.0.0.1:8000/login/")
+            page.goto(staff_login_url)
             break
         except Exception:
             time.sleep(1)
+    # Existing workflow evidence follows a visitor who enabled preferences.
+    # Fresh essential-only and withdrawal flows are exercised by cookie_smoke.py.
+    page.locator("[data-cookie-accept]").click()
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
     assert float(page.locator(".premium-login-form label").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
     assert float(page.locator(".premium-login-form input").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
     assert page.get_by_text("Private setup key", exact=True).count() == 0
     icon_hrefs = [page.locator('link[rel="icon"]').nth(i).get_attribute("href") or "" for i in range(page.locator('link[rel="icon"]').count())]
-    assert any(href.endswith("/static/brand/kofad-emblem.png") for href in icon_hrefs)
-    assert page.locator('img[src$="/static/brand/kofad-emblem.png"]').count() >= 1
-    assert page.locator(".brand-wordmark").first.get_by_text("KOFAD", exact=True).count() >= 1
+    assert any("favicon-96" in href and ".png" in href for href in icon_hrefs)
+    assert page.locator('img[src$="/static/brand/kofad-official-logo.svg"]').count() >= 1
+    assert page.locator(".brand-official-logo img").count() >= 1
+    assert page.locator(".brand-wordmark").count() == 0
     assert page.get_by_text(("KO" + "PEX"), exact=True).count() == 0
     page.get_by_role("button", name="Show password", exact=True).click()
     assert page.locator("#password").get_attribute("type") == "text"
@@ -160,8 +166,8 @@ with sync_playwright() as p:
     page.get_by_role("link",name="Forgot password?",exact=True).click()
     page.get_by_role("heading",name="Forgot your password?",exact=True).wait_for()
     assert page.get_by_text("SMS recovery is not available yet.",exact=False).is_visible()
-    page.goto("http://127.0.0.1:8000/login/")
-    page.get_by_label("Username or phone number", exact=True).fill("demo")
+    page.goto(staff_login_url)
+    page.get_by_label("Username, mobile number or verified email", exact=True).fill("demo")
     page.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     page.get_by_role("button", name="Sign in", exact=False).click()
     page.wait_for_url("http://127.0.0.1:8000/workspace/")
@@ -201,6 +207,11 @@ with sync_playwright() as p:
     second_product.locator(".product-composer input[type='number']").first.fill("1")
     second_product.get_by_role("button",name="Add to sale",exact=False).click()
     assert page.locator("#cart-count").inner_text() == "2 lines"
+    # The new POS defaults to an explicit walk-in. Saved customers require
+    # an intentional choice before the customer search becomes visible.
+    assert page.locator('[data-customer-mode="walkin"]').get_attribute("aria-pressed") == "true"
+    page.locator('[data-customer-mode="saved"]').click()
+    assert page.locator("#customer-search").is_visible()
     page.locator("#customer-search").fill("Sample Trading")
     page.locator(".customer-result").filter(has_text="Sample Trading Store").click()
     assert receipt_sms_choice.is_enabled()
@@ -280,8 +291,10 @@ with sync_playwright() as p:
     assert page.locator(".debt-account-pane").is_visible()
     assert not page.locator(".debt-detail-pane").is_visible()
     page.locator(".debt-account-card").first.click()
-    assert page.locator(".debt-detail-pane").is_visible()
-    assert not page.locator(".debt-account-pane").is_visible()
+    # The responsive debt pane can animate into view after the click handler.
+    # Wait for its actual state rather than asserting during that transition.
+    page.locator(".debt-detail-pane").wait_for(state="visible", timeout=8000)
+    page.locator(".debt-account-pane").wait_for(state="hidden", timeout=8000)
     assert page.get_by_text("Back to customer accounts", exact=False).is_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Debt desk overflows"
     page.screenshot(path=str(out / "debt-account-mobile-focused.png"), full_page=True)
@@ -337,8 +350,9 @@ with sync_playwright() as p:
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width)+path
     page.set_viewport_size({"width":390,"height":844})
     admin_page = browser.new_page(viewport={"width":1280,"height":900})
-    admin_page.goto("http://127.0.0.1:8000/login/")
-    admin_page.get_by_label("Username or phone number",exact=True).fill("admin")
+    admin_page.goto(staff_login_url)
+    admin_page.locator("[data-cookie-accept]").click()
+    admin_page.get_by_label("Username, mobile number or verified email",exact=True).fill("admin")
     admin_page.get_by_label("Password",exact=True).fill("admin")
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
     admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
@@ -366,6 +380,19 @@ with sync_playwright() as p:
     assert abs(after["height"] - before["height"]) < 1
     assert admin_page.evaluate("Boolean(localStorage.getItem(\'kofad-approval-position-v2\'))")
     assert approval.evaluate("el => getComputedStyle(el).animationName") != "none"
+    # Deliberately drag toward the phone dock: approval must remain reachable.
+    dragged = approval.bounding_box()
+    admin_page.mouse.move(dragged["x"] + dragged["width"] / 2, dragged["y"] + dragged["height"] / 2)
+    admin_page.mouse.down()
+    admin_page.mouse.move(389, 840, steps=10)
+    admin_page.mouse.up()
+    safe = approval.bounding_box()
+    dock = admin_page.locator(".mobile-dock").bounding_box()
+    bar = admin_page.locator(".topbar").bounding_box()
+    assert safe["y"] + safe["height"] <= dock["y"] - 6, "Approval control hidden by mobile dock"
+    assert safe["y"] >= bar["y"] + bar["height"] + 6, "Approval control overlaps sticky header"
+    assert safe["x"] >= 8 and safe["x"] + safe["width"] <= 390 - 8, "Approval control offscreen"
+    admin_page.screenshot(path=str(out / "approval-safe-mobile.png"), full_page=True)
 
     admin_page.goto("http://127.0.0.1:8000/settings/communications/")
     assert admin_page.locator('[role="switch"]').count() == 10
@@ -416,12 +443,13 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "market-catalog-readable.png"), full_page=True)
 
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
-    admin_page.locator("tbody td").first.wait_for()
-    assert float(admin_page.locator("tbody td").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
-    assert admin_page.locator("tbody td").first.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
-    sale_history_row = admin_page.locator("tbody tr[data-row-href]").first
-    sale_target = sale_history_row.get_attribute("data-row-href")
-    sale_history_row.locator("td").nth(1).click()
+    admin_page.locator(".sales-history-item").first.wait_for()
+    sale_link = admin_page.locator(".sales-history-reference").first
+    assert float(sale_link.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
+    assert sale_link.evaluate("el => getComputedStyle(el).color") != "rgb(255, 255, 255)"
+    sale_target = sale_link.get_attribute("href")
+    assert sale_target and sale_target.startswith("/documents/")
+    sale_link.click()
     admin_page.wait_for_url("http://127.0.0.1:8000" + sale_target)
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
     admin_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
@@ -468,6 +496,31 @@ with sync_playwright() as p:
     assert staff_table.evaluate("el => parseFloat(getComputedStyle(el).minWidth) == 0")
     admin_page.screenshot(path=str(out / "staff-users-mobile-hardened.png"), full_page=True)
 
+    # Mobile stock should be labelled cards without a second vertical scrollbar.
+    for phone_width in (320, 390, 768):
+        admin_page.set_viewport_size({"width":phone_width,"height":844})
+        admin_page.goto("http://127.0.0.1:8000/inventory/")
+        cards_table = admin_page.locator(".inventory-stock-table > table.mobile-card-table")
+        cards_table.wait_for()
+        assert cards_table.evaluate(
+            "el => getComputedStyle(el).minWidth === '0px'"
+        ), f"Inventory forces a wide table at {phone_width}px"
+        first_row = cards_table.locator("tbody tr").first
+        assert first_row.locator("td").first.get_attribute("data-mobile-label") == "Product"
+        assert first_row.locator("td").nth(1).get_attribute("data-mobile-label") == "Sellable"
+        assert first_row.locator("td").nth(2).get_attribute("data-mobile-label") == "Pack position"
+        assert admin_page.locator(".inventory-stock-table").evaluate(
+            "el => getComputedStyle(el).maxHeight === 'none' && getComputedStyle(el).overflowY === 'visible'"
+        ), f"Inventory still has inner scrolling at {phone_width}px"
+        assert admin_page.evaluate(
+            "document.documentElement.scrollWidth <= window.innerWidth"
+        ), f"Inventory overflows at {phone_width}px"
+        if phone_width == 390:
+            admin_page.screenshot(path=str(out / "inventory-product-cards-390.png"), full_page=True)
+        admin_page.evaluate("window.scrollTo(0,document.body.scrollHeight)")
+        admin_page.evaluate("window.scrollTo(0,0)")
+        assert admin_page.locator(".inventory-ledger h2").is_visible()
+    admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.goto("http://127.0.0.1:8000/settings/payments/")
     form_actions = admin_page.locator(".form-actions")
     form_actions.wait_for()
@@ -526,7 +579,7 @@ with sync_playwright() as p:
     admin_page.locator("#id_new_password2").fill("New-private-admin-passphrase-986!")
     admin_page.get_by_role("button",name="Change password",exact=True).click()
     admin_page.wait_for_url("http://127.0.0.1:8000/account/")
-    admin_page.goto("http://127.0.0.1:8000/admin/")
+    admin_page.goto(staff_admin_url)
     admin_page.get_by_role("heading",name="Access and configuration",exact=True).wait_for()
     admin_page.goto("http://127.0.0.1:8000/communications/")
     admin_page.screenshot(path=str(out / "communications-desktop.png"),full_page=True)
@@ -617,44 +670,73 @@ with sync_playwright() as p:
         "https://images.unsplash.com/**",
         lambda route: route.fulfill(status=200, content_type="image/png", body=transparent_png),
     )
+    market_page.route(
+        "https://images.pexels.com/**",
+        lambda route: route.fulfill(status=200, content_type="image/png", body=transparent_png),
+    )
 
     market_page.goto("http://127.0.0.1:8000/")
+    market_page.locator("[data-cookie-accept]").click()
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
-    assert market_page.locator(".home-hero-v9").count() == 1
-    assert market_page.locator(".home-hero-products").count() == 0
-    assert market_page.get_by_text("Everyday essentials.", exact=False).count() >= 1
-    assert market_page.get_by_text("Wholesale quantities", exact=True).count() == 1
+    assert market_page.locator(".kfd-hero").count() == 1
+    assert market_page.locator("[data-kfd-rotator] [data-hero-image]").count() == 1
+    assert market_page.get_by_text("Everything for today.", exact=False).count() >= 1
+    assert market_page.locator(".kfd-category-grid .kfd-category").count() == 4
+    assert all(img.evaluate("node => node.complete && node.naturalWidth > 0") for img in market_page.locator(".kfd-category-grid .kfd-category img").all())
+    assert market_page.locator("[data-hero-image]").evaluate("img => img.naturalWidth > 0")
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
-    mobile_hero_background = market_page.locator(".home-hero-v9").evaluate(
-        "el => getComputedStyle(el).backgroundImage"
-    )
-    assert "images.unsplash.com/photo-1768176136613-96a7bfc0049e" in mobile_hero_background
-    assert "w=1800" in mobile_hero_background
-    assert "kofad-market-retail-hero" in mobile_hero_background
-    assert "kofad-market-hero.svg" not in mobile_hero_background
-    hero_asset = market_page.request.get(
-        "http://127.0.0.1:8000/static/marketplace/kofad-market-retail-hero.webp"
-    )
-    assert hero_asset.ok, "Bundled homepage hero image is not being served"
-    assert hero_asset.headers.get("content-type", "").startswith("image/webp")
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 400
+    assert market_page.locator("[data-hero-count]").inner_text() == "01 / 06"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
 
     market_page.set_viewport_size({"width":1440,"height":1000})
     market_page.goto("http://127.0.0.1:8000/")
-    hero_mark = market_page.locator(".home-hero-v9-mark img")
-    assert hero_mark.evaluate("el => el.getBoundingClientRect().width") <= 40
-    desktop_hero_background = market_page.locator(".home-hero-v9").evaluate(
-        "el => getComputedStyle(el).backgroundImage"
+    assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 365
+    assert "kofad-home-hero-sharp" in market_page.locator("[data-hero-image]").get_attribute("src")
+    assert market_page.locator(".kfd-hero").evaluate("el => getComputedStyle(el).height !== 'auto'")
+    # The title and primary action must not be clipped behind the navigation or
+    # outside the actual slide viewport in the compact desktop composition.
+    assert market_page.locator(".kfd-hero").evaluate("""el => {
+        const hero = el.getBoundingClientRect();
+        const title = el.querySelector("h1").getBoundingClientRect();
+        const cta = el.querySelector(".kfd-cta.primary").getBoundingClientRect();
+        return title.top >= hero.top - 1 && cta.bottom <= hero.bottom - 10;
+    }""")
+    assert market_page.get_by_role("button", name="Next photograph").is_visible()
+    assert market_page.locator("[data-slide-pause]").count() == 0
+    # The slideshow must advance without anybody touching play/pause. Remote
+    # image requests are mocked above so this remains deterministic in CI.
+    market_page.wait_for_function(
+        "() => document.querySelector('[data-hero-count]')?.textContent.trim() === '02 / 06'",
+        timeout=12500,
     )
-    assert "images.unsplash.com/photo-1768176136613-96a7bfc0049e" in desktop_hero_background
-    assert "w=3000" in desktop_hero_background
-    assert "kofad-market-retail-hero" in desktop_hero_background
-    assert "kofad-market-hero.svg" not in desktop_hero_background
+    assert market_page.locator("[data-hero-image]").get_attribute("src").startswith("https://images.unsplash.com/")
     market_page.screenshot(path=str(out / "homepage-market-desktop.png"), full_page=True)
+
+    # Visual audit on real rendered viewports rather than source-only CSS checks.
+    # The headline/CTA must be wholly inside the image, not clipped under nav.
+    for width in (320, 360, 390, 768, 1024, 1440):
+        market_page.set_viewport_size({"width":width,"height":900})
+        market_page.goto("http://127.0.0.1:8000/")
+        assert market_page.locator("[data-slide-pause]").count() == 0
+        assert market_page.evaluate(
+            "document.documentElement.scrollWidth <= window.innerWidth"
+        ), f"Homepage overflow at {width}px"
+        assert market_page.locator(".kfd-hero").evaluate("""el => {
+            const hero = el.getBoundingClientRect();
+            const head = el.querySelector("h1").getBoundingClientRect();
+            const action = el.querySelector(".kfd-cta.primary").getBoundingClientRect();
+            return head.top >= hero.top - 1
+                && head.right <= hero.right + 1
+                && action.bottom <= hero.bottom - 4
+                && action.right <= hero.right + 1;
+        }"""), f"Homepage title or shop button clipped at {width}px"
+        if width in (320, 390, 768):
+            market_page.screenshot(path=str(out / f"homepage-layout-review-{width}.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/")
 
@@ -716,6 +798,24 @@ with sync_playwright() as p:
         ):
             market_page.goto("http://127.0.0.1:8000" + market_path)
             assert market_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), str(width) + market_path
+            if market_path == "/market/messages/":
+                # Regression: support-v3 used to hide the entire new chat
+                # composer on screens <= 680px, so the Start button was unusable.
+                assert market_page.locator(".support-new-panel-v3 form").is_visible(), str(width)
+                assert market_page.get_by_role("button", name="Start chat").is_visible(), str(width)
+    market_page.set_viewport_size({"width":390,"height":844})
+    market_page.goto("http://127.0.0.1:8000/market/messages/")
+    assert market_page.locator(".support-new-panel-v3 form").is_visible()
+    market_page.locator(".support-new-panel-v3 input[name='subject']").fill("Browser support request")
+    market_page.locator(".support-new-panel-v3 textarea[name='message']").fill("I need help with my order.")
+    market_page.get_by_role("button", name="Start chat").click()
+    market_page.wait_for_url("**/market/messages/*/")
+    assert market_page.locator(".support-message.customer").count() == 1
+    assert market_page.locator("[data-live-thread]").is_visible()
+    assert "I need help with my order." in market_page.locator(".support-stream-v3").inner_text()
+    market_page.screenshot(path=str(out / "market-support-new-chat-mobile.png"), full_page=True)
+    market_page.goto("http://127.0.0.1:8000/market/messages/")
+    assert market_page.locator(".support-new-panel-v3 form").is_visible()
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
     assert market_page.locator("[data-location-map]").count() == 1
@@ -854,7 +954,7 @@ with sync_playwright() as p:
         assert cancelled is False
         assert admin_page.locator("[data-session-leave-dialog]:visible").count() == 0
     admin_page.reload()
-    assert "/login/" not in admin_page.url
+    assert settings.STAFF_LOGIN_PATH not in admin_page.url
     
     # Executive and accounting workspaces remain readable across narrow phones
     # and dark theme. Market Catalog Studio must expose real customer visibility.
@@ -895,6 +995,58 @@ with sync_playwright() as p:
     admin_page.screenshot(path=str(out / "market-catalog-dark-mobile.png"), full_page=True)
     admin_page.evaluate("localStorage.setItem('kofad-theme','light'); document.documentElement.dataset.theme='light'")
 
+    # Page-by-page staff/mobile audit. Wide data tables may scroll within their
+    # own containers, but the page itself may not leak horizontally off screen.
+    # Check core jobs of a real employee, not only dashboard/card demos.
+    for width in (320, 390, 768):
+        admin_page.set_viewport_size({"width":width,"height":900})
+        for section, path in (
+            ("sales", "/sales/new/"),
+            ("online-orders", "/online-orders/"),
+            ("inventory", "/inventory/"),
+            ("finance", "/finance/"),
+            ("daily-closing", "/closings/"),
+            ("accounting", "/accounting/"),
+            ("reports", "/reports/"),
+            ("email", "/email/"),
+            ("settings", "/settings/"),
+            ("customers", "/parties/?kind=customer"),
+        ):
+            response = admin_page.goto("http://127.0.0.1:8000" + path, wait_until="domcontentloaded")
+            # The Email Centre deliberately returns 404 while unconfigured in
+            # isolated CI. Do not audit Django's oversized DEBUG traceback as UI.
+            if section == "email" and response.status == 404:
+                assert "Email Centre is not enabled yet." in admin_page.content()
+                continue
+            assert response.status == 200, f"Audit route error: {section} {response.status}"
+            admin_page.wait_for_timeout(70)
+            if not admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"):
+                offenders = admin_page.evaluate("""() => {
+                    const limit = document.documentElement.clientWidth;
+                    return Array.from(document.querySelectorAll("body *"))
+                        .filter(el => {
+                            const r = el.getBoundingClientRect();
+                            return r.width > 0 && r.right > limit + 1 &&
+                                getComputedStyle(el).display !== "none";
+                        })
+                        .slice(0, 16)
+                        .map(el => {
+                            const r = el.getBoundingClientRect();
+                            return {tag: el.tagName, cls: String(el.className).slice(0,85),
+                                width: Math.round(r.width), left: Math.round(r.left),
+                                right: Math.round(r.right)};
+                        });
+                }""")
+                raise AssertionError(f"Phase 3 mobile overflow: {section} at {width}px: {offenders}")
+            if width == 390 and section in ("sales", "online-orders", "finance", "daily-closing", "email"):
+                admin_page.screenshot(path=str(out / ("audit-" + section + "-mobile.png")), full_page=True)
+    admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.goto("http://127.0.0.1:8000/settings/")
+    assert admin_page.locator(".atelier-settings-index").is_visible()
+    assert admin_page.locator("[data-theme-choice]").count() >= 3
+    admin_page.goto("http://127.0.0.1:8000/online-orders/")
+    assert admin_page.locator(".order-filter-tabs").is_visible()
+
     # A sale-history row opens from its body, not only from the receipt reference.
     admin_page.goto("http://127.0.0.1:8000/documents/?kind=sale")
     transaction_rows = admin_page.locator("tr.transaction-row")
@@ -905,8 +1057,8 @@ with sync_playwright() as p:
 
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
-    admin_page.goto("http://127.0.0.1:8000/login/")
-    assert admin_page.get_by_label("Username or phone number", exact=True).is_visible()
+    admin_page.goto(staff_login_url)
+    assert admin_page.get_by_label("Username, mobile number or verified email", exact=True).is_visible()
     staff_state = admin_page.request.get("http://127.0.0.1:8000/session/state/").json()
     assert staff_state["authenticated"] is False
     assert not errors, errors

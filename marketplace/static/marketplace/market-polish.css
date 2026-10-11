@@ -1,0 +1,33 @@
+/* KOFAD mobile legibility and checkout-first marketplace, October 2026. */
+.market-body .shop-catalog-filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.market-body .shop-catalog-head{min-width:0}
+.market-body .shop-catalog-head>div{min-width:0}
+.market-body .shop-sort{display:flex;align-items:center;gap:8px}
+.market-body .shop-sort select{max-width:100%;min-width:0}
+.market-guest-welcome{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:20px 24px;margin:0 0 22px;border:1px solid #c9dde5;border-radius:20px;background:#fff;box-shadow:0 10px 24px #0c31400d}
+.market-guest-welcome h2{margin:5px 0;color:#102b40;font-size:clamp(18px,3vw,26px);line-height:1.25}
+.market-guest-welcome p{color:#435e6c;max-width:530px;margin:4px 0 0}
+.market-guest-welcome>a{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:12px 20px;white-space:nowrap;border-radius:13px;background:#0d3b57;color:#fff;text-decoration:none;font-weight:750}
+.market-guest-welcome>a:focus-visible{outline:3px solid #138d93;outline-offset:2px}
+.market-body .premium-access-card .kofad-google-button{background:#fff!important;box-shadow:none!important;color:#1f2937!important}
+.market-body .market-intelligence-hero{color:#effaff!important}
+.market-body .market-intelligence-hero :is(h1,h2,h3,strong,.hero-heading){color:#fff!important}
+.market-body .market-intelligence-hero :is(p,small,span){color:#d9eff6!important}
+.market-body .shop-product-grid .product-image-badges{display:none!important}
+@media(max-width:720px){
+ .market-guest-welcome{padding:17px;flex-direction:column;align-items:stretch;border-radius:16px}
+ .market-guest-welcome>a{width:100%}
+ .market-body .shop-catalog-head{flex-wrap:wrap;gap:12px}
+ .market-body .shop-catalog-filters{width:100%;justify-content:flex-start}
+ .market-body .shop-sort{width:100%}
+ .market-body .shop-sort select{flex:1}
+ .market-body .premium-access-card{box-sizing:border-box;max-width:100%!important;min-width:0!important}
+ .market-body .premium-access-card :is(input,button){max-width:100%;min-width:0}
+ .market-body .premium-access-card h1{font-size:clamp(24px,7vw,32px)!important;overflow-wrap:anywhere}
+ .market-body .premium-access-card .kofad-oauth-separator{margin:17px 0}
+}
+@media(max-width:360px){.market-body .premium-access-card{padding:23px 16px!important}}
+html[data-theme="dark"] .market-guest-welcome{background:#142832;border-color:#385363}
+html[data-theme="dark"] .market-guest-welcome h2{color:#effaff}
+html[data-theme="dark"] .market-guest-welcome p{color:#b9cdd7}
+html[data-theme="dark"] .market-guest-welcome>a{background:#157a84;color:#fff}
