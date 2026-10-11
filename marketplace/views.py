@@ -221,10 +221,21 @@ def home(request):
         listings=listings,
     ))
 
-def market(request):
+def market(request, category_slug=None):
     customer = services.customer_from_session(request)
     query = request.GET.get("q", "").strip()[:100]
     category = request.GET.get("category", "").strip()[:80]
+    if category_slug:
+        from django.http import Http404
+        from django.utils.text import slugify
+        # Resolve only currently public categories, not arbitrary user input.
+        public_categories = Product.objects.filter(
+            market_listing__enabled=True, active=True
+        ).exclude(category="").values_list("category", flat=True).distinct()
+        category = next((name for name in public_categories
+                         if slugify(name) == category_slug), None)
+        if category is None:
+            raise Http404("This catalogue category is not available.")
     sort = request.GET.get("sort", "featured")
     in_stock = request.GET.get("stock") == "available"
     featured_only = request.GET.get("featured") == "1"
