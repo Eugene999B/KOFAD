@@ -53,11 +53,12 @@ def market_branch():
     return branch
 
 
-def listing_price(listing):
+def listing_price(listing, rate=None):
+    from .pricing import all_in_unit_price, online_markup_percent
     value = getattr(listing.product, listing.price_source, None)
     if value is None or value <= 0:
         raise ValidationError(f"{listing.display_name} does not currently have a valid Market price.")
-    return value
+    return all_in_unit_price(value, online_markup_percent() if rate is None else rate)
 
 
 def active_reserved_units(branch, product, exclude_order=None):
@@ -549,6 +550,29 @@ def _consume_customer_otp_budget(request=None):
             row.save(update_fields=["failures", "blocked_until"])
 
 
+def _consume_phone_otp_hour(phone):
+    """At most two SMS sends per phone across registration, reset and phone change.
+
+    DB-backed and locked so the allowance survives service restarts and concurrent
+    browser sessions. Each hour begins with the first send, not the last resend.
+    """
+    identity = hashlib.sha256(("customer-otp-phone-v2:" + phone).encode()).hexdigest()
+    now = timezone.now()
+    with transaction.atomic():
+        LoginAttempt.objects.get_or_create(key=identity)
+        budget = LoginAttempt.objects.select_for_update().get(key=identity)
+        if not budget.blocked_until or budget.blocked_until <= now:
+            budget.failures = 0
+            budget.blocked_until = now + timedelta(hours=1)
+        if budget.failures >= 2:
+            raise ValidationError(
+                "Two verification SMS messages have already been requested. "
+                "Please try again one hour after your first request."
+            )
+        budget.failures += 1
+        budget.save(update_fields=["failures", "blocked_until"])
+
+
 def send_otp(phone, purpose="register", request=None):
     phone = normalize_ghana_phone(phone)
     if not settings.CUSTOMER_OTP_ENABLED:
@@ -568,6 +592,7 @@ def send_otp(phone, purpose="register", request=None):
             raise ValidationError("Please wait one minute before requesting another code.")
         if row.send_count >= 8:
             raise ValidationError("Daily verification-code limit reached. Try again later.")
+        _consume_phone_otp_hour(phone)
         # Hold only this phone/purpose lock during the bounded provider call.
         # Concurrent resend requests cannot deliver two different usable codes.
         code = f"{secrets.randbelow(1000000):06d}"

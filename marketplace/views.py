@@ -35,11 +35,12 @@ from .forms import (
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
+    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence,
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
 from . import services, hubtel, paystack_momo
+from .hubtel_evidence import decrypt_exchange
 
 
 def _market_context(request, **extra):
@@ -254,9 +255,12 @@ def market(request, category_slug=None):
     except ValidationError:
         branch = None
 
+    from .pricing import online_markup_percent
+    from django.db.models.functions import Round
+    rate = online_markup_percent()
     price_field = DecimalField(max_digits=14, decimal_places=2)
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product").annotate(
-        market_price_sort=Coalesce(
+        market_base_price=Coalesce(
             Case(
                 When(price_source="retail_unit", then=F("product__retail_unit")),
                 When(price_source="retail_pack", then=F("product__retail_pack")),
@@ -267,6 +271,11 @@ def market(request, category_slug=None):
             ),
             Value(Decimal("0.00")),
             output_field=price_field,
+        )
+    ).annotate(
+        market_price_sort=Round(
+            F("market_base_price") * Value(Decimal("1") + rate / Decimal("100")),
+            precision=2, output_field=price_field,
         )
     )
     if branch:
@@ -2377,6 +2386,26 @@ def online_payments(request, branch):
             core_services.audit(request.user, branch, "market.receiving_accounts_saved", "1", {"fields": account_form.changed_data})
             messages.success(request, "Receiving details saved for owner reference. Provider payout settings have not changed.")
             return redirect("online_payments")
+    elif request.method == "POST" and request.POST.get("action") == "online_price_markup":
+        from .pricing import parse_rate
+        try:
+            rate = parse_rate(request.POST.get("percentage", ""))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            # A first-ever price edit must preserve the live gateway instead
+            # of silently using a model's default provider.
+            with transaction.atomic():
+                current, _ = PaymentConfiguration.objects.select_for_update().get_or_create(
+                    pk=1, defaults={"provider": hubtel.selected_provider()},
+                )
+                current.online_price_markup_percent = rate
+                current.save(update_fields=["online_price_markup_percent"])
+            core_services.audit(request.user, branch, "market.online_price_markup_saved", "1", {
+                "percentage": str(rate),
+            })
+            messages.success(request, "All-inclusive online product prices updated. Existing orders and payment requests are unchanged.")
+        return redirect("online_payments")
     elif request.method == "POST":
         provider = request.POST.get("provider")
         if provider not in {"hubtel", "paystack"}:
@@ -2403,6 +2432,12 @@ def online_payments(request, branch):
     if query:
         rows = rows.filter(Q(reference__icontains=query) | Q(order__public_reference__icontains=query))
     page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
+    from core.models import HeldSale
+    from core.pos_paystack import LABEL_PREFIX
+    from core.pos_payment_views import _snapshot
+    pos_rows = [_snapshot(item) for item in HeldSale.objects.filter(
+        branch=branch, label__startswith=LABEL_PREFIX,
+    ).select_related("user").order_by("-created_at")[:12]]
     return render(request, "marketplace/online_payments.html", {
         "title": "Online payments", "account_form": account_form,
         "payment_provider": hubtel.selected_provider(),
@@ -2411,6 +2446,8 @@ def online_payments(request, branch):
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
         "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
+        "pos_momo_rows": pos_rows,
+        "online_price_markup_percent": configuration.online_price_markup_percent,
     })
 
 
@@ -2430,4 +2467,41 @@ def customer_payment_status(request, customer, pk):
         "needs_otp": bool(latest and latest.status == "pending" and (latest.verification_summary or {}).get("charge_status") == "send_otp"),
     })
     response["Cache-Control"] = "no-store, private"
+    return response
+
+
+
+@protected("manage_company")
+def hubtel_evidence_list(request, branch, attempt_id):
+    """Owner-only evidence inventory; never expose payloads in HTML or logs."""
+    attempt = get_object_or_404(
+        MarketPaymentAttempt, pk=attempt_id, provider="hubtel", order__branch=branch,
+    )
+    entries = Paginator(
+        HubtelEvidence.objects.filter(attempt=attempt).order_by("-created_at", "-pk"), 40
+    ).get_page(request.GET.get("page"))
+    response = render(request, "marketplace/hubtel_evidence.html", {
+        "title": "Hubtel transaction evidence",
+        "attempt": attempt,
+        "entries": entries,
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@protected("manage_company")
+def hubtel_evidence_download(request, branch, evidence_id):
+    """Only authorised managers of the order's location can retrieve original bodies."""
+    evidence = get_object_or_404(
+        HubtelEvidence.objects.select_related("attempt__order"),
+        pk=evidence_id, attempt__order__branch=branch,
+    )
+    raw = decrypt_exchange(evidence)
+    filename = f"hubtel-{evidence.direction}-{evidence.pk}-{evidence.reference[-6:]}.json"
+    response = HttpResponse(raw, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["X-Content-Type-Options"] = "nosniff"
     return response
