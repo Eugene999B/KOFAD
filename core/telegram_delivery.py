@@ -25,7 +25,8 @@ def _still_authorized(notice):
         if notice.category in {"closing", "critical"}:
             return (bool(u.is_superuser or u.has_perm("core.manage_company")
                          or u.has_perm("core.view_reports") or u.has_perm("core.operate_finance"))
-                    and Access.objects.filter(user=u).exists())
+                    and Access.objects.filter(user=u, branches=notice.branch).exists() if not u.is_superuser
+                    else bool(u.is_active))
         return True
     if identity.kind == "customer":
         from marketplace.models import CustomerAccount
