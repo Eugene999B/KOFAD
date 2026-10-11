@@ -5,6 +5,7 @@ import secrets
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
+from django.conf import settings
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 
@@ -108,7 +109,7 @@ def linked_identity(kind, owner_id):
     ).first()
 
 
-def queue_notice(identity, category, source_key, body):
+def queue_notice(identity, category, source_key, body, branch=None):
     """No messages without a linked opted-in account."""
     if not identity or identity.revoked_at or not identity.notifications_enabled:
         return False
@@ -122,7 +123,7 @@ def queue_notice(identity, category, source_key, body):
         return False
     _, created = TelegramOutbound.objects.get_or_create(
         source_key=source_key[:180],
-        defaults={"identity": identity, "category": category, "body": body},
+        defaults={"identity": identity, "category": category, "body": body, "branch": branch},
     )
     return created
 
@@ -161,8 +162,7 @@ def queue_closing_update(closing):
     from .models import Company
     company = Company.objects.first()
     threshold = max(money(getattr(company, "closing_tolerance", 0)),
-                    money(getattr(__import__("django.conf", fromlist=["settings"]).settings,
-                                  "NOTIFICATION_CRITICAL_VARIANCE_GHS", 500)))
+                    money(getattr(settings, "NOTIFICATION_CRITICAL_VARIANCE_GHS", 500)))
     critical = abs(variance) > 0 and abs(variance) >= threshold
     n = closing.summary or {}
     body = (
@@ -177,7 +177,7 @@ def queue_closing_update(closing):
         "Review details in your authorized staff portal."
     )
     count = 0
-    users = User.objects.filter(is_active=True, telegram_links_absent=False) if False else User.objects.filter(is_active=True)
+    users = User.objects.filter(is_active=True)
     for user in users:
         if not (user.is_superuser or user.has_perm("core.manage_company") or user.has_perm("core.view_reports")
                 or user.has_perm("core.operate_finance")):
@@ -190,5 +190,5 @@ def queue_closing_update(closing):
             continue
         category = "critical" if critical and identity.critical_opt_in else "closing"
         key = f"tg:closing:{closing.pk}:{category}:{user.pk}"
-        count += int(queue_notice(identity, category, key, body))
+        count += int(queue_notice(identity, category, key, body, branch=closing.branch))
     return count
