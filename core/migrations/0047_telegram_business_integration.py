@@ -1,3 +1,4 @@
+import uuid
 from django.db import migrations, models
 import django.db.models.deletion
 
@@ -65,6 +66,21 @@ class Migration(migrations.Migration):
                 ("last_error", models.CharField(blank=True, max_length=180)),
                 ("identity", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.telegramidentity")),
                 ("branch", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to="core.branch")),
+            ],
+        ),
+        migrations.CreateModel(
+            name="TelegramRecoveryChallenge",
+            fields=[
+                ("id", models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, serialize=False)),
+                ("kind", models.CharField(max_length=12)),
+                ("owner_id", models.PositiveBigIntegerField()),
+                ("code_digest", models.CharField(max_length=64)),
+                ("password_stamp", models.CharField(max_length=64)),
+                ("expires_at", models.DateTimeField()),
+                ("attempts", models.PositiveSmallIntegerField(default=0)),
+                ("used_at", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("identity", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.telegramidentity")),
             ],
         ),
     ]
