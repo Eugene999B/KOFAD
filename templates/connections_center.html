@@ -18,6 +18,18 @@
     <div class="ic-summary-tile ic-attention"><strong>{{ snapshot.counts.issue }}</strong><span>Recorded issues</span></div>
     <div class="ic-summary-tile"><strong>{{ snapshot.counts.not_connected|add:snapshot.counts.external|add:snapshot.counts.planned }}</strong><span>Disconnected / external / planned</span></div>
   </div>
+  {% if connection_priorities %}
+  <section class="ic-panel ic-attention-panel" aria-labelledby="connection-attention-heading">
+    <div class="ic-card-top"><h3 id="connection-attention-heading">Issues requiring management attention</h3><span class="ic-status bad">{{ connection_priorities|length }} priority connections</span></div>
+    <p>These findings are based on missing critical KOFAD requirements, unsuccessful recorded activity or read-only provider checks. Each opens a specific diagnosis; a disabled service alone is not an outage.</p>
+    <div class="ic-attention-list">{% for item in connection_priorities %}
+      <a href="{% url 'connections_detail' item.id %}" class="ic-attention-row">
+        <span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span>
+        <span><strong>{{ item.name }}</strong><small>{% if item.issues %}{{ item.issues.0|truncatechars:165 }}{% else %}See the detailed connection verification findings.{% endif %}</small></span>
+        <span class="ic-arrow">Investigate →</span>
+      </a>{% endfor %}</div>
+  </section>
+  {% endif %}
   <div class="ic-filters">
     <div class="ic-chipset" aria-label="Connection categories">
       <a class="ic-chip {% if not active_group %}is-selected{% endif %}" href="{% url 'connections_center' %}{% if active_state %}?state={{ active_state|urlencode }}{% endif %}">All categories</a>
