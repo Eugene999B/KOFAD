@@ -344,6 +344,8 @@ def run_scheduled_automations(now=None):
     if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
         from .telegram_integration import queue_periodic_digest
         jobs["telegram_periodic"] = queue_periodic_digest
+        from .telegram_integration import queue_inventory_alerts
+        jobs["telegram_inventory"] = queue_inventory_alerts
     results = {}
     for name, job in jobs.items():
         try:
