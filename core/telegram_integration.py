@@ -141,7 +141,7 @@ def queue_notice(identity, category, source_key, body, branch=None):
         return False
     if category == "marketing" and not identity.marketing_opt_in:
         return False
-    if category == "closing" and not identity.closing_opt_in:
+    if category in {"closing", "digest"} and not identity.closing_opt_in:
         return False
     if category == "critical" and not identity.critical_opt_in:
         return False
