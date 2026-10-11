@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'marketplace/views.py'
+      - 'marketplace/templates/marketplace/access.html'
+      - 'marketplace/templates/marketplace/login.html'
+      - 'marketplace/static/marketplace/customer-auth-premium.css'
       - 'marketplace/test_customer_google_entry.py'
       - '.github/workflows/customer-google-signin-check.yml'
 permissions:
