@@ -49,9 +49,6 @@ class IntegrationProviderChecksTests(ConnectionsCenterTests):
 
     def test_expired_session_probes_do_not_falsely_show_green(self):
         old = (timezone.now() - timedelta(hours=1)).isoformat()
-        self.client.session["kofad_integration_live_checks"] = {
-            "brevo": {"state": "verified", "checked_at": old, "summary": "old"}
-        }
         session = self.client.session
         session["kofad_integration_live_checks"] = {
             "brevo": {"state": "verified", "checked_at": old, "summary": "old"}
@@ -89,7 +86,7 @@ class IntegrationProviderChecksTests(ConnectionsCenterTests):
         self.assertNotIn("private.customer", str(evidence))
         webhook = integration_live.verify("brevo_webhook")
         self.assertEqual(webhook["state"], "failed")
-        self.assertIn("no configured", webhook["summary"])
+        self.assertIn("cannot authenticate", webhook["summary"])
 
     @override_settings(KOFAD_CLOUDFLARE_READ_TOKEN="", KOFAD_CLOUDFLARE_ZONE_ID="5459e449118218037a186d47a9fe7fd7")
     def test_public_cloudflare_mx_only_is_partial_not_routing_verified(self):
