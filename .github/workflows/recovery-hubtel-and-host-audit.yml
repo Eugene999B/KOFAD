@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/recovery-hubtel-and-host-audit.yml
+      - core/test_staff_login_routes.py
+      - core/test_lost_route_recovery.py
+      - core/test_worker_identity.py
 permissions:
   contents: read
 jobs:
@@ -33,4 +36,4 @@ jobs:
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - run: python scripts/prepare_logo.py
       - run: python manage.py collectstatic --noinput
-      - run: python manage.py test marketplace.test_hubtel.HubtelPaymentTests.test_callback_saves_exact_original_json_encrypted_and_allows_download marketplace.test_hubtel.HubtelPaymentTests.test_verified_failed_transaction_stops_retries_and_updates_order marketplace.test_hubtel.HubtelPaymentTests.test_repeated_callbacks_get_separate_evidence_entries core.test_staff_login_routes.StaffLoginRouteRegressionTests core.test_lost_route_recovery.LostRouteOwnerSmokeTests.test_nonexistent_market_category_correctly_returns_404 --noinput
+      - run: python manage.py test marketplace.test_hubtel.HubtelPaymentTests.test_callback_saves_exact_original_json_encrypted_and_allows_download marketplace.test_hubtel.HubtelPaymentTests.test_verified_failed_transaction_stops_retries_and_updates_order marketplace.test_hubtel.HubtelPaymentTests.test_repeated_callbacks_get_separate_evidence_entries core.test_staff_login_routes.StaffLoginRouteRegressionTests core.test_lost_route_recovery.LostRouteOwnerSmokeTests.test_nonexistent_market_category_correctly_returns_404 core.test_worker_identity.WorkerIdentityExperienceTests.test_public_qr_verification_is_safe_and_excludes_private_hr_data --noinput
