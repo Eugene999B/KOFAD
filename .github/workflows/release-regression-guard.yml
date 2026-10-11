@@ -1,0 +1,65 @@
+name: Protect KOFAD release from recovered regressions
+on:
+  push:
+    branches: [railway-release]
+  pull_request:
+    paths:
+      - '.github/workflows/release-regression-guard.yml'
+      - 'docs/ROLLBACK_RECOVERY_REGRESSION_MATRIX.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+# Only latest release needs a post-merge safety report.
+concurrency:
+  group: kofad-release-regression-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kofad
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kofad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kofad"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kofad:test-only@localhost:5432/kofad
+      DJANGO_SECRET_KEY: test-only-release-regression-secret-1234567890
+      DJANGO_DEBUG: "1"
+      SECURE_SSL_REDIRECT: "0"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,testserver,kofadimpex.com,market.kofadimpex.com,staff.kofadimpex.com"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt -c requirements.lock
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python scripts/prepare_logo.py
+      - run: python manage.py collectstatic --noinput
+      - name: Verify historical KOFAD features without provider sends
+        run: >
+          python manage.py test --noinput
+          core.test_lost_route_recovery
+          core.test_staff_login_routes
+          core.test_native_apps
+          core.test_pwa
+          core.test_worker_identity
+          core.test_communication_worker_recovery
+          core.test_scheduled_automation_recovery
+          core.test_google_drive_backup
+          core.test_branding.BrandingConsistencyTests.test_only_official_logo_asset_is_referenced
+          marketplace.test_checkout_momo_regression
+          marketplace.test_card_channel_recovery
+          marketplace.test_order_created_email_recovery
+          marketplace.test_hubtel.HubtelPaymentTests.test_callback_saves_exact_original_json_encrypted_and_allows_download
+          marketplace.test_hubtel.HubtelPaymentTests.test_failed_callback_is_saved_and_does_not_mark_paid
+          marketplace.test_hubtel.HubtelPaymentTests.test_repeated_callbacks_get_separate_evidence_entries
+          marketplace.test_hubtel.HubtelPaymentTests.test_verified_failed_transaction_stops_retries_and_updates_order
