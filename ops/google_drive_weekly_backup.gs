@@ -57,7 +57,7 @@ function kofadAlreadySavedToday_(folder, dateString) {
     const file = files.next();
     if (kofadBackupFile_(file) &&
         file.getName().startsWith(KOFAD_BACKUP_PREFIX + dateString + '-') &&
-        file.getDescription().indexOf('verified-sha256=') !== -1) {
+        String(file.getDescription() || '').indexOf('verified-sha256=') !== -1) {
       return true;
     }
   }
@@ -70,7 +70,7 @@ function kofadPruneAfterVerifiedUpload_(folder) {
   while (files.hasNext()) {
     const file = files.next();
     if (kofadBackupFile_(file) &&
-        file.getDescription().indexOf('verified-sha256=') !== -1) {
+        String(file.getDescription() || '').indexOf('verified-sha256=') !== -1) {
       backups.push(file);
     }
   }
