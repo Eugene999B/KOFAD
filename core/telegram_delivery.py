@@ -9,7 +9,9 @@ from .models import Access, TelegramOutbound
 
 def _still_authorized(notice):
     identity = notice.identity
-    if not identity.notifications_enabled or identity.revoked_at:
+    if identity.revoked_at or (not identity.notifications_enabled and notice.category != "recovery"):
+        return False
+    if notice.category == "recovery" and not identity.recovery_opt_in:
         return False
     if notice.category == "marketing" and not identity.marketing_opt_in:
         return False
@@ -35,8 +37,8 @@ def _still_authorized(notice):
 
 
 def deliver_pending(limit=20):
-    if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_NOTIFICATIONS_ENABLED
-            and settings.TELEGRAM_BOT_TOKEN):
+    if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_BOT_TOKEN
+            and (settings.TELEGRAM_NOTIFICATIONS_ENABLED or settings.TELEGRAM_RECOVERY_ENABLED)):
         return 0
     delivered = 0
     for _ in range(min(max(int(limit), 0), 100)):
@@ -46,7 +48,9 @@ def deliver_pending(limit=20):
             ).select_related("identity").order_by("pk").first()
             if not notice:
                 break
-            if not _still_authorized(notice):
+            if ((notice.category == "recovery" and not settings.TELEGRAM_RECOVERY_ENABLED)
+                    or (notice.category != "recovery" and not settings.TELEGRAM_NOTIFICATIONS_ENABLED)
+                    or not _still_authorized(notice)):
                 notice.status = "suppressed"
                 notice.save(update_fields=["status"])
                 continue
