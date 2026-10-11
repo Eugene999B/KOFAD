@@ -369,6 +369,8 @@ def connections_center(request, branch):
         "title": "Connections & integration health",
         "snapshot": snapshot,
         "visible_connections": visible,
+        "connection_priorities": [row for row in snapshot["items"]
+                                  if row["status"] == "issue"][:7],
         "active_group": category,
         "active_state": state,
     })
