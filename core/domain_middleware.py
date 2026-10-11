@@ -22,7 +22,7 @@ class OfficialDomainMiddleware:
         shared = (
             path in {"/health/", "/robots.txt", "/sitemap.xml", "/favicon.ico", "/favicon-96.png"} or path.startswith("/static/")
             or path.startswith("/sms/callback/") or path == "/sms/delivery/"
-            or path == "/whatsapp/webhook/"
+            or path == "/whatsapp/webhook/" or path == "/telegram/webhook/"
             or path == "/market/payments/paystack/webhook/"
             or path == "/market/payments/hubtel/callback/"
         )
