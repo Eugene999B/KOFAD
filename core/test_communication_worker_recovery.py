@@ -34,6 +34,7 @@ class RecoveryIsolationTests(SimpleTestCase):
     EMAIL_AUTOMATIONS_ENABLED=False, KOFAD_EMAIL_CENTER_ENABLED=False,
 )
 class ScheduledCampaignRecoveryTests(TestCase):
+    @patch("core.pos_hubtel.reconcile_due")
     @patch("marketplace.paystack_reconciliation.reconcile_due")
     @patch("core.pos_paystack.reconcile_due")
     @patch("marketplace.hubtel.reconcile_due")
@@ -48,16 +49,18 @@ class ScheduledCampaignRecoveryTests(TestCase):
     @patch("core.management.commands.process_sms.recover_pending_deliveries")
     def test_command_queues_opt_in_campaigns_independently(
         self, recovery, whatsapp, sync, order, automation, queue,
-        email_identity, outgoing, engine, hubtel, paystack, market_paystack,
+        email_identity, outgoing, engine, hubtel, paystack, market_paystack, pos_hubtel,
     ):
         # Other hourly housekeeping has no external settings in this test.
         Command(stdout=StringIO(), stderr=StringIO()).handle(loop=False)
         queue.assert_called_once_with(limit=75)
         recovery.assert_called_once()
+        pos_hubtel.assert_called_once()
         order.assert_called_once()
         sync.assert_called_once()
         whatsapp.assert_called_once()
 
+    @patch("core.pos_hubtel.reconcile_due", side_effect=RuntimeError("simulated merchant failure"))
     @patch("marketplace.paystack_reconciliation.reconcile_due")
     @patch("core.pos_paystack.reconcile_due")
     @patch("marketplace.hubtel.reconcile_due")
@@ -72,10 +75,14 @@ class ScheduledCampaignRecoveryTests(TestCase):
     @patch("core.management.commands.process_sms.recover_pending_deliveries")
     def test_campaign_failure_does_not_block_receipt_worker(
         self, recovery, whatsapp, sync, order, automation, queue,
-        email_identity, outgoing, engine, hubtel, paystack, market_paystack,
+        email_identity, outgoing, engine, hubtel, paystack, market_paystack, pos_hubtel,
     ):
         output = StringIO()
         Command(stdout=StringIO(), stderr=output).handle(loop=False)
         self.assertIn("Campaign queuing failed safely", output.getvalue())
+        self.assertIn("Hubtel POS reconciliation check failed safely", output.getvalue())
+        self.assertNotIn("simulated merchant failure", output.getvalue())
+        pos_hubtel.assert_called_once()
+        market_paystack.assert_called_once()
         order.assert_called_once()
         whatsapp.assert_called_once()
