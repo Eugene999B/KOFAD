@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from django.utils import timezone
 
 from core import staff_invites
 from core.models import Branch, StaffInvitation
