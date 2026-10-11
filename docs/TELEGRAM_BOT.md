@@ -1,101 +1,111 @@
-# Official KOFAD IMPEX Telegram bot
+# KOFAD IMPEX — official enterprise Telegram assistant
 
-Bot handle: **@KOFADIMPEXBOT** (provided by the owner). Public link:
-https://t.me/KOFADIMPEXBOT
+Username: **@KOFADIMPEXBOT**.
+Official bot: https://t.me/KOFADIMPEXBOT
 
-## Scope of this foundation
+## Critical release protection
 
-This integration is intentionally disabled until the owner configures the BotFather
-token privately. The initial webhook responds to private chat commands, directs
-users to canonical KOFAD services, and **never** grants access to staff, customer
-or financial records based on Telegram identifiers or claims in messages.
+Railway production uses **railway-release**, not main. This change was built as a
+new additive feature branch FROM railway-release. Never force-push, restore a
+stale branch, delete production history or replace KOFAD's existing services.
+Before merging, compare current railway-release with the PR base. Merge only
+after migrations, regression tests, and live-diff review have passed. Existing
+financial, stock, payroll, WhatsApp, Android, email, and backup behaviors must
+remain unchanged. DeepSeek is explicitly excluded from this release.
 
-The following are **not yet built or enabled**: Telegram/KOFAD account binding,
-staff management analytics, customer-specific order data returned in chat,
-OTP delivery, marketing subscriptions, outbound notification queues, AI
-conversation models, approvals, transactional business actions, and autonomous
-financial operations. These require their own identity, permission, consent,
-idempotency, audit and rollout designs. No one should advertise them as live.
+## Features implemented in this PR
 
-## Owner setup
+- Authenticated Telegram webhook at /telegram/webhook/ (header-secret verified,
+  private conversations only, replay protection, stale-update rejection).
+- Website-to-Telegram double-confirmed account pairing for existing verified
+  staff or customer accounts; website current password + short-lived Telegram
+  code. Telegram handle/phone is never accepted as proof of identity.
+- Live credential-stamp validation invalidates Telegram privileges when KOFAD
+  password or staff session version changes.
+- Customer own-order tracking by account association, published product search,
+  contact and self-service sign-in routing.
+- Staff READ-ONLY verified closing summaries for authorized branches (7d/30d).
+  No arbitrary SQL queries, direct payments, refunds or permission changes.
+- Independently opted-in customer order notices, staff closing notices, severe
+  cash variance notices, stock shortages, weekly and monthly business digests.
+- Durable idempotent outbox with kill switch, opt-in and permission checks at
+  send time. Uncertain send outcomes are NEVER automatically retried to avoid
+  duplicate alerts.
+- Separately opt-in Telegram OTP password recovery for staff and customers
+  using the phone already registered to their KOFAD account. Requires a prior
+  strong website/Telegram account link, rate limitation and a fresh six-digit
+  code delivered ONLY to that linked chat. Existing SMS and email reset flows
+  are unchanged. Staff privileged MFA is not bypassed.
+- Account pages with consent controls and explicit disconnect.
+- Automated regression tests and manual deployment hooks.
 
-1. In Telegram, open the verified **@BotFather** account, use /mybots and select
-   KOFADIMPEXBOT. Do not post or commit the BotFather token anywhere.
-2. In Railway, open the **KOFAD web service** (not the SMS worker or database),
-   select **Variables**, and store:
-   - TELEGRAM_BOT_TOKEN (the real value from BotFather; secret)
-   - TELEGRAM_WEBHOOK_SECRET (a separately generated random secret, not the bot token)
-   - TELEGRAM_BOT_ENABLED=1
-   - TELEGRAM_WEBHOOK_BASE_URL=https://staff.kofadimpex.com
-3. Deploy the reviewed change only after CI passes.
-4. Register the webhook *once*, from an environment that has those protected
-   variables, by running:
-   python manage.py setup_telegram_webhook
-   Use the hosting service's **remote shell/exec** or a safe one-time job with
-   the same protected variables. Do not copy the token into the command.
-5. For diagnostic status:
-   python manage.py setup_telegram_webhook --status
-   To disconnect:
-   python manage.py setup_telegram_webhook --remove
-6. Open https://t.me/KOFADIMPEXBOT, press Start, send /ping and /help.
-   A successful /ping reply confirms the inbound webhook and reply path.
+## Not yet provided
 
-The Telegram webhook accepts authenticated HTTPS POST requests at:
-https://staff.kofadimpex.com/telegram/webhook/
+- DeepSeek / external LLM intelligence (separate future update by request).
+- Arbitrary staff instructions, autonomous refunds, privileged financial
+  approvals, open-ended account database search, voice recognition.
+- Bulk marketing campaigns, any unconsented unsolicited messages or sending
+  Telegram messages to a phone number that has not started and linked the bot.
+- Guaranteed Telegram OTP delivery: provider API may be unavailable; existing
+  recovery alternatives remain available.
 
-We use the Telegram setWebhook secret_token option. Telegram sends that value
-as the X-Telegram-Bot-Api-Secret-Token header. The Django handler checks it
-with a constant-time comparison and rejects unauthenticated requests.
+## Environment flags — off until testing
 
-Telegram webhook responses can invoke sendMessage directly; this avoids a
-second API call but does not provide a send receipt. Current messages are
-limited to **private conversations** and use public-only commands.
+Add the token using Railway service Variables on **kofad-web**, not GitHub.
+Keep private: never paste token or webhook secret into chats, logs or code.
 
-## Secure future phases
+TELEGRAM_BOT_TOKEN=<private secret already configured by owner>
+TELEGRAM_WEBHOOK_SECRET=<separate random 32-byte URL-safe secret>
+TELEGRAM_WEBHOOK_BASE_URL=https://staff.kofadimpex.com
+TELEGRAM_BOT_ENABLED=0
+TELEGRAM_ACCOUNT_LINK_ENABLED=0
+TELEGRAM_BUSINESS_ANALYTICS_ENABLED=0
+TELEGRAM_NOTIFICATIONS_ENABLED=0
+TELEGRAM_RECOVERY_ENABLED=0
 
-1. Create a one-time, short-lived KOFAD **website-initiated** account-linking
-   challenge. Require normal staff/customer login and current role/branch
-   validation, separate account types and secure unlink/revoke controls.
-2. Add a durable, idempotent, rate-limited notification outbox, consent flags,
-   STOP/unsubscribe mechanism, logged delivery outcomes and retention.
-3. Enable read-only KOFAD tools: public product search, per-customer order
-   tracking, carefully scoped reports for authorized management.
-4. Add approved second-factor delivery use cases where allowed, throttling,
-   expiry, anti-replay and fallback. Never request password or OTP in chat.
-5. AI chat can summarize *authorized* information through explicitly scoped,
-   audited tools. Never allow the model to query arbitrary database tables,
-   change payment state, issue refunds or grant privileged permissions.
+Roll out in order:
+1. Apply migration 0047 via reviewed deployment after CI passing.
+2. Configure secret and webhook host in Railway.
+3. Enable TELEGRAM_BOT_ENABLED=1 and register webhook once in a securely
+   configured runtime: python manage.py setup_telegram_webhook
+4. Verify private chat /start, /ping, /help and rejection of spoofed requests.
+5. Enable TELEGRAM_ACCOUNT_LINK_ENABLED=1; pair a TEST staff and customer
+   account through KOFAD website, verify confirmation and permission boundaries.
+6. Enable TELEGRAM_BUSINESS_ANALYTICS_ENABLED=1 after verifying branch-scoped
+   reports in test accounts.
+7. Enable TELEGRAM_NOTIFICATIONS_ENABLED=1 only after reviewing outbox
+   consent and worker behavior. The existing kofad-sms worker processes
+   messages independently, using the same shared PostgreSQL database.
+8. Keep TELEGRAM_RECOVERY_ENABLED=0 until the owner verifies prior link,
+   opt-in, wrong-code, expiry, throttling, staff session revocation and
+   existing SMS/email fallbacks in a production-equivalent test environment.
+   Only then enable it deliberately.
 
-## BotFather metadata suggestion
+To inspect Telegram provider webhook without printing secrets:
+python manage.py setup_telegram_webhook --status
+To stop the provider webhook:
+python manage.py setup_telegram_webhook --remove
 
-Name: KOFAD IMPEX
+## Important restrictions
 
-About: Official KOFAD business assistant for information, support and services.
+Telegram bots **cannot** begin a conversation with a phone number. Users
+must first open @KOFADIMPEXBOT, start the bot, and link their existing KOFAD
+account. The KOFAD website-verified account phone is only an account lookup
+hint for password recovery, not Telegram identity proof.
 
-Description: Welcome to KOFAD IMPEX. Get company information, browse products,
-find customer accounts and support. More verified features are on the way.
-Do not share passwords, PINs or OTPs.
+Private analytics use recorded VERIFIED closing records, not speculative
+numbers. Staff roles and branch access are rechecked on every request,
+and again before queued messages are sent. Marketing is separate from
+transactional notices and requires explicit opt-in.
 
-Command list for /setcommands:
+Production Telegram messages may be stored by Telegram; avoid full customer
+addresses, passwords, OTP replies, financial credentials, or sensitive staff
+details in normal chat.
 
-start - Open the KOFAD assistant
-help - View available services
-shop - Browse KOFAD products
-orders - View your orders securely
-track - Check order tracking options
-account - Open your customer account
-staff - Open the staff portal
-analysis - Business insights information
-alerts - Telegram notification status
-otp - Verification and safety advice
-support - Contact KOFAD
-privacy - Privacy information
-ping - Test the bot connection
+## Support and rollback
 
-## Security & operations
-
-Do not send tokens through Telegram messages, ChatGPT, screenshots, public
-GitHub files, or logs. Keep bot credentials in Railway protected environment
-variables and rotate them via BotFather if exposed. Enforce KOFAD's role and
-branch restrictions on all future private tool calls, not just on menus.
-Always require user opt-in before outbound business/marketing notifications.
+Immediate disable: set TELEGRAM_BOT_ENABLED=0. Other flags are independent.
+Never roll back financial migrations to disable the Telegram bot; leave the
+additive tables in place and flip its flags. Preserve PostgreSQL data, KOFAD
+history and deployed code. The Django management command may delete the bot
+webhook if a hard disconnect is required.
