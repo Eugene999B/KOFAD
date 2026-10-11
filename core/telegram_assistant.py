@@ -182,8 +182,9 @@ def reply_for(text, chat_id, user_id):
         return (
             "Password recovery and verification are handled through the official KOFAD "
             "website. Never share passwords or OTPs in Telegram.\n"
-            "Customer: " + MARKET + "/market/account/password-reset/\n"
-            "Staff: " + STAFF + "/forgot-password/"
+            "Customer Telegram recovery (if enabled): " + MARKET + "/market/integrations/telegram/recover/\n"
+            "Staff Telegram recovery (if enabled): " + STAFF + "/integrations/telegram/recover/\n"
+            "Existing customer SMS/email: " + MARKET + "/market/account/password-reset/"
         )
     if command in {"support", "contact", "human"} or "speak to someone" in plain:
         return "Contact the KOFAD team: " + COMPANY + "/contact/"
