@@ -261,3 +261,9 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
 TELEGRAM_WEBHOOK_BASE_URL = os.environ.get("TELEGRAM_WEBHOOK_BASE_URL", "https://staff.kofadimpex.com").strip().rstrip("/")
 TELEGRAM_WEBHOOK_MAX_BYTES = 65536
+
+# Enterprise Telegram features disabled independently; never require DeepSeek.
+TELEGRAM_ACCOUNT_LINK_ENABLED = os.environ.get("TELEGRAM_ACCOUNT_LINK_ENABLED", "0") == "1"
+TELEGRAM_BUSINESS_ANALYTICS_ENABLED = os.environ.get("TELEGRAM_BUSINESS_ANALYTICS_ENABLED", "0") == "1"
+TELEGRAM_NOTIFICATIONS_ENABLED = os.environ.get("TELEGRAM_NOTIFICATIONS_ENABLED", "0") == "1"
+TELEGRAM_RECOVERY_ENABLED = os.environ.get("TELEGRAM_RECOVERY_ENABLED", "0") == "1"
