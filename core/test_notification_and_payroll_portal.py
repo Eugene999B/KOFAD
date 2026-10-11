@@ -117,6 +117,11 @@ class StaffNotificationTests(TestCase):
             "owner-report", "owner-report@example.test", "Test-pass-1234567"
         )
         self.owner.access.branches.add(self.branch)
+        from marketplace.models import EmailIdentity
+        EmailIdentity.objects.create(
+            kind="staff", owner_id=self.owner.pk, email=self.owner.email,
+            verified_at=timezone.now(), notifications_enabled=True,
+        )
         self.owner.access.email_daily_closing = True
         self.owner.access.email_critical_alerts = True
         self.owner.access.save(update_fields=["email_daily_closing", "email_critical_alerts"])
@@ -144,6 +149,18 @@ class StaffNotificationTests(TestCase):
         self.assertEqual(process_email_outbox(), 0)
         send.assert_not_called()
         self.assertFalse(EmailNotice.objects.exclude(status="cancelled").exists())
+
+    @override_settings(EMAIL_DELIVERY_ENABLED=True)
+    @patch("core.notification_engine.EmailMultiAlternatives.send", return_value=1)
+    def test_verified_staff_opt_out_stops_already_queued_business_reports(self, send):
+        from marketplace.models import EmailIdentity
+        queue_closing_reports(self.closing)
+        EmailIdentity.objects.filter(kind="staff", owner_id=self.owner.pk).update(
+            notifications_enabled=False
+        )
+        self.assertEqual(process_email_outbox(), 0)
+        send.assert_not_called()
+        self.assertEqual(EmailNotice.objects.filter(status="cancelled").count(), 2)
 
     @override_settings(EMAIL_DELIVERY_ENABLED=True)
     @patch("core.notification_engine.EmailMultiAlternatives.send", return_value=1)
