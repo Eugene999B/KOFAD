@@ -301,7 +301,7 @@ class CheckoutForm(forms.Form):
                 if not data.get(field):
                     self.add_error(field, "This is required for delivery.")
             if data.get("latitude") is None or data.get("longitude") is None:
-                raise forms.ValidationError("Pin your delivery location on the map or use current location.")
+                raise forms.ValidationError("Confirm a delivery location using landmark search, GhanaPost GPS or current location.")
         else:
             data["delivery_zone"] = None
             for field in ("region", "town", "address_line", "landmark", "ghana_post_gps", "latitude", "longitude"):
