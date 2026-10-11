@@ -48,6 +48,8 @@ class CustomerEntryRecoveryTests(MarketFixtures):
 @override_settings(
     KOFAD_EMAIL_ENABLED=True,
     KOFAD_EMAIL_NOTIFICATIONS_ENABLED=True,
+    KOFAD_EMAIL_PROVIDER="smtp",
+    DEFAULT_FROM_EMAIL="ci-only@example.com",
     EMAIL_HOST="test.mail.invalid",
     EMAIL_HOST_USER="ci-only@example.com",
     EMAIL_HOST_PASSWORD="ci-test-password",
