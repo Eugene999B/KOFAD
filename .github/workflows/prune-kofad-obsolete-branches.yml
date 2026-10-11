@@ -1,5 +1,5 @@
 name: Archive and prune verified obsolete KOFAD branches
-# One final SHA-pinned retry after fixing the absent archival-tag null response.
+# Use the tested KOFAD Python tag archiver to ensure deletion cannot lose history.
 on:
   pull_request:
     paths:
