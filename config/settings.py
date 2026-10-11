@@ -242,6 +242,10 @@ KOFAD_SUPPORT_REPLY_TO_EMAIL = os.environ.get("KOFAD_SUPPORT_REPLY_TO_EMAIL", ""
 KOFAD_EMAIL_CENTER_ENABLED = os.environ.get("KOFAD_EMAIL_CENTER_ENABLED", "0") == "1"
 KOFAD_EMAIL_INGEST_SECRET = os.environ.get("KOFAD_EMAIL_INGEST_SECRET", "").strip()
 KOFAD_BREVO_WEBHOOK_TOKEN = os.environ.get("KOFAD_BREVO_WEBHOOK_TOKEN", "").strip()
+# Optional scoped Cloudflare READ-ONLY token for manual diagnostics; do not
+# use a Global API key or an edit/write token. Never shown in staff pages.
+KOFAD_CLOUDFLARE_READ_TOKEN = os.environ.get("KOFAD_CLOUDFLARE_READ_TOKEN", "").strip()
+KOFAD_CLOUDFLARE_ZONE_ID = os.environ.get("KOFAD_CLOUDFLARE_ZONE_ID", "5459e449118218037a186d47a9fe7fd7").strip()
 
 
 # Optional public-site analytics is loaded only after the visitor opts in.
