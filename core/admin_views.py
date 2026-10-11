@@ -7,6 +7,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET
 
 from . import services as s
 from .models import Access, Branch, PasswordRecovery
@@ -340,4 +343,46 @@ def settings_center(request, branch):
     return render(request, "settings_center.html", {
         "title": "Settings",
         "single_branch": Branch.objects.filter(active=True).count() == 1,
+    })
+
+
+@company_admin
+@never_cache
+@require_GET
+def connections_center(request, branch):
+    """Private, read-only external services inventory; no provider probes."""
+    from .integration_health import catalog
+    snapshot = catalog()
+    category = request.GET.get("group", "")[:32]
+    state = request.GET.get("state", "")[:32]
+    allowed_groups = {code for code, _label in snapshot["groups"]}
+    if category not in allowed_groups:
+        category = ""
+    if state not in {"working", "ready", "warning", "issue", "not_connected", "external", "planned"}:
+        state = ""
+    visible = [row for row in snapshot["items"]
+               if (not category or row["group"] == category)
+               and (not state or row["status"] == state)]
+    return render(request, "connections_center.html", {
+        "title": "Connections & integration health",
+        "snapshot": snapshot,
+        "visible_connections": visible,
+        "active_group": category,
+        "active_state": state,
+    })
+
+
+@company_admin
+@never_cache
+@require_GET
+def connections_detail(request, branch, connection_id):
+    """Detailed explanation with evidence and specific missing prerequisites."""
+    from .integration_health import catalog
+    snapshot = catalog()
+    item = next((row for row in snapshot["items"] if row["id"] == connection_id), None)
+    if item is None:
+        raise Http404("Connection not found")
+    return render(request, "connections_detail.html", {
+        "title": item["name"] + " · Connection diagnostics",
+        "item": item, "snapshot": snapshot,
     })
