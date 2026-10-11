@@ -14,6 +14,27 @@ from .models import TelegramIdentity, TelegramLinkChallenge, TelegramOutbound
 BOT = "https://t.me/KOFADIMPEXBOT"
 
 
+def credential_stamp(kind, owner_id):
+    """Invalidate all linked Telegram access when the KOFAD credential changes."""
+    if kind == "staff":
+        from django.contrib.auth.models import User
+        from .models import Access
+        account = User.objects.filter(pk=owner_id, is_active=True).first()
+        if not account:
+            return ""
+        access = Access.objects.filter(user=account).first()
+        version = access.session_version if access else 0
+        return _digest("identity", f"staff:{owner_id}:{account.password}:{version}")
+    if kind == "customer":
+        from marketplace.models import CustomerAccount
+        account = CustomerAccount.objects.filter(pk=owner_id, active=True).first()
+        if not account:
+            return ""
+        material = "customer:" + str(owner_id) + ":" + account.password_hash + ":" + (account.phone or "")
+        return _digest("identity", material)
+    return ""
+
+
 def _digest(label, value):
     return salted_hmac("kofad-telegram-" + label, value, algorithm="sha256").hexdigest()
 
@@ -93,7 +114,8 @@ def confirm_link(kind, owner_id, code):
             existing.delete()
         try:
             TelegramIdentity.objects.create(
-                kind=kind, owner_id=owner_id, telegram_user_id=challenge.telegram_user_id,
+                kind=kind, owner_id=owner_id, auth_stamp=credential_stamp(kind, owner_id),
+                telegram_user_id=challenge.telegram_user_id,
                 chat_id=challenge.chat_id, verified_at=now,
             )
         except IntegrityError:
@@ -104,9 +126,13 @@ def confirm_link(kind, owner_id, code):
 
 
 def linked_identity(kind, owner_id):
-    return TelegramIdentity.objects.filter(
+    identity = TelegramIdentity.objects.filter(
         kind=kind, owner_id=owner_id, revoked_at__isnull=True,
     ).first()
+    if not identity:
+        return None
+    latest = credential_stamp(kind, owner_id)
+    return identity if latest and hmac.compare_digest(identity.auth_stamp, latest) else None
 
 
 def queue_notice(identity, category, source_key, body, branch=None):
