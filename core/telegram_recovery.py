@@ -23,7 +23,7 @@ from django.views.decorators.http import require_http_methods
 
 from .identity import normalize_ghana_phone
 from .models import Access, TelegramIdentity, TelegramOutbound, TelegramRecoveryChallenge
-from .telegram_integration import _digest
+from .telegram_integration import _digest, linked_identity
 
 
 def _account(kind, pk):
@@ -69,9 +69,9 @@ def request_recovery(kind, identifier, staff_username):
     account = _find_account(kind, identifier, staff_username)
     if not account:
         return None
-    identity = TelegramIdentity.objects.filter(
-        kind=kind, owner_id=account.pk, revoked_at__isnull=True, recovery_opt_in=True,
-    ).first()
+    identity = linked_identity(kind, account.pk)
+    if identity and not identity.recovery_opt_in:
+        identity = None
     if not identity:
         return None
     now = timezone.now()
@@ -117,7 +117,7 @@ def complete_recovery(kind, challenge_id, code, new_password, confirm_password):
         challenge.save(update_fields=["attempts"])
         identity = challenge.identity
         account = _account(kind, challenge.owner_id)
-        if not account or identity.revoked_at or not identity.recovery_opt_in:
+        if not account or identity.revoked_at or not identity.recovery_opt_in or not linked_identity(kind, account.pk):
             return False, "This account can no longer use Telegram recovery."
         if identity.kind != kind or identity.owner_id != challenge.owner_id:
             return False, "This recovery account has changed."
@@ -182,7 +182,7 @@ def _portal(request, kind):
             if success:
                 request.session.pop(session_key, None)
                 messages.success(request, note)
-                return redirect("/login/" if kind == "staff" else "/market/account/login/")
+                return redirect(settings.STAFF_LOGIN_PATH if kind == "staff" else "/market/account/login/")
             messages.error(request, note)
         elif action == "cancel":
             request.session.pop(session_key, None)
