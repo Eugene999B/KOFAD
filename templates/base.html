@@ -5,7 +5,7 @@
 <body class="{% block body_class %}{% endblock %}" data-session-zone="staff" data-session-active="true" data-session-logout-url="/logout/" data-session-status-url="/session/state/" data-session-login-url="/login/"><a class="skip" href="#main">Skip to content</a>
 <div class="login-welcome-overlay" id="login-welcome-overlay" aria-hidden="true" data-user-name="{{ request.user.get_full_name|default:request.user.username }}" data-branch-name="{{ current_branch.name|default:'KOFAD' }}">
   <div class="welcome-orbit" aria-hidden="true"></div>
-  <div class="welcome-logo"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+  <div class="welcome-logo"><img src="{% static 'brand/kofad-logo-transparent.png' %}" alt=""></div>
   <p>WELCOME BACK</p>
   <h2><span id="welcome-person">{{ request.user.get_full_name|default:request.user.username }}</span></h2>
   <small>{{ current_branch.name|default:"KOFAD" }} · Ready for business</small>
