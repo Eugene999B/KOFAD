@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .telegram_assistant import reply_for
+from .telegram_channels import BOT_KINDS, bot_enabled, bot_secret
 from .models import TelegramUpdate
 
 WEBHOOK_PATH = "/telegram/webhook/"
@@ -16,13 +17,12 @@ WEBHOOK_PATH = "/telegram/webhook/"
 
 @csrf_exempt
 @require_POST
-def webhook(request):
+def webhook(request, bot_kind="official"):
     # Telegram's secret_token header is independent of the bot API credential.
-    if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_BOT_TOKEN
-            and settings.TELEGRAM_WEBHOOK_SECRET):
+    if bot_kind not in BOT_KINDS or not bot_enabled(bot_kind):
         return HttpResponse("Telegram integration not configured.", status=503)
     supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    expected = settings.TELEGRAM_WEBHOOK_SECRET
+    expected = bot_secret(bot_kind)
     if not supplied or not hmac.compare_digest(supplied.encode(), expected.encode()):
         return HttpResponse("Unauthorized webhook.", status=403)
     if len(request.body) > settings.TELEGRAM_WEBHOOK_MAX_BYTES:
@@ -58,7 +58,7 @@ def webhook(request):
     if not isinstance(text, str) or not text:
         return HttpResponse(status=200)
     # Telegram resends updates when acknowledgement is lost. Only process once.
-    _, created = TelegramUpdate.objects.get_or_create(update_id=update_id)
+    _, created = TelegramUpdate.objects.get_or_create(bot_kind=bot_kind, update_id=update_id)
     if not created:
         return HttpResponse(status=200)
     # Telegram supports invoking sendMessage as the HTTP response to a webhook.
@@ -66,6 +66,6 @@ def webhook(request):
     return JsonResponse({
         "method": "sendMessage",
         "chat_id": chat_id,
-        "text": reply_for(text, chat_id, sender_id)[:4096],
+        "text": reply_for(text, chat_id, sender_id, bot_kind=bot_kind)[:4096],
         "disable_web_page_preview": True,
     })
