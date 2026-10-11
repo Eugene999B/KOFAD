@@ -64,6 +64,7 @@ class Migration(migrations.Migration):
                 ("sent_at", models.DateTimeField(blank=True, null=True)),
                 ("last_error", models.CharField(blank=True, max_length=180)),
                 ("identity", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="core.telegramidentity")),
+                ("branch", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to="core.branch")),
             ],
         ),
     ]
