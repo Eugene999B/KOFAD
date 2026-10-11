@@ -1109,7 +1109,33 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
     if attempt.provider != expected_provider:
         raise ValidationError("Payment provider does not match the saved attempt.")
     order = OnlineOrder.objects.select_for_update().get(pk=attempt.order_id)
-    if order.payment_status == "paid":
+    if order.payment_status in {"paid", "refunded"}:
+        # A separate transaction may settle after an order was paid or refunded.
+        # Never reopen a refunded order or post a second sale; do not ignore a confirmed
+        # provider receipt: operations must reconcile or refund the extra charge.
+        if (order.payment_reference != reference
+                and str(provider_data.get("status", "")).lower() == "success"):
+            notice = "Additional provider payment detected after order settlement. Manager reconciliation required."
+            if attempt.provider_message != notice:
+                attempt.status = "attention"
+                attempt.provider_message = notice
+                attempt.next_check_at = None
+                attempt.verified_at = timezone.now()
+                attempt.save(update_fields=[
+                    "status", "provider_message", "next_check_at", "verified_at",
+                ])
+                OrderEvent.objects.create(
+                    order=order,
+                    status="payment_attention",
+                    title="Additional payment requires reconciliation",
+                    note=(
+                        f"A different {expected_provider} transaction {reference} was confirmed "
+                        f"after this order was already {order.payment_status} using {order.payment_reference}. "
+                        "Investigate the provider account and arrange a refund when appropriate. "
+                        "Do not post a second sale or release stock twice."
+                    ),
+                    customer_visible=False,
+                )
         return order
 
     provider_status = str(provider_data.get("status", "")).lower()
@@ -1129,7 +1155,14 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
                 order.save(update_fields=["payment_status", "updated_at"])
         raise ValidationError("The payment has not been completed.")
 
-    direct_momo = attempt.verification_summary.get("flow") == "mobile_money"
+    flow = (attempt.verification_summary or {}).get("flow")
+    direct_momo = flow == "mobile_money"
+    if expected_provider == "paystack" and flow == "card" and provider_data.get("channel") != "card":
+        attempt.status = "attention"
+        attempt.next_check_at = None
+        attempt.provider_message = "Verified payment channel differs from the requested card channel."
+        attempt.save(update_fields=["status", "next_check_at", "provider_message"])
+        raise ValidationError("The payment channel does not match the saved card request.")
     if expected_provider == "paystack" and (
         (str(settings.PAYSTACK_SECRET_KEY).startswith("sk_live_") and provider_data.get("domain") != "live")
         or (direct_momo and (provider_data.get("channel") != "mobile_money" or not provider_data.get("id")))
