@@ -14,6 +14,7 @@ from .tests import MarketFixtures
 class GhanaLocationTests(TestCase):
     def test_code_format(self):
         self.assertEqual(normalize_digital_address(" ak-039-5028 "), "AK-039-5028")
+        self.assertEqual(normalize_digital_address("ak0395028"), "AK-039-5028")
         with self.assertRaises(ValidationError):
             normalize_digital_address("bad-code")
 
