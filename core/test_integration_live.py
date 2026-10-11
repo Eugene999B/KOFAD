@@ -21,7 +21,9 @@ class IntegrationProviderChecksTests(ConnectionsCenterTests):
             call.assert_not_called()
 
         secure = Client(enforce_csrf_checks=True)
-        secure.force_login(self.staff)
+        # Reuse the already-authorised staff session/branch cookie; otherwise
+        # KOFAD's session-zone middleware redirects before Django checks CSRF.
+        secure.cookies.update(self.client.cookies)
         self.assertEqual(secure.post(verify).status_code, 403)
 
     def test_live_result_is_scoped_to_session_and_throttled(self):
