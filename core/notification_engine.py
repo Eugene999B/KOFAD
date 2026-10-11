@@ -49,13 +49,25 @@ def _authorised(user, branch):
     )
 
 
+def _staff_mailbox_connected(user):
+    """Only currently verified staff mailboxes with notifications enabled qualify."""
+    from marketplace.models import EmailIdentity
+    return bool(
+        user.email
+        and EmailIdentity.objects.filter(
+            kind="staff", owner_id=user.pk, email__iexact=user.email,
+            verified_at__isnull=False, notifications_enabled=True,
+        ).exists()
+    )
+
+
 def _recipients(branch, flag):
     qs = User.objects.filter(is_active=True).exclude(email="").filter(
         Q(is_superuser=True) | Q(access__branches=branch)
     ).select_related("access").distinct().order_by("pk")
     for user in qs:
         access = getattr(user, "access", None)
-        if not access or not getattr(access, flag, False) or not _authorised(user, branch):
+        if not access or not getattr(access, flag, False) or not _authorised(user, branch) or not _staff_mailbox_connected(user):
             continue
         try:
             validate_email(user.email)
@@ -368,7 +380,7 @@ def _may_deliver(notice):
     return bool(
         flag and access and getattr(access, flag, False)
         and user.email.strip().lower() == notice.recipient.strip().lower()
-        and _authorised(user, notice.branch)
+        and _authorised(user, notice.branch) and _staff_mailbox_connected(user)
     )
 
 
