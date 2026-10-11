@@ -69,7 +69,6 @@ def accept_token(token, user_id, chat_id, bot_kind):
     """Telegram endpoint: do not link until authenticated website confirms code."""
     if bot_kind not in BOT_KINDS or not token or len(token) > 64 or not all(c.isalnum() or c in "_-" for c in token):
         return "Invalid or expired account-link request."
-    bot_kind = bot_kind or bot_for_account(kind)
     now = timezone.now()
     with transaction.atomic():
         challenge = TelegramLinkChallenge.objects.select_for_update().filter(
@@ -97,6 +96,7 @@ def accept_token(token, user_id, chat_id, bot_kind):
 
 def confirm_link(kind, owner_id, code, bot_kind=None):
     """Finish pairing only from existing authenticated website session."""
+    bot_kind = bot_kind or bot_for_account(kind)
     now = timezone.now()
     with transaction.atomic():
         challenge = TelegramLinkChallenge.objects.select_for_update().filter(
