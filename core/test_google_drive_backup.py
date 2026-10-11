@@ -26,6 +26,7 @@ def signed_headers(*, timestamp=None, key=KEY):
     }
 
 
+@override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com", "kofadimpex.com"])
 class GoogleWeeklyExportTests(TestCase):
     def test_export_is_off_by_default_and_reveals_nothing(self):
         response = self.client.post(PATH, **signed_headers())
