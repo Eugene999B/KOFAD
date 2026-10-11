@@ -3,6 +3,16 @@ from django.conf import settings
 from django.urls import path
 from . import views as v
 from . import account as accounts
+from . import pos_payment_views as momo_payments
+from . import gmail_api as gmail_sender
+from . import email_center as business_email
+from . import email_delivery_events as email_events
+from . import customer_care as customer_care_views
+from . import email_campaigns as campaigns
+from . import email_productivity as pro_email
+from . import staff_invites
+from . import native_apps, pwa, mobile_staff_api
+from marketplace import mobile_identity
 from . import count_views
 from . import admin_views
 from . import export_views
@@ -12,6 +22,44 @@ from . import google_oauth
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
+    # Recovered release routes lost during Oct 10 payroll/consent promotion.
+    # Modules and their existing access-control decorators are preserved.
+    path("staff/mobile/v1/bootstrap/", mobile_staff_api.bootstrap, name="staff_mobile_bootstrap"),
+    path("staff/mobile/v1/capabilities/", mobile_identity.capabilities, {"channel": "staff"}, name="staff_mobile_capabilities"),
+    path("staff/mobile/v1/authorize/", mobile_identity.authorize, {"channel": "staff"}, name="staff_mobile_authorize"),
+    path("staff/mobile/v1/token/", mobile_identity.token, {"channel": "staff"}, name="staff_mobile_token"),
+    path("staff/mobile/v1/me/", mobile_identity.me, {"channel": "staff"}, name="staff_mobile_me"),
+    path("staff/mobile/v1/revoke/", mobile_identity.revoke, {"channel": "staff"}, name="staff_mobile_revoke"),
+    path("staff/app/", native_apps.staff_downloads, name="staff_native_downloads"),
+    path("staff/app/control/", native_apps.mobile_operations_dashboard, name="mobile_operations_dashboard"),
+    path("staff/app/releases.json", native_apps.staff_release_status, name="staff_native_releases"),
+    path("staff/app/native-version.json", native_apps.staff_native_version, name="staff_native_version"),
+    path("staff/app/manifest.webmanifest", pwa.manifest, {"kind": "staff"}, name="staff_pwa_manifest"),
+    path("staff/app/sw.js", pwa.worker, {"kind": "staff"}, name="staff_pwa_sw"),
+    path("staff/app/offline/", pwa.offline, {"kind": "staff"}, name="staff_pwa_offline"),
+    path("auth/google/gmail/connect/", gmail_sender.connect_start, name="gmail_sender_connect"),
+    path("auth/google/gmail/callback/", gmail_sender.connect_callback, name="gmail_sender_callback"),
+    path("auth/google/gmail/disconnect/", gmail_sender.disconnect, name="gmail_sender_disconnect"),
+    path("auth/google/gmail/send-test/", gmail_sender.send_test, name="gmail_sender_test"),
+    path("email/", business_email.inbox, name="email_center"),
+    path("email/work/", pro_email.work, name="email_work"),
+    path("email/drafts/", pro_email.drafts, name="email_drafts"),
+    path("email/replies/", pro_email.library, name="email_replies"),
+    path("email/reports/", pro_email.reports, name="email_reports"),
+    path("email/history/", business_email.inbox, {"section": "history"}, name="email_history"),
+    path("email/automations/", business_email.inbox, {"section": "automations"}, name="email_automations"),
+    path("email/team/", business_email.inbox, {"section": "team"}, name="email_team"),
+    path("email/campaigns/", campaigns.dashboard, name="email_campaigns"),
+    path("email/ingest/", business_email.ingest, name="email_ingest"),
+    path("email/events/brevo/", email_events.brevo_delivery_callback, name="email_brevo_events"),
+    path("payments/momo/", momo_payments.payments_history, name="pos_momo_payments"),
+    path("payments/momo/<str:reference>/", momo_payments.payment_detail, name="pos_momo_payment"),
+    path("payments/momo/<str:reference>/verify/", momo_payments.manual_verify, name="pos_momo_verify"),
+    path("api/customers/check-duplicate/", v.customer_duplicate_check, name="customer_duplicate_check"),
+    path("administration/users/<int:pk>/invite/resend/", admin_views.resend_staff_invitation, name="staff_invite_resend"),
+    path("staff-invite/<int:pk>/<str:token>/", staff_invites.open_invitation, name="staff_invitation_open"),
+    path("staff-invite/complete/", staff_invites.complete_invitation, name="staff_invitation_complete"),
+    path("settings/customer-care/", customer_care_views.settings, name="customer_care_settings"),
     path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
     # Match the OAuth names used by both login templates and account linking.
     # These views enforce Google setup, PKCE, state/nonce, existing account
