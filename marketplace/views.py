@@ -616,8 +616,12 @@ def account_finish(request):
         return redirect("market_access")
     existing = CustomerAccount.objects.filter(phone=phone).first()
     if existing and existing.active:
-        services.set_customer_session(request, existing)
-        return redirect("market")
+        # Verified registration phone ownership never bypasses an existing password.
+        # Account creation may have raced with the prior OTP-check lookup.
+        request.session["market_login_phone"] = phone
+        request.session.pop("market_verified_phone", None)
+        request.session.pop("market_pending_phone", None)
+        return redirect("market_login")
     form = CustomerRegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         data = form.cleaned_data
@@ -711,7 +715,7 @@ def customer_password_reset_verify(request):
                 messages.error(request, problem(exc))
         return render(request, "marketplace/password_reset_verify.html", _market_context(
             request, title="Verify email reset", recovery_channel="email",
-            recovery_destination="your verified email address",
+            recovery_destination="your verified email address", phone="",
         ))
     verified_phone = request.session.get("market_reset_verified_phone")
     if verified_phone:
