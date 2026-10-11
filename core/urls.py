@@ -1,4 +1,5 @@
 from . import whatsapp_bot_views
+from django.conf import settings
 from django.urls import path
 from . import views as v
 from . import account as accounts
@@ -7,10 +8,25 @@ from . import admin_views
 from . import export_views
 from . import maintenance_views
 from . import google_drive_backup
+from . import google_oauth
 from . import accounting_views, approval_views, creditor_views, payroll_views, whatsapp_views, workforce_views
 from .sms.views import callback, delivery_callback as v_sms_delivery_callback
 urlpatterns = [
     path("settings/whatsapp-bot/", whatsapp_bot_views.dashboard, name="whatsapp_bot_dashboard"),
+    # Match the OAuth names used by both login templates and account linking.
+    # These views enforce Google setup, PKCE, state/nonce, existing account
+    # ownership and current-password confirmation for link/unlink actions.
+    path("auth/google/staff/login/", google_oauth.start, {"kind": "staff", "mode": "login"}, name="google_staff_login"),
+    path("auth/google/staff/link/", google_oauth.start, {"kind": "staff", "mode": "link"}, name="google_staff_link"),
+    path("auth/google/staff/callback/", google_oauth.callback, {"kind": "staff"}, name="google_staff_callback"),
+    path("auth/google/staff/unlink/", google_oauth.unlink, {"kind": "staff"}, name="google_staff_unlink"),
+    path("market/auth/google/login/", google_oauth.start, {"kind": "customer", "mode": "login"}, name="google_customer_login"),
+    path("market/auth/google/link/", google_oauth.start, {"kind": "customer", "mode": "link"}, name="google_customer_link"),
+    path("market/auth/google/callback/", google_oauth.callback, {"kind": "customer"}, name="google_customer_callback"),
+    path("market/auth/google/unlink/", google_oauth.unlink, {"kind": "customer"}, name="google_customer_unlink"),
+    path("market/auth/google/finish/", google_oauth.customer_complete, name="market_google_finish"),
+    # Preserve the configured private staff login URL used by LOGIN_URL.
+    path(settings.STAFF_LOGIN_SLUG + "/", v.login_view, name="staff_private_login"),
     path("account/", accounts.account, name="account"),
     path("approvals/", approval_views.approval_center, name="approval_center"),
     path("approvals/action/", approval_views.approval_action, name="approval_action"),
