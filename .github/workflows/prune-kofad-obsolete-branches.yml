@@ -1,4 +1,5 @@
 name: Archive and prune verified obsolete KOFAD branches
+# Re-run after fixing authenticated Git refs archive lookup.
 on:
   pull_request:
     paths:
