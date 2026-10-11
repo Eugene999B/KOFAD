@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -58,14 +59,17 @@ def webhook(request, bot_kind="official"):
     if not isinstance(text, str) or not text:
         return HttpResponse(status=200)
     # Telegram resends updates when acknowledgement is lost. Only process once.
-    _, created = TelegramUpdate.objects.get_or_create(bot_kind=bot_kind, update_id=update_id)
-    if not created:
-        return HttpResponse(status=200)
+    with transaction.atomic():
+        _, created = TelegramUpdate.objects.get_or_create(bot_kind=bot_kind, update_id=update_id)
+        if not created:
+            return HttpResponse(status=200)
+        # Failed reply generation must roll back the replay marker so Telegram may retry.
+        response_text = reply_for(text, chat_id, sender_id, bot_kind=bot_kind)[:4096]
     # Telegram supports invoking sendMessage as the HTTP response to a webhook.
     # No token is sent to the client; no separate outbound provider request needed.
     return JsonResponse({
         "method": "sendMessage",
         "chat_id": chat_id,
-        "text": reply_for(text, chat_id, sender_id, bot_kind=bot_kind)[:4096],
+        "text": response_text,
         "disable_web_page_preview": True,
     })
