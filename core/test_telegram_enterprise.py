@@ -23,6 +23,14 @@ from marketplace.models import CustomerAccount, OnlineOrder
     TELEGRAM_BOT_ENABLED=True, TELEGRAM_ACCOUNT_LINK_ENABLED=True,
     TELEGRAM_BUSINESS_ANALYTICS_ENABLED=True, TELEGRAM_NOTIFICATIONS_ENABLED=True,
     TELEGRAM_RECOVERY_ENABLED=True, TELEGRAM_BOT_TOKEN="test-only",
+    TELEGRAM_WEBHOOK_SECRET="official-test-secret",
+    TELEGRAM_CUSTOMER_BOT_ENABLED=True, TELEGRAM_STAFF_BOT_ENABLED=True,
+    TELEGRAM_CUSTOMER_BOT_TOKEN="customer-test-token",
+    TELEGRAM_STAFF_BOT_TOKEN="staff-test-token",
+    TELEGRAM_CUSTOMER_WEBHOOK_SECRET="customer-test-secret",
+    TELEGRAM_STAFF_WEBHOOK_SECRET="staff-test-secret",
+    TELEGRAM_CUSTOMER_BOT_USERNAME="KOFADTestCustomerBot",
+    TELEGRAM_STAFF_BOT_USERNAME="KOFADTestStaffBot",
 )
 class EnterpriseTelegramTests(TestCase):
     def setUp(self):
@@ -35,14 +43,15 @@ class EnterpriseTelegramTests(TestCase):
         self.customer.set_password("CustomerPass!12345")
         self.customer.save()
 
-    def link(self, kind, account, chat=12345):
-        token = begin_link(kind, account.pk).split("link_", 1)[1]
-        answer = accept_token(token, chat, chat)
+    def link(self, kind, account, chat=12345, bot_kind=None):
+        bot_kind = bot_kind or kind
+        token = begin_link(kind, account.pk, bot_kind=bot_kind).split("link_", 1)[1]
+        answer = accept_token(token, chat, chat, bot_kind=bot_kind)
         self.assertIn("Expires in 10 minutes", answer)
         code = re.search(r"\n(\d{6})\n", answer).group(1)
-        self.assertIsNone(linked_identity(kind, account.pk))
-        self.assertTrue(confirm_link(kind, account.pk, code))
-        return linked_identity(kind, account.pk)
+        self.assertIsNone(linked_identity(kind, account.pk, bot_kind=bot_kind))
+        self.assertTrue(confirm_link(kind, account.pk, code, bot_kind=bot_kind))
+        return linked_identity(kind, account.pk, bot_kind=bot_kind)
 
     def test_requires_both_website_and_telegram_confirmation(self):
         self.link("staff", self.staff)
@@ -51,13 +60,13 @@ class EnterpriseTelegramTests(TestCase):
 
     def test_wrong_confirmation_and_expired_pairing(self):
         token = begin_link("staff", self.staff.pk).split("link_", 1)[1]
-        self.assertIn("this code", accept_token(token, 123, 123))
+        self.assertIn("this code", accept_token(token, 123, 123, bot_kind="staff"))
         for _ in range(5):
             self.assertFalse(confirm_link("staff", self.staff.pk, "000001"))
         self.assertEqual(TelegramIdentity.objects.count(), 0)
         self.assertFalse(confirm_link("staff", self.staff.pk, "000001"))
         TelegramLinkChallenge.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
-        self.assertIn("invalid or expired", accept_token(token, 123, 123))
+        self.assertIn("invalid or expired", accept_token(token, 123, 123, bot_kind="staff"))
 
     def test_password_change_invalidates_existing_link(self):
         link = self.link("staff", self.staff)
@@ -65,19 +74,19 @@ class EnterpriseTelegramTests(TestCase):
         self.staff.set_password("ChangedStaffTest!4098")
         self.staff.save()
         self.assertIsNone(linked_identity("staff", self.staff.pk))
-        self.assertIn("requires", reply_for("/analysis", 12345, 12345))
+        self.assertIn("requires", reply_for("/analysis", 12345, 12345, bot_kind="staff"))
 
     def test_no_cross_customer_order_disclosure(self):
         self.link("customer", self.customer, chat=88)
-        response = reply_for("/orders", 88, 88)
+        response = reply_for("/orders", 88, 88, bot_kind="customer")
         self.assertIn("No matching order", response)
         self.assertNotIn("bank", response.casefold())
 
     def test_private_reports_require_management_account(self):
         self.link("customer", self.customer, chat=88)
-        self.assertIn("authorized KOFAD staff", reply_for("/analysis", 88, 88))
+        self.assertIn("only through", reply_for("/analysis", 88, 88, bot_kind="customer"))
         self.link("staff", self.staff, chat=91)
-        body = reply_for("/analysis", 91, 91)
+        body = reply_for("/analysis", 91, 91, bot_kind="staff")
         self.assertIn("VERIFIED CLOSING INTELLIGENCE", body)
         self.assertIn("not a profit", body)
 
@@ -124,7 +133,7 @@ class EnterpriseTelegramTests(TestCase):
         self.assertEqual(TelegramOutbound.objects.get().status, "unknown")
 
     def test_opt_in_customer_recovery_and_original_password_invalidated(self):
-        link = self.link("customer", self.customer, chat=88)
+        link = self.link("customer", self.customer, chat=88, bot_kind="official")
         self.assertIsNone(request_recovery("customer", self.customer.phone, ""))
         link.recovery_opt_in = True
         link.save()
@@ -140,8 +149,44 @@ class EnterpriseTelegramTests(TestCase):
         self.assertTrue(ok, message)
         self.customer.refresh_from_db()
         self.assertTrue(self.customer.check_password("NewPass!2026Kofad"))
-        self.assertIsNone(linked_identity("customer", self.customer.pk))
+        self.assertIsNone(linked_identity("customer", self.customer.pk, bot_kind="official"))
 
     def test_unlinked_telegram_is_not_a_phone_authentication_factor(self):
         self.assertIsNone(request_recovery("customer", self.customer.phone, ""))
-        self.assertIn("requires", reply_for("/analysis", 61234, 61234))
+        self.assertIn("requires", reply_for("/analysis", 61234, 61234, bot_kind="staff"))
+
+
+    def test_official_bot_never_exposes_staff_reports_or_private_orders(self):
+        self.link("staff", self.staff, chat=741, bot_kind="official")
+        self.assertNotIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
+            "/analysis", 741, 741, bot_kind="official",
+        ))
+        self.assertIn("Customer Bot", reply_for("/track", 741, 741, bot_kind="official"))
+        self.assertIn("official", reply_for("/otp", 741, 741, bot_kind="official").lower())
+
+    def test_pairing_token_cannot_be_accepted_by_wrong_bot(self):
+        token = begin_link("customer", self.customer.pk, bot_kind="customer").split("link_", 1)[1]
+        self.assertIn("invalid or expired", accept_token(token, 777, 777, bot_kind="official").lower())
+        self.assertIn("invalid or expired", accept_token(token, 777, 777, bot_kind="staff").lower())
+        self.assertIn("this code", accept_token(token, 777, 777, bot_kind="customer"))
+
+    def test_recovery_requires_official_bot_link_even_if_customer_bot_linked(self):
+        link = self.link("customer", self.customer, chat=444, bot_kind="customer")
+        link.recovery_opt_in = True
+        link.save(update_fields=["recovery_opt_in"])
+        self.assertIsNone(request_recovery("customer", self.customer.phone, ""))
+        official = self.link("customer", self.customer, chat=444, bot_kind="official")
+        official.recovery_opt_in = True
+        official.save(update_fields=["recovery_opt_in"])
+        self.assertIsNotNone(request_recovery("customer", self.customer.phone, ""))
+
+    def test_customer_and_staff_same_telegram_id_remain_independent(self):
+        customer = self.link("customer", self.customer, chat=555, bot_kind="customer")
+        staff = self.link("staff", self.staff, chat=555, bot_kind="staff")
+        self.assertNotEqual(customer.pk, staff.pk)
+        self.assertIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
+            "/analysis", 555, 555, bot_kind="staff",
+        ))
+        self.assertNotIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
+            "/analysis", 555, 555, bot_kind="customer",
+        ))
