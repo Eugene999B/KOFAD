@@ -1,3 +1,4 @@
+import re
 import json
 import secrets
 import uuid
@@ -45,11 +46,8 @@ from .hubtel_evidence import decrypt_exchange
 
 
 def _market_context(request, **extra):
-    # Customer login/access templates only render their Google button when
-    # this server-side readiness flag is provided. Keep the OAuth capability
-    # check centralised and fail closed when Google setup is incomplete.
+    # Keep customer Google authentication visibility behind the readiness check.
     from core.google_oauth import enabled as google_oauth_enabled
-
     customer = services.customer_from_session(request)
     cart = request.session.get("market_cart", {})
     market_auth_page = request.path in {
@@ -68,7 +66,46 @@ def _market_context(request, **extra):
             sender_type="staff",
             read_by_customer=False,
         ).count()
+    path = request.path
+    seo_indexable = path in {
+        "/", "/apps/", "/about/", "/wholesale/", "/faq/", "/delivery/",
+        "/returns-policy/", "/terms/", "/privacy/", "/contact/", "/market/",
+    } or bool(re.fullmatch(r"/market/(?:products/\d+|categories/[a-z0-9-]+)/", path))
+    page = extra.get("page") or {}
+    listing = extra.get("listing")
+    default_description = (
+        "KOFAD IMPEX ENTERPRISE — retail and wholesale shopping in Ghana, "
+        "with delivery, collection and customer care."
+    )
+    from .discovery import description as discovery_description, page_title, structured_data
+    category_name = extra.get("category_name")
+    if request.GET and (path == "/market/" or category_name):
+        # Faceted search/sort/pagination should not produce duplicate index pages.
+        seo_indexable = False
+    seo_description = discovery_description(
+        path, page if isinstance(page, dict) else None, listing, category_name
+    ) or default_description
+    seo_title = page_title(path, extra.get("title"), category_name, listing)
+    canonical_origin = settings.MARKET_SITE_ORIGIN if path.startswith("/market/") else settings.PUBLIC_SITE_ORIGIN
+    canonical_url = canonical_origin + path if seo_indexable else ""
+    seo_json_ld = structured_data(
+        path, canonical_url, seo_title, seo_description, listing, category_name
+    ) if seo_indexable else ""
+    seo_image = (
+        settings.MARKET_SITE_ORIGIN + f"/market/products/{listing.pk}/image/large/"
+        if listing and listing.image_data else
+        settings.PUBLIC_SITE_ORIGIN + "/static/brand/kofad-logo-transparent.png"
+    )
+    from core.native_apps import app_metadata
+    app_release = app_metadata("customer")
+    released_platforms = {
+        entry["id"]: entry["available"] for entry in app_release["platforms"]
+    }
     context = {
+        "native_customer_app_released": app_release["released"],
+        "native_customer_app_android": released_platforms.get("android", False),
+        "native_customer_app_ios": released_platforms.get("ios", False),
+        "native_customer_app_windows": released_platforms.get("windows", False),
         "market_customer": customer,
         "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
         "market_unread_count": unread,
@@ -76,9 +113,19 @@ def _market_context(request, **extra):
         "market_auth_page": market_auth_page,
         "google_ready": google_oauth_enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
+        "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
+        "seo_indexable": seo_indexable,
+        "seo_title": seo_title,
+        "seo_description": seo_description,
+        "seo_json_ld": seo_json_ld,
+        "seo_image": seo_image,
+        "canonical_url": canonical_url,
+        "public_site_origin": settings.PUBLIC_SITE_ORIGIN,
+        "market_site_origin": settings.MARKET_SITE_ORIGIN,
+        "google_site_verification": settings.GOOGLE_SITE_VERIFICATION,
         **extra,
     }
     return context
