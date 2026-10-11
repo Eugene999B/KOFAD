@@ -145,6 +145,8 @@ def queue_notice(identity, category, source_key, body, branch=None):
         return False
     if category == "critical" and not identity.critical_opt_in:
         return False
+    if category == "stock" and not identity.stock_opt_in:
+        return False
     if len(body) > 3900 or not body:
         return False
     _, created = TelegramOutbound.objects.get_or_create(
