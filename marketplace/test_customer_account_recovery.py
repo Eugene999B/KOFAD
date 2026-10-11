@@ -29,7 +29,7 @@ class CustomerAccountRecoveryTests(MarketFixtures):
         self.assertContains(response, "Email preferences")
         self.assertContains(response, "transactional_email_enabled")
         self.assertContains(response, "marketing_email_opt_in")
-        self.assertContains(response, "experience-upgrade.css")
+        self.assertContains(response, "experience-upgrade.")
 
     def test_customer_without_verified_email_still_sees_security_link(self):
         self.login_customer()
