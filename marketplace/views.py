@@ -42,7 +42,7 @@ from .models import (
     RecentView, StockReservation, WishlistItem,
 )
 from . import services, hubtel, paystack_momo, momo_security
-from .hubtel_evidence import decrypt_exchange
+from .hubtel_evidence import decrypt_exchange, save_exchange
 
 
 def _market_context(request, **extra):
@@ -2555,7 +2555,14 @@ def hubtel_callback(request):
     attempt = MarketPaymentAttempt.objects.filter(provider="hubtel", reference=reference).first()
     if attempt:
         from .models import OrderEvent
-        # Keep callback data only as redacted evidence; a callback never marks an order paid.
+        # Store each original callback separately, encrypted and owner-only.
+        # A callback is always UNTRUSTED evidence; independent status checks
+        # remain the only way to confirm settlement.
+        save_exchange(
+            reference=reference, direction="callback", raw_body=request.body,
+            attempt=attempt,
+        )
+        # Staff event data is redacted; a callback never marks an order paid.
         def callback_value(pascal, camel):
             return data.get(pascal, data.get(camel, ""))
         safe = {
@@ -2569,9 +2576,12 @@ def hubtel_callback(request):
             order=attempt.order, status="hubtel_callback", title="Hubtel callback received (unverified)",
             defaults={"note": json.dumps(safe, sort_keys=True), "customer_visible": False},
         )
-        if attempt.status != "success":
-            # Every valid callback is a reason to re-check immediately, even if an earlier poll was still unpaid.
-            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
+        if attempt.status in {"initializing", "submission_unknown", "pending"}:
+            # Only unresolved payments may be rescheduled. A late callback
+            # must never reopen a terminal failed, settled or disputed attempt.
+            MarketPaymentAttempt.objects.filter(
+                pk=attempt.pk, status__in=["initializing", "submission_unknown", "pending"],
+            ).update(
                 next_check_at=timezone.now(),
                 provider_message="Hubtel callback received; final status verification queued.",
             )
