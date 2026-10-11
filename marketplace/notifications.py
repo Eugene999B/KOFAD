@@ -11,13 +11,19 @@ from core.sms.service import estimate, normalize_phone, send_message_now, valida
 logger = logging.getLogger(__name__)
 
 
-@transaction.atomic
-def queue_order_sms(order, event, body):
+def queue_order_email(order, event):
+    """Queue a permission-checked and idempotent status email, never a provider send."""
     try:
         from core.notification_engine import queue_customer_order_email
-        queue_customer_order_email(order, event)
+        return queue_customer_order_email(order, event)
     except Exception:
         logger.exception("Transactional email could not be queued safely for order %s", order.pk)
+        return 0
+
+
+@transaction.atomic
+def queue_order_sms(order, event, body):
+    queue_order_email(order, event)
     if not settings.SMS_ENABLED:
         return None
     from .services import _system_actor
