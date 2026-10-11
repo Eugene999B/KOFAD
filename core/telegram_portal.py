@@ -8,12 +8,14 @@ from django.views.decorators.http import require_http_methods
 
 from marketplace import services as market_services
 from .telegram_integration import begin_link, confirm_link, linked_identity
+from .telegram_channels import bot_enabled, bot_for_account, bot_link
 from .models import TelegramIdentity, TelegramLinkChallenge
 
 
-def _portal(request, kind, account):
-    identity = linked_identity(kind, account.pk)
-    active = settings.TELEGRAM_ACCOUNT_LINK_ENABLED and settings.TELEGRAM_BOT_ENABLED
+def _portal(request, kind, account, bot_kind=None):
+    bot_kind = bot_kind or bot_for_account(kind)
+    identity = linked_identity(kind, account.pk, bot_kind=bot_kind)
+    active = settings.TELEGRAM_ACCOUNT_LINK_ENABLED and bot_enabled(bot_kind) and bool(bot_link(bot_kind))
     if request.method == "POST":
         action = request.POST.get("action", "")
         entered_password = request.POST.get("current_password", "")
@@ -23,18 +25,18 @@ def _portal(request, kind, account):
         elif not entered_password or not account.check_password(entered_password):
             messages.error(request, "Enter your current KOFAD password to continue.")
         elif action == "start":
-            url = begin_link(kind, account.pk)
-            request.session[f"telegram_pair_url_{kind}"] = url
+            url = begin_link(kind, account.pk, bot_kind=bot_kind)
+            request.session[f"telegram_pair_url_{kind}_{bot_kind}"] = url
             messages.success(request, "Open the Telegram link, then return and enter the code provided by the bot.")
         elif action == "confirm":
-            if confirm_link(kind, account.pk, request.POST.get("confirmation_code", "")):
-                request.session.pop(f"telegram_pair_url_{kind}", None)
+            if confirm_link(kind, account.pk, request.POST.get("confirmation_code", ""), bot_kind=bot_kind):
+                request.session.pop(f"telegram_pair_url_{kind}_{bot_kind}", None)
                 messages.success(request, "Telegram has been securely connected to your KOFAD account.")
             else:
                 messages.error(request, "Confirmation failed or expired. Retry or start a new connection.")
         elif action == "disconnect":
-            TelegramIdentity.objects.filter(kind=kind, owner_id=account.pk).delete()
-            TelegramLinkChallenge.objects.filter(kind=kind, owner_id=account.pk).delete()
+            TelegramIdentity.objects.filter(kind=kind, owner_id=account.pk, bot_kind=bot_kind).delete()
+            TelegramLinkChallenge.objects.filter(kind=kind, owner_id=account.pk, bot_kind=bot_kind).delete()
             request.session.pop(f"telegram_pair_url_{kind}", None)
             messages.success(request, "Your Telegram account was disconnected.")
         elif action == "preferences" and identity:
@@ -43,15 +45,15 @@ def _portal(request, kind, account):
                 account.has_perm("core." + perm)
                 for perm in ("manage_company", "view_reports", "operate_finance")
             ))
-            identity.notifications_enabled = request.POST.get("notifications_enabled") == "on"
-            identity.marketing_opt_in = kind == "customer" and request.POST.get("marketing_opt_in") == "on"
-            identity.closing_opt_in = allowed_management and request.POST.get("closing_opt_in") == "on"
-            identity.critical_opt_in = allowed_management and request.POST.get("critical_opt_in") == "on"
-            identity.stock_opt_in = kind == "staff" and (account.is_superuser or
+            identity.notifications_enabled = bot_kind != "official" and request.POST.get("notifications_enabled") == "on"
+            identity.marketing_opt_in = bot_kind == "customer" and kind == "customer" and request.POST.get("marketing_opt_in") == "on"
+            identity.closing_opt_in = bot_kind == "staff" and allowed_management and request.POST.get("closing_opt_in") == "on"
+            identity.critical_opt_in = bot_kind == "staff" and allowed_management and request.POST.get("critical_opt_in") == "on"
+            identity.stock_opt_in = bot_kind == "staff" and kind == "staff" and (account.is_superuser or
                 account.has_perm("core.manage_company") or account.has_perm("core.operate_inventory")) and (
                 request.POST.get("stock_opt_in") == "on")
             # Explicit separate opt-in; user has already reconfirmed KOFAD password.
-            identity.recovery_opt_in = request.POST.get("recovery_opt_in") == "on" and bool(
+            identity.recovery_opt_in = bot_kind == "official" and request.POST.get("recovery_opt_in") == "on" and bool(
                 (account.phone and account.verified_at) if kind == "customer"
                 else getattr(account.access, "recovery_phone", "")
             )
@@ -63,7 +65,8 @@ def _portal(request, kind, account):
         return redirect(request.path)
     context = {
         "title": "Telegram · KOFAD IMPEX",
-        "kind": kind, "telegram_identity": identity,
+        "kind": kind, "telegram_bot_kind": bot_kind,
+        "telegram_bot_url": bot_link(bot_kind), "telegram_identity": identity,
         "telegram_active": active,
         "telegram_pair_url": request.session.get(f"telegram_pair_url_{kind}", ""),
         "is_inventory": kind == "staff" and (account.is_superuser or
@@ -96,3 +99,23 @@ def customer_portal(request):
         request.session["market_after_login"] = request.path
         return redirect("market_access")
     return _portal(request, "customer", account)
+
+
+
+@never_cache
+@require_http_methods(["GET", "POST"])
+@login_required
+def staff_security_portal(request):
+    if not request.user.is_active:
+        return redirect(settings.STAFF_LOGIN_PATH)
+    return _portal(request, "staff", request.user, bot_kind="official")
+
+
+@never_cache
+@require_http_methods(["GET", "POST"])
+def customer_security_portal(request):
+    account = market_services.customer_from_session(request)
+    if account is None:
+        request.session["market_after_login"] = request.path
+        return redirect("market_access")
+    return _portal(request, "customer", account, bot_kind="official")
