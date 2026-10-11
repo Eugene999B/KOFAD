@@ -75,7 +75,7 @@ class MarketSettlementRecoveryTests(MarketFixtures):
     def test_missing_verification_summary_does_not_crash(self):
         order = self.order()
         attempt = self.attempt(order, "no-summary")
-        attempt.verification_summary = None
+        attempt.verification_summary = {}
         attempt.save(update_fields=["verification_summary"])
         # A verified card payment without a channel restriction still follows
         # regular amount/currency/ledger validation instead of raising AttributeError.
