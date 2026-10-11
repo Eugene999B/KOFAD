@@ -9,7 +9,7 @@ from django.views.decorators.http import require_http_methods
 from marketplace import services as market_services
 from .telegram_integration import begin_link, confirm_link, linked_identity
 from .telegram_channels import bot_enabled, bot_for_account, bot_link
-from .models import TelegramIdentity, TelegramLinkChallenge
+from .models import Access, TelegramIdentity, TelegramLinkChallenge
 
 
 def _portal(request, kind, account, bot_kind=None):
@@ -55,7 +55,7 @@ def _portal(request, kind, account, bot_kind=None):
             # Explicit separate opt-in; user has already reconfirmed KOFAD password.
             identity.recovery_opt_in = bot_kind == "official" and request.POST.get("recovery_opt_in") == "on" and bool(
                 (account.phone and account.verified_at) if kind == "customer"
-                else getattr(account.access, "recovery_phone", "")
+                else Access.objects.filter(user=account).values_list("recovery_phone", flat=True).first()
             )
             identity.save(update_fields=["notifications_enabled", "marketing_opt_in",
                                          "closing_opt_in", "critical_opt_in", "stock_opt_in", "recovery_opt_in"])
