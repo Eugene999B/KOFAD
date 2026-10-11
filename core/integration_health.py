@@ -379,9 +379,19 @@ def catalog():
         elif not checks:
             state = "external"
         elif missing:
-            # Missing an explicit enable switch is a legitimate dormant choice,
-            # not evidence the provider is down or a key is invalid.
-            state = "not_connected"
+            # Explicitly enabled but missing critical credentials is an issue.
+            # An intentionally disabled or not-yet-onboarded provider stays grey.
+            enabled_flags = {
+                "google_login": "google_oauth_enabled", "gmail": "gmail_enabled",
+                "google_drive": "backup_enabled", "apps_script": "backup_enabled",
+                "inbound_email": "email_center", "arkesel": "sms_enabled",
+                "whatsapp": "wa_enabled", "paystack": "paystack_enabled",
+                "hubtel": "hubtel_enabled",
+            }
+            active = config.get(enabled_flags.get(spec["id"], ""), False)
+            if spec["id"] == "brevo":
+                active = config["brevo_transaction"] or config["brevo_security"]
+            state = "issue" if active else "not_connected"
             details.append("Incomplete prerequisites: " + "; ".join(missing) + ".")
         else:
             state = "ready"
