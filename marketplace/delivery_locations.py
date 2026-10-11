@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 
 PLACES_AUTOCOMPLETE = "https://places.googleapis.com/v1/places:autocomplete"
 PLACES_DETAILS = "https://places.googleapis.com/v1/places/"
-DIGITAL_ADDRESS = re.compile(r"^[A-Z]{2,3}-[0-9]{3,4}-[0-9]{4}$")
 PLACE_ID = re.compile(r"^[a-zA-Z0-9_-]{5,180}$")
 SESSION_TOKEN = re.compile(r"^[a-zA-Z0-9_-]{1,36}$")
 
 
 def normalize_digital_address(value):
     value = str(value or "").upper().strip().replace(" ", "")
-    if not DIGITAL_ADDRESS.fullmatch(value):
+    match = re.fullmatch(r"([A-Z]{2,3})-?([0-9]{3,4})-?([0-9]{4})", value)
+    if not match:
         raise ValidationError("Enter a GhanaPost GPS code like AK-039-5028.")
-    return value
+    return "-".join(match.groups())
 
 
 def _ghana_coordinates(latitude, longitude):
