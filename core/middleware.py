@@ -107,6 +107,12 @@ class AccessMiddleware:
             )
         else:
             response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        # The new checkout displays Google's required Places attribution without
+        # loading any additional Maps JavaScript or relaxing other page CSPs.
+        if request.path == "/market/checkout/":
+            response["Content-Security-Policy"] = response["Content-Security-Policy"].replace(
+                "img-src 'self' data:", "img-src 'self' data: https://maps.gstatic.com"
+            )
         geolocation = "(self)" if request.path.startswith(geolocation_paths) else "()"
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):
