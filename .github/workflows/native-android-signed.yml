@@ -39,6 +39,8 @@ jobs:
       KOFAD_KEY_ALIAS: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_ANDROID_KEY_ALIAS || secrets.KOFAD_STAFF_ANDROID_KEY_ALIAS }}
       KOFAD_KEY_PASSWORD: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_ANDROID_KEY_PASSWORD || secrets.KOFAD_STAFF_ANDROID_KEY_PASSWORD }}
       KOFAD_CERT_SHA256: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_ANDROID_CERT_SHA256 || secrets.KOFAD_STAFF_ANDROID_CERT_SHA256 }}
+      KOFAD_FIREBASE_CONFIG_B64: ${{ inputs.channel == 'customer' && secrets.KOFAD_CUSTOMER_FIREBASE_CONFIG_B64 || secrets.KOFAD_STAFF_FIREBASE_CONFIG_B64 }}
+      KOFAD_REQUIRE_FIREBASE: "1"
     steps:
       - name: Fail closed if publisher keys are missing
         shell: bash
@@ -81,6 +83,7 @@ jobs:
           npx cap sync android
           node scripts/configure-auth-deeplink.mjs android
           node scripts/configure-keystore.mjs
+          node scripts/configure-firebase.mjs
           npx capacitor-assets generate --android
       - name: Pin release version and compile unsigned artifact
         shell: bash

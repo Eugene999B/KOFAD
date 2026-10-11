@@ -10,7 +10,8 @@
   const ROOT=CUSTOMER?"https://market.kofadimpex.com/market/mobile/v1/"
                      :"https://staff.kofadimpex.com/staff/mobile/v1/";
   const $=id=>document.getElementById(id);
-  const plugin=window.Capacitor?.Plugins?.PushNotifications;
+  const plugin=window.Capacitor?.isPluginAvailable?.("PushNotifications") === false
+    ? null : window.Capacitor?.Plugins?.PushNotifications;
   let pending=false;
   let registered=false;
   let listenersReady=false;
@@ -85,6 +86,14 @@
         message("Android notification permission was not granted. You can enable it in system settings.");
         busy(false);
         return;
+      }
+      // Explicit Android channel is needed for reliable FCM notification display.
+      if(typeof plugin.createChannel==="function") {
+        await plugin.createChannel({
+          id:"kofad_updates",name:"KOFAD Updates",
+          description:"Important account and order updates",
+          importance:4,visibility:1,
+        });
       }
       message("Registering this Android device securely…");
       await plugin.register();
