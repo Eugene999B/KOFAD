@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import DatabaseError, connection
+from django.db.models import Count
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -360,6 +361,28 @@ def _evidence(now):
             "attempted": usage["attempted"], "accepted": usage["accepted"],
             "failed": usage["failed"], "limit": min(300, max(1, settings.KOFAD_BREVO_DAILY_LIMIT)),
         }
+    # Bounded, grouped counters from the existing indexed business tables.
+    # No customer addresses, bodies, token identifiers or payment amounts.
+    cutoff = now - timedelta(days=7)
+    summaries = (
+        ("email_activity", EmailLetter.objects.filter(
+            direction="outbound", created_at__gte=cutoff), "status"),
+        ("brevo_receipts", EmailDeliveryEvent.objects.filter(
+            received_at__gte=cutoff), "event"),
+        ("sms_activity", SmsAttempt.objects.filter(
+            started_at__gte=cutoff, provider="arkesel"), "status"),
+        ("whatsapp_activity", WhatsAppAttempt.objects.filter(
+            started_at__gte=cutoff), "status"),
+        ("paystack_activity", MarketPaymentAttempt.objects.filter(
+            provider="paystack", created_at__gte=cutoff), "status"),
+        ("hubtel_activity", MarketPaymentAttempt.objects.filter(
+            provider="hubtel", created_at__gte=cutoff), "status"),
+    )
+    for key, queryset, field in summaries:
+        observations[key] = {
+            str(row[field]): row["total"]
+            for row in queryset.values(field).annotate(total=Count("pk"))[:20]
+        }
     return observations
 
 
@@ -448,6 +471,25 @@ def catalog(probes=None):
             metrics.append("Today: " + str(usage["attempted"]) + " attempted recipients, " +
                            str(usage["accepted"]) + " accepted, " + str(usage["failed"]) +
                            " failed (local cap " + str(usage["limit"]) + ").")
+        evidence_key = {
+            "brevo": "email_activity",
+            "brevo_reporting": "brevo_receipts",
+            "brevo_webhook": "brevo_receipts",
+            "arkesel": "sms_activity",
+            "whatsapp": "whatsapp_activity",
+            "paystack": "paystack_activity",
+            "hubtel": "hubtel_activity",
+        }.get(spec["id"])
+        activity = observations.get(evidence_key, {}) if evidence_key else {}
+        if activity:
+            metrics.append(
+                "Last 7 days (KOFAD local records): " +
+                " · ".join(str(key).replace("_", " ") + " " + str(value)
+                           for key, value in sorted(activity.items())[:12]) + "."
+            )
+        elif evidence_key:
+            metrics.append("No " + ("authenticated webhook receipts" if evidence_key == "brevo_receipts" else "matching local events") +
+                           " recorded in KOFAD during the past seven days; absence alone does not prove a provider outage.")
         if spec["id"] == "paystack":
             metrics.append("Customer MoMo enabled: " + ("Yes" if settings.PAYSTACK_CUSTOMER_MOMO_ENABLED else "No") +
                            " · POS MoMo enabled: " + ("Yes" if settings.PAYSTACK_POS_MOMO_ENABLED else "No") + ".")
