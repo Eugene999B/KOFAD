@@ -148,7 +148,8 @@ document.addEventListener("DOMContentLoaded", () => {
   shell.querySelector("[data-address-search]")?.addEventListener("click", search);
   shell.querySelector("[data-gps-lookup]")?.addEventListener("click", async event => {
     const button = event.currentTarget;
-    const code = (gpsInput?.value || "").trim().toUpperCase().replace(/\s/g, "");
+    const rawCode = (gpsInput?.value || "").trim().toUpperCase().replace(/\s/g, "");
+    const code = rawCode.replace(/^([A-Z]{2,3})(\d{3,4})(\d{4})$/, "$1-$2-$3");
     gpsInput.value = code;
     if (!/^[A-Z]{2,3}-\d{3,4}-\d{4}$/.test(code)) {
       message("Enter your full GhanaPost GPS code, for example AK-039-5028.");
