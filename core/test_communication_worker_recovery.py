@@ -60,6 +60,7 @@ class ScheduledCampaignRecoveryTests(TestCase):
         sync.assert_called_once()
         whatsapp.assert_called_once()
 
+    @patch("core.pos_hubtel.reconcile_due", side_effect=RuntimeError("simulated merchant failure"))
     @patch("marketplace.paystack_reconciliation.reconcile_due")
     @patch("core.pos_paystack.reconcile_due")
     @patch("marketplace.hubtel.reconcile_due")
@@ -79,6 +80,8 @@ class ScheduledCampaignRecoveryTests(TestCase):
         output = StringIO()
         Command(stdout=StringIO(), stderr=output).handle(loop=False)
         self.assertIn("Campaign queuing failed safely", output.getvalue())
+        self.assertIn("Hubtel POS reconciliation check failed safely", output.getvalue())
+        self.assertNotIn("simulated merchant failure", output.getvalue())
         pos_hubtel.assert_called_once()
         market_paystack.assert_called_once()
         order.assert_called_once()
