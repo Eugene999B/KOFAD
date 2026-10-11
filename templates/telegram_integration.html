@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="container" style="max-width:800px;margin:2rem auto;padding:1rem">
+  <h1>KOFAD IMPEX — Official Telegram integration</h1>
+  <p>Connect your existing KOFAD {{ kind }} account to <a href="https://t.me/KOFADIMPEXBOT" target="_blank" rel="noopener">@KOFADIMPEXBOT</a>.
+     A Telegram username or phone number alone does not verify your account.</p>
+  {% if not telegram_active %}
+  <p><strong>Telegram account linking is not yet enabled for this environment.</strong> Existing KOFAD features are unaffected.</p>
+  {% else %}
+  {% if telegram_identity %}
+    <p><strong>Verified Telegram account connected.</strong></p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="preferences">
+      <label><input type="checkbox" name="notifications_enabled" {% if telegram_identity.notifications_enabled %}checked{% endif %}> Receive important KOFAD Telegram notifications</label><p></p>
+      {% if kind == "customer" %}
+      <label><input type="checkbox" name="marketing_opt_in" {% if telegram_identity.marketing_opt_in %}checked{% endif %}> Receive occasional promotional updates</label><p></p>
+      {% endif %}
+      {% if is_management %}
+      <label><input type="checkbox" name="closing_opt_in" {% if telegram_identity.closing_opt_in %}checked{% endif %}> Daily verified closing summaries</label><p></p>
+      <label><input type="checkbox" name="critical_opt_in" {% if telegram_identity.critical_opt_in %}checked{% endif %}> Critical variance and urgent notices</label><p></p>
+      {% endif %}
+      <label>Confirm current KOFAD password
+        <input type="password" name="current_password" autocomplete="current-password" required>
+      </label>
+      <button type="submit">Save preferences</button>
+    </form>
+    <hr>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="disconnect">
+      <label>Current KOFAD password<input type="password" name="current_password" autocomplete="current-password" required></label>
+      <button type="submit">Disconnect Telegram</button>
+    </form>
+  {% else %}
+    <h2>Step 1 — Confirm your KOFAD password</h2>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="start">
+      <label>Current KOFAD password<input type="password" name="current_password" autocomplete="current-password" required></label>
+      <button type="submit">Generate secure Telegram pairing link</button>
+    </form>
+    {% if telegram_pair_url %}
+    <h2>Step 2 — Open Telegram</h2>
+    <p><a href="{{ telegram_pair_url }}" target="_blank" rel="noopener">Open official KOFAD bot to receive your one-time confirmation code</a></p>
+    <h2>Step 3 — Confirm the code here</h2>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="confirm">
+      <label>Six-digit code from Telegram<input name="confirmation_code" inputmode="numeric" maxlength="6" required></label>
+      <label>Current KOFAD password<input type="password" name="current_password" autocomplete="current-password" required></label>
+      <button type="submit">Verify and connect my account</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  {% endif %}
+  <p><small>Never forward pairing links or share passwords, payment PINs or OTPs in chat. Messages may be stored by Telegram.</small></p>
+</main>
+{% endblock %}
