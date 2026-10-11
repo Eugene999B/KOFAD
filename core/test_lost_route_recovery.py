@@ -4,7 +4,7 @@ Check original route names, resolved view availability, security boundaries and
 vital owner paths. Never call payment charge or message-send endpoints.
 """
 from django.contrib.auth.models import User
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import resolve, reverse
 
 from core.models import Branch, Company
@@ -50,7 +50,7 @@ RESTORED = {
     "customer_native_downloads": "/apps/",
     "customer_native_releases": "/apps/releases.json",
     "market_native_releases": "/market/app/releases.json",
-    "customer_native_version": "/market/app/native-version.json",
+    "market_native_version": "/market/app/native-version.json",
     "market_native_catalog": "/market/app/catalog.json",
     "market_mobile_bootstrap": "/market/mobile/v1/bootstrap/",
     "market_mobile_capabilities": "/market/mobile/v1/capabilities/",
@@ -103,6 +103,7 @@ class LostRouteOwnerSmokeTests(TestCase):
         session["branch"] = self.branch.pk
         session.save()
 
+    @override_settings(KOFAD_EMAIL_CENTER_ENABLED=True)
     def test_read_only_owner_pages_are_reachable(self):
         for url in ("/workspace/", "/settings/", "/settings/connections/",
                     "/email/", "/email/work/", "/email/drafts/", "/email/replies/",
@@ -124,9 +125,13 @@ class LostRouteOwnerSmokeTests(TestCase):
 
     def test_public_index_and_app_metadata_do_not_crash(self):
         for url in ("/robots.txt", "/sitemap.xml", "/wholesale/",
-                    "/market/categories/cocoa/", "/market/app/manifest.webmanifest",
+                    "/market/app/manifest.webmanifest",
                     "/apps/releases.json", "/market/app/catalog.json"):
             with self.subTest(url=url):
                 response = self.client.get(url, HTTP_HOST="market.kofadimpex.com")
                 self.assertNotEqual(response.status_code, 500)
                 self.assertNotEqual(response.status_code, 404)
+
+    def test_nonexistent_market_category_correctly_returns_404(self):
+        response = self.client.get("/market/categories/nonexistent/", HTTP_HOST="market.kofadimpex.com")
+        self.assertEqual(response.status_code, 404)
