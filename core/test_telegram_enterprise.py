@@ -35,7 +35,9 @@ from marketplace.models import CustomerAccount, OnlineOrder
 class EnterpriseTelegramTests(TestCase):
     def setUp(self):
         self.staff = User.objects.create_superuser("kofad_staff", "test@example.test", "StaffTestPass!4087")
-        self.access = Access.objects.create(user=self.staff, recovery_phone="+233241234567")
+        self.access, _ = Access.objects.get_or_create(user=self.staff)
+        self.access.recovery_phone = "+233241234567"
+        self.access.save(update_fields=["recovery_phone"])
         self.branch = Branch.objects.create(name="Test Branch", code="t-branch")
         self.access.branches.add(self.branch)
         self.customer = CustomerAccount(full_name="Customer Tester", phone="+233541234567",
