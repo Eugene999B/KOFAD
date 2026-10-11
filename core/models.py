@@ -1169,3 +1169,17 @@ class TelegramOutbound(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=180, blank=True)
+
+
+class TelegramRecoveryChallenge(models.Model):
+    """Sensitive, opted-in recovery code delivered only to a prelinked chat."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity = models.ForeignKey("TelegramIdentity", on_delete=models.CASCADE)
+    kind = models.CharField(max_length=12)
+    owner_id = models.PositiveBigIntegerField()
+    code_digest = models.CharField(max_length=64)
+    password_stamp = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
