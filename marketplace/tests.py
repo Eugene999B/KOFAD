@@ -745,16 +745,18 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertEqual(order.delivery_route_polyline, "test-route")
         self.assertEqual(order.delivery_origin_latitude, Decimal("5.603700"))
 
-    def test_delivery_quote_endpoint_and_checkout_show_map_picker(self):
+    def test_delivery_quote_endpoint_and_checkout_has_address_finder(self):
         self.customer_session()
         session = self.client.session
         session["market_cart"] = {str(self.listing.pk): 1}
         session.save()
         response = self.client.get("/market/checkout/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "data-location-map")
+        self.assertNotContains(response, "data-location-map")
+        self.assertContains(response, "data-address-finder")
+        self.assertContains(response, "GhanaPost GPS digital address")
         self.assertContains(response, "Use my current location")
-        self.assertContains(response, "Search location")
+        self.assertContains(response, "Search landmarks, streets and places in Ghana")
         quote = self.client.get("/market/delivery/quote/?lat=5.60&lng=-0.18")
         self.assertEqual(quote.status_code, 200)
         self.assertEqual(quote.json()["fee"], "0.00")
