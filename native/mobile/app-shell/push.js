@@ -87,6 +87,14 @@
         busy(false);
         return;
       }
+      // Explicit Android channel is needed for reliable FCM notification display.
+      if(typeof plugin.createChannel==="function") {
+        await plugin.createChannel({
+          id:"kofad_updates",name:"KOFAD Updates",
+          description:"Important account and order updates",
+          importance:4,visibility:1,
+        });
+      }
       message("Registering this Android device securely…");
       await plugin.register();
       // Capacitor emits registration or registrationError asynchronously.
