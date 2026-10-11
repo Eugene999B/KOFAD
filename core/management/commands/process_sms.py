@@ -120,6 +120,11 @@ class Command(BaseCommand):
                     process_replies()
                 except Exception:
                     self.stderr.write("WhatsApp assistant queue failed safely; will retry.")
+                try:
+                    from core.telegram_delivery import deliver_pending as deliver_telegram
+                    deliver_telegram(limit=10)
+                except Exception:
+                    self.stderr.write("Telegram notice delivery failed safely; will retry.")
                 last_delivery_sync = now
 
             # Payment checks and receipt delivery both run independently of any customer browser.
