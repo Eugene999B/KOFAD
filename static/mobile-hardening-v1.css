@@ -274,3 +274,16 @@
     grid-template-columns:minmax(72px,34%) minmax(0,1fr)!important;
   }
 }
+
+/* Inventory card list: phones and tablets use the document scroll, not an
+   internal 640px table viewport. Preserve the existing desktop stock grid. */
+@media(max-width:900px){
+  .inventory-ledger .inventory-stock-table{
+    max-height:none!important;
+    overflow:visible!important;
+  }
+  .inventory-ledger .inventory-stock-table > table.mobile-card-table{
+    min-width:0!important;
+    max-width:100%!important;
+  }
+}
