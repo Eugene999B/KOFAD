@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = "Eugene999B/KOFAD"
-ROOT = "https://api.github.com/repos/" + REPO
+ROOT = "/repos/" + REPO
 PREFIX = "kofad-branch-archive-20261011"
 KEEP = {"main", "railway-release"}
 

@@ -59,6 +59,17 @@ class BranchCleanupSafetyTests(unittest.TestCase):
         self.assertEqual(report["planned"][0]["branch"], "merged/old")
         self.assertEqual(len(report["preserved"]), 1)
 
+    def test_github_api_root_is_a_path_not_doubled_hostname(self):
+        self.assertEqual(cleanup.ROOT, "/repos/Eugene999B/KOFAD")
+        with patch.object(cleanup.urllib.request, "urlopen") as open_url:
+            open_url.return_value.__enter__.return_value.read.return_value = b"{}"
+            with patch.dict("os.environ", {"GITHUB_TOKEN": "fake-for-test"}):
+                cleanup.api("GET", cleanup.ROOT + "/branches")
+        self.assertEqual(
+            open_url.call_args.args[0].full_url,
+            "https://api.github.com/repos/Eugene999B/KOFAD/branches",
+        )
+
     def test_archive_tag_must_match_exact_tip_before_deletion(self):
         with patch.object(cleanup, "api", return_value={"object": {"sha": "other"}}):
             with self.assertRaisesRegex(RuntimeError, "SHA verification failed"):
