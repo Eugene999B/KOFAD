@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const total = document.querySelector("[data-checkout-total]");
   const subtotal = Number(document.querySelector("[data-checkout-subtotal]")?.dataset.checkoutSubtotal || 0);
   const mapsLink = shell.querySelector("[data-address-maps-link]");
-  const token = typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : "";
+  const token = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "";
   let queryTimeout, currentSearch, sequence = 0, quoteSequence = 0;
   const csrf = form?.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
   const message = (text, ok = false) => {
