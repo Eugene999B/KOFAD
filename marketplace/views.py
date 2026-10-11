@@ -1104,6 +1104,54 @@ def market_location_search(request):
         return JsonResponse({"error": problem(exc), "results": []}, status=400)
 
 
+def market_location_suggest(request):
+    """Ghana-only Google Places suggestions, with the existing location-search fallback."""
+    if not _map_access_allowed(request):
+        return JsonResponse({"error": "Sign in to search locations."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
+    from . import delivery_locations
+    try:
+        rows = delivery_locations.suggest_landmarks(
+            request.GET.get("q", ""), request.GET.get("session", "")
+        )
+        return JsonResponse({"results": rows})
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc), "results": []}, status=400)
+
+
+@require_POST
+def market_location_place(request):
+    """Resolve selected Google landmark: never trust or persist client place coordinates."""
+    if not _map_access_allowed(request):
+        return JsonResponse({"error": "Sign in to select a location."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
+    from . import delivery_locations
+    try:
+        row = delivery_locations.select_landmark(
+            request.POST.get("place_id", ""), request.POST.get("session", "")
+        )
+        return JsonResponse(row)
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
+@require_POST
+def market_ghana_post_lookup(request):
+    """Lookup only after the customer explicitly submits a digital address."""
+    if not _map_access_allowed(request):
+        return JsonResponse({"error": "Sign in to verify GhanaPost GPS."}, status=401)
+    if not _consume_map_lookup_budget(request):
+        return JsonResponse({"error": "Location lookup limit reached. Please wait a minute."}, status=429)
+    from . import delivery_locations
+    try:
+        row = delivery_locations.resolve_digital_address(request.POST.get("code", ""))
+        return JsonResponse(row)
+    except ValidationError as exc:
+        return JsonResponse({"error": problem(exc)}, status=400)
+
+
 def market_location_reverse(request):
     if not _map_access_allowed(request):
         return JsonResponse({"error": "Sign in to use location services."}, status=401)
