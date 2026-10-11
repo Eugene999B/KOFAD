@@ -287,6 +287,13 @@ class CheckoutForm(forms.Form):
     def clean_phone(self):
         return normalize_ghana_phone(self.cleaned_data["phone"])
 
+    def clean_ghana_post_gps(self):
+        value = (self.cleaned_data.get("ghana_post_gps") or "").strip()
+        if not value:
+            return ""
+        from .delivery_locations import normalize_digital_address
+        return normalize_digital_address(value)
+
     def clean(self):
         data = super().clean()
         if data.get("fulfilment") == "delivery":
