@@ -104,6 +104,7 @@ def users(request, branch):
             "user": user,
             "role": "System administrator" if user.is_superuser else (_assigned_role(user).name if _assigned_role(user) else "No role"),
             "phone": user.access.recovery_phone,
+            "invite": getattr(user, "staff_invitation", None),
         })
     return render(request, "admin_users.html", {"title": "Staff & users", "rows": rows})
 
@@ -126,6 +127,8 @@ def user_edit(request, branch, pk=None):
         "last_name": user.last_name if user else "",
         "recovery_phone": user.access.recovery_phone if user else "",
         "email": user.email if user else "",
+        "invite_channel": "sms",
+        "whatsapp_opt_in": False,
         "email_daily_closing": user.access.email_daily_closing if user else False,
         "email_weekly_review": user.access.email_weekly_review if user else False,
         "email_monthly_review": user.access.email_monthly_review if user else False,
@@ -144,6 +147,8 @@ def user_edit(request, branch, pk=None):
             "last_name": request.POST.get("last_name", "").strip()[:150],
             "recovery_phone": request.POST.get("recovery_phone", "").strip()[:40],
             "email": request.POST.get("email", "").strip().lower()[:254],
+            "invite_channel": request.POST.get("invite_channel", "sms").strip(),
+            "whatsapp_opt_in": request.POST.get("whatsapp_opt_in") == "on",
             **{key: request.POST.get(key) == "on" for key in ("email_daily_closing", "email_weekly_review", "email_monthly_review", "email_critical_alerts", "sms_daily_closing", "sms_critical_alerts")},
             "role": request.POST.get("role", ""),
             "active": request.POST.get("active") == "on",
@@ -187,9 +192,25 @@ def user_edit(request, branch, pk=None):
             phone = ""
             errors.extend(exc.messages)
 
-        password = request.POST.get("password", "")
-        if creating and not password:
-            errors.append("Set an initial password for the new staff account.")
+        # New employees select their own password from a private, single-use link.
+        # Never allow a password supplied in the create-account POST to bypass onboarding.
+        password = "" if creating else request.POST.get("password", "")
+        invite_destination = ""
+        if creating:
+            from . import staff_invites
+            channel = values["invite_channel"]
+            if channel in {"sms", "whatsapp"} and not phone:
+                errors.append("Enter the new staff member's phone number for the invitation.")
+            elif channel == "email" and not values["email"]:
+                errors.append("Enter the staff email address to send the invitation.")
+            else:
+                try:
+                    invite_destination = staff_invites.validate_delivery(
+                        channel, values["email"] if channel == "email" else phone,
+                        whatsapp_opt_in=values["whatsapp_opt_in"],
+                    )
+                except ValidationError as exc:
+                    errors.extend(exc.messages)
         if password:
             candidate = user or User(username=values["username"], first_name=values["first_name"], last_name=values["last_name"])
             try:
@@ -218,12 +239,13 @@ def user_edit(request, branch, pk=None):
                         "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                     }
                 if creating:
-                    user = User.objects.create_user(username=values["username"], password=password)
+                    user = User.objects.create_user(username=values["username"])
+                    user.set_unusable_password()
                 user.username = values["username"]
                 user.email = values["email"]
                 user.first_name = values["first_name"]
                 user.last_name = values["last_name"]
-                user.is_active = values["active"]
+                user.is_active = False if creating else values["active"]
                 user.save()
                 if password and not creating:
                     user.set_password(password)
@@ -251,10 +273,25 @@ def user_edit(request, branch, pk=None):
                     "recovery_phone": phone,
                     "additional_permissions": list(user.user_permissions.values_list("codename", flat=True)),
                 }
+                if creating:
+                    invitation, invitation_url = staff_invites.issue(
+                        user, request.user, values["invite_channel"], invite_destination,
+                    )
                 s.audit(request.user, branch, "staff.created" if creating else "staff.updated", user.pk, {
-                    "before": before, "after": after, "password_reset": bool(password and not creating)
+                    "before": before, "after": after, "password_reset": bool(password and not creating),
+                    "invitation_channel": values["invite_channel"] if creating else "",
                 })
-            messages.success(request, "Staff account created." if creating else "Staff account updated.")
+            if creating:
+                try:
+                    staff_invites.deliver(invitation, invitation_url)
+                    messages.success(
+                        request, "Staff account created inactive. A private activation link was submitted via "
+                        + values["invite_channel"] + ".",
+                    )
+                except ValidationError as exc:
+                    messages.warning(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, "Staff account updated.")
             return redirect("admin_users")
 
     return render(request, "admin_user_form.html", {
