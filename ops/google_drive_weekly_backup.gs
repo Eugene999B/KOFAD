@@ -129,7 +129,9 @@ function weeklyKofadBackup() {
     if (bytes.length < 256 || bytes.length > KOFAD_BACKUP_MAX_BYTES) {
       throw new Error('KOFAD backup is empty or exceeds Apps Script safe transfer size.');
     }
-    const magic = Utilities.newBlob(bytes).getDataAsString().slice(0, KOFAD_ENCRYPTED_MAGIC.length);
+    const magic = bytes.slice(0, KOFAD_ENCRYPTED_MAGIC.length).map(function (b) {
+      return String.fromCharCode(b & 255);
+    }).join('');
     if (magic !== KOFAD_ENCRYPTED_MAGIC) {
       throw new Error('Server response is not a KOFAD encrypted backup archive.');
     }
@@ -166,16 +168,20 @@ function weeklyKofadBackup() {
     config.props.setProperty('KOFAD_LAST_BACKUP_SUCCESS_UTC', new Date().toISOString());
     config.props.setProperty('KOFAD_LAST_BACKUP_FILE_ID', saved.getId());
     kofadPruneAfterVerifiedUpload_(folder);
-    MailApp.sendEmail(
-      KOFAD_BACKUP_NOTIFY,
-      'KOFAD weekly backup stored — ' + dateOnly,
-      'The encrypted weekly backup was stored and its SHA-256 checksum verified.\n\n' +
-      'File: ' + filename + '\nBytes: ' + bytes.length +
-      '\nSHA-256: ' + headerHash +
-      '\nGoogle Drive: ' + saved.getUrl() +
-      '\n\nThis is an integrity check, not a tested restore. Keep the offline ' +
-      'backup passphrase and schedule regular isolated recovery rehearsals.'
-    );
+    try {
+      MailApp.sendEmail(
+        KOFAD_BACKUP_NOTIFY,
+        'KOFAD weekly backup stored — ' + dateOnly,
+        'The encrypted weekly backup was stored and its SHA-256 checksum verified.\n\n' +
+        'File: ' + filename + '\nBytes: ' + bytes.length +
+        '\nSHA-256: ' + headerHash +
+        '\nGoogle Drive: ' + saved.getUrl() +
+        '\n\nThis is an integrity check, not a tested restore. Keep the offline ' +
+        'backup passphrase and schedule regular isolated recovery rehearsals.'
+      );
+    } catch (mailError) {
+      console.error('Backup verified, but success notification could not be sent.');
+    }
   } catch (error) {
     try {
       MailApp.sendEmail(
