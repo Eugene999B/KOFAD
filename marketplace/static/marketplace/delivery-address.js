@@ -189,7 +189,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const fulfilment = form?.querySelector("[name=fulfilment]");
   fulfilment?.addEventListener("change", () => {
     const pickup = fulfilment.value === "pickup";
-    document.querySelector("[data-delivery-fields]").hidden = pickup;
+    const deliveryFields = document.querySelector("[data-delivery-fields]");
+    deliveryFields.hidden = pickup;
+    deliveryFields.querySelectorAll("input, select, textarea").forEach(element => {
+      element.disabled = pickup;
+    });
     const pickupFields = document.querySelector("[data-pickup-fields]");
     if (pickupFields) pickupFields.hidden = !pickup;
     if (pickup) {
