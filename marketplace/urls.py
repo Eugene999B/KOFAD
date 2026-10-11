@@ -27,6 +27,7 @@ urlpatterns = [
     path("sitemap.xml", seo.sitemap, name="sitemap_xml"),
     path("wholesale/", public_views.public_page, {"slug": "wholesale"}, name="public_wholesale"),
     path("market/categories/<slug:category_slug>/", views.market, name="market_category"),
+    path("market/orders/<uuid:pk>/momo-phone/verify/", views.customer_momo_phone_verify, name="customer_momo_phone_verify"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),
     path("market/orders/<uuid:pk>/payment-status/", views.customer_payment_status, name="customer_payment_status"),
     path("settings/online-payments/", views.online_payments, name="online_payments"),
