@@ -47,8 +47,11 @@ def _portal(request, kind, account):
             identity.marketing_opt_in = kind == "customer" and request.POST.get("marketing_opt_in") == "on"
             identity.closing_opt_in = allowed_management and request.POST.get("closing_opt_in") == "on"
             identity.critical_opt_in = allowed_management and request.POST.get("critical_opt_in") == "on"
-            # Recovery remains disabled until dedicated recovery channel has been audited.
-            identity.recovery_opt_in = False
+            # Explicit separate opt-in; user has already reconfirmed KOFAD password.
+            identity.recovery_opt_in = request.POST.get("recovery_opt_in") == "on" and bool(
+                (account.phone and account.verified_at) if kind == "customer"
+                else getattr(account.access, "recovery_phone", "")
+            )
             identity.save(update_fields=["notifications_enabled", "marketing_opt_in",
                                          "closing_opt_in", "critical_opt_in", "recovery_opt_in"])
             messages.success(request, "Telegram messaging preferences saved.")
