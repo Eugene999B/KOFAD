@@ -10,7 +10,7 @@
     <a class="ic-tool" href="/settings/connections/" aria-label="Refresh local connection checks">↻ Refresh checks</a>
   </div>
   <div class="ic-note"><span aria-hidden="true">ⓘ</span>
-    <div><b>What the colours mean.</b> Green means a database query succeeded now or a relevant completed event was recorded recently—not a guarantee of uninterrupted provider uptime. Amber means configured but unverified, old, or only submitted. Red indicates missing-critical or failed evidence. Grey means inactive, external, or not implemented. This page makes <b>no chargeable provider requests</b> and shows no secret keys.</div>
+    <div><b>What the colours mean.</b> Green means an authenticated read-only check, successful database query, or a recent completed event—not a guarantee of uninterrupted uptime. Amber means configured but unverified, old, or only submitted. Red indicates missing-critical or failed evidence. Grey means inactive, external, or not implemented. This page makes <b>no chargeable provider requests</b> and shows no secret keys.</div>
   </div>
   <div class="ic-summary" aria-label="Connection status summary">
     <div class="ic-summary-tile ic-success"><strong>{{ snapshot.counts.working }}</strong><span>Recent successful evidence</span></div>
@@ -18,6 +18,18 @@
     <div class="ic-summary-tile ic-attention"><strong>{{ snapshot.counts.issue }}</strong><span>Recorded issues</span></div>
     <div class="ic-summary-tile"><strong>{{ snapshot.counts.not_connected|add:snapshot.counts.external|add:snapshot.counts.planned }}</strong><span>Disconnected / external / planned</span></div>
   </div>
+  {% if connection_priorities %}
+  <section class="ic-panel ic-attention-panel" aria-labelledby="connection-attention-heading">
+    <div class="ic-card-top"><h3 id="connection-attention-heading">Issues requiring management attention</h3><span class="ic-status bad">{{ connection_priorities|length }} priority connections</span></div>
+    <p>These findings are based on missing critical KOFAD requirements, unsuccessful recorded activity or read-only provider checks. Each opens a specific diagnosis; a disabled service alone is not an outage.</p>
+    <div class="ic-attention-list">{% for item in connection_priorities %}
+      <a href="{% url 'connections_detail' item.id %}" class="ic-attention-row">
+        <span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span>
+        <span><strong>{{ item.name }}</strong><small>{% if item.issues %}{{ item.issues.0|truncatechars:165 }}{% else %}See the detailed connection verification findings.{% endif %}</small></span>
+        <span class="ic-arrow">Investigate →</span>
+      </a>{% endfor %}</div>
+  </section>
+  {% endif %}
   <div class="ic-filters">
     <div class="ic-chipset" aria-label="Connection categories">
       <a class="ic-chip {% if not active_group %}is-selected{% endif %}" href="{% url 'connections_center' %}{% if active_state %}?state={{ active_state|urlencode }}{% endif %}">All categories</a>
@@ -51,7 +63,7 @@
             <div class="ic-card-top"><span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span><span class="ic-status {{ item.status_style }}">{{ item.status_label }}</span></div>
             <h4>{{ item.name }}</h4><p>{{ item.purpose }}</p>
             <div class="ic-evidence">
-              {% if item.proof %}Last evidence {{ item.proof.at|date:"j M Y, H:i" }}{% else %}No locally verified activity available{% endif %}
+              {% if item.probe %}Verified {{ item.probe.checked_at|slice:":16" }} UTC · {{ item.probe.scope|truncatechars:42 }}{% elif item.proof %}Last event {{ item.proof.at|date:"j M Y, H:i" }}{% else %}No locally verified activity available{% endif %}
             </div>
             <span class="ic-arrow">View diagnosis &amp; workflow →</span>
           </a>
@@ -61,6 +73,6 @@
     {% endif %}
   {% endfor %}
   {% if not visible_connections %}<div class="ic-empty">No connections match those filters. <a href="{% url 'connections_center' %}">Show all connections</a>.</div>{% endif %}
-  <p class="ic-caveat">Local snapshot checked at {{ snapshot.checked_at|date:"j M Y, H:i:s" }} (Ghana time). Provider-side credentials, billing, quota, outages and Google Script triggers are not tested by this page. No keys, tokens, customer addresses, payment references or request payloads are shown. Changes to provider onboarding remain outside this diagnostic view.</p>
+  <p class="ic-caveat">Local snapshot checked at {{ snapshot.checked_at|date:"j M Y, H:i:s" }} (Ghana time). Live verification is available by opening supported providers and explicitly requesting a read-only check. Other provider billing, full availability and Google Script triggers may remain unverified. No keys, tokens, customer addresses, payment references or request payloads are shown. Changes to provider onboarding remain outside this diagnostic view.</p>
 </section>
 {% endblock %}

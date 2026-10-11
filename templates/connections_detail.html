@@ -8,6 +8,27 @@
     <div class="ic-card-top"><span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span><span class="ic-status {{ item.status_style }}">{{ item.status_label }}</span></div>
     <h2>{{ item.name }}</h2><p>{{ item.purpose }}</p>
   </div>
+  {% if can_live_verify %}
+  <section class="ic-panel ic-verify-panel" aria-labelledby="live-verification-title">
+    <div class="ic-verify-top">
+      <div><h3 id="live-verification-title">Read-only provider verification</h3>
+      <p>Request a real authenticated or public provider check. KOFAD will only use documented <strong>GET</strong> operations, never send a message, charge a payment, refresh a token or run a backup. Results remain visible for 15 minutes to avoid repeated API requests.</p></div>
+      <form method="post" action="{% url 'connections_live_verify' item.id %}">{% csrf_token %}
+        <button type="submit" class="ic-tool ic-verify-button">{% if item.probe %}Show latest verification{% else %}Verify provider now{% endif %} →</button>
+      </form>
+    </div>
+    {% if item.probe %}
+    <div class="ic-live-result {% if item.probe.state == 'verified' %}success{% elif item.probe.state == 'failed' %}failure{% else %}partial{% endif %}">
+      <div><strong>{% if item.probe.state == 'verified' %}Provider check verified{% elif item.probe.state == 'failed' %}Provider verification failed{% elif item.probe.state == 'partial' %}Partially verified{% else %}Not configured{% endif %}</strong><small>Checked {{ item.probe.checked_at|slice:":19" }} UTC · {{ item.probe.scope }}</small></div>
+      <p>{{ item.probe.summary }}</p>
+      <ul class="ic-check-list">{% for step in item.probe.checks %}<li><span class="{% if step.state == 'passed' %}pass{% elif step.state == 'failed' %}fail{% endif %}">{% if step.state == 'passed' %}✓{% elif step.state == 'failed' %}×{% else %}–{% endif %}</span><span><strong>{{ step.name }}</strong><small>{{ step.detail }}</small></span></li>{% endfor %}</ul>
+      <p class="ic-caveat">This probe verifies only the stated scope. Provider account access is not the same as successful delivery, customer payment or continuous uptime. Results expire after 15 minutes.</p>
+    </div>
+    {% else %}<p class="ic-caveat">No live verification has been requested this session. Existing checks below are local configuration or historical records only.</p>{% endif %}
+  </section>
+  {% else %}
+  <div class="ic-note"><span aria-hidden="true">ⓘ</span><div>This connection has no safe authenticated verification method in KOFAD yet. Use the provider console linked below; the website will not guess or perform chargeable tests.</div></div>
+  {% endif %}
   <div class="ic-detail-grid">
     <div>
       <div class="ic-panel"><h3>How this connection works</h3>

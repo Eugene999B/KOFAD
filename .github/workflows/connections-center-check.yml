@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'core/integration_health.py'
+      - 'core/integration_live.py'
+      - 'core/test_integration_live.py'
+      - 'config/settings.py'
       - 'core/test_integration_health.py'
       - 'core/admin_views.py'
       - 'core/urls.py'
@@ -45,4 +48,4 @@ jobs:
       - run: python manage.py migrate --noinput
       - run: python scripts/prepare_logo.py
       - run: python manage.py collectstatic --noinput
-      - run: python manage.py test core.test_integration_health --noinput
+      - run: python manage.py test core.test_integration_health core.test_integration_live --noinput

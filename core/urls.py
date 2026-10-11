@@ -107,6 +107,7 @@ urlpatterns = [
     path("settings/", admin_views.settings_center, name="settings"),
     path("settings/connections/", admin_views.connections_center, name="connections_center"),
     path("settings/connections/<slug:connection_id>/", admin_views.connections_detail, name="connections_detail"),
+    path("settings/connections/<slug:connection_id>/verify/", admin_views.connections_live_verify, name="connections_live_verify"),
     path("settings/company/", v.settings_view, name="company_settings"),
     path("settings/location/", v.location_settings, name="location_settings"),
     path("settings/debt/", v.debt_settings, name="debt_settings"),

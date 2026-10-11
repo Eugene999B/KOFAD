@@ -6,10 +6,11 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from . import services as s
 from .models import Access, Branch, PasswordRecovery
@@ -352,7 +353,8 @@ def settings_center(request, branch):
 def connections_center(request, branch):
     """Private, read-only external services inventory; no provider probes."""
     from .integration_health import catalog
-    snapshot = catalog()
+    from .integration_live import recent_probes
+    snapshot = catalog(probes=recent_probes(request.session))
     category = request.GET.get("group", "")[:32]
     state = request.GET.get("state", "")[:32]
     allowed_groups = {code for code, _label in snapshot["groups"]}
@@ -367,6 +369,8 @@ def connections_center(request, branch):
         "title": "Connections & integration health",
         "snapshot": snapshot,
         "visible_connections": visible,
+        "connection_priorities": [row for row in snapshot["items"]
+                                  if row["status"] == "issue"][:7],
         "active_group": category,
         "active_state": state,
     })
@@ -378,11 +382,49 @@ def connections_center(request, branch):
 def connections_detail(request, branch, connection_id):
     """Detailed explanation with evidence and specific missing prerequisites."""
     from .integration_health import catalog
-    snapshot = catalog()
+    from .integration_live import recent_probes, VALID
+    snapshot = catalog(probes=recent_probes(request.session))
     item = next((row for row in snapshot["items"] if row["id"] == connection_id), None)
     if item is None:
         raise Http404("Connection not found")
     return render(request, "connections_detail.html", {
         "title": item["name"] + " · Connection diagnostics",
         "item": item, "snapshot": snapshot,
+        "can_live_verify": connection_id in VALID,
     })
+
+@company_admin
+@never_cache
+@require_POST
+def connections_live_verify(request, branch, connection_id):
+    """Explicit, cost-controlled read-only external verification (CSRF-protected)."""
+    from django.http import HttpResponseBadRequest
+    from .integration_live import VALID, verify, recent_probes
+    if connection_id not in VALID:
+        return HttpResponseBadRequest("This provider has no safe read-only live check.")
+    values = recent_probes(request.session)
+    if connection_id not in values:
+        try:
+            result = verify(connection_id)
+        except Exception:
+            # Do not send tokens, provider responses or private identifiers to
+            # the user; keep existing provider configurations untouched.
+            import logging
+            logging.getLogger(__name__).warning(
+                "Connections verification unavailable: provider=%s", connection_id
+            )
+            result = {
+                "state": "partial",
+                "summary": "Live verification encountered an internal issue; provider health could not be confirmed.",
+                "checks": [{
+                    "name": "Diagnostic request",
+                    "state": "unknown",
+                    "detail": "Inspect the server logs and retry after the 15-minute result expires.",
+                }],
+                "scope": "Safe read-only provider check",
+                "checked_at": timezone.now().isoformat(),
+            }
+        values[connection_id] = result
+        request.session["kofad_integration_live_checks"] = values
+        request.session.modified = True
+    return redirect("connections_detail", connection_id=connection_id)

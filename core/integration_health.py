@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import DatabaseError, connection
+from django.db.models import Count
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,15 @@ CATALOG = (
                        ("Security sender configured", "brevo_security")),
          repair="Check Brevo sender verification, free daily quota, outbox failures and provider delivery events. API acceptance is not proof of inbox delivery.",
          manage="/communications/"),
-    dict(id="brevo_webhook", group="communications", name="Brevo delivery reporting", mark="EV",
+    dict(id="brevo_reporting", group="communications", name="Brevo provider event reports", mark="BR",
+         purpose="Read-only authenticated reporting for sent, delivered, bounced, deferred and blocked transactional email.",
+         steps=("KOFAD sends email through Brevo when configured.",
+                "Brevo records events even if KOFAD has not installed its webhook.",
+                "A read-only provider report checks recent event samples without sending mail."),
+         requirements=(("Brevo transactional API key configured", "brevo_api"),),
+         repair="Run Verify provider API. If verified, reporting works in Brevo, while KOFAD webhook sync must be diagnosed separately. For recent delivery evidence check event samples and matching KOFAD outbox.",
+         manage="/communications/"),
+    dict(id="brevo_webhook", group="communications", name="Brevo → KOFAD webhook receipts", mark="EV",
          purpose="Receives authenticated delivered/bounce/spam signals from Brevo.",
          steps=("Brevo posts an event to the KOFAD HTTPS webhook.",
                 "A private bearer token authenticates the event.",
@@ -352,11 +361,34 @@ def _evidence(now):
             "attempted": usage["attempted"], "accepted": usage["accepted"],
             "failed": usage["failed"], "limit": min(300, max(1, settings.KOFAD_BREVO_DAILY_LIMIT)),
         }
+    # Bounded, grouped counters from the existing indexed business tables.
+    # No customer addresses, bodies, token identifiers or payment amounts.
+    cutoff = now - timedelta(days=7)
+    summaries = (
+        ("email_activity", EmailLetter.objects.filter(
+            direction="outbound", created_at__gte=cutoff), "status"),
+        ("brevo_receipts", EmailDeliveryEvent.objects.filter(
+            received_at__gte=cutoff), "event"),
+        ("sms_activity", SmsAttempt.objects.filter(
+            started_at__gte=cutoff, provider="arkesel"), "status"),
+        ("whatsapp_activity", WhatsAppAttempt.objects.filter(
+            started_at__gte=cutoff), "status"),
+        ("paystack_activity", MarketPaymentAttempt.objects.filter(
+            provider="paystack", created_at__gte=cutoff), "status"),
+        ("hubtel_activity", MarketPaymentAttempt.objects.filter(
+            provider="hubtel", created_at__gte=cutoff), "status"),
+    )
+    for key, queryset, field in summaries:
+        observations[key] = {
+            str(row[field]): row["total"]
+            for row in queryset.values(field).annotate(total=Count("pk"))[:20]
+        }
     return observations
 
 
-def catalog():
+def catalog(probes=None):
     now = timezone.now()
+    probes = probes or {}
     config = _configuration()
     # Prevent a temporary DB issue from crashing the diagnostics screen.
     try:
@@ -391,6 +423,8 @@ def catalog():
             active = config.get(enabled_flags.get(spec["id"], ""), False)
             if spec["id"] == "brevo":
                 active = config["brevo_transaction"] or config["brevo_security"]
+            if spec["id"] == "brevo_webhook":
+                active = config["brevo_api"]
             state = "issue" if active else "not_connected"
             details.append("Incomplete prerequisites: " + "; ".join(missing) + ".")
         else:
@@ -437,18 +471,60 @@ def catalog():
             metrics.append("Today: " + str(usage["attempted"]) + " attempted recipients, " +
                            str(usage["accepted"]) + " accepted, " + str(usage["failed"]) +
                            " failed (local cap " + str(usage["limit"]) + ").")
+        evidence_key = {
+            "brevo": "email_activity",
+            "brevo_reporting": "brevo_receipts",
+            "brevo_webhook": "brevo_receipts",
+            "arkesel": "sms_activity",
+            "whatsapp": "whatsapp_activity",
+            "paystack": "paystack_activity",
+            "hubtel": "hubtel_activity",
+        }.get(spec["id"])
+        activity = observations.get(evidence_key, {}) if evidence_key else {}
+        if activity:
+            metrics.append(
+                "Last 7 days (KOFAD local records): " +
+                " · ".join(str(key).replace("_", " ") + " " + str(value)
+                           for key, value in sorted(activity.items())[:12]) + "."
+            )
+        elif evidence_key:
+            metrics.append("No " + ("authenticated webhook receipts" if evidence_key == "brevo_receipts" else "matching local events") +
+                           " recorded in KOFAD during the past seven days; absence alone does not prove a provider outage.")
         if spec["id"] == "paystack":
             metrics.append("Customer MoMo enabled: " + ("Yes" if settings.PAYSTACK_CUSTOMER_MOMO_ENABLED else "No") +
                            " · POS MoMo enabled: " + ("Yes" if settings.PAYSTACK_POS_MOMO_ENABLED else "No") + ".")
         if spec["id"] == "arkesel":
             metrics.append("Mode: " + ("Sandbox" if settings.SMS_SANDBOX else "Live") +
                            " · sender configured: " + ("Yes" if settings.SMS_SENDER_ID else "No") + ".")
+        # A recent manually initiated authenticated provider check is distinct
+        # from local event evidence. Results are expiring, server-side session
+        # summaries, not permanent claims of provider health.
+        probe = probes.get(spec["id"], {})
+        if probe and not spec.get("planned"):
+            verified_state = probe.get("state")
+            if verified_state == "verified":
+                if not missing:
+                    state = "working"
+                details.append("Manually checked provider API or routing; scope is documented in the verification evidence.")
+            elif verified_state == "failed":
+                state = "issue"
+                details.append("Latest read-only verification failed. See provider-level diagnosis below.")
+            elif verified_state == "partial":
+                if state not in {"issue", "not_connected"}:
+                    state = "warning"
+                details.append("Only part of the connection could be verified; see the exact probe scope.")
+            elif verified_state == "not_configured":
+                state = "not_connected"
+        if spec["id"] == "brevo_webhook" and not config["brevo_webhook"] and config["brevo_api"]:
+            state = "issue"
+            details.append("Brevo outbound API can operate, but KOFAD has no authenticated delivery-receipt token. This does NOT imply that Brevo's independent event reporting API is unavailable.")
         rows.append({
             **spec,
             "status": state, "status_label": STATUS[state][0],
             "status_style": STATUS[state][1],
             "checks": checks, "missing": missing, "issues": details,
             "proof": proof if proof.get("at") else None,
+            "probe": probe if probe else None,
             "metrics": metrics,
             "requirements_count": len(checks),
             "requirements_ok": len(checks) - len(missing),
