@@ -26,7 +26,7 @@ while IFS='|' read -r branch expected_sha replacement_pr archive_name; do
   echo "Checked obsolete branch: $branch"
   if [[ "$PRUNE_DRY_RUN" == "1" ]]; then continue; fi
   archive="tags/archive/kofad-cleanup-20261011/$archive_name"
-  archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha' 2>/dev/null || true)"
+  archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha // empty' 2>/dev/null || true)"
   if [[ -z "$archived_sha" ]]; then
     gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/$archive" -f sha="$current" --silent
     archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha')"
