@@ -8,7 +8,8 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .telegram_bot import command_reply
+from .telegram_assistant import reply_for
+from .models import TelegramUpdate
 
 WEBHOOK_PATH = "/telegram/webhook/"
 
@@ -56,11 +57,15 @@ def webhook(request):
     text = message.get("text")
     if not isinstance(text, str) or not text:
         return HttpResponse(status=200)
+    # Telegram resends updates when acknowledgement is lost. Only process once.
+    _, created = TelegramUpdate.objects.get_or_create(update_id=update_id)
+    if not created:
+        return HttpResponse(status=200)
     # Telegram supports invoking sendMessage as the HTTP response to a webhook.
     # No token is sent to the client; no separate outbound provider request needed.
     return JsonResponse({
         "method": "sendMessage",
         "chat_id": chat_id,
-        "text": command_reply(text)[:4096],
+        "text": reply_for(text, chat_id, sender_id)[:4096],
         "disable_web_page_preview": True,
     })
