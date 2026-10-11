@@ -101,9 +101,7 @@ function weeklyKofadBackup() {
 
     const timestamp = String(Math.floor(Date.now() / 1000));
     const toSign = 'v1\nPOST\n/settings/backup/google/export/\n' + timestamp;
-    const signature = kofadHex_(Utilities.computeHmacSha256Signature(
-      Utilities.MacAlgorithm.HMAC_SHA_256, toSign, config.key
-    ));
+    const signature = kofadHex_(Utilities.computeHmacSha256Signature(toSign, config.key));
     const response = UrlFetchApp.fetch(KOFAD_BACKUP_URL, {
       method: 'post',
       contentType: 'application/octet-stream',
@@ -114,8 +112,7 @@ function weeklyKofadBackup() {
       },
       muteHttpExceptions: true,
       followRedirects: false,
-      validateHttpsCertificates: true,
-      timeoutSeconds: 300
+      validateHttpsCertificates: true
     });
     if (response.getResponseCode() !== 200) {
       throw new Error('KOFAD refused backup export (HTTP ' + response.getResponseCode() +
