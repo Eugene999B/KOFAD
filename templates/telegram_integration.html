@@ -20,6 +20,7 @@
       <label><input type="checkbox" name="closing_opt_in" {% if telegram_identity.closing_opt_in %}checked{% endif %}> Daily verified closing summaries</label><p></p>
       <label><input type="checkbox" name="critical_opt_in" {% if telegram_identity.critical_opt_in %}checked{% endif %}> Critical variance and urgent notices</label><p></p>
       {% endif %}
+      {% if is_inventory %}<label><input type="checkbox" name="stock_opt_in" {% if telegram_identity.stock_opt_in %}checked{% endif %}> Stock shortage and inventory alerts</label><p></p>{% endif %}
       <label><input type="checkbox" name="recovery_opt_in" {% if telegram_identity.recovery_opt_in %}checked{% endif %}> Allow Telegram as a password-recovery channel (only for this securely linked account)</label><p></p>
       <label>Confirm current KOFAD password
         <input type="password" name="current_password" autocomplete="current-password" required>
