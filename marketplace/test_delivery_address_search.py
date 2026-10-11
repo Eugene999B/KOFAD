@@ -104,3 +104,17 @@ class GhanaLocationEndpointTests(MarketFixtures):
         response = self.client.get("/market/location/suggest/?q=KNUST")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["label"], "KNUST")
+
+    @patch("marketplace.delivery_locations.resolve_digital_address")
+    def test_gps_lookup_only_uses_signed_in_post(self, resolve):
+        self.sign_in()
+        resolve.return_value = {
+            "code": "AK-039-5028",
+            "latitude": 6.68,
+            "longitude": -1.57,
+            "verified": True,
+        }
+        response = self.client.post("/market/location/ghana-post/", {"code": "AK-039-5028"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["verified"])
+        self.assertEqual(self.client.get("/market/location/ghana-post/").status_code, 405)
