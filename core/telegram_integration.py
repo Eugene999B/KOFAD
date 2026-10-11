@@ -218,3 +218,77 @@ def queue_closing_update(closing):
         key = f"tg:closing:{closing.pk}:{category}:{user.pk}"
         count += int(queue_notice(identity, category, key, body, branch=closing.branch))
     return count
+
+
+
+def queue_periodic_digest(now=None):
+    """Weekly and monthly reports, deterministic and source-key deduplicated."""
+    if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+        return 0
+    from datetime import timedelta
+    from decimal import Decimal, InvalidOperation
+
+    from django.contrib.auth.models import User
+    from .models import Access, Branch, Closing
+
+    now = timezone.localtime(now or timezone.now())
+    # Same scheduling convention as KOFAD's management email reviews.
+    if now.hour != 8:
+        return 0
+    today = now.date()
+    periods = []
+    if today.weekday() == 0:
+        periods.append(("weekly", today - timedelta(days=7), today - timedelta(days=1)))
+    if today.day == 1:
+        periods.append(("monthly", (today.replace(day=1) - timedelta(days=1)).replace(day=1),
+                        today - timedelta(days=1)))
+    if not periods:
+        return 0
+
+    def money(value):
+        try:
+            return Decimal(str(value or 0))
+        except (ValueError, TypeError, InvalidOperation):
+            return Decimal("0")
+
+    sent = 0
+    for user in User.objects.filter(is_active=True):
+        identity = linked_identity("staff", user.pk)
+        if not identity or not identity.notifications_enabled or not identity.closing_opt_in:
+            continue
+        if not (user.is_superuser or any(user.has_perm("core." + p) for p in (
+                "manage_company", "view_reports", "operate_finance"))):
+            continue
+        access = Access.objects.filter(user=user).first()
+        if not access:
+            continue
+        branches = Branch.objects.filter(active=True) if user.is_superuser else access.branches.filter(active=True)
+        if not branches.exists():
+            continue
+        for label, first, last in periods:
+            rows = Closing.objects.filter(
+                branch__in=branches, verified_by__isnull=False, date__gte=first,
+                date__lte=last,
+            ).values_list("summary", flat=True)[:3000]
+            totals = {"sales": Decimal("0"), "expenses": Decimal("0"), "collections": Decimal("0")}
+            count = 0
+            for item in rows:
+                item = item if isinstance(item, dict) else {}
+                totals["sales"] += money(item.get("sales_total"))
+                totals["expenses"] += money(item.get("expenses_total"))
+                totals["collections"] += money(item.get("debt_collections"))
+                count += 1
+            body = (
+                f"KOFAD {label.upper()} VERIFIED CLOSING REVIEW\n"
+                f"Period: {first:%d %b %Y} – {last:%d %b %Y}\n"
+                f"Locations in your access scope: {branches.count()}\n"
+                f"Closings examined: {count}\n"
+                f"Recorded sales: GHS {totals['sales']:,.2f}\n"
+                f"Expenses: GHS {totals['expenses']:,.2f}\n"
+                f"Debt collections: GHS {totals['collections']:,.2f}\n\n"
+                "This is a verified-closing summary, not net profit. "
+                "Check your staff dashboard for complete financial analysis."
+            )
+            sent += int(queue_notice(identity, "digest",
+                                     f"tg:digest:{label}:{first.isoformat()}:{user.pk}", body))
+    return sent
