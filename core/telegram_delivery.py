@@ -5,12 +5,17 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import Access, TelegramOutbound
+from .telegram_channels import BOT_KINDS, bot_enabled, bot_token
 
 
 def _still_authorized(notice):
     identity = notice.identity
     from .telegram_integration import linked_identity
-    if linked_identity(identity.kind, identity.owner_id) is None:
+    if linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind) is None:
+        return False
+    expected_bot = ("official" if notice.category == "recovery" else
+                    "customer" if notice.category in {"order", "marketing"} else "staff")
+    if identity.bot_kind != expected_bot:
         return False
     if identity.revoked_at or (not identity.notifications_enabled and notice.category != "recovery"):
         return False
@@ -49,13 +54,14 @@ def _still_authorized(notice):
 
 
 def deliver_pending(limit=20):
-    if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_BOT_TOKEN
-            and (settings.TELEGRAM_NOTIFICATIONS_ENABLED or settings.TELEGRAM_RECOVERY_ENABLED)):
+    if not (settings.TELEGRAM_BOT_ENABLED and
+            (settings.TELEGRAM_NOTIFICATIONS_ENABLED or settings.TELEGRAM_RECOVERY_ENABLED)):
         return 0
     delivered = 0
     for _ in range(min(max(int(limit), 0), 100)):
         with transaction.atomic():
-            pending = TelegramOutbound.objects.filter(status="queued")
+            active_bots = [kind for kind in BOT_KINDS if bot_enabled(kind)]
+            pending = TelegramOutbound.objects.filter(status="queued", identity__bot_kind__in=active_bots)
             if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
                 pending = pending.filter(category="recovery")
             if not settings.TELEGRAM_RECOVERY_ENABLED:
@@ -74,10 +80,11 @@ def deliver_pending(limit=20):
             notice.save(update_fields=["status", "attempts"])
             notice_id = notice.pk
             chat_id = notice.identity.chat_id
+            recipient_bot_token = bot_token(notice.identity.bot_kind)
             body = notice.body
         try:
             response = requests.post(
-                "https://api.telegram.org/bot" + settings.TELEGRAM_BOT_TOKEN + "/sendMessage",
+                "https://api.telegram.org/bot" + recipient_bot_token + "/sendMessage",
                 json={"chat_id": chat_id, "text": body, "disable_web_page_preview": True},
                 timeout=12,
             )
