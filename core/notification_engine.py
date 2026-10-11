@@ -1,7 +1,7 @@
 """Consent-aware business intelligence notifications.
 
 No marketing to customers; this module covers explicitly subscribed staff only.
-SMTP and SMS each have an independent production kill switch.
+Email and SMS each have an independent production kill switch. Business email uses the verified Brevo HTTPS sender.
 """
 import hashlib
 import logging
@@ -14,7 +14,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, F
 from django.utils import timezone
 from django.utils.html import escape
 
@@ -49,13 +49,25 @@ def _authorised(user, branch):
     )
 
 
+def _staff_mailbox_connected(user):
+    """Only currently verified staff mailboxes with notifications enabled qualify."""
+    from marketplace.models import EmailIdentity
+    return bool(
+        user.email
+        and EmailIdentity.objects.filter(
+            kind="staff", owner_id=user.pk, email__iexact=user.email,
+            verified_at__isnull=False, notifications_enabled=True,
+        ).exists()
+    )
+
+
 def _recipients(branch, flag):
     qs = User.objects.filter(is_active=True).exclude(email="").filter(
         Q(is_superuser=True) | Q(access__branches=branch)
     ).select_related("access").distinct().order_by("pk")
     for user in qs:
         access = getattr(user, "access", None)
-        if not access or not getattr(access, flag, False) or not _authorised(user, branch):
+        if not access or not getattr(access, flag, False) or not _authorised(user, branch) or not _staff_mailbox_connected(user):
             continue
         try:
             validate_email(user.email)
@@ -291,6 +303,29 @@ def run_staff_scheduled_reports(now=None):
     return queued
 
 
+def _customer_mailbox_verified(customer):
+    """Never send confidential transaction details to an unverified customer address."""
+    from marketplace.models import EmailIdentity
+    address = (customer.email or "").strip().lower()
+    if not address:
+        return False
+    if EmailIdentity.objects.filter(
+        kind="customer", owner_id=customer.pk, email__iexact=address,
+        verified_at__isnull=False,
+    ).exists():
+        return True
+    # The signed one-time marketing confirmation also proves mailbox ownership,
+    # independently of whether promotional messages remain opted in.
+    return bool(
+        customer.marketing_email_verified_at
+        and EmailNotice.objects.filter(
+            category="marketing_verify", recipient_ref=str(customer.pk),
+            recipient__iexact=address,
+            created_at__lte=customer.marketing_email_verified_at,
+        ).exists()
+    )
+
+
 def _may_deliver(notice):
     if notice.category == "pos_transaction":
         from marketplace.models import CustomerAccount
@@ -306,6 +341,7 @@ def _may_deliver(notice):
             return False
         customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
         return bool(customer and customer.verified_at and customer.transactional_email_enabled
+                    and _customer_mailbox_verified(customer)
                     and customer.email.strip().lower() == notice.recipient.strip().lower()
                     and notice.branch_id == document.branch_id)
     if notice.category in ("order", "marketing_verify", "marketing"):
@@ -318,6 +354,7 @@ def _may_deliver(notice):
             return bool(
                 order.customer.active and order.customer.verified_at
                 and order.customer.transactional_email_enabled
+                and _customer_mailbox_verified(order.customer)
                 and order.email.strip().lower() == notice.recipient.strip().lower()
                 and order.customer.email.strip().lower() == notice.recipient.strip().lower()
                 and order.payment_status == "paid"
@@ -333,7 +370,8 @@ def _may_deliver(notice):
             challenge_id = hashlib.sha256(customer.marketing_email_challenge.encode()).hexdigest()[:12]
             return bool(customer.marketing_email_challenge and not customer.marketing_email_opt_in
                         and notice.source_key.endswith(":" + challenge_id))
-        return customer.marketing_email_opt_in and customer.marketing_email_verified_at is not None
+        return (customer.marketing_email_opt_in and customer.marketing_email_verified_at is not None
+                and _customer_mailbox_verified(customer))
     if notice.recipient_user_id is None or notice.branch_id is None:
         return False
     user = notice.recipient_user
@@ -342,14 +380,26 @@ def _may_deliver(notice):
     return bool(
         flag and access and getattr(access, flag, False)
         and user.email.strip().lower() == notice.recipient.strip().lower()
-        and _authorised(user, notice.branch)
+        and _authorised(user, notice.branch) and _staff_mailbox_connected(user)
     )
 
 
 def process_email_outbox(limit=15):
+    """Deliver through KOFAD's verified provider, with idempotent claims and credit caps."""
     if not getattr(settings, "EMAIL_DELIVERY_ENABLED", False):
         return 0
+    provider = getattr(settings, "KOFAD_EMAIL_PROVIDER", "auto")
+    using_brevo = provider == "brevo"
+    if using_brevo:
+        from .brevo_email import ready
+        if not getattr(settings, "KOFAD_EMAIL_ENABLED", False) or not ready():
+            return 0
     now = timezone.now()
+    # A lost provider acknowledgement can mean an email was delivered.
+    # Never automatically re-send a claimed row from a crashed worker.
+    EmailNotice.objects.filter(
+        status="sending", last_attempt_at__lt=now - timedelta(minutes=20)
+    ).update(status="uncertain", last_error="Interrupted delivery; reconcile before retry.")
     ids = list(
         EmailNotice.objects.filter(status__in=("queued", "failed"), attempts__lt=3)
         .filter(Q(last_attempt_at__isnull=True) | Q(last_attempt_at__lt=now - timedelta(minutes=15)))
@@ -358,7 +408,9 @@ def process_email_outbox(limit=15):
     sent = 0
     for pk in ids:
         with transaction.atomic():
-            notice = EmailNotice.objects.select_for_update().filter(pk=pk, status__in=("queued", "failed"), attempts__lt=3).first()
+            notice = EmailNotice.objects.select_for_update().filter(
+                pk=pk, status__in=("queued", "failed"), attempts__lt=3
+            ).first()
             if notice is None:
                 continue
             if now - notice.created_at > timedelta(days=7) or not _may_deliver(notice):
@@ -370,30 +422,61 @@ def process_email_outbox(limit=15):
             notice.last_attempt_at = now
             notice.save(update_fields=["status", "attempts", "last_attempt_at"])
         try:
-            email = EmailMultiAlternatives(
-                notice.subject, notice.body, settings.DEFAULT_FROM_EMAIL, [notice.recipient]
-            )
-            paragraphs = escape(notice.body).replace("\n", "<br>")
-            email.attach_alternative(
-                '<div style="background:#f1f5f9;padding:28px;font-family:Arial,sans-serif">'
-                '<div style="max-width:620px;margin:auto;background:white;border-top:6px solid #e9ac32;'
-                'padding:30px;border-radius:8px;color:#102b46">'
-                '<h1 style="font-size:23px;margin-top:0">KOFAD IMPEX ENTERPRISE</h1>'
-                '<div style="font-size:14px;line-height:1.65">' + paragraphs + '</div>'
-                '<hr style="border:0;border-top:1px solid #ddd">'
-                '<p style="font-size:11px;color:#64798b">Confidential business report. '
-                'Never send your password in a reply.</p></div></div>',
-                "text/html",
-            )
-            email.send(fail_silently=False)
+            if using_brevo:
+                from .brevo_email import send_brevo
+                purpose = "security" if notice.category == "marketing_verify" else "transaction"
+                send_brevo(
+                    subject=notice.subject, body=notice.body,
+                    recipient=notice.recipient, purpose=purpose,
+                )
+            else:
+                email = EmailMultiAlternatives(
+                    notice.subject, notice.body, settings.DEFAULT_FROM_EMAIL, [notice.recipient]
+                )
+                paragraphs = escape(notice.body).replace("\n", "<br>")
+                email.attach_alternative(
+                    '<div style="background:#f1f5f9;padding:28px;font-family:Arial,sans-serif">'
+                    '<div style="max-width:620px;margin:auto;background:white;border-top:6px solid #e9ac32;'
+                    'padding:30px;border-radius:8px;color:#102b46">'
+                    '<h1 style="font-size:23px;margin-top:0">KOFAD IMPEX ENTERPRISE</h1>'
+                    '<div style="font-size:14px;line-height:1.65">' + paragraphs + '</div>'
+                    '<hr style="border:0;border-top:1px solid #ddd">'
+                    '<p style="font-size:11px;color:#64798b">Confidential business report. '
+                    'Never send your password in a reply.</p></div></div>',
+                    "text/html",
+                )
+                email.send(fail_silently=False)
             EmailNotice.objects.filter(pk=pk, status="sending").update(
                 status="sent", sent_at=timezone.now(), last_error=""
             )
             sent += 1
         except Exception as exc:
-            log.exception("Email delivery failed; outbox retained for controlled retry")
+            if using_brevo:
+                from .brevo_email import DailyEmailLimitExceeded, DefiniteEmailRejection
+                if isinstance(exc, DailyEmailLimitExceeded):
+                    # The free Brevo allowance is shared with security codes and receipts.
+                    # Defer without consuming a retry, and without attempting paid sends.
+                    tomorrow = (
+                        timezone.localtime().replace(hour=0, minute=10, second=0, microsecond=0)
+                        + timedelta(days=1)
+                    )
+                    EmailNotice.objects.filter(pk=pk, status="sending").update(
+                        status="failed",
+                        attempts=F("attempts") - 1,
+                        last_attempt_at=tomorrow - timedelta(minutes=15),
+                        last_error="Daily email allowance reached; deferred until tomorrow.",
+                    )
+                    continue
+                if isinstance(exc, DefiniteEmailRejection):
+                    EmailNotice.objects.filter(pk=pk, status="sending").update(
+                        status="failed", last_error="Provider explicitly rejected this email."
+                    )
+                    continue
+            # Unknown delivery outcome (including network timeout): quarantine.
+            # An HTTPS request may have been accepted even if no response arrived.
+            log.warning("Business email delivery requires manual reconciliation; notice=%s", pk)
             EmailNotice.objects.filter(pk=pk, status="sending").update(
-                status="failed", last_error=str(exc)[:240]
+                status="uncertain", last_error="Delivery outcome unknown; review before retry."
             )
     return sent
 
