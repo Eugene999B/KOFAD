@@ -4,9 +4,12 @@ Provider sends are mocked; no email/SMS is delivered by these tests.
 """
 from unittest.mock import patch
 
-from django.test import override_settings
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.test import RequestFactory, override_settings
 
-from marketplace.models import CustomerEmailRecovery, EmailIdentity
+from marketplace.models import CustomerAccount, CustomerEmailRecovery, EmailIdentity
+from marketplace import services as market_services
 from marketplace.tests import MarketFixtures
 
 
@@ -37,6 +40,29 @@ class CustomerEntryRecoveryTests(MarketFixtures):
         row.verified_at = timezone.now()
         row.save(update_fields=["verified_at"])
         self.assertEqual(self.client.post("/market/account/login/", payload).status_code, 302)
+
+    def test_registration_finish_never_signs_existing_customer_in_without_password(self):
+        session = self.client.session
+        session["market_verified_phone"] = self.customer.phone
+        session.save()
+        response = self.client.get("/market/account/finish/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/market/account/login/")
+        self.assertNotIn("market_customer_id", self.client.session)
+        self.assertNotIn("market_verified_phone", self.client.session)
+
+    def test_google_only_customer_without_phone_has_a_valid_session(self):
+        google_only = CustomerAccount(full_name="Google Only", email="google.only@example.com", phone=None)
+        google_only.set_password(None)
+        google_only.save()
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        SessionMiddleware(lambda r: None).process_request(request)
+        request.session.save()
+        market_services.set_customer_session(request, google_only)
+        resolved = market_services.customer_from_session(request)
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved.pk, google_only.pk)
 
     def test_anonymous_recovery_page_shows_both_verified_email_and_sms(self):
         response = self.client.get("/market/account/password-reset/")
