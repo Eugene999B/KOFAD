@@ -413,4 +413,11 @@ def safe_prepare_closing(closing_id, actor_id=None):
         queue_closing_reports(closing)
     except Exception as exc:
         _record_automation_failure(closing.branch, actor, "staff_closing_report", closing.pk, exc)
+    if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
+        try:
+            from .telegram_integration import queue_closing_update
+            queue_closing_update(closing)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Telegram closing notice could not be queued safely")
     return prepared
