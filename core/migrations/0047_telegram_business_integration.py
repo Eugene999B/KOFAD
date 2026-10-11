@@ -20,6 +20,7 @@ class Migration(migrations.Migration):
                 ("marketing_opt_in", models.BooleanField(default=False)),
                 ("closing_opt_in", models.BooleanField(default=False)),
                 ("critical_opt_in", models.BooleanField(default=False)),
+                ("stock_opt_in", models.BooleanField(default=False)),
                 ("recovery_opt_in", models.BooleanField(default=False)),
                 ("verified_at", models.DateTimeField()),
                 ("revoked_at", models.DateTimeField(blank=True, null=True)),
