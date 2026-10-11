@@ -287,6 +287,16 @@ class CheckoutForm(forms.Form):
     def clean_phone(self):
         return normalize_ghana_phone(self.cleaned_data["phone"])
 
+    def clean_ghana_post_gps(self):
+        # Pickup does not require a postal address and should ignore stale delivery input.
+        if self.cleaned_data.get("fulfilment") == "pickup":
+            return ""
+        value = (self.cleaned_data.get("ghana_post_gps") or "").strip()
+        if not value:
+            return ""
+        from .delivery_locations import normalize_digital_address
+        return normalize_digital_address(value)
+
     def clean(self):
         data = super().clean()
         if data.get("fulfilment") == "delivery":
@@ -294,7 +304,7 @@ class CheckoutForm(forms.Form):
                 if not data.get(field):
                     self.add_error(field, "This is required for delivery.")
             if data.get("latitude") is None or data.get("longitude") is None:
-                raise forms.ValidationError("Pin your delivery location on the map or use current location.")
+                raise forms.ValidationError("Confirm a delivery location using landmark search, GhanaPost GPS or current location.")
         else:
             data["delivery_zone"] = None
             for field in ("region", "town", "address_line", "landmark", "ghana_post_gps", "latitude", "longitude"):
