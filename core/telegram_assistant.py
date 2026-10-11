@@ -74,7 +74,7 @@ def _staff_analysis(user, days=7):
 
 def _customer_orders(customer, requested_reference=""):
     from marketplace.models import OnlineOrder
-    orders = OnlineOrder.objects.filter(customer=customer).order_by("-pk")
+    orders = OnlineOrder.objects.filter(customer=customer).order_by("-created_at")
     if requested_reference:
         requested = requested_reference.strip().upper()[:32]
         orders = orders.filter(public_reference__iexact=requested)
@@ -101,7 +101,7 @@ def _product_search(query):
     ).select_related("product")[:5]
     items = [
         f"{p.display_name[:80]} — GHS {p.market_price:.2f} / {p.selling_label[:35]}\n"
-        + MARKET + f"/market/products/{p.pk}/"
+        + MARKET + f"/market/products/{p.product_id}/"
         for p in matches
     ]
     return ("\n\n".join(items) if items else "No matching published products were found.") + (
