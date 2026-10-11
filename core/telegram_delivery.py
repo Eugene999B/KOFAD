@@ -55,14 +55,15 @@ def deliver_pending(limit=20):
     delivered = 0
     for _ in range(min(max(int(limit), 0), 100)):
         with transaction.atomic():
-            notice = TelegramOutbound.objects.select_for_update(skip_locked=True).filter(
-                status="queued",
-            ).select_related("identity").order_by("pk").first()
+            pending = TelegramOutbound.objects.filter(status="queued")
+            if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+                pending = pending.filter(category="recovery")
+            if not settings.TELEGRAM_RECOVERY_ENABLED:
+                pending = pending.exclude(category="recovery")
+            notice = pending.select_for_update(skip_locked=True).select_related("identity").order_by("pk").first()
             if not notice:
                 break
-            if ((notice.category == "recovery" and not settings.TELEGRAM_RECOVERY_ENABLED)
-                    or (notice.category != "recovery" and not settings.TELEGRAM_NOTIFICATIONS_ENABLED)
-                    or not _still_authorized(notice)):
+            if not _still_authorized(notice):
                 notice.status = "suppressed"
                 notice.save(update_fields=["status"])
                 continue
