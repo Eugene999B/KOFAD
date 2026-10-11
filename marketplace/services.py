@@ -815,6 +815,15 @@ def create_order(customer, cart, cleaned):
         customer.marketing_email_verified_at = None
         customer.marketing_email_challenge = ""
         customer.save(update_fields=["email", "marketing_email_opt_in", "marketing_email_verified_at", "marketing_email_challenge"])
+    # Restore the order-created notification lost in the 2026-10-10 promotion.
+    # The newer notice engine independently enforces verified-account email
+    # eligibility, current delivery consent, and an idempotent source key.
+    # This callback runs only after a committed order, never before.
+    def _queue_order_confirmation():
+        from core.notification_engine import queue_customer_order_email
+        queue_customer_order_email(order, "awaiting_payment")
+
+    transaction.on_commit(_queue_order_confirmation, robust=True)
     return order
 
 
