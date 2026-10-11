@@ -296,7 +296,7 @@ def callback(request, kind):
                 "subject": identity["subject"], "email": identity["email"],
                 "created_at": time.time(),
             }
-            return redirect("market_google_finish")
+            return redirect("market_google_complete")
         if kind == "staff":
             user = User.objects.filter(pk=binding.owner_id, is_active=True).first()
             if not user:

@@ -73,6 +73,7 @@ urlpatterns = [
     path("market/auth/google/callback/", google_oauth.callback, {"kind": "customer"}, name="google_customer_callback"),
     path("market/auth/google/unlink/", google_oauth.unlink, {"kind": "customer"}, name="google_customer_unlink"),
     path("market/auth/google/finish/", google_oauth.customer_complete, name="market_google_finish"),
+    path("market/auth/google/complete/", google_oauth.customer_complete, name="market_google_complete"),
     # Preserve the configured private staff login URL used by LOGIN_URL.
     path(settings.STAFF_LOGIN_SLUG + "/", v.login_view, name="staff_private_login"),
     path("account/", accounts.account, name="account"),
