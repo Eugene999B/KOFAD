@@ -28,7 +28,7 @@ class ConnectionsCenterTests(MarketFixtures):
         self.assertContains(response, "Hubtel payments")
         self.assertContains(response, "PayPal")
         self.assertContains(response, "Arkesel SMS")
-        self.assertContains(response, "No local success proof")
+        self.assertContains(response, "No locally verified activity available")
         for item in integration_health.CATALOG:
             with self.subTest(provider=item["id"]):
                 detail = self.client.get(reverse("connections_detail", args=[item["id"]]))
@@ -126,7 +126,7 @@ class ConnectionsCenterTests(MarketFixtures):
         self.assertEqual(response.status_code, 405)
         page = self.client.get(reverse("connections_center"))
         self.assertIn("no-store", page["Cache-Control"])
-        self.assertIn("private", page["Cache-Control"] if "private" in page["Cache-Control"] else "private")
+        self.assertNotIn("public", page["Cache-Control"])
 
     def test_diagnostics_do_not_modify_business_or_payment_data(self):
         from marketplace.models import MarketPaymentAttempt, OnlineOrder
