@@ -291,6 +291,29 @@ def run_staff_scheduled_reports(now=None):
     return queued
 
 
+def _customer_mailbox_verified(customer):
+    """Never send confidential transaction details to an unverified customer address."""
+    from marketplace.models import EmailIdentity
+    address = (customer.email or "").strip().lower()
+    if not address:
+        return False
+    if EmailIdentity.objects.filter(
+        kind="customer", owner_id=customer.pk, email__iexact=address,
+        verified_at__isnull=False,
+    ).exists():
+        return True
+    # The signed one-time marketing confirmation also proves mailbox ownership,
+    # independently of whether promotional messages remain opted in.
+    return bool(
+        customer.marketing_email_verified_at
+        and EmailNotice.objects.filter(
+            category="marketing_verify", recipient_ref=str(customer.pk),
+            recipient__iexact=address,
+            created_at__lte=customer.marketing_email_verified_at,
+        ).exists()
+    )
+
+
 def _may_deliver(notice):
     if notice.category == "pos_transaction":
         from marketplace.models import CustomerAccount
@@ -306,6 +329,7 @@ def _may_deliver(notice):
             return False
         customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
         return bool(customer and customer.verified_at and customer.transactional_email_enabled
+                    and _customer_mailbox_verified(customer)
                     and customer.email.strip().lower() == notice.recipient.strip().lower()
                     and notice.branch_id == document.branch_id)
     if notice.category in ("order", "marketing_verify", "marketing"):
@@ -318,6 +342,7 @@ def _may_deliver(notice):
             return bool(
                 order.customer.active and order.customer.verified_at
                 and order.customer.transactional_email_enabled
+                and _customer_mailbox_verified(order.customer)
                 and order.email.strip().lower() == notice.recipient.strip().lower()
                 and order.customer.email.strip().lower() == notice.recipient.strip().lower()
                 and order.payment_status == "paid"
@@ -333,7 +358,8 @@ def _may_deliver(notice):
             challenge_id = hashlib.sha256(customer.marketing_email_challenge.encode()).hexdigest()[:12]
             return bool(customer.marketing_email_challenge and not customer.marketing_email_opt_in
                         and notice.source_key.endswith(":" + challenge_id))
-        return customer.marketing_email_opt_in and customer.marketing_email_verified_at is not None
+        return (customer.marketing_email_opt_in and customer.marketing_email_verified_at is not None
+                and _customer_mailbox_verified(customer))
     if notice.recipient_user_id is None or notice.branch_id is None:
         return False
     user = notice.recipient_user
