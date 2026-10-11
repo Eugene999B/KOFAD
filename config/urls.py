@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from core.telegram_views import webhook as telegram_webhook
-from core.telegram_portal import staff_portal as telegram_staff_portal
+from core.telegram_portal import staff_portal as telegram_staff_portal, staff_security_portal as telegram_staff_security_portal
 from core.telegram_recovery import staff_recovery as telegram_staff_recovery
 
 urlpatterns = [
@@ -10,6 +10,7 @@ urlpatterns = [
     path("telegram/customer/webhook/", telegram_webhook, {"bot_kind": "customer"}, name="telegram_customer_webhook"),
     path("telegram/staff/webhook/", telegram_webhook, {"bot_kind": "staff"}, name="telegram_staff_webhook"),
     path("integrations/telegram/", telegram_staff_portal, name="telegram_staff_portal"),
+    path("integrations/telegram/security/", telegram_staff_security_portal, name="telegram_staff_security_portal"),
     path("integrations/telegram/recover/", telegram_staff_recovery, name="telegram_staff_recovery"),
     path(settings.STAFF_LOGIN_SLUG + "/technical-admin/", admin.site.urls),
     path("", include("marketplace.urls")),
