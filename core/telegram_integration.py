@@ -113,7 +113,7 @@ def confirm_link(kind, owner_id, code, bot_kind=None):
         if not hmac.compare_digest(challenge.confirmation_digest, expected):
             return False
         # Never steal a Telegram account linked to some other KOFAD identity.
-        if TelegramIdentity.objects.filter(bot_kind=bot_kind, telegram_user_id=challenge.telegram_user_id).exclude(
+        if TelegramIdentity.objects.filter(bot_kind=bot_kind, kind=kind, telegram_user_id=challenge.telegram_user_id).exclude(
             kind=kind, owner_id=owner_id
         ).exists():
             return False
@@ -149,9 +149,12 @@ def queue_notice(identity, category, source_key, body, branch=None):
     """No messages without a linked opted-in account."""
     if not identity or identity.revoked_at or not identity.notifications_enabled:
         return False
-    allowed_bot = ("official" if category == "recovery" else
-                   "customer" if category in {"order", "marketing"} else "staff")
-    if identity.bot_kind != allowed_bot:
+    allowed_bot = {
+        "recovery": "official", "order": "customer",
+        "marketing": "customer", "closing": "staff",
+        "digest": "staff", "critical": "staff", "stock": "staff",
+    }.get(category)
+    if not allowed_bot or identity.bot_kind != allowed_bot:
         return False
     if category == "marketing" and not identity.marketing_opt_in:
         return False
