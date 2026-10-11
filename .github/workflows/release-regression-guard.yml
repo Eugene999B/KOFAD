@@ -2,6 +2,10 @@ name: Protect KOFAD release from recovered regressions
 on:
   push:
     branches: [railway-release]
+  pull_request:
+    paths:
+      - '.github/workflows/release-regression-guard.yml'
+      - 'docs/ROLLBACK_RECOVERY_REGRESSION_MATRIX.md'
   workflow_dispatch:
 permissions:
   contents: read
