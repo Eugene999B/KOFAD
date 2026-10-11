@@ -1127,6 +1127,7 @@ class TelegramIdentity(models.Model):
     marketing_opt_in = models.BooleanField(default=False)
     closing_opt_in = models.BooleanField(default=False)
     critical_opt_in = models.BooleanField(default=False)
+    stock_opt_in = models.BooleanField(default=False)
     recovery_opt_in = models.BooleanField(default=False)
     verified_at = models.DateTimeField()
     revoked_at = models.DateTimeField(null=True, blank=True)
