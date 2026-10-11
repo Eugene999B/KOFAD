@@ -47,13 +47,16 @@ def _portal(request, kind, account):
             identity.marketing_opt_in = kind == "customer" and request.POST.get("marketing_opt_in") == "on"
             identity.closing_opt_in = allowed_management and request.POST.get("closing_opt_in") == "on"
             identity.critical_opt_in = allowed_management and request.POST.get("critical_opt_in") == "on"
+            identity.stock_opt_in = kind == "staff" and (account.is_superuser or
+                account.has_perm("core.manage_company") or account.has_perm("core.operate_inventory")) and (
+                request.POST.get("stock_opt_in") == "on")
             # Explicit separate opt-in; user has already reconfirmed KOFAD password.
             identity.recovery_opt_in = request.POST.get("recovery_opt_in") == "on" and bool(
                 (account.phone and account.verified_at) if kind == "customer"
                 else getattr(account.access, "recovery_phone", "")
             )
             identity.save(update_fields=["notifications_enabled", "marketing_opt_in",
-                                         "closing_opt_in", "critical_opt_in", "recovery_opt_in"])
+                                         "closing_opt_in", "critical_opt_in", "stock_opt_in", "recovery_opt_in"])
             messages.success(request, "Telegram messaging preferences saved.")
         else:
             messages.error(request, "Unsupported Telegram account action.")
@@ -64,6 +67,8 @@ def _portal(request, kind, account):
         "kind": kind, "telegram_identity": identity,
         "telegram_active": active,
         "telegram_pair_url": request.session.get(f"telegram_pair_url_{kind}", ""),
+        "is_inventory": kind == "staff" and (account.is_superuser or
+            account.has_perm("core.manage_company") or account.has_perm("core.operate_inventory")),
         "is_management": kind == "staff" and (account.is_superuser or any(
             account.has_perm("core." + p) for p in ("manage_company", "view_reports", "operate_finance")
         )),
