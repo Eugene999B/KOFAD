@@ -1,0 +1,25 @@
+name: Verify Ghana customer delivery location
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kofad
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kofad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kofad"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kofad:test-only@localhost:5432/kofad
+      DJANGO_SECRET_KEY: nonproduction-ghana-address-regression-testing-secret
+      DJANGO_DEBUG: "1"
+      SECURE_SSL_REDIRECT: "0"
