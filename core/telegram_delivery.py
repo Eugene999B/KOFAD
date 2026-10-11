@@ -96,3 +96,18 @@ def deliver_pending(limit=20):
                 **({"body": ""} if notice.category == "recovery" else {}),
             )
     return delivered
+
+
+
+def purge_old_telegram():
+    """Bound storage of webhook replay IDs, expired codes and sent notices."""
+    from datetime import timedelta
+    from .models import TelegramLinkChallenge, TelegramRecoveryChallenge, TelegramUpdate
+
+    now = timezone.now()
+    TelegramUpdate.objects.filter(received_at__lt=now - timedelta(days=30)).delete()
+    TelegramLinkChallenge.objects.filter(expires_at__lt=now - timedelta(days=2)).delete()
+    TelegramRecoveryChallenge.objects.filter(expires_at__lt=now - timedelta(days=2)).delete()
+    TelegramOutbound.objects.filter(created_at__lt=now - timedelta(days=90)).exclude(
+        status="queued",
+    ).delete()
