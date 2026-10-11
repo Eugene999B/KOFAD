@@ -341,6 +341,9 @@ def run_scheduled_automations(now=None):
         "email_reports": run_staff_scheduled_reports,
         "customer_email": run_customer_personalised_promotions,
     }
+    if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
+        from .telegram_integration import queue_periodic_digest
+        jobs["telegram_periodic"] = queue_periodic_digest
     results = {}
     for name, job in jobs.items():
         try:
