@@ -1,9 +1,11 @@
 from django.urls import path
 from . import views, public_views, seo
 from core import native_apps, pwa
+from core.telegram_portal import customer_portal as telegram_customer_portal
 from . import native_api, mobile_v1_api, mobile_identity
 
 urlpatterns = [
+    path("market/integrations/telegram/", telegram_customer_portal, name="telegram_customer_portal"),
     # Restore public SEO, PWA, mobile access and wholesale/catalogue URLs lost in merged route map.
     path("favicon.ico", seo.favicon, name="site_favicon"),
     path("favicon-96.png", seo.favicon_png, name="site_favicon_png"),
