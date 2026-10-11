@@ -9,6 +9,9 @@ from .models import Access, TelegramOutbound
 
 def _still_authorized(notice):
     identity = notice.identity
+    from .telegram_integration import linked_identity
+    if linked_identity(identity.kind, identity.owner_id) is None:
+        return False
     if identity.revoked_at or (not identity.notifications_enabled and notice.category != "recovery"):
         return False
     if notice.category == "recovery" and not identity.recovery_opt_in:
