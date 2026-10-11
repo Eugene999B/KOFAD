@@ -66,13 +66,15 @@ def _find_account(kind, identifier, staff_username):
 
 
 def request_recovery(kind, identifier, staff_username):
+    if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_RECOVERY_ENABLED):
+        return None
     account = _find_account(kind, identifier, staff_username)
     if not account:
         return None
-    identity = linked_identity(kind, account.pk)
+    identity = linked_identity(kind, account.pk, bot_kind="official")
     if identity and not identity.recovery_opt_in:
         identity = None
-    if not identity:
+    if not identity or identity.bot_kind != "official":
         return None
     now = timezone.now()
     if TelegramRecoveryChallenge.objects.filter(
@@ -117,7 +119,7 @@ def complete_recovery(kind, challenge_id, code, new_password, confirm_password):
         challenge.save(update_fields=["attempts"])
         identity = challenge.identity
         account = _account(kind, challenge.owner_id)
-        if not account or identity.revoked_at or not identity.recovery_opt_in or not linked_identity(kind, account.pk):
+        if not account or identity.revoked_at or not identity.recovery_opt_in or not linked_identity(kind, account.pk, bot_kind="official"):
             return False, "This account can no longer use Telegram recovery."
         if identity.kind != kind or identity.owner_id != challenge.owner_id:
             return False, "This recovery account has changed."
