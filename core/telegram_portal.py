@@ -61,8 +61,7 @@ def _portal(request, kind, account):
         else:
             messages.error(request, "Unsupported Telegram account action.")
         return redirect(request.path)
-    return render(request, "telegram_integration.html" if kind == "staff"
-                  else "marketplace/telegram_integration.html", {
+    context = {
         "title": "Telegram · KOFAD IMPEX",
         "kind": kind, "telegram_identity": identity,
         "telegram_active": active,
@@ -72,7 +71,12 @@ def _portal(request, kind, account):
         "is_management": kind == "staff" and (account.is_superuser or any(
             account.has_perm("core." + p) for p in ("manage_company", "view_reports", "operate_finance")
         )),
-    })
+    }
+    if kind == "customer":
+        from marketplace.views import _market_context
+        context = _market_context(request, **context)
+    return render(request, "telegram_integration.html" if kind == "staff"
+                  else "marketplace/telegram_integration.html", context)
 
 
 @never_cache
