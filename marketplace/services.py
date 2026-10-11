@@ -1252,11 +1252,20 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
             )
 
     from .notifications import queue_order_sms
+    payment_channel_label = {
+        "mobile_money": "Mobile Money", "card": "bank card",
+        "bank": "bank payment", "bank_transfer": "bank transfer",
+    }.get(channel, "online payment")
+    # The customer alone receives the six-digit pickup/delivery code.
+    # Staff must request it at physical handover; the staff dashboard never shows it.
     queue_order_sms(
         order, "paid",
-        f"KOFAD: Payment confirmed for {order.customer_reference}. "
-        f"Amount: GHS {order.total:.2f}. Follow your order status in your account. "
-        "Track it in your KOFAD Market account.",
+        f"KOFAD: Payment verified for order {order.customer_reference}. "
+        f"Received GHS {order.total:.2f} via {payment_channel_label}. "
+        f"Your 6-digit collection/delivery code is {handover_code(order)}. "
+        "Show this code to KOFAD staff only when you receive your items; "
+        "they must enter it to confirm handover. Never share your MoMo PIN. "
+        "Track your order in KOFAD Market.",
     )
     # Notifications are deliberately queued only on the first verified
     # settlement; late duplicate webhooks must not send another alert.
