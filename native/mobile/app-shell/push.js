@@ -10,7 +10,8 @@
   const ROOT=CUSTOMER?"https://market.kofadimpex.com/market/mobile/v1/"
                      :"https://staff.kofadimpex.com/staff/mobile/v1/";
   const $=id=>document.getElementById(id);
-  const plugin=window.Capacitor?.Plugins?.PushNotifications;
+  const plugin=window.Capacitor?.isPluginAvailable?.("PushNotifications") === false
+    ? null : window.Capacitor?.Plugins?.PushNotifications;
   let pending=false;
   let registered=false;
   let listenersReady=false;
