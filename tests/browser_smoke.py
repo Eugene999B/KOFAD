@@ -968,7 +968,20 @@ with sync_playwright() as p:
             "/settings/online-payments/",
         ):
             admin_page.goto("http://127.0.0.1:8000" + staff_path)
-            assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (\n            str(width) + staff_path + ": " + str(admin_page.evaluate(\n                """() => [...document.querySelectorAll('body *')].filter(el => {\n                  const r=el.getBoundingClientRect();\n                  const s=getComputedStyle(el);\n                  return r.width > 0 && r.right > innerWidth + 2 &&\n                    s.position !== 'fixed' && s.position !== 'absolute';\n                }).slice(0,8).map(el => ({\n                  tag: el.tagName, className: el.className?.baseVal || el.className,\n                  width: Math.round(el.getBoundingClientRect().width),\n                  right: Math.round(el.getBoundingClientRect().right),\n                }))"""\n            ))\n        )
+            assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (
+            str(width) + staff_path + ": " + str(admin_page.evaluate(
+                """() => [...document.querySelectorAll('body *')].filter(el => {
+                  const r=el.getBoundingClientRect();
+                  const s=getComputedStyle(el);
+                  return r.width > 0 && r.right > innerWidth + 2 &&
+                    s.position !== 'fixed' && s.position !== 'absolute';
+                }).slice(0,8).map(el => ({
+                  tag: el.tagName, className: el.className?.baseVal || el.className,
+                  width: Math.round(el.getBoundingClientRect().width),
+                  right: Math.round(el.getBoundingClientRect().right),
+                }))"""
+            ))
+        )
 
     admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.goto("http://127.0.0.1:8000/workspace/")
