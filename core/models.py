@@ -1136,8 +1136,8 @@ class TelegramIdentity(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["bot_kind", "kind", "owner_id"], name="tg_one_account_per_bot"),
-            models.UniqueConstraint(fields=["bot_kind", "telegram_user_id"], name="tg_one_telegram_user_per_bot"),
-            models.UniqueConstraint(fields=["bot_kind", "chat_id"], name="tg_one_telegram_chat_per_bot"),
+            models.UniqueConstraint(fields=["bot_kind", "kind", "telegram_user_id"], name="tg_one_user_per_bot_role"),
+            models.UniqueConstraint(fields=["bot_kind", "kind", "chat_id"], name="tg_one_chat_per_bot_role"),
         ]
         indexes = [models.Index(fields=["kind", "owner_id"], name="tg_account_lookup")]
 
