@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0045_merge_staff_notifications"),
+        ("core", "0046_verified_owner_email_reports"),
     ]
 
     operations = [

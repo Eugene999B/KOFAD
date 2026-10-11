@@ -48,10 +48,25 @@ class Command(BaseCommand):
             if now - last_automation >= 60:
                 try:
                     run_scheduled_automations()
+                except Exception:
+                    self.stderr.write("Communication automation check failed safely; will retry.")
+                # Independent email queues: one failure must never block receipts,
+                # approved staff letters or verified-account notifications.
+                try:
                     from core.notification_engine import process_email_outbox
-                    process_email_outbox()
-                except Exception as exc:
-                    self.stderr.write(f"Communication automation check failed safely: {exc}")
+                    process_email_outbox(limit=10)
+                except Exception:
+                    self.stderr.write("Intelligent email notice delivery failed safely; will retry.")
+                try:
+                    from core.email_center import deliver_outgoing
+                    deliver_outgoing(limit=10)
+                except Exception:
+                    self.stderr.write("Business email outbox check failed safely; will retry.")
+                try:
+                    from core.email_identity import deliver_pending
+                    deliver_pending(limit=10)
+                except Exception:
+                    self.stderr.write("Verified-account email outbox check failed safely; will retry.")
                 try:
                     from marketplace.mobile_push_delivery import process_due_push
                     process_due_push(limit=10)
