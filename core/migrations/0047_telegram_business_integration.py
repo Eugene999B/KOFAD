@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TelegramIdentity",
             fields=[
-                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("kind", models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])),
                 ("owner_id", models.PositiveBigIntegerField()),
                 ("telegram_user_id", models.BigIntegerField(unique=True)),
@@ -32,7 +32,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TelegramLinkChallenge",
             fields=[
-                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("kind", models.CharField(max_length=12)),
                 ("owner_id", models.PositiveBigIntegerField()),
                 ("token_digest", models.CharField(max_length=64, unique=True)),
@@ -48,7 +48,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TelegramUpdate",
             fields=[
-                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("update_id", models.BigIntegerField(unique=True)),
                 ("received_at", models.DateTimeField(auto_now_add=True)),
             ],
@@ -56,7 +56,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TelegramOutbound",
             fields=[
-                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("source_key", models.CharField(max_length=180, unique=True)),
                 ("category", models.CharField(max_length=24)),
                 ("body", models.TextField()),
