@@ -254,9 +254,12 @@ def market(request, category_slug=None):
     except ValidationError:
         branch = None
 
+    from .pricing import online_markup_percent
+    from django.db.models.functions import Round
+    rate = online_markup_percent()
     price_field = DecimalField(max_digits=14, decimal_places=2)
     rows = MarketListing.objects.filter(enabled=True, product__active=True).select_related("product").annotate(
-        market_price_sort=Coalesce(
+        market_base_price=Coalesce(
             Case(
                 When(price_source="retail_unit", then=F("product__retail_unit")),
                 When(price_source="retail_pack", then=F("product__retail_pack")),
@@ -267,6 +270,11 @@ def market(request, category_slug=None):
             ),
             Value(Decimal("0.00")),
             output_field=price_field,
+        )
+    ).annotate(
+        market_price_sort=Round(
+            F("market_base_price") * Value(Decimal("1") + rate / Decimal("100")),
+            precision=2, output_field=price_field,
         )
     )
     if branch:
