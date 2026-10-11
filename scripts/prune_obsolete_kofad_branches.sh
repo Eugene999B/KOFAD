@@ -25,13 +25,14 @@ while IFS='|' read -r branch expected_sha replacement_pr archive_name; do
   fi
   echo "Checked obsolete branch: $branch"
   if [[ "$PRUNE_DRY_RUN" == "1" ]]; then continue; fi
-  archive="tags/archive/kofad-cleanup-20261011/$archive_name"
-  archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha // empty' 2>/dev/null || true)"
-  if [[ -z "$archived_sha" ]]; then
-    gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/$archive" -f sha="$current" --silent
-    archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha')"
-  fi
-  if [[ "$archived_sha" != "$current" ]]; then echo "::error::Archive check failed; keeping $branch"; skipped=$((skipped+1)); continue; fi
+  # Use the already field-tested archive function shared with branch-hygiene.yml.
+  # It independently creates and GET-verifies the immutable exact-SHA tag.
+  GITHUB_TOKEN="$GH_TOKEN" python - "$branch" "$current" <<'ARCHIVE_PY'
+import sys
+from scripts.github_branch_cleanup import archive
+tag = archive(sys.argv[1], sys.argv[2])
+print("Archived verified historical commit as tag:", tag)
+ARCHIVE_PY
   gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" --silent
   echo "Archived $current; removed $branch"
   deleted=$((deleted+1))
