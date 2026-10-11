@@ -1,111 +1,149 @@
-# KOFAD IMPEX — official enterprise Telegram assistant
+# KOFAD IMPEX — three specialized official Telegram bots
 
-Username: **@KOFADIMPEXBOT**.
-Official bot: https://t.me/KOFADIMPEXBOT
+**Owner-approved architecture: three bots, NOT four.** A separate fourth
+verification bot could not be created; therefore the original official
+@KOFADIMPEXBOT is the ONLY Telegram bot for optional OTP/password recovery.
+Customer and staff bots are independent accounts created in BotFather.
+DeepSeek is a separate future integration and is not included.
 
-## Critical release protection
+## Bot responsibilities
 
-Railway production uses **railway-release**, not main. This change was built as a
-new additive feature branch FROM railway-release. Never force-push, restore a
-stale branch, delete production history or replace KOFAD's existing services.
-Before merging, compare current railway-release with the PR base. Merge only
-after migrations, regression tests, and live-diff review have passed. Existing
-financial, stock, payroll, WhatsApp, Android, email, and backup behaviors must
-remain unchanged. DeepSeek is explicitly excluded from this release.
+1. **Official KOFAD IMPEX**: @KOFADIMPEXBOT.
+   - Public company information, links to the specialized bots, support guidance.
+   - Account-security information and **opt-in recovery code delivery** for
+     customers AND staff linked to this exact official bot.
+   - No private finance, staff alerts, customer purchase records or marketing.
+2. **Customer bot**: BotFather username is configured in
+   TELEGRAM_CUSTOMER_BOT_USERNAME (do NOT guess the actual issued username).
+   - Own-order tracking, published products, customer service routing, opt-in
+     transactional notifications and opted-in marketing.
+   - No privileged KOFAD staff data, financial reports, OTP or password recovery.
+3. **Staff / management bot**: username in TELEGRAM_STAFF_BOT_USERNAME.
+   - Verified, role/branch-limited business summaries, daily verified closings,
+     periodic management reports, cash variance warnings and stock alerts.
+   - No customer session impersonation, OTP processing, password recovery or
+     cross-branch data queries.
 
-## Features implemented in this PR
+Each Telegram bot has its OWN bot API token, webhook URL and inbound webhook
+secret. Webhook replay IDs are unique per bot. Each linked identity is scoped by
+both the account type and the bot and is revoked when credentials change.
 
-- Authenticated Telegram webhook at /telegram/webhook/ (header-secret verified,
-  private conversations only, replay protection, stale-update rejection).
-- Website-to-Telegram double-confirmed account pairing for existing verified
-  staff or customer accounts; website current password + short-lived Telegram
-  code. Telegram handle/phone is never accepted as proof of identity.
-- Live credential-stamp validation invalidates Telegram privileges when KOFAD
-  password or staff session version changes.
-- Customer own-order tracking by account association, published product search,
-  contact and self-service sign-in routing.
-- Staff READ-ONLY verified closing summaries for authorized branches (7d/30d).
-  No arbitrary SQL queries, direct payments, refunds or permission changes.
-- Independently opted-in customer order notices, staff closing notices, severe
-  cash variance notices, stock shortages, weekly and monthly business digests.
-- Durable idempotent outbox with kill switch, opt-in and permission checks at
-  send time. Uncertain send outcomes are NEVER automatically retried to avoid
-  duplicate alerts.
-- Separately opt-in Telegram OTP password recovery for staff and customers
-  using the phone already registered to their KOFAD account. Requires a prior
-  strong website/Telegram account link, rate limitation and a fresh six-digit
-  code delivered ONLY to that linked chat. Existing SMS and email reset flows
-  are unchanged. Staff privileged MFA is not bypassed.
-- Account pages with consent controls and explicit disconnect.
-- Automated regression tests and manual deployment hooks.
+## Security requirements
 
-## Not yet provided
+- Telegram identity is never established by a matching phone number alone.
+  A person signs into KOFAD, confirms the current KOFAD password, opens the
+  appropriate bot's short-lived deep link, and returns to KOFAD to confirm
+  the six-digit Telegram pairing code.
+- For password reset, the user must independently link to the **official bot**
+  while authenticated, explicitly opt in to recovery, and request a short-lived
+  code on the KOFAD website. The code goes ONLY to that registered and linked
+  official bot conversation. Existing staff/customer email/SMS recovery remains.
+- A staff member with a customer account can link both account types to
+  the official security bot independently. Staff and customer business data
+  remain isolated by role, consent and branch checks.
+- Every bot needs to have been started by the user; Telegram cannot send to a
+  random phone number.
+- Do not log or paste tokens, webhook secrets, passwords, pairing links, OTPs,
+  private business reports, or customer data into GitHub commits or chat.
+- Message queue does not automatically resend deliveries whose outcomes are
+  uncertain, to avoid duplicates.
+- All external AI model calls (including DeepSeek) remain absent in this phase.
 
-- DeepSeek / external LLM intelligence (separate future update by request).
-- Arbitrary staff instructions, autonomous refunds, privileged financial
-  approvals, open-ended account database search, voice recognition.
-- Bulk marketing campaigns, any unconsented unsolicited messages or sending
-  Telegram messages to a phone number that has not started and linked the bot.
-- Guaranteed Telegram OTP delivery: provider API may be unavailable; existing
-  recovery alternatives remain available.
+## Routes
 
-## Environment flags — off until testing
+| Bot | Webhook on staff.kofadimpex.com | Website link |
+| --- | --- | --- |
+| Official + OTP | /telegram/webhook/ | /integrations/telegram/security/ and /market/integrations/telegram/security/ |
+| Customer | /telegram/customer/webhook/ | /market/integrations/telegram/ |
+| Staff | /telegram/staff/webhook/ | /integrations/telegram/ |
 
-Add the token using Railway service Variables on **kofad-web**, not GitHub.
-Keep private: never paste token or webhook secret into chats, logs or code.
+Recovery entry points stay:
+- /integrations/telegram/recover/ for staff
+- /market/integrations/telegram/recover/ for customers
 
-TELEGRAM_BOT_TOKEN=<private secret already configured by owner>
-TELEGRAM_WEBHOOK_SECRET=<separate random 32-byte URL-safe secret>
-TELEGRAM_WEBHOOK_BASE_URL=https://staff.kofadimpex.com
-TELEGRAM_BOT_ENABLED=0
-TELEGRAM_ACCOUNT_LINK_ENABLED=0
-TELEGRAM_BUSINESS_ANALYTICS_ENABLED=0
-TELEGRAM_NOTIFICATIONS_ENABLED=0
-TELEGRAM_RECOVERY_ENABLED=0
+## Protected Railway configuration
 
-Roll out in order:
-1. Apply migration 0047 via reviewed deployment after CI passing.
-2. Configure secret and webhook host in Railway.
-3. Enable TELEGRAM_BOT_ENABLED=1 and register webhook once in a securely
-   configured runtime: python manage.py setup_telegram_webhook
-4. Verify private chat /start, /ping, /help and rejection of spoofed requests.
-5. Enable TELEGRAM_ACCOUNT_LINK_ENABLED=1; pair a TEST staff and customer
-   account through KOFAD website, verify confirmation and permission boundaries.
-6. Enable TELEGRAM_BUSINESS_ANALYTICS_ENABLED=1 after verifying branch-scoped
-   reports in test accounts.
-7. Enable TELEGRAM_NOTIFICATIONS_ENABLED=1 only after reviewing outbox
-   consent and worker behavior. The existing kofad-sms worker processes
-   messages independently, using the same shared PostgreSQL database.
-8. Keep TELEGRAM_RECOVERY_ENABLED=0 until the owner verifies prior link,
-   opt-in, wrong-code, expiry, throttling, staff session revocation and
-   existing SMS/email fallbacks in a production-equivalent test environment.
-   Only then enable it deliberately.
+All values below apply only to **KOFAD**. Existing KOFAD Railway production
+services track the branch railway-release; changes MUST be merged from the
+current release baseline, never from old main snapshots.
 
-To inspect Telegram provider webhook without printing secrets:
-python manage.py setup_telegram_webhook --status
-To stop the provider webhook:
-python manage.py setup_telegram_webhook --remove
+### On kofad-web
 
-## Important restrictions
+Existing official bot:
+- TELEGRAM_BOT_TOKEN — already set by owner, value must remain private
+- TELEGRAM_WEBHOOK_SECRET — already set privately
+- TELEGRAM_WEBHOOK_BASE_URL=https://staff.kofadimpex.com
 
-Telegram bots **cannot** begin a conversation with a phone number. Users
-must first open @KOFADIMPEXBOT, start the bot, and link their existing KOFAD
-account. The KOFAD website-verified account phone is only an account lookup
-hint for password recovery, not Telegram identity proof.
+New customer bot:
+- TELEGRAM_CUSTOMER_BOT_TOKEN — set PRIVATELY from BotFather
+- TELEGRAM_CUSTOMER_BOT_USERNAME — EXACT BotFather username, without @
+- TELEGRAM_CUSTOMER_WEBHOOK_SECRET — newly generated and privately configured
 
-Private analytics use recorded VERIFIED closing records, not speculative
-numbers. Staff roles and branch access are rechecked on every request,
-and again before queued messages are sent. Marketing is separate from
-transactional notices and requires explicit opt-in.
+New staff bot:
+- TELEGRAM_STAFF_BOT_TOKEN — set PRIVATELY from BotFather
+- TELEGRAM_STAFF_BOT_USERNAME — EXACT BotFather username, without @
+- TELEGRAM_STAFF_WEBHOOK_SECRET — newly generated and privately configured
 
-Production Telegram messages may be stored by Telegram; avoid full customer
-addresses, passwords, OTP replies, financial credentials, or sensitive staff
-details in normal chat.
+### On kofad-sms
 
-## Support and rollback
+This existing worker sends opt-in Telegram notifications using the same KOFAD
+database. It needs the **three sending tokens** only:
+- TELEGRAM_BOT_TOKEN — already set by owner
+- TELEGRAM_CUSTOMER_BOT_TOKEN — same Customer Bot token as web
+- TELEGRAM_STAFF_BOT_TOKEN — same Staff Bot token as web
 
-Immediate disable: set TELEGRAM_BOT_ENABLED=0. Other flags are independent.
-Never roll back financial migrations to disable the Telegram bot; leave the
-additive tables in place and flip its flags. Preserve PostgreSQL data, KOFAD
-history and deployed code. The Django management command may delete the bot
-webhook if a hard disconnect is required.
+DO NOT set webhook secrets on the worker; only web receives webhooks.
+
+### Release flags: all OFF by default
+
+On BOTH web and worker (as applicable):
+- TELEGRAM_BOT_ENABLED=0
+- TELEGRAM_CUSTOMER_BOT_ENABLED=0
+- TELEGRAM_STAFF_BOT_ENABLED=0
+- TELEGRAM_NOTIFICATIONS_ENABLED=0
+- TELEGRAM_ACCOUNT_LINK_ENABLED=0
+- TELEGRAM_BUSINESS_ANALYTICS_ENABLED=0
+- TELEGRAM_RECOVERY_ENABLED=0
+
+A missing flag means disabled. Set flags explicitly to 1 ONLY after CI tests,
+migration review, runtime smoke tests, and correct token/secret validation.
+
+### Webhook setup
+
+In a properly secured KOFAD web runtime after code deployment:
+- python manage.py setup_telegram_webhook --bot official
+- python manage.py setup_telegram_webhook --bot customer
+- python manage.py setup_telegram_webhook --bot staff
+
+Inspect configuration without exposing tokens:
+- python manage.py setup_telegram_webhook --bot customer --status
+
+Remove just one bot:
+- python manage.py setup_telegram_webhook --bot customer --remove
+
+Do not register until the corresponding bot endpoint is ready to answer
+requests. Commands never print secrets.
+
+## Rollout and no-lost-feature rule
+
+1. Confirm the current railway-release HEAD SHA and compare the full PR diff.
+   Never use old branches to overwrite new KOFAD features.
+2. Require all GitHub Actions to finish successfully: Django system checks,
+   migrations, unit tests, staff/customer auth, native apps, notifications,
+   Google weekly backups and payment integrations.
+3. Apply ONLY additive Telegram migrations and verify live health.
+4. Configure and verify three webhook routes and secrets independently.
+5. Enable official /start and /ping first; verify that OTP only goes to the
+   official bot and requires prior account linking and explicit recovery consent.
+6. Enable customer bot pairing + own order tracking; verify foreign accounts
+   cannot access each other's data or staff reports.
+7. Enable staff bot pairing and branch-restricted reports; validate with a
+   non-management staff user and owner/admin accounts.
+8. Enable automated notifications only after opt-in and queue isolation tests.
+9. Keep recovery disabled until separate OTP security testing is complete.
+10. Do not use merge, reset, force-push, deletion, stale snapshot restore or
+    rollback on production to activate a bot. Roll back behavior with the
+    independent flags, not a destructive database migration.
+
+**Until verification and a controlled production release, this PR remains a
+DRAFT and production continues running existing KOFAD functionality.**
