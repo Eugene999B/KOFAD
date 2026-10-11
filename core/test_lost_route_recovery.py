@@ -91,6 +91,7 @@ class LostRouteContractTests(SimpleTestCase):
                 self.assertTrue(reverse(name).startswith("/"))
 
 
+@override_settings(ALLOWED_HOSTS=["testserver", "market.kofadimpex.com", "staff.kofadimpex.com"])
 class LostRouteOwnerSmokeTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_superuser("routes-owner", password="ci-synthetic-password")
