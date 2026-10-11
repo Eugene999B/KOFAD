@@ -9,6 +9,17 @@ from core.whatsapp_delivery import process_whatsapp_queue, recover_stale_whatsap
 from marketplace.notifications import process_order_sms
 
 
+def recover_pending_deliveries(error_stream):
+    """Isolate SMS and WhatsApp recovery failures so one cannot stop the worker."""
+    for label, recover in (("SMS", recover_stale), ("WhatsApp", recover_stale_whatsapp)):
+        try:
+            recover()
+        except Exception:
+            # Do not re-submit unknown provider outcomes here; defer to each
+            # channel's existing idempotent stale-delivery reconciler.
+            error_stream.write(f"{label} recovery failed safely; will retry.")
+
+
 class Command(BaseCommand):
     help = "Run communication automations and Arkesel delivery tracking."
 
@@ -63,6 +74,11 @@ class Command(BaseCommand):
                 except Exception:
                     self.stderr.write("Business email outbox check failed safely; will retry.")
                 try:
+                    from core.email_campaigns import queue_active_campaigns
+                    queue_active_campaigns(limit=75)
+                except Exception:
+                    self.stderr.write("Campaign queuing failed safely; will retry.")
+                try:
                     from core.email_identity import deliver_pending
                     deliver_pending(limit=10)
                 except Exception:
@@ -102,8 +118,7 @@ class Command(BaseCommand):
             # Payment checks and receipt delivery both run independently of any customer browser.
             # Stale-message recovery remains less frequent because those records need time to age.
             if last_recovery is None or now - last_recovery >= 30:
-                recover_stale()
-                recover_stale_whatsapp()
+                recover_pending_deliveries(self.stderr)
                 last_recovery = now
 
             if not options["loop"]:
