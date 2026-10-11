@@ -1,0 +1,53 @@
+name: Verify three KOFAD Telegram bots
+on:
+  pull_request:
+    paths:
+      - "core/telegram_*.py"
+      - "core/test_telegram_*.py"
+      - "core/models.py"
+      - "core/migrations/0047_telegram_business_integration.py"
+      - "config/urls.py"
+      - "config/settings.py"
+      - "templates/telegram_integration.html"
+      - "marketplace/templates/marketplace/telegram_integration.html"
+      - ".github/workflows/telegram-three-bot-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  telegram:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kofad
+          POSTGRES_PASSWORD: telegram-tests-only
+          POSTGRES_DB: kofad
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kofad"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kofad:telegram-tests-only@localhost:5432/kofad
+      DJANGO_SECRET_KEY: temporary-ci-secret-for-telegram-tests-123456789
+      DJANGO_DEBUG: "1"
+      SECURE_SSL_REDIRECT: "0"
+      TELEGRAM_BOT_ENABLED: "0"
+      TELEGRAM_CUSTOMER_BOT_ENABLED: "0"
+      TELEGRAM_STAFF_BOT_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt -c requirements.lock
+      - run: ruff check core/telegram_channels.py core/telegram_views.py core/telegram_assistant.py core/telegram_integration.py core/telegram_delivery.py core/telegram_recovery.py core/telegram_portal.py core/test_telegram_enterprise.py core/test_telegram_bot.py
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test core.test_telegram_bot core.test_telegram_enterprise --noinput
