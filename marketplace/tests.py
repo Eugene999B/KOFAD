@@ -792,12 +792,12 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         session.save()
         response = self.client.get("/market/checkout/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'data-google-maps-key="browser-google-key"')
-        self.assertContains(response, 'data-google-map-id="map-id-123"')
-        self.assertContains(response, "Google Maps + Places")
+        # Customer checkout uses server-side Places instead of exposing a map picker.
+        self.assertContains(response, "data-address-finder")
+        self.assertNotContains(response, 'data-google-maps-key="browser-google-key"')
+        self.assertNotContains(response, "data-location-map")
         csp = response["Content-Security-Policy"]
-        self.assertIn("https://*.googleapis.com", csp)
-        self.assertIn("https://*.gstatic.com", csp)
+        self.assertIn("https://maps.gstatic.com", csp)
 
     @override_settings(GOOGLE_MAPS_SERVER_KEY="test-google-key")
     @patch("marketplace.services.requests.get")
