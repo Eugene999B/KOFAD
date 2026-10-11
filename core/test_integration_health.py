@@ -59,7 +59,12 @@ class ConnectionsCenterTests(MarketFixtures):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("connections_center")).status_code, 302)
         unauthorized = User.objects.create_user("ordinary-connections-user", password="test-only-password")
+        unauthorized.access.branches.add(self.branch)
+        unauthorized.access.refresh_from_db()
         self.client.force_login(unauthorized)
+        session = self.client.session
+        session["access_version"] = unauthorized.access.session_version
+        session.save()
         self.assertEqual(self.client.get(reverse("connections_center")).status_code, 403)
         self.assertEqual(self.client.get("/settings/connections/brevo/").status_code, 403)
 
