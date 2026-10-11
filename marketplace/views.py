@@ -2386,6 +2386,26 @@ def online_payments(request, branch):
             core_services.audit(request.user, branch, "market.receiving_accounts_saved", "1", {"fields": account_form.changed_data})
             messages.success(request, "Receiving details saved for owner reference. Provider payout settings have not changed.")
             return redirect("online_payments")
+    elif request.method == "POST" and request.POST.get("action") == "online_price_markup":
+        from .pricing import parse_rate
+        try:
+            rate = parse_rate(request.POST.get("percentage", ""))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            # A first-ever price edit must preserve the live gateway instead
+            # of silently using a model's default provider.
+            with transaction.atomic():
+                current, _ = PaymentConfiguration.objects.select_for_update().get_or_create(
+                    pk=1, defaults={"provider": hubtel.selected_provider()},
+                )
+                current.online_price_markup_percent = rate
+                current.save(update_fields=["online_price_markup_percent"])
+            core_services.audit(request.user, branch, "market.online_price_markup_saved", "1", {
+                "percentage": str(rate),
+            })
+            messages.success(request, "All-inclusive online product prices updated. Existing orders and payment requests are unchanged.")
+        return redirect("online_payments")
     elif request.method == "POST":
         provider = request.POST.get("provider")
         if provider not in {"hubtel", "paystack"}:
@@ -2412,6 +2432,12 @@ def online_payments(request, branch):
     if query:
         rows = rows.filter(Q(reference__icontains=query) | Q(order__public_reference__icontains=query))
     page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
+    from core.models import HeldSale
+    from core.pos_paystack import LABEL_PREFIX
+    from core.pos_payment_views import _snapshot
+    pos_rows = [_snapshot(item) for item in HeldSale.objects.filter(
+        branch=branch, label__startswith=LABEL_PREFIX,
+    ).select_related("user").order_by("-created_at")[:12]]
     return render(request, "marketplace/online_payments.html", {
         "title": "Online payments", "account_form": account_form,
         "payment_provider": hubtel.selected_provider(),
@@ -2420,6 +2446,8 @@ def online_payments(request, branch):
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
         "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
+        "pos_momo_rows": pos_rows,
+        "online_price_markup_percent": configuration.online_price_markup_percent,
     })
 
 
