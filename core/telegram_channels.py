@@ -72,3 +72,15 @@ def bot_for_account(kind, purpose="service"):
     if purpose == "security":
         return "official"
     return kind if kind in {"customer", "staff"} else None
+
+
+
+def bot_can_send(kind):
+    """Background SMS worker needs only its sending token, never webhook secrets."""
+    if kind not in BOT_KINDS or not settings.TELEGRAM_BOT_ENABLED:
+        return False
+    if kind == "customer" and not getattr(settings, "TELEGRAM_CUSTOMER_BOT_ENABLED", False):
+        return False
+    if kind == "staff" and not getattr(settings, "TELEGRAM_STAFF_BOT_ENABLED", False):
+        return False
+    return bool(bot_token(kind))
