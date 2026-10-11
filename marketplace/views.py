@@ -1238,9 +1238,12 @@ def order_pay(request, customer, pk):
                 form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"],
             )
             return redirect("market_order", pk=order.pk)
-        # Retain whichever hosted card provider the merchant has selected.
-        # Never switch the provider for an unresolved payment attempt.
-        hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+        # Hosted card checkout follows the merchant-selected provider;
+        # unresolved attempts are already blocked above.
+        if hubtel.selected_provider() == "paystack":
+            services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+        else:
+            hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
         return redirect("market_payment_launch", pk=order.pk)
     except ValidationError as exc:
         messages.error(request, problem(exc))
