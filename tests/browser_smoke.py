@@ -818,26 +818,14 @@ with sync_playwright() as p:
     assert market_page.locator(".support-new-panel-v3 form").is_visible()
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/market/checkout/")
-    assert market_page.locator("[data-location-map]").count() == 1
-    assert not market_page.locator("[data-location-map]").is_visible()
-    market_page.locator("[data-map-details] summary").click()
-    assert market_page.locator("[data-location-map]").is_visible()
-    market_page.wait_for_timeout(250)
-    assert market_page.get_by_text("Open map fallback", exact=True).count() >= 1
-    assert osm_tile_requests, "Checkout map did not request canonical OpenStreetMap tiles"
-    assert all(
-        request.url.startswith("https://tile.openstreetmap.org/")
-        for request in osm_tile_requests
-    )
-    assert all(
-        request.headers.get("referer") == "http://127.0.0.1:8000/"
-        for request in osm_tile_requests
-    ), "OSM tile requests must include an origin Referer"
-    market_page.screenshot(path=str(out / "market-checkout-map-mobile.png"), full_page=True)
+    assert market_page.locator("[data-address-finder]").is_visible()
+    assert market_page.locator("[data-location-map]").count() == 0
+    assert market_page.locator("[data-gps-lookup]").is_visible()
+    market_page.screenshot(path=str(out / "market-checkout-address-mobile.png"), full_page=True)
     fulfilment_select = market_page.locator("select[name='fulfilment']")
     assert fulfilment_select.input_value() == "delivery"
     assert market_page.locator("[data-delivery-fields]").get_attribute("hidden") is None
-    assert market_page.locator("[data-capture-location]").is_visible()
+    assert market_page.locator("[data-address-current]").is_visible()
     fulfilment_select.select_option("pickup")
     assert not market_page.locator("[data-delivery-fields]").is_visible()
     assert market_page.locator("[data-pickup-fields]").is_visible()
