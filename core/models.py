@@ -1161,6 +1161,7 @@ class TelegramOutbound(models.Model):
     """Idempotent Telegram delivery. Uncertain submissions are NOT auto-retried."""
     source_key = models.CharField(max_length=180, unique=True)
     identity = models.ForeignKey("TelegramIdentity", on_delete=models.CASCADE)
+    branch = models.ForeignKey("Branch", null=True, blank=True, on_delete=models.PROTECT)
     category = models.CharField(max_length=24)
     body = models.TextField()
     status = models.CharField(max_length=16, default="queued")
