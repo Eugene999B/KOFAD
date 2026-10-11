@@ -6,10 +6,11 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import Http404
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from . import services as s
 from .models import Access, Branch, PasswordRecovery
@@ -419,7 +420,7 @@ def connections_live_verify(request, branch, connection_id):
                     "detail": "Inspect the server logs and retry after the 15-minute result expires.",
                 }],
                 "scope": "Safe read-only provider check",
-                "checked_at": __import__("django.utils.timezone", fromlist=["now"]).now().isoformat(),
+                "checked_at": timezone.now().isoformat(),
             }
         values[connection_id] = result
         request.session["kofad_integration_live_checks"] = values
