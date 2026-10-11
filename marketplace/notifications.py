@@ -18,6 +18,11 @@ def queue_order_sms(order, event, body):
         queue_customer_order_email(order, event)
     except Exception:
         logger.exception("Transactional email could not be queued safely for order %s", order.pk)
+    try:
+        from .mobile_push_delivery import queue_order_push
+        queue_order_push(order,event)
+    except Exception:
+        logger.warning("KOFAD order push could not be queued safely for order %s",order.pk)
     if not settings.SMS_ENABLED:
         return None
     from .services import _system_actor

@@ -274,3 +274,17 @@
     grid-template-columns:minmax(72px,34%) minmax(0,1fr)!important;
   }
 }
+
+/* Inventory cards must scroll with the page, not inside a second stock table
+   viewport on 320px–768px devices. Desktop inventory scrolling is retained. */
+@media(max-width:900px){
+  .inventory-ledger > .inventory-stock-table.table-wrap{
+    max-height:none!important;
+    overflow:visible!important;
+    overflow-y:visible!important;
+  }
+  .inventory-stock-table > table.mobile-card-table{
+    max-width:100%!important;
+    min-width:0!important;
+  }
+}

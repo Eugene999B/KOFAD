@@ -67,6 +67,11 @@ class Command(BaseCommand):
                     deliver_pending(limit=10)
                 except Exception:
                     self.stderr.write("Verified-account email outbox check failed safely; will retry.")
+                try:
+                    from marketplace.mobile_push_delivery import process_due_push
+                    process_due_push(limit=10)
+                except Exception:
+                    self.stderr.write("Native app push outbox check failed safely; will retry.")
                 last_automation = now
 
             if now - last_security_cleanup >= 3600:

@@ -85,13 +85,6 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 STAFF_SESSION_SECONDS = int(os.environ.get("STAFF_SESSION_SECONDS", "43200"))  # 12 hours
 MARKET_SESSION_SECONDS = int(os.environ.get("MARKET_SESSION_SECONDS", "7200"))  # 2 hours
-# Opt-in Google Apps Script weekly off-site export (not a Railway scheduled job).
-# Passphrase MUST be escrowed offline; losing Railway's secret or changing the
-# Django signing key without a recovery plan can make archived files unusable.
-KOFAD_GDRIVE_BACKUP_ENABLED = os.environ.get("KOFAD_GDRIVE_BACKUP_ENABLED", "0") == "1"
-KOFAD_GDRIVE_BACKUP_HMAC_KEY = os.environ.get("KOFAD_GDRIVE_BACKUP_HMAC_KEY", "")
-KOFAD_GDRIVE_BACKUP_PASSPHRASE = os.environ.get("KOFAD_GDRIVE_BACKUP_PASSPHRASE", "")
-
 PRIVILEGED_MFA_ENFORCED = os.environ.get("PRIVILEGED_MFA_ENFORCED", "0") == "1"
 MFA_SESSION_SECONDS = int(os.environ.get("MFA_SESSION_SECONDS", str(STAFF_SESSION_SECONDS)))
 SESSION_COOKIE_AGE = max(STAFF_SESSION_SECONDS, MARKET_SESSION_SECONDS)
@@ -250,3 +243,15 @@ KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip(
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
 KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
+
+# Android app extensions remain disabled until signed and tested Firebase devices.
+KOFAD_NATIVE_CART_ENABLED = os.environ.get("KOFAD_NATIVE_CART_ENABLED", "0") == "1"
+KOFAD_NATIVE_PUSH_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_ENABLED", "0") == "1"
+KOFAD_NATIVE_PUSH_DELIVERY_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_DELIVERY_ENABLED", "0") == "1"
+KOFAD_FCM_PROJECT_ID = os.environ.get("KOFAD_FCM_PROJECT_ID", "").strip()
+KOFAD_FCM_SERVICE_ACCOUNT_B64 = os.environ.get("KOFAD_FCM_SERVICE_ACCOUNT_B64", "").strip()
+
+# Weekly Google Drive backup (retained exactly from live release).
+KOFAD_GDRIVE_BACKUP_ENABLED = os.environ.get("KOFAD_GDRIVE_BACKUP_ENABLED", "0") == "1"
+KOFAD_GDRIVE_BACKUP_HMAC_KEY = os.environ.get("KOFAD_GDRIVE_BACKUP_HMAC_KEY", "")
+KOFAD_GDRIVE_BACKUP_PASSPHRASE = os.environ.get("KOFAD_GDRIVE_BACKUP_PASSPHRASE", "")

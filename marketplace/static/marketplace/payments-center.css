@@ -1,1 +1,38 @@
 .payment-provider-grid,.money-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.provider-choice{display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--line);border-radius:14px;cursor:pointer}.provider-choice:has(input:checked){border:2px solid var(--teal);background:var(--soft)}.provider-heading{display:flex;align-items:center;gap:12px;font-size:20px}.provider-heading input{width:20px;height:20px;flex:none}.provider-choice small{color:var(--muted)}.money-flow{grid-template-columns:repeat(3,minmax(0,1fr));padding:0;list-style:none;counter-reset:flow}.money-flow li{display:flex;flex-direction:column;gap:10px;padding:18px;border:1px solid var(--line);border-radius:12px;counter-increment:flow}.money-flow li:before{content:"0" counter(flow);color:var(--teal);font-weight:800}.money-flow span{line-height:1.65;color:var(--muted)}.payment-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:12px;align-items:end;margin:18px 0}.payment-attempt-list article{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--line);padding:18px 0}.payment-attempt-list article>div{display:flex;flex-direction:column;gap:8px;min-width:0}.payment-attempt-list article>div:last-child{align-items:flex-end;flex:none}.payment-attempt-list code{overflow-wrap:anywhere;font-size:11px}.payment-attempt-list small{color:var(--muted)}@media(max-width:700px){.payment-provider-grid,.money-flow,.payment-filters{grid-template-columns:1fr}.payment-attempt-list article{flex-direction:column;gap:12px}.payment-attempt-list article>div:last-child{align-items:flex-start;flex-wrap:wrap}.provider-choice{padding:16px}}
+
+/* Keep payment settings, credentials and provider histories within 320px
+   without hiding payment details or changing any server-side payment logic. */
+@media (max-width:680px){
+  main:has(#receiving-accounts) .payment-provider-grid,
+  main:has(#receiving-accounts) .money-flow,
+  main:has(#receiving-accounts) .payment-filters{
+    grid-template-columns:minmax(0,1fr)!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  main:has(#receiving-accounts) .panel,
+  main:has(#receiving-accounts) form,
+  main:has(#receiving-accounts) .provider-choice,
+  main:has(#receiving-accounts) .payment-provider-grid > *,
+  main:has(#receiving-accounts) .money-flow > *,
+  main:has(#receiving-accounts) .payment-attempt-list article,
+  main:has(#receiving-accounts) .payment-attempt-list article > *,
+  main:has(#receiving-accounts) .section-heading > *,
+  main:has(#receiving-accounts) .payment-markup-form,
+  main:has(#receiving-accounts) .payment-markup-controls,
+  main:has(#receiving-accounts) .payment-markup-input{
+    box-sizing:border-box;
+    min-width:0!important;
+    max-width:100%!important;
+    overflow-wrap:anywhere;
+  }
+  main:has(#receiving-accounts) input,
+  main:has(#receiving-accounts) select,
+  main:has(#receiving-accounts) button,
+  main:has(#receiving-accounts) .payment-attempt-list code{
+    box-sizing:border-box;
+    min-width:0!important;
+    max-width:100%!important;
+    overflow-wrap:anywhere;
+  }
+}
