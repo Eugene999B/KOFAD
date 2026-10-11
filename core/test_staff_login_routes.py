@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import resolve, reverse
 
 
+@override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com"])
 class StaffLoginRouteRegressionTests(TestCase):
     @override_settings(
         KOFAD_GOOGLE_OAUTH_ENABLED=True,
