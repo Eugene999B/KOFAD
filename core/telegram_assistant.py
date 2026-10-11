@@ -109,87 +109,185 @@ def _product_search(query):
     )
 
 
-def reply_for(text, chat_id, user_id):
-    """Resolve account dynamically: roles/revocation are always checked per message."""
-    stripped = text.strip()
-    if stripped.startswith("/start link_"):
-        token = stripped.split("link_", 1)[1].split(maxsplit=1)[0]
-        return accept_token(token, user_id, chat_id)
-    if not settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
-        return command_reply(text)
+def reply_for(text, chat_id, user_id, bot_kind="official"):
+    """Separate commands and identity authority across three Telegram bots.
+
+    Official bot is the ONLY bot authorized for password-recovery guidance.
+    Customer bot NEVER exposes staff intelligence; staff bot NEVER exposes a
+    customer's orders. No Telegram phone or handle proves KOFAD account access.
+    """
+    import hmac
+
+    from .telegram_channels import BOT_KINDS, bot_link
     from .models import TelegramIdentity
-    identity = TelegramIdentity.objects.filter(
-        telegram_user_id=user_id, chat_id=chat_id, revoked_at__isnull=True,
-    ).first()
-    if identity and identity.auth_stamp != credential_stamp(identity.kind, identity.owner_id):
-        identity = None
+
+    if bot_kind not in BOT_KINDS:
+        return "Unknown KOFAD service."
+    stripped = (text if isinstance(text, str) else "").strip()[:2000]
+    if not stripped:
+        return "Send /help to see available KOFAD commands."
+    if stripped.startswith("/start link_"):
+        if not settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
+            return "Secure Telegram account linking is temporarily unavailable."
+        token = stripped.split("link_", 1)[1].split(maxsplit=1)[0]
+        return accept_token(token, user_id, chat_id, bot_kind=bot_kind)
+
     head, _, tail = stripped.partition(" ")
     command = head.lower().split("@", 1)[0].lstrip("/")
     plain = stripped.casefold()
-    if command in {"start", "help", "menu"}:
-        return (
-            "KOFAD official assistant\n"
-            + ("Account verified: " + identity.kind + "\n" if identity and _account(identity)
-               else "Account not connected.\n")
-            + HELP
-            + "\n\nUse /link to connect your account, or /stop to pause alerts."
-        )
-    if command in {"link", "connect"}:
-        return (
-            "For your security, initiate account linking from the KOFAD website after signing in:\n"
-            "Staff: " + STAFF + "/integrations/telegram/\n"
-            "Customer: " + MARKET + "/market/integrations/telegram/\n"
-            "Telegram usernames and phone numbers alone do not prove account ownership."
-        )
+    identity = None
+    if settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
+        identity = TelegramIdentity.objects.filter(
+            bot_kind=bot_kind, telegram_user_id=user_id, chat_id=chat_id,
+            revoked_at__isnull=True,
+        ).first()
+        if identity:
+            stamp = credential_stamp(identity.kind, identity.owner_id)
+            if not stamp or not hmac.compare_digest(identity.auth_stamp, stamp):
+                identity = None
+
+    staff_url = STAFF + "/integrations/telegram/"
+    market_url = MARKET + "/market/integrations/telegram/"
+    official_staff_url = STAFF + "/integrations/telegram/security/"
+    official_market_url = MARKET + "/market/integrations/telegram/security/"
+    staff_bot = bot_link("staff") or staff_url
+    customer_bot = bot_link("customer") or market_url
+
     if command in {"stop", "unsubscribe"}:
         if identity:
             identity.notifications_enabled = False
             identity.marketing_opt_in = False
             identity.closing_opt_in = False
             identity.critical_opt_in = False
-            identity.save(update_fields=["notifications_enabled", "marketing_opt_in",
-                                         "closing_opt_in", "critical_opt_in"])
-        return "Telegram notifications paused. Manage preferences in your signed-in KOFAD account."
+            identity.stock_opt_in = False
+            identity.save(update_fields=[
+                "notifications_enabled", "marketing_opt_in", "closing_opt_in",
+                "critical_opt_in", "stock_opt_in",
+            ])
+        return "KOFAD notifications paused for this bot. You can manage consent at the signed-in KOFAD website."
+
     if command in {"status", "me"}:
         if identity and _account(identity):
+            return ("Verified KOFAD " + identity.kind + " account connected to " + bot_kind
+                    + " bot.\nNotifications: "
+                    + ("enabled" if identity.notifications_enabled else "disabled"))
+        return "This Telegram bot is not linked to a KOFAD account. Use /link."
+
+    if bot_kind == "official":
+        # This bot's separate link can be enabled for safe password recovery,
+        # but it does NOT expose staff finance, customer orders, or messaging.
+        if command in {"start", "help", "menu"}:
             return (
-                f"Linked account: {identity.kind}\n"
-                f"Telegram alerts: {'on' if identity.notifications_enabled else 'off'}\n"
-                "Manage consent and unlink: "
-                + (STAFF + "/integrations/telegram/" if identity.kind == "staff"
-                   else MARKET + "/market/integrations/telegram/")
+                "KOFAD IMPEX — Official Assistant & Security\n\n"
+                "/otp — secure verification and account recovery\n"
+                "/link — connect your account to official security bot\n"
+                "/shop — visit the KOFAD customer bot\n"
+                "/staff — visit the private KOFAD staff bot\n"
+                "/support — official customer service\n"
+                "/status — check this bot's verified identity\n"
+                "/stop — pause optional notifications"
             )
-        return "Your Telegram account isn't linked yet. Use /link for the official setup."
-    if command in {"search", "find"}:
-        return _product_search(tail)
-    if command in {"track", "orders", "order"} or "where is my order" in plain:
-        if identity and identity.kind == "customer":
-            customer = _account(identity)
-            if customer:
-                return _customer_orders(customer, tail if command in {"track", "order"} else "")
-        return "Order tracking requires your linked customer account. Use /link first."
-    if command in {"analysis", "reports", "closing", "sales", "finance"} or (
+        if command in {"link", "connect"}:
+            return (
+                "To enable recovery on this OFFICIAL bot, first sign in and verify "
+                "your existing account at the appropriate website:\n"
+                f"Customer: {official_market_url}\nStaff: {official_staff_url}\n"
+                "Then opt in to security recovery. A Telegram username or phone number alone is not sufficient."
+            )
+        if command in {"otp", "password", "recover", "recovery", "verify", "security"}:
+            return (
+                "KOFAD secure recovery: use your verified and previously connected "
+                "OFFICIAL bot account; never send an OTP or password in a chat.\n"
+                f"Customer recovery: {MARKET}/market/integrations/telegram/recover/\n"
+                f"Staff recovery: {STAFF}/integrations/telegram/recover/\n"
+                f"Alternative customer SMS/email: {MARKET}/market/account/password-reset/\n"
+                "Existing staff recovery: " + STAFF + "/forgot-password/"
+            )
+        if command in {"shop", "orders", "track", "catalog", "products"}:
+            return "Shopping and private order updates are handled by the KOFAD Customer Bot:\n" + customer_bot
+        if command in {"staff", "analysis", "reports", "finance", "closing", "sales", "alerts"}:
+            return "Authorized staff intelligence and notifications are handled by the KOFAD Staff Bot:\n" + staff_bot
+        if command in {"support", "contact", "human"}:
+            return "Official customer support: " + COMPANY + "/contact/"
+        if command in {"privacy"}:
+            return COMPANY + "/privacy/"
+        if command == "ping":
+            return "KOFAD Official Bot is responding."
+        return "I'm KOFAD's public assistant and security directory. Send /help for the available services."
+
+    if bot_kind == "customer":
+        if command in {"start", "help", "menu"}:
+            return (
+                "KOFAD — Customer Shopping Assistant\n\n"
+                "/search PRODUCT — find published KOFAD products\n"
+                "/shop — browse catalog\n"
+                "/orders — check your own orders (secure link required)\n"
+                "/track REFERENCE — track an order in your account\n"
+                "/link — connect your KOFAD customer account\n"
+                "/alerts — messaging preferences\n"
+                "/support — contact the store\n"
+                "/stop — pause notifications\n"
+                "Account security and recovery are handled by the Official Bot."
+            )
+        if command in {"link", "connect"}:
+            return "Connect your signed-in customer account at:\n" + market_url
+        if command in {"shop", "products", "catalog"}:
+            return "KOFAD Market catalog: " + MARKET + "/market/"
+        if command in {"search", "find"}:
+            return _product_search(tail)
+        if command in {"orders", "order", "track"} or "where is my order" in plain:
+            if identity and identity.kind == "customer":
+                customer = _account(identity)
+                if customer:
+                    return _customer_orders(
+                        customer,
+                        tail if command in {"order", "track"} else "",
+                    )
+            return "Connect your verified customer account with /link to see your private order status."
+        if command in {"alerts", "notifications"}:
+            return "Update your KOFAD customer alert preferences: " + market_url
+        if command in {"support", "contact", "human"}:
+            return "Customer service: " + MARKET + "/market/messages/"
+        if command in {"otp", "password", "recover", "recovery", "security"}:
+            return "For account recovery, use the official KOFAD bot:\n" + bot_link("official")
+        if command in {"analysis", "reports", "finance", "closing", "staff", "sales"}:
+            return "Management information is available only through the separate authorized KOFAD Staff Bot."
+        if command == "ping":
+            return "KOFAD Customer Bot is responding."
+        return "KOFAD Customer Assistant: try /search, /orders or /help."
+
+    # Staff operations bot: no OTP delivery/recovery or customer order records.
+    if command in {"start", "help", "menu"}:
+        return (
+            "KOFAD — Staff & Management Assistant\n\n"
+            "/link — securely connect existing KOFAD staff account\n"
+            "/analysis — verified closing performance, within your own access scope\n"
+            "/reports — authorized management summary\n"
+            "/alerts — notice subscriptions\n"
+            "/status — verify current staff link\n"
+            "/stop — pause notifications\n"
+            "Passwords and OTPs are handled only by the Official Bot."
+        )
+    if command in {"link", "connect"}:
+        return "Connect your signed-in KOFAD staff account at:\n" + staff_url
+    if command in {"analysis", "reports", "closing", "sales", "finance", "weekly", "monthly"} or (
         any(k in plain for k in ("sales today", "business performance", "weekly sales", "closing report"))
     ):
         if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
-            return "Private business analysis is not enabled in Telegram yet."
+            return "KOFAD Telegram business analysis is not enabled yet."
         if identity and identity.kind == "staff":
             staff = _account(identity)
             if staff:
                 return _staff_analysis(staff, 30 if ("month" in plain or command == "monthly") else 7)
-        return "Financial analysis requires a verified, authorized KOFAD staff account."
+        return "Business analysis requires a connected staff account with current report permissions."
     if command in {"alerts", "notifications"}:
-        return "Manage Telegram alert preferences after signing in to your KOFAD account. Use /link first."
-    if command in {"recovery", "password", "otp"}:
-        return (
-            "Password recovery and verification are handled through the official KOFAD "
-            "website. Never share passwords or OTPs in Telegram.\n"
-            "Customer Telegram recovery (if enabled): " + MARKET + "/market/integrations/telegram/recover/\n"
-            "Staff Telegram recovery (if enabled): " + STAFF + "/integrations/telegram/recover/\n"
-            "Existing customer SMS/email: " + MARKET + "/market/account/password-reset/"
-        )
-    if command in {"support", "contact", "human"} or "speak to someone" in plain:
-        return "Contact the KOFAD team: " + COMPANY + "/contact/"
-    if command in {"shop", "products", "catalog"} or "browse products" in plain:
-        return "Browse products: " + MARKET + "/market/"
-    return command_reply(text)
+        return "Manage business and closing alerts through your KOFAD staff account: " + staff_url
+    if command in {"otp", "password", "recover", "recovery", "security"}:
+        return "Recover credentials only through the KOFAD Official Bot:\n" + bot_link("official")
+    if command in {"orders", "track", "order"}:
+        return "Customer order tracking is handled by the separate KOFAD Customer Bot."
+    if command in {"support", "contact"}:
+        return "Staff help and account support: " + STAFF
+    if command == "ping":
+        return "KOFAD Staff Bot is responding."
+    return "KOFAD Staff Assistant: send /help for allowed commands."
