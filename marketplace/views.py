@@ -35,11 +35,12 @@ from .forms import (
 )
 from .models import (
     Conversation, ConversationAttachment, ConversationMessage, CustomerAccount,
-    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt,
+    DeliveryZone, MarketListing, MarketListingImage, MarketPaymentAttempt, HubtelEvidence,
     MarketReturnAttachment, MarketReturnRequest, OnlineOrder, OnlineOrderLine, OtpThrottle,
     RecentView, StockReservation, WishlistItem,
 )
 from . import services, hubtel, paystack_momo
+from .hubtel_evidence import decrypt_exchange
 
 
 def _market_context(request, **extra):
@@ -2438,4 +2439,41 @@ def customer_payment_status(request, customer, pk):
         "needs_otp": bool(latest and latest.status == "pending" and (latest.verification_summary or {}).get("charge_status") == "send_otp"),
     })
     response["Cache-Control"] = "no-store, private"
+    return response
+
+
+
+@protected("manage_company")
+def hubtel_evidence_list(request, branch, attempt_id):
+    """Owner-only evidence inventory; never expose payloads in HTML or logs."""
+    attempt = get_object_or_404(
+        MarketPaymentAttempt, pk=attempt_id, provider="hubtel", order__branch=branch,
+    )
+    entries = Paginator(
+        HubtelEvidence.objects.filter(attempt=attempt).order_by("-created_at", "-pk"), 40
+    ).get_page(request.GET.get("page"))
+    response = render(request, "marketplace/hubtel_evidence.html", {
+        "title": "Hubtel transaction evidence",
+        "attempt": attempt,
+        "entries": entries,
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@protected("manage_company")
+def hubtel_evidence_download(request, branch, evidence_id):
+    """Only authorised managers of the order's location can retrieve original bodies."""
+    evidence = get_object_or_404(
+        HubtelEvidence.objects.select_related("attempt__order"),
+        pk=evidence_id, attempt__order__branch=branch,
+    )
+    raw = decrypt_exchange(evidence)
+    filename = f"hubtel-{evidence.direction}-{evidence.pk}-{evidence.reference[-6:]}.json"
+    response = HttpResponse(raw, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["X-Content-Type-Options"] = "nosniff"
     return response
