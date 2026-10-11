@@ -34,4 +34,4 @@ jobs:
       - run: python manage.py check
       - run: python scripts/prepare_logo.py
       - run: python manage.py collectstatic --noinput
-      - run: python manage.py test marketplace.test_delivery_address_search marketplace.tests.MarketV3CommerceTests.test_delivery_quote_endpoint_and_checkout_has_address_finder --noinput
+      - run: python manage.py test marketplace.test_delivery_address_search marketplace.tests.MarketV2CustomerExperienceTests.test_delivery_quote_endpoint_and_checkout_has_address_finder --noinput
