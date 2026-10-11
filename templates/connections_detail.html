@@ -1,0 +1,48 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'connections-center.css' %}">{% endblock %}
+{% block content %}
+<section class="kofad-connections">
+  <div class="ic-top"><a class="ic-tool" href="{% url 'connections_center' %}">← All connections</a><a class="ic-tool" href="{% url 'connections_detail' item.id %}">↻ Refresh local checks</a></div>
+  <div class="ic-detail-head">
+    <p class="ic-eyebrow">Integration diagnostics / {{ item.group|title }}</p>
+    <div class="ic-card-top"><span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span><span class="ic-status {{ item.status_style }}">{{ item.status_label }}</span></div>
+    <h2>{{ item.name }}</h2><p>{{ item.purpose }}</p>
+  </div>
+  <div class="ic-detail-grid">
+    <div>
+      <div class="ic-panel"><h3>How this connection works</h3>
+        <ol class="ic-steps">{% for step in item.steps %}<li>{{ step }}</li>{% endfor %}</ol>
+      </div>
+      <div class="ic-panel"><h3>Evidence and observed activity</h3>
+        {% if item.proof %}
+          <div class="ic-proof"><strong>{{ item.proof.at|date:"j M Y, H:i:s" }} · local recorded event</strong><p>{{ item.proof.text }}</p></div>
+        {% else %}<p>No directly observed event is available for this connection. This does <strong>not</strong> mean the external provider is down or that a secret is invalid.</p>{% endif %}
+        {% for metric in item.metrics %}<p>{{ metric }}</p>{% endfor %}
+        <p class="ic-caveat">Historical activity is not a live provider health probe. Configured credentials alone do not prove authentication, delivery or payment.</p>
+      </div>
+      <div class="ic-panel ic-priority"><h3>Diagnosis and possible causes</h3>
+        <ul class="ic-issue-list">{% for issue in item.issues %}<li>{{ issue }}</li>{% empty %}<li>No configuration warning was identified.</li>{% endfor %}</ul>
+      </div>
+    </div>
+    <div>
+      <div class="ic-panel"><h3>Connection requirements</h3>
+        {% if item.checks %}
+          <ul class="ic-check-list">{% for c in item.checks %}
+            <li><span class="{% if c.ok %}pass{% else %}fail{% endif %}">{% if c.ok %}✓{% else %}×{% endif %}</span>{{ c.label }}</li>
+          {% endfor %}</ul>
+          <p>{{ item.requirements_ok }} of {{ item.requirements_count }} local prerequisites present. This does not validate the credentials with the provider.</p>
+        {% else %}<p>This external service cannot be configured or monitored directly by the KOFAD application today.</p>{% endif %}
+      </div>
+      <div class="ic-panel"><h3>Recommended action</h3>
+        <p>{{ item.repair }}</p>
+        {% if item.external_note %}<p>{{ item.external_note }}</p>{% endif %}
+        <a class="ic-tool" href="{{ item.manage }}" rel="noopener noreferrer">Open settings or provider ↗</a>
+      </div>
+      <div class="ic-panel"><h3>Operational safety</h3>
+        <p>These diagnostics make no SMS sends, payment attempts, token refreshes or backup requests. Admin users see status summaries and never credential values or sensitive message content.</p>
+        <p class="ic-caveat">Checked {{ snapshot.checked_at|date:"j M Y, H:i:s" }} (Ghana time). Provider-specific details require the authorised console and service logs.</p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
