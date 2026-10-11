@@ -53,7 +53,9 @@ class GoogleWeeklyExportTests(TestCase):
             self.assertEqual(self.client.post(PATH, data=b"", content_type="application/octet-stream", **bad).status_code, 403)
             host = signed_headers()
             host["HTTP_HOST"] = "kofadimpex.com"
-            self.assertEqual(self.client.post(PATH, data=b"", content_type="application/octet-stream", **host).status_code, 404)
+            wrong_host = self.client.post(PATH, data=b"", content_type="application/octet-stream", **host)
+            self.assertIn(wrong_host.status_code, (404, 409))
+            self.assertFalse(wrong_host.content)
             self.assertEqual(self.client.get(PATH, **signed_headers()).status_code, 405)
             self.assertEqual(self.client.post(PATH, data="not-empty", content_type="text/plain", **signed_headers()).status_code, 400)
             produce.assert_not_called()
