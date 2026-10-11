@@ -11,6 +11,8 @@ from django.utils.crypto import salted_hmac
 
 from .models import TelegramIdentity, TelegramLinkChallenge, TelegramOutbound
 
+from .telegram_channels import BOT_KINDS, bot_for_account, bot_link
+
 BOT = "https://t.me/KOFADIMPEXBOT"
 
 
@@ -39,32 +41,39 @@ def _digest(label, value):
     return salted_hmac("kofad-telegram-" + label, value, algorithm="sha256").hexdigest()
 
 
-def begin_link(kind, owner_id):
+def begin_link(kind, owner_id, bot_kind=None):
     """Password re-authenticated website endpoint only. Link remains pending."""
     if kind not in {"staff", "customer"}:
         raise ValueError("Invalid account type")
+    bot_kind = bot_kind or bot_for_account(kind)
+    if bot_kind not in BOT_KINDS or (bot_kind != "official" and bot_kind != kind):
+        raise ValueError("This bot cannot link that KOFAD account type.")
+    base = bot_link(bot_kind)
+    if not base:
+        raise ValueError("The Telegram bot username has not been configured.")
     raw = secrets.token_urlsafe(24)
     now = timezone.now()
     with transaction.atomic():
         TelegramLinkChallenge.objects.filter(
-            kind=kind, owner_id=owner_id, used_at__isnull=True
+            kind=kind, owner_id=owner_id, bot_kind=bot_kind, used_at__isnull=True
         ).delete()
         TelegramLinkChallenge.objects.create(
-            kind=kind, owner_id=owner_id,
+            kind=kind, owner_id=owner_id, bot_kind=bot_kind,
             token_digest=_digest("link", raw),
             expires_at=now + timedelta(minutes=10),
         )
-    return BOT + "?start=link_" + raw
+    return base + "?start=link_" + raw
 
 
-def accept_token(token, user_id, chat_id):
+def accept_token(token, user_id, chat_id, bot_kind):
     """Telegram endpoint: do not link until authenticated website confirms code."""
-    if not token or len(token) > 64 or not all(c.isalnum() or c in "_-" for c in token):
+    if bot_kind not in BOT_KINDS or not token or len(token) > 64 or not all(c.isalnum() or c in "_-" for c in token):
         return "Invalid or expired account-link request."
+    bot_kind = bot_kind or bot_for_account(kind)
     now = timezone.now()
     with transaction.atomic():
         challenge = TelegramLinkChallenge.objects.select_for_update().filter(
-            token_digest=_digest("link", token), used_at__isnull=True,
+            token_digest=_digest("link", token), bot_kind=bot_kind, used_at__isnull=True,
             expires_at__gt=now,
         ).first()
         if not challenge:
@@ -86,12 +95,12 @@ def accept_token(token, user_id, chat_id):
     )
 
 
-def confirm_link(kind, owner_id, code):
+def confirm_link(kind, owner_id, code, bot_kind=None):
     """Finish pairing only from existing authenticated website session."""
     now = timezone.now()
     with transaction.atomic():
         challenge = TelegramLinkChallenge.objects.select_for_update().filter(
-            kind=kind, owner_id=owner_id, used_at__isnull=True, expires_at__gt=now,
+            kind=kind, owner_id=owner_id, bot_kind=bot_kind, used_at__isnull=True, expires_at__gt=now,
             chat_id__isnull=False, telegram_user_id__isnull=False,
         ).order_by("-pk").first()
         if not challenge or challenge.attempts >= 5:
@@ -104,17 +113,17 @@ def confirm_link(kind, owner_id, code):
         if not hmac.compare_digest(challenge.confirmation_digest, expected):
             return False
         # Never steal a Telegram account linked to some other KOFAD identity.
-        if TelegramIdentity.objects.filter(telegram_user_id=challenge.telegram_user_id).exclude(
+        if TelegramIdentity.objects.filter(bot_kind=bot_kind, telegram_user_id=challenge.telegram_user_id).exclude(
             kind=kind, owner_id=owner_id
         ).exists():
             return False
         # A replaced link invalidates the previous link and its unsent notices.
-        existing = TelegramIdentity.objects.select_for_update().filter(kind=kind, owner_id=owner_id).first()
+        existing = TelegramIdentity.objects.select_for_update().filter(kind=kind, owner_id=owner_id, bot_kind=bot_kind).first()
         if existing:
             existing.delete()
         try:
             TelegramIdentity.objects.create(
-                kind=kind, owner_id=owner_id, auth_stamp=credential_stamp(kind, owner_id),
+                kind=kind, owner_id=owner_id, bot_kind=bot_kind, auth_stamp=credential_stamp(kind, owner_id),
                 telegram_user_id=challenge.telegram_user_id,
                 chat_id=challenge.chat_id, verified_at=now,
             )
@@ -125,9 +134,10 @@ def confirm_link(kind, owner_id, code):
         return True
 
 
-def linked_identity(kind, owner_id):
+def linked_identity(kind, owner_id, bot_kind=None):
+    bot_kind = bot_kind or bot_for_account(kind)
     identity = TelegramIdentity.objects.filter(
-        kind=kind, owner_id=owner_id, revoked_at__isnull=True,
+        kind=kind, owner_id=owner_id, bot_kind=bot_kind, revoked_at__isnull=True,
     ).first()
     if not identity:
         return None
@@ -138,6 +148,10 @@ def linked_identity(kind, owner_id):
 def queue_notice(identity, category, source_key, body, branch=None):
     """No messages without a linked opted-in account."""
     if not identity or identity.revoked_at or not identity.notifications_enabled:
+        return False
+    allowed_bot = ("official" if category == "recovery" else
+                   "customer" if category in {"order", "marketing"} else "staff")
+    if identity.bot_kind != allowed_bot:
         return False
     if category == "marketing" and not identity.marketing_opt_in:
         return False
