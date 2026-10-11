@@ -91,3 +91,12 @@ html[data-theme="dark"] .kofad-connections .ic-filter-form button{background:#23
 .kofad-connections .ic-live-result .ic-check-list li{align-items:flex-start}
 html[data-theme="dark"] .kofad-connections .ic-verify-panel{background:var(--ic-paper);border-color:var(--ic-line)}
 @media(max-width:680px){.kofad-connections .ic-verify-top form,.kofad-connections .ic-verify-button{width:100%;text-align:center;justify-content:center}}
+
+.kofad-connections .ic-attention-panel{margin-bottom:20px;border-left:4px solid #bb4b4b}
+.kofad-connections .ic-attention-list{display:grid;gap:8px;margin-top:15px}
+.kofad-connections .ic-attention-row{display:flex;gap:13px;align-items:center;border:1px solid var(--ic-line);border-radius:12px;padding:10px 13px;text-decoration:none;background:var(--ic-paper);color:var(--ic-ink)}
+.kofad-connections .ic-attention-row:hover{border-color:#8aaec4;background:var(--ic-wash)}
+.kofad-connections .ic-attention-row>span:nth-child(2){min-width:0;flex:1}
+.kofad-connections .ic-attention-row strong{display:block;font-size:13px;color:var(--ic-ink)}
+.kofad-connections .ic-attention-row small{display:block;font-size:11px;color:var(--ic-muted);line-height:1.5;margin-top:4px}
+@media(max-width:600px){.kofad-connections .ic-attention-row{align-items:flex-start}.kofad-connections .ic-attention-row .ic-arrow{display:none}}
