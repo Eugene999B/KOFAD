@@ -254,3 +254,14 @@ KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip(
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
 KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
+
+
+# Official KOFAD Telegram bot. OFF until the owner stores the token and webhook
+# secret privately, registers Telegram's webhook, and checks live delivery.
+TELEGRAM_BOT_ENABLED = os.environ.get("TELEGRAM_BOT_ENABLED", "0") == "1"
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
+TELEGRAM_WEBHOOK_BASE_URL = os.environ.get(
+    "TELEGRAM_WEBHOOK_BASE_URL", "https://staff.kofadimpex.com"
+).strip().rstrip("/")
+TELEGRAM_WEBHOOK_MAX_BYTES = 65536
