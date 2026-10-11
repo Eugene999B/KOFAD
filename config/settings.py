@@ -229,3 +229,9 @@ KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == 
 KOFAD_NATIVE_CART_ENABLED = os.environ.get("KOFAD_NATIVE_CART_ENABLED", "0") == "1"
 # Device push registration is disabled until signed apps + Firebase device QA.
 KOFAD_NATIVE_PUSH_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_ENABLED", "0") == "1"
+# FCM HTTP v1: no additional Railway service; existing communication worker
+# handles bounded service notices only when owner-controlled keys are present.
+KOFAD_NATIVE_PUSH_DELIVERY_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_DELIVERY_ENABLED", "0") == "1"
+KOFAD_FCM_PROJECT_ID = os.environ.get("KOFAD_FCM_PROJECT_ID", "").strip()
+KOFAD_FCM_SERVICE_ACCOUNT_B64 = os.environ.get("KOFAD_FCM_SERVICE_ACCOUNT_B64", "").strip()
+

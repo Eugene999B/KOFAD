@@ -52,6 +52,8 @@ def devices(request, channel):
     if session is None:
         return _message(request, {"error":"authentication_required"},401)
 
+    from .mobile_push_delivery import delivery_ready
+    active=delivery_ready()
     if request.method == "GET":
         record = MobilePushSubscription.objects.filter(device_session=session).first()
         return _message(request, {
@@ -59,7 +61,7 @@ def devices(request, channel):
             "registered":bool(record),
             "service_opt_in":bool(record and record.service_opt_in),
             "marketing_opt_in":bool(record and record.marketing_opt_in) if channel=="customer" else False,
-            "background_delivery_active":False,
+            "background_delivery_active":active,
         })
     if request.method == "DELETE":
         MobilePushSubscription.objects.filter(device_session=session).delete()
@@ -99,10 +101,10 @@ def devices(request, channel):
         if (record.pk and record.token_digest==digest
                 and record.service_opt_in==service
                 and record.marketing_opt_in==marketing):
-            return _message(request,{"registered":True,"background_delivery_active":False})
+            return _message(request,{"registered":True,"background_delivery_active":active})
         record.token_digest=digest
         record.encrypted_token=_cipher().encrypt(token.encode("ascii")).decode("ascii")
         record.service_opt_in=service
         record.marketing_opt_in=marketing
         record.save()
-    return _message(request,{"registered":True,"background_delivery_active":False})
+    return _message(request,{"registered":True,"background_delivery_active":active})

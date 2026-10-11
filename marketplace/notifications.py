@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 
 @transaction.atomic
 def queue_order_sms(order, event, body):
+    try:
+        # Independent channel: transactional app updates should not spend SMS
+        # credits, require SMS enabled, or disclose order details on lock screen.
+        from .mobile_push_delivery import queue_order_push
+        queue_order_push(order,event)
+    except Exception:
+        logger.warning("KOFAD order push could not be queued safely for order %s",order.pk)
     if not settings.SMS_ENABLED:
         return None
     from .services import _system_actor
