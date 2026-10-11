@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import Access, TelegramOutbound
-from .telegram_channels import BOT_KINDS, bot_enabled, bot_token
+from .telegram_channels import BOT_KINDS, bot_can_send, bot_token
 
 
 def _still_authorized(notice):
@@ -60,7 +60,7 @@ def deliver_pending(limit=20):
     delivered = 0
     for _ in range(min(max(int(limit), 0), 100)):
         with transaction.atomic():
-            active_bots = [kind for kind in BOT_KINDS if bot_enabled(kind)]
+            active_bots = [kind for kind in BOT_KINDS if bot_can_send(kind)]
             pending = TelegramOutbound.objects.filter(status="queued", identity__bot_kind__in=active_bots)
             if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
                 pending = pending.filter(category="recovery")
