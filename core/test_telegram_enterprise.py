@@ -190,3 +190,27 @@ class EnterpriseTelegramTests(TestCase):
         self.assertNotIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
             "/analysis", 555, 555, bot_kind="customer",
         ))
+
+
+    def test_official_bot_supports_both_verified_customer_and_staff_recovery(self):
+        customer = self.link("customer", self.customer, chat=699, bot_kind="official")
+        staff = self.link("staff", self.staff, chat=699, bot_kind="official")
+        self.assertEqual(customer.bot_kind, "official")
+        self.assertEqual(staff.bot_kind, "official")
+        self.assertEqual(TelegramIdentity.objects.filter(
+            bot_kind="official", telegram_user_id=699,
+        ).count(), 2)
+        customer.recovery_opt_in = True
+        customer.save(update_fields=["recovery_opt_in"])
+        staff.recovery_opt_in = True
+        staff.save(update_fields=["recovery_opt_in"])
+        self.assertIsNotNone(request_recovery("customer", self.customer.phone, ""))
+        self.assertIsNotNone(request_recovery("staff", self.access.recovery_phone, self.staff.username))
+
+    def test_wrong_bot_cannot_send_other_channel_notifications(self):
+        official = self.link("customer", self.customer, chat=814, bot_kind="official")
+        official.notifications_enabled = True
+        official.save(update_fields=["notifications_enabled"])
+        self.assertFalse(queue_notice(official, "order", "fake:order", "Private order!"))
+        self.assertFalse(queue_notice(official, "closing", "fake:closing", "Business report!"))
+        self.assertEqual(TelegramOutbound.objects.count(), 0)
