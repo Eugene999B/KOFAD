@@ -175,7 +175,7 @@ GOOGLE_MAPS_TIMEOUT_SECONDS = int(os.environ.get("GOOGLE_MAPS_TIMEOUT_SECONDS", 
 # Optional verified Ghana digital-address provider; credentials never in page HTML.
 GHANAPOST_GPS_LOOKUP_URL = os.environ.get("GHANAPOST_GPS_LOOKUP_URL", "").strip()
 GHANAPOST_GPS_LOOKUP_TOKEN = os.environ.get("GHANAPOST_GPS_LOOKUP_TOKEN", "").strip()
-GHANAPOST_GPS_TIMEOUT_SECONDS = int(os.environ.get("GHANAPOST_GPS_TIMEOUT_SECONDS", "8")
+GHANAPOST_GPS_TIMEOUT_SECONDS = int(os.environ.get("GHANAPOST_GPS_TIMEOUT_SECONDS", "8"))
 
 # Hubtel Online Checkout only. Direct MoMo/transfer APIs are outside our approved scope.
 HUBTEL_API_ID = os.environ.get("HUBTEL_API_ID", "").strip()
