@@ -15,6 +15,7 @@ class Migration(migrations.Migration):
                 ("owner_id", models.PositiveBigIntegerField()),
                 ("telegram_user_id", models.BigIntegerField(unique=True)),
                 ("chat_id", models.BigIntegerField(unique=True)),
+                ("auth_stamp", models.CharField(default="", max_length=64)),
                 ("notifications_enabled", models.BooleanField(default=False)),
                 ("marketing_opt_in", models.BooleanField(default=False)),
                 ("closing_opt_in", models.BooleanField(default=False)),
