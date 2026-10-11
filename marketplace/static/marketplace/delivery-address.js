@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     latInput.value = lat.toFixed(6);
     lngInput.value = lng.toFixed(6);
     if (kind === "landmark" && landmark && !landmark.value.trim()) landmark.value = description;
-    if (street && !street.value.trim()) street.value = description;
+    if (kind !== "current" && street && !street.value.trim()) street.value = description;
     mapsLink.href = "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent(lat.toFixed(6) + "," + lng.toFixed(6));
     mapsLink.hidden = false;
