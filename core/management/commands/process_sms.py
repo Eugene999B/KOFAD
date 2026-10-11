@@ -100,6 +100,11 @@ class Command(BaseCommand):
                     purge_old_replies()
                 except Exception as exc:
                     self.stderr.write(f"Security retention cleanup failed safely: {exc}")
+                try:
+                    from core.telegram_delivery import purge_old_telegram
+                    purge_old_telegram()
+                except Exception:
+                    self.stderr.write("Telegram security retention cleanup failed safely.")
                 last_security_cleanup = now
 
             if now - last_delivery_sync >= 5:
@@ -120,6 +125,11 @@ class Command(BaseCommand):
                     process_replies()
                 except Exception:
                     self.stderr.write("WhatsApp assistant queue failed safely; will retry.")
+                try:
+                    from core.telegram_delivery import deliver_pending as deliver_telegram
+                    deliver_telegram(limit=10)
+                except Exception:
+                    self.stderr.write("Telegram notice delivery failed safely; will retry.")
                 last_delivery_sync = now
 
             # Payment checks and receipt delivery both run independently of any customer browser.

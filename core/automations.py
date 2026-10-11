@@ -341,6 +341,11 @@ def run_scheduled_automations(now=None):
         "email_reports": run_staff_scheduled_reports,
         "customer_email": run_customer_personalised_promotions,
     }
+    if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
+        from .telegram_integration import queue_periodic_digest
+        jobs["telegram_periodic"] = queue_periodic_digest
+        from .telegram_integration import queue_inventory_alerts
+        jobs["telegram_inventory"] = queue_inventory_alerts
     results = {}
     for name, job in jobs.items():
         try:
@@ -413,4 +418,11 @@ def safe_prepare_closing(closing_id, actor_id=None):
         queue_closing_reports(closing)
     except Exception as exc:
         _record_automation_failure(closing.branch, actor, "staff_closing_report", closing.pk, exc)
+    if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
+        try:
+            from .telegram_integration import queue_closing_update
+            queue_closing_update(closing)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Telegram closing notice could not be queued safely")
     return prepared

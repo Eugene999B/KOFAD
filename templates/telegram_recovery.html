@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>KOFAD Telegram password recovery</title>
+<style>body{font-family:system-ui,sans-serif;background:#f3f6fb;color:#122233;margin:0;padding:24px}
+main{max-width:540px;margin:35px auto;padding:30px;background:white;border:1px solid #dde3ec;border-radius:15px}
+h1{font-size:1.5rem}label{display:block;margin:13px 0}
+input{box-sizing:border-box;padding:12px;width:100%;border:1px solid #b4c1ce;border-radius:6px;margin-top:5px}
+button{padding:12px 18px;background:#143c58;color:white;border:0;border-radius:8px;cursor:pointer}
+a{color:#0f5b85}small{color:#445}
+</style></head>
+<body><main>
+<h1>KOFAD IMPEX — Telegram password recovery</h1>
+{% if messages %}{% for message in messages %}<p role="status">{{ message }}</p>{% endfor %}{% endif %}
+{% if telegram_recovery_disabled %}
+<p>This secure recovery channel is currently disabled. Your existing KOFAD email and SMS recovery methods remain available.</p>
+{% else %}
+{% if not challenge_started %}
+<p>Only KOFAD accounts that previously linked Telegram after login and explicitly enabled Telegram recovery can use this method.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="request">
+{% if kind == "staff" %}
+<label>Staff username<input type="text" name="username" maxlength="150" autocomplete="username" required></label>
+{% endif %}
+<label>Registered Ghanaian mobile number<input name="phone" type="tel" maxlength="40" autocomplete="tel" required></label>
+<button type="submit">Request Telegram recovery code</button>
+</form>
+{% else %}
+<p>If your account is eligible, check your previously linked Telegram conversation with <strong>@KOFADIMPEXBOT</strong> for a six-digit code. Codes expire after ten minutes.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="complete">
+<label>Telegram verification code<input name="code" inputmode="numeric" maxlength="6" required></label>
+<label>New KOFAD password<input type="password" name="password" autocomplete="new-password" required></label>
+<label>Confirm new password<input type="password" name="password_confirm" autocomplete="new-password" required></label>
+<button type="submit">Securely reset password</button>
+</form>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="cancel"><button type="submit">Start again</button></form>
+{% endif %}
+{% endif %}
+<p><small>Never give your code or password to a person claiming to represent KOFAD. Telegram usernames or a phone number alone cannot bypass account verification.</small></p>
+<p><a href="{% if kind == 'staff' %}/forgot-password/{% else %}/market/account/password-reset/{% endif %}">Use existing password recovery instead</a></p>
+</main></body></html>

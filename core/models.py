@@ -1113,3 +1113,83 @@ from .email_models import (EmailMailbox, EmailMailboxMember, EmailConversation, 
 
 # KOFAD mobile app update and announcement management.
 from .mobile_release_models import MobileReleasePolicy, MobileNotice  # noqa: E402, F401
+
+
+# Official Telegram integration. Isolated models: no changes to sales or account tables.
+class TelegramIdentity(models.Model):
+    """Explicitly linked KOFAD account; Telegram IDs alone grant no access."""
+    bot_kind = models.CharField(max_length=12, default="official", choices=[("official", "Official/security"), ("customer", "Customer"), ("staff", "Staff")])
+    kind = models.CharField(max_length=12, choices=[("staff", "Staff"), ("customer", "Customer")])
+    owner_id = models.PositiveBigIntegerField()
+    telegram_user_id = models.BigIntegerField()
+    chat_id = models.BigIntegerField()
+    auth_stamp = models.CharField(max_length=64, default="")
+    notifications_enabled = models.BooleanField(default=False)
+    marketing_opt_in = models.BooleanField(default=False)
+    closing_opt_in = models.BooleanField(default=False)
+    critical_opt_in = models.BooleanField(default=False)
+    stock_opt_in = models.BooleanField(default=False)
+    recovery_opt_in = models.BooleanField(default=False)
+    verified_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["bot_kind", "kind", "owner_id"], name="tg_one_account_per_bot"),
+            models.UniqueConstraint(fields=["bot_kind", "kind", "telegram_user_id"], name="tg_one_user_per_bot_role"),
+            models.UniqueConstraint(fields=["bot_kind", "kind", "chat_id"], name="tg_one_chat_per_bot_role"),
+        ]
+        indexes = [models.Index(fields=["kind", "owner_id"], name="tg_account_lookup")]
+
+
+class TelegramLinkChallenge(models.Model):
+    """Website-started pairing. Telegram accepts token; website confirms numeric code."""
+    bot_kind = models.CharField(max_length=12, default="official")
+    kind = models.CharField(max_length=12)
+    owner_id = models.PositiveBigIntegerField()
+    token_digest = models.CharField(max_length=64, unique=True)
+    confirmation_digest = models.CharField(max_length=64, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    telegram_user_id = models.BigIntegerField(null=True, blank=True)
+    chat_id = models.BigIntegerField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TelegramUpdate(models.Model):
+    """Reject replayed Telegram webhook update IDs independently for each bot."""
+    bot_kind = models.CharField(max_length=12, default="official")
+    update_id = models.BigIntegerField()
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["bot_kind", "update_id"], name="tg_webhook_update_per_bot")]
+
+
+class TelegramOutbound(models.Model):
+    """Idempotent Telegram delivery. Uncertain submissions are NOT auto-retried."""
+    source_key = models.CharField(max_length=180, unique=True)
+    identity = models.ForeignKey("TelegramIdentity", on_delete=models.CASCADE)
+    branch = models.ForeignKey("Branch", null=True, blank=True, on_delete=models.PROTECT)
+    category = models.CharField(max_length=24)
+    body = models.TextField()
+    status = models.CharField(max_length=16, default="queued")
+    attempts = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=180, blank=True)
+
+
+class TelegramRecoveryChallenge(models.Model):
+    """Sensitive, opted-in recovery code delivered only to a prelinked chat."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity = models.ForeignKey("TelegramIdentity", on_delete=models.CASCADE)
+    kind = models.CharField(max_length=12)
+    owner_id = models.PositiveBigIntegerField()
+    code_digest = models.CharField(max_length=64)
+    password_stamp = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

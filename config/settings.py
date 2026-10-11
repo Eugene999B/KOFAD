@@ -254,3 +254,27 @@ KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip(
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
 KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
+
+# Telegram is opt-in and OFF by default until reviewed and configured.
+TELEGRAM_BOT_ENABLED = os.environ.get("TELEGRAM_BOT_ENABLED", "0") == "1"
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
+TELEGRAM_WEBHOOK_BASE_URL = os.environ.get("TELEGRAM_WEBHOOK_BASE_URL", "https://staff.kofadimpex.com").strip().rstrip("/")
+TELEGRAM_WEBHOOK_MAX_BYTES = 65536
+
+# Enterprise Telegram features disabled independently; never require DeepSeek.
+TELEGRAM_ACCOUNT_LINK_ENABLED = os.environ.get("TELEGRAM_ACCOUNT_LINK_ENABLED", "0") == "1"
+TELEGRAM_BUSINESS_ANALYTICS_ENABLED = os.environ.get("TELEGRAM_BUSINESS_ANALYTICS_ENABLED", "0") == "1"
+TELEGRAM_NOTIFICATIONS_ENABLED = os.environ.get("TELEGRAM_NOTIFICATIONS_ENABLED", "0") == "1"
+TELEGRAM_RECOVERY_ENABLED = os.environ.get("TELEGRAM_RECOVERY_ENABLED", "0") == "1"
+
+# Three independent Telegram bots: existing official bot retains OTP/security.
+# New bot usernames must be the EXACT names issued by BotFather, not guesses.
+TELEGRAM_CUSTOMER_BOT_USERNAME = os.environ.get("TELEGRAM_CUSTOMER_BOT_USERNAME", "").strip().lstrip("@")
+TELEGRAM_STAFF_BOT_USERNAME = os.environ.get("TELEGRAM_STAFF_BOT_USERNAME", "").strip().lstrip("@")
+TELEGRAM_CUSTOMER_BOT_TOKEN = os.environ.get("TELEGRAM_CUSTOMER_BOT_TOKEN", "").strip()
+TELEGRAM_STAFF_BOT_TOKEN = os.environ.get("TELEGRAM_STAFF_BOT_TOKEN", "").strip()
+TELEGRAM_CUSTOMER_WEBHOOK_SECRET = os.environ.get("TELEGRAM_CUSTOMER_WEBHOOK_SECRET", "").strip()
+TELEGRAM_STAFF_WEBHOOK_SECRET = os.environ.get("TELEGRAM_STAFF_WEBHOOK_SECRET", "").strip()
+TELEGRAM_CUSTOMER_BOT_ENABLED = os.environ.get("TELEGRAM_CUSTOMER_BOT_ENABLED", "0") == "1"
+TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") == "1"

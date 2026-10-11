@@ -18,6 +18,12 @@ def queue_order_sms(order, event, body):
         queue_customer_order_email(order, event)
     except Exception:
         logger.exception("Transactional email could not be queued safely for order %s", order.pk)
+    if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
+        try:
+            from core.telegram_integration import queue_order_update
+            queue_order_update(order, event)
+        except Exception:
+            logger.exception("Telegram order notice could not be queued safely for order %s", order.pk)
     if not settings.SMS_ENABLED:
         return None
     from .services import _system_actor

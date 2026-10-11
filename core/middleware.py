@@ -14,6 +14,9 @@ class RequestSizeLimitMiddleware:
         "/market/payments/paystack/webhook/": 65536,
         "/market/payments/hubtel/callback/": 131072,
         "/whatsapp/webhook/": 524288,
+        "/telegram/webhook/": 65536,
+        "/telegram/customer/webhook/": 65536,
+        "/telegram/staff/webhook/": 65536,
         "/sms/delivery/": 131072,
         "/settings/backup/": 110 * 1024 * 1024,
     }

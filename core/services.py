@@ -5,6 +5,7 @@ import uuid
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
 from django.db.models import F, Sum
@@ -1005,6 +1006,18 @@ def verify_closing(user, closing, owner_direct=False):
     closing.verified_by = user
     closing.save(update_fields=["verified_by"])
     audit(user, closing.branch, "closing.verified", closing.pk)
+    # New Telegram channel is isolated, opted-in and only queues after DB commit.
+    if getattr(settings, "TELEGRAM_NOTIFICATIONS_ENABLED", False):
+        def _queue_telegram_verified_closing(closing_id=closing.pk):
+            try:
+                from .telegram_integration import queue_closing_update
+                verified = Closing.objects.select_related("branch").filter(pk=closing_id).first()
+                if verified:
+                    queue_closing_update(verified)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("Telegram verified-closing notification failed safely")
+        transaction.on_commit(_queue_telegram_verified_closing)
 
 
 @transaction.atomic
