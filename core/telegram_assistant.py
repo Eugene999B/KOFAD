@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from .telegram_bot import COMPANY, HELP, MARKET, STAFF, command_reply
-from .telegram_integration import accept_token, linked_identity
+from .telegram_integration import accept_token, linked_identity, credential_stamp
 
 
 def _money(value):
@@ -121,6 +121,8 @@ def reply_for(text, chat_id, user_id):
     identity = TelegramIdentity.objects.filter(
         telegram_user_id=user_id, chat_id=chat_id, revoked_at__isnull=True,
     ).first()
+    if identity and identity.auth_stamp != credential_stamp(identity.kind, identity.owner_id):
+        identity = None
     head, _, tail = stripped.partition(" ")
     command = head.lower().split("@", 1)[0].lstrip("/")
     plain = stripped.casefold()
