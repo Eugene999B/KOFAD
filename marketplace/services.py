@@ -1101,6 +1101,24 @@ def post_order_to_ledger(order, actor=None):
     return order
 
 
+
+def _queue_staff_verified_payment_alert_safely(order_id):
+    """Restore opted-in, branch-authorised online-payment alerts after DB commit.
+
+    A mail failure must never undo a verified payment or return a provider error
+    that could cause repeated payment callbacks.
+    """
+    try:
+        from core.email_identity import enqueue_staff_payment_alerts
+
+        order = OnlineOrder.objects.select_related("branch").get(pk=order_id)
+        enqueue_staff_payment_alerts(order)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "KOFAD staff payment notification could not be queued for order %s", order_id
+        )
+
+
 @transaction.atomic
 def finalize_payment(reference, provider_data, expected_provider="paystack"):
     attempt = MarketPaymentAttempt.objects.select_for_update().select_related("order").filter(reference=reference).first()
@@ -1229,6 +1247,11 @@ def finalize_payment(reference, provider_data, expected_provider="paystack"):
         f"KOFAD: Payment confirmed for {order.customer_reference}. "
         f"Amount: GHS {order.total:.2f}. Follow your order status in your account. "
         "Track it in your KOFAD Market account.",
+    )
+    # Notifications are deliberately queued only on the first verified
+    # settlement; late duplicate webhooks must not send another alert.
+    transaction.on_commit(
+        lambda order_id=order.pk: _queue_staff_verified_payment_alert_safely(order_id)
     )
     return order
 
