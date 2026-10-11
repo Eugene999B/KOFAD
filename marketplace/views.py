@@ -1169,7 +1169,7 @@ def checkout(request, customer):
     payment_ready = hubtel.ready()
     momo_available = hubtel.selected_provider() == "paystack" and paystack_momo.ready()
     payment_form = CheckoutPaymentForm(request.POST or None,
-        initial={"momo_phone": customer.phone}, momo_available=momo_available)
+        initial={"momo_phone": customer.phone or ""}, momo_available=momo_available)
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
     if request.method == "POST" and payment_ready and form.is_valid() and payment_form.is_valid():
@@ -1189,10 +1189,18 @@ def checkout(request, customer):
             request.session.modified = True
             try:
                 if payment_form.cleaned_data["payment_method"] == "momo":
-                    paystack_momo.initialize(order, payment_form.cleaned_data["momo_phone"],
-                                             payment_form.cleaned_data["momo_network"])
+                    # First use: verify control of the number before requesting a
+                    # charge; subsequent verified numbers can proceed directly.
+                    momo_security.begin(
+                        request, customer, order,
+                        payment_form.cleaned_data["momo_phone"],
+                        payment_form.cleaned_data["momo_network"],
+                    )
                     return redirect("market_order", pk=order.pk)
-                hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
+                if hubtel.selected_provider() == "paystack":
+                    services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
+                else:
+                    hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
                 return redirect("market_payment_launch", pk=order.pk)
             except ValidationError as exc:
                 messages.error(request, problem(exc))
