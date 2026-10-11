@@ -13,9 +13,12 @@ def _still_authorized(notice):
     from .telegram_integration import linked_identity
     if linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind) is None:
         return False
-    expected_bot = ("official" if notice.category == "recovery" else
-                    "customer" if notice.category in {"order", "marketing"} else "staff")
-    if identity.bot_kind != expected_bot:
+    expected_bot = {
+        "recovery": "official", "order": "customer",
+        "marketing": "customer", "closing": "staff",
+        "digest": "staff", "critical": "staff", "stock": "staff",
+    }.get(notice.category)
+    if not expected_bot or identity.bot_kind != expected_bot:
         return False
     if identity.revoked_at or (not identity.notifications_enabled and notice.category != "recovery"):
         return False
