@@ -8,6 +8,7 @@ from django.urls import resolve, reverse
     "localhost", "127.0.0.1", "testserver",
     "kofadimpex.com", "market.kofadimpex.com", "staff.kofadimpex.com",
 ])
+@override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com"])
 class StaffLoginRouteRegressionTests(TestCase):
     @override_settings(
         KOFAD_GOOGLE_OAUTH_ENABLED=True,
