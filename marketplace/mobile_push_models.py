@@ -19,3 +19,32 @@ class MobilePushSubscription(models.Model):
 
     def __str__(self):
         return "KOFAD push subscription " + str(self.pk)
+
+class MobilePushOutbox(models.Model):
+    """One intended remote notification to one consented native device.
+
+    A claimed send is never blindly replayed. Unknown provider outcomes require
+    reconciliation rather than duplicate lock-screen notifications.
+    """
+
+    subscription = models.ForeignKey(
+        MobilePushSubscription, related_name="outbox", on_delete=models.CASCADE,
+    )
+    event_key = models.CharField(max_length=160, unique=True)
+    kind = models.CharField(
+        max_length=12, choices=[("service", "Service"), ("promotion", "Promotion")],
+        default="service",
+    )
+    title = models.CharField(max_length=90)
+    body = models.CharField(max_length=200)
+    status = models.CharField(max_length=12, default="queued", choices=[
+        ("queued", "Queued"), ("sending", "Sending"),
+        ("sent", "Sent"), ("failed", "Failed"), ("uncertain", "Needs review"),
+    ], db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    attempted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="kof_push_outbox_due_idx"),
+        ]
