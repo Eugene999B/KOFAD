@@ -74,10 +74,12 @@ def deliver_pending(limit=20):
         if ok:
             TelegramOutbound.objects.filter(pk=notice_id, status="unknown").update(
                 status="sent", sent_at=timezone.now(), last_error="",
+                **({"body": ""} if notice.category == "recovery" else {}),
             )
             delivered += 1
         else:
             TelegramOutbound.objects.filter(pk=notice_id, status="unknown").update(
                 last_error="Submission uncertain or rejected; requires manual review",
+                **({"body": ""} if notice.category == "recovery" else {}),
             )
     return delivered
