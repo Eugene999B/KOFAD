@@ -1,3 +1,4 @@
+from . import google_drive_backup
 from core import native_apps, pwa, mobile_staff_api
 from marketplace import mobile_identity, mobile_private_api, mobile_push
 from . import whatsapp_bot_views
@@ -113,6 +114,7 @@ urlpatterns = [
     path("settings/payments/", v.payment_policy_settings, name="payment_policy_settings"),
     path("settings/finance/", v.finance_policy_settings, name="finance_policy_settings"),
     path("settings/receipts/", v.receipt_policy_settings, name="receipt_policy_settings"),
+    path("settings/backup/google/export/", google_drive_backup.export_google_weekly_backup, name="google_weekly_backup_export"),
     path("settings/backup/", maintenance_views.backup_restore, name="backup_restore"),
     path("settings/backup/download/", maintenance_views.download_backup, name="backup_download"),
     path("settings/backup/status/", maintenance_views.backup_status, name="backup_status"),

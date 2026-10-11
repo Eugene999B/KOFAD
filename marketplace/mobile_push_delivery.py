@@ -31,24 +31,13 @@ MAX_AGE=timedelta(hours=24)
 
 
 def delivery_ready():
-    gates = bool(
+    return bool(
         getattr(settings,"KOFAD_NATIVE_AUTH_ENABLED",False)
         and getattr(settings,"KOFAD_NATIVE_PUSH_ENABLED",False)
         and getattr(settings,"KOFAD_NATIVE_PUSH_DELIVERY_ENABLED",False)
         and PROJECT.fullmatch(getattr(settings,"KOFAD_FCM_PROJECT_ID","") or "")
         and getattr(settings,"KOFAD_FCM_SERVICE_ACCOUNT_B64","")
     )
-    if not gates:
-        return False
-    try:
-        # Never advertise background delivery for malformed project or key data.
-        config = _credentials()
-        key = serialization.load_pem_private_key(
-            config["private_key"].encode("utf8"), password=None,
-        )
-        return key.key_size >= 2048
-    except (ValueError, TypeError, KeyError, OSError):
-        return False
 
 
 def _encode_json(value):
