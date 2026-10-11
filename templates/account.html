@@ -1,6 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}"><section class="panel"><h2>Official Telegram Assistant</h2><p>Connect your verified KOFAD account to @KOFADIMPEXBOT for permitted reports, alerts and secure services.</p><a class="button secondary" href="/integrations/telegram/">Manage Telegram connection</a></section>
-{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}
 {% block content %}
 <section class="experience-identity-head">
   <p class="eyebrow">MY WORKSPACE / IDENTITY & SECURITY</p>
@@ -47,4 +46,5 @@
 </section>
 {% endif %}
 {% if perms.core.manage_company %}<section class="panel"><div class="section-heading"><div><p class="eyebrow">STAFF ADMINISTRATION</p><h2>Team access & recovery</h2></div><a class="button secondary" href="/administration/users/">Manage staff</a></div></section>{% endif %}
+<section class="panel"><h2>Official Telegram Assistant</h2><p>Connect your verified KOFAD account to @KOFADIMPEXBOT for permitted reports, alerts and secure services.</p><a class="button secondary" href="/integrations/telegram/">Manage Telegram connection</a></section>
 {% endblock %}
