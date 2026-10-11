@@ -48,4 +48,6 @@ test("Firebase delivery dependency is linked to actual Capacitor Android package
   const push=read("app-shell/push.js");
   assert.match(push,/isPluginAvailable\?\.\("PushNotifications"\)/);
   assert.match(push,/native_mobile_push===true/);
+  assert.match(push,/plugin\.createChannel/);
+  assert.match(push,/id:"kofad_updates"/);
 });
