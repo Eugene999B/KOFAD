@@ -1,7 +1,32 @@
 from django.urls import path
-from . import views, public_views
+from . import views, public_views, seo, native_api, mobile_v1_api, mobile_identity, mobile_private_api, mobile_cart, mobile_push
+from core import native_apps, pwa
 
 urlpatterns = [
+    path("favicon.ico", seo.favicon, name="site_favicon"),
+    path("favicon-96.png", seo.favicon_png, name="site_favicon_png"),
+    path("apps/", native_apps.customer_downloads, name="customer_native_downloads"),
+    path("apps/releases.json", native_apps.customer_release_status, name="customer_native_releases"),
+    path("market/app/releases.json", native_apps.customer_release_status, name="market_native_releases"),
+    path("market/app/native-version.json", native_apps.customer_native_version, name="market_native_version"),
+    path("market/app/catalog.json", native_api.public_native_catalog, name="market_native_catalog"),
+    path("market/mobile/v1/bootstrap/", mobile_v1_api.bootstrap, name="market_mobile_bootstrap"),
+    path("market/mobile/v1/capabilities/", mobile_identity.capabilities, {"channel":"customer"}, name="market_mobile_capabilities"),
+    path("market/mobile/v1/authorize/", mobile_identity.authorize, {"channel":"customer"}, name="market_mobile_authorize"),
+    path("market/mobile/v1/token/", mobile_identity.token, {"channel":"customer"}, name="market_mobile_token"),
+    path("market/mobile/v1/me/", mobile_identity.me, {"channel":"customer"}, name="market_mobile_me"),
+    path("market/mobile/v1/orders/", mobile_private_api.customer_orders, name="market_mobile_orders"),
+    path("market/mobile/v1/orders/<uuid:order_id>/", mobile_private_api.customer_order_detail, name="market_mobile_order_detail"),
+    path("market/mobile/v1/revoke/", mobile_identity.revoke, {"channel":"customer"}, name="market_mobile_revoke"),
+    path("market/mobile/v1/cart/", mobile_cart.cart, name="market_mobile_cart"),
+    path("market/mobile/v1/push/devices/", mobile_push.devices, {"channel":"customer"}, name="market_native_push_devices"),
+    path("market/mobile/v1/products/<int:pk>/", mobile_v1_api.product_detail, name="market_mobile_product_detail"),
+    path("market/app/manifest.webmanifest", pwa.manifest, {"kind":"customer"}, name="market_pwa_manifest"),
+    path("market/app/sw.js", pwa.worker, {"kind":"customer"}, name="market_pwa_sw"),
+    path("market/app/offline/", pwa.offline, {"kind":"customer"}, name="market_pwa_offline"),
+    path("market/app/install/", pwa.market_install, name="market_pwa_install"),
+    path("robots.txt", seo.robots, name="robots_txt"),
+    path("sitemap.xml", seo.sitemap, name="sitemap_xml"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),
     path("market/orders/<uuid:pk>/payment-status/", views.customer_payment_status, name="customer_payment_status"),
     path("settings/online-payments/", views.online_payments, name="online_payments"),

@@ -52,6 +52,11 @@ class Command(BaseCommand):
                     process_email_outbox()
                 except Exception as exc:
                     self.stderr.write(f"Communication automation check failed safely: {exc}")
+                try:
+                    from marketplace.mobile_push_delivery import process_due_push
+                    process_due_push(limit=10)
+                except Exception:
+                    self.stderr.write("Native app push outbox check failed safely; will retry.")
                 last_automation = now
 
             if now - last_security_cleanup >= 3600:

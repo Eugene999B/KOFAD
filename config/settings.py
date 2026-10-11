@@ -243,3 +243,10 @@ KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip(
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
 KOFAD_NATIVE_AUTH_ENABLED = os.environ.get("KOFAD_NATIVE_AUTH_ENABLED", "0") == "1"
+
+# Android app extensions remain disabled until signed and tested Firebase devices.
+KOFAD_NATIVE_CART_ENABLED = os.environ.get("KOFAD_NATIVE_CART_ENABLED", "0") == "1"
+KOFAD_NATIVE_PUSH_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_ENABLED", "0") == "1"
+KOFAD_NATIVE_PUSH_DELIVERY_ENABLED = os.environ.get("KOFAD_NATIVE_PUSH_DELIVERY_ENABLED", "0") == "1"
+KOFAD_FCM_PROJECT_ID = os.environ.get("KOFAD_FCM_PROJECT_ID", "").strip()
+KOFAD_FCM_SERVICE_ACCOUNT_B64 = os.environ.get("KOFAD_FCM_SERVICE_ACCOUNT_B64", "").strip()

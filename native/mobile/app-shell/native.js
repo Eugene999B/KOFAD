@@ -91,6 +91,22 @@
       action.disabled = true;
     }
     item.append(thumb, category, title, price, action);
+    if (Number.isSafeInteger(id) && id > 0) {
+      const add = document.createElement("button");
+      add.className = "native-product-add";
+      add.type = "button";
+      add.textContent = product.in_stock_snapshot === false ? "Unavailable" : "＋ Add to basket";
+      add.disabled = product.in_stock_snapshot === false;
+      add.setAttribute("aria-label", "Add " + String(product.name || "product").slice(0,100) + " to basket");
+      add.addEventListener("click", () => {
+        if (window.KofadNativeBasket?.addProduct?.(product)) {
+          add.textContent = "✓ Added to basket";
+        } else {
+          add.textContent = "Check availability or limit";
+        }
+      });
+      item.append(add);
+    }
     return item;
   }
 
@@ -189,11 +205,12 @@
 
   function setupStaff() {
     $("#staff-content").hidden = false;
-    main.textContent = "Open secure workspace ↗";
-    main.addEventListener("click", () => openOfficial("/workspace/"));
+    main.textContent = "View your operations ↓";
+    main.addEventListener("click", () => window.KofadNativeExperience?.openStaffOverview?.());
     document.querySelectorAll(".native-shortcut").forEach(el => {
       const path = el.dataset.path;
-      if (approvedUrl(path)) el.addEventListener("click", () => openOfficial(path));
+      if (path === "/workspace/") el.addEventListener("click", () => window.KofadNativeExperience?.openStaffOverview?.());
+      else if (approvedUrl(path)) el.addEventListener("click", () => openOfficial(path));
     });
   }
 

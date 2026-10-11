@@ -112,7 +112,7 @@ class MobileReleasePolicyAdmin(MobileSuperuserAdmin):
 
 @admin.register(MobileNotice)
 class MobileNoticeAdmin(MobileSuperuserAdmin):
-    list_display = ("channel", "title", "priority", "enabled", "created_at", "expires_at")
-    list_filter = ("channel", "priority", "enabled")
-    fields = ("channel", "title", "message", "priority", "enabled", "expires_at")
+    list_display = ("channel", "kind", "title", "priority", "enabled", "created_at", "expires_at")
+    list_filter = ("channel", "kind", "priority", "enabled")
+    fields = ("channel", "kind", "title", "message", "priority", "enabled", "expires_at")
     search_fields = ("title", "message")
