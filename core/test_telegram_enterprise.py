@@ -51,7 +51,7 @@ class EnterpriseTelegramTests(TestCase):
 
     def test_wrong_confirmation_and_expired_pairing(self):
         token = begin_link("staff", self.staff.pk).split("link_", 1)[1]
-        self.assertIn("confirmation code", accept_token(token, 123, 123))
+        self.assertIn("this code", accept_token(token, 123, 123))
         for _ in range(5):
             self.assertFalse(confirm_link("staff", self.staff.pk, "000001"))
         self.assertEqual(TelegramIdentity.objects.count(), 0)
