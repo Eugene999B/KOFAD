@@ -1,0 +1,85 @@
+name: Upload KOFAD Market Android QA to Appetize
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Successful native QA workflow run ID containing the customer Android debug APK"
+        required: true
+        type: string
+        default: "38054211091"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  appetize-android-preview:
+    name: Upload verified KOFAD Market QA to Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPETIZE_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+    steps:
+      - name: Require account-owned Appetize token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$APPETIZE_TOKEN" ]; then
+            echo "::error::Create the APPETIZE_API_TOKEN repository Actions secret from your Appetize Organization > API Token. Do not paste it into code or public logs."
+            exit 1
+          fi
+      - name: Download completed customer Android QA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]{9,15}$ ]] || exit 1
+          mkdir -p "$RUNNER_TEMP/kofad-appetize"
+          meta="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          printf '%s' "$meta" | jq -e --arg repo "$GITHUB_REPOSITORY" \
+            '.repository.full_name == $repo and .conclusion == "success"' >/dev/null || {
+              echo "::error::Source QA run is not from KOFAD or did not pass."
+              exit 1
+            }
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name QA-ONLY-customer-android-debug --dir "$RUNNER_TEMP/kofad-appetize"
+          count="$(find "$RUNNER_TEMP/kofad-appetize" -type f -name '*.apk' | wc -l)"
+          test "$count" -eq 1
+      - name: Verify genuine Android APK and package ID
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$(find "$RUNNER_TEMP/kofad-appetize" -type f -name '*.apk' -print -quit)"
+          test -s "$apk"
+          tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -x "$tools/apksigner"
+          test -x "$tools/aapt"
+          "$tools/apksigner" verify "$apk"
+          badging="$("$tools/aapt" dump badging "$apk")"
+          grep -F "name='com.kofadimpex.market'" <<< "$badging" >/dev/null
+          echo "Verified KOFAD Market Android APK; SHA256:"
+          sha256sum "$apk"
+          echo "path=$apk" >> "$GITHUB_OUTPUT"
+      - name: Upload Android APK to Appetize (not the App Store)
+        id: appetize
+        uses: appetizeio/github-action-appetize@2a2c772c74955925c1a7575fea8e4d58056f547d # v1.1.0
+        with:
+          apiToken: ${{ secrets.APPETIZE_API_TOKEN }}
+          platform: android
+          appFile: ${{ steps.apk.outputs.path }}
+          fileType: apk
+          note: "KOFAD Market - QA emulator preview, not a public release"
+      - name: Give owner the Android emulator link
+        shell: bash
+        env:
+          APP_KEY: ${{ steps.appetize.outputs.publicKey }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_KEY"
+          echo "### KOFAD Market Android Emulator" >> "$GITHUB_STEP_SUMMARY"
+          echo "Open this link on your iPhone:" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://appetize.io/app/$APP_KEY" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "QA preview only. Avoid real customer credentials or payments in a shared emulator." >> "$GITHUB_STEP_SUMMARY"
