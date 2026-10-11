@@ -5,7 +5,7 @@ Status: **prepared, not activated** until the company owner completes Google App
 ## Owner and destination
 
 - Google account: **kofadimpexenterprise@gmail.com** (never the owner's personal account).
-- Company Drive folder: [KOFAD IMPEX ENTERPRISE - Encrypted Daily Backups](https://drive.google.com/drive/folders/15HUuUOLo6oDqP-RKd2WuKb4flm1EsNo9). The existing folder title is historical; the automation runs **weekly**, not daily.
+- Company Drive folder: [KOFAD IMPEX ENTERPRISE - Encrypted Weekly Backups](https://drive.google.com/drive/folders/15HUuUOLo6oDqP-RKd2WuKb4flm1EsNo9). This folder belongs to the KOFAD Impex Enterprise Google account.
 - Scheduler: a private Google Apps Script owned by the **Kofad Impex Enterprise** account. **No Railway cron, separate Railway app, new database, webhook queue or worker** is used.
 - Target schedule: **Sunday, 02:00–03:00 GMT (Ghana time)**. Apps Script clock triggers are approximate, not second-exact.
 - Format: existing KOFAD AES-256-GCM encrypted signed full-system backup, \`.kofad.enc\`.
