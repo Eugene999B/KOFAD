@@ -1139,7 +1139,7 @@ class AdministrationAndExportTests(Fixtures, TestCase):
                 "branches": [str(self.branch.pk)],
                 "recovery_phone": "0241234567",
             })
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302, [str(msg) for msg in response.wsgi_request._messages])
         user = User.objects.get(username="counter-one")
         self.assertTrue(user.groups.filter(pk=role.pk).exists())
         self.assertTrue(user.access.branches.filter(pk=self.branch.pk).exists())
