@@ -267,3 +267,14 @@ TELEGRAM_ACCOUNT_LINK_ENABLED = os.environ.get("TELEGRAM_ACCOUNT_LINK_ENABLED", 
 TELEGRAM_BUSINESS_ANALYTICS_ENABLED = os.environ.get("TELEGRAM_BUSINESS_ANALYTICS_ENABLED", "0") == "1"
 TELEGRAM_NOTIFICATIONS_ENABLED = os.environ.get("TELEGRAM_NOTIFICATIONS_ENABLED", "0") == "1"
 TELEGRAM_RECOVERY_ENABLED = os.environ.get("TELEGRAM_RECOVERY_ENABLED", "0") == "1"
+
+# Three independent Telegram bots: existing official bot retains OTP/security.
+# New bot usernames must be the EXACT names issued by BotFather, not guesses.
+TELEGRAM_CUSTOMER_BOT_USERNAME = os.environ.get("TELEGRAM_CUSTOMER_BOT_USERNAME", "").strip().lstrip("@")
+TELEGRAM_STAFF_BOT_USERNAME = os.environ.get("TELEGRAM_STAFF_BOT_USERNAME", "").strip().lstrip("@")
+TELEGRAM_CUSTOMER_BOT_TOKEN = os.environ.get("TELEGRAM_CUSTOMER_BOT_TOKEN", "").strip()
+TELEGRAM_STAFF_BOT_TOKEN = os.environ.get("TELEGRAM_STAFF_BOT_TOKEN", "").strip()
+TELEGRAM_CUSTOMER_WEBHOOK_SECRET = os.environ.get("TELEGRAM_CUSTOMER_WEBHOOK_SECRET", "").strip()
+TELEGRAM_STAFF_WEBHOOK_SECRET = os.environ.get("TELEGRAM_STAFF_WEBHOOK_SECRET", "").strip()
+TELEGRAM_CUSTOMER_BOT_ENABLED = os.environ.get("TELEGRAM_CUSTOMER_BOT_ENABLED", "0") == "1"
+TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") == "1"
