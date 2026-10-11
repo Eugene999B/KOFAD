@@ -428,3 +428,35 @@ def connections_live_verify(request, branch, connection_id):
         request.session["kofad_integration_live_checks"] = values
         request.session.modified = True
     return redirect("connections_detail", connection_id=connection_id)
+
+
+@company_admin
+@require_POST
+def resend_staff_invitation(request, branch, pk):
+    """Owner can renew the token for a still-unactivated account."""
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only the system administrator can invite staff.")
+    from . import staff_invites
+    from .models import StaffInvitation
+    user = get_object_or_404(User, pk=pk, is_active=False)
+    invitation = StaffInvitation.objects.filter(user=user, consumed_at__isnull=True).first()
+    if not invitation:
+        messages.error(request, "This staff member has no pending invitation.")
+        return redirect("admin_users")
+    if invitation.delivered_at and invitation.created_at and (
+        timezone.now() - invitation.delivered_at
+    ).total_seconds() < 60:
+        messages.error(request, "Wait at least a minute before resending an invitation.")
+        return redirect("admin_users")
+    try:
+        recipient = staff_invites.validate_delivery(
+            invitation.channel, invitation.destination,
+            whatsapp_opt_in=request.POST.get("whatsapp_opt_in") == "on",
+        )
+        renewed, link = staff_invites.issue(user, request.user, invitation.channel, recipient)
+        staff_invites.deliver(renewed, link)
+        s.audit(request.user, branch, "staff.invitation_renewed", user.pk)
+        messages.success(request, "A new private activation link was submitted. The old link no longer works.")
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    return redirect("admin_users")
