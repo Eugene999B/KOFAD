@@ -1,5 +1,6 @@
 import json
 import secrets
+import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -604,8 +605,12 @@ def account_finish(request):
         return redirect("market_access")
     existing = CustomerAccount.objects.filter(phone=phone).first()
     if existing and existing.active:
-        services.set_customer_session(request, existing)
-        return redirect("market")
+        # A verified phone challenge alone never authenticates an existing account.
+        # Another registration may have created this account since the OTP check.
+        request.session["market_login_phone"] = phone
+        request.session.pop("market_verified_phone", None)
+        request.session.pop("market_pending_phone", None)
+        return redirect("market_login")
     form = CustomerRegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         data = form.cleaned_data
@@ -629,27 +634,78 @@ def account_finish(request):
 def customer_password_reset_start(request):
     if services.customer_from_session(request):
         return redirect("market")
-    phone = request.POST.get("phone", "").strip()
+    identifier = request.POST.get("identifier", request.POST.get("phone", "")).strip()
+    channel = request.POST.get("channel", "sms")
     if request.method == "POST":
-        try:
-            canonical = normalize_ghana_phone(phone)
-            if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
-                # Do not disclose whether a number owns an account.
-                messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
-                return redirect("market_login")
-            services.send_otp(canonical, "reset", request=request)
-            request.session["market_reset_phone"] = canonical
-            request.session.pop("market_reset_verified_phone", None)
-            messages.success(request, "Verification code sent by SMS.")
-            return redirect("market_password_reset_verify")
-        except ValidationError as exc:
-            messages.error(request, problem(exc))
+        if channel == "whatsapp":
+            messages.error(request, "WhatsApp OTP is not enabled yet. Use verified email or SMS instead.")
+        elif channel == "email":
+            from . import email_recovery
+            try:
+                challenge_id = email_recovery.issue(identifier, request)
+                request.session["market_reset_method"] = "email"
+                request.session["market_reset_email_id"] = str(challenge_id) if challenge_id else str(uuid.uuid4())
+                request.session["market_reset_email_input"] = identifier[:254]
+                request.session.pop("market_reset_verified_email_id", None)
+                request.session.pop("market_reset_phone", None)
+                request.session.pop("market_reset_verified_phone", None)
+                messages.success(request, "If this verified email belongs to a KOFAD account, a recovery code has been sent.")
+                return redirect("market_password_reset_verify")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        elif channel == "sms":
+            try:
+                canonical = normalize_ghana_phone(identifier)
+                if not CustomerAccount.objects.filter(phone=canonical, active=True).exists():
+                    messages.success(request, "If this number has a KOFAD Market account, a verification code can be used to continue.")
+                    return redirect("market_login")
+                services.send_otp(canonical, "reset", request=request)
+                request.session["market_reset_method"] = "sms"
+                request.session["market_reset_phone"] = canonical
+                request.session.pop("market_reset_verified_phone", None)
+                request.session.pop("market_reset_email_id", None)
+                request.session.pop("market_reset_verified_email_id", None)
+                messages.success(request, "Verification code sent by SMS.")
+                return redirect("market_password_reset_verify")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        else:
+            messages.error(request, "Choose SMS, email or WhatsApp.")
+    from core.email_identity import delivery_ready
     return render(request, "marketplace/password_reset_start.html", _market_context(
-        request, title="Reset customer password", phone=phone,
+        request, title="Reset customer password", identifier=identifier,
+        email_recovery_ready=delivery_ready(),
     ))
 
 
 def customer_password_reset_verify(request):
+    method = request.session.get("market_reset_method", "sms")
+    if method == "email":
+        from . import email_recovery
+        if request.session.get("market_reset_verified_email_id"):
+            return redirect("market_password_reset_finish")
+        challenge_id = request.session.get("market_reset_email_id")
+        if not challenge_id:
+            return redirect("market_password_reset")
+        if request.method == "POST":
+            if request.POST.get("action") == "resend":
+                try:
+                    new_id = email_recovery.issue(request.session.get("market_reset_email_input", ""), request)
+                    request.session["market_reset_email_id"] = str(new_id) if new_id else str(uuid.uuid4())
+                    messages.success(request, "If the address is verified, a new recovery code was requested.")
+                except ValidationError as exc:
+                    messages.error(request, problem(exc))
+                return redirect("market_password_reset_verify")
+            try:
+                email_recovery.verify(challenge_id, request.POST.get("code"))
+                request.session["market_reset_verified_email_id"] = challenge_id
+                return redirect("market_password_reset_finish")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        return render(request, "marketplace/password_reset_verify.html", _market_context(
+            request, title="Verify email reset", recovery_channel="email",
+            recovery_destination="your verified email address",
+        ))
     verified_phone = request.session.get("market_reset_verified_phone")
     if verified_phone:
         return redirect("market_password_reset_finish")
@@ -671,11 +727,33 @@ def customer_password_reset_verify(request):
         except ValidationError as exc:
             messages.error(request, problem(exc))
     return render(request, "marketplace/password_reset_verify.html", _market_context(
-        request, title="Verify password reset", phone=phone,
+        request, title="Verify password reset", phone=phone, recovery_channel="sms",
+        recovery_destination=phone,
     ))
 
 
 def customer_password_reset_finish(request):
+    if request.session.get("market_reset_method") == "email":
+        email_id = request.session.get("market_reset_verified_email_id")
+        if not email_id:
+            return redirect("market_password_reset")
+        form = CustomerPasswordResetForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            from . import email_recovery
+            try:
+                customer = email_recovery.finish(email_id, form.cleaned_data["password"])
+                for key in ("market_reset_email_id", "market_reset_email_input",
+                            "market_reset_verified_email_id", "market_reset_method",
+                            "market_reset_phone", "market_reset_verified_phone"):
+                    request.session.pop(key, None)
+                services.set_customer_session(request, customer)
+                messages.success(request, "Your KOFAD password has been changed.")
+                return redirect("market")
+            except ValidationError as exc:
+                messages.error(request, problem(exc))
+        return render(request, "marketplace/password_reset_finish.html", _market_context(
+            request, title="Choose a new password", form=form,
+        ))
     phone = request.session.get("market_reset_verified_phone")
     if not phone:
         return redirect("market_password_reset")
@@ -690,6 +768,7 @@ def customer_password_reset_finish(request):
         customer.save(update_fields=["password_hash"])
         request.session.pop("market_reset_phone", None)
         request.session.pop("market_reset_verified_phone", None)
+        request.session.pop("market_reset_method", None)
         services.set_customer_session(request, customer)
         messages.success(request, "Your KOFAD Market password has been changed.")
         return redirect("market")
@@ -709,16 +788,31 @@ def customer_login(request):
     initial_phone = request.session.get("market_login_phone", "")
     form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
     if request.method == "POST" and form.is_valid():
-        phone = form.cleaned_data["phone"]
+        identifier = form.cleaned_data["phone"]
         now = timezone.now()
+        # Use a stable opaque throttle key for email attempts; never store an
+        # untrusted, arbitrarily long email inside the 20-char phone field.
+        if "@" in identifier:
+            import hashlib
+            throttle_phone = "email:" + hashlib.sha256(identifier.encode()).hexdigest()[:14]
+        else:
+            throttle_phone = identifier
         with transaction.atomic():
-            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=phone, purpose="login")
+            throttle, _ = OtpThrottle.objects.select_for_update().get_or_create(phone=throttle_phone, purpose="login")
             if throttle.blocked_until and throttle.blocked_until > now:
                 messages.error(request, "Too many sign-in attempts. Try again in a few minutes.")
                 return render(request, "marketplace/login.html", _market_context(
                     request, title="Customer sign in", form=form,
                 ))
-            customer = CustomerAccount.objects.filter(phone=phone, active=True).first()
+            if "@" in identifier:
+                from core.email_identity import verified_identity
+                identity = verified_identity("customer", identifier)
+                customer = (
+                    CustomerAccount.objects.filter(pk=identity.owner_id, active=True).first()
+                    if identity else None
+                )
+            else:
+                customer = CustomerAccount.objects.filter(phone=identifier, active=True).first()
             valid = bool(customer and customer.check_password(form.cleaned_data["password"]))
             if valid:
                 throttle.attempts = 0
