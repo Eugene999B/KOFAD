@@ -63,8 +63,13 @@ def reconcile_due(limit=5):
             elif (state in {"failed", "reversed"} or (direct_momo and state == "abandoned")) and (
                 not direct_momo or charge_status in {"failed", "abandoned", "reversed"}
             ):
+                from core.payment_failure_guidance import explain_provider_error
+                failure_message = (
+                    explain_provider_error(verified.get("gateway_response") or verified.get("message"))
+                    if direct_momo else "Provider confirmed unsuccessful payment."
+                )
                 MarketPaymentAttempt.objects.filter(pk=attempt.pk, status__in=["initializing", "submission_unknown", "pending"]).update(
-                    status="failed", next_check_at=None, provider_message="Provider confirmed unsuccessful payment.",
+                    status="failed", next_check_at=None, provider_message=failure_message,
                 )
                 OnlineOrder.objects.filter(pk=attempt.order_id, payment_reference=attempt.reference).exclude(
                     payment_status__in=["paid", "refunded"],

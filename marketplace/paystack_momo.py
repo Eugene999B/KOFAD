@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from core.identity import normalize_ghana_phone
 from . import services
-from .models import MarketPaymentAttempt, OnlineOrder
+from .models import MarketPaymentAttempt, OnlineOrder, VerifiedMomoPhone
 
 ACTIVE_STATUSES = ["initializing", "submission_unknown", "pending", "attention"]
 NETWORKS = {"mtn", "atl", "vod"}
@@ -25,6 +25,8 @@ def initialize(order, phone, network):
     if network not in NETWORKS:
         raise ValidationError("Choose MTN, AT Money or Telecel.")
     phone = normalize_ghana_phone(phone)
+    if not VerifiedMomoPhone.objects.filter(customer=order.customer, phone=phone).exists():
+        raise ValidationError("Verify control of this Mobile Money number by SMS first.")
     validate_email(order.email)
     with transaction.atomic():
         order = OnlineOrder.objects.select_for_update().get(pk=order.pk)

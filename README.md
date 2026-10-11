@@ -6,7 +6,7 @@ A unified retail and wholesale operating system for KOFAD. One catalog, pack-awa
 Python 3.12, Django 5.2 LTS, PostgreSQL 16, server-rendered HTML and focused vanilla JavaScript. A modular monolith keeps transactional boundaries explicit and avoids running separate frontend and API infrastructure. PostgreSQL row locks and database constraints protect concurrent stock and payment operations. Railway is the intended deployment target.
 
 ## Product direction
-A connected commerce identity: navy, gold and teal, a custom parcel-and-trade emblem, grouped task navigation, mobile checkout shortcuts and guided branch setup. All dashboard figures must come from persisted records; there are no fabricated business metrics.
+A connected commerce identity: the official KOFAD navy, charcoal and champagne-gold identity, grouped task navigation, mobile checkout shortcuts and guided branch setup. All dashboard figures must come from persisted records; there are no fabricated business metrics.
 
 ## Source of requirements
 KOFAD IMPEX ENTERPRISE Master Software Plan, version 1.0, 2 October 2026, supplied by the owner. Treat its sample prices and metrics as illustrations, not production records. Business policy and provider credentials must be configured before launch.
@@ -45,7 +45,7 @@ GitHub Actions runs PostgreSQL-backed business and concurrency tests, migration 
 - [Architecture and integrity rules](docs/ARCHITECTURE.md)
 - [Acceptance and remaining launch work](docs/ACCEPTANCE.md)
 - [Brand assets and usage](docs/BRAND.md)
-- [Logo](static/brand/kofad-emblem.png)
+- [Official brand](docs/BRAND.md)
 
 No default administrator is silently created at startup. Bootstrap creates role templates and a location; the requested initial administrator is created only through the explicit deployment initializer. Dependencies used by the container are pinned in requirements.lock. KOFAD is live on Railway with separate web, PostgreSQL and SMS-worker services; launch blockers and operational limitations remain documented below.
 
@@ -53,7 +53,7 @@ No default administrator is silently created at startup. Bootstrap creates role 
 
 Arkesel SMS has a durable outbox, editable customer templates, consent checks, delivery callbacks and retry controls. Debt Settings now define due/overdue timing, reminder cadence and anti-spam limits; Communication Settings define sale/payment/closing/low-stock event behaviour and management notification numbers. Live provider delivery remains disabled until approved Arkesel credentials are configured and validated. See [SMS setup](docs/SMS.md).
 
-The requested ADMIN account signs in directly. Password changes are optional under My account; SMS password recovery uses an individual account recovery phone. See [account recovery](docs/ACCOUNT_RECOVERY.md) and [initial administrator setup](docs/RAILWAY.md#requested-initial-administrator).
+The requested ADMIN account uses the private staff gateway. Temporary/bootstrap credentials must be replaced; SMS password recovery uses an individual account recovery phone. See [account recovery](docs/ACCOUNT_RECOVERY.md) and [initial administrator setup](docs/RAILWAY.md#requested-initial-administrator).
 
 [CHALIN03 comparison](docs/CHALIN03_REVIEW.md) records the reviewed features and KOFAD improvements without claiming complete parity.
 

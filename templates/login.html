@@ -5,20 +5,26 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#102B46">
 <meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex,nofollow,noarchive">
 <title>Sign in · KOFAD</title>
-<link rel="icon" type="image/png" href="{% static 'brand/kofad-emblem.png' %}">
-<link rel="apple-touch-icon" href="{% static 'brand/kofad-emblem.png' %}">
+<link rel="icon" type="image/png" sizes="48x48" href="{% static 'brand/favicon-48.png' %}"><link rel="icon" type="image/png" sizes="96x96" href="{% static 'brand/favicon-96.png' %}"><link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'brand/apple-touch-icon.png' %}">
+<link rel="stylesheet" href="{% static 'cookie-consent.css' %}"><script src="{% static 'cookie-consent.js' %}"></script>
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'app.css' %}">
 <link rel="stylesheet" href="{% static 'ui-v4.css' %}">
+<link rel="stylesheet" href="{% static 'brand-system.css' %}">
+<link rel="stylesheet" href="{% static 'brand-transparent.css' %}">
+<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}"><link rel="stylesheet" href="{% static 'kofad-contrast-mobile.css' %}">
 <script defer src="{% static 'app.js' %}"></script>
-</head>
+<link rel="stylesheet" href="{% static 'kofad-atelier.css' %}">
+<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script></head>
 <body class="login-page">
-<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div><span>KOFAD</span></div>
+<div class="login-brand-intro" aria-hidden="true"><div class="intro-mark"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt=""></div><span>KOFAD</span></div>
 
 <header class="login-header premium-login-header">
 <a class="brand" href="/" aria-label="KOFAD IMPEX ENTERPRISE home">{% include "brand.html" %}</a>
-<div class="login-header-actions"><button type="button" class="theme-toggle mode-toggle login-theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><span data-theme-icon aria-hidden="true">☾</span><span data-theme-label>Dark mode</span></button><div class="login-header-meta"><span class="login-online-dot"></span><span>Secure operations gateway</span></div></div>
+<div class="login-header-actions"><button type="button" class="theme-toggle mode-toggle login-theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><span data-theme-icon aria-hidden="true">☾</span><span data-theme-label>Dark mode</span></button><div class="login-header-meta"><span class="login-online-dot"></span><span>Private workspace · verified access</span></div></div>
 </header>
 
 <div class="login-layout premium-login-layout">
@@ -39,7 +45,7 @@
 </div>
 
 <div class="login-story-bottom">
-<div class="login-emblem-orbit"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div class="login-emblem-orbit"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt=""></div>
 <div><strong>KOFAD IMPEX ENTERPRISE</strong><small>Sales · Stock · Customers · Finance</small></div>
 </div>
 </section>
@@ -47,7 +53,7 @@
 <main class="login-card premium-login-card" id="main">
 <div class="login-access-chip"><span>PRIVATE STAFF ACCESS</span><b>● LIVE</b></div>
 <div class="login-card-top">
-<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-emblem.png' %}" alt=""></div>
+<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt=""></div>
 <div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KOFAD.</h2></div>
 </div>
 <p class="muted login-intro-copy">Your permissions decide exactly what you can see and do after sign-in.</p>
@@ -56,24 +62,31 @@
 {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
 <form method="post" class="premium-login-form">{% csrf_token %}
-<label for="username">Username or phone number</label>
-<div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username or Ghana phone number"></div>
+<label for="username">Username, mobile number or verified email</label>
+<div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username, phone or verified email"></div>
 
 <label for="password">Password</label>
-<div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="new-password" data-login-password required placeholder="Enter your password"><button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
+<div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="current-password" data-login-password required placeholder="Enter your password"></div>
 
 <div class="login-form-row"><span>Authorized staff only</span><a href="/forgot-password/">Forgot password?</a></div>
 <button class="button wide login-submit premium-login-submit">Sign in to workspace <span aria-hidden="true">→</span></button>
 </form>
+{% if google_ready %}
+<div class="kofad-oauth-separator"><span>or continue with</span></div>
+<a class="kofad-google-button" href="{% url 'google_staff_login' %}">
+  <span class="kofad-google-mark" aria-hidden="true">G</span> Sign in with Google
+</a>
+<p class="kofad-google-hint">Only linked staff Google accounts can sign in. Staff security checks still apply.</p>
+{% endif %}
 
 <div class="login-assurance">
 <div><span>✓</span><p><strong>Permission scoped</strong><small>Only your assigned workspaces and locations.</small></p></div>
 <div><span>✓</span><p><strong>Audited activity</strong><small>Critical business actions retain evidence.</small></p></div>
 </div>
-<p class="login-security">Need account access? Contact your KOFAD administrator.</p>
+<p class="login-security">Need account access? <a href="/forgot-password/">Recover password by SMS or verified email</a>, or contact your KOFAD administrator.</p>
 </main>
 </div>
 
 <footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Built for controlled, connected trading.</span></footer>
-</body>
+{% include "cookie_choices.html" %}</body>
 </html>

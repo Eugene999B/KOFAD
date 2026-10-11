@@ -1,0 +1,50 @@
+/* KOFAD staff invitation — isolated from global app styles */
+:root{color-scheme:light;--navy:#10344e;--ink:#18354a;--muted:#61788a;--gold:#dbbd78}
+*{box-sizing:border-box}
+html{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
+body.staff-invite{margin:0;min-height:100svh;background:radial-gradient(circle at 8% 10%,#e7eff5,transparent 35rem),linear-gradient(145deg,#f7f8fa,#f1f4f6);color:var(--ink);line-height:1.6;font-size:15px}
+a{color:#155a77;text-decoration:none}a:hover{text-decoration:underline}
+button,input{font:inherit}
+.site-head{width:min(1120px,calc(100% - 36px));margin:auto;padding:16px 0;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.site-head .brand{display:block;width:170px;max-width:48vw;flex-shrink:0}
+.site-head img{display:block;width:100%;height:auto;max-height:98px;object-fit:contain}
+.secure-label{display:inline-flex;align-items:center;gap:8px;color:#527082;font-size:12px;font-weight:700}
+.secure-label:before{content:"";width:9px;height:9px;border-radius:50%;background:#1d9374;box-shadow:0 0 0 4px #1d937422}
+.invite-layout{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1fr);width:min(1080px,calc(100% - 36px));min-height:570px;overflow:hidden;margin:20px auto 30px;border:1px solid #dce4e8;border-radius:26px;background:#fff;box-shadow:0 30px 75px #12374b1a}
+.invite-story{background:radial-gradient(circle at 110% 0%,#36718e,transparent 58%),linear-gradient(140deg,#0c2c44,#135775);color:#fff;padding:clamp(26px,4vw,52px);display:flex;flex-direction:column;justify-content:space-between;gap:36px;position:relative;overflow:hidden}
+.invite-story:before{content:"";position:absolute;width:330px;height:330px;border:1px solid #ffffff29;border-radius:50%;right:-160px;top:-130px;box-shadow:0 0 0 45px #ffffff08}
+.invite-story>*{position:relative}
+.overline{font-size:11px;letter-spacing:.16em;font-weight:800;color:#efcf90;text-transform:uppercase;margin:0 0 18px}
+.invite-story h2{color:#fff;font-size:clamp(28px,3vw,41px);line-height:1.16;letter-spacing:-.04em;margin:0}
+.invite-story h2 em{font-style:normal;color:#f0d28d}
+.story-copy{max-width:360px;color:#d1e1eb;line-height:1.8;margin:20px 0 0}
+.trust-list{list-style:none;padding:0;margin:0;display:grid;gap:13px;color:#dfeaf0;font-size:13px}
+.trust-list li{display:flex;gap:11px;align-items:center}
+.trust-list b{display:grid;place-items:center;width:27px;height:27px;background:#ffffff20;color:#efd28e;border-radius:9px;flex-shrink:0}
+.invite-content{min-width:0;display:flex;flex-direction:column;justify-content:center;padding:clamp(28px,4vw,55px)}
+.step-chip{align-self:flex-start;padding:6px 12px;border-radius:25px;border:1px solid #d7e8e6;background:#edf7f4;color:#196a60;text-transform:uppercase;letter-spacing:.05em;font-size:11px;font-weight:800}
+.invite-content h1{margin:18px 0 10px;color:#122f45;font-size:clamp(28px,3vw,36px);line-height:1.15;letter-spacing:-.04em}
+.intro{color:var(--muted);margin:0 0 18px;line-height:1.75}
+.intro strong{color:var(--ink)}
+.field-label{display:block;margin:17px 0 7px;font-size:13px;font-weight:750;color:#203c4e}
+.password-wrap{position:relative;display:flex;align-items:center}
+.password-wrap input{min-width:0;width:100%;height:52px;padding:12px 79px 12px 15px;border:1px solid #b8cbd5;border-radius:12px;background:#fff;color:#162f43;font-size:16px}
+.password-wrap input:focus{outline:0;border-color:#23728e;box-shadow:0 0 0 4px #23728e24}
+.password-wrap input::placeholder{color:#8295a1}
+.reveal{position:absolute;right:7px;top:7px;min-width:65px;height:38px;border:0;border-radius:9px;background:#edf3f6;color:#1c526c;font-size:12px;font-weight:750;cursor:pointer}
+.reveal:hover{background:#deecf2}
+.hint{color:#647d8e;font-size:12px;margin:7px 0}
+.rules{display:flex;flex-wrap:wrap;gap:7px;list-style:none;padding:0;margin:11px 0 0}
+.rules li{padding:4px 10px;border:1px solid #dce6e9;border-radius:20px;background:#f6f9fa;color:#647b86;font-size:11px;font-weight:720}
+.rules li.met{border-color:#b7e1ca;background:#eaf7ef;color:#13674a}
+.submit-btn{width:100%;min-height:53px;margin-top:24px;border:0;border-radius:12px;background:linear-gradient(120deg,#10354f,#126584);color:#fff;font-size:15px;font-weight:760;cursor:pointer;box-shadow:0 12px 27px #10354f29}
+.submit-btn:hover{background:#155e7b}
+:is(a,button,input):focus-visible{outline:3px solid #dbbd78;outline-offset:3px}
+.notice{margin:0 0 12px;padding:11px 13px;border:1px solid #edccc2;border-radius:10px;background:#fff3f0;color:#933e2d;font-size:13px}
+.fine-print{padding-top:16px;margin-top:22px;border-top:1px solid #e2e9ed;color:#697f8c;font-size:12px}
+.expired-mark{display:grid;place-items:center;width:54px;height:54px;border-radius:15px;background:#fff2dc;color:#855c18;font-size:26px;font-weight:800}
+.secondary-link{display:inline-block;align-self:flex-start;margin-top:12px;padding:11px 17px;border:1px solid #bbced8;border-radius:11px;font-weight:750}
+.site-foot{margin:0 auto 25px;text-align:center;color:#7c8f9a;font-size:11px}
+@media(max-width:800px){.invite-layout{grid-template-columns:1fr;min-height:0;max-width:560px}.invite-story{padding:24px 28px;gap:0}.invite-story h2{font-size:25px}.story-copy{font-size:13px;margin-top:10px}.trust-list{display:none}.invite-content{padding:30px}}
+@media(max-width:480px){.site-head{width:calc(100% - 28px);padding:10px 0}.site-head .brand{width:120px}.secure-label{font-size:10px}.invite-layout{width:calc(100% - 20px);margin:8px auto 20px;border-radius:20px}.invite-story{padding:20px 22px}.invite-story h2{font-size:22px}.invite-content{padding:26px 22px}.invite-content h1{font-size:28px}.site-foot{padding:0 12px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important}}

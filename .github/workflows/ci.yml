@@ -6,6 +6,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# Superseded PR revisions should not consume runners or promote obsolete code.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -25,6 +29,9 @@ jobs:
       DJANGO_SECRET_KEY: ci-only-nonproduction-key-at-least-32-characters
       DJANGO_DEBUG: "1"
       SECURE_SSL_REDIRECT: "0"
+      # Only CI accepts official production origins for canonical-host smoke tests.
+      # Deployment ALLOWED_HOSTS remains separately locked down.
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,testserver,kofadimpex.com,market.kofadimpex.com,staff.kofadimpex.com"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -33,9 +40,14 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - run: ruff check .
+      - run: node --test native/mobile/tests/profiles.test.mjs native/desktop/tests/security.test.cjs
+      - run: python native/scripts/test_set_android_version.py
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
+      - run: python scripts/prepare_logo.py
+      - run: python native/scripts/branding.py --channel customer
+      - run: python native/scripts/branding.py --channel staff
       - run: python manage.py collectstatic --noinput
       - run: pip-audit -r requirements.lock
       - run: playwright install --with-deps chromium
@@ -53,6 +65,9 @@ jobs:
           python tests/render_document_evidence.py
           for file in test-results/documents/*.pdf; do pdftoppm -r 110 -png "$file" "${file%.pdf}"; done
       - run: python tests/browser_smoke.py
+      - run: python tests/native_app_smoke.py
+      - run: python tests/native_pwa_smoke.py
+      - run: python tests/cookie_smoke.py
       - run: python manage.py test --noinput
       - name: Verify production container
         run: |

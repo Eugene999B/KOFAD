@@ -1,6 +1,6 @@
 (() => {
   try {
-    const saved = localStorage.getItem("kofad-theme") || "light";
+    const saved = (window.KofadPrivacy ? window.KofadPrivacy.getPreference("kofad-theme", "light") : (localStorage.getItem("kofad-theme") || "light"));
     const resolved = saved === "system"
       ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
       : saved;

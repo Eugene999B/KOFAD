@@ -17,6 +17,18 @@ def safe(value):
     return "'" + text if text.startswith(("=", "+", "-", "@", "\t", "\r")) else text
 
 
+def csv_value(value):
+    """Export exact, spreadsheet-readable numbers without weakening text safety.
+
+    CSV has no cell types: preserve numeric Python values before formatting.
+    Financial negatives must remain usable numbers, while untrusted text like
+    =SUM(1,1) or -cmd|... stays protected from spreadsheet formula execution.
+    """
+    if isinstance(value, (Decimal, int, float)) and not isinstance(value, bool):
+        return str(value)
+    return safe(display(value))
+
+
 def display(value):
     if value is None:
         return ""
@@ -383,7 +395,7 @@ def export(
         text = io.StringIO()
         writer = csv.writer(text)
         writer.writerow(headers)
-        writer.writerows([[safe(value) for value in record] for record in shown])
+        writer.writerows([[csv_value(value) for value in record] for record in raw])
         output.write(text.getvalue().encode("utf-8-sig"))
         content_type = "text/csv"
     else:

@@ -1,0 +1,57 @@
+/* Companion design: Email Centre's advanced tools are separate simple pages. */
+.mail-workspace .pro-pane,.mail-workspace .pro-report-filter{border:1px solid var(--mail-line);border-radius:15px;background:var(--mail-surface);box-shadow:var(--mail-shadow);min-width:0;overflow:hidden}
+.mail-workspace .pro-filter-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+.mail-workspace .pro-filter-tabs a{padding:9px 13px;border-radius:100px;border:1px solid var(--mail-line);background:var(--mail-surface);font-size:.77rem;font-weight:720;color:var(--mail-muted)}
+.mail-workspace .pro-filter-tabs a.active,.mail-workspace .pro-filter-tabs a:hover{background:var(--mail-soft);color:var(--mail-accent);border-color:#80bbb0}
+.mail-workspace .pro-toolbar{display:flex;gap:12px;flex-wrap:wrap;padding:14px 18px;align-items:end;border-bottom:1px solid var(--mail-line)}
+.mail-workspace .pro-toolbar-filter{background:var(--mail-wash)}
+.mail-workspace .pro-toolbar label{flex:1 1 170px;min-width:0}
+.mail-workspace .pro-toolbar label.pro-select-all{display:flex;gap:9px;align-items:center;flex:0 0 auto;min-width:unset;font-size:.74rem;white-space:nowrap}
+.mail-workspace input[type="checkbox"]{accent-color:var(--mail-accent);width:17px;height:17px}
+.mail-workspace .pro-bulk-tools label{flex:0 1 180px}
+.mail-workspace .pro-bulk-tools label.pro-select-all{flex:0 0 auto}
+.mail-workspace .pro-selection-counter{margin-left:auto;font-size:.76rem;color:var(--mail-muted);font-weight:700}
+.mail-workspace .pro-thread-list{display:flex;flex-direction:column}
+.mail-workspace .pro-thread-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:start;gap:14px;padding:17px 20px;border-bottom:1px solid var(--mail-line)}
+.mail-workspace .pro-thread-row:hover{background:var(--mail-wash)}
+.mail-workspace .pro-row-check{padding-top:3px}
+.mail-workspace .pro-thread-copy{min-width:0;overflow-wrap:anywhere}
+.mail-workspace .pro-thread-link{display:flex;flex-direction:column;gap:5px;min-width:0}
+.mail-workspace .pro-thread-link strong{font-size:.88rem}
+.mail-workspace .pro-thread-link span{font-size:.86rem;color:var(--mail-ink)}
+.mail-workspace .pro-thread-link:hover strong,.mail-workspace .pro-thread-link:hover span{color:var(--mail-accent)}
+.mail-workspace .pro-thread-copy>small{display:block;color:var(--mail-muted);margin-top:7px;font-size:.73rem}
+.mail-workspace .pro-row-status{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.mail-workspace .pro-row-status small{font-size:.69rem;color:var(--mail-muted)}
+.mail-workspace .pro-editor-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,.85fr);align-items:start;gap:16px}
+.mail-workspace .pro-editor-form{padding:18px 20px;display:grid;gap:15px}
+.mail-workspace .pro-editor-form textarea{min-height:130px}
+.mail-workspace .pro-editor-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.mail-workspace .pro-saved-card{display:flex;justify-content:space-between;align-items:start;gap:9px;padding:16px 19px;border-bottom:1px solid var(--mail-line)}
+.mail-workspace .pro-saved-card>a{display:flex;flex-direction:column;min-width:0;gap:5px;overflow-wrap:anywhere}
+.mail-workspace .pro-saved-card>a:hover{color:var(--mail-accent)}
+.mail-workspace .pro-saved-card>a strong{font-size:.86rem}
+.mail-workspace .pro-saved-card>a small{font-size:.72rem;color:var(--mail-muted)}
+.mail-workspace .pro-hint{padding:18px;background:var(--mail-wash);color:var(--mail-muted);font-size:.77rem}
+.mail-workspace .pro-hint a{color:var(--mail-accent);text-decoration:underline}
+.mail-workspace .pro-reply-card{padding:18px 20px;border-bottom:1px solid var(--mail-line)}
+.mail-workspace .pro-reply-head{display:flex;justify-content:space-between;align-items:start;gap:15px;margin-bottom:12px}
+.mail-workspace .pro-reply-head h4{font-size:.89rem;margin:0}
+.mail-workspace .pro-reply-head small{font-size:.69rem;color:var(--mail-muted)}
+.mail-workspace .pro-reply-body{background:var(--mail-wash);border-radius:10px;padding:13px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem}
+.mail-workspace .pro-text-action{border:0;background:transparent;color:var(--mail-accent);font:inherit;font-size:.74rem;cursor:pointer;padding:9px 0;text-decoration:underline}
+.mail-workspace .pro-side-stack{display:grid;gap:16px;min-width:0}
+.mail-workspace .pro-check-line{display:flex;align-items:center;gap:9px}
+.mail-workspace .pro-signature{border-bottom:1px solid var(--mail-line);padding:0}
+.mail-workspace .pro-signature>summary{padding:16px 19px;cursor:pointer;font-weight:750;font-size:.8rem}
+.mail-workspace .pro-report-filter{display:flex;flex-wrap:wrap;align-items:end;gap:13px;margin-bottom:18px;padding:15px 20px}
+.mail-workspace .pro-report-filter label{flex:1;min-width:160px}
+@media(max-width:900px){.mail-workspace .pro-editor-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.mail-workspace .pro-thread-row{padding:14px 11px;grid-template-columns:20px minmax(0,1fr)}
+ .mail-workspace .pro-row-status{grid-column:2;align-items:flex-start;flex-direction:row}
+ .mail-workspace .pro-toolbar{padding:11px}
+ .mail-workspace .pro-bulk-tools label{flex:1 1 100%}
+ .mail-workspace .pro-selection-counter{margin-left:0;width:100%}
+ .mail-workspace .pro-editor-form{padding:14px 12px}
+ .mail-workspace .pro-reply-head{flex-wrap:wrap}
+}

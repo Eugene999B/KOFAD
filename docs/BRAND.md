@@ -1,21 +1,40 @@
-# KOFAD IMPEX ENTERPRISE identity
+# KOFAD IMPEX ENTERPRISE — owner's official logo
 
-KOFAD uses KOFAD's original trade emblem: a parcel with interwoven navy, gold and teal routes representing goods moving through a connected business. The emblem is intentionally separate from the wordmark so it remains clear at favicon, ID-card and receipt sizes.
+The **sole master asset** is `static/brand/kofad-original-logo.png`, imported
+without re-encoding from the owner-supplied GitHub upload (which was mistakenly
+named `kofad-original-logo.png.png` on the main branch).
 
-- Navy: #102B46
-- Gold: #E9AC32
-- Teal: #138C94
-- Workspace background: #F3F6FA
-- Text: #172F47
+Do not bring back any historical photo, monogram, JPEG-in-SVG artwork, or
+earlier `kofad-emblem` image. The master contains the official appearance.
 
-The official transparent emblem is `static/brand/kofad-emblem.png`. The shared `templates/brand.html` component pairs it with a concise **KOFAD / IMPEX ENTERPRISE** wordmark. The same emblem is used for sign-in, navigation, welcome, receipts, workforce credentials and browser icons.
+During Docker, CI and any local brand preparation, run:
 
-Keep the emblem aspect ratio unchanged. Use a clean white tile behind it on dark surfaces. Navy is the trust/control colour, teal is the interactive/verification colour, and gold is reserved for premium highlights and credential security accents.
+```sh
+python scripts/prepare_logo.py
+```
 
-The product internals and historical KOFAD references remain unchanged; this document describes the visible brand treatment only.
+The script builds the official transparent-padded full wordmark PNG and the
+legacy-compatible SVG path from **only** the master PNG. It also generates
+`favicon.ico`, square PNG icons at 16/32/48/96/180/192/512, and
+`apple-touch-icon.png` from the same complete official logo used in the brand
+header. The favicon is square with transparent padding and preserves the
+whole logo instead of making an unreliable crop.
 
-## Origin
+The same generated `kofad-official-logo.svg` appears in all KOFAD customer,
+staff and public templates. The print and PDF source is the generated
+`kofad-logo-transparent.png`, read by `core.brand_art.draw_mark`. This
+covers receipts, invoices, staff credentials, PDF statements and other
+ReportLab documents. Social sharing uses the PNG.
 
-The heritage emblem was the first production identity used by this system. Its original generation brief described a navy, gold and teal circular trade emblem with interwoven routes around a parcel cube and no embedded lettering. The KOFAD IMPEX ENTERPRISE wordmark is rendered separately for legibility and easy future brand maintenance.
+`/favicon.ico` is intentionally accessible on the company, market and staff
+domains, including to Googlebot. Search engines cache favicons independently;
+Google's result thumbnail can take time to change even after deployment.
 
-Printed records must call `core.brand_art.draw_mark`, which embeds this exact PNG. Do not substitute a monogram or redraw the emblem. ID credentials use navy, gold and teal, a quiet emblem watermark, a clear portrait, and QR verification on the reverse.
+Use object-fit contain for all full-logo slots. Never crop the business name,
+stretch the logo, place a white tile behind it, or redraw it from scratch.
+When the uploaded source already contains transparency, keep its alpha as is.
+For opaque uniform-colour backgrounds, remove only the edge-connected colour.
+Do not aggressively threshold a photographic background and erase lettering.
+
+Colours (interface only): primary navy #0F3B58, deep navy #102A3D,
+charcoal #1F252A, champagne gold #D1BB7F.

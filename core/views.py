@@ -77,7 +77,7 @@ def health(request):
 
 def csrf_failure(request, reason=""):
     """Recover only stale duplicate staff login posts; keep normal CSRF strict."""
-    if request.path == "/login/" and request.user.is_authenticated:
+    if request.path == settings.STAFF_LOGIN_PATH and request.user.is_authenticated:
         return redirect("dashboard")
     return render(request, "403.html", status=403)
 
@@ -89,6 +89,18 @@ def resolve_login_identifier(identifier):
     )
     if len(username_matches) == 1:
         return username_matches[0], "user:" + username_matches[0].casefold()
+
+    if "@" in identifier:
+        from .email_identity import verified_identity
+        try:
+            identity = verified_identity("staff", identifier)
+        except ValidationError:
+            identity = None
+        if identity:
+            user = User.objects.filter(pk=identity.owner_id, is_active=True).first()
+            if user:
+                return user.username, "user:" + user.username.casefold()
+        return identifier, "email:" + identifier.casefold()
 
     try:
         canonical_phone = normalize_ghana_phone(identifier)
@@ -107,9 +119,24 @@ def resolve_login_identifier(identifier):
 
 
 @sensitive_post_parameters("password")
+def _resume_mobile_staff_authorization(request):
+    """Only resume our own staff app authorization route, never external URLs."""
+    path = request.session.pop("staff_mobile_auth_return", None)
+    if (isinstance(path, str) and len(path) <= 1024
+            and path.startswith("/staff/mobile/v1/authorize/?")
+            and not any(ord(char) < 32 or char == "\\" for char in path)):
+        return path
+    return None
+
+
 def login_view(request):
+    pending = request.GET.get("next", "")
+    if (pending.startswith("/staff/mobile/v1/authorize/?")
+            and len(pending) <= 1024
+            and not any(ord(ch) < 32 or ch == "\\" for ch in pending)):
+        request.session["staff_mobile_auth_return"] = pending
     # The sign-in gateway is an explicit new staff session boundary. If an
-    # authenticated user intentionally revisits /login/, start fresh; stale
+    # authenticated user intentionally revisits the private sign-in route, start fresh; stale
     # duplicate login POSTs are recovered by csrf_failure before reaching here.
     if request.user.is_authenticated:
         logout(request)
@@ -179,7 +206,7 @@ def login_view(request):
                         return redirect("password_change")
                     if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
                         return redirect("mfa")
-                    return redirect("dashboard")
+                    return redirect(_resume_mobile_staff_authorization(request) or "dashboard")
 
                 source.failures += 1
                 if source.failures >= 5:
@@ -197,7 +224,14 @@ def login_view(request):
                         attempt.blocked_until = now + timedelta(minutes=15)
                     attempt.save(update_fields=["failures", "blocked_until"])
                     error = "The username, phone number or password is incorrect."
-    return render(request, "login.html", {"error": error, "username": request.POST.get("username", "")})
+    from .google_oauth import enabled as google_enabled
+    response = render(request, "login.html", {
+        "error": error, "username": request.POST.get("username", ""),
+        "google_ready": google_enabled(),
+    })
+    response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    response["Cache-Control"] = "no-store, private"
+    return response
 
 
 @login_required
@@ -260,7 +294,7 @@ def mfa(request):
                         "mfa.enrolled" if was_enrolling else "mfa.verified",
                         request.user.pk,
                     )
-                    return redirect("dashboard")
+                    return redirect(_resume_mobile_staff_authorization(request) or "dashboard")
                 attempt.failures += 1
                 if attempt.failures >= 6:
                     attempt.blocked_until = now + timedelta(minutes=15)
@@ -550,6 +584,9 @@ def trade_screen(request, branch, kind):
 
     company = s.company_policy()
     payment_methods = s.active_payment_methods(company)
+    from marketplace import hubtel as payment_gateway_settings
+    payment_gateway = payment_gateway_settings.selected_provider() if kind == "sale" else ""
+    paystack_pos = __import__("core.pos_paystack", fromlist=["ready"])
     return render(request, "pos.html", {
         "title": "New sale" if kind == "sale" else "Receive purchase",
         "catalog": catalog,
@@ -557,7 +594,7 @@ def trade_screen(request, branch, kind):
         "key": str(uuid.uuid4()),
         "q": query,
         "parties": Party.objects.filter(branch=branch, kind="customer" if kind == "sale" else "supplier"),
-        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith="Paystack MoMo "),
+        "held": HeldSale.objects.filter(branch=branch, user=request.user).exclude(label__startswith="Paystack MoMo ").exclude(label__startswith="Hubtel MoMo "),
         "purchase": kind == "purchase",
         "today": timezone.localdate(),
         "payment_methods": payment_methods,
@@ -573,11 +610,15 @@ def trade_screen(request, branch, kind):
         "policy_controls": kind == "sale" and (
             company.allow_discounts or company.allow_price_overrides or company.max_credit_override > 0
         ),
-        "paystack_pos_momo_ready": (
-            kind == "sale" and __import__("core.pos_paystack", fromlist=["ready"]).ready()
+        "pos_momo_gateway": payment_gateway,
+        "pos_online_markup_percent": __import__("marketplace.pricing", fromlist=["online_markup_percent"]).online_markup_percent() if kind == "sale" else 0,
+        "paystack_pos_momo_ready": kind == "sale" and (
+            payment_gateway_settings.ready("hubtel") if payment_gateway == "hubtel"
+            else paystack_pos.ready()
         ),
-        "paystack_pos_momo_configured": (
-            kind == "sale" and __import__("core.pos_paystack", fromlist=["configured"]).configured()
+        "paystack_pos_momo_configured": kind == "sale" and (
+            payment_gateway_settings.configured() if payment_gateway == "hubtel"
+            else paystack_pos.configured()
         ),
     })
 
@@ -674,12 +715,18 @@ def complete_trade(request):
                     raise ValidationError("Invalid Mobile Money payment amount.")
                 if momo_amount > 0:
                     from . import pos_paystack
-                    if pos_paystack.ready():
+                    from marketplace.hubtel import selected_provider, ready as gateway_ready
+                    selected = selected_provider()
+                    is_ready = gateway_ready("hubtel") if selected == "hubtel" else pos_paystack.ready()
+                    if is_ready:
                         raise ValidationError(
-                            "Mobile Money sales must use the Paystack approval request so KOFAD can verify payment before posting the sale."
+                            "Mobile Money sales must use the " + (
+                                "Hubtel secure checkout" if selected == "hubtel" else "Paystack approval request"
+                            ) + " so KOFAD can independently verify payment before posting the sale."
                         )
                     raise ValidationError(
-                        "Direct Mobile Money sales are awaiting Paystack activation. Use another payment method for now."
+                        "Direct Mobile Money sales are awaiting " + selected.title()
+                        + " activation. Use another payment method for now."
                     )
         branch = branch_for(request)
         doc = s.post_trade(
@@ -794,8 +841,28 @@ def pos_paystack_momo_start(request):
         data = json.loads(request.body or "{}")
         if not isinstance(data, dict):
             raise ValidationError("Expected a payment request object.")
-        from . import pos_paystack
-        result = pos_paystack.start(
+        from marketplace.hubtel import selected_provider
+        from . import pos_paystack, pos_hubtel
+        key = request.headers.get("Idempotency-Key") or data.get("request_key")
+        paystack_reference = pos_paystack._reference_from_key(key)
+        hubtel_reference = pos_hubtel.reference_from_key(key)
+        # If the owner switched the payment gateway after this sale began, an
+        # existing payment must still be queried through its original provider.
+        original_paystack = pos_paystack._held(paystack_reference)
+        original_hubtel = pos_hubtel.held_for(hubtel_reference)
+        if original_paystack and original_hubtel:
+            raise ValidationError("Conflicting payment requests need management review.")
+        chosen = "paystack" if original_paystack else (
+            "hubtel" if original_hubtel else selected_provider()
+        )
+        requested = str(data.get("payment_gateway") or "").lower()
+        if not (original_paystack or original_hubtel) and requested and requested != chosen:
+            raise ValidationError("The payment provider was changed in Settings. Refresh this checkout before proceeding.")
+        processor = pos_hubtel if chosen == "hubtel" else pos_paystack
+        # No unsupported wallet-name lookup or pre-approval token: the cashier
+        # initiates the charge directly. Paystack's independently verified
+        # amount/reference/currency/channel still gates sale posting.
+        result = processor.start(
             request.user,
             branch,
             data.get("sale"),
@@ -804,7 +871,9 @@ def pos_paystack_momo_start(request):
             data.get("provider"),
             data.get("email"),
         )
-        return JsonResponse(result)
+        response = JsonResponse(result)
+        response["Cache-Control"] = "no-store, private"
+        return response
     except (ValidationError, ValueError, TypeError, KeyError) as exc:
         return JsonResponse({"error": problem(exc)}, status=400)
 
@@ -834,8 +903,9 @@ def pos_paystack_momo_status(request, reference):
     branch = branch_for(request)
     s.permit(request.user, branch, "operate_sales")
     try:
-        from . import pos_paystack
-        result = pos_paystack.status_for_staff(request.user, branch, reference)
+        from . import pos_paystack, pos_hubtel
+        processor = pos_paystack if reference.startswith("KFD-POS-") else pos_hubtel
+        result = processor.status_for_staff(request.user, branch, reference)
         response = JsonResponse(result)
         response["Cache-Control"] = "no-store, private"
         return response
@@ -850,7 +920,7 @@ def hold(request, branch):
         data = json.loads(request.body)
         if len(request.body) > 60000 or not isinstance(data, dict) or not isinstance(data.get("items"), list):
             raise ValidationError("Invalid held cart.")
-        if str(data.get("label", "")).startswith("Paystack MoMo ") or any(
+        if str(data.get("label", "")).startswith(("Paystack MoMo ", "Hubtel MoMo ")) or any(
             key in data for key in ("payment_request", "sale_payload")
         ):
             raise ValidationError("Payment records cannot be created through held carts.")
@@ -863,7 +933,7 @@ def hold(request, branch):
 @protected("operate_sales")
 def held(request, branch, pk):
     item = get_object_or_404(HeldSale, pk=pk, branch=branch, user=request.user)
-    if item.label.startswith("Paystack MoMo "):
+    if item.label.startswith(("Paystack MoMo ", "Hubtel MoMo ")):
         raise Http404
     if request.method == "POST":
         item.delete()
@@ -884,12 +954,16 @@ def documents(request):
         allowed += ["expense", "collection", "supplier_payment", "creditor_charge", "supplier_return", "inventory_writeoff"]
     if kind not in allowed:
         raise PermissionDenied
-    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by")
+    rows = Document.objects.filter(branch=branch, kind=kind).select_related("party", "created_by").prefetch_related("payments")
     q = request.GET.get("q", "")[:100]
     if q:
         rows = rows.filter(Q(reference__icontains=q) | Q(party__name__icontains=q))
+    from django.core.paginator import Paginator
+    from .sale_history import decorate_sales
+    page = Paginator(rows.order_by("-created_at", "-pk"), 50).get_page(request.GET.get("page"))
     return render(request, "documents.html", {"title": dict(Document.KINDS).get(kind, "Transactions"),
-        "rows": rows[:200], "kind": kind, "q": q})
+        "rows": decorate_sales(branch, page.object_list), "kind": kind, "q": q,
+        "page_obj": page})
 
 
 @login_required
@@ -904,6 +978,8 @@ def document(request, pk):
     )
     if not request.user.has_perm("core.view_reports"):
         s.permit(request.user, branch, permission)
+    from .sale_history import decorate_sales
+    decorate_sales(branch, [doc])
     return render(request, "document.html", {
         "title": doc.reference,
         "doc": doc,
@@ -1127,6 +1203,38 @@ def product_edit(request, branch, pk=None):
 
 
 @protected("operate_sales|operate_finance|view_reports")
+def customer_duplicate_check(request, branch):
+    """Preflight hint only. The final transactional creation check is authoritative."""
+    from .customer_guard import customer_conflicts
+    name = (request.GET.get("name") or "").strip()[:120]
+    phone = (request.GET.get("phone") or "").strip()[:40]
+    if not name and not phone:
+        return JsonResponse({"matches": [], "duplicate": False})
+    if len(name) < 2 and not phone:
+        return JsonResponse({"matches": [], "duplicate": False})
+    try:
+        matches = customer_conflicts(branch, name, phone)
+    except ValidationError as exc:
+        return JsonResponse({"error": "; ".join(exc.messages)}, status=400)
+    response = JsonResponse({
+        "duplicate": bool(matches),
+        "matches": [
+            {"id": m["party"].pk, "name": m["party"].name,
+             "phone": m["party"].phone, "email": m["party"].email,
+             "consent": m["party"].consent,
+             "debt_email_opt_in": m["party"].debt_email_opt_in,
+             "outstanding": str(m["debt"]),
+             "phone_match": m["phone_match"], "name_match": m["name_match"]}
+            for m in matches[:10]
+        ],
+        "message": ("Existing customer found. Select the saved record; do not create another account."
+                    if matches else "No saved customer uses this name or number."),
+    })
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@protected("operate_sales|operate_finance|view_reports")
 def customer_search(request, branch):
     query = request.GET.get("q", "").strip()[:100]
     rows = Party.objects.filter(branch=branch, kind="customer")
@@ -1148,6 +1256,7 @@ def customer_search(request, branch):
             "phone": party.phone,
             "email": party.email,
             "consent": party.consent,
+            "debt_email_opt_in": party.debt_email_opt_in,
             "outstanding": str(s.party_debt(party)),
             "purchase_count": sales.count(),
             "last_purchase_at": last_sale.created_at.isoformat() if last_sale else "",
@@ -1275,13 +1384,20 @@ def party_edit(request, pk=None):
     if not request.user.has_perm("core.operate_finance"):
         form.fields.pop("credit_limit")
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            item = form.save(commit=False)
-            item.branch = branch
-            item.kind = obj.kind if obj else kind
-            item.save()
-            s.audit(request.user, branch, "party.saved", item.pk, {"name": item.name})
-        return redirect("/parties/?kind=" + item.kind)
+        try:
+            with transaction.atomic():
+                item = form.save(commit=False)
+                item.branch = branch
+                item.kind = obj.kind if obj else kind
+                if item.kind == "customer":
+                    from .customer_guard import assert_unique_customer
+                    s.lock_branch(branch)
+                    assert_unique_customer(branch, item.name, item.phone, exclude_pk=item.pk)
+                item.save()
+                s.audit(request.user, branch, "party.saved", item.pk, {"name": item.name})
+            return redirect("/parties/?kind=" + item.kind)
+        except ValidationError as exc:
+            form.add_error(None, exc)
     return render(request, "form.html", {"title": "Edit contact" if pk else "New contact", "form": form,
         "description": "Name and phone are enough to start. Credit limits are controlled by finance."})
 
@@ -1291,25 +1407,20 @@ def statement(request, pk):
     branch = branch_for(request)
     s.permit(request.user, branch, "view_reports" if request.user.has_perm("core.view_reports") else "operate_finance")
     party = get_object_or_404(Party, pk=pk, branch=branch)
-    docs = Document.objects.filter(party=party).select_related("original").order_by("created_at")
-    running = Decimal(0)
-    rows = []
-    for doc in docs:
-        if doc.kind in ("sale", "purchase", "creditor_charge"):
-            change = doc.total
-        elif doc.kind in ("collection", "supplier_payment"):
-            change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
-        elif doc.kind in ("return", "supplier_return"):
-            change = -sum((a.amount for a in doc.allocations.all()), Decimal(0))
-        elif doc.kind == "reversal" and doc.original_id and doc.original.kind in ("collection", "supplier_payment"):
-            change = sum((a.amount for a in doc.original.allocations.all()), Decimal(0))
-        elif doc.kind == "reversal" and doc.original_id and doc.original.kind == "creditor_charge":
-            change = -doc.original.total
-        else:
-            change = Decimal(0)
-        running += change
-        rows.append({"doc": doc, "change": change, "running": running})
-    return render(request, "statement.html", {"title": party.name, "party": party, "rows": rows, "balance": running})
+    from .statement_engine import account_statement
+    try:
+        rows, running = account_statement(party, branch)
+    except ValidationError as exc:
+        s.audit(request.user, branch, "statement.reconciliation_failed", party.pk, {
+            "details": problem(exc),
+        }, category="accounting", severity="warning")
+        return render(request, "error.html", {
+            "title": "Account statement needs reconciliation",
+            "error": problem(exc),
+        }, status=400)
+    return render(request, "statement.html", {
+        "title": party.name, "party": party, "rows": rows, "balance": running,
+    })
 
 
 @protected("operate_finance")

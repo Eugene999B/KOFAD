@@ -117,6 +117,11 @@ class StaffNotificationTests(TestCase):
             "owner-report", "owner-report@example.test", "Test-pass-1234567"
         )
         self.owner.access.branches.add(self.branch)
+        from marketplace.models import EmailIdentity
+        EmailIdentity.objects.create(
+            kind="staff", owner_id=self.owner.pk, email=self.owner.email,
+            verified_at=timezone.now(), notifications_enabled=True,
+        )
         self.owner.access.email_daily_closing = True
         self.owner.access.email_critical_alerts = True
         self.owner.access.save(update_fields=["email_daily_closing", "email_critical_alerts"])
@@ -147,8 +152,73 @@ class StaffNotificationTests(TestCase):
 
     @override_settings(EMAIL_DELIVERY_ENABLED=True)
     @patch("core.notification_engine.EmailMultiAlternatives.send", return_value=1)
+    def test_verified_staff_opt_out_stops_already_queued_business_reports(self, send):
+        from marketplace.models import EmailIdentity
+        queue_closing_reports(self.closing)
+        EmailIdentity.objects.filter(kind="staff", owner_id=self.owner.pk).update(
+            notifications_enabled=False
+        )
+        self.assertEqual(process_email_outbox(), 0)
+        send.assert_not_called()
+        self.assertEqual(EmailNotice.objects.filter(status="cancelled").count(), 2)
+
+    @override_settings(EMAIL_DELIVERY_ENABLED=True)
+    @patch("core.notification_engine.EmailMultiAlternatives.send", return_value=1)
     def test_valid_email_delivered_exactly_once(self, send):
         queue_closing_reports(self.closing)
         self.assertEqual(process_email_outbox(), 2)
         self.assertEqual(process_email_outbox(), 0)
         self.assertEqual(send.call_count, 2)
+
+    @override_settings(
+        EMAIL_DELIVERY_ENABLED=True,
+        KOFAD_EMAIL_ENABLED=True,
+        KOFAD_EMAIL_PROVIDER="brevo",
+        KOFAD_BREVO_API_KEY="safe-test-key",
+        KOFAD_BREVO_SECURITY_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+    )
+    @patch("core.brevo_email.send_brevo", return_value=1)
+    def test_https_brevo_delivery_is_deduplicated(self, send):
+        queue_closing_reports(self.closing)
+        self.assertEqual(process_email_outbox(), 2)
+        self.assertEqual(process_email_outbox(), 0)
+        self.assertEqual(send.call_count, 2)
+        self.assertFalse(EmailNotice.objects.exclude(status="sent").exists())
+
+    @override_settings(
+        EMAIL_DELIVERY_ENABLED=True,
+        KOFAD_EMAIL_ENABLED=True,
+        KOFAD_EMAIL_PROVIDER="brevo",
+        KOFAD_BREVO_API_KEY="safe-test-key",
+        KOFAD_BREVO_SECURITY_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+    )
+    @patch("core.brevo_email.send_brevo")
+    def test_ambiguous_https_response_is_not_retried(self, send):
+        from core.brevo_email import UncertainEmailDelivery
+        send.side_effect = UncertainEmailDelivery()
+        queue_closing_reports(self.closing)
+        self.assertEqual(process_email_outbox(), 0)
+        self.assertTrue(EmailNotice.objects.filter(status="uncertain").count() == 2)
+        self.assertEqual(process_email_outbox(), 0)
+        self.assertEqual(send.call_count, 2)
+
+    @override_settings(
+        EMAIL_DELIVERY_ENABLED=True,
+        KOFAD_EMAIL_ENABLED=True,
+        KOFAD_EMAIL_PROVIDER="brevo",
+        KOFAD_BREVO_API_KEY="safe-test-key",
+        KOFAD_BREVO_SECURITY_FROM_EMAIL="transactions@kofadimpex.com",
+        KOFAD_BREVO_TRANSACTION_FROM_EMAIL="transactions@kofadimpex.com",
+    )
+    @patch("core.brevo_email.send_brevo")
+    def test_brevo_free_quota_defers_without_using_retry(self, send):
+        from core.brevo_email import DailyEmailLimitExceeded
+        send.side_effect = DailyEmailLimitExceeded("Free daily allowance exhausted")
+        queue_closing_reports(self.closing)
+        self.assertEqual(process_email_outbox(), 0)
+        for notice in EmailNotice.objects.all():
+            self.assertEqual(notice.status, "failed")
+            self.assertEqual(notice.attempts, 0)
+            self.assertGreater(notice.last_attempt_at, timezone.now())

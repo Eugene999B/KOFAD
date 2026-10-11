@@ -20,7 +20,10 @@
     // Dense editable/approval sheets need their column geometry because users
     // enter values across a row. Keep those horizontally scrollable instead of
     // turning them into cards.
-    if (table.querySelector("input, select, textarea, button")) return;
+    // Inventory is a read-mostly register; its Restock/Edit action buttons
+    // are safe to retain in per-product cards. Editable matrices still scroll.
+    if (table.querySelector("input, select, textarea, button") &&
+        table.dataset.mobileTable !== "cards") return;
 
     const headers = [...table.querySelectorAll("thead th")].map(cell =>
       cleanHeader(cell.textContent)

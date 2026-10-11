@@ -1,3 +1,4 @@
+import re
 from django.conf import settings
 from django.contrib.auth import logout
 from django.utils import timezone
@@ -37,6 +38,23 @@ class RequestSizeLimitMiddleware:
         return self.get_response(request)
 
 
+def _public_indexable_path(path):
+    """Only explicitly public company/market pages are indexable."""
+    if path in {
+        "/", "/apps/", "/about/", "/faq/", "/delivery/", "/returns-policy/",
+        "/terms/", "/privacy/", "/contact/", "/market/",
+        "/robots.txt", "/sitemap.xml", "/favicon.ico",
+    }:
+        return True
+    if re.fullmatch(r"/market/products/\d+/", path):
+        return True
+    if re.fullmatch(r"/market/products/\d+/image/(?:thumb|large|full)/", path):
+        return True
+    if re.fullmatch(r"/market/gallery/\d+/image/(?:thumb|large|full)/", path):
+        return True
+    return False
+
+
 class AccessMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -67,7 +85,7 @@ class AccessMiddleware:
                     mfa_valid = float(raw_verified) + settings.MFA_SESSION_SECONDS > now
                 except (TypeError, ValueError):
                     mfa_valid = False
-                if not mfa_valid and request.path not in ("/mfa/", "/logout/", "/account/password/", "/session/state/"):
+                if not mfa_valid and request.path not in ("/mfa/", "/logout/", "/account/password/", "/session/state/", "/staff/mobile/v1/authorize/"):
                     return redirect("mfa")
         response = self.get_response(request)
         geolocation_paths = ("/market/checkout/", "/market-settings/", "/online-orders/")
@@ -93,4 +111,7 @@ class AccessMiddleware:
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):
             response["Cache-Control"] = "no-store"
+
+        if not _public_indexable_path(request.path):
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         return response

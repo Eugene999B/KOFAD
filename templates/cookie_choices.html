@@ -1,0 +1,14 @@
+<div class="kofad-cookie-footer"><button type="button" data-cookie-open>Cookie choices</button></div>
+<section class="kofad-cookie-panel" data-cookie-panel data-analytics-id="{{ cookie_analytics_id }}" role="region" aria-labelledby="cookie-title" hidden>
+  <div class="kofad-cookie-copy"><span class="kofad-cookie-eyebrow">YOUR CHOICE</span><h2 id="cookie-title">A few words about cookies.</h2>
+  <p>We use essential cookies for sign-in, your basket and secure forms. You can choose whether we remember preferences or use optional website analytics.</p>
+  <a href="https://kofadimpex.com/privacy/" target="_blank" rel="noopener">Read our privacy notice</a></div>
+  <div class="kofad-cookie-options" data-cookie-options hidden>
+    <p><strong>Essential</strong> · Always on for security and the services you request.</p>
+    <label><input type="checkbox" name="cookie_preferences"><span><strong>Preferences</strong><small>Remember your theme and welcome-sound choices.</small></span></label>
+    <label><input type="checkbox" name="cookie_analytics"{% if not cookie_analytics_id %} disabled{% endif %}><span><strong>Website analytics</strong><small>{% if cookie_analytics_id %}Help us understand how the public website is used. No account, payment or search details are sent.{% else %}Not connected on this page. No analytics or advertising trackers are loaded.{% endif %}</small></span></label>
+    <button type="button" data-cookie-save>Save my choices</button>
+  </div>
+  <div class="kofad-cookie-actions"><button type="button" data-cookie-reject>Essential only</button><button type="button" data-cookie-customise>Choose cookies</button><button type="button" data-cookie-accept>Accept available cookies</button></div>
+</section>
+<span class="kofad-cookie-status" data-cookie-status role="status" aria-live="polite"></span>

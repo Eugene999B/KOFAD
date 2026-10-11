@@ -1,7 +1,15 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block head %}<script defer src="{% static 'marketplace/payment-choice.js' %}"></script><script defer src="{% static 'marketplace/payment-progress.js' %}"></script>{% endblock %}{% block content %}
+{% extends "marketplace/base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market-payment-audit.css' %}"><script defer src="{% static 'marketplace/payment-choice.js' %}"></script><script defer src="{% static 'marketplace/payment-progress.js' %}"></script>{% endblock %}{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/select-affordances.css' %}">{% endblock %}
+{% block content %}
 <section class="order-v2-page">
 <nav class="commerce-breadcrumb"><a href="/market/account/">My KOFAD</a><span>›</span><a href="/market/orders/">Orders</a><span>›</span><strong>{{ order.customer_reference }}</strong></nav>
 <header class="order-v2-hero"><div><div class="order-v2-label"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><small>{{ order.created_at|date:"d M Y · H:i" }}</small></div><h1>{{ order.customer_reference }}</h1><p>{{ order.get_fulfilment_display }} · {{ order.lines.count }} item line{{ order.lines.count|pluralize }} · GHS {{ order.total|floatformat:2 }}</p></div><div class="order-v2-payment"><small>PAYMENT</small><strong>{{ order.get_payment_status_display }}</strong>{% if order.confirmed_reference %}<span class="payment-confirmation-id">Order ID · {{ order.confirmed_reference }}</span>{% endif %}</div></header>
+<section class="order-v2-card market-payment-audit" aria-label="Payment confirmation and help">
+  <div class="order-v2-card-head"><div><p class="market-eyebrow">PAYMENT TRACKING</p><h2>{% if order.payment_status == 'paid' %}Payment successfully verified{% elif payment_waiting %}Verification in progress{% elif order.payment_status == 'refunded' %}Payment refunded{% else %}Payment not yet confirmed{% endif %}</h2></div><span class="order-status status-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span></div>
+  <p>{% if order.payment_status == 'paid' %}KOFAD has received independent confirmation from the payment provider. Your order is recorded for fulfilment; check the timeline for further progress.{% elif order.payment_status == 'refunded' %}The payment is recorded as refunded. Your account and any return updates will show further information.{% elif payment_waiting %}Your payment request is still being verified. If the wallet was debited, do not send another payment until KOFAD confirms the outcome.{% else %}No successful payment has been recorded yet. A payment request or screenshot is not proof that money was received.{% endif %}</p>
+  <div class="market-payment-facts"><div><small>Order</small><strong>{{ order.customer_reference }}</strong></div><div><small>Amount</small><strong>GHS {{ order.total|floatformat:2 }}</strong></div><div><small>Payment method</small><strong>{% if order.payment_channel == "mobile_money" %}Mobile Money{% elif order.payment_channel == "card" %}Debit / credit card{% elif order.payment_channel == "bank" or order.payment_channel == "bank_transfer" %}Bank payment{% elif order.payment_status == "paid" %}Online payment{% else %}Awaiting payment{% endif %}</strong></div><div><small>Confirmation</small><strong>{{ order.confirmed_reference|default:"Pending verification" }}</strong></div></div>
+  {% if order.sale_document %}<p class="company-fineprint">Your payment has been recorded in KOFAD's sales ledger. You can use this order page as your customer-facing record.</p>{% endif %}
+  <p class="company-fineprint">Need help? Contact KOFAD with your order reference. Never share your Mobile Money PIN with staff or a website.</p>
+</section>
 <div class="order-v2-layout">
 <div class="order-v2-main">
 <section class="order-v2-card"><div class="order-v2-card-head"><div><p class="market-eyebrow">FULFILMENT JOURNEY</p><h2>Where your order is now.</h2></div><span class="support-live-chip"><span class="commerce-live-dot"></span>Account tracking</span></div><div class="order-timeline order-v2-timeline">{% for event in order.events.all %}{% if event.customer_visible %}<article><span></span><div><strong>{{ event.title }}</strong><p>{{ event.note|default:"Your order status was updated." }}</p><small>{{ event.created_at|date:"d M Y · H:i" }}</small></div></article>{% endif %}{% endfor %}</div></section>
@@ -13,16 +21,33 @@
 {% if order.payment_status != 'paid' and order.status != 'cancelled' %}
 <section class="order-action-card payment-required-v2"{% if payment_waiting %} data-payment-progress data-status-url="/market/orders/{{ order.pk }}/payment-status/"{% endif %}>
 <p class="market-eyebrow">PAYMENT</p>
-{% if payment_waiting %}
+{% if momo_phone_verification %}
+<h2>Verify your Mobile Money number</h2>
+<p>Before your first payment to this number, enter the six-digit code KOFAD sent by SMS to <strong>{{ momo_phone_verification.phone }}</strong>. This confirms control of the phone, not the registered wallet name. No payment prompt has been sent yet.</p>
+<form method="post" action="/market/orders/{{ order.pk }}/momo-phone/verify/">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="verify">
+  <label for="momo-phone-code">SMS verification code</label>
+  <input id="momo-phone-code" name="code" inputmode="numeric" autocomplete="one-time-code"
+         pattern="[0-9]{6}" minlength="6" maxlength="6" required>
+  <button class="market-button primary wide">Verify number and request payment</button>
+</form>
+<form method="post" action="/market/orders/{{ order.pk }}/momo-phone/verify/">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="resend">
+  <button class="market-button ghost wide">Resend verification SMS</button>
+</form>
+<p class="company-fineprint">Only approve a Mobile Money prompt you recognise. Never enter your MoMo PIN on this website.</p>
+{% elif payment_waiting %}
 <h2>Waiting for payment confirmation</h2><p data-payment-progress-message role="status" aria-live="polite">{% if payment_attempt.provider_message %}{{ payment_attempt.provider_message }}{% else %}Complete approval on the payment page or your phone.{% endif %} Your order will update automatically after payment is confirmed. If money has been deducted, please do not pay again.</p>
 {% elif payment_available %}
-<h2>Complete payment</h2><p>Continue to secure checkout, choose Mobile Money and approve the payment on your phone. Your order updates automatically after confirmation.</p>
+<h2>Complete payment</h2><p>Pay by card using secure checkout, or select Mobile Money for a direct approval prompt on your phone. Your order updates only after verified payment.</p>
 {% else %}
 <h2>Payment is not open yet</h2><p>This order is saved. Online payments are awaiting final testing. You have not been charged by saving this order.</p>
 {% endif %}
-{% if payment_waiting and payment_attempt.verification_summary.charge_status == "send_otp" %}<form method="post" action="/market/orders/{{ order.pk }}/payment-otp/">{% csrf_token %}<label for="payment-otp">One-time payment code</label><input id="payment-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required><p>Use the code sent for this payment. Never enter your Mobile Money PIN.</p><button class="market-button primary wide">Verify payment code</button></form>{% endif %}
-{% if payment_available and not payment_waiting or payment_attempt.authorization_url %}<form method="post" action="/market/orders/{{ order.pk }}/pay/">{% csrf_token %}{% if not payment_waiting %}{% include "marketplace/payment_choices.html" %}{% endif %}<button class="market-button primary wide">{% if payment_waiting %}Continue payment{% else %}Pay GHS {{ order.total|floatformat:2 }}{% endif %} <span>→</span></button></form>{% endif %}
-{% if not payment_waiting %}<form method="post" action="/market/orders/{{ order.pk }}/cancel/" class="cancel-order-form">{% csrf_token %}<button>Cancel unpaid order</button></form>{% endif %}
+{% if not momo_phone_verification and payment_waiting and payment_attempt.verification_summary.charge_status == "send_otp" %}<form method="post" action="/market/orders/{{ order.pk }}/payment-otp/">{% csrf_token %}<label for="payment-otp">One-time payment code</label><input id="payment-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required><p>Use the code sent for this payment. Never enter your Mobile Money PIN.</p><button class="market-button primary wide">Verify payment code</button></form>{% endif %}
+{% if not momo_phone_verification and payment_available and not payment_waiting or payment_attempt.authorization_url %}<form method="post" action="/market/orders/{{ order.pk }}/pay/">{% csrf_token %}{% if not payment_waiting %}{% include "marketplace/payment_choices.html" %}{% endif %}<button class="market-button primary wide">{% if payment_waiting %}Continue payment{% else %}Pay GHS {{ order.total|floatformat:2 }}{% endif %} <span>→</span></button></form>{% endif %}
+{% if not payment_waiting and not momo_phone_verification %}<form method="post" action="/market/orders/{{ order.pk }}/cancel/" class="cancel-order-form">{% csrf_token %}<button>Cancel unpaid order</button></form>{% endif %}
 </section>
 {% elif order.payment_status == 'paid' %}<section class="payment-done-card order-payment-done"><span>✓</span><div><strong>Payment confirmed</strong>{% if order.confirmed_reference %}<small>{{ order.confirmed_reference }}</small>{% endif %}</div></section>{% endif %}
 <section class="order-action-card"><p class="market-eyebrow">{{ order.get_fulfilment_display|upper }}</p>{% if order.fulfilment == 'delivery' %}<h3>{{ order.recipient_name }}</h3><p>{{ order.address_line }}{% if order.town %}<br>{{ order.town }}{% endif %}{% if order.region %}, {{ order.region }}{% endif %}</p>{% if order.landmark %}<small>Landmark · {{ order.landmark }}</small>{% endif %}{% if order.ghana_post_gps %}<small>GPS · {{ order.ghana_post_gps }}</small>{% endif %}{% else %}<h3>Pickup from KOFAD</h3><p>KOFAD will mark the order ready before collection.</p>{% endif %}<span class="order-contact-line">{{ order.phone }}</span></section>

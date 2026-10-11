@@ -1,0 +1,78 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'connections-center.css' %}">{% endblock %}
+{% block content %}
+<section class="kofad-connections">
+  <div class="ic-top">
+    <div><p class="ic-eyebrow">Settings / system connectivity</p>
+      <h2 class="ic-title">Connections <span aria-hidden="true">&amp;</span> health</h2>
+      <p class="ic-lede">A private, evidence-led view of KOFAD's Google services, communications, payments, hosting and external tools. Open any integration to understand its workflow, requirements, observed activity and what to do next.</p>
+    </div>
+    <a class="ic-tool" href="/settings/connections/" aria-label="Refresh local connection checks">↻ Refresh checks</a>
+  </div>
+  <div class="ic-note"><span aria-hidden="true">ⓘ</span>
+    <div><b>What the colours mean.</b> Green means an authenticated read-only check, successful database query, or a recent completed event—not a guarantee of uninterrupted uptime. Amber means configured but unverified, old, or only submitted. Red indicates missing-critical or failed evidence. Grey means inactive, external, or not implemented. This page makes <b>no chargeable provider requests</b> and shows no secret keys.</div>
+  </div>
+  <div class="ic-summary" aria-label="Connection status summary">
+    <div class="ic-summary-tile ic-success"><strong>{{ snapshot.counts.working }}</strong><span>Recent successful evidence</span></div>
+    <div class="ic-summary-tile ic-pending"><strong>{{ snapshot.counts.ready|add:snapshot.counts.warning }}</strong><span>Configured / needs verification</span></div>
+    <div class="ic-summary-tile ic-attention"><strong>{{ snapshot.counts.issue }}</strong><span>Recorded issues</span></div>
+    <div class="ic-summary-tile"><strong>{{ snapshot.counts.not_connected|add:snapshot.counts.external|add:snapshot.counts.planned }}</strong><span>Disconnected / external / planned</span></div>
+  </div>
+  {% if connection_priorities %}
+  <section class="ic-panel ic-attention-panel" aria-labelledby="connection-attention-heading">
+    <div class="ic-card-top"><h3 id="connection-attention-heading">Issues requiring management attention</h3><span class="ic-status bad">{{ connection_priorities|length }} priority connections</span></div>
+    <p>These findings are based on missing critical KOFAD requirements, unsuccessful recorded activity or read-only provider checks. Each opens a specific diagnosis; a disabled service alone is not an outage.</p>
+    <div class="ic-attention-list">{% for item in connection_priorities %}
+      <a href="{% url 'connections_detail' item.id %}" class="ic-attention-row">
+        <span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span>
+        <span><strong>{{ item.name }}</strong><small>{% if item.issues %}{{ item.issues.0|truncatechars:165 }}{% else %}See the detailed connection verification findings.{% endif %}</small></span>
+        <span class="ic-arrow">Investigate →</span>
+      </a>{% endfor %}</div>
+  </section>
+  {% endif %}
+  <div class="ic-filters">
+    <div class="ic-chipset" aria-label="Connection categories">
+      <a class="ic-chip {% if not active_group %}is-selected{% endif %}" href="{% url 'connections_center' %}{% if active_state %}?state={{ active_state|urlencode }}{% endif %}">All categories</a>
+      {% for code, label in snapshot.groups %}
+      <a class="ic-chip {% if active_group == code %}is-selected{% endif %}" href="{% url 'connections_center' %}?group={{ code }}{% if active_state %}&amp;state={{ active_state|urlencode }}{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <form class="ic-filter-form" method="get" action="{% url 'connections_center' %}">
+      {% if active_group %}<input type="hidden" name="group" value="{{ active_group }}">{% endif %}
+      <label for="connection-status-filter">Status</label>
+      <select id="connection-status-filter" name="state">
+        <option value="">All statuses</option>
+        <option value="working" {% if active_state == "working" %}selected{% endif %}>Recent success</option>
+        <option value="ready" {% if active_state == "ready" %}selected{% endif %}>Configured</option>
+        <option value="warning" {% if active_state == "warning" %}selected{% endif %}>Needs verification</option>
+        <option value="issue" {% if active_state == "issue" %}selected{% endif %}>Needs attention</option>
+        <option value="not_connected" {% if active_state == "not_connected" %}selected{% endif %}>Not connected</option>
+        <option value="external" {% if active_state == "external" %}selected{% endif %}>Provider console only</option>
+        <option value="planned" {% if active_state == "planned" %}selected{% endif %}>Not integrated</option>
+      </select>
+      <button type="submit">Apply</button>
+    </form>
+  </div>
+  {% for group_id, group_name in snapshot.groups %}
+    {% if not active_group or active_group == group_id %}
+      <div class="ic-group-head"><h3>{{ group_name }}</h3><span>Connection diagnostics</span></div>
+      <div class="ic-card-grid">
+      {% for item in visible_connections %}
+        {% if item.group == group_id %}
+          <a class="ic-card" href="{% url 'connections_detail' item.id %}">
+            <div class="ic-card-top"><span class="ic-service-mark" aria-hidden="true">{{ item.mark }}</span><span class="ic-status {{ item.status_style }}">{{ item.status_label }}</span></div>
+            <h4>{{ item.name }}</h4><p>{{ item.purpose }}</p>
+            <div class="ic-evidence">
+              {% if item.probe %}Verified {{ item.probe.checked_at|slice:":16" }} UTC · {{ item.probe.scope|truncatechars:42 }}{% elif item.proof %}Last event {{ item.proof.at|date:"j M Y, H:i" }}{% else %}No locally verified activity available{% endif %}
+            </div>
+            <span class="ic-arrow">View diagnosis &amp; workflow →</span>
+          </a>
+        {% endif %}
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
+  {% if not visible_connections %}<div class="ic-empty">No connections match those filters. <a href="{% url 'connections_center' %}">Show all connections</a>.</div>{% endif %}
+  <p class="ic-caveat">Local snapshot checked at {{ snapshot.checked_at|date:"j M Y, H:i:s" }} (Ghana time). Live verification is available by opening supported providers and explicitly requesting a read-only check. Other provider billing, full availability and Google Script triggers may remain unverified. No keys, tokens, customer addresses, payment references or request payloads are shown. Changes to provider onboarding remain outside this diagnostic view.</p>
+</section>
+{% endblock %}

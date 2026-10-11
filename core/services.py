@@ -362,7 +362,7 @@ def _new_purchase_product(data):
 
 
 @transaction.atomic
-def post_trade(user, branch, payload, key, kind="sale"):
+def post_trade(user, branch, payload, key, kind="sale", *, online_markup_percent=Decimal("0")):
     if kind not in ("sale", "purchase"):
         raise ValidationError("Invalid transaction kind.")
     permit(user, branch, "operate_sales" if kind == "sale" else "operate_inventory")
@@ -496,6 +496,12 @@ def post_trade(user, branch, payload, key, kind="sale"):
             list_price = price
 
         price = money(price)
+        if kind == "sale" and online_markup_percent:
+            # Only trusted provider-backed POS callers set this argument.
+            # Never accept an unverified browser field to change the ledger.
+            from marketplace.pricing import all_in_unit_price
+            price = all_in_unit_price(price, online_markup_percent)
+            list_price = all_in_unit_price(list_price, online_markup_percent)
         if qty * factor > 1000000000:
             raise ValidationError("Base-unit quantity exceeds the supported posting limit.")
         line_total = money(price * qty)
@@ -583,6 +589,9 @@ def post_trade(user, branch, payload, key, kind="sale"):
         "document_date": str(document_date) if kind == "purchase" else "",
         "new_products_created": created_products if kind == "purchase" else [],
     })
+    if kind == "sale" and paid < total and party:
+        from .debt_email import safe_queue_credit_sale
+        transaction.on_commit(lambda document_id=doc.pk: safe_queue_credit_sale(document_id))
     if kind == "sale" and not any(key in payload for key in ("customer_consent", "send_sms", "send_whatsapp")):
         from . import automations
         transaction.on_commit(
@@ -616,6 +625,8 @@ def post_payment(user, branch, payload, key, supplier=False):
     request.save(update_fields=["document"])
     audit(user, branch, kind + ".posted", doc.reference, {"invoice": invoice.reference, "amount": str(amount)})
     if not supplier:
+        from .debt_email import safe_queue_debt_payment
+        transaction.on_commit(lambda document_id=doc.pk: safe_queue_debt_payment(document_id))
         from . import automations
         transaction.on_commit(
             lambda document_id=doc.pk, actor_id=user.pk:

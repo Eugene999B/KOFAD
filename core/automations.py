@@ -324,13 +324,32 @@ def run_low_stock_summary(now=None):
 
 
 def run_scheduled_automations(now=None):
+    """Run independently so an email or SMS failure cannot suppress other notices.
+
+    Restore consent-gated debt-email scheduling lost in the October promotion;
+    all queue writers retain their original idempotency and opt-in checks.
+    """
+    import logging
+
+    from .debt_email import run_debt_email_reminders
     from .notification_engine import run_staff_scheduled_reports, run_customer_personalised_promotions
-    return {
-        "debt": run_debt_reminders(now),
-        "low_stock": run_low_stock_summary(now),
-        "email_reports": run_staff_scheduled_reports(now),
-        "customer_email": run_customer_personalised_promotions(now),
+
+    jobs = {
+        "debt": run_debt_reminders,
+        "debt_email": run_debt_email_reminders,
+        "low_stock": run_low_stock_summary,
+        "email_reports": run_staff_scheduled_reports,
+        "customer_email": run_customer_personalised_promotions,
     }
+    results = {}
+    for name, job in jobs.items():
+        try:
+            results[name] = job(now)
+        except Exception:
+            # Do not log message bodies, customer identities or provider secrets.
+            logging.getLogger(__name__).exception("Scheduled automation %s failed; other jobs will continue", name)
+            results[name] = 0
+    return results
 
 
 def _record_automation_failure(branch, actor, event, reference, exc):

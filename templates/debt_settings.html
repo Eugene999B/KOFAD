@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/debts/">Open Debt Desk</a><a class="button secondary" href="/settings/">← Settings</a></div>{% endblock %}
 {% block content %}
-<section class="hero-panel settings-hero"><div><p class="eyebrow">RECEIVABLES POLICY</p><h2>Debt settings</h2><p>Control when an unpaid receipt becomes overdue, when customers are reminded, how often KOFAD may contact them and the exact default SMS wording.</p></div><span class="pill">{% if item.delivery_mode == "off" %}Automation off{% elif item.delivery_mode == "draft" %}Drafts only{% else %}Automatic send{% endif %}</span></section>
+<section class="hero-panel settings-hero"><div><p class="eyebrow">RECEIVABLES POLICY</p><h2>Debt settings</h2><p>Control when an unpaid receipt becomes overdue, when customers are reminded, how often KOFAD may contact them and the wording used for customer reminders.</p></div><span class="pill">{% if item.delivery_mode == "off" %}Automation off{% elif item.delivery_mode == "draft" %}Drafts only{% else %}Automatic send{% endif %}</span></section>
 
 <div class="settings-explainer-grid">
 <article class="panel"><small>OVERDUE RULE</small><strong>{{ item.overdue_grace_value }} {{ item.get_overdue_grace_unit_display }}</strong><p>A receipt becomes overdue after its due date plus this grace period. Zero means the next day is overdue.</p></article>
@@ -40,9 +40,10 @@
 
 <div class="policy-section">
 <div class="section-heading"><div><p class="eyebrow">3 · AUTOMATION & MESSAGE</p><h2>What KOFAD should do</h2></div></div>
-<label>{{ form.delivery_mode.label }}{{ form.delivery_mode }}<small>{{ form.delivery_mode.help_text }}</small>{{ form.delivery_mode.errors }}</label>
+<div class="two-column"><label>{{ form.delivery_mode.label }}{{ form.delivery_mode }}<small>{{ form.delivery_mode.help_text }}</small>{{ form.delivery_mode.errors }}</label><label>{{ form.email_delivery_mode.label }}{{ form.email_delivery_mode }}<small>{{ form.email_delivery_mode.help_text }}</small>{{ form.email_delivery_mode.errors }}</label></div>
+<div class="notice subtle"><strong>Debt email safety.</strong> Email is off by default. The cashier may confirm a customer email and opt-in during a credit sale. Draft mode requires finance staff review in the Email Centre; Send mode uses Brevo and the same due date, grace, weekend, amount and contact frequency rules. Unpaid invoice and payment messages are informational, not marketing.</div>
 <label>{{ form.message_template.label }}{{ form.message_template }}<small>{{ form.message_template.help_text }}</small>{{ form.message_template.errors }}</label>
-<div class="notice subtle"><strong>Customer consent still applies.</strong> Automatic debt reminders only target opted-in customer records. A saved phone number alone does not make a customer eligible for recurring messages.</div>
+<div class="notice subtle"><strong>Customer consent still applies.</strong> Automatic debt reminders use separate SMS and debt-email contact preferences. Saving an email or a phone number alone does not enable debt reminders.</div>
 </div>
 <button class="button">Save debt settings</button>
 </form>

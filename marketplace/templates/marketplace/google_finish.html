@@ -1,0 +1,20 @@
+{% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}
+{% block content %}
+<section class="simple-customer-access premium-market-access" aria-labelledby="google-finish-title">
+  <div class="simple-access-card premium-access-card">
+    {% include "marketplace/_auth_logo.html" %}
+    <p class="market-eyebrow">GOOGLE ACCOUNT VERIFIED</p>
+    <h1 id="google-finish-title">Welcome to KOFAD.</h1>
+    <p>One more step: tell us your name to create your customer profile. You don't need a phone number to sign up.</p>
+    {% include "marketplace/_auth_messages.html" %}
+    <p class="helper">Google email: <strong>{{ google_email }}</strong></p>
+    <form method="post" class="premium-auth-form">{% csrf_token %}
+      <label for="full_name">Full name</label>
+      <input type="text" id="full_name" name="full_name" maxlength="140" minlength="2" autocomplete="name" required autofocus placeholder="Your full name">
+      <button class="market-button primary wide" type="submit">Create my customer account →</button>
+    </form>
+    <p class="helper">Later, you can link and verify a Ghana mobile number in Account Security. A phone number is required only where delivery or payment needs it.</p>
+    <a class="simple-access-back" href="{% url 'market_access' %}">Choose another sign-in method</a>
+  </div>
+</section>
+{% endblock %}

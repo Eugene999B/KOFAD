@@ -1,0 +1,41 @@
+name: Verify recovered canonical site smoke tests
+on:
+  pull_request:
+    paths:
+      - core/test_staff_login_routes.py
+      - core/test_lost_route_recovery.py
+      - core/test_worker_identity.py
+      - .github/workflows/canonical-domain-smoke-recovery.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kofad
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kofad
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kofad"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://kofad:test-only@localhost:5432/kofad
+      DJANGO_SECRET_KEY: test-only-canonical-host-recovery-secret-123456
+      DJANGO_DEBUG: "1"
+      SECURE_SSL_REDIRECT: "0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt -c requirements.lock
+      - run: ruff check core/test_staff_login_routes.py core/test_lost_route_recovery.py core/test_worker_identity.py
+      - run: python manage.py check
+      - run: python scripts/prepare_logo.py
+      - run: python manage.py collectstatic --noinput
+      - run: python manage.py test core.test_staff_login_routes core.test_lost_route_recovery core.test_worker_identity --noinput

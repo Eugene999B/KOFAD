@@ -79,6 +79,7 @@
       <a class="button secondary" href="{% url 'customer_profile' selected.party.pk %}">Full profile</a>
     </header>
 
+    <div class="notice subtle"><strong>Debt email:</strong> {% if selected.party.debt_email_opt_in and selected.party.email %}Enabled for {{ selected.party.email }}{% elif selected.party.email %}Off · customer email saved, but debt email preference is disabled{% else %}Off · no customer email confirmed{% endif %}. <a href="{% url 'customer_profile' selected.party.pk %}">View customer record</a>.</div>
     <section class="debt-balance-card">
       <div><small>Outstanding balance</small><strong>{{ company.currency }} {{ selected.outstanding|floatformat:2 }}</strong><p>{{ selected.invoice_count }} open receipt{{ selected.invoice_count|pluralize }}{% if selected.maximum_days_overdue %} · oldest {{ selected.maximum_days_overdue }} days overdue{% endif %}</p></div>
       <div class="debt-quick-actions">
