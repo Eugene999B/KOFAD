@@ -880,6 +880,7 @@ def initialize_paystack(order, callback_url):
         attempt = MarketPaymentAttempt.objects.create(
             order=order, provider="paystack", reference=reference, amount=order.total,
             currency="GHS", status="initializing",
+            verification_summary={"flow": "card"},
             next_check_at=timezone.now() + timedelta(minutes=1),
         )
         order.payment_status = "initializing"
@@ -891,7 +892,7 @@ def initialize_paystack(order, callback_url):
         "currency": "GHS",
         "reference": reference,
         "callback_url": callback_url,
-        "channels": ["card", "mobile_money", "bank_transfer"],
+        "channels": ["card"],
         "metadata": json.dumps({
             "order_reference": order.public_reference,
             "customer_phone": order.phone,
