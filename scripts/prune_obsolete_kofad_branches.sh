@@ -11,7 +11,7 @@ deleted=0
 skipped=0
 while IFS='|' read -r branch expected_sha replacement_pr archive_name; do
   [[ "$branch" == recovery/* && "$expected_sha" =~ ^[a-f0-9]{40}$ && "$archive_name" =~ ^[a-z0-9-]+$ ]] || exit 1
-  current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --jq '.object.sha' 2>/dev/null || true)"
+  current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --jq '.object.sha // empty' 2>/dev/null || true)"
   if [[ -z "$current" ]]; then echo "Already absent: $branch"; continue; fi
   if [[ "$current" != "$expected_sha" ]]; then echo "::warning::Moved branch left intact: $branch"; skipped=$((skipped+1)); continue; fi
   active="$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=Eugene999B:$branch&per_page=100" --jq 'length')"
@@ -25,10 +25,10 @@ while IFS='|' read -r branch expected_sha replacement_pr archive_name; do
   fi
   echo "Checked obsolete branch: $branch"
   if [[ "$PRUNE_DRY_RUN" == "1" ]]; then continue; fi
-  archive="refs/tags/archive/kofad-cleanup-20261011/$archive_name"
+  archive="tags/archive/kofad-cleanup-20261011/$archive_name"
   archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha' 2>/dev/null || true)"
   if [[ -z "$archived_sha" ]]; then
-    gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="$archive" -f sha="$current" --silent
+    gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/$archive" -f sha="$current" --silent
     archived_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/$archive" --jq '.object.sha')"
   fi
   if [[ "$archived_sha" != "$current" ]]; then echo "::error::Archive check failed; keeping $branch"; skipped=$((skipped+1)); continue; fi
