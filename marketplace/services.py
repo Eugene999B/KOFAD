@@ -815,6 +815,11 @@ def create_order(customer, cart, cleaned):
         customer.marketing_email_verified_at = None
         customer.marketing_email_challenge = ""
         customer.save(update_fields=["email", "marketing_email_opt_in", "marketing_email_verified_at", "marketing_email_challenge"])
+    # Restore the consent-checked order receipt lost in the October promotion.
+    # Queue only AFTER successful commit: never email for rolled-back orders.
+    # Unlike queue_order_sms(), this does not trigger a paid SMS.
+    from .notifications import queue_order_email
+    transaction.on_commit(lambda: queue_order_email(order, "awaiting_payment"))
     return order
 
 
