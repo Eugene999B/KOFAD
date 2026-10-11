@@ -1,5 +1,5 @@
 name: Archive and prune verified obsolete KOFAD branches
-# Re-run after fixing authenticated Git refs archive lookup.
+# One final SHA-pinned retry after fixing the absent archival-tag null response.
 on:
   pull_request:
     paths:
