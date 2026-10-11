@@ -18,7 +18,7 @@ def _still_authorized(notice):
         return False
     if notice.category == "marketing" and not identity.marketing_opt_in:
         return False
-    if notice.category == "closing" and not identity.closing_opt_in:
+    if notice.category in {"closing", "digest"} and not identity.closing_opt_in:
         return False
     if notice.category == "critical" and not identity.critical_opt_in:
         return False
@@ -27,11 +27,13 @@ def _still_authorized(notice):
         u = User.objects.filter(pk=identity.owner_id, is_active=True).first()
         if not u:
             return False
-        if notice.category in {"closing", "critical"}:
+        if notice.category in {"closing", "critical", "digest"}:
             authorized = bool(u.is_superuser or u.has_perm("core.manage_company")
                               or u.has_perm("core.view_reports") or u.has_perm("core.operate_finance"))
-            return authorized and (u.is_superuser or bool(notice.branch_id and
-                    Access.objects.filter(user=u, branches=notice.branch).exists()))
+            return authorized and (u.is_superuser or bool(
+                (Access.objects.filter(user=u, branches=notice.branch).exists()
+                 if notice.branch_id else Access.objects.filter(user=u, branches__active=True).exists())
+            ))
         return True
     if identity.kind == "customer":
         from marketplace.models import CustomerAccount
