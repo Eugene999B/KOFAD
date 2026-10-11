@@ -288,6 +288,9 @@ class CheckoutForm(forms.Form):
         return normalize_ghana_phone(self.cleaned_data["phone"])
 
     def clean_ghana_post_gps(self):
+        # Pickup does not require a postal address and should ignore stale delivery input.
+        if self.cleaned_data.get("fulfilment") == "pickup":
+            return ""
         value = (self.cleaned_data.get("ghana_post_gps") or "").strip()
         if not value:
             return ""
