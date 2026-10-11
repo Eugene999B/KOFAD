@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from core import staff_invites
-from core.models import Branch, StaffInvitation
+from core.models import Branch, Company, StaffInvitation
 
 
 class StaffOnboardingReleaseRecoveryTests(TestCase):
@@ -20,7 +20,13 @@ class StaffOnboardingReleaseRecoveryTests(TestCase):
         )
         self.branch = Branch.objects.create(name="Main", code="main", active=True)
         self.role = Group.objects.create(name="Cashier")
+        Company.objects.create()
+        self.owner.access.refresh_from_db()
         self.client.force_login(self.owner)
+        session = self.client.session
+        session["access_version"] = self.owner.access.session_version
+        session["branch"] = self.branch.pk
+        session.save()
 
     def payload(self, channel="sms"):
         return {
