@@ -81,10 +81,12 @@ def deliver(invitation, url):
     )
     try:
         if invitation.channel == "email":
-            email_identity._send_kofad_mail(
+            accepted = email_identity._send_kofad_mail(
                 "Activate your KOFAD staff account", body,
                 [invitation.destination], purpose="security",
             )
+            if accepted != 1:
+                raise ValidationError("The email provider did not confirm accepting this invitation.")
         elif invitation.channel == "sms":
             provider = get_provider(settings.SMS_PROVIDER)
             result = provider.submit(
