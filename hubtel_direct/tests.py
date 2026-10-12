@@ -1,5 +1,6 @@
 """Offline provider contract and no-duplicate-money regression tests."""
 from datetime import timedelta
+import uuid
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -167,9 +168,21 @@ class DirectWorkflowTests(MarketFixtures):
     def test_payout_requires_second_person_and_uses_distinct_disbursement_account(self, post):
         post.side_effect = self.accepted
         second = User.objects.create_superuser("second-controller", "second@example.test", "another-long-password")
+        key = uuid.uuid4()
         tx = service.create_payout(
-            self.staff, "send_bank", "10.00", "0123456789", "Supplier One", bank_code="300311"
+            self.staff, "send_bank", "10.00", "0123456789", "Supplier One",
+            bank_code="300311", idempotency_key=key,
         )
+        repeated = service.create_payout(
+            self.staff, "send_bank", "10.00", "0123456789", "Supplier One",
+            bank_code="300311", idempotency_key=key,
+        )
+        self.assertEqual(tx.pk, repeated.pk)
+        with self.assertRaises(ValidationError):
+            service.create_payout(
+                self.staff, "send_bank", "11.00", "0123456789", "Supplier One",
+                bank_code="300311", idempotency_key=key,
+            )
         with self.assertRaises(PermissionDenied):
             service.approve_payout(tx.pk, self.staff)
         self.assertEqual(tx.status, "approval_pending")
