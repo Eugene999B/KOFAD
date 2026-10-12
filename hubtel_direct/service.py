@@ -9,7 +9,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import F, Sum
 from django.utils import timezone
 
 from core.identity import normalize_ghana_phone
@@ -84,13 +84,16 @@ def create_collection(customer, order_id, network):
     return tx
 
 
-def create_payout(user, kind, amount, destination, recipient_name, channel="", bank_code="", idempotency_key=None):
+def create_payout(user, kind, amount, destination, recipient_name, channel="", bank_code="", idempotency_key=None, purpose=""):
     if kind not in ("send_momo", "send_bank"):
         raise ValidationError("Choose a supported payout type.")
     client.require_enabled(kind)
     amount = client.money(amount)
     if amount > client.money(settings.HUBTEL_DIRECT_MAX_PAYOUT_GHS):
         raise ValidationError("Payout exceeds the configured single-transaction limit.")
+    purpose = str(purpose or "").strip()
+    if not 6 <= len(purpose) <= 180:
+        raise ValidationError("Provide a documented business reason for this transfer.")
     recipient_name = str(recipient_name or "").strip()
     if not 2 <= len(recipient_name) <= 140:
         raise ValidationError("Enter a recipient name for independent review.")
@@ -112,6 +115,7 @@ def create_payout(user, kind, amount, destination, recipient_name, channel="", b
     fingerprint_input = json.dumps({
         "actor": user.pk, "kind": kind, "amount": str(amount),
         "destination": destination, "recipient_name": recipient_name,
+        "purpose": purpose,
         "channel": channel, "bank_code": bank_code,
     }, sort_keys=True, separators=(",", ":")).encode()
     fingerprint = hmac.new(settings.SECRET_KEY.encode(), fingerprint_input, hashlib.sha256).hexdigest()
@@ -123,6 +127,7 @@ def create_payout(user, kind, amount, destination, recipient_name, channel="", b
     try:
         tx = _persisted(
             kind, amount, destination, recipient_name=recipient_name,
+            purpose=purpose,
             requested_by=user, channel=channel, bank_code=bank_code,
             status="approval_pending", request_key=request_key,
             request_fingerprint=fingerprint,
@@ -133,7 +138,7 @@ def create_payout(user, kind, amount, destination, recipient_name, channel="", b
             return existing
         raise ValidationError("Duplicate payout request could not be reconciled.")
     accounting.audit(user, None, "hubtel.payout_requested", tx.client_reference,
-                     {"kind": kind, "amount": str(amount), "destination_last4": tx.destination_suffix},
+                     {"kind": kind, "amount": str(amount), "destination_last4": tx.destination_suffix, "purpose": purpose},
                      category="finance", severity="high")
     return tx
 
@@ -151,12 +156,24 @@ def approve_payout(tx_id, approver):
             raise ValidationError("Payout exceeds the current approval limit.")
         if not tx.requested_by or not tx.requested_by.is_active or not tx.requested_by.has_perm("core.operate_finance"):
             raise PermissionDenied("The payout requester no longer has finance authorization.")
+        # Lock the company row to serialize aggregate daily approvals across
+        # concurrent requests and across money channels.
+        from core.models import Company
+        company = Company.objects.select_for_update().order_by("pk").first()
+        if not company:
+            raise ValidationError("KOFAD company configuration is required for payouts.")
+        spent = DirectTransaction.objects.filter(
+            kind__in=["send_momo", "send_bank"], approved_at__date=timezone.localdate(),
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        if spent + tx.amount > client.money(settings.HUBTEL_DIRECT_DAILY_PAYOUT_GHS):
+            raise ValidationError("The company-wide daily Hubtel payout limit would be exceeded.")
         tx.approved_by = approver
+        tx.approved_at = timezone.now()
         tx.status = "initializing"
         tx.next_check_at = timezone.now() + MIN_STATUS_WAIT
-        tx.save(update_fields=["approved_by", "status", "next_check_at", "updated_at"])
+        tx.save(update_fields=["approved_by", "approved_at", "status", "next_check_at", "updated_at"])
         accounting.audit(approver, None, "hubtel.payout_approved", tx.client_reference,
-                         {"kind": tx.kind, "amount": str(tx.amount)},
+                         {"kind": tx.kind, "amount": str(tx.amount), "purpose": tx.purpose},
                          category="finance", severity="high")
     dispatch_once(tx)
     tx.refresh_from_db()
@@ -218,6 +235,15 @@ def reconcile(reference):
     tx = DirectTransaction.objects.filter(client_reference=reference).first()
     if not tx or tx.status not in ACTIVE:
         return tx
+    if now - tx.created_at > timedelta(hours=72):
+        DirectTransaction.objects.filter(pk=tx.pk, status__in=ACTIVE).update(
+            status="attention", next_check_at=None,
+        )
+        if tx.kind == "receive":
+            MarketPaymentAttempt.objects.filter(reference=tx.client_reference, provider="hubtel_direct").exclude(
+                status="success"
+            ).update(status="attention", next_check_at=None, provider_message="Payment must be reviewed by KOFAD staff.")
+        return DirectTransaction.objects.get(pk=tx.pk)
     if now < tx.created_at + MIN_STATUS_WAIT:
         return tx
     # Claim the next check with a durable lease for cross-worker concurrency.
