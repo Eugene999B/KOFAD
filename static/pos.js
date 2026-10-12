@@ -100,60 +100,128 @@
   const walletVerify = document.querySelector("#hubtel-wallet-verify");
   const walletName = document.querySelector("#hubtel-wallet-name");
   const walletConsent = document.querySelector("#hubtel-wallet-consent");
+  const walletSmsSend = document.querySelector("#hubtel-wallet-sms-send");
+  const walletSmsConfirm = document.querySelector("#hubtel-wallet-sms-confirm");
+  const walletSmsCode = document.querySelector("#hubtel-wallet-sms-code");
+  const walletSmsStatus = document.querySelector("#hubtel-wallet-sms-status");
   let walletProof = null;
+  let walletOtpProof = null;
   let walletVerifiedNumber = "";
   let walletVerifiedChannel = "";
+  let walletOtpNumber = "";
+  let walletOtpChannel = "";
+  function walletSelection() {
+    return {
+      phone: normalizeGhanaPhone(paystackMomoPhone?.value || ""),
+      channel: {"mtn": "mtn-gh", "atl": "tigo-gh", "vod": "vodafone-gh"}[paystackMomoProvider?.value]
+    };
+  }
   function clearWalletProof() {
     walletProof = null;
+    walletOtpProof = null;
+    walletOtpNumber = "";
+    walletOtpChannel = "";
     walletVerifiedNumber = "";
     walletVerifiedChannel = "";
+    if (walletSmsCode) walletSmsCode.value = "";
+    if (walletSmsStatus) walletSmsStatus.textContent = "Verify control of this number by SMS.";
     if (walletName) walletName.textContent = "Number or network changed. Check wallet name again.";
+    if (walletVerify) walletVerify.disabled = true;
   }
   paystackMomoPhone?.addEventListener("input", clearWalletProof);
   paystackMomoProvider?.addEventListener("change", clearWalletProof);
   walletConsent?.addEventListener("change", clearWalletProof);
-  async function verifyWalletName() {
+  async function walletOtp(action) {
     if (!walletConsent?.checked) {
-      setMomoStatus("Confirm customer consent before checking their wallet.", "error");
+      setMomoStatus("The customer must authorize the SMS and payment request.", "error");
       return;
     }
-    let phone;
-    try { phone = normalizeGhanaPhone(paystackMomoPhone?.value || ""); }
+    let selection;
+    try { selection = walletSelection(); }
     catch (err) { setMomoStatus(err.message, "error"); return; }
-    const network = {"mtn": "mtn-gh", "atl": "tigo-gh", "vod": "vodafone-gh"}[paystackMomoProvider?.value];
-    clearWalletProof();
+    if (!selection.channel) {
+      setMomoStatus("Select MTN, Telecel or AirtelTigo.", "error");
+      return;
+    }
+    let code = "";
+    if (action === "verify") {
+      code = (walletSmsCode?.value || "").trim();
+      if (!/^\d{6}$/.test(code)) {
+        setMomoStatus("Enter the six-digit customer SMS verification code.", "error");
+        return;
+      }
+    }
+    const button = action === "send" ? walletSmsSend : walletSmsConfirm;
+    if (button) button.disabled = true;
+    if (walletSmsStatus) walletSmsStatus.textContent =
+      action === "send" ? "Sending SMS to customer's phone…" : "Checking customer SMS code…";
+    try {
+      const result = await api("/api/pos/hubtel/wallet-otp/", {
+        action, phone: selection.phone, channel: selection.channel,
+        customer_authorized: true, ...(action === "verify" ? {code} : {})
+      });
+      const now = walletSelection();
+      if (now.phone !== selection.phone || now.channel !== selection.channel || !walletConsent?.checked) {
+        clearWalletProof();
+        return;
+      }
+      if (action === "verify") {
+        walletOtpProof = result.otp_proof;
+        walletOtpNumber = selection.phone;
+        walletOtpChannel = selection.channel;
+        if (walletSmsStatus) walletSmsStatus.textContent = "Phone confirmed by SMS. Checking registered wallet name…";
+        if (walletVerify) walletVerify.disabled = false;
+        await verifyWalletName();
+      } else if (walletSmsStatus) {
+        walletSmsStatus.textContent = result.message || "Ask the customer for the SMS code.";
+      }
+    } catch (err) {
+      if (walletSmsStatus) walletSmsStatus.textContent = "SMS confirmation was not completed.";
+      setMomoStatus(err.message, "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+  walletSmsSend?.addEventListener("click", () => { void walletOtp("send"); });
+  walletSmsConfirm?.addEventListener("click", () => { void walletOtp("verify"); });
+  async function verifyWalletName() {
+    if (!walletConsent?.checked || !walletOtpProof) {
+      setMomoStatus("Confirm the customer's wallet number by SMS first.", "error");
+      return;
+    }
+    let selection;
+    try { selection = walletSelection(); }
+    catch (err) { setMomoStatus(err.message, "error"); return; }
+    if (selection.phone !== walletOtpNumber || selection.channel !== walletOtpChannel) {
+      clearWalletProof();
+      setMomoStatus("The wallet number or network changed. Repeat SMS verification.", "error");
+      return;
+    }
+    walletProof = null;
     walletVerify.disabled = true;
-    if (walletName) walletName.textContent = "Contacting Hubtel to verify the wallet…";
+    if (walletName) walletName.textContent = "Checking registered wallet name with Hubtel…";
     try {
       const result = await api("/api/pos/hubtel/wallet-name/", {
-        phone, channel: network, customer_authorized: true
+        phone: selection.phone, channel: selection.channel,
+        customer_authorized: true, otp_proof: walletOtpProof
       });
+      const now = walletSelection();
+      if (now.phone !== selection.phone || now.channel !== selection.channel || !walletConsent?.checked) {
+        clearWalletProof();
+        return;
+      }
       walletProof = result.verification_token;
-      walletVerifiedNumber = phone;
-      walletVerifiedChannel = network;
+      walletVerifiedNumber = selection.phone;
+      walletVerifiedChannel = selection.channel;
       if (walletName) walletName.textContent =
         "Hubtel registered wallet name: " + result.name + " • Number ending " + result.phone_suffix;
-      setMomoStatus("Confirm the displayed wallet name with the customer before sending the payment prompt.");
+      setMomoStatus("Confirm this Hubtel-verified name with the customer before sending the payment prompt.");
     } catch (err) {
-      if (walletName) walletName.textContent = "Name verification unavailable. No payment has been sent.";
+      if (walletName) walletName.textContent = "Wallet name verification unavailable. No payment sent.";
       setMomoStatus(err.message, "error");
-    } finally { walletVerify.disabled = false; }
+    } finally { walletVerify.disabled = !walletOtpProof; }
   }
-  walletVerify?.addEventListener("click", verifyWalletName);
-  // After consent, automatically check the completed number on leaving the
-  // field or changing the wallet network. Manual "Check name" stays available.
-  paystackMomoPhone?.addEventListener("blur", () => {
-    if (momoGateway === "hubtel" && walletConsent?.checked &&
-        !walletProof && paystackMomoPhone.value.trim()) void verifyWalletName();
-  });
-  paystackMomoProvider?.addEventListener("change", () => {
-    if (momoGateway === "hubtel" && walletConsent?.checked &&
-        paystackMomoPhone?.value.trim()) void verifyWalletName();
-  });
-  walletConsent?.addEventListener("change", () => {
-    if (momoGateway === "hubtel" && walletConsent.checked &&
-        paystackMomoPhone?.value.trim()) void verifyWalletName();
-  });
+  walletVerify?.addEventListener("click", () => { void verifyWalletName(); });
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
