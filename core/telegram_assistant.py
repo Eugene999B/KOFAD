@@ -109,6 +109,65 @@ def _product_search(query):
     )
 
 
+
+def _conversational_command(text, bot_kind):
+    """Map ordinary questions onto verified, deterministic KOFAD operations.
+
+    Never infer authorization from wording: all mapped operations still use
+    the existing Telegram identity and live Django permission checks.
+    """
+    import re
+
+    q = " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+    if re.search(r"\b(?:which|what) (?:ai )?(?:model|api|provider|engine)\b|"
+                 r"\b(?:powered by|which llm)\b", q):
+        return "aboutai"
+    if re.search(r"\b(?:who are you|your name|introduce yourself)\b", q):
+        return "introduce"
+    if re.fullmatch(r"(?:hi|hello|hey|good morning|good evening|good afternoon)[\w\s]*", q):
+        return "introduce"
+    if any(x in q for x in ("what can you do", "how can you help", "show me your features",
+                            "what are your capabilities", "help me use this bot")):
+        return "menu"
+    if any(x in q for x in ("sign in", "log in", "connect my account", "link my account")):
+        return "login"
+    if bot_kind == "staff":
+        if any(x in q for x in ("my role", "my permissions", "my access rights",
+                                "what am i allowed", "what is my job")):
+            return "myrole"
+        if any(x in q for x in ("my tasks", "to do", "to-do", "my priorities",
+                                "what needs attention", "work pending")):
+            return "tasks"
+        if any(x in q for x in ("my branches", "my locations", "assigned branches",
+                                "assigned locations", "where can i work")):
+            return "branches"
+        if any(x in q for x in ("low stock", "out of stock", "inventory level",
+                                "stock alerts", "inventory problems")):
+            return "inventory"
+        if any(x in q for x in ("pending orders", "orders due", "outstanding orders",
+                                "orders need attention")):
+            return "orders_due"
+        if any(x in q for x in ("my notifications", "my alerts", "notification settings")):
+            return "myalerts"
+        if any(x in q for x in ("sales", "closing", "performance", "report", "revenue")):
+            if any(x in q for x in ("last month", "this month", "past month", "30 days")):
+                return "month"
+            if any(x in q for x in ("today", "this morning", "current day")):
+                return "today"
+            return "week"
+    if bot_kind == "customer":
+        if any(x in q for x in ("track my", "where is my order", "where are my items",
+                                "order status", "my purchases", "my orders")):
+            return "orders"
+        if any(x in q for x in ("pay for", "payment", "mobile money", "checkout")):
+            return "pay"
+        if any(x in q for x in ("return an item", "my refund", "refund policy")):
+            return "returns"
+        if any(x in q for x in ("find a product", "what products", "shop online")):
+            return "shop"
+    return ""
+
+
 def reply_for(text, chat_id, user_id, bot_kind="official"):
     """Separate commands and identity authority across three Telegram bots.
 
@@ -135,6 +194,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
     head, _, tail = stripped.partition(" ")
     command = head.lower().split("@", 1)[0].lstrip("/")
     plain = stripped.casefold()
+    if not stripped.startswith("/"):
+        command = _conversational_command(stripped, bot_kind) or command
     identity = None
     if settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
         identity = TelegramIdentity.objects.filter(
@@ -152,6 +213,29 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
     official_market_url = MARKET + "/market/integrations/telegram/security/"
     staff_bot = bot_link("staff") or staff_url
     customer_bot = bot_link("customer") or market_url
+
+    if command == "aboutai":
+        return ("I'm KOFAD's digital assistant. I can't disclose internal "
+                "model or API configuration. I can explain public services "
+                "and help with verified, permission-scoped KOFAD operations.")
+    if command == "introduce":
+        if bot_kind == "staff" and identity and identity.kind == "staff":
+            staff = _account(identity)
+            if staff:
+                from .telegram_intelligence import staff_menu
+                return "Hello! I'm your KOFAD Staff Assistant.\n\n" + staff_menu(staff)
+        if bot_kind == "customer":
+            return ("Hello! I'm the KOFAD Customer Bot. I can help you browse "
+                    "products, track orders after secure linking, and learn "
+                    "about delivery and safe checkout. Send /menu for options.")
+        return ("Hello! I'm the official KOFAD IMPEX assistant. I can guide "
+                "you to shopping, staff tools or secure account recovery. "
+                "Send /menu to explore.")
+    if bot_kind == "staff" and command == "myrole":
+        if not identity or identity.kind != "staff" or not _account(identity):
+            return "First use /login to verify your KOFAD staff account."
+        from .telegram_intelligence import staff_menu
+        return staff_menu(_account(identity))
 
     if command in {"stop", "unsubscribe"}:
         if identity:
@@ -382,7 +466,9 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             return "Management information is available only through the separate authorized KOFAD Staff Bot."
         if command == "ping":
             return "KOFAD Customer Bot is responding."
-        return "KOFAD Customer Assistant: try /search, /orders or /help."
+        from marketplace.kofad_ai import answer
+        result, _ = answer(stripped[:600], ai_allowed=False)
+        return result
 
     # Staff operations bot: no OTP delivery/recovery or customer order records.
     if command in {"start", "help", "menu"}:
@@ -440,4 +526,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return "Staff help and account support: " + STAFF
     if command == "ping":
         return "KOFAD Staff Bot is responding."
-    return "KOFAD Staff Assistant: send /help for allowed commands."
+    return ("I can help with your authorized KOFAD work. Ask about your "
+            "tasks, assigned branches, inventory, pending orders or closing "
+            "reports, or use /menu. Financial and account data require a "
+            "verified staff link and appropriate permissions.")
