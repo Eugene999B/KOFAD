@@ -374,3 +374,34 @@ class EnterpriseTelegramTests(TestCase):
         notice = TelegramOutbound.objects.get(category="marketing")
         self.assertIn("FEATURED THIS WEEK", notice.body)
         self.assertIn(str(product.pk), notice.body)
+
+    def test_conversational_staff_queries_stay_role_checked(self):
+        self.assertIn("/login", reply_for(
+            "What is my role?", 601, 601, bot_kind="staff"))
+        self.assertNotIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
+            "Show sales today", 601, 601, bot_kind="staff"))
+        self.link("staff", self.staff, chat=601)
+        self.assertIn(self.branch.name, reply_for(
+            "What are my assigned branches?", 601, 601, bot_kind="staff"))
+        self.assertIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
+            "Show sales today", 601, 601, bot_kind="staff"))
+        self.assertIn("/inventory", reply_for(
+            "What can you do?", 601, 601, bot_kind="staff"))
+        self.assertIn("can't disclose", reply_for(
+            "Which model are you using?", 601, 601, bot_kind="staff"))
+
+    def test_verified_staff_alert_subscription_queues_one_role_welcome(self):
+        from core.telegram_delivery import _still_authorized
+
+        identity = self.link("staff", self.staff, chat=808)
+        self.assertFalse(TelegramOutbound.objects.filter(category="welcome").exists())
+        reply_for("/alerts_on", 808, 808, bot_kind="staff")
+        notice = TelegramOutbound.objects.get(category="welcome")
+        self.assertIn("KOFAD STAFF ACCOUNT CONNECTED", notice.body)
+        self.assertTrue(_still_authorized(notice))
+        reply_for("/alerts_on", 808, 808, bot_kind="staff")
+        self.assertEqual(TelegramOutbound.objects.filter(category="welcome").count(), 1)
+        identity.refresh_from_db()
+        identity.notifications_enabled = False
+        identity.save(update_fields=["notifications_enabled"])
+        self.assertFalse(_still_authorized(notice))
