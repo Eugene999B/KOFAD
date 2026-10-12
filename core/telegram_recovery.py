@@ -196,7 +196,7 @@ def _portal(request, kind):
     if request.method == "POST":
         action = request.POST.get("action", "request")
         if action == "request":
-            challenge_id = request_recovery(kind, request.POST.get("phone", "")[:40],
+            challenge_id = request_recovery(kind, request.POST.get("phone", "")[:254],
                                             request.POST.get("username", "")[:150])
             # A dummy identifier gives exactly the same visible response for an unknown account.
             request.session[session_key] = str(challenge_id or uuid.uuid4())
