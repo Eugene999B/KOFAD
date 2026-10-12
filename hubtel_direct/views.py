@@ -12,7 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from marketplace import services as market_services
-from marketplace.models import OnlineOrder
+from marketplace.models import OnlineOrder, VerifiedMomoPhone
 from . import service
 from .models import DirectTransaction
 
@@ -90,6 +90,35 @@ def _finance_staff(request, approval=False):
     if not valid:
         raise PermissionDenied("Recent staff MFA is required for money transfers.")
     return user
+
+
+@require_POST
+def verify_registered_phone(request, order_id):
+    """SMS OTP proves control of the customer's SAVED phone (never a typed number)."""
+    try:
+        customer, _ = _customer(request, order_id)
+        if not customer.verified_at or not customer.phone or not settings.CUSTOMER_OTP_ENABLED:
+            raise ValidationError("Verified account phone and enabled SMS verification are required.")
+        body = _json(request)
+        action = body.get("action")
+        from core.identity import normalize_ghana_phone
+        phone = normalize_ghana_phone(customer.phone)
+        if action == "send" and set(body) == {"action"}:
+            market_services.send_otp(phone, "momo", request=request)
+            result = {"message": "Verification SMS sent to your registered account number."}
+        elif action == "verify" and set(body) == {"action", "code"}:
+            market_services.verify_otp(phone, body["code"], "momo")
+            VerifiedMomoPhone.objects.get_or_create(customer=customer, phone=phone)
+            result = {"verified": True}
+        else:
+            raise ValidationError("Invalid phone verification action.")
+        response = JsonResponse(result)
+        response["Cache-Control"] = "private, no-store"
+        return response
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    except ValidationError as exc:
+        return _error(exc)
 
 
 @require_POST
