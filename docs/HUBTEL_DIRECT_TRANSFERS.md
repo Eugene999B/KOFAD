@@ -21,7 +21,9 @@ Hubtel requires a **static public outbound IP** whitelisted with the assigned Re
 - `HUBTEL_DIRECT_RECEIVE_ENABLED=0`: direct payment prompts.
 - `HUBTEL_DIRECT_SEND_MOMO_ENABLED=0`: wallet payouts.
 - `HUBTEL_DIRECT_SEND_BANK_ENABLED=0`: GhIPSS bank payouts.
-- `HUBTEL_DIRECT_MAX_PAYOUT_GHS=500.00`: a per-transaction *ceiling*, not a substitute for total daily controls.
+- `HUBTEL_DIRECT_MAX_PAYOUT_GHS=500.00`: per-transaction ceiling.
+- `HUBTEL_DIRECT_DAILY_PAYOUT_GHS=2000.00`: company-wide daily cap, serialized under a PostgreSQL company-row lock at approval (counts even uncertain/reversed transfers conservatively).
+- Outgoing transfers require a saved 6–180 character business reason, an unguessable UUIDv4 idempotency key, recent MFA and second-person approval.
 
 Live payout activation requires an owner-approved spending policy, disbursement balance check, tested accounting reconciliation, and authenticated staff MFA. Do not turn on payout switches merely because a branch builds.
 
@@ -46,7 +48,7 @@ Direct collection and outbound transfers record reference and destination **befo
 2. Ensure `railway-release` and this branch comparison does not revert any parallel AI/Telegram features, and no unrelated file deletion or migration conflict exists.
 3. Verify whitelisted outbound egress IP and callback deployment path, Hubtel API scopes, collection/disbursement account IDs, callback ownership, correct credential domain and retail engineer approval.
 4. Run only pre-approved low-value provider UAT with merchant and customer participation: pending, failed, wrong PIN, timeout, duplicate callback, wrong amount, delayed callback, bank invalid account, disbursement low balance and cancellation.
-5. Link existing worker invocation, owner-specific payout accounting, ledger reconciliation, aggregate daily budgets/limits, approval dashboard and redacted monitoring before **any** live outbound payout.
+5. Verify existing worker relay to the web service, owner-specific payout accounting and ledger reconciliation, approval dashboard and redacted monitoring before **any** live outbound payout.
 6. Separate feature flags and a tested rollback path must permit instant shutdown **without reverting** the rest of KOFAD. The new app should not be made production-active until all gates above pass.
 
 **No live transaction tests and no production deployment in this change.**
