@@ -1174,7 +1174,20 @@ def checkout(request, customer):
         initial={"momo_phone": customer.phone or ""}, momo_available=momo_available)
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
-    if request.method == "POST" and payment_ready and form.is_valid() and (direct_checkout or payment_form.is_valid()):
+    wallet_number = (request.POST.get("direct_momo_phone", "") if request.method == "POST" else
+                     customer.phone or "")
+    wallet_channel = (request.POST.get("direct_momo_channel", "") if request.method == "POST" else "mtn-gh")
+    direct_wallet_valid = True
+    if direct_checkout and request.method == "POST":
+        try:
+            from core.identity import normalize_ghana_phone as checked_phone
+            wallet_number = checked_phone(wallet_number)
+            if wallet_channel not in ("mtn-gh", "vodafone-gh", "tigo-gh"):
+                raise ValidationError("Choose your Mobile Money network.")
+        except ValidationError as exc:
+            form.add_error(None, str(exc.messages[0]))
+            direct_wallet_valid = False
+    if request.method == "POST" and payment_ready and direct_wallet_valid and form.is_valid() and (direct_checkout or payment_form.is_valid()):
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
             if order.fulfilment == "delivery":
@@ -1190,9 +1203,13 @@ def checkout(request, customer):
             request.session["market_cart"] = {}
             request.session.modified = True
             if direct_checkout:
-                # Save the order FIRST. Direct Receive Money starts only after
-                # a separate registered-phone verification on the order page.
-                # Never create Hubtel hosted checkout links for new orders.
+                # Keep selected wallet separate from delivery/contact phone.
+                # Session defaults only; the final debit is gated on DB-backed
+                # customer-specific first-use OTP for this exact wallet number.
+                request.session["direct_wallet_for_order"] = {
+                    "order": str(order.pk), "phone": wallet_number, "channel": wallet_channel
+                }
+                request.session.modified = True
                 return redirect("market_order", pk=order.pk)
             try:
                 if payment_form.cleaned_data["payment_method"] == "momo":
@@ -1230,6 +1247,7 @@ def checkout(request, customer):
         hubtel_direct_checkout=direct_checkout,
         payment_notice="Online payment is awaiting final testing and activation.", payment_form=payment_form,
         momo_available=momo_available,
+        direct_wallet_number=wallet_number, direct_wallet_channel=wallet_channel,
     ))
 
 
@@ -1467,15 +1485,22 @@ def customer_order(request, customer, pk):
             eligible = services.eligible_market_return_quantity(line)
             if eligible:
                 returnable.append((line, eligible))
+    saved_wallet = request.session.get("direct_wallet_for_order")
+    if not isinstance(saved_wallet, dict) or saved_wallet.get("order") != str(order.pk):
+        saved_wallet = {}
+    wallet_default = saved_wallet.get("phone") or customer.phone or ""
+    wallet_channel_default = saved_wallet.get("channel") or "mtn-gh"
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel.ready() if hubtel.selected_provider() == "paystack" else False,
+        direct_wallet_number=wallet_default,
+        direct_wallet_channel=wallet_channel_default,
+        hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED),
         hubtel_direct_available=hubtel_direct.enabled("receive") and hubtel.selected_provider() == "hubtel",
         hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
             customer=customer, phone=normalize_ghana_phone(customer.phone)
         ).exists()),
-        hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED and customer.phone and customer.verified_at),
         momo_phone_verification=momo_security.pending_for_order(request, customer, order) if hubtel.selected_provider() == "paystack" else None,
         payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
             momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),

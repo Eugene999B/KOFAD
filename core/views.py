@@ -877,7 +877,7 @@ def pos_paystack_momo_start(request):
             data.get("phone"),
             data.get("provider"),
             data.get("email"),
-            **({"wallet_proof": data.get("wallet_proof")} if chosen == "hubtel" else {}),
+            **({"wallet_proof": data.get("wallet_proof"), "customer_authorized": data.get("customer_authorized")} if chosen == "hubtel" else {}),
         )
         response = JsonResponse(result)
         response["Cache-Control"] = "no-store, private"

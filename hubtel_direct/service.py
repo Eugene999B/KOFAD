@@ -41,18 +41,18 @@ def _persisted(kind, amount, dest, **attributes):
     )
 
 
-def create_collection(customer, order_id, network):
-    """Buyer cannot choose their phone or amount. Requires prior account-phone OTP."""
+def create_collection(customer, order_id, network, momo_phone):
+    """Charge only a phone the signed-in customer verified by SMS once before."""
     client.require_enabled("receive")
     if network not in client.CHANNELS:
-        raise ValidationError("Choose a supported Mobile Money network.")
-    if not customer or not customer.active or not customer.verified_at or not customer.phone:
-        raise PermissionDenied("Sign in with a verified Ghana phone number.")
-    phone = _normalized_destination(customer.phone)
+        raise ValidationError("Choose MTN, Telecel or AirtelTigo.")
+    if not customer or not customer.active:
+        raise PermissionDenied("Sign in to your KOFAD account before paying.")
+    phone = _normalized_destination(momo_phone)
     if not VerifiedMomoPhone.objects.filter(
-        customer=customer, phone__in=[customer.phone, "+" + phone, phone]
+        customer=customer, phone="+" + phone
     ).exists():
-        raise ValidationError("Verify your registered Mobile Money number with KOFAD before a payment prompt.")
+        raise ValidationError("Verify this Mobile Money number by SMS before requesting payment.")
     with transaction.atomic():
         order = OnlineOrder.objects.select_for_update().get(pk=order_id, customer=customer)
         if order.status != "awaiting_payment" or order.payment_status in ("paid", "refunded"):
@@ -67,7 +67,7 @@ def create_collection(customer, order_id, network):
         market_services.refresh_order_reservations(order)
         tx = _persisted(
             "receive", order.total, phone, customer=customer, order=order,
-            channel=network, recipient_name=customer.full_name[:140], status="initializing",
+            channel=network, recipient_name="", status="initializing",
             next_check_at=timezone.now() + MIN_STATUS_WAIT,
         )
         MarketPaymentAttempt.objects.create(

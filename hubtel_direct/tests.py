@@ -79,8 +79,8 @@ class DirectWorkflowTests(MarketFixtures):
     def test_customer_registered_phone_is_locked_and_repeat_post_never_charges_twice(self, post):
         post.side_effect = self.accepted
         order = self.order()
-        first = service.create_collection(self.customer, order.pk, "mtn-gh")
-        second = service.create_collection(self.customer, order.pk, "mtn-gh")
+        first = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
+        second = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(first.status, "pending")
         post.assert_called_once()
@@ -93,23 +93,34 @@ class DirectWorkflowTests(MarketFixtures):
     @patch("hubtel_direct.client.requests.post", side_effect=requests.Timeout())
     def test_lost_response_never_resends(self, post):
         order = self.order()
-        tx = service.create_collection(self.customer, order.pk, "vodafone-gh")
+        tx = service.create_collection(self.customer, order.pk, "vodafone-gh", self.customer.phone)
         self.assertEqual(tx.status, "submission_unknown")
-        self.assertEqual(service.create_collection(self.customer, order.pk, "vodafone-gh").pk, tx.pk)
+        self.assertEqual(service.create_collection(self.customer, order.pk, "vodafone-gh", self.customer.phone).pk, tx.pk)
         post.assert_called_once()
+
+    @patch("hubtel_direct.client.requests.post")
+    def test_customer_can_use_different_verified_wallet_than_delivery_phone(self, post):
+        post.side_effect = self.accepted
+        other_wallet = "+233501112233"
+        VerifiedMomoPhone.objects.create(customer=self.customer, phone=other_wallet)
+        order = self.order()
+        tx = service.create_collection(self.customer, order.pk, "vodafone-gh", other_wallet)
+        self.assertEqual(tx.destination_suffix, "2233")
+        self.assertEqual(post.call_args.kwargs["json"]["CustomerMsisdn"], "233501112233")
+        self.assertNotEqual(order.phone, other_wallet)
 
     @patch("hubtel_direct.client.requests.post")
     def test_unverified_number_never_receives_prompt(self, post):
         VerifiedMomoPhone.objects.all().delete()
         with self.assertRaises(ValidationError):
-            service.create_collection(self.customer, self.order().pk, "mtn-gh")
+            service.create_collection(self.customer, self.order().pk, "mtn-gh", self.customer.phone)
         post.assert_not_called()
 
     @patch("hubtel_direct.client.requests.post")
     def test_spoofed_callback_does_not_settle_order(self, post):
         post.side_effect = self.accepted
         order = self.order()
-        tx = service.create_collection(self.customer, order.pk, "mtn-gh")
+        tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
         service.note_callback({"ResponseCode": "0000", "Data": {
             "ClientReference": tx.client_reference, "Amount": 9000000,
         }})
@@ -123,7 +134,7 @@ class DirectWorkflowTests(MarketFixtures):
     def test_independent_paid_status_posts_order_once(self, post, get):
         post.side_effect = self.accepted
         order = self.order()
-        tx = service.create_collection(self.customer, order.pk, "mtn-gh")
+        tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
         DirectTransaction.objects.filter(pk=tx.pk).update(
             created_at=timezone.now() - timedelta(minutes=6),
             next_check_at=timezone.now() - timedelta(seconds=1),
@@ -147,7 +158,7 @@ class DirectWorkflowTests(MarketFixtures):
     def test_mismatched_amount_never_marks_paid(self, post, get):
         post.side_effect = self.accepted
         order = self.order()
-        tx = service.create_collection(self.customer, order.pk, "mtn-gh")
+        tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
         DirectTransaction.objects.filter(pk=tx.pk).update(
             created_at=timezone.now() - timedelta(minutes=6),
             next_check_at=timezone.now() - timedelta(seconds=1),

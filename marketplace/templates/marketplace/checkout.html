@@ -1,5 +1,6 @@
 {% extends "marketplace/base.html" %}{% load static %}
 {% block head %}
+<link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">
 <script defer src="{% static 'marketplace/payment-choice.js' %}"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 <link rel="stylesheet" href="{% static 'marketplace/market-map.css' %}">
@@ -13,7 +14,7 @@
 <div class="commerce-checkout-steps"><span class="done"><b>✓</b> Cart</span><i></i><span class="active"><b>2</b> Delivery</span><i></i><span><b>3</b> Payment</span><i></i><span><b>4</b> Tracking</span></div>
 <div class="commerce-checkout-layout">
 <form method="post" class="commerce-checkout-form" data-checkout-form>{% csrf_token %}{{ form.non_field_errors }}
-<section class="checkout-v2-section"><div class="checkout-v2-number">01</div><div class="checkout-v2-content"><p class="market-eyebrow">FULFILMENT</p><h2>How do you want to receive it?</h2><div class="fulfilment-choice commerce-fulfilment-choice">{{ form.fulfilment }}{{ form.fulfilment.errors }}<p class="market-select-help">Tap to select delivery or collection</p></div></div></section>
+<section class="checkout-v2-section"><div class="checkout-v2-number">01</div><div class="checkout-v2-content"><p class="market-eyebrow">FULFILMENT</p><h2>How do you want to receive it?</h2><div class="fulfilment-choice commerce-fulfilment-choice"><label for="id_fulfilment" class="fulfilment-label">Choose delivery or pickup</label>{{ form.fulfilment }}{{ form.fulfilment.errors }}</div></div></section>
 <section class="checkout-v2-section"><div class="checkout-v2-number">02</div><div class="checkout-v2-content"><p class="market-eyebrow">RECIPIENT</p><h2>Who should we contact?</h2><div class="checkout-grid"><label>Recipient name{{ form.recipient_name }}{{ form.recipient_name.errors }}</label><label>Mobile number{{ form.phone }}{{ form.phone.errors }}</label><label class="full">Email address{{ form.email }}{{ form.email.errors }}</label></div></div></section>
 <section class="checkout-v2-section pickup-note" data-pickup-fields{% if form.fulfilment.value != "pickup" %} hidden{% endif %}><div class="checkout-v2-number">03</div><div class="checkout-v2-content"><p class="market-eyebrow">COLLECT FROM KOFAD</p><h2>No delivery address needed</h2><p>{{ delivery_company.delivery_origin_label|default:delivery_company.address }}</p><p>Delivery fee: <strong>GHS 0.00</strong>. We will update your order when it is ready for collection.</p></div></section>
 <section class="checkout-v2-section" data-delivery-fields{% if form.fulfilment.value == "pickup" %} hidden{% endif %}><div class="checkout-v2-number">03</div><div class="checkout-v2-content"><p class="market-eyebrow">DELIVERY LOCATION</p><h2>Where should we deliver?</h2><p>Search for your address or use your current location. Then check the pin and add directions for the driver.</p>
@@ -36,12 +37,24 @@
 </div></section>
 <section class="checkout-v2-section"><div class="checkout-v2-number">04</div><div class="checkout-v2-content"><p class="market-eyebrow">OPTIONAL</p><h2>Order note</h2><label>Instruction{{ form.customer_note }}</label></div></section>
 {% if hubtel_direct_checkout %}
-<div class="checkout-payment-choice">
- <h3>Pay by Hubtel Direct Mobile Money</h3>
- <p>Your order will be saved first. On the next screen, verify your registered KOFAD account phone and choose MTN, Telecel or AirtelTigo. KOFAD will send a direct Mobile Money approval prompt to that number — no external checkout page.</p>
- <p class="company-fineprint">The delivery contact number is not automatically the Mobile Money wallet. KOFAD can request payment only on your verified registered account phone. Never share your MoMo PIN.</p>
-</div>
-{% else %}{% include "marketplace/payment_choices.html" %}{% endif %}<p class="company-fineprint">Before placing your order, read our <a href="/terms/" target="_blank" rel="noopener">terms</a>, <a href="/delivery/" target="_blank" rel="noopener">delivery policy</a>, <a href="/returns-policy/" target="_blank" rel="noopener">returns policy</a> and <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>. These open in a new tab so you can keep your checkout.</p>{% if not payment_ready %}<div class="checkout-payment-notice" role="status"><strong>Online checkout is not open yet</strong><p>{{ payment_notice }} Your cart is saved. Please contact KOFAD if you need help with this order.</p><a href="/market/messages/">Contact KOFAD</a></div>{% endif %}<div class="checkout-v2-submit"><div><strong>Total is confirmed before payment.</strong></div><button class="market-button primary"{% if not payment_ready %} disabled{% endif %}>{% if hubtel_direct_checkout %}Review & verify Mobile Money{% else %}Make payment{% endif %} <span>→</span></button></div>
+<section class="checkout-payment-choice direct-momo-checkout" aria-label="Mobile Money payment">
+ <p class="market-eyebrow">PAYMENT</p><h3>Pay securely with Mobile Money</h3>
+ <p>Enter the wallet that will pay. This may be different from your delivery phone. If it is your first time using this number on KOFAD, you will verify it once by SMS on the next screen.</p>
+ <div class="direct-momo-checkout-grid">
+ <label for="direct-momo-phone">MoMo number
+  <input id="direct-momo-phone" type="tel" name="direct_momo_phone" inputmode="tel" autocomplete="tel" maxlength="18" placeholder="024 123 4567" value="{{ direct_wallet_number|default:'' }}" required>
+ </label>
+ <label for="direct-momo-channel">Network
+  <select id="direct-momo-channel" name="direct_momo_channel" required>
+   <option value="mtn-gh"{% if direct_wallet_channel == "mtn-gh" %} selected{% endif %}>MTN MoMo</option>
+   <option value="vodafone-gh"{% if direct_wallet_channel == "vodafone-gh" %} selected{% endif %}>Telecel Cash</option>
+   <option value="tigo-gh"{% if direct_wallet_channel == "tigo-gh" %} selected{% endif %}>AT Money</option>
+  </select>
+ </label>
+ </div>
+ <p class="company-fineprint">You will approve payment through your mobile network's secure prompt. KOFAD never asks you to type your MoMo PIN into our website.</p>
+</section>
+{% else %}{% include "marketplace/payment_choices.html" %}{% endif %}<p class="company-fineprint">Before placing your order, read our <a href="/terms/" target="_blank" rel="noopener">terms</a>, <a href="/delivery/" target="_blank" rel="noopener">delivery policy</a>, <a href="/returns-policy/" target="_blank" rel="noopener">returns policy</a> and <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>. These open in a new tab so you can keep your checkout.</p>{% if not payment_ready %}<div class="checkout-payment-notice" role="status"><strong>Online checkout is not open yet</strong><p>{{ payment_notice }} Your cart is saved. Please contact KOFAD if you need help with this order.</p><a href="/market/messages/">Contact KOFAD</a></div>{% endif %}<div class="checkout-v2-submit"><div><strong>Total is confirmed before payment.</strong></div><button class="market-button primary"{% if not payment_ready %} disabled{% endif %}>{% if hubtel_direct_checkout %}Continue to secure payment{% else %}Make payment{% endif %} <span>→</span></button></div>
 </form>
 <aside class="commerce-checkout-summary"><p class="market-eyebrow">YOUR ORDER</p><h2>Order summary</h2><div class="checkout-v2-items">{% for row in rows %}<article><span>{{ row.quantity }}</span><div><strong>{{ row.listing.display_name }}</strong><small>{{ row.listing.selling_label }} · GHS {{ row.price|floatformat:2 }} each</small></div><b>GHS {{ row.total|floatformat:2 }}</b></article>{% endfor %}</div><div class="summary-row"><span>Products</span><strong data-checkout-subtotal="{{ subtotal }}">GHS {{ subtotal|floatformat:2 }}</strong></div><div class="summary-row"><span>Delivery</span><strong data-delivery-fee>GHS {{ delivery_fee_preview|floatformat:2 }}</strong></div><div class="summary-row grand"><span>Total</span><strong data-checkout-total>GHS {{ checkout_total|floatformat:2 }}</strong></div><div class="checkout-account-box"><small>ACCOUNT</small><strong>{{ market_customer.full_name }}</strong></div></aside>
 </div></section>

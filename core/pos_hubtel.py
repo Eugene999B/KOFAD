@@ -101,7 +101,7 @@ def mark_attention(reference, message):
         save_state(held, state)
 
 
-def start(user, branch, sale_payload, request_key, phone, network, email, wallet_proof=None):
+def start(user, branch, sale_payload, request_key, phone, network, email, wallet_proof=None, customer_authorized=False):
     services.permit(user, branch, "operate_sales")
     if not isinstance(sale_payload, dict) or sale_payload.get("kind", "sale") != "sale":
         raise ValidationError("Invalid sale request.")
@@ -114,6 +114,8 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
     if hubtel.selected_provider() != "hubtel":
         raise ValidationError("Hubtel is not selected for cashier payments.")
     direct_client.require_enabled("receive")
+    if customer_authorized is not True:
+        raise ValidationError("Confirm the customer agreed to this Mobile Money payment request.")
 
     payload = copy.deepcopy(sale_payload)
     if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
