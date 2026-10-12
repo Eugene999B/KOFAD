@@ -46,7 +46,8 @@ class CheckoutControlsTests(MarketFixtures):
         self.customer_session()
         response = self.client.get("/market/checkout/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Tap to select delivery or collection")
+        self.assertContains(response, "Choose delivery or pickup")
+        self.assertNotContains(response, "Tap to select delivery or collection")
         self.assertContains(response, "marketplace/select-affordances.")
         self.assertContains(response, 'name="fulfilment"')
 
