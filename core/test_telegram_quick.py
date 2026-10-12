@@ -159,6 +159,7 @@ class TelegramQuickAuthTests(TestCase):
         self.assertTrue(_still_authorized(welcome))
         self.assertIn("/month", staff_menu(self.staff))
 
+    @override_settings(TELEGRAM_BUSINESS_ANALYTICS_ENABLED=True)
     def test_verified_staff_sales_comparison_and_yesterday(self):
         from datetime import timedelta
         from core.models import Closing
