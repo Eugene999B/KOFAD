@@ -260,6 +260,10 @@ def answer(question, *, customer=None, ai_allowed=True):
         return "Please ask a question in 600 characters or fewer.", "local"
     if INTENT_ORDER.search(question):
         return _customer_orders(customer), "private" if customer else "local"
+    if BLOCKED.search(question):
+        return ("Please do not enter account numbers, phone numbers, email "
+                "addresses, passwords or verification codes into the AI chat. "
+                "For private account help, sign in to KOFAD or contact our team."), "local"
     if PRIVATE_TOPIC.search(question):
         return (
             "For private account information, sign in to your KOFAD account. "
@@ -267,10 +271,6 @@ def answer(question, *, customer=None, ai_allowed=True):
             "dashboard or Staff Telegram Bot. Account: "
             "https://market.kofadimpex.com/market/account/"
         ), "local"
-    if BLOCKED.search(question):
-        return ("Please do not enter account numbers, phone numbers, email "
-                "addresses, passwords or verification codes into the AI chat. "
-                "For private account help, sign in to KOFAD or contact our team."), "local"
     company = _company_info()
     products = _public_products(question)
     if ai_allowed:
