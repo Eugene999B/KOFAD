@@ -347,7 +347,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         # chat/session/customer/staff/account info to an external free provider.
         import re
         import hashlib
-        from marketplace.kofad_ai import answer, free_configured, reserve_free_request
+        from marketplace.kofad_ai import answer, eligible_for_external_ai, free_configured, reserve_free_request
         public_question = tail.strip()
         if not public_question:
             return (
@@ -369,7 +369,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         # has a small allowance shared with the web's free daily budget.
         # Hash Telegram IDs so cache keys are not directly identifying.
         ai_permitted = False
-        if free_configured():
+        if free_configured() and eligible_for_external_ai(public_question):
             user_hash = hashlib.sha256(
                 f"{settings.SECRET_KEY}:{bot_kind}:{user_id}".encode()
             ).hexdigest()[:20]
