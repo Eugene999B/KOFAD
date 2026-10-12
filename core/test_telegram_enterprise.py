@@ -342,3 +342,31 @@ class EnterpriseTelegramTests(TestCase):
         pending.verified_by = self.staff
         pending.save(update_fields=["verified_by"])
         self.assertFalse(_still_authorized(notice))
+
+
+    def test_weekly_customer_featured_news_requires_promo_consent(self):
+        from decimal import Decimal
+        from core.models import Product
+        from core.telegram_integration import queue_weekly_customer_showcase
+        from marketplace.models import MarketListing
+
+        product = Product.objects.create(
+            name="KOFAD Featured Test Item", sku="TEL-TEST-01",
+            retail_unit=Decimal("25.00"), active=True,
+        )
+        MarketListing.objects.create(product=product, featured=True, enabled=True)
+        linked = self.link("customer", self.customer, chat=664)
+        linked.notifications_enabled = True
+        linked.save(update_fields=["notifications_enabled"])
+        now = timezone.localtime()
+        monday = (now - timedelta(days=now.weekday())).replace(
+            hour=10, minute=10, second=0, microsecond=0,
+        )
+        self.assertEqual(queue_weekly_customer_showcase(now=monday), 0)
+        linked.marketing_opt_in = True
+        linked.save(update_fields=["marketing_opt_in"])
+        self.assertEqual(queue_weekly_customer_showcase(now=monday), 1)
+        self.assertEqual(queue_weekly_customer_showcase(now=monday), 0)
+        notice = TelegramOutbound.objects.get(category="marketing")
+        self.assertIn("FEATURED THIS WEEK", notice.body)
+        self.assertIn(str(product.pk), notice.body)
