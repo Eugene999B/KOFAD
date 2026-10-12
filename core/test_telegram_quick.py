@@ -84,7 +84,7 @@ class TelegramQuickAuthTests(TestCase):
         self.assertFalse(TelegramIdentity.objects.exists())
         self.staff_session()
         response = self.client.post(url, {"telegram_init_data": "", "alerts": "on"})
-        self.assertContains(response, "Reopen")
+        self.assertContains(response, "Open this page using the Sign in button")
         self.assertFalse(TelegramIdentity.objects.exists())
         response = self.client.post(url, {
             "telegram_init_data": self.signed(), "alerts": "on",
