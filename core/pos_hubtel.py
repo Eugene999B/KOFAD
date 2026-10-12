@@ -252,7 +252,10 @@ def reconcile(reference, *, force=False):
         )
         try:
             outcome, tid = direct_client.check(tx)
-        except (direct_client.StatusUnconfirmed, ValidationError):
+        except direct_client.StatusUnconfirmed:
+            return response_state(held_for(reference))
+        except ValidationError:
+            mark_attention(reference, "Hubtel status information did not match this cashier sale. Manager review required.")
             return response_state(held_for(reference))
         if outcome == "failed":
             with transaction.atomic():
