@@ -19,7 +19,8 @@ from marketplace.models import CustomerAccount
 
 @override_settings(
     TELEGRAM_BOT_ENABLED=True, TELEGRAM_ACCOUNT_LINK_ENABLED=True,
-    TELEGRAM_NOTIFICATIONS_ENABLED=True, TELEGRAM_BOT_TOKEN="official-ci-token",
+    TELEGRAM_NOTIFICATIONS_ENABLED=True, TELEGRAM_RECOVERY_ENABLED=True,
+    TELEGRAM_BOT_TOKEN="official-ci-token",
     TELEGRAM_WEBHOOK_SECRET="official-ci-secret",
     TELEGRAM_STAFF_BOT_ENABLED=True, TELEGRAM_STAFF_BOT_TOKEN="staff-ci-token",
     TELEGRAM_STAFF_WEBHOOK_SECRET="staff-ci-secret",
@@ -117,15 +118,6 @@ class TelegramQuickAuthTests(TestCase):
         self.assertEqual(TelegramIdentity.objects.count(), 1)
 
     def test_customer_promotion_is_not_silently_enabled(self):
-        from marketplace import services as market_services
-        session_request = None
-        from django.test import RequestFactory
-        request = RequestFactory().get("/")
-        request.session = self.client.session
-        session_request = request
-        market_services.set_customer_session(session_request, self.customer)
-        session_request.session.save()
-        self.client.cookies[session_request.session.session_key] = session_request.session.session_key
         link = link_miniapp_identity("customer", self.customer.pk, "customer", 53321,
                                     alerts=True, marketing=False)
         self.assertTrue(link.notifications_enabled)
