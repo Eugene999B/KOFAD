@@ -1471,7 +1471,7 @@ def customer_order(request, customer, pk):
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel.ready() if hubtel.selected_provider() == "paystack" else False,
-        hubtel_direct_available=hubtel_direct.enabled("receive"),
+        hubtel_direct_available=hubtel_direct.enabled("receive") and hubtel.selected_provider() == "hubtel",
         hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
             customer=customer, phone=normalize_ghana_phone(customer.phone)
         ).exists()),
@@ -2712,10 +2712,16 @@ def online_payments(request, branch):
     return render(request, "marketplace/online_payments.html", {
         "title": "Online payments", "account_form": account_form,
         "payment_provider": hubtel.selected_provider(),
-        "hubtel_configured": hubtel.configured(), "hubtel_ready": hubtel.ready("hubtel"),
+        "hubtel_configured": hubtel.configured(),
+        "hubtel_ready": __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive"),
         "paystack_ready": hubtel.ready("paystack"),
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
-        "payment_ready": hubtel.ready(), "payment_notice": hubtel.availability_notice(),
+        "payment_ready": (
+            __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive")
+            if hubtel.selected_provider() == "hubtel" else hubtel.ready()
+        ),
+        "payment_notice": "Hubtel Direct requires a verified registered Mobile Money number.",
+
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
         "pos_momo_rows": pos_rows,
         "online_price_markup_percent": configuration.online_price_markup_percent,
