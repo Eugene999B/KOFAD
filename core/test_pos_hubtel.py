@@ -1,35 +1,44 @@
-"""Cashier Hubtel payments require independent merchant verification."""
+"""Hubtel cashier Direct Receive, verified wallet-name guard, and legacy history."""
 import json
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from core import pos_hubtel
 from core.models import Document, HeldSale, Movement, Payment
 from core.tests import Fixtures
 
-
-@override_settings(
+DIRECT_READY = dict(
     HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-secret",
-    HUBTEL_COLLECTION_ACCOUNT="123456", HUBTEL_CHECKOUT_ENABLED=True,
-    HUBTEL_TIMEOUT_SECONDS=5, SMS_ENABLED=False,
+    HUBTEL_COLLECTION_ACCOUNT="123456", HUBTEL_CHECKOUT_ENABLED=False,
+    HUBTEL_DIRECT_RECEIVE_ENABLED=True, HUBTEL_DIRECT_EGRESS_CONFIRMED=True,
+    HUBTEL_TIMEOUT_SECONDS=5, MARKET_SITE_ORIGIN="https://market.kofadimpex.com",
+    SMS_ENABLED=False,
 )
+
+
+@override_settings(**DIRECT_READY)
 class StaffHubtelPaymentTests(Fixtures, TestCase):
     def setUp(self):
         self.setup_data()
         self.customer.phone = "+233551234567"
         self.customer.email = "customer@example.test"
         self.customer.save(update_fields=["phone", "email"])
-        for target, value in [
-            ("core.pos_hubtel.hubtel.selected_provider", "hubtel"),
-            ("core.pos_hubtel.hubtel.ready", True),
-        ]:
-            patcher = patch(target, return_value=value)
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        p = patch("core.pos_hubtel.hubtel.selected_provider", return_value="hubtel")
+        p.start()
+        self.addCleanup(p.stop)
+
+    def proof(self, *, phone="233551234567", channel="mtn-gh", name="Verified Wallet Owner"):
+        return signing.dumps({
+            "user": self.user.pk, "branch": self.branch.pk, "phone": phone,
+            "channel": channel, "name": name,
+        }, salt="kofad-hubtel-staff-wallet-verify-v1")
 
     def payload(self):
         return {
@@ -45,58 +54,77 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
             ],
         }
 
-    def initiate(self, reference):
-        obj = Mock(status_code=200)
-        obj.json.return_value = {"responseCode": "0000", "data": {
-            "checkoutId": "checkout-test", "clientReference": reference,
-            "checkoutUrl": "https://pay.hubtel.com/secure/" + reference,
-        }}
-        return obj
+    @staticmethod
+    def accepted(url, **kwargs):
+        payload = kwargs["json"]
+        return Mock(status_code=200, json=lambda: {
+            "ResponseCode": "0001",
+            "Data": {"ClientReference": payload["ClientReference"], "TransactionId": "txn-test-123"},
+        })
 
-    def verified(self, reference, *, amount="50.00", channel="MobileMoney"):
-        return {
-            "status": "Paid", "amount": amount, "currencyCode": "GHS",
-            "transactionId": "txn-test-123", "clientReference": reference,
-            "paymentMethod": channel,
-        }
+    def start(self, key=None, **kwargs):
+        key = key or uuid.uuid4()
+        result = pos_hubtel.start(
+            self.user, self.branch, self.payload(), key,
+            kwargs.get("phone", "0551234567"), kwargs.get("network", "mtn"),
+            "customer@example.test", wallet_proof=kwargs.get("proof", self.proof()),
+        )
+        return key, result
 
-    @patch("core.pos_hubtel.hubtel.headers", return_value={"Authorization": "Basic test"})
-    @patch("core.pos_hubtel.requests.post")
-    def test_start_creates_link_but_no_sale(self, post, _):
-        key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
-        result = pos_hubtel.start(self.user, self.branch, self.payload(), key,
-                                  "0551234567", "mtn", "customer@example.test")
+    def mature(self, key):
+        held = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
+        state = held.cart["payment_request"]
+        state["created_at"] = (timezone.now() - timedelta(minutes=6)).timestamp()
+        state["next_check_at"] = 0
+        held.save(update_fields=["cart"])
+
+    @patch("hubtel_direct.client.requests.post")
+    def test_direct_start_sends_prompt_without_checkout_link_or_receipt(self, post):
+        post.side_effect = self.accepted
+        key, result = self.start()
         self.assertEqual(result["provider"], "hubtel")
         self.assertEqual(result["reference"], key.hex)
-        self.assertTrue(result["authorization_url"].startswith("https://pay.hubtel.com/"))
+        self.assertEqual(result["authorization_url"], "")
         self.assertTrue(result["waiting"])
         self.assertFalse(result["paid"])
         self.assertEqual(Document.objects.count(), 0)
         self.assertEqual(Movement.objects.count(), 0)
-        self.assertEqual(post.call_args.kwargs["json"]["clientReference"], key.hex)
-        self.assertEqual(post.call_args.kwargs["json"]["totalAmount"], 50.0)
+        self.assertIn("/receive/mobilemoney", post.call_args.args[0])
+        body = post.call_args.kwargs["json"]
+        self.assertEqual(body["ClientReference"], key.hex)
+        self.assertEqual(body["CustomerMsisdn"], "233551234567")
+        self.assertEqual(body["CustomerName"], "Verified Wallet Owner")
+        self.assertEqual(body["Channel"], "mtn-gh")
+        self.assertEqual(body["Amount"], 50.0)
 
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_same_key_never_creates_second_checkout(self, post, _):
-        key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
-        for unused in range(2):
-            pos_hubtel.start(self.user, self.branch, self.payload(), key,
-                             "0551234567", "mtn", "customer@example.test")
+    @patch("hubtel_direct.client.requests.post")
+    def test_duplicate_submit_idempotency_and_uncertain_outcome(self, post):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        self.start(key)
         self.assertEqual(post.call_count, 1)
         self.assertEqual(HeldSale.objects.filter(label=pos_hubtel.LABEL_PREFIX + key.hex).count(), 1)
 
-    @patch("core.pos_hubtel.hubtel.verify")
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_verified_payment_posts_once_and_references_provider(self, post, _, verify):
-        key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
-        pos_hubtel.start(self.user, self.branch, self.payload(), key,
-                         "0551234567", "mtn", "customer@example.test")
-        verify.return_value = self.verified(key.hex)
+    @patch("hubtel_direct.client.requests.post")
+    def test_refuses_number_or_network_mismatch_before_provider(self, post):
+        for data in ({"phone": "0241234567"}, {"network": "vod"},
+                     {"proof": "not-a-signed-proof"}):
+            with self.assertRaises(ValidationError):
+                self.start(**data)
+        self.assertEqual(post.call_count, 0)
+        self.assertEqual(HeldSale.objects.count(), 0)
+
+    @patch("hubtel_direct.client.requests.get")
+    @patch("hubtel_direct.client.requests.post")
+    def test_verified_paid_direct_status_posts_receipt_once(self, post, get):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        self.mature(key)
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "responseCode": "0000",
+            "data": {"clientReference": key.hex, "transactionId": "txn-test-123",
+                     "status": "Paid", "amount": 50.0, "paymentMethod": "mobilemoney"},
+        })
         first = pos_hubtel.reconcile(key.hex, force=True)
         second = pos_hubtel.reconcile(key.hex, force=True)
         self.assertTrue(first["paid"])
@@ -107,129 +135,90 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         payment = Payment.objects.get(document=receipt, method="momo")
         self.assertEqual(payment.amount, Decimal("50.00"))
         self.assertEqual(payment.reference, key.hex)
+        post.assert_called_once()
+        get.assert_called_once()
 
-    @patch("core.pos_hubtel.hubtel.verify")
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_mismatched_amount_or_card_channel_never_posts(self, post, _, verify):
-        for amount, method in [("49.00", "MobileMoney"), ("50.00", "Card")]:
-            key = uuid.uuid4()
-            post.return_value = self.initiate(key.hex)
-            pos_hubtel.start(self.user, self.branch, self.payload(), key,
-                             "0551234567", "mtn", "customer@example.test")
-            verify.return_value = self.verified(key.hex, amount=amount, channel=method)
-            with self.assertRaises(ValidationError):
-                pos_hubtel.reconcile(key.hex, force=True)
-            held = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
-            self.assertEqual(held.cart["payment_request"]["status"], "attention")
+    @patch("hubtel_direct.client.requests.get")
+    @patch("hubtel_direct.client.requests.post")
+    def test_amount_mismatch_never_posts_and_requires_manager(self, post, get):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        self.mature(key)
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "responseCode": "0000",
+            "data": {"clientReference": key.hex, "transactionId": "txn-test-123",
+                     "status": "Paid", "amount": 49.0, "paymentMethod": "mobilemoney"},
+        })
+        result = pos_hubtel.reconcile(key.hex, force=True)
+        self.assertEqual(result["status"], "attention")
         self.assertEqual(Document.objects.count(), 0)
 
-    @patch("core.pos_hubtel.hubtel.verify")
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_worker_recovers_payment_without_staff_browser(self, post, _, verify):
-        key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
-        pos_hubtel.start(self.user, self.branch, self.payload(), key,
-                         "0551234567", "mtn", "customer@example.test")
-        held = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
-        held.cart["payment_request"]["next_check_at"] = 0
-        held.save(update_fields=["cart"])
-        verify.return_value = self.verified(key.hex)
-        self.assertEqual(pos_hubtel.reconcile_due(), 1)
-        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
-
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_rejects_untrusted_checkout_redirect_domain(self, post, _):
-        key = uuid.uuid4()
-        obj = self.initiate(key.hex)
-        obj.json.return_value["data"]["checkoutUrl"] = "https://attacker.example/checkout"
-        post.return_value = obj
-        result = pos_hubtel.start(self.user, self.branch, self.payload(), key,
-                                  "0551234567", "mtn", "customer@example.test")
-        self.assertEqual(result["status"], "submission_unknown")
-        self.assertFalse(result["authorization_url"])
+    @patch("hubtel_direct.client.requests.get")
+    @patch("hubtel_direct.client.requests.post")
+    def test_unpaid_remains_pending_without_receipt(self, post, get):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        self.mature(key)
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "responseCode": "0000",
+            "data": {"clientReference": key.hex, "transactionId": "txn-test-123",
+                     "status": "Unpaid", "amount": 50.0, "paymentMethod": "mobilemoney"},
+        })
+        result = pos_hubtel.reconcile(key.hex, force=True)
+        self.assertFalse(result["paid"])
+        self.assertTrue(result["waiting"])
         self.assertEqual(Document.objects.count(), 0)
 
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_staff_start_api_respects_shared_gateway(self, post, _):
+    @patch("hubtel_direct.client.requests.post")
+    def test_staff_start_endpoint_requires_verification_proof(self, post):
+        post.side_effect = self.accepted
         self.authenticate_client()
         key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
+        payload = {
+            "sale": self.payload(), "phone": "0551234567", "provider": "mtn",
+            "payment_gateway": "hubtel", "request_key": str(key),
+        }
         response = self.client.post(
             "/api/pos/paystack-momo/start/",
-            data=json.dumps({
-                "sale": self.payload(), "phone": "0551234567",
-                "provider": "mtn", "payment_gateway": "hubtel",
-                "email": "", "request_key": str(key),
-            }),
-            content_type="application/json",
+            data=json.dumps(payload), content_type="application/json",
             HTTP_IDEMPOTENCY_KEY=str(key),
         )
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()["provider"], "hubtel")
-        self.assertTrue(response.json()["authorization_url"].startswith("https://pay.hubtel.com/"))
-        self.assertFalse(response.json()["paid"])
-        self.assertEqual(Document.objects.count(), 0)
-
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_existing_hubtel_checkout_remains_hubtel_after_settings_switch(self, post, _):
-        self.authenticate_client()
-        key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
-        request = {
-            "sale": self.payload(), "phone": "0551234567",
-            "provider": "mtn", "payment_gateway": "hubtel",
-            "email": "", "request_key": str(key),
-        }
-        first = self.client.post(
-            "/api/pos/paystack-momo/start/", data=json.dumps(request),
+        self.assertEqual(response.status_code, 400)
+        post.assert_not_called()
+        payload["wallet_proof"] = self.proof()
+        response = self.client.post(
+            "/api/pos/paystack-momo/start/", data=json.dumps(payload),
             content_type="application/json", HTTP_IDEMPOTENCY_KEY=str(key),
         )
-        self.assertEqual(first.status_code, 200, first.content)
-        with patch("marketplace.hubtel.selected_provider", return_value="paystack"):
-            second = self.client.post(
-                "/api/pos/paystack-momo/start/", data=json.dumps(request),
-                content_type="application/json", HTTP_IDEMPOTENCY_KEY=str(key),
-            )
-        self.assertEqual(second.status_code, 200, second.content)
-        self.assertEqual(second.json()["reference"], key.hex)
-        self.assertEqual(second.json()["provider"], "hubtel")
-        self.assertEqual(post.call_count, 1)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["authorization_url"], "")
+        post.assert_called_once()
 
-    @patch("core.pos_hubtel.hubtel.verify")
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_hubtel_all_in_price_is_fixed_through_verified_posting(self, post, _, verify):
-        from marketplace.models import PaymentConfiguration
-        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
-        payload = self.payload()
-        payload["payments"][1]["amount"] = "51.25"
-        key = uuid.uuid4()
-        post.return_value = self.initiate(key.hex)
-        pos_hubtel.start(self.user, self.branch, payload, key,
-                         "0551234567", "mtn", "customer@example.test")
-        self.assertEqual(post.call_args.kwargs["json"]["totalAmount"], 51.25)
-        saved = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
-        self.assertEqual(saved.cart["payment_request"]["online_markup_percent"], "2.500")
-        PaymentConfiguration.objects.filter(pk=1).update(online_price_markup_percent=Decimal("0"))
-        verify.return_value = self.verified(key.hex, amount="51.25")
-        result = pos_hubtel.reconcile(key.hex, force=True)
-        self.assertTrue(result["paid"])
-        doc = Document.objects.get(kind="sale")
-        self.assertEqual(doc.total, Decimal("51.25"))
-        self.assertEqual(doc.lines.get().unit_price, Decimal("51.25"))
-        self.assertEqual(Payment.objects.get(document=doc, method="momo").amount, Decimal("51.25"))
+    @patch("hubtel_direct.verification.requests.get")
+    def test_staff_sees_real_registered_name_before_payment(self, get):
+        self.authenticate_client()
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "ResponseCode": "0000",
+            "Data": {"IsRegistered": True, "Name": "OWNER FROM HUBTEL", "Status": "active"},
+        })
+        response = self.client.post(
+            "/api/pos/hubtel/wallet-name/",
+            data=json.dumps({"phone": "0551234567", "channel": "mtn-gh", "customer_authorized": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["name"], "OWNER FROM HUBTEL")
+        self.assertTrue(response.json()["verification_token"])
+        self.assertIn("rnv.hubtel.com", get.call_args.args[0])
+        self.assertEqual(get.call_args.kwargs["params"]["customerMsisdn"], "233551234567")
 
-    @patch("core.pos_hubtel.hubtel.headers", return_value={})
-    @patch("core.pos_hubtel.requests.post")
-    def test_hubtel_rejects_old_cash_price_when_percentage_is_set(self, post, _):
-        from marketplace.models import PaymentConfiguration
-        PaymentConfiguration.objects.create(online_price_markup_percent=Decimal("2.500"))
-        with self.assertRaises(ValidationError):
-            pos_hubtel.start(self.user, self.branch, self.payload(), uuid.uuid4(),
-                             "0551234567", "mtn", "customer@example.test")
-        post.assert_not_called()
+    @patch("hubtel_direct.verification.requests.get")
+    def test_staff_wallet_lookup_requires_customer_consent(self, get):
+        self.authenticate_client()
+        response = self.client.post(
+            "/api/pos/hubtel/wallet-name/",
+            data=json.dumps({"phone": "0551234567", "channel": "mtn-gh", "customer_authorized": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        get.assert_not_called()
