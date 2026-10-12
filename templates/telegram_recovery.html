@@ -16,12 +16,16 @@ a{color:#0f5b85}small{color:#445}
 <p>This secure recovery channel is currently disabled. Your existing KOFAD email and SMS recovery methods remain available.</p>
 {% else %}
 {% if not challenge_started %}
-<p>Only KOFAD accounts that previously linked Telegram after login and explicitly enabled Telegram recovery can use this method.</p>
+<p>Only KOFAD accounts that previously verified and linked the Official Telegram Bot, and opted in to recovery, can receive a code here. Staff may use their username without a phone; codes are sent ONLY to that already verified Telegram chat.</p>
 <form method="post">{% csrf_token %}<input type="hidden" name="action" value="request">
 {% if kind == "staff" %}
 <label>Staff username<input type="text" name="username" maxlength="150" autocomplete="username" required></label>
 {% endif %}
-<label>Registered Ghanaian mobile number<input name="phone" type="tel" maxlength="40" autocomplete="tel" required></label>
+{% if kind == "staff" %}
+<label>Registered phone or verified email (optional if your Official Bot is already linked)<input name="phone" type="text" maxlength="254" autocomplete="off"></label>
+{% else %}
+<label>Registered Ghana phone number or verified email<input name="phone" type="text" maxlength="254" autocomplete="username" required></label>
+{% endif %}
 <button type="submit">Request Telegram recovery code</button>
 </form>
 {% else %}
