@@ -16,7 +16,7 @@ def _still_authorized(notice):
         # An old or replaced Telegram chat must never receive queued messages.
         return False
     expected_bot = {
-        "recovery": "official", "order": "customer", "task": "staff",
+        "recovery": "official", "order": "customer", "task": "staff", "welcome": "staff",
         "marketing": "customer", "closing": "staff",
         "digest": "staff", "critical": "staff", "stock": "staff",
     }.get(notice.category)
@@ -49,6 +49,10 @@ def _still_authorized(notice):
         u = User.objects.filter(pk=identity.owner_id, is_active=True).first()
         if not u:
             return False
+        if notice.category == "welcome":
+            from .telegram_intelligence import staff_welcome
+            # A role/branch change invalidates a pending onboarding notice.
+            return notice.body == staff_welcome(u)
         if notice.category == "task":
             from .telegram_intelligence import account_tasks
             # Permission revocation or completed tasks must invalidate pending
