@@ -1166,13 +1166,15 @@ def checkout(request, customer):
     if not has_delivery:
         initial["fulfilment"] = "pickup"
     form = CheckoutForm(request.POST or None, initial=initial, delivery_enabled=has_delivery)
-    payment_ready = hubtel.ready()
-    momo_available = hubtel.selected_provider() == "paystack" and paystack_momo.ready()
+    from hubtel_direct.client import enabled as direct_enabled
+    direct_checkout = hubtel.selected_provider() == "hubtel"
+    payment_ready = direct_enabled("receive") if direct_checkout else hubtel.ready()
+    momo_available = not direct_checkout and paystack_momo.ready()
     payment_form = CheckoutPaymentForm(request.POST or None,
         initial={"momo_phone": customer.phone or ""}, momo_available=momo_available)
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
-    if request.method == "POST" and payment_ready and form.is_valid() and payment_form.is_valid():
+    if request.method == "POST" and payment_ready and form.is_valid() and (direct_checkout or payment_form.is_valid()):
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
             if order.fulfilment == "delivery":
@@ -1187,6 +1189,11 @@ def checkout(request, customer):
                 )
             request.session["market_cart"] = {}
             request.session.modified = True
+            if direct_checkout:
+                # Save the order FIRST. Direct Receive Money starts only after
+                # a separate registered-phone verification on the order page.
+                # Never create Hubtel hosted checkout links for new orders.
+                return redirect("market_order", pk=order.pk)
             try:
                 if payment_form.cleaned_data["payment_method"] == "momo":
                     # First use: verify control of the number before requesting a
@@ -1237,8 +1244,13 @@ def order_pay(request, customer, pk):
         return redirect("market_order", pk=order.pk)
     if existing:
         return redirect("market_payment_launch", pk=order.pk)
+    if hubtel.selected_provider() == "hubtel":
+        # No new hosted checkout. Pending historic checkout requests keep
+        # their previous payment-link route above, but new direct payments
+        # are initiated from the locked-number order interface.
+        return redirect("market_order", pk=order.pk)
     form = CheckoutPaymentForm(request.POST,
-        momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready())
+        momo_available=paystack_momo.ready())
     if not form.is_valid():
         messages.error(request, "Check your Mobile Money number and network, then try again.")
         return redirect("market_order", pk=order.pk)
@@ -1457,13 +1469,13 @@ def customer_order(request, customer, pk):
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
-        payment_available=hubtel.ready(),
+        payment_available=hubtel.ready() if hubtel.selected_provider() == "paystack" else False,
         hubtel_direct_available=hubtel_direct.enabled("receive"),
         hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
             customer=customer, phone=normalize_ghana_phone(customer.phone)
         ).exists()),
         hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED and customer.phone and customer.verified_at),
-        momo_phone_verification=momo_security.pending_for_order(request, customer, order),
+        momo_phone_verification=momo_security.pending_for_order(request, customer, order) if hubtel.selected_provider() == "paystack" else None,
         payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
             momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
         momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready(),
@@ -2679,7 +2691,7 @@ def online_payments(request, branch):
     provider_filter = request.GET.get("provider", "")
     state = request.GET.get("state", "")
     query = request.GET.get("q", "").strip()[:100]
-    if provider_filter in {"hubtel", "paystack"}:
+    if provider_filter in {"hubtel", "hubtel_direct", "paystack"}:
         rows = rows.filter(provider=provider_filter)
     if state == "confirmed":
         rows = rows.filter(status="success")
