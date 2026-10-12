@@ -11,7 +11,9 @@ from .telegram_channels import BOT_KINDS, bot_can_send, bot_token
 def _still_authorized(notice):
     identity = notice.identity
     from .telegram_integration import linked_identity
-    if linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind) is None:
+    current = linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind)
+    if current is None or current.pk != identity.pk:
+        # An old or replaced Telegram chat must never receive queued messages.
         return False
     expected_bot = {
         "recovery": "official", "order": "customer", "task": "staff",
