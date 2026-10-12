@@ -5,6 +5,7 @@ import json
 import time
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -17,6 +18,9 @@ from core.telegram_intelligence import account_tasks, staff_menu, queue_role_bri
 from marketplace.models import CustomerAccount
 
 
+@override_settings(STORAGES={**settings.STORAGES, "staticfiles": {
+    "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+}})
 @override_settings(
     TELEGRAM_BOT_ENABLED=True, TELEGRAM_ACCOUNT_LINK_ENABLED=True,
     TELEGRAM_NOTIFICATIONS_ENABLED=True, TELEGRAM_RECOVERY_ENABLED=True,
