@@ -136,6 +136,7 @@ def payout(request):
 def payout_approve(request, tx_id):
     try:
         user = _finance_staff(request, approval=True)
+        get_object_or_404(DirectTransaction, pk=tx_id, kind__in=["send_momo", "send_bank"])
         tx = service.approve_payout(tx_id, user)
         return _answer(tx, 202)
     except PermissionDenied as exc:
