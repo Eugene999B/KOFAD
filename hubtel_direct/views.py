@@ -144,25 +144,30 @@ def verify_registered_phone(request, order_id):
         customer, order = _customer(request, order_id)
         if order.status != "awaiting_payment" or order.payment_status in {"paid", "refunded"}:
             raise ValidationError("This order cannot accept a new payment request.")
-        if not settings.CUSTOMER_OTP_ENABLED:
-            raise ValidationError("First-time wallet verification is temporarily unavailable.")
         body = _json(request)
         if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}):
             raise ValidationError("Enter the Mobile Money number and verification action.")
         from core.identity import normalize_ghana_phone
         phone = normalize_ghana_phone(body.get("phone"))
         action = body.get("action")
-        if VerifiedMomoPhone.objects.filter(customer=customer, phone=phone).exists():
-            result = {"verified": True, "message": "This wallet is already verified for your account."}
+        already_verified = VerifiedMomoPhone.objects.filter(customer=customer, phone=phone).exists()
+        if action == "check" and set(body) == {"action", "phone"}:
+            result = {"verified": already_verified,
+                      "message": "Wallet already verified for this account." if already_verified
+                                 else "Verify this wallet once using an SMS code."}
+        elif already_verified and action in ("send", "verify"):
+            result = {"verified": True, "message": "Wallet already verified for your account."}
+        elif not settings.CUSTOMER_OTP_ENABLED:
+            raise ValidationError("First-time wallet SMS verification is temporarily unavailable.")
         elif action == "send" and set(body) == {"action", "phone"}:
             market_services.send_otp(phone, "momo", request=request)
-            result = {"message": "A six-digit SMS code was sent to the Mobile Money number you entered."}
+            result = {"message": "Six-digit verification code sent to the MoMo number you entered."}
         elif action == "verify" and set(body) == {"action", "phone", "code"}:
             market_services.verify_otp(phone, body["code"], "momo")
             VerifiedMomoPhone.objects.get_or_create(customer=customer, phone=phone)
             result = {"verified": True, "message": "Number verified. You can now request payment."}
         else:
-            raise ValidationError("Enter the new wallet's six-digit SMS verification code.")
+            raise ValidationError("Enter the six-digit SMS verification code for this wallet.")
         response = JsonResponse(result)
         response["Cache-Control"] = "private, no-store"
         return response
