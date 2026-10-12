@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load static %}
 {% block head %}<script defer src="{% static 'pos.js' %}"></script>{% endblock %}
-{% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}">{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">{% endblock %}
 {% block actions %}
 <div class="actions">
 {% if purchase %}<a class="button secondary" href="/parties/?kind=supplier">Suppliers</a><a class="button secondary" href="/creditors/">Creditors</a><a class="button secondary" href="/inventory/">Inventory</a>
