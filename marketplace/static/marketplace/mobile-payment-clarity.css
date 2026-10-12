@@ -1,0 +1,85 @@
+/* Targeted, high-contrast repair for payment and checkout screens.
+   Loaded after Market's core stylesheet stack; covers mobile and desktop. */
+html:not([data-theme="dark"]) .order-v2-page .order-v2-hero {
+  color:#1b3546!important;background:linear-gradient(135deg,#fff,#f7fbfc)!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .order-v2-hero :is(h1,p,small,strong,span) {
+  color:#213b4e!important;text-shadow:none!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .order-v2-hero .order-status {
+  color:#405b69!important;background:#edf2f4!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .order-v2-hero .order-v2-payment {
+  background:#e8f5f1!important;border-color:#b4d9d2!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .order-v2-payment small,
+html:not([data-theme="dark"]) .order-v2-page .order-v2-payment strong,
+html:not([data-theme="dark"]) .order-v2-page .order-v2-payment span {
+  color:#174f4b!important;opacity:1!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .market-payment-audit,
+html:not([data-theme="dark"]) .order-v2-page .order-action-card {
+  color:#1a3548!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .market-payment-audit :is(h2,p,small,strong),
+html:not([data-theme="dark"]) .order-v2-page .order-action-card :is(h2,h3,p,label) {
+  color:#1a3548!important;opacity:1!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .market-payment-audit .market-eyebrow,
+html:not([data-theme="dark"]) .order-v2-page .order-action-card .market-eyebrow {
+  color:#246a72!important;
+}
+html:not([data-theme="dark"]) .order-v2-page .market-payment-facts :is(small,strong) {
+  color:#1b394a!important;
+}
+.order-v2-page .order-v2-hero h1,.order-v2-page .market-payment-facts strong {
+  overflow-wrap:anywhere;
+}
+.fulfilment-label {display:block;color:#385d70;font-size:13px;font-weight:750;margin:0 0 9px}
+.commerce-fulfilment-choice{position:relative}
+.commerce-fulfilment-choice select{cursor:pointer}
+.direct-momo-checkout,.direct-momo-review {
+  display:block;border:1px solid #cbdfe5;border-radius:17px;
+  background:#f4f9fb;color:#183548;padding:18px;margin:16px 0;
+}
+.direct-momo-checkout h3,.direct-momo-review h3{color:#143548;margin:4px 0 10px}
+.direct-momo-checkout p,.direct-momo-review p{color:#37586a;line-height:1.6}
+.direct-momo-checkout-grid,.direct-momo-fields{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.direct-momo-checkout-grid label,.direct-momo-fields label,
+.direct-momo-first-use label{display:flex;flex-direction:column;gap:7px;font-size:14px;font-weight:750;color:#1b3d51}
+.direct-momo-checkout-grid input,.direct-momo-checkout-grid select,
+.direct-momo-fields input,.direct-momo-fields select,
+.direct-momo-first-use input{
+  width:100%;min-height:50px;border:1.5px solid #b9d0dd;border-radius:12px;
+  color:#183548;background:#fff;padding:11px 13px;font:inherit;
+}
+.direct-momo-review header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.direct-momo-review .direct-momo-total{font-size:20px;font-weight:850;color:#103953}
+.direct-momo-first-use{padding:15px;margin:15px 0;background:#fff;border:1px solid #c9dfe2;border-radius:14px}
+.direct-momo-first-use[hidden],.direct-momo-wallet-ready[hidden]{display:none!important}
+.direct-momo-first-use .market-button{margin:8px 0}
+.direct-momo-wallet-ready{color:#145c4b!important;font-weight:800}
+.direct-momo-review [data-direct-pay]{margin:14px 0 10px}
+.hubtel-wallet-authorize{display:flex!important;flex-direction:row!important;gap:10px;align-items:flex-start;margin-top:12px}
+.hubtel-wallet-authorize input{width:21px!important;height:21px!important;flex:none}
+html[data-theme="dark"] .direct-momo-checkout,
+html[data-theme="dark"] .direct-momo-review {
+  background:#14242c;color:#edf7f8;border-color:#3a5963;
+}
+html[data-theme="dark"] .direct-momo-checkout :is(h3,p,label),
+html[data-theme="dark"] .direct-momo-review :is(h3,p,label) {color:#e7f2f4}
+html[data-theme="dark"] .direct-momo-first-use {background:#1b3038;border-color:#45636d}
+html[data-theme="dark"] .direct-momo-checkout :is(input,select),
+html[data-theme="dark"] .direct-momo-review :is(input,select) {background:#10222b;color:#eef6f7;border-color:#5f7881}
+html[data-theme="dark"] .direct-momo-wallet-ready{color:#9ae8ca!important}
+html[data-theme="dark"] .order-v2-page .market-payment-audit{background:#172a32!important;border-color:#35565d!important}
+html[data-theme="dark"] .order-v2-page .market-payment-audit :is(h2,p){color:#e9f3f4!important}
+html[data-theme="dark"] .order-v2-page .market-payment-facts>div{background:#1c3038;border-color:#35565d}
+html[data-theme="dark"] .order-v2-page .market-payment-facts :is(small,strong){color:#e9f3f4}
+@media(max-width:640px) {
+  .direct-momo-checkout-grid,.direct-momo-fields{grid-template-columns:1fr}
+  .direct-momo-checkout,.direct-momo-review{padding:15px}
+  .order-v2-page .order-v2-hero :is(small,p){font-size:13px!important;line-height:1.55!important}
+  .order-v2-page .order-v2-payment strong{font-size:19px!important}
+  .order-v2-page .market-payment-audit>p{font-size:14px!important;line-height:1.65!important}
+}
