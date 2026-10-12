@@ -46,6 +46,8 @@ class PublicKofadAiTests(TestCase):
         self.assertEqual(post.call_args.args[0], OPENROUTER_ENDPOINT)
         kwargs = post.call_args.kwargs
         self.assertEqual(kwargs["json"]["model"], "openrouter/free")
+        self.assertEqual(kwargs["json"]["provider"]["max_price"], {"prompt": 0, "completion": 0})
+        self.assertEqual(kwargs["json"]["provider"]["data_collection"], "deny")
         self.assertFalse(kwargs["json"].get("models"))
         serialized = str(kwargs["json"])
         self.assertNotIn("Private customer name", serialized)
