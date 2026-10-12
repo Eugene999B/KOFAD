@@ -1,4 +1,5 @@
 """Small authenticated JSON interfaces. All money-changing methods are POST+CSRF."""
+import hmac
 import json
 
 from django.conf import settings
@@ -14,6 +15,27 @@ from marketplace import services as market_services
 from marketplace.models import OnlineOrder
 from . import service
 from .models import DirectTransaction
+
+
+@csrf_exempt
+@require_POST
+def internal_reconcile(request):
+    """Only a shared-secret worker call can trigger web-egress Hubtel GET checks.
+
+    The Railway communications worker may NOT have the three whitelisted web
+    static IPs; the web service alone must contact the Hubtel status endpoints.
+    """
+    expected = str(getattr(settings, "HUBTEL_DIRECT_RECONCILE_TOKEN", ""))
+    supplied = str(request.headers.get("X-Kofad-Direct-Reconcile", ""))
+    if len(expected) < 48 or not hmac.compare_digest(expected, supplied):
+        response = JsonResponse({"error": "Forbidden"}, status=403)
+        response["Cache-Control"] = "no-store"
+        return response
+    from .service import reconcile_due
+    count = reconcile_due(limit=10)
+    response = JsonResponse({"checked": count})
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 def _json(request):
