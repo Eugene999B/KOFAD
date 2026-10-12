@@ -2,7 +2,8 @@
 <section class="hubtel-direct-customer" data-hubtel-direct data-order-id="{{ order.pk }}"
  data-verified="{% if hubtel_direct_phone_verified %}1{% else %}0{% endif %}">
  <h3>Pay directly with Mobile Money</h3>
- <p>Use the Mobile Money number saved in your KOFAD account. Your order total is <strong>GHS {{ order.total|floatformat:2 }}</strong>. You will approve the request on your phone; never share your PIN.</p>
+ <p>Your order total is <strong>GHS {{ order.total|floatformat:2 }}</strong>. To prevent unsolicited charges, the direct request goes only to your verified, registered KOFAD account phone. Approve the request on your own phone; never share your PIN.</p>
+ <p class="company-fineprint">Payment phone: <strong>{{ customer.phone|default:"No registered phone" }}</strong> (read-only; delivery phone changes do not change the wallet used for payment).</p>
  <form data-hubtel-direct-form>
   {% csrf_token %}
   {% if not hubtel_direct_phone_verified %}
