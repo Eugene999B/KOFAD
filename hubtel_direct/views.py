@@ -34,7 +34,11 @@ def internal_reconcile(request):
         return response
     from .service import reconcile_due
     count = reconcile_due(limit=10)
-    response = JsonResponse({"checked": count})
+    # Direct POS payments must also use this web service's whitelisted IPs,
+    # never kofad-sms worker's unlisted egress.
+    from core.pos_hubtel import reconcile_due as reconcile_pos_due
+    pos_count = reconcile_pos_due(limit=10, include_direct=True)
+    response = JsonResponse({"checked": count, "pos_checked": pos_count})
     response["Cache-Control"] = "no-store"
     return response
 
