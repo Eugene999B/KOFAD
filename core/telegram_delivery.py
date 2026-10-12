@@ -14,7 +14,7 @@ def _still_authorized(notice):
     if linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind) is None:
         return False
     expected_bot = {
-        "recovery": "official", "order": "customer",
+        "recovery": "official", "order": "customer", "task": "staff",
         "marketing": "customer", "closing": "staff",
         "digest": "staff", "critical": "staff", "stock": "staff",
     }.get(notice.category)
