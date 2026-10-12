@@ -43,7 +43,7 @@
 {% elif payment_available %}
 <h2>Complete payment</h2><p>Pay by card using secure checkout, or select Mobile Money for a direct approval prompt on your phone. Your order updates only after verified payment.</p>
 {% else %}
-<h2>Payment is not open yet</h2><p>This order is saved. Online payments are awaiting final testing. You have not been charged by saving this order.</p>
+{% if hubtel_direct_available %}<h2>Direct Mobile Money payment</h2><p>Use the secure Mobile Money option below. Your registered phone must be verified before a payment request can be sent.</p>{% else %}<h2>Payment is not open yet</h2><p>This order is saved. Online payments are awaiting final testing. You have not been charged by saving this order.</p>{% endif %}
 {% endif %}
 {% if not momo_phone_verification and payment_waiting and payment_attempt.verification_summary.charge_status == "send_otp" %}<form method="post" action="/market/orders/{{ order.pk }}/payment-otp/">{% csrf_token %}<label for="payment-otp">One-time payment code</label><input id="payment-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required><p>Use the code sent for this payment. Never enter your Mobile Money PIN.</p><button class="market-button primary wide">Verify payment code</button></form>{% endif %}
 {% if hubtel_direct_available and not payment_waiting and not momo_phone_verification and order.status == 'awaiting_payment' %}{% include "marketplace/partials/hubtel_direct_payment.html" %}{% endif %}
