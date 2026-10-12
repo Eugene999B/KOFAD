@@ -168,7 +168,7 @@ def dispatch_once(tx):
         status = "pending"
     except client.ProviderRejected as exc:
         code, provider_id, status = exc.code, "", "failed"
-    except client.SubmissionUnknown:
+    except (client.SubmissionUnknown, ValidationError):
         code, provider_id, status = "", "", "submission_unknown"
     DirectTransaction.objects.filter(pk=tx.pk, status="initializing").update(
         status=status, provider_code=code, hubtel_transaction_id=provider_id,
