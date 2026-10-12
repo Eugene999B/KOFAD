@@ -16,6 +16,7 @@
   <div class="form-grid">
    <label>Transfer type<select name="kind" required>{% if wallet_enabled %}<option value="send_momo">Mobile Money</option>{% endif %}{% if bank_enabled %}<option value="send_bank">Bank account</option>{% endif %}</select></label>
    <label>Amount (GHS)<input name="amount" type="number" step=".01" min=".01" required></label>
+   <label>Business reason<input name="purpose" minlength="6" maxlength="180" required autocomplete="off" placeholder="Supplier invoice or approved refund reference"></label>
    <label>Recipient's name<input name="recipient_name" minlength="2" maxlength="140" required autocomplete="off"></label>
    <label>Phone or bank account number<input name="destination" type="text" inputmode="numeric" minlength="6" maxlength="24" required autocomplete="off"></label>
    <label data-momo-network>Mobile Money network<select name="channel"><option value="mtn-gh">MTN</option><option value="vodafone-gh">Telecel</option><option value="tigo-gh">AirtelTigo</option></select></label>
@@ -32,7 +33,7 @@
  <h2>{% if can_approve %}Transfer approval queue and history{% else %}My transfer requests{% endif %}</h2>
  <div class="table-wrap"><table class="data-table"><thead><tr><th>Created</th><th>Reference</th><th>Transfer</th><th>Amount</th><th>Recipient</th><th>Requester</th><th>Status</th><th>Action</th></tr></thead><tbody>
  {% for row in direct_transactions %}
- <tr><td>{{ row.created_at|date:"d M Y H:i" }}</td><td><code>{{ row.client_reference }}</code></td><td>{{ row.get_kind_display }}</td><td>GHS {{ row.amount|floatformat:2 }}</td><td>{{ row.recipient_name }} · ****{{ row.destination_suffix }}</td><td>{{ row.requested_by.get_full_name|default:row.requested_by.username }}</td><td>{{ row.status|title }}</td><td>
+ <tr><td>{{ row.created_at|date:"d M Y H:i" }}</td><td><code>{{ row.client_reference }}</code></td><td>{{ row.get_kind_display }}</td><td>GHS {{ row.amount|floatformat:2 }}</td><td>{{ row.recipient_name }} · ****{{ row.destination_suffix }}<small>{{ row.purpose }}</small></td><td>{{ row.requested_by.get_full_name|default:row.requested_by.username }}</td><td>{{ row.status|title }}</td><td>
   {% if can_approve and row.status == "approval_pending" and row.requested_by_id != request.user.pk %}
    <form data-direct-payout-approve data-id="{{ row.pk }}">{% csrf_token %}<button class="button secondary" type="submit">Review and approve</button></form>
   {% else %}—{% endif %}
