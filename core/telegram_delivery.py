@@ -47,6 +47,12 @@ def _still_authorized(notice):
         u = User.objects.filter(pk=identity.owner_id, is_active=True).first()
         if not u:
             return False
+        if notice.category == "task":
+            from .telegram_intelligence import account_tasks
+            # Permission revocation or completed tasks must invalidate pending
+            # reports; do not send a stale stored role briefing.
+            return bool(notice.body == account_tasks(u) and
+                        notice.body.startswith("KOFAD OPERATIONAL PRIORITIES"))
         if notice.category == "stock":
             return (bool(u.is_superuser or u.has_perm("core.operate_inventory")
                          or u.has_perm("core.manage_company")) and
