@@ -209,3 +209,58 @@ their authenticated KOFAD portal (or send consent-compliant invitation SMS/email
 using existing channels). No Telegram alert is sent until the individual starts
 the correct bot, pairs their KOFAD account, and opts in. Public promos must
 never inherit service-notification consent.
+
+
+## One-tap Telegram Mini App sign-in (October 2026)
+
+Each bot provides a \`/login\` command with a secure **Telegram Mini App**
+button. The button opens KOFAD's own site inside Telegram:
+
+- Staff: \`https://staff.kofadimpex.com/integrations/telegram/quick/staff/\`
+- Customer: \`https://market.kofadimpex.com/market/integrations/telegram/quick/customer/\`
+- Official OTP/security bot: staff or customer quick-link screen, chosen
+  from that Official Bot's two identity-specific login buttons.
+
+The user signs in using their KOFAD username, registered phone, verified
+email or existing Google sign-in. **The form is KOFAD's normal login, not a
+Telegram message.** Staff still pass KOFAD's mandatory password change and
+MFA checks. An authenticated KOFAD session alone does NOT attach arbitrary
+Telegram contacts. The Mini App submits Telegram's signed \`initData\`;
+KOFAD verifies its bot-specific HMAC, timestamp (five-minute maximum), signed
+user ID and explicitly requested consent BEFORE creating the chat ID link.
+
+The old website-started six-digit pairing is retained as a fallback; the
+Mini App is the preferred, shorter flow. A staff account doesn't require a
+previously saved phone number. Already-linked Official Bot users who opted
+into recovery can request a reset by staff username alone (or an independently
+verified email), with the code delivered to that previously connected chat.
+This **does not** enable sending OTPs to previously unknown Telegram accounts.
+
+### Role-aware assistance and delivery guarantees
+
+- Admin / management: verified closing intelligence and action priorities
+  for permitted business locations; critical variances and authorized reports
+  are available only with the applicable KOFAD permissions.
+- Accountant / finance: authorized closing/report figures and verification
+  follow-up limited to current KOFAD permissions.
+- Inventory: low-stock exceptions and restocking follow-up summaries.
+- Sales: outstanding online-order operations, without unrelated financial
+  or customer private records.
+- Customer: verified orders, product discovery, support, opted-in order updates,
+  and separate marketing consent.
+
+The bot's \`/start\` and \`/menu\` responses are computed from the actual
+verified KOFAD user permissions, not guessed Telegram roles. \`/tasks\`
+and the optional 8 AM Telegram duty briefing contain fresh source-backed
+exception counts. Queued briefings are suppressed if duties or permissions
+change before delivery. Queued messages have idempotency keys and uncertain
+deliveries are NEVER blindly resent.
+
+Telegram Bot API does **not** offer a phone-number lookup of who has Telegram;
+it also cannot send private messages to people who never opened the bot or
+authorized bot communication. Staff with no linked Telegram chat can still
+receive applicable KOFAD email and SMS operational notices through the
+existing verified-address, consent, permission and channel settings. A full
+Telegram account connection requires the staff member to initiate the bot.
+Never bypass this limitation through Telegram user scraping or sending
+unauthenticated financial statements to a claimed mobile number.
