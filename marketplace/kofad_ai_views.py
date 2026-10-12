@@ -63,7 +63,10 @@ def message(request):
     # Bound the business's quota even when many people share one public IP.
     if ai_allowed and not _quota(f"kofad:ai:free-global:{day}", 40, 86400):
         ai_allowed = False
-    reply, source = answer(data["message"], customer=customer, ai_allowed=ai_allowed)
+    reply, source = answer(
+        data["message"], customer=customer, ai_allowed=ai_allowed,
+        history=data.get("history") if isinstance(data.get("history"), list) else None,
+    )
     response = JsonResponse({
         "reply": reply, "source": source,
         "ai_active": bool(free_configured()),
