@@ -233,7 +233,11 @@
           {% if pos_momo_gateway == "hubtel" %}
           <div id="hubtel-wallet-review" class="notice subtle" style="margin:12px 0">
             <label><input id="hubtel-wallet-consent" type="checkbox"> Customer agrees to this wallet-name check and payment request.</label>
-            <button type="button" id="hubtel-wallet-verify" class="button secondary">Check wallet name with Hubtel</button>
+            <button type="button" id="hubtel-wallet-sms-send" class="button secondary">Send phone confirmation SMS</button>
+            <label>Customer's SMS code <input id="hubtel-wallet-sms-code" type="text" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" placeholder="6-digit code" aria-label="Hubtel customer wallet verification code"></label>
+            <button type="button" id="hubtel-wallet-sms-confirm" class="button secondary">Verify phone code</button>
+            <p id="hubtel-wallet-sms-status" role="status" aria-live="polite">Verify control of the selected phone before checking its registered wallet name.</p>
+            <button type="button" id="hubtel-wallet-verify" class="button secondary" disabled>Check wallet name with Hubtel</button>
             <p id="hubtel-wallet-name" role="status" aria-live="polite">No wallet verified. No payment prompt has been sent.</p>
             <p class="hint">Review the registered wallet name with the customer before submitting. Never ask for a MoMo PIN.</p>
           </div>
