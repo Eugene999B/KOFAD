@@ -52,6 +52,30 @@ def staff_menu(user):
     return "KOFAD Staff Assistant — your authorized tools\n\n" + "\n".join(options)
 
 
+def staff_welcome(user):
+    """Current role-scoped welcome text, rechecked immediately before sending."""
+    branches = _branches(user)
+    role = _role(user)
+    areas = []
+    if role["management"]:
+        areas.append("verified closing reports")
+    if role["inventory"]:
+        areas.append("inventory exceptions")
+    if role["sales"]:
+        areas.append("open sales orders")
+    areas.append("your assigned work and alerts")
+    return (
+        "KOFAD STAFF ACCOUNT CONNECTED\n"
+        "Your Telegram assistant is linked to your verified staff login.\n"
+        f"Active assigned locations: {branches.count()}\n"
+        "Authorized tools: " + ", ".join(areas) + ".\n"
+        "Send /menu for your role-specific commands, /tasks for current "
+        "priorities, or /myalerts to review notifications.\n"
+        "Messages never authorize transactions or override KOFAD permissions. "
+        "You can pause optional notifications with /alerts_off."
+    )
+
+
 def account_tasks(user):
     """Plain-language facts from KOFAD records, without leaking customer details."""
     if not user or not user.is_active:
