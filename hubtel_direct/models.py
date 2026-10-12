@@ -21,10 +21,12 @@ class DirectTransaction(models.Model):
     destination_encrypted = models.TextField()  # Fernet, no plain account/phone number
     destination_suffix = models.CharField(max_length=4, blank=True)
     recipient_name = models.CharField(max_length=140, blank=True)
+    purpose = models.CharField(max_length=180, blank=True)
     status = models.CharField(max_length=24, default="approval_pending", db_index=True)
     hubtel_transaction_id = models.CharField(max_length=100, blank=True)
     provider_code = models.CharField(max_length=20, blank=True)
     callback_seen_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True, db_index=True)
     next_check_at = models.DateTimeField(null=True, blank=True, db_index=True)
     check_count = models.PositiveIntegerField(default=0)
     checked_at = models.DateTimeField(null=True, blank=True)
