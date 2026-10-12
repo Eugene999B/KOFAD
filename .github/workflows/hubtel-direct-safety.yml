@@ -45,4 +45,6 @@ jobs:
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
+      - run: python scripts/prepare_logo.py
+      - run: python manage.py collectstatic --noinput
       - run: python manage.py test hubtel_direct marketplace.test_hubtel core.test_pos_hubtel marketplace.test_kofad_ai core.test_telegram_bot --noinput
