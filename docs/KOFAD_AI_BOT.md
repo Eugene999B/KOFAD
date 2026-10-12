@@ -22,7 +22,11 @@ transactions.
 \`FREE_MODEL = "openrouter/free"\` and does not accept paid model IDs from
 Railway, browsers, customers or the API. It never retries with another paid
 model. OpenRouter request body is bounded with \`max_tokens=320\`, only public
-company and published product context, and no tools, images or web-search addons.
+company and published product context, and no tools, images or web-search addons. Every request also adds an
+OpenRouter provider-level `max_price.prompt=0` and
+`max_price.completion=0`, plus `data_collection=deny` so only providers
+that disclose no user-data collection are eligible. If no provider satisfies
+all conditions, KOFAD falls back to its local public-help answers.
 
 The OpenRouter key must be entered in Railway for **kofad-web only**:
 
