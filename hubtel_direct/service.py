@@ -67,7 +67,7 @@ def create_collection(customer, order_id, network, momo_phone):
         market_services.refresh_order_reservations(order)
         tx = _persisted(
             "receive", order.total, phone, customer=customer, order=order,
-            channel=network, recipient_name=customer.full_name[:140], status="initializing",
+            channel=network, recipient_name="", status="initializing",
             next_check_at=timezone.now() + MIN_STATUS_WAIT,
         )
         MarketPaymentAttempt.objects.create(
