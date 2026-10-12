@@ -170,12 +170,12 @@ def payout(request):
     try:
         user = _finance_staff(request)
         body = _json(request)
-        if set(body) - {"kind", "amount", "destination", "recipient_name", "channel", "bank_code"}:
+        if set(body) - {"kind", "amount", "destination", "recipient_name", "channel", "bank_code", "purpose"}:
             raise ValidationError("Unsupported payout fields.")
         tx = service.create_payout(
             user, body.get("kind"), body.get("amount"), body.get("destination"),
             body.get("recipient_name"), body.get("channel", ""), body.get("bank_code", ""),
-            idempotency_key=request.headers.get("Idempotency-Key"),
+            idempotency_key=request.headers.get("Idempotency-Key"), purpose=body.get("purpose", ""),
         )
         return _answer(tx, 201)
     except PermissionDenied as exc:
