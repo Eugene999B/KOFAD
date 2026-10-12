@@ -72,6 +72,58 @@ def _staff_analysis(user, days=7):
     )
 
 
+def _staff_compare(user, days=7):
+    """Compare two equally sized periods of verified, role-scoped closing data."""
+    from .models import Closing
+
+    branches = _authorized_branches(user)
+    if not branches.exists():
+        return "Your KOFAD account is not authorized to view management reports."
+    today = timezone.localdate()
+    current_start = today - timedelta(days=days - 1)
+    previous_start = current_start - timedelta(days=days)
+    # Only verified data is authoritative; bound report size and disclose caps.
+    rows = Closing.objects.filter(
+        branch__in=branches, verified_by__isnull=False,
+        date__gte=previous_start, date__lte=today,
+    ).order_by("-date").values_list("date", "summary")[:3001]
+    totals = [Decimal("0"), Decimal("0")]
+    count = [0, 0]
+    scanned = 0
+    capped = False
+    for date, summary in rows:
+        scanned += 1
+        if scanned > 3000:
+            capped = True
+            break
+        period = 1 if date < current_start else 0
+        totals[period] += _money((summary or {}).get("sales_total"))
+        count[period] += 1
+    prior, current = totals[1], totals[0]
+    if not any(count):
+        return ("No verified closing records were found for these periods "
+                "within your authorized KOFAD branches.")
+    if prior:
+        percent = (current - prior) / abs(prior) * 100
+        trend = f"{percent:+.1f}% compared with the previous period"
+    else:
+        trend = "percentage change unavailable because the prior total is zero"
+    end_prev = current_start - timedelta(days=1)
+    return (
+        f"KOFAD VERIFIED SALES COMPARISON — {days}-day periods\n"
+        f"Current: {current_start:%d %b}–{today:%d %b %Y} | "
+        f"{count[0]} verified closings | GHS {current:,.2f}\n"
+        f"Previous: {previous_start:%d %b}–{end_prev:%d %b %Y} | "
+        f"{count[1]} verified closings | GHS {prior:,.2f}\n"
+        f"Change: {trend}.\n"
+        + ("WARNING: The 3,000-record safety cap was reached, so totals are incomplete.\n"
+           if capped else "")
+        + "Figures reflect recorded verified closing sales only, not "
+        "profit, actual bank deposits or a complete accounting statement. "
+        "Missing or unverified closings affect comparability."
+    )
+
+
 def _customer_orders(customer, requested_reference=""):
     from marketplace.models import OnlineOrder
     orders = OnlineOrder.objects.filter(customer=customer).order_by("-created_at")
@@ -132,6 +184,13 @@ def _conversational_command(text, bot_kind):
     if any(x in q for x in ("sign in", "log in", "connect my account", "link my account")):
         return "login"
     if bot_kind == "staff":
+        if any(x in q for x in ("compare sales", "compare revenue",
+                                "sales comparison", "sales versus",
+                                "sales vs", "sales growth", "sales trend",
+                                "performance compared")):
+            if any(x in q for x in ("month", "30 day")):
+                return "compare_month"
+            return "compare_week"
         if any(x in q for x in ("my role", "my permissions", "my access rights",
                                 "what am i allowed", "what is my job")):
             return "myrole"
@@ -530,6 +589,17 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         )
     if command in {"link", "connect"}:
         return "Connect your signed-in KOFAD staff account at:\n" + staff_url
+    if command in {"compare", "compare_week", "compare_month", "trend"}:
+        if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
+            return "KOFAD Telegram business analysis is not enabled yet."
+        if not identity or identity.kind != "staff":
+            return "Use /login to verify your KOFAD reporting access."
+        staff = _account(identity)
+        if staff is None:
+            return "Your verified staff account is no longer available."
+        return _staff_compare(
+            staff, days=30 if command == "compare_month" or "month" in plain else 7,
+        )
     if command in {"analysis", "reports", "closing", "sales", "finance", "weekly", "monthly", "today", "week", "month"} or (
         any(k in plain for k in ("sales today", "business performance", "weekly sales", "closing report"))
     ):
