@@ -53,9 +53,17 @@
   <h2>Sign-in not connecting?</h2>
   <p>If your login opened another browser or Google sign-in ended the Telegram Mini App session, use the existing secure website pairing method instead. It verifies your logged-in account and asks you to confirm a one-time pairing code in Telegram; it never accepts just a phone number.</p>
   {% if kind == 'staff' %}
-  <a href="/integrations/telegram/">Connect securely using KOFAD staff account verification</a>
+    {% if bot_kind == 'official' %}
+      <a href="/integrations/telegram/security/">Connect to KOFAD Official Bot recovery verification</a>
+    {% else %}
+      <a href="/integrations/telegram/">Connect securely using KOFAD staff account verification</a>
+    {% endif %}
   {% elif kind == 'customer' %}
-  <a href="/market/integrations/telegram/">Connect securely using KOFAD customer account verification</a>
+    {% if bot_kind == 'official' %}
+      <a href="/market/integrations/telegram/security/">Connect to KOFAD Official Bot recovery verification</a>
+    {% else %}
+      <a href="/market/integrations/telegram/">Connect securely using KOFAD customer account verification</a>
+    {% endif %}
   {% endif %}
 </section>
 {% endif %}
