@@ -208,11 +208,11 @@
       {% if not purchase %}
       <section id="paystack-momo-panel" class="notice subtle hidden" aria-live="polite">
         <div>
-          <strong>{% if pos_momo_gateway == "hubtel" %}Hubtel secure Mobile Money checkout{% else %}Paystack direct Mobile Money approval{% endif %}</strong>
+          <strong>{% if pos_momo_gateway == "hubtel" %}Hubtel Direct Mobile Money{% else %}Paystack direct Mobile Money approval{% endif %}</strong>
           {% if paystack_pos_momo_ready %}
-          <p>{% if pos_momo_gateway == "hubtel" %}Create a secure Hubtel payment link for this sale. KOFAD records the sale only after independent verification.{% else %}Enter the MoMo number and send the approval prompt. A full payment can be a walk-in sale; for part payment, choose a customer and due date so the unpaid balance becomes debt. KOFAD posts the sale only after Paystack confirms the deposit.{% endif %}</p>
+          <p>{% if pos_momo_gateway == "hubtel" %}Enter the payer’s MoMo number and network, check the registered wallet name with Hubtel, then request payment directly on their phone. No hosted checkout link.{% else %}Enter the MoMo number and send the approval prompt. A full payment can be a walk-in sale; for part payment, choose a customer and due date so the unpaid balance becomes debt. KOFAD posts the sale only after Paystack confirms the deposit.{% endif %}</p>
           <div class="two-column">
-            <label{% if pos_momo_gateway == "hubtel" %} class="hidden"{% endif %}>Network
+            <label>Network
               <select id="paystack-momo-provider">
                 <option value="mtn">MTN MoMo</option>
                 <option value="atl">AT Money</option>
@@ -230,7 +230,18 @@
           <p class="hint"><a href="{% url 'pos_momo_payments' %}">View previous MoMo payments and receipts →</a></p>
           {% endif %}
           {% if pos_momo_gateway != "hubtel" %}<p class="hint">No email? Paystack receives a unique processor-only address for this wallet. It is not saved as the customer's email; consented receipts still use KOFAD's SMS/WhatsApp options.</p>{% endif %}
-          <a id="hubtel-momo-checkout-link" class="button hidden" target="_blank" rel="noopener noreferrer" href="#">Open secure Hubtel checkout ↗</a>
+          {% if pos_momo_gateway == "hubtel" %}
+          <div id="hubtel-wallet-review" class="notice subtle" style="margin:12px 0">
+            <label><input id="hubtel-wallet-consent" type="checkbox"> Customer agrees to this wallet-name check and payment request.</label>
+            <button type="button" id="hubtel-wallet-sms-send" class="button secondary">Send phone confirmation SMS</button>
+            <label>Customer's SMS code <input id="hubtel-wallet-sms-code" type="text" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="6" pattern="[0-9]{6}" placeholder="6-digit code" aria-label="Hubtel customer wallet verification code"></label>
+            <button type="button" id="hubtel-wallet-sms-confirm" class="button secondary">Verify phone code</button>
+            <p id="hubtel-wallet-sms-status" role="status" aria-live="polite">Verify control of the selected phone before checking its registered wallet name.</p>
+            <button type="button" id="hubtel-wallet-verify" class="button secondary" disabled>Check wallet name with Hubtel</button>
+            <p id="hubtel-wallet-name" role="status" aria-live="polite">No wallet verified. No payment prompt has been sent.</p>
+            <p class="hint">Review the registered wallet name with the customer before submitting. Never ask for a MoMo PIN.</p>
+          </div>
+          {% endif %}
           <div id="paystack-momo-challenge" class="hidden">
             <label>One-time payment code
               <input id="paystack-momo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code sent for this payment">
@@ -239,7 +250,7 @@
             <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
           </div>
           {% if pos_momo_gateway == "paystack" %}<div id="momo-deposit-summary" class="momo-deposit-summary" aria-live="polite"><div><span>MoMo to collect now</span><strong id="momo-deposit-amount">GHS 0.00</strong></div><div><span>Balance to customer debt</span><strong id="momo-balance-amount">GHS 0.00</strong></div></div><p class="hint">Paystack cannot identify the wallet holder by name. Confirm the number directly with the customer. The MoMo PIN is entered only on their phone.</p>{% endif %}
-          <p id="paystack-momo-status" class="hint" role="status">{% if pos_momo_gateway == "hubtel" %}When you continue, KOFAD will create a hosted Hubtel checkout and wait for independently confirmed payment.{% else %}When you continue, KOFAD will send the MoMo approval request and wait for verified payment.{% endif %}</p>
+          <p id="paystack-momo-status" class="hint" role="status">{% if pos_momo_gateway == "hubtel" %}First check the wallet name with Hubtel. A direct payment request then goes to the customer’s phone and is independently verified.{% else %}When you continue, KOFAD will send the MoMo approval request and wait for verified payment.{% endif %}</p>
           {% else %}
           <p>{{ pos_momo_gateway|title }} Mobile Money payment is not activated yet. Check gateway credentials and activation in Payment Settings.</p>
           {% endif %}

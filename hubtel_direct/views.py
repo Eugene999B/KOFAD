@@ -4,6 +4,7 @@ import json
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -33,7 +34,11 @@ def internal_reconcile(request):
         return response
     from .service import reconcile_due
     count = reconcile_due(limit=10)
-    response = JsonResponse({"checked": count})
+    # Direct POS payments must also use this web service's whitelisted IPs,
+    # never kofad-sms worker's unlisted egress.
+    from core.pos_hubtel import reconcile_due as reconcile_pos_due
+    pos_count = reconcile_pos_due(limit=10, include_direct=True)
+    response = JsonResponse({"checked": count, "pos_checked": pos_count})
     response["Cache-Control"] = "no-store"
     return response
 
@@ -90,6 +95,101 @@ def _finance_staff(request, approval=False):
     if not valid:
         raise PermissionDenied("Recent staff MFA is required for money transfers.")
     return user
+
+
+@login_required
+@require_POST
+def staff_wallet_otp(request):
+    """Customer's six-digit SMS proves control before a cashier-initiated prompt."""
+    try:
+        from core import services as core_services
+        from core.identity import normalize_ghana_phone
+        from core.views import branch_for
+        from . import client as hubtel_client
+        branch = branch_for(request)
+        core_services.permit(request.user, branch, "operate_sales")
+        data = _json(request)
+        action = data.get("action")
+        if action == "send" and set(data) != {"action", "phone", "channel", "customer_authorized"}:
+            raise ValidationError("Invalid SMS request fields.")
+        if action == "verify" and set(data) != {"action", "phone", "channel", "code", "customer_authorized"}:
+            raise ValidationError("Invalid SMS verification fields.")
+        if data.get("customer_authorized") is not True:
+            raise ValidationError("Customer must authorize verification before an SMS is sent.")
+        channel = data.get("channel")
+        if channel not in hubtel_client.CHANNELS:
+            raise ValidationError("Choose a supported Mobile Money network.")
+        phone = normalize_ghana_phone(data.get("phone"))
+        if action == "send":
+            market_services.send_otp(phone, purpose="momo", request=request)
+            result = {"message": "SMS sent to the customer's selected wallet number. Ask the customer to enter the six-digit code."}
+        elif action == "verify":
+            market_services.verify_otp(phone, data.get("code"), purpose="momo")
+            token = signing.dumps(
+                {"user": request.user.pk, "branch": branch.pk, "phone": phone.lstrip("+"),
+                 "channel": channel},
+                salt="kofad-pos-wallet-otp-v1",
+            )
+            result = {"verified": True, "otp_proof": token}
+        else:
+            raise ValidationError("Select send or verify.")
+        response = JsonResponse(result)
+        response["Cache-Control"] = "private, no-store"
+        return response
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    except (ValidationError, ValueError, TypeError) as exc:
+        return _error(exc)
+
+
+@login_required
+@require_POST
+def staff_wallet_name(request):
+    """Protected cashier name lookup; no payment is initiated by this endpoint."""
+    try:
+        from core import services as core_services
+        from core.views import branch_for
+        from . import verification
+        branch = branch_for(request)
+        core_services.permit(request.user, branch, "operate_sales")
+        data = _json(request)
+        if set(data) != {"phone", "channel", "customer_authorized", "otp_proof"} or data["customer_authorized"] is not True:
+            raise ValidationError("Verify customer control of the selected wallet before checking its name.")
+        from core.identity import normalize_ghana_phone
+        from . import client as hubtel_client
+        phone = normalize_ghana_phone(data["phone"]).lstrip("+")
+        if data["channel"] not in hubtel_client.CHANNELS:
+            raise ValidationError("Select a valid network.")
+        try:
+            proof = signing.loads(
+                data["otp_proof"], salt="kofad-pos-wallet-otp-v1", max_age=300,
+            )
+        except (signing.BadSignature, TypeError, ValueError) as exc:
+            raise ValidationError("The customer's SMS verification expired. Verify the wallet number again.") from exc
+        if (not isinstance(proof, dict) or proof.get("user") != request.user.pk
+                or proof.get("branch") != branch.pk or proof.get("phone") != phone
+                or proof.get("channel") != data["channel"]):
+            raise ValidationError("The SMS confirmation does not match the selected phone and network.")
+        verification.staff_throttle(request.user.pk, phone)
+        result = verification.inquiry(phone, data["channel"])
+        proof = signing.dumps(
+            {"user": request.user.pk, "branch": branch.pk, "phone": result["phone"],
+             "channel": result["channel"], "name": result["wallet_name"]},
+            salt="kofad-hubtel-staff-wallet-verify-v1",
+        )
+        core_services.audit(
+            request.user, branch, "hubtel.wallet_verified", "wallet",
+            {"phone_suffix": result["phone"][-4:], "channel": result["channel"]},
+            category="finance",
+        )
+        response = JsonResponse({"name": result["wallet_name"], "network": result["channel"],
+                                 "phone_suffix": result["phone"][-4:], "verification_token": proof})
+        response["Cache-Control"] = "private, no-store"
+        return response
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    except (ValidationError, ValueError, TypeError) as exc:
+        return _error(exc)
 
 
 @require_POST

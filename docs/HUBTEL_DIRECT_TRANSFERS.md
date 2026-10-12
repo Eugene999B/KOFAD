@@ -1,4 +1,43 @@
-# KOFAD — Hubtel Direct Receive, Send Money and Send-to-Bank (draft / review only)
+## Corrected Hubtel Direct-only sales (12 October 2026)
+
+**New Hubtel sales must not use Online Checkout.** A customer order is saved first;
+the buyer authorizes Direct Receive on the registered, non-editable account
+phone (SMS verification is required for a new account phone). Cashiers can
+enter a customer's Ghana MoMo wallet number and choose MTN, Telecel or
+AirtelTigo, but must obtain customer consent, send an SMS verification code to
+that exact wallet, verify the code, and use the separate Hubtel Wallet
+Registration & Username Query API to show the registered wallet holder's
+**provider-supplied name** before sending a direct approval prompt. The
+staff verification API is documented as
+`GET https://rnv.hubtel.com/merchantaccount/merchants/{Collection_Account_Number}/mobilemoney/verify`
+with `customerMsisdn` and `channel` query parameters. Status must be
+active/registered and `IsRegistered=true`. The staff proof is
+session-user/branch/phone/network-bound and expires after 3 minutes. Never
+guess a name when Hubtel declines or is unavailable.
+
+**Hubtel scopes:** In addition to `mobilemoney-receive-direct`, Hubtel must
+enable the merchant's wallet registration/username inquiry permissions for
+these API credentials. If account-name verification returns 403, staff must
+contact Hubtel; no direct prompt is submitted. All requests use the
+whitelisted `kofad-web` static outbound IPs. Communications worker
+requests the internal web reconciler, which handles both order and POS direct
+references; worker must never send direct status calls from its own egress.
+
+Hubtel Online Checkout implementation is retained for **historical transactions
+only**. Set `HUBTEL_CHECKOUT_ENABLED=0` on the production web/worker services
+after deployment to prevent new hosted requests. Do not remove legacy
+status/callback storage; old payments must remain reconcilable. Preserve
+Paystack's separately configured historic flow and financial ledgers.
+
+The Direct Receive POST is irreversible if accepted: never automatically
+retry an unknown outcome, never mark receipts paid from callback/browser claims,
+and do not issue a second prompt until the original reference is reconciled.
+The independent Hubtel status check after five or more minutes is authoritative.
+A production payment requires a real consented end-to-end test, verification
+of wallet name/API scope, confirmation the customer approved on phone, and
+independent receipt/ledger checks. No real funds are sent in automated tests.
+
+# KOFD — Hubtel Direct Receive, Send Money and Send-to-Bank (draft / review only)
 
 This isolated module implements the **new** September 18, 2026 Sales APIs without replacing KOFAD's existing hosted Hubtel checkout or Paystack checkout. It is developed from the Oct 12 `railway-release` snapshot, not from a stale `main` snapshot. No live flags, credentials, IP rules, production deployments or real transfers are changed by this PR. Do not merge until the parallel AI/Telegram deployment is separately reconciled.
 
