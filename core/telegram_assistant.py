@@ -39,12 +39,12 @@ def _authorized_branches(user):
     return access.branches.filter(active=True)
 
 
-def _staff_analysis(user, days=7):
+def _staff_analysis(user, days=7, offset=0):
     from .models import Closing
     branches = _authorized_branches(user)
     if not branches.exists():
         return "Your KOFAD account is not authorized to view management reports."
-    today = timezone.localdate()
+    today = timezone.localdate() - timedelta(days=offset)
     closings = Closing.objects.filter(
         branch__in=branches, verified_by__isnull=False,
         date__gte=today - timedelta(days=days - 1), date__lte=today,
@@ -184,10 +184,8 @@ def _conversational_command(text, bot_kind):
     if any(x in q for x in ("sign in", "log in", "connect my account", "link my account")):
         return "login"
     if bot_kind == "staff":
-        if any(x in q for x in ("compare sales", "compare revenue",
-                                "sales comparison", "sales versus",
-                                "sales vs", "sales growth", "sales trend",
-                                "performance compared")):
+        if (any(x in q for x in ("compare", "versus", " vs ", "growth", "trend"))
+                and any(x in q for x in ("sales", "revenue", "performance", "closing"))):
             if any(x in q for x in ("month", "30 day")):
                 return "compare_month"
             return "compare_week"
@@ -211,6 +209,8 @@ def _conversational_command(text, bot_kind):
         if any(x in q for x in ("sales", "closing", "performance", "report", "revenue")):
             if any(x in q for x in ("last month", "this month", "past month", "30 days")):
                 return "month"
+            if any(x in q for x in ("yesterday", "previous day")):
+                return "yesterday"
             if any(x in q for x in ("today", "this morning", "current day")):
                 return "today"
             return "week"
@@ -589,6 +589,15 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         )
     if command in {"link", "connect"}:
         return "Connect your signed-in KOFAD staff account at:\n" + staff_url
+    if command == "yesterday":
+        if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
+            return "KOFAD Telegram business analysis is not enabled yet."
+        if not identity or identity.kind != "staff":
+            return "Use /login to verify your KOFAD reporting access."
+        staff = _account(identity)
+        return _staff_analysis(staff, 1, offset=1) if staff else (
+            "Your verified staff account is no longer available."
+        )
     if command in {"compare", "compare_week", "compare_month", "trend"}:
         if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
             return "KOFAD Telegram business analysis is not enabled yet."
