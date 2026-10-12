@@ -57,6 +57,8 @@ def _finance_staff(request, approval=False):
     permission = "core.manage_company" if approval else "core.operate_finance"
     if not user.is_active or not user.has_perm(permission):
         raise PermissionDenied("Finance authorization is required.")
+    if not user.is_superuser and not user.access.branches.filter(active=True).exists():
+        raise PermissionDenied("No active company location is assigned.")
     # Explicit MFA for transfers even if legacy staff MFA enforcement is off.
     stamp = request.session.get("mfa_verified_at")
     try:
