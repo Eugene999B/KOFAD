@@ -1,32 +1,33 @@
 {% load static %}
-<section class="hubtel-direct-customer" data-hubtel-direct data-order-id="{{ order.pk }}"
- data-verified="{% if hubtel_direct_phone_verified %}1{% else %}0{% endif %}">
- <h3>Pay directly with Mobile Money</h3>
- <p>Your order total is <strong>GHS {{ order.total|floatformat:2 }}</strong>. To prevent unsolicited charges, the direct request goes only to your verified, registered KOFAD account phone. Approve the request on your own phone; never share your PIN.</p>
- <p class="company-fineprint">Payment phone: <strong>{{ customer.phone|default:"No registered phone" }}</strong> (read-only; delivery phone changes do not change the wallet used for payment).</p>
+<section class="hubtel-direct-customer direct-momo-review" data-hubtel-direct data-order-id="{{ order.pk }}">
+ <header><p class="market-eyebrow">SECURE MOBILE MONEY</p><h3>Complete your payment</h3>
+ <p class="direct-momo-total">GHS {{ order.total|floatformat:2 }}</p></header>
+ <p>Confirm the number that will pay, then approve the request on your phone. Your delivery contact does not need to match the wallet.</p>
  <form data-hubtel-direct-form>
   {% csrf_token %}
-  {% if not hubtel_direct_phone_verified %}
-   <p class="company-fineprint">First verify that you control your registered KOFAD phone number. A phone confirmation does not establish the wallet holder's legal name.</p>
-   {% if hubtel_direct_can_verify_phone %}
-    <button type="button" class="market-button ghost wide" data-hubtel-verify-send>Send phone verification SMS</button>
-    <label>SMS verification code<input type="text" name="verification_code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" minlength="6" pattern="[0-9]{6}"></label>
-    <button type="button" class="market-button ghost wide" data-hubtel-verify-code>Verify registered phone</button>
-   {% else %}
-    <p class="company-fineprint">Registered phone verification is not enabled. Please use another available payment method or contact KOFAD support.</p>
-   {% endif %}
-  {% else %}
-   <label>Mobile Money network
+  <div class="direct-momo-fields">
+   <label>Mobile Money number
+    <input type="tel" name="phone" autocomplete="tel" inputmode="tel" maxlength="18" placeholder="024 123 4567" value="{{ direct_wallet_number|default:'' }}" required>
+   </label>
+   <label>Network
     <select name="channel" required>
-     <option value="">Choose network</option>
-     <option value="mtn-gh">MTN Mobile Money</option>
-     <option value="vodafone-gh">Telecel Cash</option>
-     <option value="tigo-gh">AirtelTigo Money</option>
+     <option value="mtn-gh"{% if direct_wallet_channel == "mtn-gh" %} selected{% endif %}>MTN MoMo</option>
+     <option value="vodafone-gh"{% if direct_wallet_channel == "vodafone-gh" %} selected{% endif %}>Telecel Cash</option>
+     <option value="tigo-gh"{% if direct_wallet_channel == "tigo-gh" %} selected{% endif %}>AirtelTigo Money</option>
     </select>
    </label>
-   <button type="submit" class="market-button primary wide">Request GHS {{ order.total|floatformat:2 }} payment</button>
-  {% endif %}
+  </div>
+  <section class="direct-momo-first-use" data-direct-verify-panel hidden aria-label="First-time wallet verification">
+   <p><strong>Verify this number once</strong></p>
+   <p>A six-digit SMS confirms this is your wallet. You will not need another SMS for the same wallet on this KOFAD account.</p>
+   <button type="button" class="market-button ghost wide" data-hubtel-verify-send>Send SMS code</button>
+   <label>SMS code<input type="text" name="verification_code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" minlength="6" pattern="[0-9]{6}" placeholder="6-digit code"></label>
+   <button type="button" class="market-button ghost wide" data-hubtel-verify-code>Verify number</button>
+  </section>
+  <p class="direct-momo-wallet-ready" data-direct-verified hidden>Number verified. Ready to request payment.</p>
+  <button type="submit" class="market-button primary wide" data-direct-pay>Continue — GHS {{ order.total|floatformat:2 }}</button>
   <p data-hubtel-direct-message class="company-fineprint" role="status" aria-live="polite"></p>
+  <p class="company-fineprint">A secure MTN, Telecel or AirtelTigo prompt lets you approve with your MoMo PIN <strong>on your phone</strong>. KOFAD will never collect your PIN.</p>
  </form>
 </section>
 <script defer src="{% static 'marketplace/hubtel-direct-payment.js' %}"></script>
