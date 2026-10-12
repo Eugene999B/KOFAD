@@ -267,8 +267,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "by OpenRouter free AI. Never send passwords, OTPs or private records."
             )
         if bot_kind == "staff" and re.search(
-            r"(?i)\\b(?:closing|salaries|payroll|profit|financial|"
-            r"branch sales|daily revenue|staff personal|ledger|cash variance)\\b",
+            r"(?i)\b(?:closing|salaries|payroll|profit|financial|"
+            r"branch sales|daily revenue|staff personal|ledger|cash variance)\b",
             public_question,
         ):
             return (
@@ -278,7 +278,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             )
         result, _source = answer(public_question[:601], customer=None, ai_allowed=True)
         return result[:1600] + (
-            "\\n\\nPublic KOFAD questions only. Free AI may be inaccurate; "
+            "\n\nPublic KOFAD questions only. Free AI may be inaccurate; "
             "check live product listings or customer support."
         )
 
