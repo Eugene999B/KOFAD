@@ -165,6 +165,34 @@ def callback(request):
 
 
 @login_required
+@require_GET
+def finance_dashboard(request):
+    from django.shortcuts import render
+    try:
+        manager = request.user.has_perm("core.manage_company")
+        _finance_staff(request, approval=manager)
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    qs = DirectTransaction.objects.filter(
+        kind__in=["send_momo", "send_bank"]
+    ).select_related("requested_by", "approved_by")
+    if not manager:
+        qs = qs.filter(requested_by=request.user)
+    from .client import BANK_CODES, enabled
+    response = render(request, "hubtel_direct/finance_dashboard.html", {
+        "title": "Hubtel Direct transfers",
+        "direct_transactions": qs.order_by("-created_at")[:80],
+        "can_approve": manager,
+        "wallet_enabled": enabled("send_momo"),
+        "bank_enabled": enabled("send_bank"),
+        "receive_enabled": enabled("receive"),
+        "available_banks": sorted(BANK_CODES),
+    })
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@login_required
 @require_POST
 def payout(request):
     try:
