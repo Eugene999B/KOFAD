@@ -30,7 +30,7 @@ BLOCKED = re.compile(
     r"\b\d{12,19}\b)"
 )
 INTENT_ORDER = re.compile(
-    r"(?i)\b(my\s+(?:orders?|purchases?|delivery|refund|returns?)|"
+    r"(?i)\b(my\s+(?:(?:recent|latest|last|previous|current)\s+)?(?:orders?|purchases?|delivery|refund|returns?)|"
     r"track\s+(?:my\s+)?order|where\s+is\s+my\s+order|"
     r"(?:order\s+status|payment\s+status|receipt))\b"
 )
