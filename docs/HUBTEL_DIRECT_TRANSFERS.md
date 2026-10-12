@@ -29,7 +29,7 @@ Live payout activation requires an owner-approved spending policy, disbursement 
 - `POST /market/orders/<uuid>/hubtel-direct/` body `{"channel":"mtn-gh"}`, or `vodafone-gh` / `tigo-gh`: customer session required; uses immutable registered **verified** number, order's actual total, and one persisted unique reference. No arbitrary phone/amount in input.
 - `GET /market/orders/<uuid>/hubtel-direct/status/`: customer only, returns saved state.
 - `POST /market/payments/hubtel-direct/callback/`: public Hubtel callback; no privileged mutation; never marks paid.
-- `POST /finance/hubtel-direct/payouts/`: authenticated finance staff with recent MFA create **approval_pending** intent, body e.g. `{"kind":"send_momo","amount":"10.00","destination":"0241234567","recipient_name":"Supplier A","channel":"mtn-gh"}`. For banks use kind `send_bank`, numeric bank account string and documented `bank_code`.
+- `POST /finance/hubtel-direct/payouts/`: authenticated finance staff with recent MFA create **approval_pending** intent. Require a random UUIDv4 `Idempotency-Key` request header; safely reuse the same key only for identical retry requests. Body e.g. `{"kind":"send_momo","amount":"10.00","destination":"0241234567","recipient_name":"Supplier A","channel":"mtn-gh"}`. For banks use kind `send_bank`, numeric bank account string and documented `bank_code`.
 - `POST /finance/hubtel-direct/payouts/<uuid>/approve/`: *different* company manager with recent MFA approves one saved payout and initiates its **single** outbound POST.
 - `GET /finance/hubtel-direct/payouts/<uuid>/`: manager-only status.
 
