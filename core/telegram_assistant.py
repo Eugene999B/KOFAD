@@ -39,19 +39,22 @@ def _authorized_branches(user):
     return access.branches.filter(active=True)
 
 
-def _staff_analysis(user, days=7):
+def _staff_analysis(user, days=7, offset=0):
     from .models import Closing
     branches = _authorized_branches(user)
     if not branches.exists():
         return "Your KOFAD account is not authorized to view management reports."
-    today = timezone.localdate()
+    today = timezone.localdate() - timedelta(days=offset)
     closings = Closing.objects.filter(
         branch__in=branches, verified_by__isnull=False,
         date__gte=today - timedelta(days=days - 1), date__lte=today,
-    ).select_related("branch").order_by("-date")[:200]
+    ).select_related("branch").order_by("-date")[:2001]
     totals = {"sales": Decimal("0"), "expenses": Decimal("0"), "collections": Decimal("0")}
-    count, most_recent = 0, None
+    count, most_recent, capped = 0, None, False
     for item in closings:
+        if count >= 2000:
+            capped = True
+            break
         n = item.summary or {}
         totals["sales"] += _money(n.get("sales_total"))
         totals["expenses"] += _money(n.get("expenses_total"))
@@ -60,15 +63,68 @@ def _staff_analysis(user, days=7):
         if most_recent is None:
             most_recent = item
     return (
-        f"KOFAD VERIFIED CLOSING INTELLIGENCE — last {days} days\n"
+        f"KOFAD VERIFIED CLOSING INTELLIGENCE — {days} day(s) ending {today:%d %b %Y}\n"
         f"Authorized business locations: {branches.count()}\n"
         f"Verified closings reviewed: {count}\n"
         f"Recorded sales: GHS {totals['sales']:,.2f}\n"
         f"Expenses: GHS {totals['expenses']:,.2f}\n"
         f"Debt collections: GHS {totals['collections']:,.2f}\n"
         + (f"Latest verified closing: {most_recent.branch.name}, {most_recent.date:%d %b %Y}\n" if most_recent else "")
+        + ("\nWARNING: Report reached its 2,000-closing safety cap; totals may be incomplete." if capped else "")
         + "\nThese figures are closing-record totals, not a profit or cash balance calculation. "
         "Incomplete/unverified closings are excluded. Reopen the staff dashboard for details."
+    )
+
+
+def _staff_compare(user, days=7):
+    """Compare two equally sized periods of verified, role-scoped closing data."""
+    from .models import Closing
+
+    branches = _authorized_branches(user)
+    if not branches.exists():
+        return "Your KOFAD account is not authorized to view management reports."
+    today = timezone.localdate()
+    current_start = today - timedelta(days=days - 1)
+    previous_start = current_start - timedelta(days=days)
+    # Only verified data is authoritative; bound report size and disclose caps.
+    rows = Closing.objects.filter(
+        branch__in=branches, verified_by__isnull=False,
+        date__gte=previous_start, date__lte=today,
+    ).order_by("-date").values_list("date", "summary")[:3001]
+    totals = [Decimal("0"), Decimal("0")]
+    count = [0, 0]
+    scanned = 0
+    capped = False
+    for date, summary in rows:
+        scanned += 1
+        if scanned > 3000:
+            capped = True
+            break
+        period = 1 if date < current_start else 0
+        totals[period] += _money((summary or {}).get("sales_total"))
+        count[period] += 1
+    prior, current = totals[1], totals[0]
+    if not any(count):
+        return ("No verified closing records were found for these periods "
+                "within your authorized KOFAD branches.")
+    if prior:
+        percent = (current - prior) / abs(prior) * 100
+        trend = f"{percent:+.1f}% compared with the previous period"
+    else:
+        trend = "percentage change unavailable because the prior total is zero"
+    end_prev = current_start - timedelta(days=1)
+    return (
+        f"KOFAD VERIFIED SALES COMPARISON — {days}-day periods\n"
+        f"Current: {current_start:%d %b}–{today:%d %b %Y} | "
+        f"{count[0]} verified closings | GHS {current:,.2f}\n"
+        f"Previous: {previous_start:%d %b}–{end_prev:%d %b %Y} | "
+        f"{count[1]} verified closings | GHS {prior:,.2f}\n"
+        f"Change: {trend}.\n"
+        + ("WARNING: The 3,000-record safety cap was reached, so totals are incomplete.\n"
+           if capped else "")
+        + "Figures reflect recorded verified closing sales only, not "
+        "profit, actual bank deposits or a complete accounting statement. "
+        "Missing or unverified closings affect comparability."
     )
 
 
@@ -109,6 +165,72 @@ def _product_search(query):
     )
 
 
+
+def _conversational_command(text, bot_kind):
+    """Map ordinary questions onto verified, deterministic KOFAD operations.
+
+    Never infer authorization from wording: all mapped operations still use
+    the existing Telegram identity and live Django permission checks.
+    """
+    import re
+
+    q = " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+    if re.search(r"\b(?:which|what) (?:ai )?(?:model|api|provider|engine)\b|"
+                 r"\b(?:powered by|which llm)\b", q):
+        return "aboutai"
+    if re.search(r"\b(?:who are you|your name|introduce yourself)\b", q):
+        return "introduce"
+    if re.fullmatch(r"(?:hi|hello|hey|good morning|good evening|good afternoon)(?: there| team| everyone| bot)?", q):
+        return "introduce"
+    if any(x in q for x in ("what can you do", "how can you help", "show me your features",
+                            "what are your capabilities", "help me use this bot")):
+        return "menu"
+    if any(x in q for x in ("sign in", "log in", "connect my account", "link my account")):
+        return "login"
+    if bot_kind == "staff":
+        if (any(x in q for x in ("compare", "versus", " vs ", "growth", "trend"))
+                and any(x in q for x in ("sales", "revenue", "performance", "closing"))):
+            if any(x in q for x in ("month", "30 day")):
+                return "compare_month"
+            return "compare_week"
+        if any(x in q for x in ("my role", "my permissions", "my access rights",
+                                "what am i allowed", "what is my job")):
+            return "myrole"
+        if any(x in q for x in ("my tasks", "to do", "to-do", "my priorities",
+                                "what needs attention", "work pending")):
+            return "tasks"
+        if any(x in q for x in ("my branches", "my locations", "assigned branches",
+                                "assigned locations", "where can i work")):
+            return "branches"
+        if any(x in q for x in ("low stock", "out of stock", "inventory level",
+                                "stock alerts", "inventory problems")):
+            return "inventory"
+        if any(x in q for x in ("pending orders", "orders due", "outstanding orders",
+                                "orders need attention")):
+            return "orders_due"
+        if any(x in q for x in ("my notifications", "my alerts", "notification settings")):
+            return "myalerts"
+        if any(x in q for x in ("sales", "closing", "performance", "report", "revenue")):
+            if any(x in q for x in ("last month", "this month", "past month", "30 days")):
+                return "month"
+            if any(x in q for x in ("yesterday", "previous day")):
+                return "yesterday"
+            if any(x in q for x in ("today", "this morning", "current day")):
+                return "today"
+            return "week"
+    if bot_kind == "customer":
+        if any(x in q for x in ("track my", "where is my order", "where are my items",
+                                "order status", "my purchases", "my orders")):
+            return "orders"
+        if any(x in q for x in ("pay for", "payment", "mobile money", "checkout")):
+            return "pay"
+        if any(x in q for x in ("return an item", "my refund", "refund policy")):
+            return "returns"
+        if any(x in q for x in ("find a product", "what products", "shop online")):
+            return "shop"
+    return ""
+
+
 def reply_for(text, chat_id, user_id, bot_kind="official"):
     """Separate commands and identity authority across three Telegram bots.
 
@@ -135,6 +257,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
     head, _, tail = stripped.partition(" ")
     command = head.lower().split("@", 1)[0].lstrip("/")
     plain = stripped.casefold()
+    if not stripped.startswith("/"):
+        command = _conversational_command(stripped, bot_kind) or command
     identity = None
     if settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
         identity = TelegramIdentity.objects.filter(
@@ -152,6 +276,29 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
     official_market_url = MARKET + "/market/integrations/telegram/security/"
     staff_bot = bot_link("staff") or staff_url
     customer_bot = bot_link("customer") or market_url
+
+    if command == "aboutai":
+        return ("I'm KOFAD's digital assistant. I can't disclose internal "
+                "model or API configuration. I can explain public services "
+                "and help with verified, permission-scoped KOFAD operations.")
+    if command == "introduce":
+        if bot_kind == "staff" and identity and identity.kind == "staff":
+            staff = _account(identity)
+            if staff:
+                from .telegram_intelligence import staff_menu
+                return "Hello! I'm your KOFAD Staff Assistant.\n\n" + staff_menu(staff)
+        if bot_kind == "customer":
+            return ("Hello! I'm the KOFAD Customer Bot. I can help you browse "
+                    "products, track orders after secure linking, and learn "
+                    "about delivery and safe checkout. Send /menu for options.")
+        return ("Hello! I'm the official KOFAD IMPEX assistant. I can guide "
+                "you to shopping, staff tools or secure account recovery. "
+                "Send /menu to explore.")
+    if bot_kind == "staff" and command == "myrole":
+        if not identity or identity.kind != "staff" or not _account(identity):
+            return "First use /login to verify your KOFAD staff account."
+        from .telegram_intelligence import staff_menu
+        return staff_menu(_account(identity))
 
     if command in {"stop", "unsubscribe"}:
         if identity:
@@ -208,6 +355,10 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         identity.save(update_fields=[
             "notifications_enabled", "closing_opt_in", "critical_opt_in", "stock_opt_in",
         ])
+        from .telegram_intelligence import staff_welcome
+        from .telegram_integration import queue_notice
+        queue_notice(identity, "welcome", f"tg:welcome:{identity.pk}",
+                     staff_welcome(staff))
         return (
             "Staff notices enabled for your CURRENT permissions and branches. "
             "Daily closing, critical variances, and inventory alerts are sent only "
@@ -258,7 +409,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         # Deliberately opt-in to external AI with /ask. Never send private KOFAD
         # chat/session/customer/staff/account info to an external free provider.
         import re
-        from marketplace.kofad_ai import answer
+        import hashlib
+        from marketplace.kofad_ai import answer, eligible_for_external_ai, free_configured, reserve_free_request
         public_question = tail.strip()
         if not public_question:
             return (
@@ -276,11 +428,24 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "Use /today, /week, /month or /tasks for reports permitted "
                 "by your KOFAD role."
             )
-        result, _source = answer(public_question[:601], customer=None, ai_allowed=True)
-        return result[:1600] + (
-            "\n\nPublic KOFAD questions only. Free AI may be inaccurate; "
-            "check live product listings or customer support."
+        # /ask is explicit consent for a PUBLIC question only. Each bot user
+        # has a small allowance shared with the web's free daily budget.
+        # Hash Telegram IDs so cache keys are not directly identifying.
+        ai_permitted = False
+        if free_configured() and eligible_for_external_ai(public_question):
+            user_hash = hashlib.sha256(
+                f"{settings.SECRET_KEY}:{bot_kind}:{user_id}".encode()
+            ).hexdigest()[:20]
+            ai_permitted = reserve_free_request(
+                "telegram", user_hash, timezone.now().strftime("%Y%m%d"),
+            )
+        result, source = answer(
+            public_question[:601], customer=None, ai_allowed=ai_permitted,
         )
+        note = ("Free AI unavailable or at its daily limit; this is local guidance."
+                if source == "local" and not ai_permitted else
+                "Public information only; confirm important details with KOFAD.")
+        return result[:1600] + "\n\n" + note
 
     if command in {"login", "signin", "authenticate"}:
         return ("Tap the secure Sign in button below. Sign in using your normal "
@@ -382,7 +547,9 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             return "Management information is available only through the separate authorized KOFAD Staff Bot."
         if command == "ping":
             return "KOFAD Customer Bot is responding."
-        return "KOFAD Customer Assistant: try /search, /orders or /help."
+        from marketplace.kofad_ai import answer
+        result, _ = answer(stripped[:600], ai_allowed=False)
+        return result
 
     # Staff operations bot: no OTP delivery/recovery or customer order records.
     if command in {"start", "help", "menu"}:
@@ -402,6 +569,12 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             return "Your KOFAD role does not include inventory access."
         if command == "orders_due" and not roles["sales"]:
             return "Your KOFAD role does not include sales operations."
+        if command == "inventory":
+            from .telegram_intelligence import inventory_brief
+            return inventory_brief(user)
+        if command == "orders_due":
+            from .telegram_intelligence import sales_work_brief
+            return sales_work_brief(user)
         return account_tasks(user)
     if command in {"start", "help", "menu"}:
         return (
@@ -420,6 +593,26 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         )
     if command in {"link", "connect"}:
         return "Connect your signed-in KOFAD staff account at:\n" + staff_url
+    if command == "yesterday":
+        if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
+            return "KOFAD Telegram business analysis is not enabled yet."
+        if not identity or identity.kind != "staff":
+            return "Use /login to verify your KOFAD reporting access."
+        staff = _account(identity)
+        return _staff_analysis(staff, 1, offset=1) if staff else (
+            "Your verified staff account is no longer available."
+        )
+    if command in {"compare", "compare_week", "compare_month", "trend"}:
+        if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
+            return "KOFAD Telegram business analysis is not enabled yet."
+        if not identity or identity.kind != "staff":
+            return "Use /login to verify your KOFAD reporting access."
+        staff = _account(identity)
+        if staff is None:
+            return "Your verified staff account is no longer available."
+        return _staff_compare(
+            staff, days=30 if command == "compare_month" or "month" in plain else 7,
+        )
     if command in {"analysis", "reports", "closing", "sales", "finance", "weekly", "monthly", "today", "week", "month"} or (
         any(k in plain for k in ("sales today", "business performance", "weekly sales", "closing report"))
     ):
@@ -440,4 +633,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return "Staff help and account support: " + STAFF
     if command == "ping":
         return "KOFAD Staff Bot is responding."
-    return "KOFAD Staff Assistant: send /help for allowed commands."
+    return ("I can help with your authorized KOFAD work. Ask about your "
+            "tasks, assigned branches, inventory, pending orders or closing "
+            "reports, or use /menu. Financial and account data require a "
+            "verified staff link and appropriate permissions.")
