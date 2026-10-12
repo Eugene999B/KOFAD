@@ -124,7 +124,10 @@ def _payload(tx):
         "Description": "KOFAD transaction " + tx.client_reference[-10:],
     }
     if tx.kind == "receive":
-        return dict(common, CustomerMsisdn=dest, CustomerName=tx.recipient_name[:100], Channel=tx.channel)
+        payload = dict(common, CustomerMsisdn=dest, Channel=tx.channel)
+        if tx.recipient_name:
+            payload["CustomerName"] = tx.recipient_name[:100]
+        return payload
     if tx.kind == "send_momo":
         return dict(common, RecipientMsisdn=dest, RecipientName=tx.recipient_name[:100], Channel=tx.channel)
     return dict(common, BankAccountNumber=dest, BankAccountName=tx.recipient_name[:100])
