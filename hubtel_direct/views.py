@@ -17,8 +17,8 @@ from . import service
 from .models import DirectTransaction
 
 
-@csrf_exempt
-@require_POST
+lcsrf_exempt
+lrequire_POST
 def internal_reconcile(request):
     """Only a shared-secret worker call can trigger web-egress Hubtel GET checks.
 
