@@ -139,6 +139,12 @@ class TelegramQuickAuthTests(TestCase):
         self.assertTrue(linked.notifications_enabled)
         self.assertEqual(queue_role_briefings(timezone.localtime().replace(hour=8)), 0)
 
+    def test_official_mini_app_fallback_stays_with_official_security_bot(self):
+        self.staff_session()
+        response = self.client.get("/integrations/telegram/quick/official/")
+        self.assertContains(response, 'href="/integrations/telegram/security/"')
+        self.assertNotContains(response, 'href="/integrations/telegram/"')
+
     def test_mini_app_staff_welcome_and_manual_pairing_fallback(self):
         from core.telegram_delivery import _still_authorized
         self.staff_session()
