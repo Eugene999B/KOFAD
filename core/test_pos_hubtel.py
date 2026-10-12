@@ -194,6 +194,12 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.assertEqual(response.json()["authorization_url"], "")
         post.assert_called_once()
 
+    def sms_proof(self):
+        return signing.dumps({
+            "user": self.user.pk, "branch": self.branch.pk, "phone": "233551234567",
+            "channel": "mtn-gh",
+        }, salt="kofad-pos-wallet-otp-v1")
+
     @patch("hubtel_direct.verification.requests.get")
     def test_staff_sees_real_registered_name_before_payment(self, get):
         self.authenticate_client()
@@ -203,7 +209,10 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         })
         response = self.client.post(
             "/api/pos/hubtel/wallet-name/",
-            data=json.dumps({"phone": "0551234567", "channel": "mtn-gh", "customer_authorized": True}),
+            data=json.dumps({
+                "phone": "0551234567", "channel": "mtn-gh",
+                "customer_authorized": True, "otp_proof": self.sms_proof(),
+            }),
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200, response.content)
@@ -211,6 +220,48 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.assertTrue(response.json()["verification_token"])
         self.assertIn("rnv.hubtel.com", get.call_args.args[0])
         self.assertEqual(get.call_args.kwargs["params"]["customerMsisdn"], "233551234567")
+
+    @patch("hubtel_direct.verification.requests.get")
+    def test_wallet_name_lookup_blocks_without_sms_confirmation(self, get):
+        self.authenticate_client()
+        response = self.client.post(
+            "/api/pos/hubtel/wallet-name/",
+            data=json.dumps({
+                "phone": "0551234567", "channel": "mtn-gh",
+                "customer_authorized": True, "otp_proof": "not-valid",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        get.assert_not_called()
+
+    @patch("marketplace.services.verify_otp", return_value="+233551234567")
+    @patch("marketplace.services.send_otp", return_value="+233551234567")
+    def test_staff_momo_otp_must_follow_merchant_payer_consent(self, send, verify):
+        self.authenticate_client()
+        base = {"phone": "0551234567", "channel": "mtn-gh"}
+        denied = self.client.post(
+            "/api/pos/hubtel/wallet-otp/",
+            data=json.dumps(dict(base, action="send", customer_authorized=False)),
+            content_type="application/json",
+        )
+        self.assertEqual(denied.status_code, 400)
+        send.assert_not_called()
+        sent = self.client.post(
+            "/api/pos/hubtel/wallet-otp/",
+            data=json.dumps(dict(base, action="send", customer_authorized=True)),
+            content_type="application/json",
+        )
+        self.assertEqual(sent.status_code, 200, sent.content)
+        send.assert_called_once()
+        verified = self.client.post(
+            "/api/pos/hubtel/wallet-otp/",
+            data=json.dumps(dict(base, action="verify", customer_authorized=True, code="123456")),
+            content_type="application/json",
+        )
+        self.assertEqual(verified.status_code, 200, verified.content)
+        self.assertTrue(verified.json()["otp_proof"])
+        verify.assert_called_once()
 
     @patch("hubtel_direct.verification.requests.get")
     def test_staff_wallet_lookup_requires_customer_consent(self, get):
