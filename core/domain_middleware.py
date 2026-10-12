@@ -23,6 +23,7 @@ class OfficialDomainMiddleware:
             path in {"/health/", "/robots.txt", "/sitemap.xml", "/favicon.ico", "/favicon-96.png"} or path.startswith("/static/")
             or path.startswith("/sms/callback/") or path == "/sms/delivery/"
             or path == "/whatsapp/webhook/" or path in {"/telegram/webhook/", "/telegram/customer/webhook/", "/telegram/staff/webhook/"}
+            or path == "/market/ai/chat/"  # same-origin on both root homepage and Market
             or path == "/market/payments/paystack/webhook/"
             or path == "/market/payments/hubtel/callback/"
         )

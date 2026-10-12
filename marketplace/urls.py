@@ -5,9 +5,11 @@ from core.telegram_portal import customer_portal as telegram_customer_portal, cu
 from core.telegram_recovery import customer_recovery as telegram_customer_recovery
 from core.telegram_quick_portal import quick_link as telegram_quick_link
 from . import native_api, mobile_v1_api, mobile_identity
+from . import kofad_ai_views
 
 urlpatterns = [
     path("market/integrations/telegram/quick/<str:bot_kind>/", telegram_quick_link, {"kind": "customer"}, name="telegram_quick_customer"),
+    path("market/ai/chat/", kofad_ai_views.message, name="kofad_ai_chat"),
     path("market/integrations/telegram/", telegram_customer_portal, name="telegram_customer_portal"),
     path("market/integrations/telegram/security/", telegram_customer_security_portal, name="telegram_customer_security_portal"),
     path("market/integrations/telegram/recover/", telegram_customer_recovery, name="telegram_customer_recovery"),
