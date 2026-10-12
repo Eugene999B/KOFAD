@@ -48,10 +48,13 @@ def _staff_analysis(user, days=7, offset=0):
     closings = Closing.objects.filter(
         branch__in=branches, verified_by__isnull=False,
         date__gte=today - timedelta(days=days - 1), date__lte=today,
-    ).select_related("branch").order_by("-date")[:200]
+    ).select_related("branch").order_by("-date")[:2001]
     totals = {"sales": Decimal("0"), "expenses": Decimal("0"), "collections": Decimal("0")}
-    count, most_recent = 0, None
+    count, most_recent, capped = 0, None, False
     for item in closings:
+        if count >= 2000:
+            capped = True
+            break
         n = item.summary or {}
         totals["sales"] += _money(n.get("sales_total"))
         totals["expenses"] += _money(n.get("expenses_total"))
@@ -60,13 +63,14 @@ def _staff_analysis(user, days=7, offset=0):
         if most_recent is None:
             most_recent = item
     return (
-        f"KOFAD VERIFIED CLOSING INTELLIGENCE — last {days} days\n"
+        f"KOFAD VERIFIED CLOSING INTELLIGENCE — {days} day(s) ending {today:%d %b %Y}\n"
         f"Authorized business locations: {branches.count()}\n"
         f"Verified closings reviewed: {count}\n"
         f"Recorded sales: GHS {totals['sales']:,.2f}\n"
         f"Expenses: GHS {totals['expenses']:,.2f}\n"
         f"Debt collections: GHS {totals['collections']:,.2f}\n"
         + (f"Latest verified closing: {most_recent.branch.name}, {most_recent.date:%d %b %Y}\n" if most_recent else "")
+        + ("\nWARNING: Report reached its 2,000-closing safety cap; totals may be incomplete." if capped else "")
         + "\nThese figures are closing-record totals, not a profit or cash balance calculation. "
         "Incomplete/unverified closings are excluded. Reopen the staff dashboard for details."
     )
