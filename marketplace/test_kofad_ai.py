@@ -246,3 +246,24 @@ class PublicKofadAiTests(TestCase):
         request_contents = str(post.call_args.kwargs["json"]["messages"])
         self.assertIn("maize flour", request_contents)
         self.assertNotIn("123456", request_contents)
+
+    @override_settings(KOFAD_OPENROUTER_FREE_ENABLED=False)
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_local_chat_handles_real_visitor_questions_without_repetitive_greeting(self, post):
+        examples = (
+            ("Hi wahts your name", "KOFAD Bot"),
+            ("which model is this", "can't provide"),
+            ("which api are you using", "API configuration"),
+            ("what can you do", "published products"),
+            ("can you track my items if i register", "track KOFAD"),
+            ("payment", "payment options"),
+        )
+        for question, expected in examples:
+            with self.subTest(question=question):
+                response, source = answer(question)
+                self.assertEqual(source, "local")
+                self.assertIn(expected, response)
+        response, source = answer("Explain relativity in detail")
+        self.assertEqual(source, "local")
+        self.assertIn("can't give a reliable answer", response)
+        post.assert_not_called()
