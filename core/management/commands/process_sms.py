@@ -102,8 +102,11 @@ class Command(BaseCommand):
                 if len(reconcile_token) >= 48 and getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False):
                     if settings.MARKET_SITE_ORIGIN.rstrip("/") == "https://market.kofadimpex.com":
                         try:
+                            # The site canonical-host middleware routes internal
+                            # endpoints to staff.kofadimpex.com, on the SAME
+                            # whitelisted kofad-web Railway service.
                             response = requests.post(
-                                "https://market.kofadimpex.com/internal/hubtel-direct/reconcile/",
+                                "https://staff.kofadimpex.com/internal/hubtel-direct/reconcile/",
                                 headers={"X-Kofad-Direct-Reconcile": reconcile_token},
                                 timeout=15, allow_redirects=False,
                             )
