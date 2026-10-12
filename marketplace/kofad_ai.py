@@ -43,6 +43,43 @@ PRIVATE_TOPIC = re.compile(
 )
 
 
+META_QUESTION = re.compile(
+    r"(?i)\b(?:(?:what|which)\s+(?:(?:ai|language|underlying)\s+)?"
+    r"(?:model|api|provider|engine)\b|which\s+llm\b|"
+    r"what\s+(?:are\s+you\s+)?powered\s+by\b)"
+)
+
+
+def _meta_reply():
+    return ("I'm KOFAD Bot. I can't provide details of the internal AI "
+            "model or API configuration. I can help you with KOFAD "
+            "shopping, payments, delivery and verified orders.")
+
+
+def reserve_free_request(channel, user_key, today):
+    """Bound free provider calls across website AND Telegram entry points.
+
+    A shared daily ceiling protects the site's free capacity from Telegram
+    traffic. Uses atomic cache add/incr, and fails closed on cache failure.
+    """
+    if channel not in {"web", "telegram"} or not isinstance(user_key, str):
+        return False
+    scoped_key = f"kofad:ai:free:{channel}:{user_key}:{today}"
+    shared_key = f"kofad:ai:free-global:{today}"
+
+    def take(key, limit):
+        try:
+            if cache.add(key, 1, 86400):
+                return True
+            return cache.incr(key) <= limit
+        except (ValueError, TypeError, ConnectionError):
+            return False
+
+    if not take(scoped_key, 30 if channel == "web" else 8):
+        return False
+    return take(shared_key, 40)
+
+
 def free_configured():
     """The caller cannot configure a paid or dynamically billable model."""
     return bool(getattr(settings, "KOFAD_OPENROUTER_FREE_ENABLED", False)
@@ -161,9 +198,20 @@ def _customer_orders(customer):
     )
 
 
-def _offline(question, products, company):
+def _offline(question, products, company, history=None):
     """Honest local assistance when free AI is not available."""
     q = question.casefold()
+    if products and history and re.search(
+        r"(?i)\b(?:how much|what price|what(?:'s| is) the price|those|that one|"
+        r"and that|same one)\b", question,
+    ):
+        lines = [
+            f"{item['name']} — GHS {item['price']} per {item['unit']}\n{item['url']}"
+            for item in products
+        ]
+        return ("Based on the published product(s) we discussed:\n\n"
+                + "\n\n".join(lines)
+                + "\nConfirm availability and final price at checkout.")
     if re.search(r"\b(?:your name|what(?:'s| is) your name|who are you|introduce yourself)\b", q):
         return ("I'm KOFAD Bot, KOFAD IMPEX's digital assistant. I can explain "
                 "our services and help you find products or follow up on an "
@@ -352,6 +400,8 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
     question = " ".join(question.strip().split())[:MAX_QUESTION + 1]
     if not question or len(question) > MAX_QUESTION:
         return "Please ask a question in 600 characters or fewer.", "local"
+    if META_QUESTION.search(question):
+        return _meta_reply(), "local"
     if INTENT_ORDER.search(question):
         return _customer_orders(customer), "private" if customer else "local"
     if BLOCKED.search(question):
@@ -365,7 +415,7 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
             "dashboard or Staff Telegram Bot. Account: "
             "https://market.kofadimpex.com/market/account/"
         ), "local"
-    public_history = _public_history(history) if ai_allowed else []
+    public_history = _public_history(history)
     topic = _grounding_question(question, public_history)
     company = _company_info()
     products = _public_products(topic)
@@ -373,4 +423,4 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
         generated = _free_completion(question, products, company, public_history)
         if generated:
             return generated, "free-ai"
-    return _offline(question, products, company), "local"
+    return _offline(question, products, company, public_history), "local"
