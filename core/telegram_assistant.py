@@ -492,6 +492,12 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             return "Your KOFAD role does not include inventory access."
         if command == "orders_due" and not roles["sales"]:
             return "Your KOFAD role does not include sales operations."
+        if command == "inventory":
+            from .telegram_intelligence import inventory_brief
+            return inventory_brief(user)
+        if command == "orders_due":
+            from .telegram_intelligence import sales_work_brief
+            return sales_work_brief(user)
         return account_tasks(user)
     if command in {"start", "help", "menu"}:
         return (
