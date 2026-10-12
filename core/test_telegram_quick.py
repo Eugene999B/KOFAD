@@ -138,3 +138,17 @@ class TelegramQuickAuthTests(TestCase):
         linked = link_miniapp_identity("staff", self.staff.pk, "staff", 78398, alerts=True)
         self.assertTrue(linked.notifications_enabled)
         self.assertEqual(queue_role_briefings(timezone.localtime().replace(hour=8)), 0)
+
+    def test_mini_app_staff_welcome_and_manual_pairing_fallback(self):
+        from core.telegram_delivery import _still_authorized
+        self.staff_session()
+        response = self.client.get("/integrations/telegram/quick/staff/")
+        self.assertContains(response, "Connect securely using KOFAD staff account verification")
+        self.assertContains(response, "another browser")
+        identity = link_miniapp_identity(
+            "staff", self.staff.pk, "staff", 88741, alerts=True)
+        self.assertIsNotNone(identity)
+        welcome = TelegramOutbound.objects.get(category="welcome")
+        self.assertEqual(welcome.identity_id, identity.pk)
+        self.assertTrue(_still_authorized(welcome))
+        self.assertIn("/month", staff_menu(self.staff))
