@@ -44,7 +44,10 @@ def staff_menu(user):
                "/alerts_off — pause optional notices"]
     if role["management"]:
         options += ["/today — verified closing intelligence for today",
-                    "/week — last seven days", "/month — last 30 days"]
+                    "/yesterday — previous day's verified closings",
+                    "/week — last seven days", "/month — last 30 days",
+                    "/compare — compare two seven-day sales periods",
+                    "/compare_month — compare two 30-day sales periods"]
     if role["inventory"]:
         options.append("/inventory — stock exceptions in your assigned locations")
     if role["sales"]:
