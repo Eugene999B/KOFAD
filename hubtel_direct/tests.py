@@ -171,17 +171,17 @@ class DirectWorkflowTests(MarketFixtures):
         key = uuid.uuid4()
         tx = service.create_payout(
             self.staff, "send_bank", "10.00", "0123456789", "Supplier One",
-            bank_code="300311", idempotency_key=key,
+            bank_code="300311", idempotency_key=key, purpose="Approved test supplier invoice",
         )
         repeated = service.create_payout(
             self.staff, "send_bank", "10.00", "0123456789", "Supplier One",
-            bank_code="300311", idempotency_key=key,
+            bank_code="300311", idempotency_key=key, purpose="Approved test supplier invoice",
         )
         self.assertEqual(tx.pk, repeated.pk)
         with self.assertRaises(ValidationError):
             service.create_payout(
                 self.staff, "send_bank", "11.00", "0123456789", "Supplier One",
-                bank_code="300311", idempotency_key=key,
+                bank_code="300311", idempotency_key=key, purpose="Approved test supplier invoice",
             )
         with self.assertRaises(PermissionDenied):
             service.approve_payout(tx.pk, self.staff)
@@ -203,5 +203,5 @@ class DirectWorkflowTests(MarketFixtures):
             ("send_momo", "10.00", "123", "Name", "mtn-gh", ""),
         ]:
             with self.assertRaises(ValidationError):
-                service.create_payout(self.staff, *params)
+                service.create_payout(self.staff, *params, idempotency_key=uuid.uuid4(), purpose="Approved test supplier invoice")
         post.assert_not_called()
