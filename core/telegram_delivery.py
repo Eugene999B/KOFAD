@@ -10,6 +10,9 @@ from .telegram_channels import BOT_KINDS, bot_can_send, bot_token
 
 def _still_authorized(notice):
     identity = notice.identity
+    # Always re-read opt-in and revocation flags, even if a queued object was
+    # prefetched before the recipient changed notification preferences.
+    identity.refresh_from_db()
     from .telegram_integration import linked_identity
     current = linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind)
     if current is None or current.pk != identity.pk:
