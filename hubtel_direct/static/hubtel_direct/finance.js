@@ -28,6 +28,7 @@
         amount: form.elements.amount.value,
         destination: form.elements.destination.value.trim(),
         recipient_name: form.elements.recipient_name.value.trim(),
+        purpose: form.elements.purpose.value.trim(),
       };
       if (isBank) body.bank_code = form.elements.bank_code.value;
       else body.channel = form.elements.channel.value;
