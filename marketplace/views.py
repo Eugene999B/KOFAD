@@ -1501,7 +1501,6 @@ def customer_order(request, customer, pk):
         hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
             customer=customer, phone=normalize_ghana_phone(customer.phone)
         ).exists()),
-        hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED and customer.phone and customer.verified_at),
         momo_phone_verification=momo_security.pending_for_order(request, customer, order) if hubtel.selected_provider() == "paystack" else None,
         payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
             momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
