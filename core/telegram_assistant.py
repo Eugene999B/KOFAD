@@ -346,7 +346,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         # Deliberately opt-in to external AI with /ask. Never send private KOFAD
         # chat/session/customer/staff/account info to an external free provider.
         import re
-        from marketplace.kofad_ai import answer
+        import hashlib
+        from marketplace.kofad_ai import answer, free_configured, reserve_free_request
         public_question = tail.strip()
         if not public_question:
             return (
@@ -364,11 +365,24 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "Use /today, /week, /month or /tasks for reports permitted "
                 "by your KOFAD role."
             )
-        result, _source = answer(public_question[:601], customer=None, ai_allowed=True)
-        return result[:1600] + (
-            "\n\nPublic KOFAD questions only. Free AI may be inaccurate; "
-            "check live product listings or customer support."
+        # /ask is explicit consent for a PUBLIC question only. Each bot user
+        # has a small allowance shared with the web's free daily budget.
+        # Hash Telegram IDs so cache keys are not directly identifying.
+        ai_permitted = False
+        if free_configured():
+            user_hash = hashlib.sha256(
+                f"{settings.SECRET_KEY}:{bot_kind}:{user_id}".encode()
+            ).hexdigest()[:20]
+            ai_permitted = reserve_free_request(
+                "telegram", user_hash, timezone.now().strftime("%Y%m%d"),
+            )
+        result, source = answer(
+            public_question[:601], customer=None, ai_allowed=ai_permitted,
         )
+        note = ("Free AI unavailable or at its daily limit; this is local guidance."
+                if source == "local" and not ai_permitted else
+                "Public information only; confirm important details with KOFAD.")
+        return result[:1600] + "\n\n" + note
 
     if command in {"login", "signin", "authenticate"}:
         return ("Tap the secure Sign in button below. Sign in using your normal "
