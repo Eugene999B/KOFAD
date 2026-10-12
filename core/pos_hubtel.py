@@ -352,7 +352,7 @@ def status_for_staff(user, branch, reference):
     return response_state(held)
 
 
-def reconcile_due(limit=10):
+def reconcile_due(limit=10, *, include_direct=False):
     if not hubtel.configured() and not direct_client.enabled("receive"):
         return 0
     now = timezone.now()
@@ -364,6 +364,10 @@ def reconcile_due(limit=10):
     count = 0
     for held in rows:
         state = state_of(held)
+        # The communications worker does NOT have the whitelisted web IPs.
+        # Direct status checks run through the secured web egress relay only.
+        if state.get("flow") == "direct" and not include_direct:
+            continue
         if float(state.get("next_check_at") or 0) > now.timestamp():
             continue
         reference = state.get("reference")
