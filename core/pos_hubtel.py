@@ -1,9 +1,4 @@
-"""Hubtel hosted MoMo checkout for cashier sales.
-
-A verified Hubtel transaction, never a callback or browser report, posts the sale.
-The merchant checkout link is shown to the cashier; customers enter their
-own MoMo credentials only in Hubtel's secure flow.
-"""
+"""Direct Hubtel cashier MoMo prompts, with legacy hosted-history reconciliation."""
 import copy
 import hashlib
 import json
@@ -12,6 +7,8 @@ import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
+from django.core import signing
 from urllib.parse import urlsplit
 
 import requests
@@ -25,6 +22,7 @@ from core import pos_paystack, services
 from core.identity import normalize_ghana_phone
 from core.models import Document, HeldSale, Idempotency
 from marketplace import hubtel
+from hubtel_direct import client as direct_client
 from marketplace.services import PaymentVerificationUnavailable
 
 logger = logging.getLogger(__name__)
@@ -103,7 +101,7 @@ def mark_attention(reference, message):
         save_state(held, state)
 
 
-def start(user, branch, sale_payload, request_key, phone, network, email):
+def start(user, branch, sale_payload, request_key, phone, network, email, wallet_proof=None):
     services.permit(user, branch, "operate_sales")
     if not isinstance(sale_payload, dict) or sale_payload.get("kind", "sale") != "sale":
         raise ValidationError("Invalid sale request.")
@@ -113,14 +111,33 @@ def start(user, branch, sale_payload, request_key, phone, network, email):
         if saved.branch_id != branch.pk or saved.user_id != user.pk:
             raise ValidationError("This payment request could not be found.")
         return response_state(saved)
-    if hubtel.selected_provider() != "hubtel" or not hubtel.ready("hubtel"):
-        raise ValidationError("Hubtel is not enabled for new cashier payments.")
+    if hubtel.selected_provider() != "hubtel":
+        raise ValidationError("Hubtel is not selected for cashier payments.")
+    direct_client.require_enabled("receive")
 
     payload = copy.deepcopy(sale_payload)
     if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
         raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
     phone = normalize_ghana_phone(phone)
-    # Unlike Paystack's charge API, Hubtel's hosted checkout does not require
+    network = {"mtn": "mtn-gh", "vod": "vodafone-gh", "atl": "tigo-gh"}.get(str(network), network)
+    if network not in direct_client.CHANNELS:
+        raise ValidationError("Select the correct MoMo network.")
+    try:
+        verified = signing.loads(
+            wallet_proof, salt="kofad-hubtel-staff-wallet-verify-v1", max_age=180,
+        )
+    except (signing.BadSignature, TypeError, ValueError) as exc:
+        raise ValidationError("Verify the Mobile Money wallet name before requesting payment.") from exc
+    if (
+        not isinstance(verified, dict) or verified.get("user") != user.pk
+        or verified.get("branch") != branch.pk
+        or verified.get("phone") != phone.lstrip("+")
+        or verified.get("channel") != network
+        or not verified.get("name")
+    ):
+        raise ValidationError("The wallet verification does not match this phone or network.")
+    wallet_name = str(verified["name"])[:140]
+    # Unlike Paystack's's charge API, Hubtel's hosted checkout does not require
     # a shopper email address. Preserve it when supplied, but do not block sales.
     email = str(email or "").strip().lower()
     if email:
@@ -134,13 +151,13 @@ def start(user, branch, sale_payload, request_key, phone, network, email):
         raise ValidationError("The MoMo request must exactly match the full sale total.")
     now = timezone.now()
     state = {
-        "provider": "hubtel", "reference": reference, "status": "initializing",
-        "phone": phone, "network": str(network or ""), "email": email,
+        "provider": "hubtel", "flow": "direct", "reference": reference, "status": "initializing",
+        "phone": phone, "network": str(network or ""), "email": email, "verified_wallet_name": wallet_name,
         "amount": str(total), "online_markup_percent": str(markup),
         "request_key": str(request_key),
         "authorization_url": "", "display_text": "",
-        "message": "Creating a secure Hubtel checkout.",
-        "created_at": now.timestamp(), "next_check_at": (now + timedelta(seconds=40)).timestamp(),
+        "message": "Sending a direct Hubtel Mobile Money approval prompt.",
+        "created_at": now.timestamp(), "next_check_at": (now + timedelta(minutes=5)).timestamp(),
         "check_count": 0, "document_id": "",
     }
     claim_key = uuid.uuid5(uuid.NAMESPACE_URL, "kofad-pos-hubtel:" + reference)
@@ -166,48 +183,37 @@ def start(user, branch, sale_payload, request_key, phone, network, email):
             cart={"sale_payload": payload, "payment_request": state},
         )
 
-    payload_request = {
-        "totalAmount": float(total),
-        "description": "KOFAD cashier sale",
-        "merchantAccountNumber": settings.HUBTEL_COLLECTION_ACCOUNT,
-        "clientReference": reference,
-        "callbackUrl": hubtel.PUBLIC_ORIGIN + "/market/payments/hubtel/callback/",
-        "returnUrl": "https://staff.kofadimpex.com/sales/new/",
-        "cancellationUrl": "https://staff.kofadimpex.com/sales/new/",
-    }
+    # The reference and HeldSale already exist BEFORE this irreversible POST.
+    # Never retry after an unknown network result.
+    tx = SimpleNamespace(
+        kind="receive", channel=network, bank_code="", amount=total,
+        client_reference=reference, recipient_name=wallet_name,
+        destination_encrypted=direct_client.seal(phone.lstrip("+")),
+    )
     try:
-        response = requests.post(
-            hubtel.INITIATE_URL, headers=hubtel.headers(), json=payload_request,
-            timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
-        )
-        body = response.json()
-        data = body.get("data") if isinstance(body, dict) else None
-        url = data.get("checkoutUrl") if isinstance(data, dict) else ""
-        parsed = urlsplit(url) if isinstance(url, str) else urlsplit("")
-        valid = (
-            200 <= response.status_code < 300 and isinstance(body, dict)
-            and body.get("responseCode") == "0000"
-            and isinstance(data, dict) and data.get("clientReference") == reference
-            and data.get("checkoutId") and parsed.scheme == "https"
-            and parsed.netloc == "pay.hubtel.com" and bool(parsed.path.strip("/"))
-            and len(url) <= 200
-        )
-    except (requests.RequestException, ValueError, TypeError):
-        valid = False
-    if not valid:
+        response_code, transaction_id = direct_client.submit(tx)
+    except direct_client.ProviderRejected as exc:
         state.update(
-            status="submission_unknown",
-            message="Hubtel checkout outcome is uncertain. Do not start another payment; KOFAD is checking.",
-            next_check_at=(timezone.now() + timedelta(seconds=40)).timestamp(),
+            status="failed", provider_code=exc.code,
+            message="Hubtel rejected the payment request (" + exc.code + "). No sale was posted.",
+            next_check_at=None,
         )
         save_state(held, state)
         return response_state(held)
-
+    except (direct_client.SubmissionUnknown, ValidationError):
+        state.update(
+            status="submission_unknown",
+            message="Hubtel request outcome unknown. Do not send another prompt; KOFAD will check it.",
+            next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
+        )
+        save_state(held, state)
+        return response_state(held)
     state.update(
-        status="pending", authorization_url=url,
-        message="Open the secure Hubtel checkout and let the customer approve payment.",
-        display_text="The customer must complete payment in Hubtel. Never collect their MoMo PIN.",
-        next_check_at=(timezone.now() + timedelta(seconds=40)).timestamp(),
+        status="pending", provider_code=response_code, provider_transaction_id=transaction_id,
+        authorization_url="",
+        message="Direct Mobile Money prompt sent. Ask the customer to approve it on their own phone.",
+        display_text="Waiting for Hubtel confirmation. Do not charge again or ask for a MoMo PIN.",
+        next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
     )
     save_state(held, state)
     held.refresh_from_db()
@@ -231,15 +237,50 @@ def reconcile(reference, *, force=False):
             return response_state(held)
         state["check_count"] = int(state.get("check_count") or 0) + 1
         state["lease_until"] = now + settings.HUBTEL_TIMEOUT_SECONDS + 5
-        state["next_check_at"] = now + 40
+        state["next_check_at"] = now + (300 if state.get("flow") == "direct" else 40)
         save_state(held, state)
 
-    try:
-        verified = hubtel.verify(reference)
-    except PaymentVerificationUnavailable:
-        return response_state(held_for(reference))
-    if verified.get("status") != "Paid":
-        return response_state(held_for(reference))
+    if state.get("flow") == "direct":
+        # The receive-status endpoint is mandatory after five minutes when the
+        # provider's final callback was not trusted/verified. No early duplicate.
+        if now - float(state.get("created_at") or now) < 300:
+            return response_state(held_for(reference))
+        tx = SimpleNamespace(
+            kind="receive", channel=state["network"],
+            client_reference=reference, amount=Decimal(str(state["amount"])),
+            hubtel_transaction_id=state.get("provider_transaction_id") or "",
+        )
+        try:
+            outcome, tid = direct_client.check(tx)
+        except (direct_client.StatusUnconfirmed, ValidationError):
+            return response_state(held_for(reference))
+        if outcome == "failed":
+            with transaction.atomic():
+                held = held_for(reference, lock=True)
+                result = state_of(held)
+                if result.get("status") in PENDING:
+                    result.update(status="failed", next_check_at=None,
+                                  message="Hubtel confirmed the Mobile Money request was unsuccessful.")
+                    save_state(held, result)
+            return response_state(held_for(reference))
+        if outcome == "attention":
+            mark_attention(reference, "Hubtel reported a disputed payment. Manager review required.")
+            return response_state(held_for(reference))
+        if outcome != "success":
+            return response_state(held_for(reference))
+        verified = {
+            "status": "Paid", "amount": state["amount"], "currencyCode": "GHS",
+            "paymentMethod": "mobilemoney", "transactionId": tid,
+            "clientReference": reference,
+        }
+    else:
+        # Historical Hubtel Online Checkout charges must still reconcile.
+        try:
+            verified = hubtel.verify(reference)
+        except PaymentVerificationUnavailable:
+            return response_state(held_for(reference))
+        if verified.get("status") != "Paid":
+            return response_state(held_for(reference))
     try:
         amount = Decimal(str(verified.get("amount")))
         currency = str(verified.get("currencyCode") or "").strip().upper()
@@ -309,7 +350,7 @@ def status_for_staff(user, branch, reference):
 
 
 def reconcile_due(limit=10):
-    if not hubtel.configured():
+    if not hubtel.configured() and not direct_client.enabled("receive"):
         return 0
     now = timezone.now()
     rows = HeldSale.objects.filter(
