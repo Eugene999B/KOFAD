@@ -1440,6 +1440,8 @@ def customer_payment_otp(request, customer, pk):
 
 @market_customer_required
 def customer_order(request, customer, pk):
+    from hubtel_direct import client as hubtel_direct
+    from .models import VerifiedMomoPhone
     order = get_object_or_404(
         OnlineOrder.objects.prefetch_related(
             "lines", "events", "delivery_updates", "return_requests__lines"
@@ -1456,6 +1458,11 @@ def customer_order(request, customer, pk):
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel.ready(),
+        hubtel_direct_available=hubtel_direct.enabled("receive"),
+        hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
+            customer=customer, phone=normalize_ghana_phone(customer.phone)
+        ).exists()),
+        hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED and customer.phone and customer.verified_at),
         momo_phone_verification=momo_security.pending_for_order(request, customer, order),
         payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
             momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),

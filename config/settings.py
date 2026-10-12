@@ -15,7 +15,7 @@ CSRF_FAILURE_VIEW = "core.views.csrf_failure"
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles", "core",
-    "marketplace.apps.MarketplaceConfig",
+    "marketplace.apps.MarketplaceConfig", "hubtel_direct.apps.HubtelDirectConfig",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "core.domain_middleware.OfficialDomainMiddleware",
@@ -173,12 +173,23 @@ MAP_LOOKUP_GLOBAL_MINUTE_LIMIT = int(os.environ.get("MAP_LOOKUP_GLOBAL_MINUTE_LI
 GOOGLE_MAPS_MAP_ID = os.environ.get("GOOGLE_MAPS_MAP_ID", "")
 GOOGLE_MAPS_TIMEOUT_SECONDS = int(os.environ.get("GOOGLE_MAPS_TIMEOUT_SECONDS", "12"))
 
-# Hubtel Online Checkout only. Direct MoMo/transfer APIs are outside our approved scope.
+# Existing Hubtel Online Checkout, unchanged. New Direct APIs are separately gated.
 HUBTEL_API_ID = os.environ.get("HUBTEL_API_ID", "").strip()
 HUBTEL_API_KEY = os.environ.get("HUBTEL_API_KEY", "").strip()
 HUBTEL_COLLECTION_ACCOUNT = os.environ.get("HUBTEL_COLLECTION_ACCOUNT", "").strip()
 HUBTEL_TIMEOUT_SECONDS = int(os.environ.get("HUBTEL_TIMEOUT_SECONDS", "10"))
 HUBTEL_CHECKOUT_ENABLED = os.environ.get("HUBTEL_CHECKOUT_ENABLED", "0") == "1"
+# Separate September 2026 Hubtel Direct receive/disbursement APIs. All OFF until
+# Hubtel confirms the fixed outbound IP, API scopes, audited payouts and merchant UAT.
+HUBTEL_DISBURSEMENT_ACCOUNT = os.environ.get("HUBTEL_DISBURSEMENT_ACCOUNT", "").strip()
+HUBTEL_DIRECT_EGRESS_CONFIRMED = os.environ.get("HUBTEL_DIRECT_EGRESS_CONFIRMED", "0") == "1"
+HUBTEL_DIRECT_RECONCILE_TOKEN = os.environ.get("HUBTEL_DIRECT_RECONCILE_TOKEN", "")
+HUBTEL_DIRECT_RECEIVE_ENABLED = os.environ.get("HUBTEL_DIRECT_RECEIVE_ENABLED", "0") == "1"
+HUBTEL_DIRECT_SEND_MOMO_ENABLED = os.environ.get("HUBTEL_DIRECT_SEND_MOMO_ENABLED", "0") == "1"
+HUBTEL_DIRECT_SEND_BANK_ENABLED = os.environ.get("HUBTEL_DIRECT_SEND_BANK_ENABLED", "0") == "1"
+HUBTEL_DIRECT_MAX_PAYOUT_GHS = os.environ.get("HUBTEL_DIRECT_MAX_PAYOUT_GHS", "500.00")
+HUBTEL_DIRECT_DAILY_PAYOUT_GHS = os.environ.get("HUBTEL_DIRECT_DAILY_PAYOUT_GHS", "2000.00")
+
 
 # Independent kill switch. Enable only after verified-number configuration and a delivery test.
 WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"

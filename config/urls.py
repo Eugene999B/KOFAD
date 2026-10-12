@@ -17,4 +17,6 @@ urlpatterns = [
     path(settings.STAFF_LOGIN_SLUG + "/technical-admin/", admin.site.urls),
     path("", include("marketplace.urls")),
     path("", include("core.urls")),
+    # Isolated, disabled-by-default Hubtel Direct APIs; no existing route replaced.
+    path("", include("hubtel_direct.urls")),
 ]

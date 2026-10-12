@@ -308,8 +308,14 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "purchasing-new-product-mobile.png"), full_page=True)
 
     page.goto("http://127.0.0.1:8000/finance/")
+    # Finance's existing deferred JS must initialize before the funding-source UI.
+    page.wait_for_function(
+        "() => document.querySelector('#expense-closing-treatment')?.disabled === true"
+    )
     page.get_by_label("Funding source", exact=True).select_option("prior_business_funds")
-    assert page.get_by_label("Daily Closing treatment", exact=True).input_value() == "0"
+    page.wait_for_function(
+        "() => document.querySelector('#expense-closing-treatment')?.value === '0'"
+    )
     assert page.get_by_text("Accounting only for Daily Closing.", exact=True).is_visible()
     page.get_by_label("Funding source", exact=True).select_option("today_sales_receipts")
     assert page.get_by_label("Daily Closing treatment", exact=True).input_value() == "1"
