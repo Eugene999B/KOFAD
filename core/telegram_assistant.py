@@ -124,7 +124,7 @@ def _conversational_command(text, bot_kind):
         return "aboutai"
     if re.search(r"\b(?:who are you|your name|introduce yourself)\b", q):
         return "introduce"
-    if re.fullmatch(r"(?:hi|hello|hey|good morning|good evening|good afternoon)[\w\s]*", q):
+    if re.fullmatch(r"(?:hi|hello|hey|good morning|good evening|good afternoon)(?: there| team| everyone| bot)?", q):
         return "introduce"
     if any(x in q for x in ("what can you do", "how can you help", "show me your features",
                             "what are your capabilities", "help me use this bot")):
