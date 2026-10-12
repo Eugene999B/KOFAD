@@ -292,6 +292,10 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         identity.save(update_fields=[
             "notifications_enabled", "closing_opt_in", "critical_opt_in", "stock_opt_in",
         ])
+        from .telegram_intelligence import staff_welcome
+        from .telegram_integration import queue_notice
+        queue_notice(identity, "welcome", f"tg:welcome:{identity.pk}",
+                     staff_welcome(staff))
         return (
             "Staff notices enabled for your CURRENT permissions and branches. "
             "Daily closing, critical variances, and inventory alerts are sent only "
