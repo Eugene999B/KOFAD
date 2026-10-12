@@ -218,6 +218,14 @@ def _free_completion(question, products, company):
     }, ensure_ascii=False, separators=(",", ":"))
     payload = {
         "model": FREE_MODEL,
+        # A second, provider-level billing guard: never route to a model or
+        # provider charging > $0 for either input or output tokens.
+        # Also exclude providers that collect prompts; if no such FREE model
+        # exists, the request fails safely and the local KOFAD FAQ responds.
+        "provider": {
+            "max_price": {"prompt": 0, "completion": 0},
+            "data_collection": "deny",
+        },
         "temperature": 0.35,
         "max_tokens": 320,
         "stream": False,
