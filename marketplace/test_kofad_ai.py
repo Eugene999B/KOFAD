@@ -172,3 +172,77 @@ class PublicKofadAiTests(TestCase):
         self.assertContains(response, 'KOFAD Bot')
         self.assertNotContains(response, "fake-test-only-should-never-display")
         self.assertContains(response, "/market/ai/chat/")
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_public_followup_uses_previous_product_question_only(self, post):
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "choices": [{"message": {"content": "The published maize flour listing shows its price."}}]
+        })
+        reply, source = answer(
+            "How much is that?", customer=self.customer, history=[
+                {"role": "user", "content": "Do you sell maize flour?"},
+                {"role": "assistant", "content": "Yes, maize flour is listed."},
+            ]
+        )
+        self.assertEqual(source, "free-ai")
+        self.assertIn("maize", reply.lower())
+        sent = post.call_args.kwargs["json"]
+        self.assertEqual(sent["model"], "openrouter/free")
+        self.assertIn("Public Maize Flour", str(sent["messages"]))
+        self.assertEqual(sent["messages"][-1]["content"], "How much is that?")
+        self.assertEqual(sent["messages"][-2]["content"], "Yes, maize flour is listed.")
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_sensitive_forged_history_is_removed_before_openrouter(self, post):
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "choices": [{"message": {"content": "Please view the FAQ."}}]
+        })
+        answer("What are KOFAD policies?", history=[
+            {"role": "user", "content": "My password is abcdef123"},
+            {"role": "assistant", "content": "Phone +233541234567"},
+            {"role": "user", "content": "My recent orders"},
+            {"role": "assistant", "content": "Internal sales records"},
+            {"role": "user", "content": "Tell me about delivery"},
+        ])
+        content = str(post.call_args.kwargs["json"])
+        self.assertNotIn("abcdef123", content)
+        self.assertNotIn("+233541234567", content)
+        self.assertNotIn("My recent orders", content)
+        self.assertNotIn("Internal sales records", content)
+        self.assertIn("Tell me about delivery", content)
+        self.assertEqual(post.call_args.kwargs["json"]["provider"]["max_price"],
+                         {"prompt": 0, "completion": 0})
+
+    def test_v2_homepage_has_compact_drag_and_new_conversation_controls(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Drag to move")
+        self.assertContains(response, "data-kofad-ai-new")
+        self.assertContains(response, "data-kofad-ai-feed")
+        self.assertContains(response, "data-kofad-ai-consent")
+        self.assertNotContains(response, "fake-test-only-should-never-display")
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_chat_endpoint_sanitizes_client_followup_history(self, post):
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "choices": [{"message": {"content": "Here are KOFAD products."}}]
+        })
+        payload = {
+            "message": "And the price of that?",
+            "ai_consent": True,
+            "history": [
+                {"role": "user", "content": "Tell me about maize flour"},
+                {"role": "assistant", "content": "Our published maize flour listing."},
+                {"role": "user", "content": "My OTP code is 123456"},
+            ]
+        }
+        import json
+        response = self.client.post(
+            "/market/ai/chat/", data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["source"], "free-ai")
+        request_contents = str(post.call_args.kwargs["json"]["messages"])
+        self.assertIn("maize flour", request_contents)
+        self.assertNotIn("123456", request_contents)
