@@ -265,7 +265,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "/staff — visit the private KOFAD staff bot\n"
                 "/support — official customer service\n"
                 "/status — check this bot's verified identity\n"
-                "/stop — pause optional notifications\n"\n                "/myalerts — security recovery consent status"
+                "/stop — pause optional notifications\n""
+                "/myalerts — security recovery consent status"
             )
         if command in {"link", "connect"}:
             return (
@@ -304,7 +305,10 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "/orders — check your own orders (secure link required)\n"
                 "/track REFERENCE — track an order in your account\n"
                 "/link — connect your KOFAD customer account\n"
-                "/alerts_on — enable private order updates\n"\n                "/promos_on — opt in to occasional promotions\n"\n                "/promos_off — opt out of promotions\n"\n                "/myalerts — see your subscriptions\n"
+                "/alerts_on — enable private order updates\n""
+                "/promos_on — opt in to occasional promotions\n""
+                "/promos_off — opt out of promotions\n""
+                "/myalerts — see your subscriptions\n"
                 "/support — contact the store\n"
                 "/stop — pause notifications\n"
                 "Account security and recovery are handled by the Official Bot."
@@ -345,7 +349,11 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return (
             "KOFAD — Staff & Management Assistant\n\n"
             "/link — securely connect existing KOFAD staff account\n"
-            "/analysis — verified closing performance, within your own access scope\n"\n            "/today, /week, /month — select reporting period\n"\n            "/mybranches — see authorized reporting branches\n"\n            "/alerts_on — subscribe to notices for your permissions\n"\n            "/myalerts — review subscriptions\n"
+            "/analysis — verified closing performance, within your own access scope\n""
+            "/today, /week, /month — select reporting period\n""
+            "/mybranches — see authorized reporting branches\n""
+            "/alerts_on — subscribe to notices for your permissions\n""
+            "/myalerts — review subscriptions\n"
             "/reports — authorized management summary\n"
             "/alerts — notice subscriptions\n"
             "/status — verify current staff link\n"
