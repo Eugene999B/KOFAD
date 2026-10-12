@@ -278,3 +278,9 @@ TELEGRAM_CUSTOMER_WEBHOOK_SECRET = os.environ.get("TELEGRAM_CUSTOMER_WEBHOOK_SEC
 TELEGRAM_STAFF_WEBHOOK_SECRET = os.environ.get("TELEGRAM_STAFF_WEBHOOK_SECRET", "").strip()
 TELEGRAM_CUSTOMER_BOT_ENABLED = os.environ.get("TELEGRAM_CUSTOMER_BOT_ENABLED", "0") == "1"
 TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") == "1"
+
+# KOFAD public AI assistant. Disabled until the user supplies their own key.
+# Model is hard-coded in marketplace/kofad_ai.py to OpenRouter's $0 free router;
+# never accept a paid model ID, dynamic fallback or customer-supplied model.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", "0") == "1"
