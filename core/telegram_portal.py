@@ -1,6 +1,7 @@
 """KOFAD-authenticated Telegram pairing pages; never infer identity from phone or handle."""
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.views.decorators.cache import never_cache
@@ -25,12 +26,28 @@ def _portal(request, kind, account, bot_kind=None):
         elif not entered_password or not account.check_password(entered_password):
             messages.error(request, "Enter your current KOFAD password to continue.")
         elif action == "start":
-            url = begin_link(kind, account.pk, bot_kind=bot_kind)
-            request.session[f"telegram_pair_url_{kind}_{bot_kind}"] = url
-            messages.success(request, "Open the Telegram link, then return and enter the code provided by the bot.")
+            # Phone is OPTIONAL. Telegram pairing works even for a superadmin
+            # who has never recorded a recovery number.
+            proposed_phone = request.POST.get("optional_phone", "").strip() if kind == "staff" else ""
+            try:
+                url = begin_link(kind, account.pk, bot_kind=bot_kind, proposed_phone=proposed_phone)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+                request.session.pop(f"telegram_pair_url_{kind}_{bot_kind}", None)
+            else:
+                request.session[f"telegram_pair_url_{kind}_{bot_kind}"] = url
+                request.session[f"telegram_pair_has_phone_{kind}_{bot_kind}"] = bool(proposed_phone)
+                messages.success(request, (
+                    "Open the Telegram bot link and press Start. The six-digit code appears INSIDE "
+                    "that bot's Telegram chat, not as a regular text message. "
+                    + ("If you entered a mobile number, send /sharephone to confirm it first. "
+                       if proposed_phone else "")
+                    + "Return here with the code to complete linking."
+                ))
         elif action == "confirm":
             if confirm_link(kind, account.pk, request.POST.get("confirmation_code", ""), bot_kind=bot_kind):
                 request.session.pop(f"telegram_pair_url_{kind}_{bot_kind}", None)
+                request.session.pop(f"telegram_pair_has_phone_{kind}_{bot_kind}", None)
                 messages.success(request, "Telegram has been securely connected to your KOFAD account.")
             else:
                 messages.error(request, "Confirmation failed or expired. Retry or start a new connection.")
@@ -38,6 +55,7 @@ def _portal(request, kind, account, bot_kind=None):
             TelegramIdentity.objects.filter(kind=kind, owner_id=account.pk, bot_kind=bot_kind).delete()
             TelegramLinkChallenge.objects.filter(kind=kind, owner_id=account.pk, bot_kind=bot_kind).delete()
             request.session.pop(f"telegram_pair_url_{kind}_{bot_kind}", None)
+            request.session.pop(f"telegram_pair_has_phone_{kind}_{bot_kind}", None)
             messages.success(request, "Your Telegram account was disconnected.")
         elif action == "preferences" and identity:
             # Never silently subscribe to messaging. Require explicit opt-in.
@@ -69,6 +87,8 @@ def _portal(request, kind, account, bot_kind=None):
         "telegram_bot_url": bot_link(bot_kind), "telegram_identity": identity,
         "telegram_active": active,
         "telegram_pair_url": request.session.get(f"telegram_pair_url_{kind}_{bot_kind}", ""),
+        "telegram_pair_has_phone": request.session.get(f"telegram_pair_has_phone_{kind}_{bot_kind}", False),
+        "staff_recovery_phone": (Access.objects.filter(user=account).values_list("recovery_phone", flat=True).first() or "") if kind == "staff" else "",
         "is_inventory": kind == "staff" and (account.is_superuser or
             account.has_perm("core.manage_company") or account.has_perm("core.operate_inventory")),
         "is_management": kind == "staff" and (account.is_superuser or any(
