@@ -1149,6 +1149,9 @@ class TelegramLinkChallenge(models.Model):
     owner_id = models.PositiveBigIntegerField()
     token_digest = models.CharField(max_length=64, unique=True)
     confirmation_digest = models.CharField(max_length=64, blank=True)
+    # Optional recovery contact enrolled by website + Telegram-owned contact share.
+    proposed_phone = models.CharField(max_length=20, blank=True, default="")
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
     attempts = models.PositiveSmallIntegerField(default=0)
     telegram_user_id = models.BigIntegerField(null=True, blank=True)
     chat_id = models.BigIntegerField(null=True, blank=True)
