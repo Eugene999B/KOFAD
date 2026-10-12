@@ -339,7 +339,11 @@ class EnterpriseTelegramTests(TestCase):
         self.assertEqual(queue_pending_closing_reviews(now=now), 0)
         notice = TelegramOutbound.objects.get(source_key=f"tg:review:{pending.pk}:{self.staff.pk}")
         self.assertTrue(_still_authorized(notice))
-        pending.verified_by = self.staff
+        # KOFAD protects closing verification: submitter and reviewer MUST differ.
+        verifier = User.objects.create_user(
+            "independent_telegram_reviewer", "reviewer@example.test", "ReviewPass!2026Kofad"
+        )
+        pending.verified_by = verifier
         pending.save(update_fields=["verified_by"])
         self.assertFalse(_still_authorized(notice))
 
