@@ -484,3 +484,60 @@ def queue_pending_closing_reviews(now=None):
                 branch=closing.branch,
             ))
     return count
+
+
+
+def queue_weekly_customer_showcase(now=None):
+    """Consent-only weekly message with actual published FEATURED products.
+
+    No guessed discounts, unapproved offers, or arbitrary phone-number lookup.
+    Send only to already linked, verified and marketing-opted-in customers.
+    Deduplicate by ISO week and customer ID.
+    """
+    if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+        return 0
+    from marketplace.models import MarketListing
+    from .models import TelegramIdentity
+
+    now = timezone.localtime(now or timezone.now())
+    if now.weekday() != 0 or now.hour != 10:
+        return 0
+    published = MarketListing.objects.filter(
+        enabled=True, featured=True, product__active=True,
+    ).select_related("product").order_by("sort_order", "product__name")[:3]
+    rows = []
+    for listing in published:
+        price = listing.market_price
+        if not price or price <= 0:
+            continue
+        rows.append(
+            f"{listing.display_name[:80]} — GHS {price:,.2f} / {listing.selling_label[:25]}\n"
+            f"https://market.kofadimpex.com/market/products/{listing.product_id}/"
+        )
+    if not rows:
+        return 0
+    body = (
+        "KOFAD MARKET — FEATURED THIS WEEK\n\n"
+        + "\n\n".join(rows)
+        + "\n\nPrices and availability can change. Check the live listing before ordering.\n"
+        "You opted in to KOFAD Telegram promotions. Reply /promos_off at any time."
+    )
+    iso_year, iso_week, _ = now.date().isocalendar()
+    count = 0
+    for identity in TelegramIdentity.objects.filter(
+        bot_kind="customer", kind="customer", revoked_at__isnull=True,
+        notifications_enabled=True, marketing_opt_in=True,
+    ).iterator(chunk_size=200):
+        if linked_identity("customer", identity.owner_id, bot_kind="customer") is None:
+            continue
+        from marketplace.models import CustomerAccount
+        if not CustomerAccount.objects.filter(
+            pk=identity.owner_id, active=True, verified_at__isnull=False,
+        ).exists():
+            continue
+        count += int(queue_notice(
+            identity, "marketing",
+            f"tg:featured:{iso_year}-W{iso_week:02d}:{identity.owner_id}",
+            body,
+        ))
+    return count
