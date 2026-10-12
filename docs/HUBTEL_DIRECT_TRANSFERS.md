@@ -4,7 +4,8 @@
 the buyer authorizes Direct Receive on the registered, non-editable account
 phone (SMS verification is required for a new account phone). Cashiers can
 enter a customer's Ghana MoMo wallet number and choose MTN, Telecel or
-AirtelTigo, but must get customer consent and use the separate Hubtel Wallet
+AirtelTigo, but must obtain customer consent, send an SMS verification code to
+that exact wallet, verify the code, and use the separate Hubtel Wallet
 Registration & Username Query API to show the registered wallet holder's
 **provider-supplied name** before sending a direct approval prompt. The
 staff verification API is documented as
