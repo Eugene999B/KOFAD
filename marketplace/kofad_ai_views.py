@@ -10,7 +10,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from . import services
-from .kofad_ai import answer, free_configured
+from .kofad_ai import answer, free_configured, reserve_free_request
 
 log = logging.getLogger(__name__)
 
@@ -52,24 +52,32 @@ def message(request):
     ).hexdigest()[:20]
     day = datetime.now(timezone.utc).strftime("%Y%m%d")
     if not (
-        _quota(f"kofad:ai:session:{identity_hash}:{day}", 30 if customer else 15, 86400)
-        and _quota(f"kofad:ai:source:{ip_hash}:{day}", 50, 86400)
+        _quota(f"kofad:ai:session:{identity_hash}:{day}", 80 if customer else 40, 86400)
+        and _quota(f"kofad:ai:source:{ip_hash}:{day}", 120, 86400)
     ):
         return JsonResponse({
             "error": "This chat has reached its daily request limit. Please use KOFAD Market or customer support."
         }, status=429)
     # Explicit user consent before forwarding PUBLIC questions to the free provider.
-    ai_allowed = bool(data.get("ai_consent") is True and free_configured())
-    # Bound the business's quota even when many people share one public IP.
-    if ai_allowed and not _quota(f"kofad:ai:free-global:{day}", 40, 86400):
-        ai_allowed = False
+    consent = data.get("ai_consent") is True
+    active = free_configured()
+    ai_allowed = bool(consent and active)
+    mode = "consent_required" if active and not consent else "offline"
+    if ai_allowed:
+        # Telegram and website share one zero-cost allowance. After the
+        # cap is reached, continue helping locally rather than charging.
+        ai_allowed = reserve_free_request("web", identity_hash, day)
+        mode = "ready" if ai_allowed else "daily_limit"
     reply, source = answer(
         data["message"], customer=customer, ai_allowed=ai_allowed,
         history=data.get("history") if isinstance(data.get("history"), list) else None,
     )
     response = JsonResponse({
         "reply": reply, "source": source,
-        "ai_active": bool(free_configured()),
+        "ai_mode": ("free" if source == "free-ai" else
+                    "private" if source == "private" else
+                    "provider_unavailable" if mode == "ready" else mode),
+        "ai_active": active,
         "customer_connected": bool(customer),
     })
     response["Cache-Control"] = "no-store, private"
