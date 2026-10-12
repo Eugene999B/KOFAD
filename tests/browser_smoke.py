@@ -308,18 +308,9 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "purchasing-new-product-mobile.png"), full_page=True)
 
     page.goto("http://127.0.0.1:8000/finance/")
-    # Debug only: surface browser/static asset evidence rather than hiding a
-    # genuine failure as an unstable assertion.
-    print("FINANCE_SCRIPT_DIAGNOSTIC", page.evaluate("""() => ({
-      url: location.href,
-      formFound: !!document.querySelector('[data-expense-form]'),
-      treatmentDisabled: document.querySelector('#expense-closing-treatment')?.disabled,
-      scripts: Array.from(document.scripts).filter(x => x.src.includes('finance')).map(x => x.src),
-      resources: performance.getEntriesByType('resource').filter(x => x.name.includes('finance')).map(x => x.name)
-    })"""), flush=True)
+    # Finance's existing deferred JS must initialize before the funding-source UI.
     page.wait_for_function(
-        "() => document.querySelector('#expense-closing-treatment')?.disabled === true",
-        timeout=6500,
+        "() => document.querySelector('#expense-closing-treatment')?.disabled === true"
     )
     page.get_by_label("Funding source", exact=True).select_option("prior_business_funds")
     page.wait_for_function(
