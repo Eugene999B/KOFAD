@@ -1,7 +1,6 @@
 """Persist-before-send, two-person payout approval and independent settlement."""
 import secrets
 from datetime import timedelta
-from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -11,7 +10,7 @@ from django.utils import timezone
 from core.identity import normalize_ghana_phone
 from core import services as accounting
 from marketplace import services as market_services
-from marketplace.models import MarketPaymentAttempt, OnlineOrder, OrderEvent, VerifiedMomoPhone
+from marketplace.models import MarketPaymentAttempt, OnlineOrder, VerifiedMomoPhone
 from . import client
 from .models import DirectTransaction
 
