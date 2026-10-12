@@ -188,6 +188,7 @@ HUBTEL_DIRECT_RECEIVE_ENABLED = os.environ.get("HUBTEL_DIRECT_RECEIVE_ENABLED", 
 HUBTEL_DIRECT_SEND_MOMO_ENABLED = os.environ.get("HUBTEL_DIRECT_SEND_MOMO_ENABLED", "0") == "1"
 HUBTEL_DIRECT_SEND_BANK_ENABLED = os.environ.get("HUBTEL_DIRECT_SEND_BANK_ENABLED", "0") == "1"
 HUBTEL_DIRECT_MAX_PAYOUT_GHS = os.environ.get("HUBTEL_DIRECT_MAX_PAYOUT_GHS", "500.00")
+HUBTEL_DIRECT_DAILY_PAYOUT_GHS = os.environ.get("HUBTEL_DIRECT_DAILY_PAYOUT_GHS", "2000.00")
 
 
 # Independent kill switch. Enable only after verified-number configuration and a delivery test.
