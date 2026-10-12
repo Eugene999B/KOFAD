@@ -196,6 +196,44 @@ class DirectWorkflowTests(MarketFixtures):
         post.assert_called_once()
 
     @patch("hubtel_direct.client.requests.post")
+    def test_second_approver_cannot_exceed_company_daily_limit(self, post):
+        approver = User.objects.create_superuser(
+            "bank-approver", "bank-approver@example.test", "other-strong-test-password"
+        )
+        tx = service.create_payout(
+            self.staff, "send_bank", "10.00", "0123456789", "Supplier One",
+            bank_code="300311", idempotency_key=uuid.uuid4(),
+            purpose="Approved supplier invoice",
+        )
+        with override_settings(HUBTEL_DIRECT_DAILY_PAYOUT_GHS="5.00"):
+            with self.assertRaises(ValidationError):
+                service.approve_payout(tx.pk, approver)
+        tx.refresh_from_db()
+        self.assertEqual(tx.status, "approval_pending")
+        post.assert_not_called()
+
+    def test_protected_internal_reconciliation_denies_missing_secret(self):
+        response = self.client.post("/internal/hubtel-direct/reconcile/", content_type="application/json")
+        self.assertEqual(response.status_code, 403)
+
+    @patch("hubtel_direct.service.reconcile_due", return_value=2)
+    def test_internal_reconcile_uses_shared_secret_not_customer_cookie(self, reconcile):
+        secret = "secure-reconcile-test-secret-" + ("x" * 60)
+        with override_settings(HUBTEL_DIRECT_RECONCILE_TOKEN=secret):
+            wrong = self.client.post(
+                "/internal/hubtel-direct/reconcile/",
+                HTTP_X_KOFAD_DIRECT_RECONCILE="wrong", content_type="application/json",
+            )
+            self.assertEqual(wrong.status_code, 403)
+            good = self.client.post(
+                "/internal/hubtel-direct/reconcile/",
+                HTTP_X_KOFAD_DIRECT_RECONCILE=secret, content_type="application/json",
+            )
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(good.json()["checked"], 2)
+        reconcile.assert_called_once_with(limit=10)
+
+    @patch("hubtel_direct.client.requests.post")
     def test_bank_payout_invalid_code_and_limit_blocked(self, post):
         for params in [
             ("send_bank", "10.00", "0123456789", "Name", "", "999999"),
