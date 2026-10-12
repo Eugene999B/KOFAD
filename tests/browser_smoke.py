@@ -308,10 +308,18 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "purchasing-new-product-mobile.png"), full_page=True)
 
     page.goto("http://127.0.0.1:8000/finance/")
-    # The finance controls initialise in deferred JS; wait until that handler
-    # has bound before selecting a funding source in headless Chromium.
+    # Debug only: surface browser/static asset evidence rather than hiding a
+    # genuine failure as an unstable assertion.
+    print("FINANCE_SCRIPT_DIAGNOSTIC", page.evaluate("""() => ({
+      url: location.href,
+      formFound: !!document.querySelector('[data-expense-form]'),
+      treatmentDisabled: document.querySelector('#expense-closing-treatment')?.disabled,
+      scripts: Array.from(document.scripts).filter(x => x.src.includes('finance')).map(x => x.src),
+      resources: performance.getEntriesByType('resource').filter(x => x.name.includes('finance')).map(x => x.name)
+    })"""), flush=True)
     page.wait_for_function(
-        "() => document.querySelector('#expense-closing-treatment')?.disabled === true"
+        "() => document.querySelector('#expense-closing-treatment')?.disabled === true",
+        timeout=6500,
     )
     page.get_by_label("Funding source", exact=True).select_option("prior_business_funds")
     page.wait_for_function(
