@@ -216,3 +216,129 @@ class EnterpriseTelegramTests(TestCase):
         self.assertFalse(queue_notice(official, "order", "fake:order", "Private order!"))
         self.assertFalse(queue_notice(official, "closing", "fake:closing", "Business report!"))
         self.assertEqual(TelegramOutbound.objects.count(), 0)
+
+
+    def test_admin_with_no_registered_phone_still_links_without_sms(self):
+        self.access.recovery_phone = ""
+        self.access.save(update_fields=["recovery_phone"])
+        identity = self.link("staff", self.staff, chat=502, bot_kind="official")
+        self.assertEqual(identity.telegram_user_id, 502)
+        self.access.refresh_from_db()
+        self.assertEqual(self.access.recovery_phone, "")
+
+    def test_optional_staff_phone_requires_real_telegram_contact(self):
+        from core.telegram_integration import accept_telegram_contact, awaiting_phone_contact
+
+        self.access.recovery_phone = ""
+        self.access.save(update_fields=["recovery_phone"])
+        token = begin_link("staff", self.staff.pk, bot_kind="official",
+                           proposed_phone="0241234567").split("link_", 1)[1]
+        response = accept_token(token, 502, 502, bot_kind="official")
+        self.assertIn("/sharephone", response)
+        code = re.search(r"\n(\d{6})\n", response).group(1)
+        self.assertTrue(awaiting_phone_contact("official", 502, 502))
+        self.assertFalse(confirm_link("staff", self.staff.pk, code, bot_kind="official"))
+        self.assertIn("OWN Telegram", accept_telegram_contact(
+            "official", 502, 502, {"user_id": 888, "phone_number": "+233241234567"}))
+        self.assertIn("differs", accept_telegram_contact(
+            "official", 502, 502, {"user_id": 502, "phone_number": "+233541234567"}))
+        self.assertFalse(confirm_link("staff", self.staff.pk, code, bot_kind="official"))
+        self.assertIn("confirmed", accept_telegram_contact(
+            "official", 502, 502, {"user_id": 502, "phone_number": "+233241234567"}))
+        self.assertTrue(confirm_link("staff", self.staff.pk, code, bot_kind="official"))
+        self.access.refresh_from_db()
+        self.assertEqual(self.access.recovery_phone, "+233241234567")
+        self.assertFalse(awaiting_phone_contact("official", 502, 502))
+
+    def test_telegram_contact_share_button_and_replay_protection(self):
+        import json
+        from datetime import datetime, timezone as dt_timezone
+
+        from core.telegram_integration import accept_token
+        token = begin_link("staff", self.staff.pk, bot_kind="official",
+                           proposed_phone="0241234567").split("link_", 1)[1]
+        accept_token(token, 721, 721, bot_kind="official")
+
+        def send(update_id, payload):
+            message = {
+                "date": int(datetime.now(dt_timezone.utc).timestamp()),
+                "chat": {"id": 721, "type": "private"},
+                "from": {"id": 721, "is_bot": False},
+            }
+            message.update(payload)
+            return self.client.post(
+                "/telegram/webhook/",
+                data=json.dumps({"update_id": update_id, "message": message}),
+                content_type="application/json",
+                HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN="official-test-secret",
+            )
+
+        prompt = send(654322, {"text": "/sharephone"})
+        self.assertEqual(prompt.status_code, 200)
+        self.assertTrue(prompt.json()["reply_markup"]["keyboard"][0][0]["request_contact"])
+        rejection = send(654323, {"contact": {
+            "user_id": 999, "phone_number": "+233241234567", "first_name": "Forwarded"
+        }})
+        self.assertIn("OWN Telegram", rejection.json()["text"])
+        accepted = send(654324, {"contact": {
+            "user_id": 721, "phone_number": "+233241234567", "first_name": "Self"
+        }})
+        self.assertIn("confirmed", accepted.json()["text"])
+        self.assertTrue(accepted.json()["reply_markup"]["remove_keyboard"])
+        repeated = send(654324, {"contact": {
+            "user_id": 721, "phone_number": "+233241234567"
+        }})
+        self.assertEqual(repeated.content, b"")
+
+    def test_customer_alerts_require_verified_link_and_promos_are_separate(self):
+        self.assertIn("connect", reply_for("/alerts_on", 904, 904, bot_kind="customer"))
+        identity = self.link("customer", self.customer, chat=904)
+        self.assertFalse(identity.notifications_enabled)
+        self.assertFalse(identity.marketing_opt_in)
+        reply_for("/alerts_on", 904, 904, bot_kind="customer")
+        identity.refresh_from_db()
+        self.assertTrue(identity.notifications_enabled)
+        self.assertFalse(identity.marketing_opt_in)
+        reply_for("/promos_on", 904, 904, bot_kind="customer")
+        identity.refresh_from_db()
+        self.assertTrue(identity.marketing_opt_in)
+        reply_for("/promos_off", 904, 904, bot_kind="customer")
+        identity.refresh_from_db()
+        self.assertFalse(identity.marketing_opt_in)
+        reply_for("/alerts_off", 904, 904, bot_kind="customer")
+        identity.refresh_from_db()
+        self.assertFalse(identity.notifications_enabled)
+
+    def test_staff_alert_subscription_is_restricted_to_permissions(self):
+        identity = self.link("staff", self.staff, chat=885)
+        reply_for("/alerts_on", 885, 885, bot_kind="staff")
+        identity.refresh_from_db()
+        self.assertTrue(identity.notifications_enabled)
+        self.assertTrue(identity.closing_opt_in)
+        self.assertTrue(identity.critical_opt_in)
+        self.assertTrue(identity.stock_opt_in)
+        self.assertIn(self.branch.name, reply_for("/mybranches", 885, 885, bot_kind="staff"))
+
+    def test_unverified_closing_alert_suppressed_after_verification(self):
+        from core.telegram_integration import queue_pending_closing_reviews
+        from core.telegram_delivery import _still_authorized
+
+        identity = self.link("staff", self.staff, chat=442)
+        identity.notifications_enabled = True
+        identity.closing_opt_in = True
+        identity.save(update_fields=["notifications_enabled", "closing_opt_in"])
+        pending = Closing.objects.create(
+            branch=self.branch,
+            date=timezone.localdate() - timedelta(days=1),
+            expected={"cash": "100"},
+            counted={"cash": "100"},
+            submitted_by=self.staff,
+        )
+        now = timezone.localtime().replace(hour=8, minute=10, second=0, microsecond=0)
+        self.assertEqual(queue_pending_closing_reviews(now=now), 1)
+        self.assertEqual(queue_pending_closing_reviews(now=now), 0)
+        notice = TelegramOutbound.objects.get(source_key=f"tg:review:{pending.pk}:{self.staff.pk}")
+        self.assertTrue(_still_authorized(notice))
+        pending.verified_by = self.staff
+        pending.save(update_fields=["verified_by"])
+        self.assertFalse(_still_authorized(notice))
