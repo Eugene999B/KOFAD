@@ -10,13 +10,14 @@ This isolated module implements the **new** September 18, 2026 Sales APIs withou
 | Send MoMo | `https://smp.hubtel.com/api/merchants/{DISBURSEMENT}/send/mobilemoney` | `https://smrsc.hubtel.com/api/merchants/{DISBURSEMENT}/transactions/status?clientReference=...` |
 | Send bank | `https://smp.hubtel.com/api/merchants/{DISBURSEMENT}/send/bank/gh/{BANKCODE}` | Same disbursement status API |
 
-Hubtel requires a **static public outbound IP** whitelisted with the assigned Retail Systems Engineer (maximum four IPs per service), the correct Sales API key scopes (including `mobilemoney-receive-direct` for collections) and dedicated Collection/Disbursement account numbers. A standard Railway instance may not provide fixed outbound egress. Obtain approved static egress, **verify the outgoing public IP from the running service**, obtain Hubtel confirmation, and only then set the KOFAD egress confirmation switch. The fixed callback URL is `https://market.kofadimpex.com/market/payments/hubtel-direct/callback/`. A callback is an untrusted hint; only independent status verification can mark a transaction final.
+Hubtel requires a **static public outbound IP** whitelisted with the assigned Retail Systems Engineer (maximum four IPs per service), the correct Sales API key scopes (including `mobilemoney-receive-direct` for collections) and dedicated Collection/Disbursement account numbers. A standard Railway instance may not provide fixed outbound egress. Obtain approved static egress, **verify the outgoing public IP from the running service**, obtain Hubtel confirmation, and only then set the KOFAD egress confirmation switch. The approved `kofad-web` service static outbound IPs reported by the merchant are `162.220.232.250`, `152.55.176.240` and `152.55.177.193`. Because Railway static IPs are **per service**, `kofad-sms` must not call the Hubtel Direct status endpoints itself. Instead, the existing worker calls a protected `kofad-web` reconciliation endpoint once per minute using an identical, high-entropy server-only `HUBTEL_DIRECT_RECONCILE_TOKEN` installed on both services. The web then uses its whitelisted egress for mandatory independent GET status checks. The fixed callback URL is `https://market.kofadimpex.com/market/payments/hubtel-direct/callback/`. A callback is an untrusted hint; only independent status verification can mark a transaction final.
 
 ## Disabled-by-default server configuration
 
 - `HUBTEL_API_ID`, `HUBTEL_API_KEY`, `HUBTEL_COLLECTION_ACCOUNT`: current protected Hubtel variables.
 - `HUBTEL_DISBURSEMENT_ACCOUNT`: new protected account number, NEVER guess or use the collection account.
-- `HUBTEL_DIRECT_EGRESS_CONFIRMED=0`: switch to 1 only after real Hubtel whitelist confirmation.
+- `HUBTEL_DIRECT_EGRESS_CONFIRMED=0`: switch to 1 only after the listed static IPs are attached and confirmed in the web service's own Railway Networking settings, and all three are accepted by Hubtel.
+- `HUBTEL_DIRECT_RECONCILE_TOKEN`: shared, randomly generated 48+ character bearer secret on `kofad-web` and `kofad-sms`; never put in browser code, GitHub or logs.
 - `HUBTEL_DIRECT_RECEIVE_ENABLED=0`: direct payment prompts.
 - `HUBTEL_DIRECT_SEND_MOMO_ENABLED=0`: wallet payouts.
 - `HUBTEL_DIRECT_SEND_BANK_ENABLED=0`: GhIPSS bank payouts.
