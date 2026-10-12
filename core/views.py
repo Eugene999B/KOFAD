@@ -131,6 +131,13 @@ def _resume_mobile_staff_authorization(request):
 
 def login_view(request):
     pending = request.GET.get("next", "")
+    # Only these exact internal Telegram Mini App URLs can be resumed after
+    # existing staff password authentication and any required MFA.
+    if pending in {
+        "/integrations/telegram/quick/staff/",
+        "/integrations/telegram/quick/official/",
+    }:
+        request.session["staff_telegram_quick_return"] = pending
     if (pending.startswith("/staff/mobile/v1/authorize/?")
             and len(pending) <= 1024
             and not any(ord(ch) < 32 or ch == "\\" for ch in pending)):
@@ -206,7 +213,7 @@ def login_view(request):
                         return redirect("password_change")
                     if settings.PRIVILEGED_MFA_ENFORCED and requires_mfa(user):
                         return redirect("mfa")
-                    return redirect(_resume_mobile_staff_authorization(request) or "dashboard")
+                    return redirect(_resume_mobile_staff_authorization(request) or request.session.pop("staff_telegram_quick_return", None) or "dashboard")
 
                 source.failures += 1
                 if source.failures >= 5:
@@ -294,7 +301,7 @@ def mfa(request):
                         "mfa.enrolled" if was_enrolling else "mfa.verified",
                         request.user.pk,
                     )
-                    return redirect(_resume_mobile_staff_authorization(request) or "dashboard")
+                    return redirect(_resume_mobile_staff_authorization(request) or request.session.pop("staff_telegram_quick_return", None) or "dashboard")
                 attempt.failures += 1
                 if attempt.failures >= 6:
                     attempt.blocked_until = now + timedelta(minutes=15)
