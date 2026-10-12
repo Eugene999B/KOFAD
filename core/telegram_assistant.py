@@ -254,6 +254,34 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             + "\nUse /alerts_on or /alerts_off, and your KOFAD website preferences."
         )
 
+    if command in {"ask", "ai", "question"}:
+        # Deliberately opt-in to external AI with /ask. Never send private KOFAD
+        # chat/session/customer/staff/account info to an external free provider.
+        import re
+        from marketplace.kofad_ai import answer
+        public_question = tail.strip()
+        if not public_question:
+            return (
+                "Ask me about KOFAD public products and services using "
+                "/ask followed by a question. The question may be processed "
+                "by OpenRouter free AI. Never send passwords, OTPs or private records."
+            )
+        if bot_kind == "staff" and re.search(
+            r"(?i)\\b(?:closing|salaries|payroll|profit|financial|"
+            r"branch sales|daily revenue|staff personal|ledger|cash variance)\\b",
+            public_question,
+        ):
+            return (
+                "Private business figures are never sent to external AI. "
+                "Use /today, /week, /month or /tasks for reports permitted "
+                "by your KOFAD role."
+            )
+        result, _source = answer(public_question[:601], customer=None, ai_allowed=True)
+        return result[:1600] + (
+            "\\n\\nPublic KOFAD questions only. Free AI may be inaccurate; "
+            "check live product listings or customer support."
+        )
+
     if command in {"login", "signin", "authenticate"}:
         return ("Tap the secure Sign in button below. Sign in using your normal "
                 "KOFAD website username, phone or verified email, with Google "
