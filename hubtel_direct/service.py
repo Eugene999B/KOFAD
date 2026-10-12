@@ -1,9 +1,14 @@
 """Persist-before-send, two-person payout approval and independent settlement."""
+import hashlib
+import hmac
+import json
 import secrets
+import uuid
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -79,12 +84,11 @@ def create_collection(customer, order_id, network):
     return tx
 
 
-def create_payout(user, kind, amount, destination, recipient_name, channel="", bank_code=""):
+def create_payout(user, kind, amount, destination, recipient_name, channel="", bank_code="", idempotency_key=None):
     if kind not in ("send_momo", "send_bank"):
         raise ValidationError("Choose a supported payout type.")
     client.require_enabled(kind)
     amount = client.money(amount)
-    from django.conf import settings
     if amount > client.money(settings.HUBTEL_DIRECT_MAX_PAYOUT_GHS):
         raise ValidationError("Payout exceeds the configured single-transaction limit.")
     recipient_name = str(recipient_name or "").strip()
@@ -99,11 +103,35 @@ def create_payout(user, kind, amount, destination, recipient_name, channel="", b
             raise ValidationError("Choose a supported Ghana bank code.")
         if not isinstance(destination, str) or not destination.isdigit() or not 6 <= len(destination) <= 24:
             raise ValidationError("Enter a valid bank account number.")
-    tx = _persisted(
-        kind, amount, destination, recipient_name=recipient_name,
-        requested_by=user, channel=channel, bank_code=bank_code,
-        status="approval_pending",
-    )
+    try:
+        request_key = uuid.UUID(str(idempotency_key))
+        if request_key.version != 4:
+            raise ValueError
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValidationError("A fresh UUIDv4 Idempotency-Key is required for each payout intent.") from exc
+    fingerprint_input = json.dumps({
+        "actor": user.pk, "kind": kind, "amount": str(amount),
+        "destination": destination, "recipient_name": recipient_name,
+        "channel": channel, "bank_code": bank_code,
+    }, sort_keys=True, separators=(",", ":")).encode()
+    fingerprint = hmac.new(settings.SECRET_KEY.encode(), fingerprint_input, hashlib.sha256).hexdigest()
+    existing = DirectTransaction.objects.filter(request_key=request_key).first()
+    if existing:
+        if existing.requested_by_id == user.pk and hmac.compare_digest(existing.request_fingerprint, fingerprint):
+            return existing
+        raise ValidationError("This payout request key was already used for different details.")
+    try:
+        tx = _persisted(
+            kind, amount, destination, recipient_name=recipient_name,
+            requested_by=user, channel=channel, bank_code=bank_code,
+            status="approval_pending", request_key=request_key,
+            request_fingerprint=fingerprint,
+        )
+    except IntegrityError:
+        existing = DirectTransaction.objects.filter(request_key=request_key).first()
+        if existing and existing.requested_by_id == user.pk and hmac.compare_digest(existing.request_fingerprint, fingerprint):
+            return existing
+        raise ValidationError("Duplicate payout request could not be reconciled.")
     accounting.audit(user, None, "hubtel.payout_requested", tx.client_reference,
                      {"kind": kind, "amount": str(amount), "destination_last4": tx.destination_suffix},
                      category="finance", severity="high")
