@@ -112,7 +112,7 @@
   paystackMomoPhone?.addEventListener("input", clearWalletProof);
   paystackMomoProvider?.addEventListener("change", clearWalletProof);
   walletConsent?.addEventListener("change", clearWalletProof);
-  walletVerify?.addEventListener("click", async () => {
+  async function verifyWalletName() {
     if (!walletConsent?.checked) {
       setMomoStatus("Confirm customer consent before checking their wallet.", "error");
       return;
@@ -138,6 +138,21 @@
       if (walletName) walletName.textContent = "Name verification unavailable. No payment has been sent.";
       setMomoStatus(err.message, "error");
     } finally { walletVerify.disabled = false; }
+  }
+  walletVerify?.addEventListener("click", verifyWalletName);
+  // After consent, automatically check the completed number on leaving the
+  // field or changing the wallet network. Manual "Check name" stays available.
+  paystackMomoPhone?.addEventListener("blur", () => {
+    if (momoGateway === "hubtel" && walletConsent?.checked &&
+        !walletProof && paystackMomoPhone.value.trim()) void verifyWalletName();
+  });
+  paystackMomoProvider?.addEventListener("change", () => {
+    if (momoGateway === "hubtel" && walletConsent?.checked &&
+        paystackMomoPhone?.value.trim()) void verifyWalletName();
+  });
+  walletConsent?.addEventListener("change", () => {
+    if (momoGateway === "hubtel" && walletConsent.checked &&
+        paystackMomoPhone?.value.trim()) void verifyWalletName();
   });
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
