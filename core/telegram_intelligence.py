@@ -119,6 +119,65 @@ def account_tasks(user):
     )
 
 
+def inventory_brief(user):
+    """Current low-stock lines in active assigned branches, without write access."""
+    from .models import Stock
+
+    branches = _branches(user)
+    if not _role(user)["inventory"]:
+        return "Your KOFAD role does not permit inventory reporting."
+    if not branches.exists():
+        return "No active branch is assigned to your KOFAD account."
+    low = Stock.objects.filter(
+        branch__in=branches, product__active=True,
+        quantity__lte=F("product__reorder_level"),
+    ).select_related("branch", "product").order_by(
+        "branch__name", "product__name"
+    )
+    total = low.count()
+    lines = [
+        f"• {row.branch.name}: {row.product.name} — {row.quantity} recorded "
+        f"(reorder level {row.product.reorder_level})"
+        for row in low[:8]
+    ]
+    if not lines:
+        return ("No low-stock records were identified in your assigned branches. "
+                "Items without stock records are not included. Confirm in the inventory portal.")
+    return (
+        f"KOFAD LOW STOCK — {total} recorded exception(s)\n"
+        + "\n".join(lines)
+        + ("\nShowing the first 8 exceptions." if total > 8 else "")
+        + "\nReview stock movements and restocking in your staff portal. "
+        "This message cannot place an order or modify stock."
+    )
+
+
+def sales_work_brief(user):
+    """Scoped order-work summary; no customer names, addresses or payments."""
+    from django.db.models import Count
+    from marketplace.models import OnlineOrder
+
+    branches = _branches(user)
+    if not _role(user)["sales"]:
+        return "Your KOFAD role does not permit sales operations reporting."
+    if not branches.exists():
+        return "No active branch is assigned to your KOFAD account."
+    statuses = ("paid", "confirmed", "preparing", "ready_pickup", "out_for_delivery")
+    rows = OnlineOrder.objects.filter(
+        branch__in=branches, status__in=statuses
+    ).values("status").annotate(total=Count("pk")).order_by("status")
+    counts = list(rows)
+    if not counts:
+        return ("No outstanding online orders in your assigned branches "
+                "currently match the active fulfillment states.")
+    return (
+        "KOFAD ACTIVE SALES WORK\n"
+        + "\n".join(f"• {x['status'].replace('_', ' ').title()}: {x['total']}" for x in counts)
+        + "\nOpen your authorized staff order workspace for individual tasks. "
+        "No customer information or payment authority is provided here."
+    )
+
+
 def queue_role_briefings(now=None):
     """Once-daily opted-in Telegram role brief; no message without a verified link."""
     from django.conf import settings
