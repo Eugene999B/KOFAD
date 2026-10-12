@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("internal/hubtel-direct/reconcile/", views.internal_reconcile, name="hubtel_direct_internal_reconcile"),
     path("market/orders/<uuid:order_id>/hubtel-direct/", views.collect, name="hubtel_direct_collect"),
     path("market/orders/<uuid:order_id>/hubtel-direct/status/", views.collect_status, name="hubtel_direct_collect_status"),
     path("market/payments/hubtel-direct/callback/", views.callback, name="hubtel_direct_callback"),
