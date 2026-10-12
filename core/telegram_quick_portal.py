@@ -1,6 +1,5 @@
 """One-page Telegram Mini App identity connection using existing KOFAD sessions."""
 from django.conf import settings
-from django.contrib import messages
 from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
@@ -19,7 +18,7 @@ def quick_link(request, kind, bot_kind):
     if kind not in {"staff", "customer"} or bot_kind not in {kind, "official"}:
         return render(request, "telegram_quick_link.html", {"invalid": True}, status=404)
     enabled = bool(settings.TELEGRAM_ACCOUNT_LINK_ENABLED and bot_enabled(bot_kind))
-    route = reverse("telegram_quick_link", kwargs={"kind": kind, "bot_kind": bot_kind})
+    route = reverse("telegram_quick_" + kind, kwargs={"bot_kind": bot_kind})
     if kind == "staff":
         account = request.user if request.user.is_authenticated and request.user.is_active else None
         if account:
