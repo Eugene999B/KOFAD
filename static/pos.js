@@ -97,6 +97,48 @@
   const completeSaleHint = document.querySelector("#complete-sale-hint");
   const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
   const momoGateway = root.dataset.momoGateway === "hubtel" ? "hubtel" : "paystack";
+  const walletVerify = document.querySelector("#hubtel-wallet-verify");
+  const walletName = document.querySelector("#hubtel-wallet-name");
+  const walletConsent = document.querySelector("#hubtel-wallet-consent");
+  let walletProof = null;
+  let walletVerifiedNumber = "";
+  let walletVerifiedChannel = "";
+  function clearWalletProof() {
+    walletProof = null;
+    walletVerifiedNumber = "";
+    walletVerifiedChannel = "";
+    if (walletName) walletName.textContent = "Number or network changed. Check wallet name again.";
+  }
+  paystackMomoPhone?.addEventListener("input", clearWalletProof);
+  paystackMomoProvider?.addEventListener("change", clearWalletProof);
+  walletConsent?.addEventListener("change", clearWalletProof);
+  walletVerify?.addEventListener("click", async () => {
+    if (!walletConsent?.checked) {
+      setMomoStatus("Confirm customer consent before checking their wallet.", "error");
+      return;
+    }
+    let phone;
+    try { phone = normalizeGhanaPhone(paystackMomoPhone?.value || ""); }
+    catch (err) { setMomoStatus(err.message, "error"); return; }
+    const network = {"mtn": "mtn-gh", "atl": "tigo-gh", "vod": "vodafone-gh"}[paystackMomoProvider?.value];
+    clearWalletProof();
+    walletVerify.disabled = true;
+    if (walletName) walletName.textContent = "Contacting Hubtel to verify the wallet…";
+    try {
+      const result = await api("/api/pos/hubtel/wallet-name/", {
+        phone, channel: network, customer_authorized: true
+      });
+      walletProof = result.verification_token;
+      walletVerifiedNumber = phone;
+      walletVerifiedChannel = network;
+      if (walletName) walletName.textContent =
+        "Hubtel registered wallet name: " + result.name + " • Number ending " + result.phone_suffix;
+      setMomoStatus("Confirm the displayed wallet name with the customer before sending the payment prompt.");
+    } catch (err) {
+      if (walletName) walletName.textContent = "Name verification unavailable. No payment has been sent.";
+      setMomoStatus(err.message, "error");
+    } finally { walletVerify.disabled = false; }
+  });
   const paymentDialog = document.querySelector("#sale-payment-dialog");
   const openPaymentButton = document.querySelector("#open-payment");
   const closePaymentButton = document.querySelector("#close-payment");
@@ -1029,13 +1071,13 @@
     }
     if (completeButton && !purchase) {
       completeButton.textContent = active && paystackMomoReady
-        ? (momoGateway === "hubtel" ? "Create secure Hubtel checkout" : "Send MoMo Approval Request")
+        ? (momoGateway === "hubtel" ? "Send Hubtel Direct MoMo Request" : "Send MoMo Approval Request")
         : "Complete Sale & Generate Receipt";
     }
     if (completeSaleHint && !purchase) {
       completeSaleHint.textContent = active && paystackMomoReady
         ? (momoGateway === "hubtel"
-          ? "The customer pays on Hubtel's secure checkout. KOFAD waits for independently verified payment before posting the sale and issuing a receipt."
+          ? "Confirm the wallet name first, then KOFAD sends a direct Mobile Money prompt and posts the sale after verified payment."
           : "KOFAD verifies the MoMo deposit with Paystack before recording the sale and any remaining customer debt. The receipt shows paid and balance due.")
         : "One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.";
     }
@@ -1339,19 +1381,9 @@
     paystackMomoStatus.classList.toggle("error", tone === "error");
   }
 
-  function syncHubtelCheckoutLink(result) {
-    const link = document.querySelector("#hubtel-momo-checkout-link");
-    if (!link) return;
-    const url = typeof result?.authorization_url === "string" ? result.authorization_url : "";
-    let safe = false;
-    try {
-      const parsed = new URL(url);
-      safe = result?.provider === "hubtel" && parsed.protocol === "https:"
-        && parsed.hostname === "pay.hubtel.com" && !parsed.username && !parsed.password;
-    } catch (_) { /* A missing or malformed link is never rendered. */ }
-    if (safe) link.href = url;
-    else link.removeAttribute("href");
-    link.classList.toggle("hidden", !safe);
+  function syncHubtelCheckoutLink(_result) {
+    // Historical hosted checkouts can still be reconciled server-side,
+    // but no new Hubtel payment exposes a hosted checkout URL.
   }
 
   function syncMomoChallenge(result) {
@@ -1472,7 +1504,13 @@
     const provider = paystackMomoProvider?.value || "mtn";
     if (!phone) throw new Error("Enter the customer's Mobile Money number.");
     if (momoGateway === "paystack" && email && !email.includes("@")) throw new Error("Enter a valid customer email or leave it blank for a walk-in MoMo payment.");
-    setMomoStatus(momoGateway === "hubtel" ? "Creating your secure Hubtel checkout…" : "Sending Mobile Money approval request…");
+    if (momoGateway === "hubtel") {
+      const mapped = {"mtn": "mtn-gh", "atl": "tigo-gh", "vod": "vodafone-gh"}[provider];
+      if (!walletConsent?.checked || !walletProof || walletVerifiedNumber !== normalizeGhanaPhone(phone) || walletVerifiedChannel !== mapped) {
+        throw new Error("First verify the selected Mobile Money number with Hubtel and confirm the wallet owner's name.");
+      }
+    }
+    setMomoStatus(momoGateway === "hubtel" ? "Sending direct Mobile Money approval prompt…" : "Sending Mobile Money approval request…");
     lockCheckoutForMomo(true);
     try {
       const result = await api("/api/pos/paystack-momo/start/", {
@@ -1481,6 +1519,7 @@
         email,
         provider,
         payment_gateway: momoGateway,
+        wallet_proof: momoGateway === "hubtel" ? walletProof : undefined,
         request_key: requestKey
       }, requestKey);
       momoReference = result.reference || momoReference;
