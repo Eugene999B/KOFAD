@@ -1,5 +1,8 @@
 import time
 
+import requests
+from django.conf import settings
+
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 
@@ -91,6 +94,23 @@ class Command(BaseCommand):
                 except Exception:
                     self.stderr.write("Verified-account email outbox check failed safely; will retry.")
                 last_automation = now
+                # Direct Hubtel status verification must egress from kofad-web,
+                # whose Railway static IPs are whitelisted by Hubtel.
+                # The communications worker only triggers a short authenticated
+                # call; it never calls Hubtel's allowlisted APIs itself.
+                reconcile_token = getattr(settings, "HUBTEL_DIRECT_RECONCILE_TOKEN", "")
+                if len(reconcile_token) >= 48 and getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False):
+                    if settings.MARKET_SITE_ORIGIN.rstrip("/") == "https://market.kofadimpex.com":
+                        try:
+                            response = requests.post(
+                                "https://market.kofadimpex.com/internal/hubtel-direct/reconcile/",
+                                headers={"X-Kofad-Direct-Reconcile": reconcile_token},
+                                timeout=15, allow_redirects=False,
+                            )
+                            if response.status_code != 200:
+                                self.stderr.write("Hubtel Direct web-egress check was not accepted.")
+                        except requests.RequestException:
+                            self.stderr.write("Hubtel Direct web-egress status check temporarily unavailable.")
 
             if now - last_security_cleanup >= 3600:
                 try:
