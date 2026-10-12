@@ -1,6 +1,5 @@
 """Small authenticated JSON interfaces. All money-changing methods are POST+CSRF."""
 import json
-from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
