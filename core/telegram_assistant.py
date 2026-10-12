@@ -173,6 +173,86 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                     + ("enabled" if identity.notifications_enabled else "disabled"))
         return "This Telegram bot is not linked to a KOFAD account. Use /link."
 
+    # A typed command is an explicit instruction from a PREVIOUSLY VERIFIED
+    # KOFAD-to-Telegram account link, not evidence based on a phone number.
+    if command in {"alerts_on", "notify_on", "subscribe", "promos_on", "promos_off"}:
+        if bot_kind == "official":
+            return "Security recovery consent must be confirmed with your KOFAD password on the official website."
+        if not identity or not _account(identity) or identity.kind != bot_kind:
+            return "First connect your KOFAD account securely using /link."
+        if bot_kind == "customer":
+            identity.notifications_enabled = command != "promos_off" or identity.notifications_enabled
+            if command == "promos_on":
+                identity.marketing_opt_in = True
+            elif command == "promos_off":
+                identity.marketing_opt_in = False
+            identity.save(update_fields=["notifications_enabled", "marketing_opt_in"])
+            return (
+                "Customer order alerts: " + ("ON" if identity.notifications_enabled else "OFF")
+                + "\nOptional promotions: " + ("ON" if identity.marketing_opt_in else "OFF")
+                + "\nUse /promos_off, /alerts_off or website preferences to change consent."
+            )
+        staff = _account(identity)
+        from .models import Access
+        access = Access.objects.filter(user=staff).first()
+        if not access or access.force_password_change or access.must_change_password:
+            return "Complete your required KOFAD staff security steps before enabling alerts."
+        management = staff.is_superuser or any(staff.has_perm("core." + perm) for perm in (
+            "manage_company", "operate_finance", "view_reports"))
+        inventory = staff.is_superuser or any(staff.has_perm("core." + perm) for perm in (
+            "manage_company", "operate_inventory"))
+        identity.notifications_enabled = True
+        identity.closing_opt_in = bool(management)
+        identity.critical_opt_in = bool(management)
+        identity.stock_opt_in = bool(inventory)
+        identity.save(update_fields=[
+            "notifications_enabled", "closing_opt_in", "critical_opt_in", "stock_opt_in",
+        ])
+        return (
+            "Staff notices enabled for your CURRENT permissions and branches. "
+            "Daily closing, critical variances, and inventory alerts are sent only "
+            "when your authorized responsibilities apply. Use /alerts_off to stop."
+        )
+    if command in {"alerts_off", "notify_off"}:
+        if identity:
+            identity.notifications_enabled = False
+            identity.marketing_opt_in = False
+            identity.closing_opt_in = False
+            identity.critical_opt_in = False
+            identity.stock_opt_in = False
+            identity.save(update_fields=[
+                "notifications_enabled", "marketing_opt_in", "closing_opt_in",
+                "critical_opt_in", "stock_opt_in",
+            ])
+        return "Optional Telegram notifications paused for this bot. Recovery on the Official Bot is separate."
+    if command in {"mybranches", "branches", "locations"} and bot_kind == "staff":
+        if not identity or identity.kind != "staff" or not _account(identity):
+            return "Verify your KOFAD staff account using /link."
+        branches = _authorized_branches(_account(identity))
+        if not branches.exists():
+            return "You do not have authorized management branches in Telegram."
+        return "Authorized reporting branches:\n" + "\n".join(
+            "• " + b.name for b in branches.order_by("name")[:30]
+        )
+    if command in {"myalerts", "subscriptions"}:
+        if not identity:
+            return "No verified KOFAD account connected. Use /link."
+        if bot_kind == "official":
+            return (
+                "Official bot security recovery consent: "
+                + ("ON" if identity.recovery_opt_in else "OFF")
+                + "\nRecovery settings require confirmation on the KOFAD website."
+            )
+        return (
+            "Telegram alerts: " + ("ON" if identity.notifications_enabled else "OFF")
+            + ("\nMarketing: " + ("ON" if identity.marketing_opt_in else "OFF")
+               if bot_kind == "customer" else
+               "\nClosing: " + ("ON" if identity.closing_opt_in else "OFF")
+               + "\nCritical: " + ("ON" if identity.critical_opt_in else "OFF")
+               + "\nInventory: " + ("ON" if identity.stock_opt_in else "OFF"))
+            + "\nUse /alerts_on or /alerts_off, and your KOFAD website preferences."
+        )
+
     if bot_kind == "official":
         # This bot's separate link can be enabled for safe password recovery,
         # but it does NOT expose staff finance, customer orders, or messaging.
@@ -185,7 +265,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "/staff — visit the private KOFAD staff bot\n"
                 "/support — official customer service\n"
                 "/status — check this bot's verified identity\n"
-                "/stop — pause optional notifications"
+                "/stop — pause optional notifications\n"
+                "/myalerts — security recovery consent status"
             )
         if command in {"link", "connect"}:
             return (
@@ -224,7 +305,10 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                 "/orders — check your own orders (secure link required)\n"
                 "/track REFERENCE — track an order in your account\n"
                 "/link — connect your KOFAD customer account\n"
-                "/alerts — messaging preferences\n"
+                "/alerts_on — enable private order updates\n"
+                "/promos_on — opt in to occasional promotions\n"
+                "/promos_off — opt out of promotions\n"
+                "/myalerts — see your subscriptions\n"
                 "/support — contact the store\n"
                 "/stop — pause notifications\n"
                 "Account security and recovery are handled by the Official Bot."
@@ -245,9 +329,13 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                     )
             return "Connect your verified customer account with /link to see your private order status."
         if command in {"alerts", "notifications"}:
-            return "Update your KOFAD customer alert preferences: " + market_url
+            return "Manage subscriptions with /alerts_on, /alerts_off, /promos_on, /promos_off or at: " + market_url
         if command in {"support", "contact", "human"}:
             return "Customer service: " + MARKET + "/market/messages/"
+        if command in {"returns", "refunds"}:
+            return "Review your returns securely in your customer account: " + MARKET + "/market/account/returns/"
+        if command in {"checkout", "cart", "pay"}:
+            return "Review your cart and complete payment safely on KOFAD Market: " + MARKET + "/market/cart/"
         if command in {"otp", "password", "recover", "recovery", "security"}:
             return "For account recovery, use the official KOFAD bot:\n" + bot_link("official")
         if command in {"analysis", "reports", "finance", "closing", "staff", "sales"}:
@@ -262,6 +350,10 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             "KOFAD — Staff & Management Assistant\n\n"
             "/link — securely connect existing KOFAD staff account\n"
             "/analysis — verified closing performance, within your own access scope\n"
+            "/today, /week, /month — select reporting period\n"
+            "/mybranches — see authorized reporting branches\n"
+            "/alerts_on — subscribe to notices for your permissions\n"
+            "/myalerts — review subscriptions\n"
             "/reports — authorized management summary\n"
             "/alerts — notice subscriptions\n"
             "/status — verify current staff link\n"
@@ -270,7 +362,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         )
     if command in {"link", "connect"}:
         return "Connect your signed-in KOFAD staff account at:\n" + staff_url
-    if command in {"analysis", "reports", "closing", "sales", "finance", "weekly", "monthly"} or (
+    if command in {"analysis", "reports", "closing", "sales", "finance", "weekly", "monthly", "today", "week", "month"} or (
         any(k in plain for k in ("sales today", "business performance", "weekly sales", "closing report"))
     ):
         if not settings.TELEGRAM_BUSINESS_ANALYTICS_ENABLED:
@@ -278,10 +370,10 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         if identity and identity.kind == "staff":
             staff = _account(identity)
             if staff:
-                return _staff_analysis(staff, 30 if ("month" in plain or command == "monthly") else 7)
+                return _staff_analysis(staff, 30 if ("month" in plain or command in {"month", "monthly"}) else 1 if command == "today" else 7)
         return "Business analysis requires a connected staff account with current report permissions."
     if command in {"alerts", "notifications"}:
-        return "Manage business and closing alerts through your KOFAD staff account: " + staff_url
+        return "Use /alerts_on, /alerts_off, /myalerts, or website preferences: " + staff_url
     if command in {"otp", "password", "recover", "recovery", "security"}:
         return "Recover credentials only through the KOFAD Official Bot:\n" + bot_link("official")
     if command in {"orders", "track", "order"}:

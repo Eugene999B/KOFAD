@@ -41,7 +41,7 @@ def _digest(label, value):
     return salted_hmac("kofad-telegram-" + label, value, algorithm="sha256").hexdigest()
 
 
-def begin_link(kind, owner_id, bot_kind=None):
+def begin_link(kind, owner_id, bot_kind=None, proposed_phone=''):
     """Password re-authenticated website endpoint only. Link remains pending."""
     if kind not in {"staff", "customer"}:
         raise ValueError("Invalid account type")
@@ -51,6 +51,13 @@ def begin_link(kind, owner_id, bot_kind=None):
     base = bot_link(bot_kind)
     if not base:
         raise ValueError("The Telegram bot username has not been configured.")
+    # A linked Telegram chat does not require a phone. For staff who choose to
+    # add a recovery number, require an authentic contact share from that chat.
+    if proposed_phone:
+        if kind != "staff":
+            raise ValueError("Customer phone changes belong in KOFAD account security.")
+        from .identity import normalize_ghana_phone
+        proposed_phone = normalize_ghana_phone(proposed_phone)
     raw = secrets.token_urlsafe(24)
     now = timezone.now()
     with transaction.atomic():
@@ -59,6 +66,7 @@ def begin_link(kind, owner_id, bot_kind=None):
         ).delete()
         TelegramLinkChallenge.objects.create(
             kind=kind, owner_id=owner_id, bot_kind=bot_kind,
+            proposed_phone=proposed_phone,
             token_digest=_digest("link", raw),
             expires_at=now + timedelta(minutes=10),
         )
@@ -91,6 +99,13 @@ def accept_token(token, user_id, chat_id, bot_kind):
         + code
         + "\n\nExpires in 10 minutes. Do not share this code. "
         "Your account is NOT connected until you confirm on the website."
+        + (
+            "\n\nTo verify the optional mobile number you entered on the website, "
+            "send /sharephone and tap 'Share my Telegram number'. "
+            "Only the phone actually shared from YOUR Telegram account will be accepted."
+            if challenge.proposed_phone else
+            "\n\nNo existing mobile number is required to finish connecting this account."
+        )
     )
 
 
@@ -104,6 +119,8 @@ def confirm_link(kind, owner_id, code, bot_kind=None):
             chat_id__isnull=False, telegram_user_id__isnull=False,
         ).order_by("-pk").first()
         if not challenge or challenge.attempts >= 5:
+            return False
+        if challenge.proposed_phone and not challenge.phone_verified_at:
             return False
         challenge.attempts += 1
         challenge.save(update_fields=["attempts"])
@@ -129,9 +146,66 @@ def confirm_link(kind, owner_id, code, bot_kind=None):
             )
         except IntegrityError:
             return False
+        if kind == "staff" and challenge.proposed_phone and challenge.phone_verified_at:
+            from .models import Access
+            from django.contrib.auth.models import User
+            if not User.objects.filter(pk=owner_id, is_active=True).exists():
+                return False
+            access, _ = Access.objects.get_or_create(user_id=owner_id)
+            access.recovery_phone = challenge.proposed_phone
+            access.save(update_fields=["recovery_phone"])
         challenge.used_at = now
         challenge.save(update_fields=["used_at"])
         return True
+
+
+
+def awaiting_phone_contact(bot_kind, telegram_user_id, chat_id):
+    """Only a KOFAD-password-authenticated, Telegram-accepted pairing may ask for contact."""
+    if not settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
+        return False
+    return TelegramLinkChallenge.objects.filter(
+        bot_kind=bot_kind, kind="staff",
+        telegram_user_id=telegram_user_id, chat_id=chat_id,
+        proposed_phone__gt="", phone_verified_at__isnull=True,
+        used_at__isnull=True, expires_at__gt=timezone.now(),
+    ).exists()
+
+
+def accept_telegram_contact(bot_kind, telegram_user_id, chat_id, contact):
+    """A claimed text number or someone else's forwarded contact is never proof."""
+    if not settings.TELEGRAM_ACCOUNT_LINK_ENABLED:
+        return "Phone verification is currently disabled."
+    if (not isinstance(contact, dict) or type(contact.get("user_id")) is not int
+            or contact["user_id"] != telegram_user_id):
+        return "Only your OWN Telegram contact, shared using the bot button, can verify the number."
+    from .identity import normalize_ghana_phone
+    from django.core.exceptions import ValidationError
+    try:
+        phone = normalize_ghana_phone(contact.get("phone_number", ""))
+    except ValidationError:
+        return "That is not a valid Ghana phone number. Enter your registered Ghana number on KOFAD."
+    with transaction.atomic():
+        challenge = TelegramLinkChallenge.objects.select_for_update().filter(
+            bot_kind=bot_kind, kind="staff",
+            telegram_user_id=telegram_user_id, chat_id=chat_id,
+            proposed_phone__gt="", used_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        ).order_by("-created_at").first()
+        if not challenge:
+            return "Start a new account pairing from your signed-in KOFAD staff portal first."
+        if not hmac.compare_digest(phone, challenge.proposed_phone):
+            return (
+                "The number shared by your Telegram account differs from the one "
+                "you entered on the KOFAD website. Correct the website number and restart pairing."
+            )
+        challenge.phone_verified_at = timezone.now()
+        challenge.save(update_fields=["phone_verified_at"])
+    return (
+        "Your Telegram phone has been confirmed for this KOFAD staff link. "
+        "Return to your KOFAD website and enter the six-digit pairing code "
+        "already sent in this chat. No SMS is required."
+    )
 
 
 def linked_identity(kind, owner_id, bot_kind=None):
@@ -360,4 +434,110 @@ def queue_inventory_alerts(now=None):
                     identity, "stock", f"tg:stock:{branch.pk}:{today.isoformat()}:{user.pk}",
                     body, branch=branch,
                 ))
+    return count
+
+
+
+def queue_pending_closing_reviews(now=None):
+    """One actionable notice for each unverified prior-day closing, not generic spam.
+
+    Queue only verified KOFAD staff identities with reporting permission and
+    opt-in. A separate delivery check suppresses notices already resolved.
+    """
+    if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+        return 0
+    from datetime import timedelta
+    from django.contrib.auth.models import User
+    from .models import Access, Closing
+
+    now = timezone.localtime(now or timezone.now())
+    if now.hour != 8:
+        return 0
+    target_date = now.date() - timedelta(days=1)
+    count = 0
+    for closing in Closing.objects.filter(
+        date=target_date, verified_by__isnull=True,
+    ).select_related("branch")[:500]:
+        for user in User.objects.filter(is_active=True):
+            if not (user.is_superuser or any(user.has_perm("core." + perm) for perm in (
+                "manage_company", "view_reports", "operate_finance"
+            ))):
+                continue
+            access = Access.objects.filter(user=user).first()
+            if not access or access.force_password_change or access.must_change_password:
+                continue
+            if not (user.is_superuser or access.branches.filter(pk=closing.branch_id).exists()):
+                continue
+            identity = linked_identity("staff", user.pk)
+            if not identity:
+                continue
+            body = (
+                "KOFAD CLOSING REQUIRES REVIEW\n"
+                f"Branch: {closing.branch.name}\n"
+                f"Closing date: {closing.date:%d %b %Y}\n"
+                "This closing has not yet been verified. If you are responsible, "
+                "check the record in your KOFAD staff portal and complete the normal approval process.\n"
+                "https://staff.kofadimpex.com/workspace/"
+            )
+            count += int(queue_notice(
+                identity, "closing", f"tg:review:{closing.pk}:{user.pk}", body,
+                branch=closing.branch,
+            ))
+    return count
+
+
+
+def queue_weekly_customer_showcase(now=None):
+    """Consent-only weekly message with actual published FEATURED products.
+
+    No guessed discounts, unapproved offers, or arbitrary phone-number lookup.
+    Send only to already linked, verified and marketing-opted-in customers.
+    Deduplicate by ISO week and customer ID.
+    """
+    if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+        return 0
+    from marketplace.models import MarketListing
+    from .models import TelegramIdentity
+
+    now = timezone.localtime(now or timezone.now())
+    if now.weekday() != 0 or now.hour != 10:
+        return 0
+    published = MarketListing.objects.filter(
+        enabled=True, featured=True, product__active=True,
+    ).select_related("product").order_by("sort_order", "product__name")[:3]
+    rows = []
+    for listing in published:
+        price = listing.market_price
+        if not price or price <= 0:
+            continue
+        rows.append(
+            f"{listing.display_name[:80]} — GHS {price:,.2f} / {listing.selling_label[:25]}\n"
+            f"https://market.kofadimpex.com/market/products/{listing.product_id}/"
+        )
+    if not rows:
+        return 0
+    body = (
+        "KOFAD MARKET — FEATURED THIS WEEK\n\n"
+        + "\n\n".join(rows)
+        + "\n\nPrices and availability can change. Check the live listing before ordering.\n"
+        "You opted in to KOFAD Telegram promotions. Reply /promos_off at any time."
+    )
+    iso_year, iso_week, _ = now.date().isocalendar()
+    count = 0
+    for identity in TelegramIdentity.objects.filter(
+        bot_kind="customer", kind="customer", revoked_at__isnull=True,
+        notifications_enabled=True, marketing_opt_in=True,
+    ).iterator(chunk_size=200):
+        if linked_identity("customer", identity.owner_id, bot_kind="customer") is None:
+            continue
+        from marketplace.models import CustomerAccount
+        if not CustomerAccount.objects.filter(
+            pk=identity.owner_id, active=True, verified_at__isnull=False,
+        ).exists():
+            continue
+        count += int(queue_notice(
+            identity, "marketing",
+            f"tg:featured:{iso_year}-W{iso_week:02d}:{identity.owner_id}",
+            body,
+        ))
     return count

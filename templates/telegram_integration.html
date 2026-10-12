@@ -2,8 +2,9 @@
 {% block content %}
 <main class="container" style="max-width:800px;margin:2rem auto;padding:1rem">
   <h1>KOFAD IMPEX — {{ telegram_bot_kind|title }} Telegram integration</h1>
-  <p>Connect your existing KOFAD {{ kind }} account to <a href="{{ telegram_bot_url }}" target="_blank" rel="noopener">the {{ telegram_bot_kind|title }} KOFAD Bot</a>.
-     A Telegram username or phone number alone does not verify your account.</p>
+  <p>Connect your existing KOFAD {{ kind }} account securely to <a href="{{ telegram_bot_url }}" target="_blank" rel="noopener">the {{ telegram_bot_kind|title }} KOFAD Bot</a>.</p>
+  <p><strong>Important:</strong> Telegram sends the six-digit linking code <strong>inside the bot chat</strong>, not by SMS.
+  You do not need to have a phone number saved on your KOFAD account to connect. The bot must be opened by you first.</p>
   {% if not telegram_active %}
   <p><strong>Telegram account linking is not yet enabled for this environment.</strong> Existing KOFAD features are unaffected.</p>
   {% else %}
@@ -24,6 +25,9 @@
       {% if telegram_bot_kind == "staff" and is_inventory %}<label><input type="checkbox" name="stock_opt_in" {% if telegram_identity.stock_opt_in %}checked{% endif %}> Stock shortage and inventory alerts</label><p></p>{% endif %}
       {% endif %}
       {% if telegram_bot_kind == "official" %}
+      {% if kind == "staff" and not staff_recovery_phone %}
+      <p><strong>Recovery phone not set:</strong> You may link the bot without a number. To enable password recovery, reconnect and optionally verify your Ghana number by sharing your own Telegram contact.</p>
+      {% endif %}
       <label><input type="checkbox" name="recovery_opt_in" {% if telegram_identity.recovery_opt_in %}checked{% endif %}> Allow Telegram as a password-recovery channel (only for this securely linked account)</label><p></p>
       {% endif %}
       <label>Confirm current KOFAD password
@@ -39,24 +43,39 @@
     </form>
   {% else %}
     <h2>Step 1 — Confirm your KOFAD password</h2>
+    <p>For security, only your existing signed-in KOFAD account can start this connection.</p>
     <form method="post">{% csrf_token %}
       <input type="hidden" name="action" value="start">
       <label>Current KOFAD password<input type="password" name="current_password" autocomplete="current-password" required></label>
+      {% if kind == "staff" %}
+      <label>Ghana mobile number (optional)
+        <input name="optional_phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="e.g. 0241234567">
+      </label>
+      <p><small>No number saved for ADMIN? Leave this blank to link the bot now, or enter a number
+      and verify it through Telegram's own contact-sharing button. KOFAD never guesses your Telegram account from a number.</small></p>
+      {% endif %}
       <button type="submit">Generate secure Telegram pairing link</button>
     </form>
     {% if telegram_pair_url %}
-    <h2>Step 2 — Open Telegram</h2>
-    <p><a href="{{ telegram_pair_url }}" target="_blank" rel="noopener">Open this KOFAD bot to receive your one-time confirmation code</a></p>
-    <h2>Step 3 — Confirm the code here</h2>
+    <h2>Step 2 — Open the bot and press Start</h2>
+    <p><a href="{{ telegram_pair_url }}" target="_blank" rel="noopener">Open your secure one-time bot link</a>.
+    Press <strong>Start</strong> in that Telegram chat, and read the six-digit code the bot shows you.</p>
+    {% if telegram_pair_has_phone %}
+    <h2>Step 3 — Confirm your optional number</h2>
+    <p>In the SAME Telegram chat, send <code>/sharephone</code>, then tap
+    <strong>Share my Telegram number</strong>. The number must match what you entered here.
+    Forwarded contacts and manually typed numbers are not accepted as verification.</p>
+    {% endif %}
+    <h2>Step {% if telegram_pair_has_phone %}4{% else %}3{% endif %} — Enter the Telegram chat code here</h2>
     <form method="post">{% csrf_token %}
       <input type="hidden" name="action" value="confirm">
-      <label>Six-digit code from Telegram<input name="confirmation_code" inputmode="numeric" maxlength="6" required></label>
+      <label>Six-digit code displayed by the KOFAD Telegram bot<input name="confirmation_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
       <label>Current KOFAD password<input type="password" name="current_password" autocomplete="current-password" required></label>
       <button type="submit">Verify and connect my account</button>
     </form>
     {% endif %}
   {% endif %}
   {% endif %}
-  <p><small>Never forward pairing links or share passwords, payment PINs or OTPs in chat. Messages may be stored by Telegram.</small></p>
+  <p><small>Only KOFAD's authenticated portal can finish linking. Never send your password, payment PIN, or the six-digit website confirmation to another person. Telegram stores chat messages according to its policies.</small></p>
 </main>
 {% endblock %}

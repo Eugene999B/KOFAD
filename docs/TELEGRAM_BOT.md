@@ -147,3 +147,65 @@ requests. Commands never print secrets.
 
 **Until verification and a controlled production release, this PR remains a
 DRAFT and production continues running existing KOFAD functionality.**
+
+
+## October 2026 onboarding and notification upgrade
+
+### Why ADMIN does not need an existing recovery phone to link
+
+The website pairing process is **NOT an SMS OTP**. When signed into KOFAD,
+select the appropriate Telegram integration page and confirm the current
+KOFAD account password. Choose "Generate secure Telegram pairing link",
+open that link from your phone, press **Start** in the designated KOFAD bot,
+and return the six-digit code shown **in that Telegram chat** to the website.
+
+Staff (including ADMIN/superuser) without a previously saved phone number can
+complete pairing by leaving the **optional Ghana phone** field blank.
+
+For staff who voluntarily enter a recovery phone during linking:
+1. Enter a Ghana mobile number (e.g. 0241234567) on the KOFAD staff linking page.
+2. Open the one-time Telegram bot link, press Start, and obtain the chat code.
+3. Send \`/sharephone\` and tap **Share my Telegram number** inside the SAME bot.
+4. Telegram's private-chat contact must have \`contact.user_id == message.from.id\`,
+   and that Telegram-owned number must equal the number entered on KOFAD.
+5. Return to KOFAD, re-enter the current KOFAD password, and confirm the six-digit
+   pairing code. Only then is that number stored as the staff recovery contact.
+
+Do not use \`/sharephone\` to replace KOFAD customer-account mobile identity.
+Existing customer-phone change and verification flows remain authoritative.
+
+An entered phone number alone never grants account access. A forwarded contact,
+a manually typed phone, a Telegram username, or someone claiming to be admin
+cannot link an account. The Telegram user must start the bot, accept the
+website-created challenge and confirm the code in the already authenticated KOFAD
+browser. Expired, replayed or cross-bot challenges do not complete linking.
+
+### Messaging opt-in and advanced commands
+
+- Customer: \`/search TEXT\`, \`/shop\`, \`/orders\`, \`/track REF\`,
+  \`/returns\`, \`/cart\`, \`/alerts_on\`, \`/alerts_off\`, \`/promos_on\`,
+  \`/promos_off\`, \`/myalerts\` and \`/support\`.
+- Staff: \`/today\`, \`/week\`, \`/month\`, \`/analysis\`, \`/mybranches\`,
+  \`/alerts_on\`, \`/alerts_off\`, \`/myalerts\`, \`/reports\`, \`/status\`.
+  All branch/report data is re-authorized for current KOFAD permissions.
+- Official: company information, bot directory, linking status, and the ONLY
+  Telegram password-recovery channel. Turning on recovery requires **separate
+  website password confirmation and opt-in**.
+
+Scheduled notifications remain tied to current source data, consent and access:
+verified closings, critical variances, weekly/monthly summaries, inventory
+exceptions, transaction/order changes, and one-time actionable reminders for
+prior-day closings awaiting verification. Closing action reminders are suppressed
+if someone approves the closing before the message is delivered.
+
+**Telegram Bot API privacy limit:** KOFAD cannot enumerate who has Telegram
+from its saved phone numbers, cold-DM all phone contacts, or send a bot message to
+a phone number without a known Telegram chat ID. Linking and optional Telegram
+phone sharing are voluntary, initiated by the individual. Never use scraping,
+contact syncing or an unofficial Telegram user account to bypass this restriction.
+
+To onboard many staff or customers, show the official bot-link invitation in
+their authenticated KOFAD portal (or send consent-compliant invitation SMS/email
+using existing channels). No Telegram alert is sent until the individual starts
+the correct bot, pairs their KOFAD account, and opts in. Public promos must
+never inherit service-notification consent.

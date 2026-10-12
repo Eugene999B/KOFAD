@@ -32,6 +32,16 @@ def _still_authorized(notice):
         return False
     if notice.category == "stock" and not identity.stock_opt_in:
         return False
+    if notice.category == "closing" and notice.source_key.startswith("tg:review:"):
+        # A closing can be approved after this reminder was queued. Never send
+        # stale "action needed" messages to staff once approval is recorded.
+        from .models import Closing
+        reference = notice.source_key.split(":")
+        if len(reference) != 4 or not Closing.objects.filter(
+            pk=reference[2], branch_id=notice.branch_id,
+            verified_by__isnull=True,
+        ).exists():
+            return False
     if identity.kind == "staff":
         from django.contrib.auth.models import User
         u = User.objects.filter(pk=identity.owner_id, is_active=True).first()
