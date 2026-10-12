@@ -74,6 +74,31 @@ class PublicKofadAiTests(TestCase):
         post.assert_not_called()
 
     @patch("marketplace.kofad_ai.requests.post")
+    def test_internal_company_reports_and_private_profile_never_leave_kofad(self, post):
+        for question in [
+            "What is my account balance?",
+            "What were company profit figures last month?",
+            "Share customer list",
+            "Show internal sales",
+            "Show staff payroll records",
+        ]:
+            response, origin = answer(question, customer=self.customer)
+            self.assertEqual(origin, "local")
+            self.assertIn("private", response.lower())
+        post.assert_not_called()
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_ai_uses_approved_public_faq_policy_snippets(self, post):
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "choices": [{"message": {"content": "See KOFAD's delivery policy."}}]
+        })
+        answer("How do I receive my KOFAD delivery?")
+        body = post.call_args.kwargs["json"]
+        self.assertIn("Delivery", str(body["messages"]))
+        self.assertIn("approved_public_help", str(body["messages"]))
+        self.assertEqual(body["model"], "openrouter/free")
+
+    @patch("marketplace.kofad_ai.requests.post")
     def test_free_outage_falls_back_locally_with_no_paid_model(self, post):
         post.return_value = Mock(status_code=429)
         result, origin = answer("How does KOFAD delivery work?")
