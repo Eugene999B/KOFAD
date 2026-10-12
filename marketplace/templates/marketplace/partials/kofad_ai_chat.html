@@ -1,57 +1,62 @@
-<aside class="kofad-ai" id="kofad-ai-widget" aria-label="KOFAD AI customer assistant" data-chat-url="/market/ai/chat/">
+<aside class="kofad-ai" id="kofad-ai-widget" aria-label="KOFAD assistant" data-chat-url="/market/ai/chat/">
   <button class="kofad-ai-launcher" type="button" data-kofad-ai-launcher
-    aria-controls="kofad-ai-panel" aria-expanded="false" aria-label="Open KOFAD Bot">
-    <span class="kofad-ai-robot" aria-hidden="true">
-      <svg viewBox="0 0 64 64" role="presentation" focusable="false">
-        <path d="M32 8v9" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/>
-        <circle cx="32" cy="7.5" r="4.1" fill="#ffcc72"/>
-        <rect x="11" y="16" width="42" height="33" rx="13" fill="#e9f8ff" stroke="#126792" stroke-width="3"/>
-        <rect x="17" y="22" width="30" height="19" rx="8" fill="#114f78"/>
-        <circle cx="25.5" cy="31" r="4.2" fill="#76e6ef"/>
-        <circle cx="38.5" cy="31" r="4.2" fill="#76e6ef"/>
-        <path d="M28 38h8" stroke="#71d6e5" stroke-width="2" stroke-linecap="round"/>
-        <rect x="5" y="28" width="7" height="12" rx="3.5" fill="#ffca79"/>
-        <rect x="52" y="28" width="7" height="12" rx="3.5" fill="#ffca79"/>
-        <path d="M22 50h20" stroke="#126792" stroke-width="4" stroke-linecap="round"/>
-      </svg>
-    </span>
-    <span class="kofad-ai-launcher-copy"><strong>KOFAD Bot</strong><small>Ask me anything</small></span>
-    <span class="kofad-ai-live" aria-hidden="true"></span>
+    aria-controls="kofad-ai-panel" aria-expanded="false" aria-label="Open KOFAD Bot. Drag to move." title="KOFAD Bot · Drag to move">
+    <svg class="kofad-ai-robot" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+      <rect x="8" y="11" width="32" height="28" rx="11" fill="currentColor" fill-opacity=".12" stroke="currentColor" stroke-width="2"/>
+      <path d="M24 11V6m-3.5 0a3.5 3.5 0 1 0 7 0 3.5 3.5 0 0 0-7 0Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <rect x="13" y="17" width="22" height="16" rx="6" fill="currentColor"/>
+      <circle cx="20" cy="25" r="2.3" fill="#fff"/>
+      <circle cx="28" cy="25" r="2.3" fill="#fff"/>
+      <path d="M22 30h4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M5 23v8m38-8v8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <span class="kofad-ai-dot" aria-hidden="true"></span>
   </button>
+  <div class="kofad-ai-tooltip" aria-hidden="true">KOFAD Bot</div>
+
   <section id="kofad-ai-panel" class="kofad-ai-panel" hidden aria-label="Chat with KOFAD Bot" role="dialog" aria-modal="false">
     <header class="kofad-ai-topbar">
-      <span class="kofad-ai-header-icon" aria-hidden="true">✦</span>
-      <span class="kofad-ai-heading"><strong>KOFAD Bot</strong><small>Business &amp; shopping assistant</small></span>
-      <button type="button" data-kofad-ai-close aria-label="Close KOFAD chat">×</button>
+      <span class="kofad-ai-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="6" width="17" height="15" rx="6" stroke="currentColor" stroke-width="1.6"/><path d="M12 6V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8.6" cy="13" r="1.7" fill="currentColor"/><circle cx="15.4" cy="13" r="1.7" fill="currentColor"/><path d="M9.8 17h4.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </span>
+      <div class="kofad-ai-heading"><strong>KOFAD Bot</strong><span><i aria-hidden="true"></i> Your shopping &amp; business assistant</span></div>
+      <div class="kofad-ai-actions">
+        <button type="button" class="kofad-ai-icon-btn" data-kofad-ai-new title="New conversation" aria-label="Start a new conversation">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6M12 13 21 4m-5 0h5v5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" class="kofad-ai-icon-btn" data-kofad-ai-close title="Close chat" aria-label="Close KOFAD Bot">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </header>
-    <div class="kofad-ai-feed" data-kofad-ai-feed role="log" aria-live="polite" aria-relevant="additions text">
-      <div class="kofad-ai-message bot">Hi! I'm KOFAD Bot. I can help you discover products, find wholesale information, understand delivery and returns, and check your orders when you're signed in.</div>
+    <div class="kofad-ai-feed" data-kofad-ai-feed role="log" aria-live="polite" aria-relevant="additions">
+      <div class="kofad-ai-welcome">
+        <div class="kofad-ai-spark" aria-hidden="true">✧</div>
+        <h2>How can I help?</h2>
+        <p>Ask about our products, delivery, wholesale or your KOFAD orders. I'll help you find the next step.</p>
+      </div>
     </div>
-    <div class="kofad-ai-starters">
-      <button type="button" data-kofad-ai-suggestion="What products do you sell?">Browse products</button>
-      <button type="button" data-kofad-ai-suggestion="How does KOFAD delivery work?">Delivery</button>
-      <button type="button" data-kofad-ai-suggestion="How can I buy wholesale?">Wholesale</button>
-      {% if market_customer %}
-      <button type="button" data-kofad-ai-suggestion="Show my recent orders">My orders</button>
-      {% else %}
-      <button type="button" data-kofad-ai-suggestion="How do I create a KOFAD customer account?">Create account</button>
-      {% endif %}
+    <div class="kofad-ai-starters" data-kofad-ai-starters aria-label="Suggested questions">
+      <button type="button" data-kofad-ai-suggestion="What products does KOFAD sell?">Products <span aria-hidden="true">↗</span></button>
+      <button type="button" data-kofad-ai-suggestion="How does KOFAD delivery work?">Delivery <span aria-hidden="true">↗</span></button>
+      <button type="button" data-kofad-ai-suggestion="How can I buy wholesale from KOFAD?">Wholesale <span aria-hidden="true">↗</span></button>
+      {% if market_customer %}<button type="button" data-kofad-ai-suggestion="Show my recent orders">My orders <span aria-hidden="true">↗</span></button>
+      {% else %}<button type="button" data-kofad-ai-suggestion="How can I open a customer account with KOFAD?">Join KOFAD <span aria-hidden="true">↗</span></button>{% endif %}
     </div>
     <form class="kofad-ai-form" data-kofad-ai-form>
       {% csrf_token %}
-      <label class="kofad-ai-consent">
-        <input type="checkbox" data-kofad-ai-consent>
-        <span>Use free AI for public questions (your question may be processed by an external provider).</span>
-      </label>
       <div class="kofad-ai-compose">
-        <label class="sr-only" for="kofad-ai-question">Ask KOFAD Bot</label>
-        <input id="kofad-ai-question" type="text" data-kofad-ai-input maxlength="600" autocomplete="off"
-          placeholder="Ask about KOFAD..." aria-label="Question for KOFAD Bot" required>
-        <button type="submit" data-kofad-ai-send aria-label="Send question">
-          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="m4 12 15-7-4 14-3-6zM12 13l7-8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <label class="sr-only" for="kofad-ai-question">Your question</label>
+        <textarea id="kofad-ai-question" data-kofad-ai-input rows="1" maxlength="600" placeholder="Message KOFAD Bot..." autocomplete="off" aria-label="Message KOFAD Bot"></textarea>
+        <button class="kofad-ai-send" type="submit" data-kofad-ai-send aria-label="Send message">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
-      <p class="kofad-ai-note">Never enter passwords, OTPs or payment details. <a href="/market/messages/">Human support</a> · <a href="/privacy/">Privacy</a></p>
+      <div class="kofad-ai-foot">
+        <label class="kofad-ai-consent"><input type="checkbox" data-kofad-ai-consent><span>Use free AI for public questions <span class="kofad-ai-info" title="When selected, public questions may be processed by a third-party free AI provider. Your private KOFAD order data remains inside KOFAD.">ⓘ</span></span></label>
+        <a href="/market/messages/" target="_blank" rel="noopener noreferrer">Human support</a>
+      </div>
+      <p class="kofad-ai-note">AI can make mistakes. Never share passwords, OTPs or payment details.</p>
     </form>
   </section>
 </aside>
