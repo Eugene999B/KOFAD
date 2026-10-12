@@ -251,6 +251,15 @@ def _offline(question, products, company, history=None):
                 "https://market.kofadimpex.com/market/orders/. "
                 "Registration alone does not create a shipment or let us "
                 "track unrelated parcels.")
+    if any(x in q for x in ("register", "sign up", "create an account",
+                            "open an account", "customer login", "log in",
+                            "sign in", "make an account")):
+        return ("Create a KOFAD Market account at "
+                "https://market.kofadimpex.com/market/account/register/ "
+                "or sign in at "
+                "https://market.kofadimpex.com/market/account/login/. "
+                "After placing orders through your account, you can see "
+                "their available tracking and payment status in My Orders.")
     if any(x in q for x in ("payment", "pay for", "paying", "checkout", "mobile money",
                             "momo", "card payment", "pay online")):
         return ("To pay for KOFAD purchases, review your cart and the "
@@ -258,6 +267,19 @@ def _offline(question, products, company, history=None):
                 "https://market.kofadimpex.com/market/cart/. "
                 "Available methods and confirmation are shown at checkout; "
                 "never send your PIN or payment details in this chat.")
+    if any(x in q for x in ("do you have", "do you stock", "have you got",
+                            "is there", "is it available", "looking for")) and not products:
+        return ("I couldn't match that to an active published KOFAD listing. "
+                "Please browse https://market.kofadimpex.com/market/ "
+                "or tell me the product name so I can look again.")
+    if any(x in q for x in ("do you have", "do you stock", "have you got",
+                            "is there", "is it available", "looking for")) and products:
+        rows = [
+            f"{p['name']} — GHS {p['price']} per {p['unit']}\n{p['url']}"
+            for p in products
+        ]
+        return ("I found these published KOFAD listings:\n\n" + "\n\n".join(rows)
+                + "\nConfirm current stock and price at checkout.")
     if any(x in q for x in ("stock", "catalog", "price", "buy", "purchase",
                             "sell", "find product", "product")) and products:
         rows = [
