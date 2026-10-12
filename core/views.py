@@ -620,11 +620,11 @@ def trade_screen(request, branch, kind):
         "pos_momo_gateway": payment_gateway,
         "pos_online_markup_percent": __import__("marketplace.pricing", fromlist=["online_markup_percent"]).online_markup_percent() if kind == "sale" else 0,
         "paystack_pos_momo_ready": kind == "sale" and (
-            payment_gateway_settings.ready("hubtel") if payment_gateway == "hubtel"
+            __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive") if payment_gateway == "hubtel"
             else paystack_pos.ready()
         ),
         "paystack_pos_momo_configured": kind == "sale" and (
-            payment_gateway_settings.configured() if payment_gateway == "hubtel"
+            __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive") if payment_gateway == "hubtel"
             else paystack_pos.configured()
         ),
     })
@@ -866,9 +866,9 @@ def pos_paystack_momo_start(request):
         if not (original_paystack or original_hubtel) and requested and requested != chosen:
             raise ValidationError("The payment provider was changed in Settings. Refresh this checkout before proceeding.")
         processor = pos_hubtel if chosen == "hubtel" else pos_paystack
-        # No unsupported wallet-name lookup or pre-approval token: the cashier
-        # initiates the charge directly. Paystack's independently verified
-        # amount/reference/currency/channel still gates sale posting.
+        # Hubtel requires a freshly verified registered wallet name and staff
+        # confirmation before the direct receive POST. Paystack keeps its
+        # existing independent verification workflow.
         result = processor.start(
             request.user,
             branch,
@@ -877,6 +877,7 @@ def pos_paystack_momo_start(request):
             data.get("phone"),
             data.get("provider"),
             data.get("email"),
+            **({"wallet_proof": data.get("wallet_proof")} if chosen == "hubtel" else {}),
         )
         response = JsonResponse(result)
         response["Cache-Control"] = "no-store, private"
