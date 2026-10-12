@@ -10,7 +10,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from . import services
-from .kofad_ai import answer, free_configured, reserve_free_request
+from .kofad_ai import answer, free_configured, eligible_for_external_ai, reserve_free_request
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def message(request):
     # Explicit user consent before forwarding PUBLIC questions to the free provider.
     consent = data.get("ai_consent") is True
     active = free_configured()
-    ai_allowed = bool(consent and active)
+    ai_allowed = bool(consent and active and eligible_for_external_ai(data["message"]))
     mode = "consent_required" if active and not consent else "offline"
     if ai_allowed:
         # Telegram and website share one zero-cost allowance. After the
