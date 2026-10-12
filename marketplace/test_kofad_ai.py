@@ -4,12 +4,12 @@ from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.core.cache import cache
-from django.test import Client, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.models import Product
 from marketplace.kofad_ai import OPENROUTER_ENDPOINT, answer
-from marketplace.models import CustomerAccount, MarketListing, OnlineOrder
+from marketplace.models import CustomerAccount, MarketListing
 
 
 @override_settings(
