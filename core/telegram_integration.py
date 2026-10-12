@@ -224,7 +224,7 @@ def queue_notice(identity, category, source_key, body, branch=None):
     if not identity or identity.revoked_at or not identity.notifications_enabled:
         return False
     allowed_bot = {
-        "recovery": "official", "order": "customer", "task": "staff",
+        "recovery": "official", "order": "customer", "task": "staff", "welcome": "staff",
         "marketing": "customer", "closing": "staff",
         "digest": "staff", "critical": "staff", "stock": "staff",
     }.get(category)
