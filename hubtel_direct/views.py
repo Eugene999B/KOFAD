@@ -122,6 +122,7 @@ def payout(request):
         tx = service.create_payout(
             user, body.get("kind"), body.get("amount"), body.get("destination"),
             body.get("recipient_name"), body.get("channel", ""), body.get("bank_code", ""),
+            idempotency_key=request.headers.get("Idempotency-Key"),
         )
         return _answer(tx, 201)
     except PermissionDenied as exc:
