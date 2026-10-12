@@ -4,6 +4,7 @@ import json
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -90,6 +91,41 @@ def _finance_staff(request, approval=False):
     if not valid:
         raise PermissionDenied("Recent staff MFA is required for money transfers.")
     return user
+
+
+@login_required
+@require_POST
+def staff_wallet_name(request):
+    """Protected cashier name lookup; no payment is initiated by this endpoint."""
+    try:
+        from core import services as core_services
+        from core.views import branch_for
+        from . import verification
+        branch = branch_for(request)
+        core_services.permit(request.user, branch, "operate_sales")
+        data = _json(request)
+        if set(data) != {"phone", "channel", "customer_authorized"} or data["customer_authorized"] is not True:
+            raise ValidationError("Confirm that the customer authorized verification of their wallet.")
+        verification.staff_throttle(request.user.pk, data.get("phone"))
+        result = verification.inquiry(data["phone"], data["channel"])
+        proof = signing.dumps(
+            {"user": request.user.pk, "branch": branch.pk, "phone": result["phone"],
+             "channel": result["channel"], "name": result["wallet_name"]},
+            salt="kofad-hubtel-staff-wallet-verify-v1",
+        )
+        core_services.audit(
+            request.user, branch, "hubtel.wallet_verified", "wallet",
+            {"phone_suffix": result["phone"][-4:], "channel": result["channel"]},
+            category="finance",
+        )
+        response = JsonResponse({"name": result["wallet_name"], "network": result["channel"],
+                                 "phone_suffix": result["phone"][-4:], "verification_token": proof})
+        response["Cache-Control"] = "private, no-store"
+        return response
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    except (ValidationError, ValueError, TypeError) as exc:
+        return _error(exc)
 
 
 @require_POST
