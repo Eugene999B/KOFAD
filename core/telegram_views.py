@@ -69,7 +69,7 @@ def webhook(request, bot_kind="official"):
         if isinstance(contact, dict):
             response_text = accept_telegram_contact(bot_kind, sender_id, chat_id, contact)
             reply_markup = {"remove_keyboard": True}
-        elif text.strip().split("@", 1)[0].split(maxsplit=1)[0].lower() == "/sharephone":
+        elif text.strip().partition(" ")[0].partition("@")[0].lower() == "/sharephone":
             if awaiting_phone_contact(bot_kind, sender_id, chat_id):
                 response_text = (
                     "Tap the button below to share your OWN Telegram account number. "
