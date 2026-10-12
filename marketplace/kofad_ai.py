@@ -97,6 +97,16 @@ def safe_question(text):
     return text
 
 
+def eligible_for_external_ai(question):
+    """Sensitive, private or deterministic questions must never spend free AI."""
+    return bool(
+        safe_question(question)
+        and not INTENT_ORDER.search(question)
+        and not PRIVATE_TOPIC.search(question)
+        and not META_QUESTION.search(question)
+    )
+
+
 def _public_products(question):
     """Only live, published, active products become AI grounding material."""
     tokens = [
