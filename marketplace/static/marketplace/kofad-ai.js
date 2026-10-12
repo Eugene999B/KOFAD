@@ -154,7 +154,7 @@
 
   function scrollEnd() { feed.scrollTop = feed.scrollHeight; }
 
-  function appendMessage(message, type, source) {
+  function appendMessage(message, type, source, mode) {
     const bubble = document.createElement("div");
     bubble.className = "kofad-ai-message " + (type === "user" ? "user" : "bot");
     if (type === "bot" && !reducedMotion && message.length > 90) {
@@ -181,8 +181,12 @@
       const meta = document.createElement("div");
       meta.className = "kofad-ai-response-meta";
       const label = document.createElement("span");
-      label.textContent = source === "free-ai" ? "Free AI · confirm details at checkout" :
-        source === "private" ? "From your KOFAD account" : "KOFAD information";
+      label.textContent = source === "free-ai" ? "AI-assisted · verify important details" :
+        source === "private" ? "From your KOFAD account" :
+        mode === "consent_required" ? "Local answer · enable advanced AI below" :
+        mode === "daily_limit" ? "Local answer · free AI daily limit reached" :
+        mode === "provider_unavailable" ? "Local answer · advanced AI unavailable" :
+        "KOFAD quick answer";
       const copy = document.createElement("button");
       copy.type = "button";
       copy.textContent = "Copy";
@@ -280,8 +284,8 @@
       thinking.node.remove();
       const text = response.ok ? String(data.reply || "I couldn't find an answer.") :
         String(data.error || "KOFAD Bot couldn't answer. Please try again.");
-      appendMessage(text, "bot", response.ok ? data.source : "local");
-      if (response.ok && consent.checked && ["free-ai", "local"].includes(data.source)) {
+      appendMessage(text, "bot", response.ok ? data.source : "local", data.ai_mode);
+      if (response.ok && ["free-ai", "local"].includes(data.source)) {
         history.push({ role: "user", content: question.slice(0, 320) });
         history.push({ role: "assistant", content: text.slice(0, 440) });
         history = history.slice(-6);
