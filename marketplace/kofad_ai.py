@@ -43,6 +43,43 @@ PRIVATE_TOPIC = re.compile(
 )
 
 
+META_QUESTION = re.compile(
+    r"(?i)\b(?:(?:what|which)\s+(?:(?:ai|language|underlying)\s+)?"
+    r"(?:model|api|provider|engine)\b|which\s+llm\b|"
+    r"what\s+(?:are\s+you\s+)?powered\s+by\b)"
+)
+
+
+def _meta_reply():
+    return ("I'm KOFAD Bot. I can't provide details of the internal AI "
+            "model or API configuration. I can help you with KOFAD "
+            "shopping, payments, delivery and verified orders.")
+
+
+def reserve_free_request(channel, user_key, today):
+    """Bound free provider calls across website AND Telegram entry points.
+
+    A shared daily ceiling protects the site's free capacity from Telegram
+    traffic. Uses atomic cache add/incr, and fails closed on cache failure.
+    """
+    if channel not in {"web", "telegram"} or not isinstance(user_key, str):
+        return False
+    scoped_key = f"kofad:ai:free:{channel}:{user_key}:{today}"
+    shared_key = f"kofad:ai:free-global:{today}"
+
+    def take(key, limit):
+        try:
+            if cache.add(key, 1, 86400):
+                return True
+            return cache.incr(key) <= limit
+        except (ValueError, TypeError, ConnectionError):
+            return False
+
+    if not take(scoped_key, 30 if channel == "web" else 8):
+        return False
+    return take(shared_key, 40)
+
+
 def free_configured():
     """The caller cannot configure a paid or dynamically billable model."""
     return bool(getattr(settings, "KOFAD_OPENROUTER_FREE_ENABLED", False)
@@ -58,6 +95,16 @@ def safe_question(text):
     if BLOCKED.search(text):
         return None
     return text
+
+
+def eligible_for_external_ai(question):
+    """Sensitive, private or deterministic questions must never spend free AI."""
+    return bool(
+        safe_question(question)
+        and not INTENT_ORDER.search(question)
+        and not PRIVATE_TOPIC.search(question)
+        and not META_QUESTION.search(question)
+    )
 
 
 def _public_products(question):
@@ -161,9 +208,80 @@ def _customer_orders(customer):
     )
 
 
-def _offline(question, products, company):
+def _offline(question, products, company, history=None):
+    """Honest local assistance when free AI is not available."""
     q = question.casefold()
-    if any(x in q for x in ("stock", "catalog", "price", "buy", "purchase", "sell", "find product", "product")) and products:
+    if products and history and re.search(
+        r"(?i)\b(?:how much|what price|what(?:'s| is) the price|those|that one|"
+        r"and that|same one)\b", question,
+    ):
+        lines = [
+            f"{item['name']} — GHS {item['price']} per {item['unit']}\n{item['url']}"
+            for item in products
+        ]
+        return ("Based on the published product(s) we discussed:\n\n"
+                + "\n\n".join(lines)
+                + "\nConfirm availability and final price at checkout.")
+    if re.search(r"\b(?:your name|what(?:'s| is) your name|who are you|introduce yourself)\b", q):
+        return ("I'm KOFAD Bot, KOFAD IMPEX's digital assistant. I can explain "
+                "our services and help you find products or follow up on an "
+                "order securely. What would you like to do?")
+    if re.search(r"\b(?:which|what)\s+(?:ai\s+)?(?:model|api|provider|engine)\b|"
+                 r"\b(?:powered by|which llm|your underlying model)\b", q):
+        return ("I'm KOFAD Bot. I can't provide details of the internal AI "
+                "model or API configuration. My job is to help with KOFAD "
+                "shopping and account guidance; I can also answer general "
+                "public questions when advanced AI is available.")
+    if any(x in q for x in ("what can you do", "what do you do", "your capabilities",
+                            "how can you help", "what are your features")):
+        return (
+            "I can search KOFAD's published products and prices, explain "
+            "delivery and wholesale services, and guide you through safe "
+            "checkout, returns and customer support. If you sign in, I can "
+            "show your own KOFAD order status without sharing it with an "
+            "outside AI service. Staff use the separate verified Staff Bot "
+            "for their authorized tasks. Try 'Do you sell flour?' or "
+            "'How do I track my order?'"
+        )
+    if ("track" in q or "where is" in q or "status" in q) and any(
+        term in q for term in ("order", "item", "parcel", "package", "purchase", "delivery")
+    ):
+        return ("Yes, after registering and signing in you can track KOFAD "
+                "orders placed through your account. Open your orders at "
+                "https://market.kofadimpex.com/market/orders/. "
+                "Registration alone does not create a shipment or let us "
+                "track unrelated parcels.")
+    if any(x in q for x in ("register", "sign up", "create an account",
+                            "open an account", "customer login", "log in",
+                            "sign in", "make an account")):
+        return ("Create a KOFAD Market account at "
+                "https://market.kofadimpex.com/market/account/register/ "
+                "or sign in at "
+                "https://market.kofadimpex.com/market/account/login/. "
+                "After placing orders through your account, you can see "
+                "their available tracking and payment status in My Orders.")
+    if any(x in q for x in ("payment", "pay for", "paying", "checkout", "mobile money",
+                            "momo", "card payment", "pay online")):
+        return ("To pay for KOFAD purchases, review your cart and the "
+                "currently available secure payment options at "
+                "https://market.kofadimpex.com/market/cart/. "
+                "Available methods and confirmation are shown at checkout; "
+                "never send your PIN or payment details in this chat.")
+    if any(x in q for x in ("do you have", "do you stock", "have you got",
+                            "is there", "is it available", "looking for")) and not products:
+        return ("I couldn't match that to an active published KOFAD listing. "
+                "Please browse https://market.kofadimpex.com/market/ "
+                "or tell me the product name so I can look again.")
+    if any(x in q for x in ("do you have", "do you stock", "have you got",
+                            "is there", "is it available", "looking for")) and products:
+        rows = [
+            f"{p['name']} — GHS {p['price']} per {p['unit']}\n{p['url']}"
+            for p in products
+        ]
+        return ("I found these published KOFAD listings:\n\n" + "\n\n".join(rows)
+                + "\nConfirm current stock and price at checkout.")
+    if any(x in q for x in ("stock", "catalog", "price", "buy", "purchase",
+                            "sell", "find product", "product")) and products:
         rows = [
             f"{p['name']} — GHS {p['price']} per {p['unit']}\n{p['url']}"
             for p in products
@@ -171,25 +289,30 @@ def _offline(question, products, company):
         return ("Here are published KOFAD Market listings:\n\n" + "\n\n".join(rows)
                 + "\nPrices and availability must be confirmed at checkout.")
     if any(x in q for x in ("return", "refund", "exchange")):
-        return "Our returns and refund information: " + company["returns"]
+        return ("Find KOFAD's published returns and refund terms here: "
+                + company["returns"]
+                + ". To check your own return, sign in to your KOFAD account.")
     if any(x in q for x in ("deliver", "shipping", "collection", "pickup", "ghana post")):
-        return ("Explore KOFAD's delivery and collection options: " + company["delivery"]
-                + "\nYour final quote depends on your order and location.")
+        return ("See KOFAD's delivery and collection information: " + company["delivery"]
+                + ". Your final quote depends on the order and destination.")
     if any(x in q for x in ("wholesale", "bulk", "business supply", "supplier")):
-        return ("KOFAD supports wholesale and bulk purchasing. Enquire here: "
-                + company["wholesale"])
+        return ("KOFAD supports wholesale and bulk purchasing. Ask about "
+                "quantity, availability and a quotation here: " + company["wholesale"])
     if any(x in q for x in ("contact", "phone", "call", "email", "reach", "address", "location")):
         return (f"Contact KOFAD: {company['contact']}" +
                 (f"\nTelephone: {company['phone']}" if company["phone"] else "") +
                 (f"\nEmail: {company['email']}" if company["email"] else "") +
                 (f"\nAddress: {company['address']}" if company["address"] else ""))
-    if any(x in q for x in ("hello", "hi", "good morning", "hey")):
-        return ("Hello! I am KOFAD Bot. Ask about our published products, "
-                "retail/wholesale service, deliveries, returns or your orders.")
+    if re.search(r"\b(?:hello|hi|hey|good morning|good evening|good afternoon)\b", q):
+        return ("Hello! I'm KOFAD Bot. I can help you shop, check your own "
+                "orders after sign-in, or explain delivery and payments. "
+                "What are you looking for?")
     return (
-        "I can help with KOFAD products, retail and wholesale, delivery, "
-        "returns and customer orders. Browse the FAQs at " + company["faq"]
-        + " or contact our team at " + company["contact"] + "."
+        "I can't give a reliable answer to that question from KOFAD's "
+        "published information alone. Advanced AI may be unavailable or "
+        "not enabled for this chat right now. You can ask about products, "
+        "orders, checkout and delivery, or contact our team at "
+        + company["contact"] + "."
     )
 
 
@@ -240,8 +363,8 @@ def _free_completion(question, products, company, history=None):
         "You are KOFAD Bot, a friendly helpful assistant for KOFAD IMPEX "
         "ENTERPRISE, a Ghana-based retail/wholesale business. Answer the "
         "visitor's public business and product questions accurately and "
-        "briefly. Use ONLY the public KOFAD facts and published listings "
-        "provided in the next message. Do not invent price, availability, "
+        "briefly. For KOFAD questions use ONLY public facts and listings "
+        "provided next. For general public questions, reason carefully and distinguish them from KOFAD business facts. Never disclose internal model/API/provider configuration. Do not invent price, availability, "
         "discount, payment method, hours, policy, contact number, or delivery "
         "times. If a fact is missing, say so and link the relevant page. "
         "Never request passwords, payment PINs, OTPs, or bank details. "
@@ -309,6 +432,8 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
     question = " ".join(question.strip().split())[:MAX_QUESTION + 1]
     if not question or len(question) > MAX_QUESTION:
         return "Please ask a question in 600 characters or fewer.", "local"
+    if META_QUESTION.search(question):
+        return _meta_reply(), "local"
     if INTENT_ORDER.search(question):
         return _customer_orders(customer), "private" if customer else "local"
     if BLOCKED.search(question):
@@ -322,7 +447,7 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
             "dashboard or Staff Telegram Bot. Account: "
             "https://market.kofadimpex.com/market/account/"
         ), "local"
-    public_history = _public_history(history) if ai_allowed else []
+    public_history = _public_history(history)
     topic = _grounding_question(question, public_history)
     company = _company_info()
     products = _public_products(topic)
@@ -330,4 +455,4 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
         generated = _free_completion(question, products, company, public_history)
         if generated:
             return generated, "free-ai"
-    return _offline(question, products, company), "local"
+    return _offline(question, products, company, public_history), "local"

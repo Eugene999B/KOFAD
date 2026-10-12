@@ -48,6 +48,25 @@
 </form>
 <p class="muted">Staff reports and notifications are restricted to your actual KOFAD permissions and branches. Any required KOFAD MFA must be completed first.</p>
 {% endif %}
+{% if not invalid and active and not linked %}
+<section aria-label="Alternative secure pairing" class="muted">
+  <h2>Sign-in not connecting?</h2>
+  <p>If your login opened another browser or Google sign-in ended the Telegram Mini App session, use the existing secure website pairing method instead. It verifies your logged-in account and asks you to confirm a one-time pairing code in Telegram; it never accepts just a phone number.</p>
+  {% if kind == 'staff' %}
+    {% if bot_kind == 'official' %}
+      <a href="/integrations/telegram/security/">Connect to KOFAD Official Bot recovery verification</a>
+    {% else %}
+      <a href="/integrations/telegram/">Connect securely using KOFAD staff account verification</a>
+    {% endif %}
+  {% elif kind == 'customer' %}
+    {% if bot_kind == 'official' %}
+      <a href="/market/integrations/telegram/security/">Connect to KOFAD Official Bot recovery verification</a>
+    {% else %}
+      <a href="/market/integrations/telegram/">Connect securely using KOFAD customer account verification</a>
+    {% endif %}
+  {% endif %}
+</section>
+{% endif %}
 <p class="fine">We never ask for your KOFAD password or payment PIN inside a Telegram message. Contact identification is based on verified Telegram account IDs, not a typed mobile number.</p>
 </main>
 </body>

@@ -124,4 +124,11 @@ def link_miniapp_identity(kind, owner_id, bot_kind, telegram_user_id, *, alerts=
         # recovery codes to this cryptographically verified, linked chat.
         existing.recovery_opt_in = bool(recovery and bot_kind == "official")
         existing.save()
+        if kind == "staff" and bot_kind == "staff" and existing.notifications_enabled:
+            # First role-specific Telegram message, queued only after both
+            # the KOFAD session and Telegram HMAC have been verified.
+            from .telegram_intelligence import staff_welcome
+            from .telegram_integration import queue_notice
+            queue_notice(existing, "welcome", f"tg:welcome:{existing.pk}",
+                         staff_welcome(user))
     return linked_identity(kind, owner_id, bot_kind=bot_kind)

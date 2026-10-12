@@ -44,12 +44,39 @@ def staff_menu(user):
                "/alerts_off — pause optional notices"]
     if role["management"]:
         options += ["/today — verified closing intelligence for today",
-                    "/week — last seven days", "/month — last 30 days"]
+                    "/yesterday — previous day's verified closings",
+                    "/week — last seven days", "/month — last 30 days",
+                    "/compare — compare two seven-day sales periods",
+                    "/compare_month — compare two 30-day sales periods"]
     if role["inventory"]:
         options.append("/inventory — stock exceptions in your assigned locations")
     if role["sales"]:
         options.append("/orders_due — active online orders in your assigned locations")
     return "KOFAD Staff Assistant — your authorized tools\n\n" + "\n".join(options)
+
+
+def staff_welcome(user):
+    """Current role-scoped welcome text, rechecked immediately before sending."""
+    branches = _branches(user)
+    role = _role(user)
+    areas = []
+    if role["management"]:
+        areas.append("verified closing reports")
+    if role["inventory"]:
+        areas.append("inventory exceptions")
+    if role["sales"]:
+        areas.append("open sales orders")
+    areas.append("your assigned work and alerts")
+    return (
+        "KOFAD STAFF ACCOUNT CONNECTED\n"
+        "Your Telegram assistant is linked to your verified staff login.\n"
+        f"Active assigned locations: {branches.count()}\n"
+        "Authorized tools: " + ", ".join(areas) + ".\n"
+        "Send /menu for your role-specific commands, /tasks for current "
+        "priorities, or /myalerts to review notifications.\n"
+        "Messages never authorize transactions or override KOFAD permissions. "
+        "You can pause optional notifications with /alerts_off."
+    )
 
 
 def account_tasks(user):
@@ -92,6 +119,65 @@ def account_tasks(user):
         + "\n".join("• " + line for line in lines)
         + "\nThese are actionable counts, not authorization to approve a payment or change stock.\n"
         "Review and act through your signed-in KOFAD staff portal."
+    )
+
+
+def inventory_brief(user):
+    """Current low-stock lines in active assigned branches, without write access."""
+    from .models import Stock
+
+    branches = _branches(user)
+    if not _role(user)["inventory"]:
+        return "Your KOFAD role does not permit inventory reporting."
+    if not branches.exists():
+        return "No active branch is assigned to your KOFAD account."
+    low = Stock.objects.filter(
+        branch__in=branches, product__active=True,
+        quantity__lte=F("product__reorder_level"),
+    ).select_related("branch", "product").order_by(
+        "branch__name", "product__name"
+    )
+    total = low.count()
+    lines = [
+        f"• {row.branch.name}: {row.product.name} — {row.quantity} recorded "
+        f"(reorder level {row.product.reorder_level})"
+        for row in low[:8]
+    ]
+    if not lines:
+        return ("No low-stock records were identified in your assigned branches. "
+                "Items without stock records are not included. Confirm in the inventory portal.")
+    return (
+        f"KOFAD LOW STOCK — {total} recorded exception(s)\n"
+        + "\n".join(lines)
+        + ("\nShowing the first 8 exceptions." if total > 8 else "")
+        + "\nReview stock movements and restocking in your staff portal. "
+        "This message cannot place an order or modify stock."
+    )
+
+
+def sales_work_brief(user):
+    """Scoped order-work summary; no customer names, addresses or payments."""
+    from django.db.models import Count
+    from marketplace.models import OnlineOrder
+
+    branches = _branches(user)
+    if not _role(user)["sales"]:
+        return "Your KOFAD role does not permit sales operations reporting."
+    if not branches.exists():
+        return "No active branch is assigned to your KOFAD account."
+    statuses = ("paid", "confirmed", "preparing", "ready_pickup", "out_for_delivery")
+    rows = OnlineOrder.objects.filter(
+        branch__in=branches, status__in=statuses
+    ).values("status").annotate(total=Count("pk")).order_by("status")
+    counts = list(rows)
+    if not counts:
+        return ("No outstanding online orders in your assigned branches "
+                "currently match the active fulfillment states.")
+    return (
+        "KOFAD ACTIVE SALES WORK\n"
+        + "\n".join(f"• {x['status'].replace('_', ' ').title()}: {x['total']}" for x in counts)
+        + "\nOpen your authorized staff order workspace for individual tasks. "
+        "No customer information or payment authority is provided here."
     )
 
 

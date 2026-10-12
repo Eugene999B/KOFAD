@@ -138,3 +138,52 @@ class TelegramQuickAuthTests(TestCase):
         linked = link_miniapp_identity("staff", self.staff.pk, "staff", 78398, alerts=True)
         self.assertTrue(linked.notifications_enabled)
         self.assertEqual(queue_role_briefings(timezone.localtime().replace(hour=8)), 0)
+
+    def test_official_mini_app_fallback_stays_with_official_security_bot(self):
+        self.staff_session()
+        response = self.client.get("/integrations/telegram/quick/official/")
+        self.assertContains(response, 'href="/integrations/telegram/security/"')
+        self.assertNotContains(response, 'href="/integrations/telegram/"')
+
+    def test_mini_app_staff_welcome_and_manual_pairing_fallback(self):
+        from core.telegram_delivery import _still_authorized
+        self.staff_session()
+        response = self.client.get("/integrations/telegram/quick/staff/")
+        self.assertContains(response, "Connect securely using KOFAD staff account verification")
+        self.assertContains(response, "another browser")
+        identity = link_miniapp_identity(
+            "staff", self.staff.pk, "staff", 88741, alerts=True)
+        self.assertIsNotNone(identity)
+        welcome = TelegramOutbound.objects.get(category="welcome")
+        self.assertEqual(welcome.identity_id, identity.pk)
+        self.assertTrue(_still_authorized(welcome))
+        self.assertIn("/month", staff_menu(self.staff))
+
+    @override_settings(TELEGRAM_BUSINESS_ANALYTICS_ENABLED=True)
+    def test_verified_staff_sales_comparison_and_yesterday(self):
+        from datetime import timedelta
+        from core.models import Closing
+        from core.telegram_assistant import reply_for
+
+        branch = Branch.objects.create(name="Comparison Branch", code="tg-cmp-ci")
+        self.access.branches.add(branch)
+        link_miniapp_identity("staff", self.staff.pk, "staff", 94210, alerts=True)
+        today = timezone.localdate()
+        for date, amount in ((today, "125"), (today - timedelta(days=8), "100")):
+            Closing.objects.create(
+                branch=branch, date=date,
+                expected={"cash": "0"}, counted={"cash": "0"},
+                summary={"sales_total": amount},
+                submitted_by=self.staff, verified_by=self.staff,
+            )
+        text = reply_for("Compare sales this week vs last week", 94210, 94210, "staff")
+        self.assertIn("VERIFIED SALES COMPARISON", text)
+        self.assertIn("GHS 125.00", text)
+        self.assertIn("GHS 100.00", text)
+        self.assertIn("not profit", text)
+        self.assertIn("VERIFIED CLOSING INTELLIGENCE", reply_for(
+            "Show yesterday sales", 94210, 94210, "staff",
+        ))
+        self.assertIn("/login", reply_for(
+            "Compare sales this month vs last month", 94211, 94211, "staff",
+        ))
