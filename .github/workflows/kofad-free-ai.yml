@@ -49,6 +49,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - run: ruff check marketplace/kofad_ai.py marketplace/kofad_ai_views.py marketplace/test_kofad_ai.py core/telegram_assistant.py core/domain_middleware.py
+      - run: node --check marketplace/static/marketplace/kofad-ai.js
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test marketplace.test_kofad_ai core.test_telegram_quick --noinput
