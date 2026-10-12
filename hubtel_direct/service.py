@@ -147,6 +147,10 @@ def approve_payout(tx_id, approver):
         if tx.requested_by_id == approver.pk:
             raise PermissionDenied("The payout creator cannot approve their own transfer.")
         client.require_enabled(tx.kind)
+        if tx.amount > client.money(settings.HUBTEL_DIRECT_MAX_PAYOUT_GHS):
+            raise ValidationError("Payout exceeds the current approval limit.")
+        if not tx.requested_by or not tx.requested_by.is_active or not tx.requested_by.has_perm("core.operate_finance"):
+            raise PermissionDenied("The payout requester no longer has finance authorization.")
         tx.approved_by = approver
         tx.status = "initializing"
         tx.next_check_at = timezone.now() + MIN_STATUS_WAIT
