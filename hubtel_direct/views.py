@@ -99,51 +99,6 @@ def _finance_staff(request, approval=False):
 
 @login_required
 @require_POST
-def staff_wallet_otp(request):
-    """Customer's six-digit SMS proves control before a cashier-initiated prompt."""
-    try:
-        from core import services as core_services
-        from core.identity import normalize_ghana_phone
-        from core.views import branch_for
-        from . import client as hubtel_client
-        branch = branch_for(request)
-        core_services.permit(request.user, branch, "operate_sales")
-        data = _json(request)
-        action = data.get("action")
-        if action == "send" and set(data) != {"action", "phone", "channel", "customer_authorized"}:
-            raise ValidationError("Invalid SMS request fields.")
-        if action == "verify" and set(data) != {"action", "phone", "channel", "code", "customer_authorized"}:
-            raise ValidationError("Invalid SMS verification fields.")
-        if data.get("customer_authorized") is not True:
-            raise ValidationError("Customer must authorize verification before an SMS is sent.")
-        channel = data.get("channel")
-        if channel not in hubtel_client.CHANNELS:
-            raise ValidationError("Choose a supported Mobile Money network.")
-        phone = normalize_ghana_phone(data.get("phone"))
-        if action == "send":
-            market_services.send_otp(phone, purpose="momo", request=request)
-            result = {"message": "SMS sent to the customer's selected wallet number. Ask the customer to enter the six-digit code."}
-        elif action == "verify":
-            market_services.verify_otp(phone, data.get("code"), purpose="momo")
-            token = signing.dumps(
-                {"user": request.user.pk, "branch": branch.pk, "phone": phone.lstrip("+"),
-                 "channel": channel},
-                salt="kofad-pos-wallet-otp-v1",
-            )
-            result = {"verified": True, "otp_proof": token}
-        else:
-            raise ValidationError("Select send or verify.")
-        response = JsonResponse(result)
-        response["Cache-Control"] = "private, no-store"
-        return response
-    except PermissionDenied as exc:
-        return _error(exc, 403)
-    except (ValidationError, ValueError, TypeError) as exc:
-        return _error(exc)
-
-
-@login_required
-@require_POST
 def staff_wallet_name(request):
     """Protected cashier name lookup; no payment is initiated by this endpoint."""
     try:
@@ -153,23 +108,13 @@ def staff_wallet_name(request):
         branch = branch_for(request)
         core_services.permit(request.user, branch, "operate_sales")
         data = _json(request)
-        if set(data) != {"phone", "channel", "customer_authorized", "otp_proof"} or data["customer_authorized"] is not True:
-            raise ValidationError("Verify customer control of the selected wallet before checking its name.")
+        if set(data) != {"phone", "channel"}:
+            raise ValidationError("Enter a Mobile Money number and choose a network.")
         from core.identity import normalize_ghana_phone
         from . import client as hubtel_client
-        phone = normalize_ghana_phone(data["phone"]).lstrip("+")
-        if data["channel"] not in hubtel_client.CHANNELS:
-            raise ValidationError("Select a valid network.")
-        try:
-            proof = signing.loads(
-                data["otp_proof"], salt="kofad-pos-wallet-otp-v1", max_age=300,
-            )
-        except (signing.BadSignature, TypeError, ValueError) as exc:
-            raise ValidationError("The customer's SMS verification expired. Verify the wallet number again.") from exc
-        if (not isinstance(proof, dict) or proof.get("user") != request.user.pk
-                or proof.get("branch") != branch.pk or proof.get("phone") != phone
-                or proof.get("channel") != data["channel"]):
-            raise ValidationError("The SMS confirmation does not match the selected phone and network.")
+        phone = normalize_ghana_phone(data.get("phone")).lstrip("+")
+        if data.get("channel") not in hubtel_client.CHANNELS:
+            raise ValidationError("Select MTN, Telecel or AirtelTigo.")
         verification.staff_throttle(request.user.pk, phone)
         result = verification.inquiry(phone, data["channel"])
         proof = signing.dumps(
@@ -194,24 +139,30 @@ def staff_wallet_name(request):
 
 @require_POST
 def verify_registered_phone(request, order_id):
-    """SMS OTP proves control of the customer's SAVED phone (never a typed number)."""
+    """A one-time SMS only for a NEW MoMo wallet on this customer's account."""
     try:
-        customer, _ = _customer(request, order_id)
-        if not customer.verified_at or not customer.phone or not settings.CUSTOMER_OTP_ENABLED:
-            raise ValidationError("Verified account phone and enabled SMS verification are required.")
+        customer, order = _customer(request, order_id)
+        if order.status != "awaiting_payment" or order.payment_status in {"paid", "refunded"}:
+            raise ValidationError("This order cannot accept a new payment request.")
+        if not settings.CUSTOMER_OTP_ENABLED:
+            raise ValidationError("First-time wallet verification is temporarily unavailable.")
         body = _json(request)
-        action = body.get("action")
+        if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}):
+            raise ValidationError("Enter the Mobile Money number and verification action.")
         from core.identity import normalize_ghana_phone
-        phone = normalize_ghana_phone(customer.phone)
-        if action == "send" and set(body) == {"action"}:
+        phone = normalize_ghana_phone(body.get("phone"))
+        action = body.get("action")
+        if VerifiedMomoPhone.objects.filter(customer=customer, phone=phone).exists():
+            result = {"verified": True, "message": "This wallet is already verified for your account."}
+        elif action == "send" and set(body) == {"action", "phone"}:
             market_services.send_otp(phone, "momo", request=request)
-            result = {"message": "Verification SMS sent to your registered account number."}
-        elif action == "verify" and set(body) == {"action", "code"}:
+            result = {"message": "A six-digit SMS code was sent to the Mobile Money number you entered."}
+        elif action == "verify" and set(body) == {"action", "phone", "code"}:
             market_services.verify_otp(phone, body["code"], "momo")
             VerifiedMomoPhone.objects.get_or_create(customer=customer, phone=phone)
-            result = {"verified": True}
+            result = {"verified": True, "message": "Number verified. You can now request payment."}
         else:
-            raise ValidationError("Invalid phone verification action.")
+            raise ValidationError("Enter the new wallet's six-digit SMS verification code.")
         response = JsonResponse(result)
         response["Cache-Control"] = "private, no-store"
         return response
@@ -226,9 +177,9 @@ def collect(request, order_id):
     try:
         customer, order = _customer(request, order_id)
         body = _json(request)
-        if set(body) != {"channel"}:
-            raise ValidationError("Only a Mobile Money channel may be selected.")
-        tx = service.create_collection(customer, order.pk, body["channel"])
+        if set(body) != {"channel", "phone", "customer_authorized"} or body.get("customer_authorized") is not True:
+            raise ValidationError("Enter the MoMo number, choose its network and confirm this payment.")
+        tx = service.create_collection(customer, order.pk, body["channel"], body["phone"])
         return _answer(tx, 202)
     except PermissionDenied as exc:
         return _error(exc, 403)
