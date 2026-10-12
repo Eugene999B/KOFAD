@@ -108,6 +108,14 @@ class AccessMiddleware:
                 "frame-src *.google.com; worker-src blob:; "
                 "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
             )
+        elif request.path.startswith(("/integrations/telegram/quick/", "/market/integrations/telegram/quick/")):
+            # Telegram's official Mini App SDK; no inline scripts or third-party
+            # authentication domains in KOFAD's private sign-in form.
+            response["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self' https://telegram.org; "
+                "style-src 'self'; img-src 'self' data:; font-src 'self'; "
+                "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+            )
         else:
             response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         geolocation = "(self)" if request.path.startswith(geolocation_paths) else "()"

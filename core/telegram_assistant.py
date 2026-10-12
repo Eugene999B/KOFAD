@@ -228,7 +228,8 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
     if command in {"mybranches", "branches", "locations"} and bot_kind == "staff":
         if not identity or identity.kind != "staff" or not _account(identity):
             return "Verify your KOFAD staff account using /link."
-        branches = _authorized_branches(_account(identity))
+        from .telegram_intelligence import _branches
+        branches = _branches(_account(identity))
         if not branches.exists():
             return "You do not have authorized management branches in Telegram."
         return "Authorized reporting branches:\n" + "\n".join(
@@ -252,6 +253,11 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
                + "\nInventory: " + ("ON" if identity.stock_opt_in else "OFF"))
             + "\nUse /alerts_on or /alerts_off, and your KOFAD website preferences."
         )
+
+    if command in {"login", "signin", "authenticate"}:
+        return ("Tap the secure Sign in button below. Sign in using your normal "
+                "KOFAD website username, phone or verified email, with Google "
+                "or staff MFA as configured. NEVER send passwords in bot chats.")
 
     if bot_kind == "official":
         # This bot's separate link can be enabled for safe password recovery,
@@ -297,6 +303,12 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return "I'm KOFAD's public assistant and security directory. Send /help for the available services."
 
     if bot_kind == "customer":
+        if command in {"start", "help", "menu"} and not identity:
+            return ("KOFAD Customer Assistant\n"
+                    "Tap the Sign in button to access your KOFAD account.\n"
+                    "/shop — public catalog\n/search PRODUCT — published items\n"
+                    "/login — secure sign-in\n/support — customer support\n"
+                    "Never send passwords or payment PINs in chat.")
         if command in {"start", "help", "menu"}:
             return (
                 "KOFAD — Customer Shopping Assistant\n\n"
@@ -345,6 +357,24 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return "KOFAD Customer Assistant: try /search, /orders or /help."
 
     # Staff operations bot: no OTP delivery/recovery or customer order records.
+    if command in {"start", "help", "menu"}:
+        if identity and identity.kind == "staff" and _account(identity):
+            from .telegram_intelligence import staff_menu
+            return staff_menu(_account(identity))
+        return ("KOFAD Staff Bot — sign in to unlock the tools your real "
+                "KOFAD role permits. Tap Sign in below or type /login. "
+                "Your password and any MFA code are entered only on KOFAD's website.")
+    if command in {"tasks", "priorities", "mytasks", "inventory", "orders_due"}:
+        from .telegram_intelligence import account_tasks, _role
+        if not identity or identity.kind != "staff" or not _account(identity):
+            return "Use /login to verify your KOFAD staff account before viewing tasks."
+        user = _account(identity)
+        roles = _role(user)
+        if command == "inventory" and not roles["inventory"]:
+            return "Your KOFAD role does not include inventory access."
+        if command == "orders_due" and not roles["sales"]:
+            return "Your KOFAD role does not include sales operations."
+        return account_tasks(user)
     if command in {"start", "help", "menu"}:
         return (
             "KOFAD — Staff & Management Assistant\n\n"

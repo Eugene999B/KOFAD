@@ -47,7 +47,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt -c requirements.lock
-      - run: ruff check core/telegram_channels.py core/telegram_views.py core/telegram_assistant.py core/telegram_integration.py core/telegram_delivery.py core/telegram_recovery.py core/telegram_portal.py core/test_telegram_enterprise.py core/test_telegram_bot.py
+      - run: ruff check core/telegram_channels.py core/telegram_views.py core/telegram_assistant.py core/telegram_integration.py core/telegram_delivery.py core/telegram_recovery.py core/telegram_portal.py core/test_telegram_enterprise.py core/test_telegram_bot.py core/telegram_quick_auth.py core/telegram_quick_portal.py core/telegram_intelligence.py core/test_telegram_quick.py
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
-      - run: python manage.py test core.test_telegram_bot core.test_telegram_enterprise --noinput
+      - run: python manage.py test core.test_telegram_bot core.test_telegram_enterprise core.test_telegram_quick --noinput

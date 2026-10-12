@@ -41,29 +41,53 @@ def _stamp(account, kind):
 
 
 def _find_account(kind, identifier, staff_username):
-    try:
-        normalized = normalize_ghana_phone(identifier)
-    except ValidationError:
-        return None
+    """Resolve account only to its PRELINKED official Telegram identity.
+
+    A supplied phone or email is a lookup hint, never proof to send Telegram.
+    No phone is necessary for staff with website-verified, opted-in Official Bot.
+    """
+    raw = str(identifier or "").strip()[:254]
     if kind == "customer":
         from marketplace.models import CustomerAccount
-        return CustomerAccount.objects.filter(phone=normalized, active=True, verified_at__isnull=False).first()
+        if "@" in raw:
+            from core.email_identity import verified_identity
+            verified = verified_identity("customer", raw)
+            return (CustomerAccount.objects.filter(
+                pk=verified.owner_id, active=True, verified_at__isnull=False,
+            ).first() if verified else None)
+        try:
+            normalized = normalize_ghana_phone(raw)
+        except ValidationError:
+            return None
+        return CustomerAccount.objects.filter(
+            phone=normalized, active=True, verified_at__isnull=False,
+        ).first()
     username = (staff_username or "").strip()[:150]
     if not username:
         return None
     matches = list(User.objects.filter(username__iexact=username, is_active=True)[:2])
     if len(matches) != 1:
         return None
-    access = Access.objects.filter(user=matches[0]).first()
+    account = matches[0]
+    access = Access.objects.filter(user=account).first()
     if not access:
         return None
-    try:
-        if normalize_ghana_phone(access.recovery_phone) == normalized:
-            return matches[0]
-    except ValidationError:
-        pass
-    return None
-
+    if raw:
+        if "@" in raw:
+            from core.email_identity import verified_identity
+            verified = verified_identity("staff", raw)
+            if not verified or verified.owner_id != account.pk:
+                return None
+        else:
+            try:
+                if normalize_ghana_phone(access.recovery_phone) != normalize_ghana_phone(raw):
+                    return None
+            except ValidationError:
+                return None
+    # Without a phone or email hint, only an already securely linked, opted-in
+    # official bot is eligible. Generic response prevents account enumeration.
+    identity = linked_identity("staff", account.pk, bot_kind="official")
+    return account if identity and identity.recovery_opt_in else None
 
 def request_recovery(kind, identifier, staff_username):
     if not (settings.TELEGRAM_BOT_ENABLED and settings.TELEGRAM_RECOVERY_ENABLED):
@@ -119,7 +143,8 @@ def complete_recovery(kind, challenge_id, code, new_password, confirm_password):
         challenge.save(update_fields=["attempts"])
         identity = challenge.identity
         account = _account(kind, challenge.owner_id)
-        if not account or identity.revoked_at or not identity.recovery_opt_in or not linked_identity(kind, account.pk, bot_kind="official"):
+        current = linked_identity(kind, account.pk, bot_kind="official") if account else None
+        if not account or identity.revoked_at or not identity.recovery_opt_in or not current or current.pk != identity.pk:
             return False, "This account can no longer use Telegram recovery."
         if identity.kind != kind or identity.owner_id != challenge.owner_id:
             return False, "This recovery account has changed."
@@ -171,7 +196,7 @@ def _portal(request, kind):
     if request.method == "POST":
         action = request.POST.get("action", "request")
         if action == "request":
-            challenge_id = request_recovery(kind, request.POST.get("phone", "")[:40],
+            challenge_id = request_recovery(kind, request.POST.get("phone", "")[:254],
                                             request.POST.get("username", "")[:150])
             # A dummy identifier gives exactly the same visible response for an unknown account.
             request.session[session_key] = str(challenge_id or uuid.uuid4())

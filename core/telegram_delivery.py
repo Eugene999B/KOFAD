@@ -11,10 +11,12 @@ from .telegram_channels import BOT_KINDS, bot_can_send, bot_token
 def _still_authorized(notice):
     identity = notice.identity
     from .telegram_integration import linked_identity
-    if linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind) is None:
+    current = linked_identity(identity.kind, identity.owner_id, bot_kind=identity.bot_kind)
+    if current is None or current.pk != identity.pk:
+        # An old or replaced Telegram chat must never receive queued messages.
         return False
     expected_bot = {
-        "recovery": "official", "order": "customer",
+        "recovery": "official", "order": "customer", "task": "staff",
         "marketing": "customer", "closing": "staff",
         "digest": "staff", "critical": "staff", "stock": "staff",
     }.get(notice.category)
@@ -47,6 +49,12 @@ def _still_authorized(notice):
         u = User.objects.filter(pk=identity.owner_id, is_active=True).first()
         if not u:
             return False
+        if notice.category == "task":
+            from .telegram_intelligence import account_tasks
+            # Permission revocation or completed tasks must invalidate pending
+            # reports; do not send a stale stored role briefing.
+            return bool(notice.body == account_tasks(u) and
+                        notice.body.startswith("KOFAD OPERATIONAL PRIORITIES"))
         if notice.category == "stock":
             return (bool(u.is_superuser or u.has_perm("core.operate_inventory")
                          or u.has_perm("core.manage_company")) and

@@ -1,0 +1,54 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>KOFAD | Telegram secure sign-in</title>
+<link rel="stylesheet" href="{% static 'core/telegram_quick.css' %}">
+<script defer src="https://telegram.org/js/telegram-web-app.js"></script>
+<script defer src="{% static 'core/telegram_quick.js' %}"></script>
+</head>
+<body>
+<main class="panel">
+<h1>KOFAD IMPEX</h1>
+<p class="muted">{{ bot_kind|title }} Telegram assistant · Secure account connection</p>
+{% if invalid %}
+<p role="alert">This KOFAD assistant is not available.</p>
+{% elif linked %}
+<h2>Account connected</h2>
+<p>Your existing KOFAD {{ kind }} account is connected. Return to Telegram and send <strong>/menu</strong> to see the functions available to your account.</p>
+<button id="close-miniapp" type="button">Return to Telegram</button>
+{% elif not active %}
+<p role="alert">Telegram account connection is currently unavailable.</p>
+{% elif not account %}
+<h2>Sign in to your KOFAD account</h2>
+<p>Use your normal KOFAD credentials. Staff can use their username, registered number or verified email; customers can use their registered phone or verified email. Supported Google sign-in remains available on the website.</p>
+<a class="primary" href="{{ login_url }}">Sign in securely to KOFAD</a>
+<p class="muted">If the sign-in process opens a separate page, finish it and reopen this assistant's <strong>/login</strong> button. Your password is never sent to a Telegram chat.</p>
+{% else %}
+<h2>Connect your signed-in {{ kind }} account</h2>
+<p class="muted">Telegram cryptographically verifies which Telegram account opened this Mini App. KOFAD separately verifies your current website sign-in and staff permissions.</p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+<form method="post" id="kofad-tg-quick-form">
+{% csrf_token %}
+<input name="telegram_init_data" id="telegram-init-data" type="hidden" value="">
+{% if supports_alerts %}
+<label class="choice"><input type="checkbox" name="alerts" checked> Send me the important KOFAD account and role-relevant alerts that I authorize</label>
+{% endif %}
+{% if supports_marketing %}
+<label class="choice"><input type="checkbox" name="marketing"> I also want occasional KOFAD promotions (optional)</label>
+{% endif %}
+{% if supports_recovery %}
+<label class="choice"><input type="checkbox" name="recovery"> Enable password recovery codes to this verified Telegram chat (optional)</label>
+{% endif %}
+<button type="submit">Connect this Telegram account</button>
+<p id="miniapp-status" class="muted" role="status"></p>
+</form>
+<p class="muted">Staff reports and notifications are restricted to your actual KOFAD permissions and branches. Any required KOFAD MFA must be completed first.</p>
+{% endif %}
+<p class="fine">We never ask for your KOFAD password or payment PIN inside a Telegram message. Contact identification is based on verified Telegram account IDs, not a typed mobile number.</p>
+</main>
+</body>
+</html>

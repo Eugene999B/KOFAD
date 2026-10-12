@@ -17,6 +17,20 @@ from .models import TelegramUpdate
 WEBHOOK_PATH = "/telegram/webhook/"
 
 
+def _quick_buttons(kind):
+    """Telegram opens KOFAD's authentication Mini App, NOT a password chat."""
+    staff = {"text": "Staff / Admin sign-in",
+             "web_app": {"url": "https://staff.kofadimpex.com/integrations/telegram/quick/"
+                                  + ("official" if kind == "official" else "staff") + "/"}}
+    customer = {"text": "Customer sign-in",
+                "web_app": {"url": "https://market.kofadimpex.com/market/integrations/telegram/quick/"
+                                     + ("official" if kind == "official" else "customer") + "/"}}
+    if kind == "official":
+        return {"inline_keyboard": [[staff], [customer]]}
+    return {"inline_keyboard": [[customer if kind == "customer" else staff]]}
+
+
+
 @csrf_exempt
 @require_POST
 def webhook(request, bot_kind="official"):
@@ -94,6 +108,12 @@ def webhook(request, bot_kind="official"):
         "text": response_text[:4096],
         "disable_web_page_preview": True,
     }
+    # Attach one-tap, Telegram-signed web apps to the real bot conversation.
+    # Telegram never receives the KOFAD login form's password.
+    if reply_markup is None and isinstance(text, str):
+        command = text.strip().split(maxsplit=1)[0].split("@", 1)[0].lower() if text.strip() else ""
+        if command in {"/login", "/connect", "/link", "/start", "/menu", "/help"}:
+            reply_markup = _quick_buttons(bot_kind)
     if reply_markup is not None:
         result["reply_markup"] = reply_markup
     return JsonResponse(result)

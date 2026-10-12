@@ -350,6 +350,8 @@ def run_scheduled_automations(now=None):
         jobs["telegram_pending_closing"] = queue_pending_closing_reviews
         from .telegram_integration import queue_weekly_customer_showcase
         jobs["telegram_customer_showcase"] = queue_weekly_customer_showcase
+        from .telegram_intelligence import queue_role_briefings
+        jobs["telegram_role_briefings"] = queue_role_briefings
     results = {}
     for name, job in jobs.items():
         try:
