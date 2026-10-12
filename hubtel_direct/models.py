@@ -8,6 +8,8 @@ class DirectTransaction(models.Model):
     KINDS = [("receive", "Receive MoMo"), ("send_momo", "Send MoMo"), ("send_bank", "Send to bank")]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     client_reference = models.CharField(max_length=36, unique=True, editable=False)
+    request_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    request_fingerprint = models.CharField(max_length=64, blank=True, editable=False)
     kind = models.CharField(max_length=16, choices=KINDS)
     order = models.ForeignKey("marketplace.OnlineOrder", null=True, blank=True, on_delete=models.PROTECT)
     customer = models.ForeignKey("marketplace.CustomerAccount", null=True, blank=True, on_delete=models.PROTECT)
