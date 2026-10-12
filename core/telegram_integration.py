@@ -435,3 +435,52 @@ def queue_inventory_alerts(now=None):
                     body, branch=branch,
                 ))
     return count
+
+
+
+def queue_pending_closing_reviews(now=None):
+    """One actionable notice for each unverified prior-day closing, not generic spam.
+
+    Queue only verified KOFAD staff identities with reporting permission and
+    opt-in. A separate delivery check suppresses notices already resolved.
+    """
+    if not settings.TELEGRAM_NOTIFICATIONS_ENABLED:
+        return 0
+    from datetime import timedelta
+    from django.contrib.auth.models import User
+    from .models import Access, Closing
+
+    now = timezone.localtime(now or timezone.now())
+    if now.hour != 8:
+        return 0
+    target_date = now.date() - timedelta(days=1)
+    count = 0
+    for closing in Closing.objects.filter(
+        date=target_date, verified_by__isnull=True,
+    ).select_related("branch")[:500]:
+        for user in User.objects.filter(is_active=True):
+            if not (user.is_superuser or any(user.has_perm("core." + perm) for perm in (
+                "manage_company", "view_reports", "operate_finance"
+            ))):
+                continue
+            access = Access.objects.filter(user=user).first()
+            if not access or access.force_password_change or access.must_change_password:
+                continue
+            if not (user.is_superuser or access.branches.filter(pk=closing.branch_id).exists()):
+                continue
+            identity = linked_identity("staff", user.pk)
+            if not identity:
+                continue
+            body = (
+                "KOFAD CLOSING REQUIRES REVIEW\n"
+                f"Branch: {closing.branch.name}\n"
+                f"Closing date: {closing.date:%d %b %Y}\n"
+                "This closing has not yet been verified. If you are responsible, "
+                "check the record in your KOFAD staff portal and complete the normal approval process.\n"
+                "https://staff.kofadimpex.com/workspace/"
+            )
+            count += int(queue_notice(
+                identity, "closing", f"tg:review:{closing.pk}:{user.pk}", body,
+                branch=closing.branch,
+            ))
+    return count
