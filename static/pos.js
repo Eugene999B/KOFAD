@@ -98,7 +98,9 @@
   const creditDirectVerify = document.querySelector("#credit-direct-verify");
   const creditDirectName = document.querySelector("#credit-direct-name");
   let creditLookupGeneration = 0;
+  let creditWalletProof = null;
   const resetCreditVerifiedName = () => {
+    creditWalletProof = null;
     creditLookupGeneration++;
     if (creditDirectName) creditDirectName.textContent = "Not verified";
   };
@@ -119,6 +121,8 @@
       const result = await api("/api/pos/hubtel/wallet-name/", {phone, channel:network});
       if (generation === creditLookupGeneration && creditDirectName) {
         creditDirectName.textContent = result.name || "Name unavailable";
+        creditWalletProof = result.name && result.verification_token
+          ? {phone, network, token:result.verification_token} : null;
       }
     } catch (err) {
       if (generation === creditLookupGeneration && creditDirectName) {
@@ -199,10 +203,18 @@
     if (!creditDirectContactConsent?.checked) throw new Error("Confirm permission to send this customer a Hubtel authorization invitation.");
     const phone = normalizeGhanaPhone(creditDirectPhone.value);
     if (!creditDirectNetwork.value) throw new Error("Choose MTN or Telecel for authorization.");
+    const channel = creditDirectNetwork.value === "mtn-gh-direct-debit"
+      ? "mtn-gh" : creditDirectNetwork.value === "vodafone-gh-direct-debit"
+      ? "vodafone-gh" : "";
+    if (!creditWalletProof || creditWalletProof.phone !== phone ||
+        creditWalletProof.network !== channel) {
+      throw new Error("Check the registered wallet name with Hubtel before continuing.");
+    }
     const s = calculateCreditSchedule(grandTotal - paidNow);
     return {phone, channel:creditDirectNetwork.value, frequency:s.frequency,
       first_due_date:s.first, final_due_date:s.final, collection_hour:String(s.hour),
-      amount:formatted(s.each), maximum:formatted(s.total)};
+      amount:formatted(s.each), maximum:formatted(s.total),
+      verification_token:creditWalletProof.token};
   }
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
