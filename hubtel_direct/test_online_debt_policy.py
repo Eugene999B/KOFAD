@@ -119,7 +119,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         self.assertEqual(row.amount_per_period, Decimal("200.00"))
 
     def test_debt_center_renders_manual_payments_and_draft_editor(self):
-        self.client.force_login(self.user)
+        self.authenticate_client()
         page = self.client.get(f"/debts/?customer={self.customer.pk}")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Record partial payment")
@@ -133,7 +133,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         self.assertContains(page, f"/debts/hubtel/mandates/{draft.pk}/edit/")
 
     def test_simple_settings_page_explicitly_separates_drafts_and_live_debits(self):
-        self.client.force_login(self.user)
+        self.authenticate_client()
         page = self.client.get("/settings/debt/online/")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Agreement setup")
