@@ -7,7 +7,7 @@
   </div>
   <p class="muted">The credit sale is recorded. Direct Debit is not approved until the wallet holder accepts Hubtel's USSD or OTP request.</p>
   <div class="three-column" style="margin:16px 0;gap:12px">
-    <div class="notice subtle"><small>CUSTOMER</small><strong>{{ mandate.party.name }}</strong><div>Wallet ····{{ mandate.phone_suffix }}</div></div>
+    <div class="notice subtle"><small>CUSTOMER</small><strong>{{ mandate.party.name }}</strong><div>Wallet ····{{ mandate.phone_suffix }}</div>{% if mandate.terms_snapshot.verified_wallet_name %}<div>Hubtel: {{ mandate.terms_snapshot.verified_wallet_name }}</div>{% endif %}</div>
     <div class="notice subtle"><small>UNPAID AGREEMENT</small><strong>GHS {{ mandate.maximum_total|floatformat:2 }}</strong></div>
     <div class="notice subtle"><small>INSTALLMENTS</small><strong>{% if schedule %}{{ schedule|length }}{% else %}{{ mandate.get_frequency_display }}{% endif %}</strong><div>{{ mandate.get_frequency_display }}</div></div>
   </div>
