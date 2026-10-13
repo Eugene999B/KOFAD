@@ -250,6 +250,38 @@ def finance_dashboard(request):
 
 @login_required
 @require_POST
+def recipient_name(request):
+    """Server-only Hubtel lookup; no payment is initiated."""
+    try:
+        user = _finance_staff(request)
+        from . import verification
+        body = _json(request)
+        kind = body.get("kind")
+        if kind == "momo" and set(body) == {"kind", "phone", "channel"}:
+            verification.staff_throttle(user.pk, body["phone"])
+            result = verification.inquiry(body["phone"], body["channel"])
+            data = {"registered_name": result["wallet_name"],
+                    "destination_suffix": result["phone"][-4:],
+                    "channel": result["channel"], "verified": True}
+        elif kind == "bank" and set(body) == {"kind", "bank_code", "account"}:
+            verification.staff_throttle(user.pk, body["account"])
+            result = verification.bank_inquiry(body["bank_code"], body["account"])
+            data = {"registered_name": result["name"],
+                    "destination_suffix": result["account_suffix"],
+                    "bank_code": result["bank_code"], "verified": True}
+        else:
+            raise ValidationError("Choose MoMo network and wallet number, or a bank and account number.")
+        response = JsonResponse(data)
+        response["Cache-Control"] = "private, no-store"
+        return response
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    except (ValidationError, ValueError, TypeError) as exc:
+        return _error(exc)
+
+
+@login_required
+@require_POST
 def payout(request):
     try:
         user = _finance_staff(request)
