@@ -194,6 +194,10 @@ def refresh_preapproval(mandate):
 def request_cancel(mandate):
     """Locally revoke ability to debit BEFORE contacting Hubtel for cancellation."""
     with transaction.atomic():
+        # Serialize with dispatch_planned's existing branch -> mandate lock
+        # order so a cancellation isn't lost during a simultaneous send claim.
+        prelim = DebtMandate.objects.select_related("branch").get(pk=mandate.pk)
+        core_services.lock_branch(prelim.branch)
         row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
         if row.status in {"cancelled", "settled", "failed"}:
             return row
