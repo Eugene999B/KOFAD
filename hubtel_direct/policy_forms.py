@@ -43,6 +43,8 @@ class OnlineDebtSettingsForm(forms.ModelForm):
             "collection_until_hour": "Latest auto-debit hour, exclusive (1–23)",
             "daily_collection_limit": "Daily debit submission ceiling per location (GHS)",
             "daily_attempt_limit": "Maximum automated debit requests per location per day",
+            "pending_review_hours": "Escalate unresolved debits after (hours)",
+            "unresolved_poll_hours": "Recheck unresolved provider status every (hours)",
         }
         help_texts = {
             "plan_creation_enabled": "Disabled by default. Staff may only draft an agreement; Hubtel authorization remains separate.",
@@ -52,6 +54,8 @@ class OnlineDebtSettingsForm(forms.ModelForm):
             "rollover_unpaid": "Captured on each new customer's agreement; changing this setting cannot rewrite an already accepted contract.",
             "daily_collection_limit": "Caps attempted debits, including failed or unconfirmed submissions. It cannot be used to infer wallet balance.",
             "daily_attempt_limit": "Separate from the permanent safety rule of one automatic attempt per agreed installment period.",
+            "pending_review_hours": "After this period, KOFAD suspends new debits while still checking the original transaction. It never assumes a failed payment.",
+            "unresolved_poll_hours": "Used only for old pending or uncertain payments. No repeat charge is generated.",
         }
 
     def clean(self):
@@ -100,6 +104,12 @@ class OnlineDebtSettingsForm(forms.ModelForm):
         requests = data.get("daily_attempt_limit")
         if requests is not None and not 1 <= requests <= 500:
             self.add_error("daily_attempt_limit", "Choose 1 to 500 submissions per location per day.")
+        pending_hours = data.get("pending_review_hours")
+        if pending_hours is not None and not 6 <= pending_hours <= 168:
+            self.add_error("pending_review_hours", "Choose 6 to 168 hours.")
+        poll_hours = data.get("unresolved_poll_hours")
+        if poll_hours is not None and not 1 <= poll_hours <= 24:
+            self.add_error("unresolved_poll_hours", "Choose 1 to 24 hours.")
         if data.get("plan_creation_enabled"):
             if not (data.get("allow_mtn") or data.get("allow_telecel")):
                 self.add_error("allow_mtn", "Enable at least one wallet network.")
