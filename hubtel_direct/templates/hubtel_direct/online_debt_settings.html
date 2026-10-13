@@ -31,6 +31,13 @@
  <p class="muted">These totals include pending, failed and unconfirmed debit submissions. They are not confirmed collections or customer's wallet balances.</p>
 </section>
 
+{% if needs_attention_count %}
+<section class="panel">
+ <div class="section-heading"><div><p class="eyebrow">FINANCE RECONCILIATION</p><h3>{{ needs_attention_count }} case{{ needs_attention_count|pluralize }} need attention</h3></div></div>
+ <p>These include suspended mandates and unresolved or provider-paid/unposted debit attempts. Never repeat a charge while its result is uncertain. Review the original customer debt record, the transaction reference and Hubtel evidence before resolving it.</p>
+ <a class="button secondary" href="{% url 'debts' %}?type=direct">Open direct debtors →</a>
+</section>
+{% endif %}
 <form method="post" class="panel policy-workspace">
 {% csrf_token %}
 {{ form.non_field_errors }}
