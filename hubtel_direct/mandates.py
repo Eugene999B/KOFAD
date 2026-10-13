@@ -22,7 +22,8 @@ from . import client, debit_api
 from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 
 ZERO = Decimal("0.00")
-CHARGE_STATES = ("planned", "sending", "pending", "unknown", "settled", "failed")
+CHARGE_STATES = ("planned", "sending", "pending", "unknown", "finance_review", "settled", "failed")
+UNRESOLVED_CHARGE_STATES = ("planned", "sending", "pending", "unknown", "finance_review")
 
 
 def outstanding(party):
@@ -264,7 +265,7 @@ def plan_due_attempt(mandate):
         grace = int(row.terms_snapshot.get("auto_collection_grace_days", 0))
         if row.next_due_date + timedelta(days=grace) > timezone.localdate():
             return None
-        if DebtDebitAttempt.objects.filter(mandate=row, status__in=["planned", "sending", "pending", "unknown"]).exists():
+        if DebtDebitAttempt.objects.filter(mandate=row, status__in=UNRESOLVED_CHARGE_STATES).exists():
             return None
         # No repeated probes: at most one charge attempt per period by default.
         attempts = DebtDebitAttempt.objects.filter(mandate=row, period_due_date=row.next_due_date)
@@ -312,7 +313,7 @@ def dispatch_planned(limit=8):
                     or attempt.amount > mandate.maximum_total - mandate.collected_total
                     or attempt.period_due_date > timezone.localdate()
                     or DebtDebitAttempt.objects.filter(
-                        mandate=mandate, status__in=["sending", "pending", "unknown"],
+                        mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
                     ).exclude(pk=attempt.pk).exists()):
                 if attempt.status == "planned":
                     attempt.status = "cancelled"
@@ -331,6 +332,12 @@ def dispatch_planned(limit=8):
             attempt = DebtDebitAttempt.objects.select_for_update().select_related("mandate").get(pk=attempt_id)
             mandate = DebtMandate.objects.select_for_update().get(pk=attempt.mandate_id)
             if attempt.status != "planned" or mandate.status != "approved":
+                continue
+            # Provider-success and local-ledger-unposted amounts are money
+            # in transit, not failed collections. Never start another debit.
+            if DebtDebitAttempt.objects.filter(
+                mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
+            ).exclude(pk=attempt.pk).exists():
                 continue
             policy = OnlineDebtSettings.objects.select_for_update().filter(
                 branch=mandate.branch,
