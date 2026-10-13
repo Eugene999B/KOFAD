@@ -96,6 +96,7 @@
         <strong>{{ mandate.get_status_display }} · {{ mandate.get_frequency_display }}</strong>
         <span>Wallet ending {{ mandate.phone_suffix }} · GHS {{ mandate.amount_per_period|floatformat:2 }} per period · maximum GHS {{ mandate.maximum_total|floatformat:2 }}</span>
         <span>Next due {{ mandate.next_due_date|date:"d M Y" }} · paid GHS {{ mandate.collected_total|floatformat:2 }}</span>
+        {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Collection suspended.</strong> Do not start another automatic debit until finance resolves the existing provider authorization or transaction evidence. Customer can still make a manual payment.</p>{% endif %}
         <p><a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval/cancellation page ↗</a></p>
         {% if perms.core.operate_finance and mandate.status != "cancelled" and mandate.status != "settled" %}
         <form action="{% url 'hubtel_debt_staff_cancel' mandate.pk %}" method="post">{% csrf_token %}
