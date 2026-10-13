@@ -12,13 +12,14 @@ from calendar import monthrange
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from core import debts as debt_service
 from core import services as core_services
 from core.models import Party
 from . import client, debit_api
-from .models import DebtMandate, DebtDebitAttempt
+from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 
 ZERO = Decimal("0.00")
 CHARGE_STATES = ("planned", "sending", "pending", "unknown", "settled", "failed")
@@ -54,6 +55,15 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
     core_services.permit(user, branch, "operate_finance")
+    policy, _ = OnlineDebtSettings.objects.select_for_update().get_or_create(branch=branch)
+    if not policy.plan_creation_enabled:
+        raise ValidationError("Online Debt agreements are disabled in Debt Settings for this location.")
+    if not policy.allows_channel(channel):
+        raise ValidationError("This Mobile Money network is disabled in Online Debt Settings.")
+    if not policy.allows_frequency(frequency):
+        raise ValidationError("This repayment frequency is disabled in Online Debt Settings.")
+    if allow_one_partial_retry:
+        raise ValidationError("Automatic lower-amount retry is unavailable; choose a scheduled repayment without wallet probing.")
     party = Party.objects.select_for_update().filter(
         pk=party_id, branch=branch, kind="customer").first()
     if not party:
@@ -70,19 +80,22 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             raise ValidationError("Enter a valid first payment date.") from exc
     if first_due_date < timezone.localdate():
         raise ValidationError("First payment date cannot be in the past.")
-    if first_due_date > timezone.localdate() + timedelta(days=366):
-        raise ValidationError("First payment date cannot be more than one year away.")
+    delay = (first_due_date - timezone.localdate()).days
+    if delay < policy.min_first_due_days or delay > min(policy.max_first_due_days, 366):
+        raise ValidationError("The first due date is outside the location's Online Debt schedule limits.")
     due = outstanding(party)
     if due <= ZERO:
         raise ValidationError("This account has no unpaid customer invoices.")
+    if not policy.min_open_balance <= due <= policy.max_open_balance:
+        raise ValidationError("This customer's outstanding balance is outside Online Debt eligibility limits.")
     amt, maximum = _money(amount_per_period), _money(maximum_total)
     if maximum > due:
         raise ValidationError("The mandate ceiling cannot exceed recorded debt.")
+    if not policy.min_installment <= amt <= policy.max_installment:
+        raise ValidationError("Installment amount is outside the Online Debt policy limits.")
     if amt > maximum:
         raise ValidationError("Installment cannot exceed the agreed mandate maximum.")
-    minimum = ZERO if not allow_one_partial_retry else _money(minimum_partial)
-    if allow_one_partial_retry and (minimum < Decimal("1.00") or minimum >= amt):
-        raise ValidationError("A partial retry minimum must be at least GHS 1 and below the installment.")
+    minimum = ZERO
     digits = debit_api.number(phone)
     fingerprint = hashlib.sha256((settings.SECRET_KEY + "|hubtel-debt-wallet|" + digits).encode()).hexdigest()
     if not party.consent:
@@ -95,14 +108,17 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
         channel=channel, client_reference=debit_api.reference(),
         frequency=frequency, first_due_date=first_due_date, next_due_date=first_due_date,
         amount_per_period=amt, maximum_total=maximum,
-        lower_partial_payment=bool(allow_one_partial_retry), minimum_partial=minimum,
-        maximum_attempts_per_period=2 if allow_one_partial_retry else 1,
+        lower_partial_payment=False, minimum_partial=minimum,
+        maximum_attempts_per_period=1,
         terms_snapshot={
             "starting_outstanding": str(due), "amount": str(amt),
             "maximum_total": str(maximum), "frequency": frequency,
             "starts": first_due_date.isoformat(), "network": channel,
-            "partial_retry_enabled": bool(allow_one_partial_retry),
+            "partial_retry_enabled": False,
             "minimum_partial": str(minimum),
+            "rollover_unpaid": bool(policy.rollover_unpaid),
+            "auto_collection_grace_days": policy.auto_collection_grace_days,
+            "policy_version": policy.updated_at.isoformat(),
             "customer_can_cancel": True,
         },
     )
@@ -216,7 +232,8 @@ def request_cancel(mandate):
 def payment_preview(mandate, today=None):
     """Never charge more than agreement ceiling, installment and real debt."""
     today = today or timezone.localdate()
-    if mandate.status != "approved" or mandate.next_due_date > today:
+    grace = int(mandate.terms_snapshot.get("auto_collection_grace_days", 0))
+    if mandate.status != "approved" or mandate.next_due_date + timedelta(days=grace) > today:
         return ZERO
     debt = outstanding(mandate.party)
     remaining_cap = mandate.maximum_total - mandate.collected_total
@@ -231,7 +248,10 @@ def payment_preview(mandate, today=None):
             scheduled += mandate.amount_per_period
         next_date = _period_next(next_date, mandate.frequency)
         ticks += 1
-    # Never exceed the total agreed ceiling or the actual balance.
+    # If the signed plan disallows rollover, never bundle missed installments.
+    if not mandate.terms_snapshot.get("rollover_unpaid", True):
+        scheduled = mandate.amount_per_period + mandate.collected_total
+    # Never exceed the signed ceiling, installment rules or ledger balance.
     return max(ZERO, min(debt, remaining_cap, scheduled - mandate.collected_total))
 
 
@@ -240,6 +260,9 @@ def plan_due_attempt(mandate):
     with transaction.atomic():
         row = DebtMandate.objects.select_for_update().select_related("party").get(pk=mandate.pk)
         if row.status != "approved" or row.next_due_date > timezone.localdate():
+            return None
+        grace = int(row.terms_snapshot.get("auto_collection_grace_days", 0))
+        if row.next_due_date + timedelta(days=grace) > timezone.localdate():
             return None
         if DebtDebitAttempt.objects.filter(mandate=row, status__in=["planned", "sending", "pending", "unknown"]).exists():
             return None
