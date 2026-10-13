@@ -118,6 +118,29 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         row.refresh_from_db()
         self.assertEqual(row.amount_per_period, Decimal("200.00"))
 
+    def test_debt_center_renders_manual_payments_and_draft_editor(self):
+        self.client.force_login(self.user)
+        page = self.client.get(f"/debts/?customer={self.customer.pk}")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Record partial payment")
+        self.assertContains(page, "Offer a Direct Debit repayment plan")
+        draft = self.draft()
+        page = self.client.get(f"/debts/?customer={self.customer.pk}&type=direct")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Edit draft terms")
+        self.assertContains(page, "Awaiting setup")
+        self.assertContains(page, "Record partial payment")
+        self.assertContains(page, f"/debts/hubtel/mandates/{draft.pk}/edit/")
+
+    def test_simple_settings_page_explicitly_separates_drafts_and_live_debits(self):
+        self.client.force_login(self.user)
+        page = self.client.get("/settings/debt/online/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Agreement setup")
+        self.assertContains(page, "Advanced limits and safeguards")
+        self.assertContains(page, "Automatic debits")
+        self.assertContains(page, "Setup available")
+
     def test_disabled_frequency_network_and_limits_are_enforced(self):
         self.policy.plan_creation_enabled = True
         self.policy.allow_daily = False
