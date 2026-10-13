@@ -21,6 +21,16 @@
   <article class="panel"><small>HUBTEL AUTOMATION</small><strong>{% if not flags.egress_confirmed %}Network not verified{% elif not flags.provider_charges %}Provider debit gate off{% elif policy.pause_auto_collection %}Paused by policy{% else %}Gated collections{% endif %}</strong><p>Railway credentials, whitelisted WEB IP, customer consent and real-money rollout checks are separate from this screen.</p></article>
 </div>
 
+<section class="panel">
+ <div class="section-heading"><div><p class="eyebrow">TODAY'S FINANCE MONITOR</p><h3>Automated debit budget</h3></div><span class="pill">{{ attempts_today }} submitted attempt{{ attempts_today|pluralize }}</span></div>
+ <div class="three-column" style="gap:18px">
+   <div><small>Amounts submitted today</small><strong>GHS {{ submitted_today|floatformat:2 }}</strong></div>
+   <div><small>Remaining submission allowance</small><strong>GHS {{ remaining_today|floatformat:2 }}</strong></div>
+   <div><small>Daily policy ceiling</small><strong>GHS {{ policy.daily_collection_limit|floatformat:2 }}</strong></div>
+ </div>
+ <p class="muted">These totals include pending, failed and unconfirmed debit submissions. They are not confirmed collections or customer's wallet balances.</p>
+</section>
+
 <form method="post" class="panel policy-workspace">
 {% csrf_token %}
 {{ form.non_field_errors }}
