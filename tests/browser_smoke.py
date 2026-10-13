@@ -233,7 +233,25 @@ with sync_playwright() as p:
         route.abort()
     page.route("**/api/trades/",lose_confirmed_response)
     page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).click()
-    page.locator("#pos-error").wait_for(state="visible")
+    try:
+        page.locator("#pos-error").wait_for(state="visible", timeout=12000)
+    except Exception:
+        print("POS LOST-RESPONSE DEBUG:", {
+            "intercepts": len(lost_response),
+            "page_errors": errors[-12:],
+            "pos_error_text": page.locator("#pos-error").inner_text(),
+            "complete_disabled": page.locator("#complete").is_disabled(),
+            "complete_form": page.locator("#complete").evaluate("(b) => b.form?.id"),
+            "success_visible": page.locator("#sale-success-dialog").is_visible(),
+            "url": page.url,
+            "pending_inputs": page.evaluate("""() => ({
+                settlement: document.querySelector('#payment-plan')?.value,
+                direct: document.querySelector('#credit-repayment-mode')?.value,
+                lineCount: document.querySelector('#cart-count')?.textContent
+            })"""),
+        }, flush=True)
+        page.screenshot(path=str(out / "pos-lost-response-debug.png"), full_page=True)
+        raise
     assert page.locator("#party").is_disabled()
     page.unroute("**/api/trades/",lose_confirmed_response)
     page.once("dialog",lambda dialog: dialog.accept())
