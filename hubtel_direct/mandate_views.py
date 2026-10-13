@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
 
 from core import services as core_services
 from core.views import branch_for
@@ -142,6 +143,7 @@ def staff_cancel(request, mandate_id):
     return redirect("/debts/?customer=" + str(mandate.party_id))
 
 
+@csrf_exempt
 @require_POST
 def callback(request):
     """Hubtel webhook is advisory only; NEVER set APPROVED from inbound JSON."""
