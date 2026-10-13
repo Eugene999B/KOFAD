@@ -535,6 +535,13 @@ def dispatch_planned(limit=8):
                 continue
             if not policy.collection_from_hour <= local_now.hour < policy.collection_until_hour:
                 continue
+            # Per-agreement collection hour is disclosed to the wallet owner.
+            # Never initiate a charge before their selected earliest hour.
+            agreed_hour = int((mandate.terms_snapshot or {}).get(
+                "collection_hour", policy.collection_from_hour,
+            ))
+            if local_now.hour < agreed_hour:
+                continue
             grace = int(mandate.terms_snapshot.get("auto_collection_grace_days", 0))
             if attempt.period_due_date + timedelta(days=grace) > today:
                 continue
