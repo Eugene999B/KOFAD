@@ -15,6 +15,7 @@ urlpatterns = [
     path("market/orders/<uuid:order_id>/hubtel-direct/status/", views.collect_status, name="hubtel_direct_collect_status"),
     path("market/payments/hubtel-direct/callback/", views.callback, name="hubtel_direct_callback"),
     path("finance/hubtel-direct/", views.finance_dashboard, name="hubtel_direct_finance"),
+    path("finance/hubtel-direct/verify-beneficiary/", views.recipient_name, name="hubtel_direct_recipient_name"),
     path("finance/hubtel-direct/payouts/", views.payout, name="hubtel_direct_payout"),
     path("finance/hubtel-direct/payouts/<uuid:tx_id>/approve/", views.payout_approve, name="hubtel_direct_approve"),
     path("finance/hubtel-direct/payouts/<uuid:tx_id>/", views.payout_detail, name="hubtel_direct_payout_detail"),
