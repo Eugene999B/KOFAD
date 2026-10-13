@@ -64,6 +64,7 @@ class DebtMandate(models.Model):
     party = models.ForeignKey("core.Party", on_delete=models.PROTECT, related_name="hubtel_debt_mandates")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="hubtel_debt_mandates_created")
     phone_encrypted = models.TextField()
+    phone_fingerprint = models.CharField(max_length=64, db_index=True)
     phone_suffix = models.CharField(max_length=4)
     channel = models.CharField(max_length=28)
     client_reference = models.CharField(max_length=36, unique=True, editable=False)
@@ -93,6 +94,7 @@ class DebtMandate(models.Model):
             models.Index(fields=["branch", "status", "next_due_date"], name="hubtel_debt_due_idx"),
             models.Index(fields=["party", "-created_at"], name="hubtel_debt_party_idx"),
         ]
+        constraints = [models.UniqueConstraint(fields=["phone_fingerprint"], condition=models.Q(status__in=["draft", "pending", "approved", "cancel_pending"]), name="hubtel_one_active_mandate_wallet")]
 
 
 class DebtDebitAttempt(models.Model):
