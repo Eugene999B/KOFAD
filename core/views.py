@@ -1327,7 +1327,8 @@ def debts(request, branch):
 
     overview = debt_service.debt_overview(branch, query)
     rows = overview["rows"]
-    from hubtel_direct.models import DebtMandate
+    from hubtel_direct.models import DebtMandate, OnlineDebtSettings
+    online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first()
     agreement_rows = list(DebtMandate.objects.filter(
         branch=branch, status__in=["draft", "pending", "approved", "cancel_pending"],
     ).select_related("party"))
@@ -1371,6 +1372,7 @@ def debts(request, branch):
         "rows": rows,
         "debtor_type": debtor_type,
         "selected_mandates": [item for item in agreement_rows if selected and item.party_id == selected["party"].pk],
+        "online_debt_policy": online_debt_policy,
         "selected": selected,
         "methods": s.active_payment_methods(),
         "key": request.POST.get("key") or str(uuid.uuid4()),
