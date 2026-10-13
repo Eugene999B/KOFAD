@@ -2010,6 +2010,10 @@ def market_return_staff_detail(request, branch, pk):
         "item": item,
         "is_hubtel_payment": is_hubtel_payment,
         "hubtel_refund_case": hubtel_case,
+        "hubtel_refunds_enabled": bool(
+            getattr(settings, "HUBTEL_REFUNDS_ENABLED", False)
+            and getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False)
+        ),
     })
 
 
