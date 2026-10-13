@@ -91,7 +91,9 @@
   const creditDirectNetwork = document.querySelector("#credit-direct-network");
   const creditDirectPhone = document.querySelector("#credit-direct-phone");
   const creditDirectFrequency = document.querySelector("#credit-direct-frequency");
-  const creditDirectInstallment = document.querySelector("#credit-direct-installment");
+  const creditDirectEnd = document.querySelector("#credit-direct-end-date");
+  const creditDirectHour = document.querySelector("#credit-direct-hour");
+  const creditDirectPreview = document.querySelector("#credit-direct-preview");
   const creditDirectContactConsent = document.querySelector("#credit-direct-contact-consent");
   const creditDirectVerify = document.querySelector("#credit-direct-verify");
   const creditDirectName = document.querySelector("#credit-direct-name");
@@ -130,30 +132,77 @@
     const eligible = !purchase && ["part", "credit"].includes(paymentPlan?.value || "");
     const selected = eligible && creditRepaymentMode?.value === "direct";
     creditDirectFields?.classList.toggle("hidden", !selected);
+    const dueLabel = document.querySelector("#due-date-label");
+    if (dueLabel) dueLabel.textContent = selected ? "First Direct Debit date" : "Due date";
     if (creditRepaymentMode) creditRepaymentMode.disabled = !eligible;
+    if (selected) renderCheckoutSummary();
+  }
+  function calculateCreditSchedule(balanceCents) {
+    if (balanceCents <= 0) throw new Error("Enter a credit or part-payment sale with money remaining.");
+    const first = dueDate?.value || "";
+    const frequency = creditDirectFrequency?.value || "";
+    const final = frequency === "once" ? first : (creditDirectEnd?.value || "");
+    const hour = Number(creditDirectHour?.value || 9);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(first) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(final)) {
+      throw new Error("Choose first and final repayment dates.");
+    }
+    let cursor = new Date(first + "T00:00:00Z");
+    const finish = new Date(final + "T00:00:00Z");
+    if (!Number.isFinite(cursor.getTime()) || !Number.isFinite(finish.getTime())
+        || finish < cursor || (finish - cursor) > 366 * 86400000) {
+      throw new Error("The final repayment date must follow the first and be within one year.");
+    }
+    const dates = [];
+    while (cursor <= finish && dates.length < 367) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      if (frequency === "once") break;
+      const next = new Date(cursor.getTime());
+      if (frequency === "daily") next.setUTCDate(next.getUTCDate() + 1);
+      else if (frequency === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+      else if (["monthly", "quarterly", "yearly"].includes(frequency)) {
+        const plus = frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : 12;
+        const originalDay = next.getUTCDate();
+        next.setUTCDate(1);
+        next.setUTCMonth(next.getUTCMonth() + plus);
+        const monthLast = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+        next.setUTCDate(Math.min(originalDay, monthLast));
+      } else throw new Error("Choose a valid repayment frequency.");
+      cursor = next;
+    }
+    if (!dates.length || dates.length > 366 || !Number.isInteger(hour) || hour < 0 || hour > 23) {
+      throw new Error("Invalid repayment dates or time.");
+    }
+    const centsPerPayment = Math.ceil(balanceCents / dates.length);
+    const finalCents = balanceCents - centsPerPayment * (dates.length - 1);
+    if (finalCents <= 0) throw new Error("The debt is too small for that many collections.");
+    return {count: dates.length, each: centsPerPayment, finalCents,
+      dates, first, final, frequency, hour, total: balanceCents};
+  }
+  function renderDirectSchedule(grandTotal, paidNow) {
+    if (!creditDirectPreview || creditRepaymentMode?.value !== "direct") return;
+    if (creditDirectEnd) creditDirectEnd.disabled = creditDirectFrequency?.value === "once";
+    try {
+      const s = calculateCreditSchedule(Math.max(0, grandTotal - paidNow));
+      creditDirectPreview.textContent = "Balance GHS " + formatted(s.total) + " · "
+        + s.count + " collection" + (s.count === 1 ? "" : "s")
+        + " · GHS " + formatted(s.each) + " each (last GHS " + formatted(s.finalCents) + ")"
+        + " · " + s.dates[0] + " to " + s.dates[s.dates.length - 1]
+        + " · not before " + String(s.hour).padStart(2, "0") + ":00 GMT.";
+    } catch (error) { creditDirectPreview.textContent = error.message; }
   }
   function validateDirectDebitSetup(grandTotal, paidNow, party, newName) {
-    if (creditRepaymentMode?.value !== "direct") return null;
-    if (!["part", "credit"].includes(paymentPlan?.value || "")) return null;
-    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectInstallment) {
-      throw new Error("Direct Debit planning is disabled. Enable plan creation in Online Debt Settings.");
+    if (creditRepaymentMode?.value !== "direct" || !["part", "credit"].includes(paymentPlan?.value || "")) return null;
+    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectEnd || !creditDirectHour) {
+      throw new Error("Direct Debit scheduling is unavailable.");
     }
     if (!party && !newName) throw new Error("Choose a customer for Direct Debit.");
-    if (!creditDirectContactConsent?.checked) throw new Error("Confirm the customer agreed to receive a Direct Debit authorization SMS.");
-    // Receipt SMS preferences do not confer (or deny) Direct Debit authority.
-    // The customer must independently verify wallet ownership and accept the
-    // exact Hubtel mandate terms via the separate authorization page.
+    if (!creditDirectContactConsent?.checked) throw new Error("Confirm permission to send this customer a Hubtel authorization invitation.");
     const phone = normalizeGhanaPhone(creditDirectPhone.value);
-    const balance = grandTotal - paidNow;
-    const installment = cents(creditDirectInstallment.value);
-    if (balance <= 0 || installment <= 0 || installment > balance) {
-      throw new Error("The installment must be greater than zero and no more than the unpaid balance.");
-    }
-    if (!dueDate?.value || !creditDirectNetwork.value || !creditDirectFrequency.value) {
-      throw new Error("Choose a wallet network, interval, and first payment date.");
-    }
-    return {phone, channel:creditDirectNetwork.value, frequency:creditDirectFrequency.value,
-      first_due_date:dueDate.value, amount:formatted(installment), maximum:formatted(balance)};
+    if (!creditDirectNetwork.value) throw new Error("Choose MTN or Telecel for authorization.");
+    const s = calculateCreditSchedule(grandTotal - paidNow);
+    return {phone, channel:creditDirectNetwork.value, frequency:s.frequency,
+      first_due_date:s.first, final_due_date:s.final, collection_hour:String(s.hour),
+      amount:formatted(s.each), maximum:formatted(s.total)};
   }
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
@@ -315,6 +364,7 @@
       const percent = grandTotal > 0 ? Math.min(100, Math.round((paidNow / grandTotal) * 100)) : 0;
       progress.style.width = percent + "%";
     }
+    renderDirectSchedule(grandTotal, paidNow);
   }
   function normalizeGhanaPhone(value) {
     let digits = String(value || "").replace(/\D/g, "");
@@ -907,7 +957,7 @@
     if (creditRepaymentMode) creditRepaymentMode.value = "manual";
     if (creditDirectPhone) creditDirectPhone.value = "";
     resetCreditVerifiedName();
-    if (creditDirectInstallment) creditDirectInstallment.value = "";
+    if (creditDirectEnd) creditDirectEnd.value = "";
     if (creditDirectContactConsent) creditDirectContactConsent.checked = false;
     debitAuthorizationForm?.classList.add("hidden");
     changed();
@@ -1251,7 +1301,9 @@
   });
   creditDirectPhone?.addEventListener("change", () => { changed(); persist(); });
   creditDirectFrequency?.addEventListener("change", () => { changed(); persist(); });
-  creditDirectInstallment?.addEventListener("input", () => { changed(); persist(); });
+  creditDirectEnd?.addEventListener("change", () => { changed(); renderCheckoutSummary(); persist(); });
+  creditDirectHour?.addEventListener("change", () => { changed(); renderCheckoutSummary(); persist(); });
+  dueDate?.addEventListener("change", () => { renderCheckoutSummary(); });
   paymentPlan?.addEventListener("change", () => {
     changed();
     applyPaymentPlan();
@@ -1710,11 +1762,19 @@
       const ready = Boolean(pendingDebitSetup && hasDebt && result.customer?.id);
       debitAuthorizationForm.classList.toggle("hidden", !ready);
       if (ready) {
+        // Do not treat a posted sale as wallet authorization; proceed only to
+        // the visible staff approval waiting room after verifying its source.
         const data = {...pendingDebitSetup, party:String(result.customer.id),
-          maximum:(Number(result.total) - Number(result.paid)).toFixed(2)};
+          maximum:(Number(result.total) - Number(result.paid)).toFixed(2),
+          source_document_id: result.document_id || ""};
         for (const [field,value] of Object.entries(data)) {
           const target = debitAuthorizationForm.querySelector('[name="' + field + '"]');
           if (target) target.value = value;
+        }
+        if (result.document_id) {
+          // Advance immediately into the approval workflow; no additional
+          // checkout/payment step or repeated manual installment entry.
+          setTimeout(() => { debitAuthorizationForm.requestSubmit(); }, 150);
         }
       }
     }
