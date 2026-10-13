@@ -144,6 +144,13 @@ class HubtelRefundSafetyTests(MarketFixtures):
         self.assertEqual(self.item.status, "processing")
         self.assertEqual(self.order_row.payment_status, "paid")
 
+    def test_hubtel_card_payment_never_uses_momo_refund_endpoint(self):
+        self.order_row.payment_channel = "card"
+        self.order_row.save(update_fields=["payment_channel"])
+        with self.assertRaisesRegex(ValidationError, "cannot refund a card"):
+            refunds.prepare_case(self.staff, self.item, branch=self.branch)
+        self.assertFalse(HubtelRefundCase.objects.exists())
+
     def test_expired_refund_window_blocks_provider_release(self):
         self.order_row.paid_at = timezone.now() - timedelta(days=46)
         self.order_row.save(update_fields=["paid_at"])
