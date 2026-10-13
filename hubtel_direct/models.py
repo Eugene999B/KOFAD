@@ -109,6 +109,7 @@ class DebtDebitAttempt(models.Model):
     provider_code = models.CharField(max_length=24, blank=True)
     collection_document = models.OneToOneField("core.Document", null=True, blank=True, on_delete=models.PROTECT)
     next_check_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
