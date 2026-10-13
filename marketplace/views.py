@@ -1999,9 +1999,17 @@ def market_return_staff_detail(request, branch, pk):
             else:
                 messages.success(request, "Online return workflow updated.")
             return redirect("staff_market_return", pk=item.pk)
+    from hubtel_direct.models import HubtelRefundCase
+    is_hubtel_payment = MarketPaymentAttempt.objects.filter(
+        order=item.order, reference=item.order.payment_reference,
+        provider__in=["hubtel", "hubtel_direct"],
+    ).exists()
+    hubtel_case = HubtelRefundCase.objects.filter(return_request=item).first() if is_hubtel_payment else None
     return render(request, "marketplace/staff_return_detail.html", {
         "title": "Online return",
         "item": item,
+        "is_hubtel_payment": is_hubtel_payment,
+        "hubtel_refund_case": hubtel_case,
     })
 
 
