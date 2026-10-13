@@ -170,6 +170,12 @@ def reactivate_preapproval(phone):
 def debit_charge(tx):
     """Only an independently approved bounded agreement may call this; no retries."""
     gate("charge")
+    from .models import OnlineDebtSettings
+    policy = OnlineDebtSettings.objects.filter(branch=tx.mandate.branch).first()
+    if not policy or policy.pause_auto_collection:
+        raise ValidationError("Automatic Online Debt collection is paused for this location.")
+    if tx.mandate.status != "approved" or tx.status != "sending" or not tx.sent_at:
+        raise ValidationError("An approved mandate and durable one-time send claim are required.")
     if tx.mandate.channel not in DEBIT_CHANNELS:
         raise ValidationError("Direct Debit only supports MTN and Telecel.")
     if not re.fullmatch(r"[a-f0-9]{32}", tx.reference):
