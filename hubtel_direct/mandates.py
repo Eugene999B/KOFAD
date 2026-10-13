@@ -183,6 +183,13 @@ def request_cancel(mandate):
         row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
         if row.status in {"cancelled", "settled", "failed"}:
             return row
+        if row.status == "draft":
+            # No preapproval ever started; calling Hubtel's wallet-wide
+            # cancellation could affect another agreement for this wallet.
+            row.status = "cancelled"
+            row.cancelled_at = timezone.now()
+            row.save(update_fields=["status", "cancelled_at", "updated_at"])
+            return row
         if row.status != "cancel_pending":
             row.status = "cancel_pending"
             row.cancellation_requested_at = timezone.now()
@@ -393,10 +400,9 @@ def reconcile_attempts(limit=15):
             # Provider has paid, but local accounting needs manual handling:
             # keep full evidence and STOP further mandates for this customer.
             DebtMandate.objects.filter(pk=attempt.mandate_id, status="approved").update(status="suspended")
-        if completed:
-            current = DebtMandate.objects.select_related("party").get(pk=attempt.mandate_id)
-            if outstanding(current.party) == ZERO:
-                request_cancel(current)
+        current = DebtMandate.objects.select_related("party").get(pk=attempt.mandate_id)
+        if current.status == "approved" and outstanding(current.party) == ZERO:
+            request_cancel(current)
     return completed
 
 
