@@ -41,3 +41,75 @@ class DirectTransaction(models.Model):
 
     def __str__(self):
         return f"{self.kind} {self.client_reference[-8:]} {self.status}"
+
+
+class DebtMandate(models.Model):
+    """A bounded, customer-authorized repayment agreement, not blanket wallet access.
+
+    Never consider staff-created terms as Hubtel preapproval. Provider approval
+    must be independently checked and cancellation always wins over dispatch.
+    """
+    STATUSES = [
+        ("draft", "Awaiting setup"), ("pending", "Awaiting customer authorization"),
+        ("approved", "Approved by wallet holder"), ("cancel_pending", "Cancellation processing"),
+        ("cancelled", "Cancelled"), ("suspended", "Suspended"), ("settled", "Settled"),
+        ("failed", "Authorization failed"),
+    ]
+    FREQUENCIES = [
+        ("once", "One charge when overdue"), ("daily", "Daily"), ("weekly", "Weekly"),
+        ("monthly", "Monthly"), ("quarterly", "Quarterly"), ("yearly", "Yearly"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey("core.Branch", on_delete=models.PROTECT, related_name="hubtel_debt_mandates")
+    party = models.ForeignKey("core.Party", on_delete=models.PROTECT, related_name="hubtel_debt_mandates")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="hubtel_debt_mandates_created")
+    phone_encrypted = models.TextField()
+    phone_suffix = models.CharField(max_length=4)
+    channel = models.CharField(max_length=28)
+    client_reference = models.CharField(max_length=36, unique=True, editable=False)
+    hubtel_preapproval_id = models.CharField(max_length=100, blank=True)
+    verification_type = models.CharField(max_length=8, blank=True)
+    otp_prefix = models.CharField(max_length=8, blank=True)
+    status = models.CharField(max_length=18, choices=STATUSES, default="draft", db_index=True)
+    frequency = models.CharField(max_length=12, choices=FREQUENCIES)
+    first_due_date = models.DateField()
+    next_due_date = models.DateField()
+    amount_per_period = models.DecimalField(max_digits=14, decimal_places=2)
+    maximum_total = models.DecimalField(max_digits=14, decimal_places=2)
+    collected_total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    lower_partial_payment = models.BooleanField(default=False)
+    minimum_partial = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    maximum_attempts_per_period = models.PositiveSmallIntegerField(default=1)
+    terms_snapshot = models.JSONField(default=dict)
+    provider_approved_at = models.DateTimeField(null=True, blank=True)
+    cancellation_requested_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    last_provider_check_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["branch", "status", "next_due_date"], name="hubtel_debt_due_idx"),
+            models.Index(fields=["party", "-created_at"], name="hubtel_debt_party_idx"),
+        ]
+
+
+class DebtDebitAttempt(models.Model):
+    """One immutable amount/reference; no reuse after unknown HTTP outcomes."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    mandate = models.ForeignKey(DebtMandate, related_name="attempts", on_delete=models.PROTECT)
+    reference = models.CharField(max_length=36, unique=True, editable=False)
+    period_due_date = models.DateField()
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=24, default="planned", db_index=True)
+    hubtel_transaction_id = models.CharField(max_length=100, blank=True)
+    provider_code = models.CharField(max_length=24, blank=True)
+    collection_document = models.OneToOneField("core.Document", null=True, blank=True, on_delete=models.PROTECT)
+    next_check_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "next_check_at"], name="hubtel_debit_attempt_due")]
+
