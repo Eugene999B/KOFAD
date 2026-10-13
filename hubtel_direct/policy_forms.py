@@ -20,6 +20,7 @@ class OnlineDebtSettingsForm(forms.ModelForm):
             "auto_collection_grace_days", "rollover_unpaid",
             "skip_weekends", "collection_from_hour", "collection_until_hour",
             "daily_collection_limit", "daily_attempt_limit",
+            "pending_review_hours", "unresolved_poll_hours",
         ]
         labels = {
             "plan_creation_enabled": "Staff may offer new Online Debt agreements",
