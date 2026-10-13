@@ -65,10 +65,15 @@ def internal_reconcile(request):
             # Fail closed: an uncertain provider response never causes a new
             # submission of an existing request reference.
             pass
+    payroll_paid = 0
+    if getattr(settings, "HUBTEL_PAYROLL_DISBURSEMENTS_ENABLED", False):
+        from .payroll import settle_confirmed
+        payroll_paid = settle_confirmed(limit=20)
     response = JsonResponse({
         "checked": count, "pos_checked": pos_count,
         "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
         "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
+        "payroll_settled": payroll_paid,
     })
     response["Cache-Control"] = "no-store"
     return response
