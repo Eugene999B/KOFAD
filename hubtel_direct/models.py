@@ -221,6 +221,8 @@ class OnlineDebtSettings(models.Model):
     rollover_unpaid = models.BooleanField(default=True)
     daily_collection_limit = models.DecimalField(max_digits=14, decimal_places=2, default="5000.00")
     daily_attempt_limit = models.PositiveSmallIntegerField(default=20)
+    pending_review_hours = models.PositiveSmallIntegerField(default=72)
+    unresolved_poll_hours = models.PositiveSmallIntegerField(default=6)
     changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True,
         on_delete=models.PROTECT,
