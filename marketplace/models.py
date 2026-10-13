@@ -547,6 +547,24 @@ class Conversation(models.Model):
     class Meta:
         ordering = ["-updated_at"]
 
+    @property
+    def inbox_display_name(self):
+        """Display a guest chat without dereferencing a missing customer."""
+        public = (self.public_name or "").strip()
+        if public:
+            return public
+        customer = self.customer if self.customer_id else None
+        return ((getattr(customer, "full_name", "") or "").strip() or "Customer")
+
+    @property
+    def inbox_phone(self):
+        """Safe phone fallback for historical guest or deleted accounts."""
+        public = (self.public_phone or "").strip()
+        if public:
+            return public
+        customer = self.customer if self.customer_id else None
+        return (getattr(customer, "phone", "") or "").strip()
+
 
 class ConversationMessage(models.Model):
     SENDERS = [("visitor", "Visitor"), ("customer", "Customer"), ("staff", "Staff")]
