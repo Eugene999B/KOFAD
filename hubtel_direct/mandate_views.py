@@ -4,13 +4,15 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import JsonResponse
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
 
 from core import services as core_services
 from core.views import branch_for
 from marketplace import services as sms_service
-from . import client, debit_api, mandates
+from . import client, debit_api, mandates, schedule
 from .models import DebtMandate
 
 
@@ -27,14 +29,14 @@ def staff_create_mandate(request):
             frequency=request.POST.get("frequency"),
             first_due_date=request.POST.get("first_due_date"),
             amount_per_period=amount, maximum_total=ceiling,
+            final_due_date=request.POST.get("final_due_date") or None,
+            collection_hour=request.POST.get("collection_hour") or None,
+            source_document_id=request.POST.get("source_document_id") or None,
             allow_one_partial_retry=request.POST.get("partial_retry") == "yes",
             minimum_partial=request.POST.get("minimum_partial") or "0.00",
         )
-        messages.success(
-            request, "Repayment terms saved. Show the customer the authorization page; "
-                     "no direct debit can start until the customer authorizes and Hubtel confirms.",
-        )
-        return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
+        messages.success(request, "Repayment schedule prepared. Send the customer their Hubtel approval link.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
     except (ValidationError, ValueError, TypeError) as exc:
         messages.error(request, str(exc))
         return redirect("/debts/?customer=" + str(request.POST.get("party") or ""))
@@ -68,6 +70,101 @@ def staff_edit_draft(request, mandate_id):
     return redirect("/debts/?customer=" + str(mandate.party_id))
 
 
+def _staff_mandate(request, mandate_id):
+    branch = branch_for(request)
+    core_services.permit(
+        request.user, branch,
+        "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
+    )
+    return get_object_or_404(
+        DebtMandate.objects.select_related("branch", "party"),
+        pk=mandate_id, branch=branch,
+    )
+
+
+@login_required
+@require_GET
+def staff_status(request, mandate_id):
+    mandate = _staff_mandate(request, mandate_id)
+    return render(request, "hubtel_direct/staff_debt_waiting.html", {
+        "title": "Direct Debit authorization",
+        "mandate": mandate,
+        "schedule": schedule.for_mandate(mandate),
+        "balance": mandates.outstanding(mandate.party),
+        "authorization_url": request.build_absolute_uri(reverse(
+            "hubtel_debt_authorize", kwargs={"mandate_id": mandate.pk},
+        )),
+        "hubtel_ready": bool(
+            getattr(__import__("django.conf", fromlist=["settings"]).settings,
+                    "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)
+        ),
+    })
+
+
+@login_required
+@require_GET
+def staff_status_json(request, mandate_id):
+    mandate = _staff_mandate(request, mandate_id)
+    response = JsonResponse({
+        "status": mandate.status, "label": mandate.get_status_display(),
+        "verification_type": mandate.verification_type,
+        "approved": mandate.status == "approved",
+        "provider_checked": bool(mandate.last_provider_check_at),
+    })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@login_required
+@require_POST
+def staff_check_approval(request, mandate_id):
+    mandate = _staff_mandate(request, mandate_id)
+    if mandate.status == "pending":
+        try:
+            mandates.refresh_preapproval(mandate)
+            messages.success(request, "Checked directly with Hubtel.")
+        except (ValidationError, client.StatusUnconfirmed) as exc:
+            messages.error(request, str(exc))
+    return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
+
+
+@login_required
+@require_POST
+def staff_send_schedule(request, mandate_id):
+    mandate = _staff_mandate(request, mandate_id)
+    if mandate.status not in {"draft", "pending"}:
+        messages.error(request, "Only agreements awaiting approval can be sent.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
+    if not mandate.party.consent:
+        messages.error(request, "Confirm customer permission to receive agreement details first.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
+    entries = schedule.for_mandate(mandate)
+    if not entries:
+        messages.error(request, "The signed schedule is not available.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
+    url = request.build_absolute_uri(reverse(
+        "hubtel_debt_authorize", kwargs={"mandate_id": mandate.pk},
+    ))
+    body = (
+        f"KOFAD repayment approval: GHS {mandate.maximum_total:.2f} "
+        f"in {len(entries)} {mandate.frequency} payment(s), "
+        f"first {entries[0]['date']:%d %b %Y}, "
+        f"last {entries[-1]['date']:%d %b %Y}, "
+        f"not before {entries[0]['hour']:02d}:00 Ghana time. "
+        f"Installments GHS {mandate.amount_per_period:.2f}; "
+        f"final GHS {entries[-1]['amount']:.2f}. "
+        "Review dates and approve securely through Hubtel here: " + url
+        + " Never share your MoMo PIN."
+    )
+    result = sms_service.send_transactional_sms(mandates.mandate_phone(mandate), body)
+    if result in {"accepted", "delivered", "sending", "simulated"}:
+        messages.success(request, "Agreement invitation sent to the customer's wallet number.")
+    else:
+        messages.warning(request, "SMS not confirmed. Copy the approval link and share it with the customer.")
+    return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
+
+
+
 def _safe_mandate(mandate_id):
     return get_object_or_404(
         DebtMandate.objects.select_related("party", "branch"), pk=mandate_id,
@@ -83,6 +180,12 @@ def customer_authorize(request, mandate_id):
         "mandate": mandate,
         "debt_balance": mandates.outstanding(mandate.party),
         "payment_channel": "MTN MoMo" if mandate.channel == "mtn-gh-direct-debit" else "Telecel Cash",
+        "schedule": schedule.for_mandate(mandate),
+        "hubtel_ready": bool(getattr(
+            __import__("django.conf", fromlist=["settings"]).settings,
+            "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False,
+        )),
+    
     })
 
 
@@ -90,29 +193,24 @@ def customer_authorize(request, mandate_id):
 def customer_authorize_action(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
     action = request.POST.get("action")
-    if action not in {"send", "confirm", "hubtel_otp", "check"}:
+    if action not in {"start", "send", "confirm", "hubtel_otp", "check"}:
         messages.error(request, "Choose an authorization action.")
         return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
     try:
-        if action in {"send", "confirm"} and mandate.status != "draft":
+        if action in {"start", "send", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
-        if action == "send":
-            if not mandates.outstanding(mandate.party) > 0:
-                raise ValidationError("No debt remains to authorize.")
-            sms_service.send_otp(mandates.mandate_phone(mandate), "momo", request=request)
-            messages.success(request, "A six-digit ownership code was sent to the wallet being authorized.")
-        elif action == "confirm":
+        if action in {"start", "confirm"}:
             if request.POST.get("accepted_terms") != "yes":
-                raise ValidationError("Read and accept the displayed payment schedule, limits and cancellation terms.")
-            sms_service.verify_otp(
-                mandates.mandate_phone(mandate), request.POST.get("code", ""),
-                "momo",
-            )
+                raise ValidationError("Review and accept the exact repayment dates, amounts and cancellation terms.")
+            if mandates.outstanding(mandate.party) <= 0:
+                raise ValidationError("No unpaid debt remains to authorize.")
+            # Hubtel itself verifies wallet ownership with a USSD prompt or
+            # provider OTP. No KOFAD SMS code is misrepresented as approval.
             result = mandates.prepare_customer_authorization(mandate)
             if result["verification_type"] == "OTP":
-                messages.success(request, "Ownership confirmed. Enter the separate Hubtel preapproval OTP shown below.")
+                messages.success(request, "Hubtel sent a verification code to your wallet. Enter it below.")
             else:
-                messages.success(request, "Ownership confirmed. Approve Hubtel's preapproval on your mobile phone.")
+                messages.success(request, "Hubtel has requested wallet approval. Check your phone's USSD prompt.")
         elif action == "hubtel_otp":
             if mandate.status != "pending" or mandate.verification_type != "OTP":
                 raise ValidationError("This mandate does not have a pending Hubtel OTP request.")
