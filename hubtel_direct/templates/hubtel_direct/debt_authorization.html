@@ -7,7 +7,7 @@
   <p>This is <strong>not a payment request</strong>. Hubtel will ask permission to collect only the agreed repayments from your MoMo wallet when due.</p>
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;padding:16px;background:#edf5f6;border-radius:12px;margin:18px 0;color:#143746">
     <div><small>Customer</small><div><strong>{{ mandate.party.name }}</strong></div></div>
-    <div><small>Mobile Money wallet</small><div><strong>{{ payment_channel }} ····{{ mandate.phone_suffix }}</strong></div></div>
+    <div><small>Mobile Money wallet</small><div><strong>{{ payment_channel }} ····{{ mandate.phone_suffix }}</strong></div></div>{% if mandate.terms_snapshot.verified_wallet_name %}<div><small>Verified wallet holder</small><div><strong>{{ mandate.terms_snapshot.verified_wallet_name }}</strong></div></div>{% endif %}
     <div><small>Unpaid amount authorized</small><div><strong>GHS {{ mandate.maximum_total|floatformat:2 }}</strong></div></div>
     <div><small>Frequency</small><div><strong>{{ mandate.get_frequency_display }}</strong></div></div>
     <div><small>First collection</small><div><strong>{{ mandate.first_due_date|date:"d M Y" }}</strong></div></div>
