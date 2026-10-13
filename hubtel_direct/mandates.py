@@ -187,15 +187,22 @@ def request_cancel(mandate):
             row.cancelled_at = timezone.now()
             row.save(update_fields=["status", "cancelled_at", "updated_at"])
             return row
-        if row.status != "cancel_pending":
+        if row.status == "cancel_pending":
+            # The provider GET causes a revocation. Do not hammer it on
+            # repeated button presses or an unconfirmed network response.
+            if row.updated_at > timezone.now() - timedelta(minutes=15):
+                return row
+            row.save(update_fields=["updated_at"])
+        else:
             row.status = "cancel_pending"
             row.cancellation_requested_at = timezone.now()
             row.save(update_fields=["status", "cancellation_requested_at", "updated_at"])
     try:
         debit_api.cancel_preapproval(mandate_phone(row))
     except (client.StatusUnconfirmed, ValidationError):
-        # Fail closed: leave cancellation pending; web service must retry
-        # provider cancellation through an explicitly audited operation.
+        # Authorization has already been revoked locally. An uncertain
+        # provider response is never proof that cancellation succeeded.
+        # The periodic web-server sweep will retry after the cooldown.
         return row
     with transaction.atomic():
         row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
@@ -404,12 +411,39 @@ def reconcile_attempts(limit=15):
 
 
 def cancel_fully_paid(limit=50):
-    """Cancel locally whenever an account settles, then revoke Hubtel approval."""
-    # Should run from the web process, not the unwhitelisted SMS worker.
-    qs = DebtMandate.objects.filter(status="approved").select_related("party")[:limit]
-    cancelled = 0
-    for mandate in qs:
+    """Revoke settled debt authority and retry uncertain provider cancellations.
+
+    All Hubtel requests run here on the whitelisted web process. A persistent
+    local cancellation always blocks further charges, even when Hubtel is down.
+    """
+    from django.core.cache import cache
+
+    limit = max(1, min(int(limit), 100))
+    cooldown = timezone.now() - timedelta(minutes=15)
+    confirmed = 0
+    # Do not strand a cancelled wallet authorization merely because the
+    # provider was unavailable when the customer first revoked it.
+    pending = DebtMandate.objects.filter(
+        status="cancel_pending", updated_at__lte=cooldown,
+    ).order_by("updated_at", "pk")[:limit]
+    for mandate in pending:
+        if request_cancel(mandate).status == "cancelled":
+            confirmed += 1
+
+    # Round-robin scanning prevents the same first 25 unpaid customers from
+    # starving later mandates that have already been settled manually.
+    cursor_key = "hubtel-debt-approved-scan-cursor"
+    cursor = cache.get(cursor_key)
+    qs = DebtMandate.objects.filter(status="approved").select_related("party")
+    if cursor:
+        qs = qs.filter(pk__gt=cursor)
+    rows = list(qs.order_by("pk")[:limit])
+    if not rows:
+        cache.delete(cursor_key)
+        return confirmed
+    cache.set(cursor_key, str(rows[-1].pk), timeout=86400)
+    for mandate in rows:
         if outstanding(mandate.party) == ZERO:
-            request_cancel(mandate)
-            cancelled += 1
-    return cancelled
+            if request_cancel(mandate).status == "cancelled":
+                confirmed += 1
+    return confirmed
