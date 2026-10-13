@@ -23,13 +23,13 @@ class OnlineDebtSettingsForm(forms.ModelForm):
             "pending_review_hours", "unresolved_poll_hours",
         ]
         labels = {
-            "plan_creation_enabled": "Staff may offer new Online Debt agreements",
-            "pause_auto_collection": "Emergency pause all automatic debits in this location",
+            "plan_creation_enabled": "Allow Direct Debit agreement setup",
+            "pause_auto_collection": "Pause automatic collections",
             "allow_mtn": "MTN Mobile Money", "allow_telecel": "Telecel Cash",
             "allow_once": "One-time after grace",
             "allow_daily": "Daily", "allow_weekly": "Weekly", "allow_monthly": "Monthly",
             "allow_quarterly": "Quarterly", "allow_yearly": "Yearly",
-            "default_frequency": "Default payment schedule",
+            "default_frequency": "Preselected interval for new plans",
             "min_open_balance": "Minimum eligible debt (GHS)",
             "max_open_balance": "Maximum eligible debt (GHS)",
             "min_installment": "Minimum installment (GHS)",
@@ -47,8 +47,8 @@ class OnlineDebtSettingsForm(forms.ModelForm):
             "unresolved_poll_hours": "Recheck unresolved provider status every (hours)",
         }
         help_texts = {
-            "plan_creation_enabled": "Disabled by default. Staff may only draft an agreement; Hubtel authorization remains separate.",
-            "pause_auto_collection": "On by default. This blocks outgoing direct-debit requests even when the Railway charge switch is active.",
+            "plan_creation_enabled": "On by default. Drafting an agreement never charges or authorizes a wallet.",
+            "pause_auto_collection": "Keep paused until Hubtel preapproval, collection credentials and live testing have been authorized.",
             "max_first_due_days": "A new agreement may not schedule its first payment more than 366 days ahead.",
             "auto_collection_grace_days": "Affects new scheduled collection attempts; it never authorizes collection beyond the customer's signed limit.",
             "rollover_unpaid": "Captured on each new customer's agreement; changing this setting cannot rewrite an already accepted contract.",
