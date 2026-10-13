@@ -204,22 +204,22 @@ class OnlineDebtSettings(models.Model):
         "core.Branch", related_name="online_debt_settings",
         on_delete=models.PROTECT,
     )
-    plan_creation_enabled = models.BooleanField(default=False)
+    plan_creation_enabled = models.BooleanField(default=True)
     pause_auto_collection = models.BooleanField(default=True)
     allow_mtn = models.BooleanField(default=True)
     allow_telecel = models.BooleanField(default=True)
     allow_once = models.BooleanField(default=True)
-    allow_daily = models.BooleanField(default=False)
+    allow_daily = models.BooleanField(default=True)
     allow_weekly = models.BooleanField(default=True)
     allow_monthly = models.BooleanField(default=True)
     allow_quarterly = models.BooleanField(default=True)
-    allow_yearly = models.BooleanField(default=False)
+    allow_yearly = models.BooleanField(default=True)
     default_frequency = models.CharField(
         max_length=12, choices=DebtMandate.FREQUENCIES, default="weekly",
     )
-    min_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="10.00")
+    min_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="1.00")
     max_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="10000.00")
-    min_installment = models.DecimalField(max_digits=14, decimal_places=2, default="5.00")
+    min_installment = models.DecimalField(max_digits=14, decimal_places=2, default="1.00")
     max_installment = models.DecimalField(max_digits=14, decimal_places=2, default="2000.00")
     min_first_due_days = models.PositiveSmallIntegerField(default=0)
     max_first_due_days = models.PositiveSmallIntegerField(default=90)

@@ -87,10 +87,10 @@
 
     <section class="debt-section" aria-labelledby="direct-debit-title">
       <div class="section-heading"><div>
-        <p class="eyebrow">CONSENTED MOBILE MONEY REPAYMENTS</p>
+        <p class="eyebrow">REPAYMENT PLANS</p>
         <h3 id="direct-debit-title">Hubtel Direct Debit</h3>
         {% if perms.core.manage_company %}<p><a href="{% url 'online_debt_settings' %}">Manage Online Debt policy</a></p>{% endif %}
-        <p class="muted">The customer's wallet owner must approve the mandate independently before any automated installment can begin. MTN and Telecel only.</p>
+        
       </div></div>
       {% for mandate in selected_mandates %}
       <div class="notice subtle" style="display:grid;gap:8px;margin:12px 0">
@@ -98,7 +98,34 @@
         <span>Wallet ending {{ mandate.phone_suffix }} · GHS {{ mandate.amount_per_period|floatformat:2 }} per period · maximum GHS {{ mandate.maximum_total|floatformat:2 }}</span>
         <span>Next due {{ mandate.next_due_date|date:"d M Y" }} · paid GHS {{ mandate.collected_total|floatformat:2 }}</span>
         {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Collection suspended.</strong> Do not start another automatic debit until finance resolves the existing provider authorization or transaction evidence. Customer can still make a manual payment.</p>{% endif %}
-        <p><a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval/cancellation page ↗</a></p>
+        <p><a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">{% if mandate.status == "draft" %}Customer approval ↗{% else %}Approval / cancellation ↗{% endif %}</a></p>
+        {% if mandate.status == "draft" and perms.core.operate_finance %}
+        <details class="debt-draft-editor">
+          <summary class="button secondary" style="cursor:pointer">Edit draft terms</summary>
+          <form method="post" action="{% url 'hubtel_debt_edit_draft' mandate.pk %}" style="display:grid;gap:12px;max-width:600px;margin-top:12px">
+            {% csrf_token %}
+            <label>Change wallet number (optional)<input type="tel" name="phone" inputmode="tel" placeholder="Leave blank to keep wallet ending {{ mandate.phone_suffix }}" autocomplete="off"></label>
+            <label>Network<select name="channel">
+              <option value="mtn-gh-direct-debit" {% if mandate.channel == "mtn-gh-direct-debit" %}selected{% endif %}>MTN MoMo</option>
+              <option value="vodafone-gh-direct-debit" {% if mandate.channel == "vodafone-gh-direct-debit" %}selected{% endif %}>Telecel Cash</option>
+            </select></label>
+            <label>Repayment frequency<select name="frequency">
+              <option value="once" {% if mandate.frequency == "once" %}selected{% endif %}>Once</option>
+              <option value="daily" {% if mandate.frequency == "daily" %}selected{% endif %}>Daily</option>
+              <option value="weekly" {% if mandate.frequency == "weekly" %}selected{% endif %}>Weekly</option>
+              <option value="monthly" {% if mandate.frequency == "monthly" %}selected{% endif %}>Monthly</option>
+              <option value="quarterly" {% if mandate.frequency == "quarterly" %}selected{% endif %}>Quarterly</option>
+              <option value="yearly" {% if mandate.frequency == "yearly" %}selected{% endif %}>Yearly</option>
+            </select></label>
+            <label>First payment date<input type="date" name="first_due_date" value="{{ mandate.first_due_date|date:'Y-m-d' }}" required></label>
+            <label>Installment (GHS)<input type="number" name="amount" step="0.01" min="1.00" value="{{ mandate.amount_per_period }}" required></label>
+            <label>Maximum authorized amount (GHS)<input type="number" name="maximum" step="0.01" min="1.00" value="{{ mandate.maximum_total }}" required></label>
+            <button class="button" type="submit">Save draft terms</button>
+          </form>
+        </details>
+        {% elif mandate.status == "approved" or mandate.status == "pending" %}
+        <small>Changing an authorized schedule requires cancellation and fresh customer approval.</small>
+        {% endif %}
         {% if perms.core.operate_finance and mandate.status != "cancelled" and mandate.status != "settled" %}
         <form action="{% url 'hubtel_debt_staff_cancel' mandate.pk %}" method="post">{% csrf_token %}
           <button type="submit" class="button secondary" onclick="return confirm('Stop future debit requests for this customer?')">Stop direct debit</button>
@@ -112,20 +139,19 @@
        <summary class="button secondary" style="cursor:pointer">Offer a Direct Debit repayment plan</summary>
        <form method="post" action="{% url 'hubtel_debt_create' %}" style="display:grid;gap:12px;max-width:640px;margin-top:16px">
         {% csrf_token %}<input type="hidden" name="party" value="{{ selected.party.pk }}">
-        <p><strong>The customer must explicitly approve these terms and verify wallet ownership.</strong> Creating this plan will not debit or preapprove the wallet.</p>
+        <p class="muted">The wallet holder must approve before collection.</p>
         <label>Wallet number<input type="tel" name="phone" value="{{ selected.party.phone }}" autocomplete="off" required></label>
         <label>Network<select name="channel">{% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN Mobile Money</option>{% endif %}{% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}</select></label>
         <label>Payment schedule<select name="frequency">{% if online_debt_policy.allow_weekly %}<option value="weekly">Weekly</option>{% endif %}{% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}{% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}{% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}{% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}{% if online_debt_policy.allow_once %}<option value="once">Once after agreed grace period</option>{% endif %}</select></label>
         <label>First payment due<input type="date" name="first_due_date" required></label>
         <label>Agreed amount per payment (GHS)<input type="number" min="{{ online_debt_policy.min_installment }}" max="{{ online_debt_policy.max_installment }}" step="0.01" name="amount" required><small>Allowed GHS {{ online_debt_policy.min_installment }} – GHS {{ online_debt_policy.max_installment }}</small></label>
         <label>Absolute maximum amount authorized (GHS)<input type="number" min="0.01" max="{{ selected.outstanding }}" step="0.01" name="maximum" value="{{ selected.outstanding }}" required><small>Not more than the recorded customer debt of GHS {{ selected.outstanding|floatformat:2 }}.</small></label>
-        <p class="muted">Repeated shrinking debit attempts are not supported. A confirmed failed installment may carry forward to the next date only when the customer has agreed to that arrangement.</p>
-        <p class="muted">KOFAD will not query or attempt to drain a customer's wallet balance. An unsuccessful installment stays due; all debits must fit the customer's agreement, provider approval and recorded outstanding debt.</p>
+
         <button type="submit" class="button">Create agreement for customer authorization</button>
        </form>
       </details>
       {% elif perms.core.operate_finance %}
-      <div class="notice subtle">Management has disabled new Online Debt arrangements for this location. Manual debt collection is still available.</div>
+      <div class="notice subtle">New repayment agreement setup is paused by management.</div>
       {% endif %}
       {% endfor %}
     </section>

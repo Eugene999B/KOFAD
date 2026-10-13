@@ -595,7 +595,7 @@ def trade_screen(request, branch, kind):
     payment_gateway = payment_gateway_settings.selected_provider() if kind == "sale" else ""
     paystack_pos = __import__("core.pos_paystack", fromlist=["ready"])
     from hubtel_direct.models import OnlineDebtSettings
-    online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first() if kind == "sale" else None
+    online_debt_policy = OnlineDebtSettings.objects.get_or_create(branch=branch)[0] if kind == "sale" else None
     return render(request, "pos.html", {
         "title": "New sale" if kind == "sale" else "Receive purchase",
         "catalog": catalog,
@@ -618,7 +618,8 @@ def trade_screen(request, branch, kind):
         "online_debt_policy": online_debt_policy,
         "can_offer_direct_debit": (
             kind == "sale" and company.allow_credit_sales
-            and (request.user.is_superuser or request.user.has_perm("core.operate_finance"))
+            and (request.user.is_superuser or request.user.has_perm("core.operate_sales")
+                 or request.user.has_perm("core.operate_finance"))
         ),
         "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
@@ -1335,17 +1336,15 @@ def debts(request, branch):
     overview = debt_service.debt_overview(branch, query)
     rows = overview["rows"]
     from hubtel_direct.models import DebtMandate, OnlineDebtSettings
-    online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first()
+    online_debt_policy, _ = OnlineDebtSettings.objects.get_or_create(branch=branch)
     agreement_rows = list(DebtMandate.objects.filter(
         branch=branch, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"],
     ).select_related("party"))
-    # Staff drafts and unapproved wallet prompts are still manual debtors.
-    # Only provider-confirmed agreements (including suspended or cancelled-
-    # pending ones needing reconciliation) count as Direct Debit debtors.
-    agreement_ids = {
-        item.party_id for item in agreement_rows
-        if item.status in {"approved", "suspended", "cancel_pending"}
-    }
+    # A debtor with an agreement belongs on the Direct Debit tab from
+    # drafting onward. The status badge clearly says "Awaiting setup" or
+    # "Awaiting customer authorization" until Hubtel confirms consent.
+    # This is classification only: it NEVER authorizes a wallet debit.
+    agreement_ids = {item.party_id for item in agreement_rows}
     debtor_type = request.GET.get("type", "all")
     if debtor_type == "manual":
         rows = [item for item in rows if item["party"].pk not in agreement_ids]

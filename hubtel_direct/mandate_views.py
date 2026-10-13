@@ -40,6 +40,34 @@ def staff_create_mandate(request):
         return redirect("/debts/?customer=" + str(request.POST.get("party") or ""))
 
 
+
+@login_required
+@require_POST
+def staff_edit_draft(request, mandate_id):
+    """Edit a draft only; already presented/approved Hubtel terms are frozen."""
+    branch = branch_for(request)
+    mandate = get_object_or_404(
+        DebtMandate, pk=mandate_id, branch=branch,
+    )
+    try:
+        mandates.update_draft_plan(
+            request.user, branch, mandate_id,
+            phone=request.POST.get("phone"),
+            channel=request.POST.get("channel"),
+            frequency=request.POST.get("frequency"),
+            first_due_date=request.POST.get("first_due_date"),
+            amount_per_period=request.POST.get("amount"),
+            maximum_total=request.POST.get("maximum"),
+        )
+        messages.success(
+            request,
+            "Draft terms updated. The wallet holder must approve the new schedule.",
+        )
+    except (ValidationError, ValueError, TypeError) as exc:
+        messages.error(request, str(exc))
+    return redirect("/debts/?customer=" + str(mandate.party_id))
+
+
 def _safe_mandate(mandate_id):
     return get_object_or_404(
         DebtMandate.objects.select_related("party", "branch"), pk=mandate_id,

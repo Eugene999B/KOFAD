@@ -55,7 +55,12 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 first_due_date, amount_per_period, maximum_total,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
-    core_services.permit(user, branch, "operate_finance")
+    # A cashier may PROPOSE a plan when making a credit sale. Only the
+    # wallet holder may grant authority, and finance controls real collections.
+    core_services.permit(
+        user, branch,
+        "operate_finance" if user.has_perm("core.operate_finance") else "operate_sales",
+    )
     # Serialize two customers trying to bind the same merchant wallet before
     # the database uniqueness constraint resolves any remaining race.
     core_services.lock_branch(branch)
@@ -147,6 +152,120 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
         "party": party.pk, "ceiling": str(maximum), "schedule": frequency,
     })
     return mandate
+
+
+
+@transaction.atomic
+def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
+                      frequency=None, first_due_date=None,
+                      amount_per_period=None, maximum_total=None):
+    """Revise UNSIGNED terms. Hubtel-approved/pending contracts are immutable.
+
+    A cashier cannot silently change wallet authority: new terms on a signed
+    mandate require provider cancellation and a completely fresh consent.
+    """
+    from datetime import date
+
+    core_services.permit(user, branch, "operate_finance")
+    core_services.lock_branch(branch)
+    policy, _ = OnlineDebtSettings.objects.select_for_update().get_or_create(branch=branch)
+    if not policy.plan_creation_enabled:
+        raise ValidationError("New Direct Debit agreement setup is paused.")
+    row = DebtMandate.objects.select_for_update().select_related("party").get(
+        pk=mandate_id, branch=branch,
+    )
+    if (row.status != "draft" or row.hubtel_preapproval_id
+            or row.provider_approved_at or row.collected_total != ZERO
+            or row.attempts.exists()):
+        raise ValidationError(
+            "This agreement was already submitted for approval or collection. "
+            "Cancel it and obtain fresh customer consent for different terms."
+        )
+    if not row.party.consent:
+        raise ValidationError("The customer must consent to payment communications.")
+    channel = channel or row.channel
+    frequency = frequency or row.frequency
+    if channel not in debit_api.DEBIT_CHANNELS or not policy.allows_channel(channel):
+        raise ValidationError("Choose an allowed MTN or Telecel wallet network.")
+    if frequency not in debit_api.FREQUENCIES or not policy.allows_frequency(frequency):
+        raise ValidationError("Choose an available repayment interval.")
+    start = first_due_date or row.first_due_date
+    if isinstance(start, str):
+        try:
+            start = date.fromisoformat(start)
+        except ValueError as exc:
+            raise ValidationError("Enter a valid first payment date.") from exc
+    if not isinstance(start, date) or start < timezone.localdate():
+        raise ValidationError("First payment date cannot be in the past.")
+    days = (start - timezone.localdate()).days
+    if not policy.min_first_due_days <= days <= min(policy.max_first_due_days, 366):
+        raise ValidationError("First due date is outside the configured date limit.")
+
+    balance = outstanding(row.party)
+    if not policy.min_open_balance <= balance <= policy.max_open_balance:
+        raise ValidationError("The customer's outstanding balance is outside the repayment limits.")
+    installment = _money(amount_per_period if amount_per_period is not None else row.amount_per_period)
+    ceiling = _money(maximum_total if maximum_total is not None else row.maximum_total)
+    if not policy.min_installment <= installment <= policy.max_installment:
+        raise ValidationError("Installment amount is outside the configured repayment limits.")
+    if ceiling <= ZERO or ceiling > balance or installment > ceiling:
+        raise ValidationError("Installment and total authorization must fit the outstanding customer debt.")
+
+    digits = debit_api.number(phone) if (phone or "").strip() else mandate_phone(row)
+    fingerprint = hashlib.sha256(
+        (settings.SECRET_KEY + "|hubtel-debt-wallet|" + digits).encode()
+    ).hexdigest()
+    blocking = ["draft", "pending", "approved", "cancel_pending", "suspended"]
+    if DebtMandate.objects.filter(
+        party=row.party, status__in=blocking,
+    ).exclude(pk=row.pk).exists():
+        raise ValidationError("Another agreement is already active for this customer.")
+    if DebtMandate.objects.filter(
+        phone_fingerprint=fingerprint, status__in=blocking,
+    ).exclude(pk=row.pk).exists():
+        raise ValidationError("This wallet is already linked to another active agreement.")
+    if DebtDebitAttempt.objects.filter(
+        mandate__phone_fingerprint=fingerprint,
+        status__in=["sending", "pending", "unknown", "finance_review"],
+    ).exists():
+        raise ValidationError("Unresolved Hubtel wallet payments must be reconciled first.")
+
+    previous = {
+        "frequency": row.frequency, "due": row.first_due_date.isoformat(),
+        "amount": str(row.amount_per_period), "ceiling": str(row.maximum_total),
+        "wallet_suffix": row.phone_suffix,
+    }
+    row.phone_encrypted = client.seal(digits)
+    row.phone_fingerprint = fingerprint
+    row.phone_suffix = digits[-4:]
+    row.channel = channel
+    row.frequency = frequency
+    row.first_due_date = start
+    row.next_due_date = start
+    row.amount_per_period = installment
+    row.maximum_total = ceiling
+    row.client_reference = debit_api.reference()
+    row.terms_snapshot = {
+        "starting_outstanding": str(balance),
+        "amount": str(installment), "maximum_total": str(ceiling),
+        "frequency": frequency, "starts": start.isoformat(), "network": channel,
+        "partial_retry_enabled": False, "minimum_partial": "0.00",
+        "rollover_unpaid": bool(policy.rollover_unpaid),
+        "auto_collection_grace_days": policy.auto_collection_grace_days,
+        "policy_version": policy.updated_at.isoformat(),
+        "customer_can_cancel": True,
+    }
+    row.save()
+    core_services.audit(
+        user, branch, "hubtel_debt.draft_revised", str(row.pk),
+        {"before": previous, "after": {
+            "frequency": frequency, "due": start.isoformat(),
+            "amount": str(installment), "ceiling": str(ceiling),
+            "wallet_suffix": row.phone_suffix,
+        }},
+        category="finance", severity="high",
+    )
+    return row
 
 
 def mandate_phone(mandate):
