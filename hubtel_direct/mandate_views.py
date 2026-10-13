@@ -1,21 +1,16 @@
 """Consent-first customer debt mandates; no customer MoMo PIN is ever requested."""
-import uuid
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
-from django.utils import timezone
 
 from core import services as core_services
 from core.views import branch_for
 from marketplace import services as sms_service
 from . import client, debit_api, mandates
-from .models import DebtMandate, DebtDebitAttempt
+from .models import DebtMandate
 
 
 @login_required
