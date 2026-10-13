@@ -62,7 +62,7 @@ def _validate_return(item):
             "Hubtel refunds the original entire order, not selected products. "
             "For partial returns, use the replacement/manual finance workflow."
         )
-    if HubtelRefundCase.objects.filter(original_order_id=item.order_id).exists():
+    if HubtelRefundCase.objects.filter(original_order_id=item.order_id).exclude(return_request=item).exists():
         raise ValidationError("This original Hubtel order already has a refund case.")
     if item.order.return_requests.exclude(pk=item.pk).filter(
         hubtel_refund_case__status__in=[
