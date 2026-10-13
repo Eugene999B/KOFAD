@@ -138,7 +138,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Agreement setup")
         self.assertContains(page, "Advanced limits and safeguards")
-        self.assertContains(page, "Automatic debits")
+        self.assertContains(page, "AUTOMATIC DEBITS")
         self.assertContains(page, "Setup available")
 
     def test_disabled_frequency_network_and_limits_are_enforced(self):
