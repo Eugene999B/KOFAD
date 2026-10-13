@@ -326,7 +326,17 @@ def reconcile(reference):
             "status": "success", "amount": int(amount * 100), "currency": "GHS",
             "channel": channel,
         }, expected_provider="hubtel")
-        MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(next_check_at=None, provider_message="Verified by Hubtel status check.")
+        # Only preserve an original Hubtel OrderId when it is present in the
+        # independently authenticated PAID status response. A checkout ID,
+        # transaction ID, callback field or client-supplied string is NOT a
+        # substitute for the refund API's original OrderId.
+        verified_order_id = str(data.get("orderId") or "").strip()
+        if re.fullmatch(r"[a-fA-F0-9]{24,64}", verified_order_id):
+            summary["hubtel_order_id"] = verified_order_id
+        MarketPaymentAttempt.objects.filter(pk=attempt.pk).update(
+            next_check_at=None, provider_message="Verified by Hubtel status check.",
+            verification_summary=summary,
+        )
         return order
     except services.PaymentVerificationUnavailable:
         raise
