@@ -113,6 +113,10 @@ class DebtDebitAttempt(models.Model):
     status = models.CharField(max_length=24, default="planned", db_index=True)
     hubtel_transaction_id = models.CharField(max_length=100, blank=True)
     provider_code = models.CharField(max_length=24, blank=True)
+    # Set only after authenticated Hubtel status-check returned an exact
+    # PAID reference, amount, currency and provider transaction identity.
+    # A callback, missing reply or tentative status must never populate this.
+    provider_verified_paid_at = models.DateTimeField(null=True, blank=True, db_index=True)
     collection_document = models.OneToOneField("core.Document", null=True, blank=True, on_delete=models.PROTECT)
     next_check_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
