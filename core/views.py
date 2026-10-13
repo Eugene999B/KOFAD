@@ -1330,7 +1330,7 @@ def debts(request, branch):
     from hubtel_direct.models import DebtMandate, OnlineDebtSettings
     online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first()
     agreement_rows = list(DebtMandate.objects.filter(
-        branch=branch, status__in=["draft", "pending", "approved", "cancel_pending"],
+        branch=branch, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"],
     ).select_related("party"))
     agreement_ids = {item.party_id for item in agreement_rows}
     debtor_type = request.GET.get("type", "all")
