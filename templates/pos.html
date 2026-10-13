@@ -294,6 +294,10 @@
                 <input id="credit-direct-installment" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100.00">
               </label>
             </div>
+            <div class="direct-wallet-lookup">
+              <button class="button secondary" type="button" id="credit-direct-verify">Check wallet name</button>
+              <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="credit-direct-name" role="status" aria-live="polite">Not verified</strong></div>
+            </div>
             <p class="hint">Customer approval required before collection.</p>
             {% else %}
             <p class="hint">Enable repayment agreements in <a href="{% url 'online_debt_settings' %}" target="_blank" rel="noopener">Online Debt Settings</a>.</p>
