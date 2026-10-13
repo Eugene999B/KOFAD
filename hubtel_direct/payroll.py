@@ -40,6 +40,16 @@ def save_recipient(user, worker, *, payment_type, destination, channel="", bank_
     else:
         raise ValidationError("Choose Mobile Money or a verified Ghana bank.")
     with transaction.atomic():
+        # Editing a recipient while a prepared/processing batch exists cannot
+        # silently re-route payroll. Finish or explicitly review that batch
+        # before accepting new beneficiary instructions.
+        if PayrollTransferLine.objects.filter(
+            entry__worker=worker, batch__status__in=["awaiting_approval", "processing"],
+        ).exists():
+            raise ValidationError(
+                "This worker has an active Hubtel salary batch. Resolve the batch "
+                "before changing their verified bank or wallet destination."
+            )
         obj, _ = WorkerTransferProfile.objects.select_for_update().get_or_create(
             worker=worker,
             defaults={
@@ -113,6 +123,7 @@ def prepare_batch(user, period):
             batch=batch, entry=entry, destination=profile, amount=entry.balance,
             encrypted_account_snapshot=profile.destination_encrypted,
             recipient_name_snapshot=profile.provider_name,
+            payment_type_snapshot=profile.payment_type,
             channel_snapshot=profile.channel,
             bank_code_snapshot=profile.bank_code,
         )
@@ -158,7 +169,17 @@ def approve_and_send(user, batch_id):
             continue
         try:
             destination = client.unseal(line.encrypted_account_snapshot)
-            payment_kind = "send_momo" if line.destination.payment_type == "momo" else "send_bank"
+            # No mutable live beneficiary field may select the payout rail.
+            if line.payment_type_snapshot == "momo":
+                if line.channel_snapshot not in client.CHANNELS or line.bank_code_snapshot:
+                    raise ValidationError("Saved payroll MoMo instructions are inconsistent.")
+                payment_kind = "send_momo"
+            elif line.payment_type_snapshot == "bank":
+                if line.bank_code_snapshot not in client.BANK_CODES or line.channel_snapshot:
+                    raise ValidationError("Saved payroll bank instructions are inconsistent.")
+                payment_kind = "send_bank"
+            else:
+                raise ValidationError("Saved payroll payment type is not supported.")
             tx = service.create_payout(
                 line.batch.created_by, payment_kind, line.amount,
                 destination, line.recipient_name_snapshot,
