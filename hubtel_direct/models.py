@@ -217,9 +217,9 @@ class OnlineDebtSettings(models.Model):
     default_frequency = models.CharField(
         max_length=12, choices=DebtMandate.FREQUENCIES, default="weekly",
     )
-    min_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="10.00")
+    min_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="1.00")
     max_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="10000.00")
-    min_installment = models.DecimalField(max_digits=14, decimal_places=2, default="5.00")
+    min_installment = models.DecimalField(max_digits=14, decimal_places=2, default="1.00")
     max_installment = models.DecimalField(max_digits=14, decimal_places=2, default="2000.00")
     min_first_due_days = models.PositiveSmallIntegerField(default=0)
     max_first_due_days = models.PositiveSmallIntegerField(default=90)
