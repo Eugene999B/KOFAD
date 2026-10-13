@@ -115,13 +115,15 @@
         <label>Network<select name="channel">{% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN Mobile Money</option>{% endif %}{% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}</select></label>
         <label>Payment schedule<select name="frequency">{% if online_debt_policy.allow_weekly %}<option value="weekly">Weekly</option>{% endif %}{% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}{% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}{% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}{% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}{% if online_debt_policy.allow_once %}<option value="once">Once after agreed grace period</option>{% endif %}</select></label>
         <label>First payment due<input type="date" name="first_due_date" required></label>
-        <label>Agreed amount per payment (GHS)<input type="number" min="0.01" step="0.01" name="amount" required></label>
-        <label>Absolute maximum amount authorized (GHS)<input type="number" min="0.01" max="{{ selected.outstanding }}" step="0.01" name="maximum" value="{{ selected.outstanding }}" required></label>
+        <label>Agreed amount per payment (GHS)<input type="number" min="{{ online_debt_policy.min_installment }}" max="{{ online_debt_policy.max_installment }}" step="0.01" name="amount" required><small>Allowed GHS {{ online_debt_policy.min_installment }} – GHS {{ online_debt_policy.max_installment }}</small></label>
+        <label>Absolute maximum amount authorized (GHS)<input type="number" min="0.01" max="{{ selected.outstanding }}" step="0.01" name="maximum" value="{{ selected.outstanding }}" required><small>Not more than the recorded customer debt of GHS {{ selected.outstanding|floatformat:2 }}.</small></label>
         <p class="muted">Repeated shrinking debit attempts are not supported. A confirmed failed installment may carry forward to the next date only when the customer has agreed to that arrangement.</p>
         <p class="muted">KOFAD will not query or attempt to drain a customer's wallet balance. An unsuccessful installment stays due; all debits must fit the customer's agreement, provider approval and recorded outstanding debt.</p>
         <button type="submit" class="button">Create agreement for customer authorization</button>
        </form>
       </details>
+      {% elif perms.core.operate_finance %}
+      <div class="notice subtle">Management has disabled new Online Debt arrangements for this location. Manual debt collection is still available.</div>
       {% endif %}
       {% endfor %}
     </section>
