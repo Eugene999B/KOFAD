@@ -1,0 +1,164 @@
+/* KOFAD compact interface, October 2026.
+   A staff-only finishing layer: retains mobile touch targets, dark mode,
+   approval visibility, finance safety and existing semantic labels. */
+@media (min-width: 951px) {
+  body[data-session-zone="staff"] .workspace {
+    grid-template-columns: 222px minmax(0,1fr) !important;
+  }
+  body[data-session-zone="staff"] .sidebar {
+    width: 222px !important;
+    padding: 15px 10px 16px !important;
+  }
+  body[data-session-zone="staff"] .sidebar nav {
+    gap: 1px !important;
+  }
+  body[data-session-zone="staff"] .sidebar nav a {
+    min-height: 35px !important;
+    padding: 7px 11px !important;
+    font-size: 12px !important;
+    line-height: 1.28 !important;
+    font-weight: 570 !important;
+    border-radius: 8px !important;
+    letter-spacing: 0 !important;
+    gap: 10px !important;
+  }
+  body[data-session-zone="staff"] .sidebar nav a :is(svg,img) {
+    width: 16px !important;
+    height: 16px !important;
+    flex: 0 0 16px;
+  }
+  body[data-session-zone="staff"] .sidebar .nav-label {
+    margin: 13px 8px 4px !important;
+    font-size: 9px !important;
+    letter-spacing: .1em !important;
+    line-height: 1.4 !important;
+  }
+  body[data-session-zone="staff"] .sidebar .brand {
+    min-height: 72px !important;
+    margin: 0 0 9px !important;
+    padding: 0 8px !important;
+  }
+  body[data-session-zone="staff"] .topbar {
+    height: 61px !important;
+    padding: 0 22px !important;
+  }
+  body[data-session-zone="staff"] main {
+    padding: 19px 24px 34px !important;
+    max-width: none;
+  }
+  body[data-session-zone="staff"] .page-heading {
+    margin-bottom: 15px !important;
+    padding-bottom: 11px !important;
+    gap: 12px !important;
+  }
+  body[data-session-zone="staff"] .page-heading h1 {
+    font-size: clamp(22px, 2vw, 28px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -.025em !important;
+  }
+  body[data-session-zone="staff"] .page-heading .eyebrow {
+    font-size: 9px !important;
+    letter-spacing: .08em !important;
+    margin-bottom: 3px !important;
+  }
+  body[data-session-zone="staff"] .panel {
+    border-radius: 12px !important;
+  }
+  body[data-session-zone="staff"] .page-heading .actions a,
+  body[data-session-zone="staff"] .page-heading .actions button {
+    font-size: 12px !important;
+    min-height: 34px !important;
+  }
+  body[data-session-zone="staff"] .counter-sale-head h2,
+  body[data-session-zone="staff"] .chalin-checkout-head h2 {
+    font-size: clamp(18px, 1.6vw, 23px) !important;
+  }
+}
+body[data-session-zone="staff"] .sidebar-bottom {
+  font-size: 10px !important;
+  opacity: .75;
+}
+body[data-session-zone="staff"] :is(.counter-sale-head,.chalin-checkout-head) > div > .muted:empty {
+  display:none !important;
+}
+#pos .hubtel-wallet-review {
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid var(--line, #d7e2eb);
+  border-radius: 11px;
+  background: var(--soft, #eef5f8);
+  margin: 10px 0;
+}
+#pos .hubtel-wallet-review #hubtel-wallet-verify {
+  justify-self: start;
+  min-height: 35px;
+  padding: 7px 13px;
+  font-size: 12px;
+}
+#pos .hubtel-verified-name {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line, #dce5ed);
+  border-radius: 9px;
+  background: var(--white, #fff);
+  min-height: 63px;
+}
+#pos .hubtel-verified-name small {
+  font-size: 10px;
+  color: var(--muted, #667);
+  letter-spacing: .09em;
+  font-weight: 750;
+}
+#pos .hubtel-verified-name strong {
+  color: var(--ink, #122f44);
+  font-size: 16px !important;
+  line-height: 1.4;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+#pos .hubtel-wallet-authorize {
+  margin: 1px 0 0 !important;
+  font-size: 12px;
+  line-height: 1.45;
+}
+#pos .hubtel-wallet-authorize input {accent-color: #087c86;}
+#pos .credit-repayment-chooser {
+  display:grid;
+  gap: 7px;
+  border-top: 1px solid var(--line, #dce5ed);
+  padding-top: 13px;
+  margin-top: 12px;
+}
+#pos .credit-direct-debit-fields {
+  padding: 12px;
+  border: 1px solid var(--line, #dce5ed);
+  border-radius: 9px;
+}
+#pos .credit-direct-debit-fields .two-column {
+  display:grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+#pos .credit-direct-debit-fields .hint {font-size: 11px; margin: 9px 0 0;}
+#pos .credit-direct-debit-fields.hidden,
+#pos .credit-repayment-chooser.hidden {display:none!important;}
+#sale-debit-authorization {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--line, #dce5ed);
+  border-radius: 10px;
+  background: var(--soft, #eef5f8);
+}
+#sale-debit-authorization.hidden {display:none!important;}
+#sale-debit-authorization button {width:100%;}
+@media (max-width: 680px) {
+  #pos .credit-direct-debit-fields .two-column{grid-template-columns:1fr;}
+  #pos .hubtel-verified-name strong{font-size:15px!important;}
+}
+html[data-theme="dark"] #pos :is(.hubtel-wallet-review,.credit-direct-debit-fields,#sale-debit-authorization) {
+  background: var(--white, #132a3a);
+}
