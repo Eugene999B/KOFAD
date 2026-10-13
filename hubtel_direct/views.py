@@ -72,6 +72,15 @@ def internal_reconcile(request):
             debit_paid = debt_mandates.reconcile_attempts(limit=10)
         except (ValidationError, Exception):
             pass
+    # An already VERIFIED paid debit is an accounting obligation even when
+    # Hubtel is unavailable or outbound collections have been switched off.
+    # Never issue a provider POST from this ledger-only recovery path.
+    debt_ledger_recovered = 0
+    try:
+        debt_ledger_recovered = debt_mandates.post_verified_collections(limit=15)
+    except Exception:
+        # Preserve finance review records for investigation.
+        pass
     if getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False):
         try:
             debt_mandates.enqueue_due(limit=10)
@@ -87,6 +96,7 @@ def internal_reconcile(request):
         "checked": count, "pos_checked": pos_count,
         "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
         "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
+        "debit_ledger_recovered": debt_ledger_recovered,
         "payroll_settled": payroll_paid,
     })
     response["Cache-Control"] = "no-store"
