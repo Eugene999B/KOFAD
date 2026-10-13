@@ -170,12 +170,28 @@ def reactivate_preapproval(phone):
 def debit_charge(tx):
     """Only an independently approved bounded agreement may call this; no retries."""
     gate("charge")
-    from .models import OnlineDebtSettings
-    policy = OnlineDebtSettings.objects.filter(branch=tx.mandate.branch).first()
+    from .models import DebtDebitAttempt, OnlineDebtSettings
+    from .mandates import outstanding, UNRESOLVED_CHARGE_STATES
+
+    # tx can have been fetched before a customer cancelled the mandate or
+    # finance placed the account on hold. Never rely on that stale object.
+    current = DebtDebitAttempt.objects.select_related("mandate__party").get(pk=tx.pk)
+    mandate = current.mandate
+    policy = OnlineDebtSettings.objects.filter(branch=mandate.branch).first()
     if not policy or policy.pause_auto_collection:
         raise ValidationError("Automatic Online Debt collection is paused for this location.")
-    if tx.mandate.status != "approved" or tx.status != "sending" or not tx.sent_at:
-        raise ValidationError("An approved mandate and durable one-time send claim are required.")
+    if mandate.status != "approved" or current.status != "sending" or not current.sent_at:
+        raise ValidationError("A current approved mandate and durable one-time send claim are required.")
+    if current.reference != tx.reference or current.amount != tx.amount:
+        raise ValidationError("Debit attempt changed after it was scheduled.")
+    if (current.amount > mandate.maximum_total - mandate.collected_total
+            or current.amount > outstanding(mandate.party)):
+        raise ValidationError("The real customer balance or authorized ceiling has changed.")
+    if DebtDebitAttempt.objects.filter(
+        mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
+    ).exclude(pk=current.pk).exists():
+        raise ValidationError("Another debit or provider-paid finance review is not resolved.")
+    tx = current
     if tx.mandate.channel not in DEBIT_CHANNELS:
         raise ValidationError("Direct Debit only supports MTN and Telecel.")
     if not re.fullmatch(r"[a-f0-9]{32}", tx.reference):
