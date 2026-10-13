@@ -94,7 +94,7 @@ class DebtMandate(models.Model):
             models.Index(fields=["branch", "status", "next_due_date"], name="hubtel_debt_due_idx"),
             models.Index(fields=["party", "-created_at"], name="hubtel_debt_party_idx"),
         ]
-        constraints = [models.UniqueConstraint(fields=["phone_fingerprint"], condition=models.Q(status__in=["draft", "pending", "approved", "cancel_pending"]), name="hubtel_one_active_mandate_wallet")]
+        constraints = [models.UniqueConstraint(fields=["phone_fingerprint"], condition=models.Q(status__in=["draft", "pending", "approved", "cancel_pending", "suspended"]), name="hubtel_one_active_mandate_wallet")]
 
     @property
     def rollover_unpaid(self):
