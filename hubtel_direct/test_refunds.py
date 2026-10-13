@@ -55,9 +55,17 @@ class HubtelRefundSafetyTests(MarketFixtures):
             paid=self.order_row.total, reference="HUBTEL-ORIGINAL-SALE",
             created_by=self.staff,
         )
+        self.order_row.sale_document = original_sale
+        self.order_row.save(update_fields=["sale_document"])
+        posted_return = Document.objects.create(
+            branch=self.branch, kind="return", total=self.order_row.total,
+            paid=self.order_row.total, reference="HUBTEL-POSTED-RETURN",
+            created_by=self.staff,
+        )
         core_return = CustomerReturnRequest.objects.create(
             branch=self.branch, sale=original_sale, status="approved",
-            requested_by=self.staff, reviewed_by=self.manager, reason="Returned goods",
+            posted=posted_return, requested_by=self.staff,
+            reviewed_by=self.manager, reason="Returned goods",
         )
         self.item = MarketReturnRequest.objects.create(
             order=self.order_row, customer=self.customer,
