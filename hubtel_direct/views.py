@@ -271,9 +271,17 @@ def finance_dashboard(request):
     if not manager:
         qs = qs.filter(requested_by=request.user)
     from .client import BANK_CODES, enabled
+    from .models import HubtelRefundCase
+    refunds = HubtelRefundCase.objects.select_related(
+        "return_request__order", "created_by", "approved_by",
+    )
+    if not manager:
+        refunds = refunds.filter(created_by=request.user)
     response = render(request, "hubtel_direct/finance_dashboard.html", {
         "title": "Hubtel Direct transfers",
         "direct_transactions": qs.order_by("-created_at")[:80],
+        "hubtel_refund_cases": refunds.order_by("-created_at")[:60],
+        "refund_enabled": getattr(settings, "HUBTEL_REFUNDS_ENABLED", False),
         "can_approve": manager,
         "wallet_enabled": enabled("send_momo"),
         "bank_enabled": enabled("send_bank"),
