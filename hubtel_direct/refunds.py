@@ -72,7 +72,9 @@ def _validate_return(item):
 def prepare_case(user, item, *, branch):
     """Queue human review. This operation does not call Hubtel or move funds."""
     core_services.permit(user, branch, "operate_finance")
-    item = MarketReturnRequest.objects.select_for_update().select_related(
+    # Lock ONLY the return record; PostgreSQL does not allow FOR UPDATE
+    # against the nullable side of the core_return_request relation.
+    item = MarketReturnRequest.objects.select_for_update(of=("self",)).select_related(
         "order", "core_return_request",
     ).get(pk=item.pk, order__branch=branch)
     existing = HubtelRefundCase.objects.filter(return_request=item).first()
@@ -112,7 +114,7 @@ def submit_approved_case(user, refund_id, *, branch):
     debit_api.gate("refund")  # OFF until real merchant-approved test and validation
     with transaction.atomic():
         core_services.lock_branch(branch)
-        row = HubtelRefundCase.objects.select_for_update().select_related(
+        row = HubtelRefundCase.objects.select_for_update(of=("self",)).select_related(
             "return_request__order", "return_request__core_return_request",
         ).get(pk=refund_id, return_request__order__branch=branch)
         if row.status != "review_pending" or row.submitted_at or row.approved_by_id:
