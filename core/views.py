@@ -595,7 +595,7 @@ def trade_screen(request, branch, kind):
     payment_gateway = payment_gateway_settings.selected_provider() if kind == "sale" else ""
     paystack_pos = __import__("core.pos_paystack", fromlist=["ready"])
     from hubtel_direct.models import OnlineDebtSettings
-    online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first() if kind == "sale" else None
+    online_debt_policy = OnlineDebtSettings.objects.get_or_create(branch=branch)[0] if kind == "sale" else None
     return render(request, "pos.html", {
         "title": "New sale" if kind == "sale" else "Receive purchase",
         "catalog": catalog,
@@ -1335,7 +1335,7 @@ def debts(request, branch):
     overview = debt_service.debt_overview(branch, query)
     rows = overview["rows"]
     from hubtel_direct.models import DebtMandate, OnlineDebtSettings
-    online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first()
+    online_debt_policy, _ = OnlineDebtSettings.objects.get_or_create(branch=branch)
     agreement_rows = list(DebtMandate.objects.filter(
         branch=branch, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"],
     ).select_related("party"))
