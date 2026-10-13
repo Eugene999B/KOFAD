@@ -53,12 +53,69 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         args.update(kwargs)
         return mandates.create_plan(self.user, self.branch, **args)
 
-    def test_policies_start_off_and_cannot_create_draft(self):
-        self.assertFalse(self.policy.plan_creation_enabled)
+    def test_policies_allow_drafts_by_default_but_still_pause_all_charges(self):
+        self.assertTrue(self.policy.plan_creation_enabled)
+        self.assertTrue(self.policy.allow_daily)
+        self.assertTrue(self.policy.allow_yearly)
+        self.assertEqual(self.policy.min_open_balance, Decimal("1.00"))
+        self.assertEqual(self.policy.min_installment, Decimal("1.00"))
         self.assertTrue(self.policy.pause_auto_collection)
+        drafted = self.draft()
+        self.assertEqual(drafted.status, "draft")
+        self.assertFalse(DebtDebitAttempt.objects.exists())
+
+    def test_manager_may_explicitly_pause_new_plan_creation(self):
+        self.policy.plan_creation_enabled = False
+        self.policy.save(update_fields=["plan_creation_enabled"])
         with self.assertRaisesRegex(ValidationError, "disabled"):
             self.draft()
         self.assertFalse(DebtMandate.objects.exists())
+
+    @patch("hubtel_direct.debit_api.initiate_preapproval")
+    @patch("hubtel_direct.debit_api.debit_charge")
+    def test_draft_can_be_edited_without_preapproving_or_charging(self, debit, preapprove):
+        row = self.draft()
+        initial_reference = row.client_reference
+        edited = mandates.update_draft_plan(
+            self.user, self.branch, row.pk, phone="",
+            channel="mtn-gh-direct-debit", frequency="monthly",
+            first_due_date=timezone.localdate() + timedelta(days=14),
+            amount_per_period="100.00", maximum_total="600.00",
+        )
+        self.assertEqual(edited.pk, row.pk)
+        self.assertEqual(edited.status, "draft")
+        self.assertEqual(edited.frequency, "monthly")
+        self.assertEqual(edited.amount_per_period, Decimal("100.00"))
+        self.assertEqual(edited.maximum_total, Decimal("600.00"))
+        self.assertNotEqual(edited.client_reference, initial_reference)
+        self.assertEqual(edited.terms_snapshot["frequency"], "monthly")
+        preapprove.assert_not_called()
+        debit.assert_not_called()
+
+    def test_authorized_or_pending_terms_cannot_be_silently_revised(self):
+        row = self.draft()
+        DebtMandate.objects.filter(pk=row.pk).update(status="pending")
+        with self.assertRaisesRegex(ValidationError, "Cancel it"):
+            mandates.update_draft_plan(
+                self.user, self.branch, row.pk,
+                frequency="daily", first_due_date=timezone.localdate(),
+                amount_per_period="100", maximum_total="600",
+            )
+        row.refresh_from_db()
+        self.assertEqual(row.frequency, "weekly")
+
+    def test_staff_edits_must_remain_within_outstanding_and_configured_limits(self):
+        row = self.draft()
+        for amount, ceiling in [("900", "900"), ("200", "900"), ("0.01", "800")]:
+            with self.subTest(amount=amount, ceiling=ceiling):
+                with self.assertRaises(ValidationError):
+                    mandates.update_draft_plan(
+                        self.user, self.branch, row.pk,
+                        frequency="daily", first_due_date=timezone.localdate(),
+                        amount_per_period=amount, maximum_total=ceiling,
+                    )
+        row.refresh_from_db()
+        self.assertEqual(row.amount_per_period, Decimal("200.00"))
 
     def test_disabled_frequency_network_and_limits_are_enforced(self):
         self.policy.plan_creation_enabled = True
