@@ -92,6 +92,7 @@
   const creditDirectPhone = document.querySelector("#credit-direct-phone");
   const creditDirectFrequency = document.querySelector("#credit-direct-frequency");
   const creditDirectInstallment = document.querySelector("#credit-direct-installment");
+  const creditDirectContactConsent = document.querySelector("#credit-direct-contact-consent");
   const creditDirectVerify = document.querySelector("#credit-direct-verify");
   const creditDirectName = document.querySelector("#credit-direct-name");
   let creditLookupGeneration = 0;
@@ -138,6 +139,7 @@
       throw new Error("Direct Debit planning is disabled. Enable plan creation in Online Debt Settings.");
     }
     if (!party && !newName) throw new Error("Choose a customer for Direct Debit.");
+    if (!creditDirectContactConsent?.checked) throw new Error("Confirm the customer agreed to receive a Direct Debit authorization SMS.");
     // Receipt SMS preferences do not confer (or deny) Direct Debit authority.
     // The customer must independently verify wallet ownership and accept the
     // exact Hubtel mandate terms via the separate authorization page.
@@ -906,6 +908,7 @@
     if (creditDirectPhone) creditDirectPhone.value = "";
     resetCreditVerifiedName();
     if (creditDirectInstallment) creditDirectInstallment.value = "";
+    if (creditDirectContactConsent) creditDirectContactConsent.checked = false;
     debitAuthorizationForm?.classList.add("hidden");
     changed();
     updateConsentAvailability();
@@ -1457,7 +1460,10 @@
         customer_debt_email_opt_in: Boolean(creditDebtEmailConsent?.checked)
       } : {}),
       ...(!purchase ? {
-        customer_consent: Boolean((party || newName) && (customerConsent?.checked || customerWhatsApp?.checked)),
+        customer_consent: Boolean((party || newName) && (
+          customerConsent?.checked || customerWhatsApp?.checked ||
+          (pendingDebitSetup && creditDirectContactConsent?.checked)
+        )),
         send_sms: Boolean((party || newName) && customerConsent?.checked),
         send_whatsapp: Boolean((party || newName) && customerWhatsApp?.checked)
       } : {}),
