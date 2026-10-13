@@ -55,7 +55,12 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 first_due_date, amount_per_period, maximum_total,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
-    core_services.permit(user, branch, "operate_finance")
+    # A cashier may PROPOSE a plan when making a credit sale. Only the
+    # wallet holder may grant authority, and finance controls real collections.
+    core_services.permit(
+        user, branch,
+        "operate_finance" if user.has_perm("core.operate_finance") else "operate_sales",
+    )
     # Serialize two customers trying to bind the same merchant wallet before
     # the database uniqueness constraint resolves any remaining race.
     core_services.lock_branch(branch)
