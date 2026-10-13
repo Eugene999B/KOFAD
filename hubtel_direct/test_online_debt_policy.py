@@ -54,6 +54,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         return mandates.create_plan(self.user, self.branch, **args)
 
     def test_policies_allow_drafts_by_default_but_still_pause_all_charges(self):
+        self.policy.refresh_from_db()
         self.assertTrue(self.policy.plan_creation_enabled)
         self.assertTrue(self.policy.allow_daily)
         self.assertTrue(self.policy.allow_yearly)
