@@ -266,7 +266,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         self.assertIsNotNone(attempt.provider_verified_paid_at)
         self.assertEqual(plan.status, "suspended")
         self.assertIsNone(attempt.collection_document_id)
-        with patch("hubtel_direct.client.check", side_effect=AssertionError("Do not recheck to retry posting")), \\
+        with patch("hubtel_direct.client.check", side_effect=AssertionError("Do not recheck to retry posting")), \
              patch("hubtel_direct.debit_api.debit_charge", side_effect=AssertionError("Never send again")):
             self.assertEqual(mandates.post_verified_collections(), 1)
             self.assertEqual(mandates.post_verified_collections(), 0)
