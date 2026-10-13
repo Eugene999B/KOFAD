@@ -159,6 +159,29 @@ class DebtMandateTests(Fixtures, TestCase):
         self.assertEqual(plan.status, "cancel_pending")
         self.assertEqual(mandates.payment_preview(plan, timezone.localdate() + timedelta(days=8)), Decimal("0.00"))
 
+    @patch("hubtel_direct.debit_api.preapproval_status", return_value="CANCELLED")
+    def test_wallet_owner_provider_revocation_is_reflected_as_cancelled(self, provider):
+        plan = self.plan()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        result = mandates.refresh_preapproval(plan)
+        self.assertEqual(result.status, "cancelled")
+        self.assertIsNotNone(result.cancelled_at)
+        self.assertEqual(mandates.payment_preview(result, timezone.localdate()), Decimal("0.00"))
+
+    @patch("hubtel_direct.debit_api.cancel_preapproval", return_value=True)
+    @patch("hubtel_direct.mandates.outstanding", return_value=Decimal("0.00"))
+    def test_paid_suspended_mandate_is_revoked_at_hubtel(self, debt, provider):
+        from django.core.cache import cache
+        cache.delete("hubtel-debt-approved-scan-cursor")
+        plan = self.plan()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="suspended")
+        self.assertEqual(mandates.cancel_fully_paid(limit=20), 1)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "cancelled")
+        self.assertIsNotNone(plan.cancelled_at)
+        provider.assert_called_once()
+
     @patch("hubtel_direct.verification.requests.get")
     def test_bank_account_name_is_supplied_by_hubtel(self, get):
         get.return_value = Mock(status_code=200, json=lambda: {
