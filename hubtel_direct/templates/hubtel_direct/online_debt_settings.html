@@ -31,6 +31,31 @@
  <p class="muted">These totals include pending, failed and unconfirmed debit submissions. They are not confirmed collections or customer's wallet balances.</p>
 </section>
 
+{% if verified_unposted_count %}
+<section class="panel">
+  <div class="section-heading"><div><p class="eyebrow">HUBTEL VERIFIED / ACCOUNTING PENDING</p>
+    <h3>{{ verified_unposted_count }} confirmed payment{{ verified_unposted_count|pluralize }} awaiting KOFAD receipts</h3></div>
+    <strong>GHS {{ verified_unposted_amount|floatformat:2 }}</strong>
+  </div>
+  <p>Hubtel confirmed these payments, but posting the KOFAD accounting receipt has not completed. No new debit should be sent for these agreements. The system may retry <strong>ledger posting only</strong> using the original transaction evidence.</p>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Customer</th><th>Original reference</th><th>Hubtel verified</th><th>Amount</th><th>Review</th></tr></thead>
+    <tbody>
+    {% for item in verified_unposted_items %}
+    <tr>
+      <td>{{ item.mandate.party.name }}</td>
+      <td><code>{{ item.reference }}</code></td>
+      <td>{{ item.provider_verified_paid_at|date:"d M Y H:i" }}</td>
+      <td>GHS {{ item.amount|floatformat:2 }}</td>
+      <td><a href="{% url 'debts' %}?customer={{ item.mandate.party_id }}&type=direct">Open debt account →</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if verified_unposted_count > 15 %}<p class="muted">Displaying the 15 oldest unresolved receipts first.</p>{% endif %}
+</section>
+{% endif %}
+
 {% if needs_attention_count %}
 <section class="panel">
  <div class="section-heading"><div><p class="eyebrow">FINANCE RECONCILIATION</p><h3>{{ needs_attention_count }} case{{ needs_attention_count|pluralize }} need attention</h3></div></div>
