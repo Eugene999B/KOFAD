@@ -112,6 +112,17 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             "This wallet is still linked to an existing or suspended debt mandate. "
             "The previous agreement must be cancelled and reconciled first."
         )
+    # An already-cancelled wallet authority can still have a charge in
+    # flight. Do not authorize a replacement while the previous reference
+    # may have moved money. All customers sharing this wallet are covered.
+    if DebtDebitAttempt.objects.filter(
+        mandate__phone_fingerprint=fingerprint,
+        status__in=["sending", "pending", "unknown", "finance_review"],
+    ).exists():
+        raise ValidationError(
+            "A previous Hubtel debit on this wallet is not reconciled. "
+            "Finance must resolve its original payment reference first."
+        )
     mandate = DebtMandate.objects.create(
         branch=branch, party=party, created_by=user,
         phone_encrypted=client.seal(digits), phone_fingerprint=fingerprint, phone_suffix=digits[-4:],
@@ -177,7 +188,7 @@ def prepare_customer_authorization(mandate):
 
 def refresh_preapproval(mandate):
     """Check Hubtel from the whitelisted web server; callbacks are advisory only."""
-    if mandate.status not in {"pending", "approved", "cancel_pending"}:
+    if mandate.status not in {"pending", "approved", "suspended", "cancel_pending"}:
         return mandate
     state = debit_api.preapproval_status(
         mandate.client_reference, expected_phone=mandate_phone(mandate),
