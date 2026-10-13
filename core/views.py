@@ -1340,13 +1340,11 @@ def debts(request, branch):
     agreement_rows = list(DebtMandate.objects.filter(
         branch=branch, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"],
     ).select_related("party"))
-    # Staff drafts and unapproved wallet prompts are still manual debtors.
-    # Only provider-confirmed agreements (including suspended or cancelled-
-    # pending ones needing reconciliation) count as Direct Debit debtors.
-    agreement_ids = {
-        item.party_id for item in agreement_rows
-        if item.status in {"approved", "suspended", "cancel_pending"}
-    }
+    # A debtor with an agreement belongs on the Direct Debit tab from
+    # drafting onward. The status badge clearly says "Awaiting setup" or
+    # "Awaiting customer authorization" until Hubtel confirms consent.
+    # This is classification only: it NEVER authorizes a wallet debit.
+    agreement_ids = {item.party_id for item in agreement_rows}
     debtor_type = request.GET.get("type", "all")
     if debtor_type == "manual":
         rows = [item for item in rows if item["party"].pk not in agreement_ids]
