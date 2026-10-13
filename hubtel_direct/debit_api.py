@@ -129,7 +129,9 @@ def verify_preapproval_otp(*, phone, provider_id, client_reference, otp):
 
 
 def preapproval_status(client_reference, *, expected_phone=None, expected_provider_id=None):
-    gate("preapproval")
+    # Existing consent must remain independently auditable after initiation
+    # has been paused. This GET never initiates an authorization.
+    client.require_reconciliation_ready("receive")
     if not re.fullmatch(r"[a-zA-Z0-9]{1,36}", client_reference):
         raise ValidationError("Invalid preapproval reference.")
     url = f"{PREAPPROVAL_ORIGIN}/api/v2/merchant/{account()}/preapproval/{client_reference}/status"
@@ -147,7 +149,9 @@ def preapproval_status(client_reference, *, expected_phone=None, expected_provid
 
 
 def cancel_preapproval(phone):
-    gate("preapproval")
+    # Customer-initiated revocation must remain possible even after finance
+    # turns OFF the switch for NEW preapprovals. Network/credential gates stay.
+    client.require_reconciliation_ready("receive")
     url = f"{PREAPPROVAL_ORIGIN}/api/v2/merchant/{account()}/preapproval/{number(phone)}/cancel"
     # Hubtel documents a GET for cancellation. KOFAD only exposes a
     # CSRF-protected authenticated POST; this GET never appears as a browser link.
