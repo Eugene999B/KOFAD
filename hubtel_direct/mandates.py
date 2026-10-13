@@ -426,11 +426,13 @@ def payment_preview(mandate, today=None):
     remaining_cap = mandate.maximum_total - mandate.collected_total
     if debt <= ZERO or remaining_cap <= ZERO:
         return ZERO
-    # Current installment plus previously unpaid installments, capped by debt.
+    # New end-dated agreements cannot accrue additional installments beyond
+    # the collection count signed by the customer.
+    signed_periods = int((mandate.terms_snapshot or {}).get("scheduled_periods") or 400)
     scheduled = mandate.amount_per_period
     next_date = mandate.first_due_date
     ticks = 0
-    while next_date and next_date <= today and ticks < 400:
+    while next_date and next_date <= today and ticks < min(400, signed_periods):
         if ticks:
             scheduled += mandate.amount_per_period
         next_date = _period_next(next_date, mandate.frequency)
@@ -452,6 +454,11 @@ def plan_due_attempt(mandate):
         if row.next_due_date + timedelta(days=grace) > timezone.localdate():
             return None
         if DebtDebitAttempt.objects.filter(mandate=row, status__in=UNRESOLVED_CHARGE_STATES).exists():
+            return None
+        final_date = (row.terms_snapshot or {}).get("final_collection_date")
+        if final_date and row.next_due_date.isoformat() > final_date:
+            row.status = "suspended"
+            row.save(update_fields=["status", "updated_at"])
             return None
         # No repeated probes: at most one charge attempt per period by default.
         attempts = DebtDebitAttempt.objects.filter(mandate=row, period_due_date=row.next_due_date)
@@ -498,6 +505,11 @@ def dispatch_planned(limit=8):
                     or attempt.amount > outstanding(mandate.party)
                     or attempt.amount > mandate.maximum_total - mandate.collected_total
                     or attempt.period_due_date > timezone.localdate()
+                    or (
+                        (mandate.terms_snapshot or {}).get("final_collection_date")
+                        and attempt.period_due_date.isoformat() >
+                        mandate.terms_snapshot["final_collection_date"]
+                    )
                     or DebtDebitAttempt.objects.filter(
                         mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
                     ).exclude(pk=attempt.pk).exists()):
