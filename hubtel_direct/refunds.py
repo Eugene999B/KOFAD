@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core import services as core_services
-from marketplace.models import MarketPaymentAttempt, MarketReturnRequest
+from marketplace.models import MarketPaymentAttempt, MarketReturnRequest, OnlineOrder
 from . import client, debit_api
 from .models import HubtelRefundCase
 
@@ -62,6 +62,8 @@ def _validate_return(item):
             "Hubtel refunds the original entire order, not selected products. "
             "For partial returns, use the replacement/manual finance workflow."
         )
+    if HubtelRefundCase.objects.filter(original_order_id=item.order_id).exists():
+        raise ValidationError("This original Hubtel order already has a refund case.")
     if item.order.return_requests.exclude(pk=item.pk).filter(
         hubtel_refund_case__status__in=[
             "awaiting_order_id", "review_pending", "submission_unknown",
@@ -76,6 +78,10 @@ def _validate_return(item):
 def prepare_case(user, item, *, branch):
     """Queue human review. This operation does not call Hubtel or move funds."""
     core_services.permit(user, branch, "operate_finance")
+    # Serialize concurrent refund creation for different returns on the same
+    # paid order: one order must never acquire two release intents.
+    core_services.lock_branch(branch)
+    OnlineOrder.objects.select_for_update().get(pk=item.order_id, branch=branch)
     # Lock ONLY the return record; PostgreSQL does not allow FOR UPDATE
     # against the nullable side of the core_return_request relation.
     item = MarketReturnRequest.objects.select_for_update(of=("self",)).select_related(
@@ -93,7 +99,8 @@ def prepare_case(user, item, *, branch):
     raw_order_id = str(summary.get("hubtel_order_id") or "").strip()
     provider_order_id = raw_order_id if ORDER_ID_PATTERN.fullmatch(raw_order_id) else None
     row = HubtelRefundCase.objects.create(
-        return_request=item, original_hubtel_order_id=provider_order_id,
+        return_request=item, original_order=item.order,
+        original_hubtel_order_id=provider_order_id,
         original_transaction_reference=payment.reference, amount=amount,
         created_by=user, status="review_pending" if provider_order_id else "awaiting_order_id",
         review_note=(
@@ -126,6 +133,8 @@ def submit_approved_case(user, refund_id, *, branch):
         if row.created_by_id == user.pk:
             raise ValidationError("A different manager must approve the refund request.")
         item = row.return_request
+        if row.original_order_id != item.order_id:
+            raise ValidationError("Refund is not linked to this original KOFAD order.")
         amount = _validate_return(item)
         payment = _verified_original(item)
         valid_id = str((payment.verification_summary or {}).get("hubtel_order_id") or "")
