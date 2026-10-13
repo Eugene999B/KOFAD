@@ -177,17 +177,23 @@ def refresh_preapproval(mandate):
     with transaction.atomic():
         row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
         row.last_provider_check_at = timezone.now()
-        if row.status == "pending":
+        if state == "CANCELLED":
+            # A customer may independently revoke the Hubtel-side approval.
+            # Reflect that final cancellation instead of leaving a misleading
+            # suspended/failed label or permitting automatic reactivation.
+            row.status = "cancelled"
+            row.cancelled_at = timezone.now()
+        elif row.status == "pending":
             if state == "APPROVED":
                 row.status = "approved"
                 row.provider_approved_at = timezone.now()
-            elif state in {"FAILED", "REJECTED", "EXPIRED", "CANCELLED"}:
+            elif state in {"FAILED", "REJECTED", "EXPIRED"}:
                 row.status = "failed"
         elif row.status == "approved" and state != "APPROVED":
             row.status = "suspended"
         # A cancellation request blocks all debits even if an old status
         # query still reports APPROVED.
-        row.save(update_fields=["status", "provider_approved_at", "last_provider_check_at", "updated_at"])
+        row.save(update_fields=["status", "provider_approved_at", "cancelled_at", "last_provider_check_at", "updated_at"])
         return row
 
 
@@ -513,7 +519,9 @@ def cancel_fully_paid(limit=50):
     # starving later mandates that have already been settled manually.
     cursor_key = "hubtel-debt-approved-scan-cursor"
     cursor = cache.get(cursor_key)
-    qs = DebtMandate.objects.filter(status="approved").select_related("party")
+    # Even suspended mandates must be revoked when the debt is fully paid:
+    # the customer's provider-side preapproval may otherwise remain active.
+    qs = DebtMandate.objects.filter(status__in=["approved", "suspended"]).select_related("party")
     if cursor:
         qs = qs.filter(pk__gt=cursor)
     rows = list(qs.order_by("pk")[:limit])
