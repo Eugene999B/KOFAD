@@ -115,3 +115,58 @@ class DebtDebitAttempt(models.Model):
     class Meta:
         indexes = [models.Index(fields=["status", "next_check_at"], name="hubtel_debit_attempt_due")]
 
+
+
+class WorkerTransferProfile(models.Model):
+    """Owner-managed, provider-verified salary destination, encrypted at rest."""
+    worker = models.OneToOneField("core.Worker", related_name="hubtel_salary_destination", on_delete=models.PROTECT)
+    payment_type = models.CharField(max_length=10, choices=[("momo", "Mobile Money"), ("bank", "Bank")])
+    channel = models.CharField(max_length=20, blank=True)
+    bank_code = models.CharField(max_length=6, blank=True)
+    destination_encrypted = models.TextField()
+    destination_suffix = models.CharField(max_length=4)
+    provider_name = models.CharField(max_length=140)
+    verified_at = models.DateTimeField()
+    verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class PayrollTransferBatch(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    period = models.OneToOneField("core.PayrollPeriod", related_name="hubtel_transfer_batch", on_delete=models.PROTECT)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    status = models.CharField(max_length=24, default="draft", db_index=True)
+    expected_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+
+class PayrollTransferLine(models.Model):
+    batch = models.ForeignKey(PayrollTransferBatch, related_name="lines", on_delete=models.PROTECT)
+    entry = models.OneToOneField("core.PayrollEntry", related_name="hubtel_transfer_line", on_delete=models.PROTECT)
+    destination = models.ForeignKey(WorkerTransferProfile, on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=24, default="draft", db_index=True)
+    transaction = models.OneToOneField(DirectTransaction, null=True, blank=True, on_delete=models.PROTECT)
+    payroll_payment = models.OneToOneField("core.PayrollPayment", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["batch", "status"], name="hubtel_pay_line_status_idx")]
+
+
+class HubtelRefundCase(models.Model):
+    """One provider refund request per approved return; never auto-repeat unknown POST."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    return_request = models.OneToOneField("marketplace.MarketReturnRequest", related_name="hubtel_refund_case", on_delete=models.PROTECT)
+    original_hubtel_order_id = models.CharField(max_length=64)
+    original_transaction_reference = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name="+", on_delete=models.PROTECT)
+    status = models.CharField(max_length=24, default="review_pending", db_index=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    last_provider_code = models.CharField(max_length=24, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
