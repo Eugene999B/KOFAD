@@ -95,6 +95,11 @@
     <label>{{ form.daily_collection_limit.label }}{{ form.daily_collection_limit }}<small>{{ form.daily_collection_limit.help_text }}</small>{{ form.daily_collection_limit.errors }}</label>
     <label>{{ form.daily_attempt_limit.label }}{{ form.daily_attempt_limit }}<small>{{ form.daily_attempt_limit.help_text }}</small>{{ form.daily_attempt_limit.errors }}</label>
   </div>
+  <div class="section-heading"><div><p class="eyebrow">UNCONFIRMED TRANSACTIONS</p><h3>Financial review and recovery</h3><p>Stop new charges when Hubtel cannot confirm what happened to a previous debit.</p></div></div>
+  <div class="two-column">
+    <label>{{ form.pending_review_hours.label }}{{ form.pending_review_hours }}<small>{{ form.pending_review_hours.help_text }}</small>{{ form.pending_review_hours.errors }}</label>
+    <label>{{ form.unresolved_poll_hours.label }}{{ form.unresolved_poll_hours }}<small>{{ form.unresolved_poll_hours.help_text }}</small>{{ form.unresolved_poll_hours.errors }}</label>
+  </div>
 </div>
 
 <div class="notice subtle"><strong>About debt reminders:</strong> SMS delivery time, email mode, message templates, contact consent and frequency caps remain in <a href="{% url 'debt_settings' %}">General Debt Settings</a>. Changing this online policy never enables Hubtel's real-money services. The customer can stop future collection from the verified authorization page.</div>
