@@ -101,8 +101,14 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
     fingerprint = hashlib.sha256((settings.SECRET_KEY + "|hubtel-debt-wallet|" + digits).encode()).hexdigest()
     if not party.consent:
         raise ValidationError("Record the customer's consent to payment communications first.")
-    if DebtMandate.objects.filter(party=party, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"]).exists():
-        raise ValidationError("This customer already has an active or pending direct-debit arrangement.")
+    blocking = ["draft", "pending", "approved", "cancel_pending", "suspended"]
+    if DebtMandate.objects.filter(party=party, status__in=blocking).exists():
+        raise ValidationError("This customer already has an active, suspended or pending direct-debit arrangement.")
+    if DebtMandate.objects.filter(phone_fingerprint=fingerprint, status__in=blocking).exists():
+        raise ValidationError(
+            "This wallet is still linked to an existing or suspended debt mandate. "
+            "The previous agreement must be cancelled and reconciled first."
+        )
     mandate = DebtMandate.objects.create(
         branch=branch, party=party, created_by=user,
         phone_encrypted=client.seal(digits), phone_fingerprint=fingerprint, phone_suffix=digits[-4:],
