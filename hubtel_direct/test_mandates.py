@@ -129,6 +129,29 @@ class DebtMandateTests(Fixtures, TestCase):
             )
         self.assertEqual(DebtMandate.objects.count(), 1)
 
+    def test_cancelled_wallet_with_unresolved_charge_cannot_be_reauthorized(self):
+        old = self.plan(first_due_date=timezone.localdate())
+        DebtMandate.objects.filter(pk=old.pk).update(status="approved")
+        old.refresh_from_db()
+        attempt = mandates.plan_due_attempt(old)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="unknown", sent_at=timezone.now(),
+        )
+        DebtMandate.objects.filter(pk=old.pk).update(status="cancelled")
+        with self.assertRaisesRegex(ValidationError, "not reconciled"):
+            self.plan()
+        self.assertEqual(DebtMandate.objects.count(), 1)
+
+    @patch("hubtel_direct.debit_api.preapproval_status", return_value="CANCELLED")
+    def test_suspended_wallet_can_reflect_independent_cancellation(self, provider):
+        old = self.plan()
+        DebtMandate.objects.filter(pk=old.pk).update(status="suspended")
+        old.refresh_from_db()
+        refreshed = mandates.refresh_preapproval(old)
+        self.assertEqual(refreshed.status, "cancelled")
+        self.assertIsNotNone(refreshed.cancelled_at)
+        provider.assert_called_once()
+
     def test_installment_arrears_never_exceed_contract_ceiling_or_real_debt(self):
         plan = self.plan(first_due_date=timezone.localdate())
         DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
