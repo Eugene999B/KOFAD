@@ -9,7 +9,7 @@ from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import urlsplit
 
-from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -41,12 +41,12 @@ def _period_next(day, frequency):
         return day + timedelta(days=1)
     if frequency == "weekly":
         return day + timedelta(days=7)
-    if frequency == "monthly":
-        return day + relativedelta(months=1)
-    if frequency == "quarterly":
-        return day + relativedelta(months=3)
-    if frequency == "yearly":
-        return day + relativedelta(years=1)
+    if frequency in {"monthly", "quarterly", "yearly"}:
+        months = {"monthly": 1, "quarterly": 3, "yearly": 12}[frequency]
+        year = day.year + (day.month - 1 + months) // 12
+        month = (day.month - 1 + months) % 12 + 1
+        return day.replace(year=year, month=month,
+                           day=min(day.day, monthrange(year, month)[1]))
     raise ValidationError("Choose a supported payment frequency.")
 
 
@@ -219,7 +219,7 @@ def payment_preview(mandate, today=None):
         next_date = _period_next(next_date, mandate.frequency)
         ticks += 1
     # Never exceed the total agreed ceiling or the actual balance.
-    return min(debt, remaining_cap, scheduled)
+    return max(ZERO, min(debt, remaining_cap, scheduled - mandate.collected_total))
 
 
 def plan_due_attempt(mandate):
