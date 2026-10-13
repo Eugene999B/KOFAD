@@ -170,7 +170,8 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
 
     @patch("hubtel_direct.mandates.timezone.localdate")
     def test_provider_paid_finance_review_stops_new_due_attempt(self, localdate):
-        today = timezone.localdate()
+        today = timezone.localtime(timezone.now()).date()
+        localdate.return_value = today
         self.policy.plan_creation_enabled = True
         self.policy.save()
         plan = self.draft()
