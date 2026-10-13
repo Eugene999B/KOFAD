@@ -138,7 +138,9 @@
       throw new Error("Direct Debit planning is disabled. Enable plan creation in Online Debt Settings.");
     }
     if (!party && !newName) throw new Error("Choose a customer for Direct Debit.");
-    if (!customerConsent?.checked) throw new Error("Confirm the customer's consent to payment communications.");
+    // Receipt SMS preferences do not confer (or deny) Direct Debit authority.
+    // The customer must independently verify wallet ownership and accept the
+    // exact Hubtel mandate terms via the separate authorization page.
     const phone = normalizeGhanaPhone(creditDirectPhone.value);
     const balance = grandTotal - paidNow;
     const installment = cents(creditDirectInstallment.value);
