@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel" style="padding:22px;max-width:1000px">
+  <div class="section-heading">
+    <div><p class="eyebrow">HUBTEL / REPAYMENT MANDATE</p><h2>Customer wallet authorization</h2></div>
+    <span class="pill" id="authorization-state">{{ mandate.get_status_display }}</span>
+  </div>
+  <p class="muted">The credit sale is recorded. Direct Debit is not approved until the wallet holder accepts Hubtel's USSD or OTP request.</p>
+  <div class="three-column" style="margin:16px 0;gap:12px">
+    <div class="notice subtle"><small>CUSTOMER</small><strong>{{ mandate.party.name }}</strong><div>Wallet ····{{ mandate.phone_suffix }}</div></div>
+    <div class="notice subtle"><small>UNPAID AGREEMENT</small><strong>GHS {{ mandate.maximum_total|floatformat:2 }}</strong></div>
+    <div class="notice subtle"><small>INSTALLMENTS</small><strong>{% if schedule %}{{ schedule|length }}{% else %}{{ mandate.get_frequency_display }}{% endif %}</strong><div>{{ mandate.get_frequency_display }}</div></div>
+  </div>
+  {% if schedule %}
+  <h3>Automatic repayment timetable</h3>
+  <div class="table-wrap" style="max-height:350px;overflow:auto">
+    <table class="data-table"><thead><tr><th>#</th><th>Due date</th><th>Earliest hour (GMT)</th><th>Amount</th></tr></thead><tbody>
+      {% for item in schedule %}<tr><td>{{ item.number }} / {{ schedule|length }}</td><td>{{ item.date|date:"d M Y" }}</td><td>{{ item.hour }}:00</td><td>GHS {{ item.amount|floatformat:2 }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}
+  <p>GHS {{ mandate.amount_per_period|floatformat:2 }} {{ mandate.get_frequency_display|lower }} starting {{ mandate.first_due_date|date:"d M Y" }}.</p>
+  {% endif %}
+  <p class="muted">Dates and hours are the earliest collection windows; weekends, grace rules and provider delays may move an attempt later. A successful payment cannot exceed outstanding debt or the customer's authorized total.</p>
+  <div style="padding:16px;border:1px solid #d8e5eb;border-radius:12px;margin:16px 0">
+    <h3 style="margin-top:0">Get approval from the wallet holder</h3>
+    <p>Open the link on the customer's phone. They review the complete terms and request Hubtel's USSD/OTP authorization themselves.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="button" href="{{ authorization_url }}" target="_blank" rel="noopener">Open customer approval page ↗</a>
+      <button type="button" class="button secondary" id="copy-authorization-url" data-url="{{ authorization_url }}">Copy approval link</button>
+    </div>
+    {% if mandate.status == "draft" or mandate.status == "pending" %}
+    <form action="{% url 'hubtel_debt_staff_sms' mandate.pk %}" method="post" style="margin-top:12px">{% csrf_token %}
+      <button type="submit" class="button secondary">Send schedule and approval link by SMS</button>
+    </form>
+    {% endif %}
+    {% if not hubtel_ready %}
+      <p class="muted">Hubtel preapproval is not active in KOFAD's payment configuration. The customer page will not send a provider prompt until this is enabled.</p>
+    {% endif %}
+  </div>
+  <div role="status" id="approval-live-status" aria-live="polite" style="padding:14px;border-radius:10px;background:var(--soft,#eff5f8)">
+    <strong id="approval-status-text">{{ mandate.get_status_display }}</strong>
+    <p id="approval-status-details" style="margin:5px 0 0">
+      {% if mandate.status == "draft" %}Waiting for the customer to open the link and request Hubtel preapproval.
+      {% elif mandate.status == "pending" %}Hubtel preapproval started. Waiting for USSD or OTP verification.
+      {% elif mandate.status == "approved" %}The provider confirmed wallet authorization.
+      {% else %}View the customer's agreement for the next step.{% endif %}
+    </p>
+  </div>
+  {% if mandate.status == "pending" %}
+    <form action="{% url 'hubtel_debt_staff_check' mandate.pk %}" method="post" style="margin-top:12px">{% csrf_token %}
+      <button type="submit" class="button secondary">Check with Hubtel now</button>
+    </form>
+  {% endif %}
+  <div class="actions" style="margin-top:18px"><a class="button secondary" href="/debts/?customer={{ mandate.party_id }}&type=direct">Return to Direct Debit customers</a></div>
+</section>
+<script>
+(function(){
+  const button=document.getElementById("copy-authorization-url");
+  button?.addEventListener("click",()=>{navigator.clipboard.writeText(button.dataset.url).then(()=>{button.textContent="Link copied";}).catch(()=>{button.textContent="Copy from browser address";});});
+  const statusText=document.getElementById("approval-status-text");
+  const details=document.getElementById("approval-status-details");
+  const state=document.getElementById("authorization-state");
+  let previous="{{ mandate.status|escapejs }}";
+  async function refresh(){
+    try {
+      const response=await fetch("{% url 'hubtel_debt_staff_json' mandate.pk %}",{credentials:"same-origin",cache:"no-store"});
+      if(!response.ok)return;
+      const data=await response.json();
+      if(data.status!==previous){
+        previous=data.status;
+        statusText.textContent=data.label;
+        state.textContent=data.label;
+        details.textContent=data.approved?"Hubtel confirmed the wallet holder's authorization.":data.status==="pending"?"Waiting for customer USSD or OTP approval.":"Agreement status updated.";
+      }
+    }catch(_){/* network interruption does not change finance status */}
+  }
+  if(previous!=="approved" && previous!=="cancelled" && previous!=="settled") setInterval(refresh,10000);
+})();
+</script>
+{% endblock %}
