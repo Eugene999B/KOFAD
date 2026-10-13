@@ -170,13 +170,15 @@ class DebtMandateTests(Fixtures, TestCase):
         self.assertEqual(mandates.payment_preview(result, timezone.localdate()), Decimal("0.00"))
 
     @patch("hubtel_direct.debit_api.cancel_preapproval", return_value=True)
-    @patch("hubtel_direct.mandates.outstanding", return_value=Decimal("0.00"))
-    def test_paid_suspended_mandate_is_revoked_at_hubtel(self, debt, provider):
+    def test_paid_suspended_mandate_is_revoked_at_hubtel(self, provider):
         from django.core.cache import cache
         cache.delete("hubtel-debt-approved-scan-cursor")
         plan = self.plan()
         DebtMandate.objects.filter(pk=plan.pk).update(status="suspended")
-        self.assertEqual(mandates.cancel_fully_paid(limit=20), 1)
+        # A real invoice is required when the contract is first drafted.
+        # Only mock a zero balance after the original debt exists.
+        with patch("hubtel_direct.mandates.outstanding", return_value=Decimal("0.00")):
+            self.assertEqual(mandates.cancel_fully_paid(limit=20), 1)
         plan.refresh_from_db()
         self.assertEqual(plan.status, "cancelled")
         self.assertIsNotNone(plan.cancelled_at)
