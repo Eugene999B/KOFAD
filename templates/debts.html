@@ -98,7 +98,7 @@
         <span>Wallet ending {{ mandate.phone_suffix }} · GHS {{ mandate.amount_per_period|floatformat:2 }} per period · maximum GHS {{ mandate.maximum_total|floatformat:2 }}</span>
         <span>Next due {{ mandate.next_due_date|date:"d M Y" }} · paid GHS {{ mandate.collected_total|floatformat:2 }}</span>
         {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Collection suspended.</strong> Do not start another automatic debit until finance resolves the existing provider authorization or transaction evidence. Customer can still make a manual payment.</p>{% endif %}
-        <p><a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">{% if mandate.status == "draft" %}Customer approval ↗{% else %}Approval / cancellation ↗{% endif %}</a></p>
+        <p><a class="button" href="{% url 'hubtel_debt_staff_status' mandate.pk %}">{% if mandate.status == "draft" %}Send Hubtel approval prompt ↗{% elif mandate.status == "pending" %}Waiting for approval ↗{% else %}View Hubtel authorization ↗{% endif %}</a> <a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Customer page ↗</a></p>
         {% if mandate.status == "draft" and perms.core.operate_finance %}
         <details class="debt-draft-editor">
           <summary class="button secondary" style="cursor:pointer">Edit draft terms</summary>
