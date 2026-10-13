@@ -130,6 +130,40 @@ class DebtMandateTests(Fixtures, TestCase):
                 mandates.enqueue_due()
             provider.assert_not_called()
 
+    @patch("hubtel_direct.debit_api.cancel_preapproval")
+    def test_uncertain_cancellation_retries_only_after_cooldown(self, provider):
+        plan = self.plan()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        provider.side_effect = [client.StatusUnconfirmed("network timeout"), True]
+        first = mandates.request_cancel(plan)
+        self.assertEqual(first.status, "cancel_pending")
+        # A second click cannot flood the provider with revoke requests.
+        second = mandates.request_cancel(first)
+        self.assertEqual(second.status, "cancel_pending")
+        self.assertEqual(provider.call_count, 1)
+        DebtMandate.objects.filter(pk=plan.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=16),
+        )
+        self.assertEqual(mandates.cancel_fully_paid(limit=2), 1)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "cancelled")
+        self.assertEqual(provider.call_count, 2)
+
+    @patch("hubtel_direct.debit_api.cancel_preapproval")
+    def test_provider_approval_cannot_override_local_cancellation(self, provider):
+        plan = self.plan()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        provider.side_effect = client.StatusUnconfirmed("network timeout")
+        mandates.request_cancel(plan)
+        plan.refresh_from_db()
+        with patch("hubtel_direct.debit_api.preapproval_status", return_value="APPROVED"):
+            mandates.refresh_preapproval(plan)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "cancel_pending")
+        self.assertEqual(mandates.payment_preview(plan, timezone.localdate() + timedelta(days=8)), Decimal("0.00"))
+
     @patch("hubtel_direct.verification.requests.get")
     def test_bank_account_name_is_supplied_by_hubtel(self, get):
         get.return_value = Mock(status_code=200, json=lambda: {
