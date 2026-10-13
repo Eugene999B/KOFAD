@@ -92,6 +92,37 @@
   const creditDirectPhone = document.querySelector("#credit-direct-phone");
   const creditDirectFrequency = document.querySelector("#credit-direct-frequency");
   const creditDirectInstallment = document.querySelector("#credit-direct-installment");
+  const creditDirectVerify = document.querySelector("#credit-direct-verify");
+  const creditDirectName = document.querySelector("#credit-direct-name");
+  let creditLookupGeneration = 0;
+  const resetCreditVerifiedName = () => {
+    creditLookupGeneration++;
+    if (creditDirectName) creditDirectName.textContent = "Not verified";
+  };
+  creditDirectPhone?.addEventListener("input", resetCreditVerifiedName);
+  creditDirectNetwork?.addEventListener("change", resetCreditVerifiedName);
+  creditDirectVerify?.addEventListener("click", async () => {
+    let phone;
+    try { phone = normalizeGhanaPhone(creditDirectPhone?.value || ""); }
+    catch (_) { if (creditDirectName) creditDirectName.textContent = "Enter a valid wallet number"; return; }
+    const network = creditDirectNetwork?.value === "mtn-gh-direct-debit"
+      ? "mtn-gh" : creditDirectNetwork?.value === "vodafone-gh-direct-debit"
+      ? "vodafone-gh" : "";
+    if (!network) { if (creditDirectName) creditDirectName.textContent = "Choose a wallet network"; return; }
+    const generation = ++creditLookupGeneration;
+    creditDirectVerify.disabled = true;
+    if (creditDirectName) creditDirectName.textContent = "Checking…";
+    try {
+      const result = await api("/api/pos/hubtel/wallet-name/", {phone, channel:network});
+      if (generation === creditLookupGeneration && creditDirectName) {
+        creditDirectName.textContent = result.name || "Name unavailable";
+      }
+    } catch (err) {
+      if (generation === creditLookupGeneration && creditDirectName) {
+        creditDirectName.textContent = "Lookup unavailable: " + err.message;
+      }
+    } finally { creditDirectVerify.disabled = false; }
+  });
   const debitAuthorizationForm = document.querySelector("#sale-debit-authorization");
   let pendingDebitSetup = null;
   function syncDirectDebitFields() {
@@ -871,6 +902,7 @@
     if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
     if (creditRepaymentMode) creditRepaymentMode.value = "manual";
     if (creditDirectPhone) creditDirectPhone.value = "";
+    resetCreditVerifiedName();
     if (creditDirectInstallment) creditDirectInstallment.value = "";
     debitAuthorizationForm?.classList.add("hidden");
     changed();
