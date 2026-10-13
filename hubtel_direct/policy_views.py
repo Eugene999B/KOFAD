@@ -17,6 +17,9 @@ def online_debt_settings(request, branch):
     form = OnlineDebtSettingsForm(request.POST or None, instance=policy)
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
+            # Use the same lock order as the debit dispatcher (branch, policy)
+            # to prevent manager edits and money workers from deadlocking.
+            core_services.lock_branch(branch)
             row = OnlineDebtSettings.objects.select_for_update().get(pk=policy.pk)
             previous = {field: str(getattr(row, field)) for field in form.fields}
             form.instance = row
