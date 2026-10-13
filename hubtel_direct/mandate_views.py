@@ -1,5 +1,6 @@
 """Consent-first customer debt mandates; no customer MoMo PIN is ever requested."""
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -94,10 +95,7 @@ def staff_status(request, mandate_id):
         "authorization_url": request.build_absolute_uri(reverse(
             "hubtel_debt_authorize", kwargs={"mandate_id": mandate.pk},
         )),
-        "hubtel_ready": bool(
-            getattr(__import__("django.conf", fromlist=["settings"]).settings,
-                    "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)
-        ),
+        "hubtel_ready": bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)),
     })
 
 
@@ -125,6 +123,29 @@ def staff_check_approval(request, mandate_id):
             messages.success(request, "Checked directly with Hubtel.")
         except (ValidationError, client.StatusUnconfirmed) as exc:
             messages.error(request, str(exc))
+    return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
+
+
+
+@login_required
+@require_POST
+def staff_start_preapproval(request, mandate_id):
+    """Send ONE Hubtel USSD/OTP request; never charge or guess wallet approval."""
+    mandate = _staff_mandate(request, mandate_id)
+    try:
+        if request.POST.get("customer_asked_for_prompt") != "yes":
+            raise ValidationError("Confirm the customer reviewed the repayment schedule and requested a Hubtel wallet prompt.")
+        if not schedule.for_mandate(mandate):
+            raise ValidationError("The automatic repayment timetable must be complete first.")
+        if not mandate.party.consent:
+            raise ValidationError("Record the customer's consent to payment communications.")
+        result = mandates.prepare_customer_authorization(mandate)
+        if result["verification_type"] == "OTP":
+            messages.success(request, "Hubtel sent an OTP to the customer's MoMo phone. Ask them to complete it on their secure approval page.")
+        else:
+            messages.success(request, "Hubtel USSD preapproval sent. Customer must approve the prompt on their own phone.")
+    except (ValidationError, client.StatusUnconfirmed, client.SubmissionUnknown) as exc:
+        messages.error(request, str(exc))
     return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
 
 
@@ -181,10 +202,7 @@ def customer_authorize(request, mandate_id):
         "debt_balance": mandates.outstanding(mandate.party),
         "payment_channel": "MTN MoMo" if mandate.channel == "mtn-gh-direct-debit" else "Telecel Cash",
         "schedule": schedule.for_mandate(mandate),
-        "hubtel_ready": bool(getattr(
-            __import__("django.conf", fromlist=["settings"]).settings,
-            "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False,
-        )),
+        "hubtel_ready": bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)),
     
     })
 
