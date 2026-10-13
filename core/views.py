@@ -616,6 +616,8 @@ def trade_screen(request, branch, kind):
         "credit_override_available": kind == "sale" and company.max_credit_override > 0,
         "allow_credit_sales": kind == "sale" and company.allow_credit_sales,
         "online_debt_policy": online_debt_policy,
+        "collection_hours": list(range(online_debt_policy.collection_from_hour, online_debt_policy.collection_until_hour)) if online_debt_policy else [],
+        "preferred_collection_hour": min(online_debt_policy.collection_from_hour + 1, online_debt_policy.collection_until_hour - 1) if online_debt_policy else 9,
         "can_offer_direct_debit": (
             kind == "sale" and company.allow_credit_sales
             and (request.user.is_superuser or request.user.has_perm("core.operate_sales")
