@@ -139,6 +139,10 @@
     const dueLabel = document.querySelector("#due-date-label");
     if (dueLabel) dueLabel.textContent = selected ? "First Direct Debit date" : "Due date";
     if (creditRepaymentMode) creditRepaymentMode.disabled = !eligible;
+    if (creditDirectEnd) {
+      creditDirectEnd.disabled = !selected || creditDirectFrequency?.value === "once";
+      creditDirectEnd.required = selected && creditDirectFrequency?.value !== "once";
+    }
     if (selected) renderCheckoutSummary();
   }
   function calculateCreditSchedule(balanceCents) {
@@ -1312,7 +1316,7 @@
     persist();
   });
   creditDirectPhone?.addEventListener("change", () => { changed(); persist(); });
-  creditDirectFrequency?.addEventListener("change", () => { changed(); persist(); });
+  creditDirectFrequency?.addEventListener("change", () => { changed(); syncDirectDebitFields(); renderCheckoutSummary(); persist(); });
   creditDirectEnd?.addEventListener("change", () => { changed(); renderCheckoutSummary(); persist(); });
   creditDirectHour?.addEventListener("change", () => { changed(); renderCheckoutSummary(); persist(); });
   dueDate?.addEventListener("change", () => { renderCheckoutSummary(); });
