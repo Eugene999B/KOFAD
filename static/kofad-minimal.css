@@ -42,6 +42,9 @@
     height: 61px !important;
     padding: 0 22px !important;
   }
+  body[data-session-zone="staff"] .topbar .top-right {
+    margin-left: auto !important;
+  }
   body[data-session-zone="staff"] main {
     padding: 19px 24px 34px !important;
     max-width: none;
@@ -161,4 +164,15 @@ body[data-session-zone="staff"] :is(.counter-sale-head,.chalin-checkout-head) > 
 }
 html[data-theme="dark"] #pos :is(.hubtel-wallet-review,.credit-direct-debit-fields,#sale-debit-authorization) {
   background: var(--white, #132a3a);
+}
+
+#pos .direct-wallet-lookup {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+}
+#pos .direct-wallet-lookup button {
+  justify-self: start;
+  min-height: 36px;
+  font-size: 12px;
 }
