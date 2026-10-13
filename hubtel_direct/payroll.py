@@ -164,7 +164,7 @@ def approve_and_send(user, batch_id):
                 line.batch.created_by, payment_kind, line.amount,
                 destination, line.recipient_name_snapshot,
                 channel=line.channel_snapshot, bank_code=line.bank_code_snapshot,
-                idempotency_key=uuid.uuid5(uuid.NAMESPACE_URL, str(line.pk)).hex,
+                idempotency_key=str(line.request_key),
                 purpose="KOFAD approved monthly payroll " + line.entry.period.label,
             )
         except (ValidationError, PermissionDenied) as exc:
