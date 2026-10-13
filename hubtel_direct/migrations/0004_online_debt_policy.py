@@ -43,6 +43,8 @@ class Migration(migrations.Migration):
                 ("rollover_unpaid", models.BooleanField(default=True)),
                 ("daily_collection_limit", models.DecimalField(decimal_places=2, max_digits=14, default="5000.00")),
                 ("daily_attempt_limit", models.PositiveSmallIntegerField(default=20)),
+                ("pending_review_hours", models.PositiveSmallIntegerField(default=72)),
+                ("unresolved_poll_hours", models.PositiveSmallIntegerField(default=6)),
                 ("branch", models.OneToOneField(
                     to="core.branch", on_delete=django.db.models.deletion.PROTECT,
                     related_name="online_debt_settings",
