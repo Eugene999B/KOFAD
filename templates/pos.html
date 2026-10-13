@@ -256,7 +256,7 @@
       {% endif %}
 
       <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
-        <label for="due-date">Due date</label>
+        <label id="due-date-label" for="due-date">Due date</label>
         <input id="due-date" type="date" max="9999-12-31">
         {% if not purchase %}
         <div class="credit-email-capture">
@@ -297,8 +297,13 @@
                   {% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}
                 </select>
               </label>
-              <label for="credit-direct-installment">Installment · GHS
-                <input id="credit-direct-installment" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100.00">
+              <label for="credit-direct-end-date">Finish repayment by
+                <input id="credit-direct-end-date" type="date" required>
+              </label>
+              <label for="credit-direct-hour">Earliest debit time · Ghana
+                <select id="credit-direct-hour">
+                  {% for hour in collection_hours %}<option value="{{ hour }}" {% if hour == preferred_collection_hour %}selected{% endif %}>{{ hour }}:00</option>{% endfor %}
+                </select>
               </label>
             </div>
             <label class="switch-row">
@@ -309,7 +314,8 @@
               <button class="button secondary" type="button" id="credit-direct-verify">Check wallet name</button>
               <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="credit-direct-name" role="status" aria-live="polite">Not verified</strong></div>
             </div>
-            <p class="hint">Customer approval required before collection.</p>
+            <div class="notice subtle" id="credit-direct-preview" role="status" aria-live="polite">The schedule will be calculated from the unpaid sale balance.</div>
+            <p class="hint">Hubtel asks the customer to approve on their MoMo phone. This is not a checkout payment.</p>
             {% else %}
             <p class="hint">Enable repayment agreements in <a href="{% url 'online_debt_settings' %}" target="_blank" rel="noopener">Online Debt Settings</a>.</p>
             {% endif %}
@@ -382,7 +388,10 @@
     <input type="hidden" name="first_due_date" id="sale-debit-date">
     <input type="hidden" name="amount" id="sale-debit-amount">
     <input type="hidden" name="maximum" id="sale-debit-ceiling">
-    <button type="submit" class="button">Continue to customer Direct Debit approval →</button>
+    <input type="hidden" name="final_due_date" id="sale-debit-final-date">
+    <input type="hidden" name="collection_hour" id="sale-debit-hour">
+    <input type="hidden" name="source_document_id" id="sale-debit-source-sale">
+    <button type="submit" class="button">Continue to Hubtel approval →</button>
   </form>
   {% endif %}
   <div id="success-message-status" class="notice subtle hidden" role="status"></div>
