@@ -132,7 +132,7 @@ def payroll_period(request, branch, pk):
         PayrollPeriod.objects.select_related("rule", "prepared_by", "approved_by", "locked_by"),
         pk=pk, branch=branch,
     )
-    entries = period.entries.select_related("worker").order_by("worker__last_name", "worker__first_name")
+    entries = period.entries.select_related("worker", "worker__hubtel_salary_destination").order_by("worker__last_name", "worker__first_name")
     q = request.GET.get("q", "").strip()[:100]
     department = request.GET.get("department", "").strip()[:100]
     issue = request.GET.get("issue", "")
@@ -150,7 +150,17 @@ def payroll_period(request, branch, pk):
     departments = Worker.objects.filter(branch=branch).exclude(
         department=""
     ).values_list("department", flat=True).distinct().order_by("department")
+    from hubtel_direct.banks import BANKS
+    from hubtel_direct.models import PayrollTransferBatch
+    from django.conf import settings
+    salary_batch = PayrollTransferBatch.objects.filter(period=period).prefetch_related(
+        "lines__entry__worker", "lines__transaction"
+    ).first()
     return render(request, "payroll_period.html", {
+        "hubtel_banks": BANKS,
+        "hubtel_batch": salary_batch,
+        "hubtel_payroll_enabled": bool(getattr(settings, "HUBTEL_PAYROLL_DISBURSEMENTS_ENABLED", False)),
+        "can_transfer_approve": request.user.is_superuser or request.user.has_perm("core.manage_company"),
         "title": f"Payroll · {period.label}", "period": period, "entries": entries,
         "summary": _period_summary(period), "q": q, "department": department, "issue": issue,
         "departments": departments, "methods": Payment.METHODS,
