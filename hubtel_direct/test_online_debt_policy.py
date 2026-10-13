@@ -210,3 +210,79 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         check.assert_called_once()
         self.assertIsNone(mandates.plan_due_attempt(plan))
 
+    @override_settings(
+        HUBTEL_DEBT_AUTO_DEBIT_ENABLED=False,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=False,
+    )
+    def test_provider_paid_recovers_ledger_without_a_second_wallet_charge(self):
+        """Hubtel charge gate OFF must not strand a previously paid receipt."""
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        sent = timezone.now() - timedelta(minutes=10)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="pending", sent_at=sent, next_check_at=sent,
+        )
+        with patch("hubtel_direct.client.check", return_value=("success", "verified-provider-payment")) as get, \
+             patch("hubtel_direct.debit_api.debit_charge") as send:
+            self.assertEqual(mandates.reconcile_attempts(), 1)
+            self.assertEqual(mandates.post_verified_collections(), 0)
+        get.assert_called_once()
+        send.assert_not_called()
+        attempt.refresh_from_db()
+        plan.refresh_from_db()
+        self.assertEqual(attempt.status, "settled")
+        self.assertIsNotNone(attempt.provider_verified_paid_at)
+        self.assertIsNotNone(attempt.collection_document_id)
+        self.assertEqual(plan.collected_total, Decimal("200.00"))
+        self.assertEqual(attempt.collection_document.total, Decimal("200.00"))
+        self.assertEqual(mandates.post_verified_collections(), 0)
+
+    @override_settings(
+        HUBTEL_DEBT_AUTO_DEBIT_ENABLED=False,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=False,
+    )
+    def test_provider_paid_unposted_receipt_can_recover_locally_after_error(self):
+        """Only verified paid evidence can recover; never probe wallet again."""
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        sent = timezone.now() - timedelta(minutes=10)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="pending", sent_at=sent, next_check_at=sent,
+        )
+        with patch("hubtel_direct.client.check", return_value=("success", "verified-provider-payment")), \
+             patch("core.debts.post_customer_payment", side_effect=ValidationError("Ledger temporarily unavailable")):
+            self.assertEqual(mandates.reconcile_attempts(), 0)
+        attempt.refresh_from_db()
+        plan.refresh_from_db()
+        self.assertEqual(attempt.status, "finance_review")
+        self.assertIsNotNone(attempt.provider_verified_paid_at)
+        self.assertEqual(plan.status, "suspended")
+        self.assertIsNone(attempt.collection_document_id)
+        with patch("hubtel_direct.client.check", side_effect=AssertionError("Do not recheck to retry posting")), \\
+             patch("hubtel_direct.debit_api.debit_charge", side_effect=AssertionError("Never send again")):
+            self.assertEqual(mandates.post_verified_collections(), 1)
+            self.assertEqual(mandates.post_verified_collections(), 0)
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, "settled")
+        self.assertIsNotNone(attempt.collection_document_id)
+
+    def test_unknown_finance_review_without_paid_evidence_cannot_auto_credit(self):
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(status="finance_review")
+        with patch("core.debts.post_customer_payment") as post:
+            self.assertEqual(mandates.post_verified_collections(), 0)
+        post.assert_not_called()
+
