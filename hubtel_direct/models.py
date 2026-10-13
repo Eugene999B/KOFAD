@@ -165,7 +165,7 @@ class HubtelRefundCase(models.Model):
     """One provider refund request per approved return; never auto-repeat unknown POST."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     return_request = models.OneToOneField("marketplace.MarketReturnRequest", related_name="hubtel_refund_case", on_delete=models.PROTECT)
-    original_hubtel_order_id = models.CharField(max_length=64)
+    original_hubtel_order_id = models.CharField(max_length=64, unique=True)
     original_transaction_reference = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="+", on_delete=models.PROTECT)
