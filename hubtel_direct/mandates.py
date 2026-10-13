@@ -398,6 +398,42 @@ def dispatch_planned(limit=8):
     return posted
 
 
+def defer_unresolved_attempt(attempt, now=None):
+    """Escalate stale provider uncertainty without inventing a payment failure.
+
+    KOFAD keeps verifying the ORIGINAL payment reference. It never schedules a
+    second charge while the original remains uncertain or paid but unposted.
+    """
+    now = now or timezone.now()
+    policy = OnlineDebtSettings.objects.filter(branch=attempt.mandate.branch).first()
+    review_hours = max(6, min(getattr(policy, "pending_review_hours", 72), 168))
+    poll_hours = max(1, min(getattr(policy, "unresolved_poll_hours", 6), 24))
+    first_submission = attempt.sent_at or attempt.created_at
+    overdue = now >= first_submission + timedelta(hours=review_hours)
+    with transaction.atomic():
+        core_services.lock_branch(attempt.mandate.branch)
+        row = DebtDebitAttempt.objects.select_for_update().get(pk=attempt.pk)
+        if row.status not in {"sending", "pending", "unknown"}:
+            return False
+        row.next_check_at = now + (timedelta(hours=poll_hours) if overdue else timedelta(minutes=5))
+        row.save(update_fields=["next_check_at", "updated_at"])
+        if overdue:
+            transitioned = DebtMandate.objects.filter(
+                pk=row.mandate_id, status="approved",
+            ).update(status="suspended")
+            if transitioned:
+                core_services.audit(
+                    None, attempt.mandate.branch, "hubtel_debt.payment_unresolved_hold",
+                    str(row.pk), {
+                        "mandate": str(row.mandate_id),
+                        "reference": row.reference,
+                        "review_after_hours": review_hours,
+                        "next_provider_check": row.next_check_at.isoformat(),
+                    }, category="finance", severity="high",
+                )
+        return overdue
+
+
 def reconcile_attempts(limit=15):
     """Use Hubtel's independent >=5-minute status endpoint on KOFAD WEB."""
     from types import SimpleNamespace
@@ -420,14 +456,10 @@ def reconcile_attempts(limit=15):
         try:
             result, provider_id = client.check(tx)
         except (client.StatusUnconfirmed, ValidationError):
-            DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
-                next_check_at=now + timedelta(minutes=5)
-            )
+            defer_unresolved_attempt(attempt, now=now)
             continue
         if result == "pending":
-            DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
-                next_check_at=now + timedelta(minutes=5)
-            )
+            defer_unresolved_attempt(attempt, now=now)
             continue
         with transaction.atomic():
             row = DebtDebitAttempt.objects.select_for_update().select_related("mandate", "mandate__party").get(pk=attempt.pk)
