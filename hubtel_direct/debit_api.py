@@ -5,13 +5,10 @@ A client-side callback is NEVER sufficient to create authorization or settle deb
 """
 import re
 import uuid
-from datetime import date
-from decimal import Decimal
 
 import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.utils import timezone
 
 from . import client
 
