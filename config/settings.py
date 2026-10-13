@@ -190,6 +190,15 @@ HUBTEL_DIRECT_SEND_BANK_ENABLED = os.environ.get("HUBTEL_DIRECT_SEND_BANK_ENABLE
 HUBTEL_DIRECT_MAX_PAYOUT_GHS = os.environ.get("HUBTEL_DIRECT_MAX_PAYOUT_GHS", "500.00")
 HUBTEL_DIRECT_DAILY_PAYOUT_GHS = os.environ.get("HUBTEL_DIRECT_DAILY_PAYOUT_GHS", "2000.00")
 
+# New consented Hubtel financial operations. Keep disabled until verified
+# merchant scopes, static web egress, UAT and second-person finance approvals.
+HUBTEL_DEBT_PREAPPROVAL_ENABLED = os.environ.get("HUBTEL_DEBT_PREAPPROVAL_ENABLED", "0") == "1"
+HUBTEL_DEBT_AUTO_DEBIT_ENABLED = os.environ.get("HUBTEL_DEBT_AUTO_DEBIT_ENABLED", "0") == "1"
+HUBTEL_REFUNDS_ENABLED = os.environ.get("HUBTEL_REFUNDS_ENABLED", "0") == "1"
+HUBTEL_PAYROLL_DISBURSEMENTS_ENABLED = os.environ.get("HUBTEL_PAYROLL_DISBURSEMENTS_ENABLED", "0") == "1"
+HUBTEL_DEBT_DAILY_DEBIT_CAP_GHS = os.environ.get("HUBTEL_DEBT_DAILY_DEBIT_CAP_GHS", "1000.00")
+
+
 
 # Independent kill switch. Enable only after verified-number configuration and a delivery test.
 WHATSAPP_BOT_ENABLED = os.environ.get("WHATSAPP_BOT_ENABLED", "0") == "1"
