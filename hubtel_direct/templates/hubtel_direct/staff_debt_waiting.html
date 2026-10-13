@@ -29,6 +29,17 @@
       <a class="button" href="{{ authorization_url }}" target="_blank" rel="noopener">Open customer approval page ↗</a>
       <button type="button" class="button secondary" id="copy-authorization-url" data-url="{{ authorization_url }}">Copy approval link</button>
     </div>
+    {% if mandate.status == "draft" %}
+    <form action="{% url 'hubtel_debt_staff_start' mandate.pk %}" method="post" style="margin-top:12px">
+      {% csrf_token %}
+      <label class="switch-row" style="margin-bottom:10px">
+        <input type="checkbox" name="customer_asked_for_prompt" value="yes" required>
+        <span>Customer reviewed the repayment dates and asked for a Hubtel prompt on their own MoMo phone</span>
+      </label>
+      {% if hubtel_ready %}<button type="submit" class="button">Send Hubtel approval prompt to customer's MoMo →</button>
+      {% else %}<button type="button" class="button" disabled title="Merchant preapproval must be enabled first">Hubtel approval not activated</button>{% endif %}
+    </form>
+    {% endif %}
     {% if mandate.status == "draft" or mandate.status == "pending" %}
     <form action="{% url 'hubtel_debt_staff_sms' mandate.pk %}" method="post" style="margin-top:12px">{% csrf_token %}
       <button type="submit" class="button secondary">Send schedule and approval link by SMS</button>
