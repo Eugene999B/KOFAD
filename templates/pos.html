@@ -25,7 +25,6 @@
  data-paystack-pos-momo-ready="{{ paystack_pos_momo_ready|yesno:"true,false" }}"
  data-paystack-pos-momo-configured="{{ paystack_pos_momo_configured|yesno:"true,false" }}">
 
-<nav class="atelier-counter-context" aria-label="Sales workspace shortcuts"><strong>{% if purchase %}STOCK RECEIVING{% else %}COUNTER SALES{% endif %}</strong><span>{% if purchase %}Check items and supplier details before posting the delivery.{% else %}Search a product, review the cart, and verify the payment before completing a sale.{% endif %}</span><a href="/inventory/">Inventory ↗</a>{% if not purchase %}<a href="/online-orders/">Online orders ↗</a>{% endif %}</nav>
 <div id="pos-error" class="notice error hidden" role="alert"></div>
 
 <div class="counter-layout chalin-sale-layout">
@@ -37,7 +36,6 @@
       <input id="product-query" name="q" value="{{ q }}" placeholder="Search product, SKU, barcode or category…" autofocus autocomplete="off" spellcheck="false">
       <button class="button secondary">Search</button>
     </form>
-    <div class="sale-search-help"><span>Type a product or scan a barcode</span><kbd>/</kbd></div>
   </div>
 
   {% if purchase %}
@@ -84,7 +82,6 @@
   <div id="catalog-status" class="catalog-status counter-empty-state">
     <span class="catalog-empty-icon">⌕</span>
     <h3>{% if purchase %}Find an existing product{% else %}Find a product{% endif %}</h3>
-    <p>{% if purchase %}Search an existing product, or choose New product above.{% else %}Search, choose the item, and add it to this sale.{% endif %}</p>
   </div>
   <div class="product-grid search-results-grid counter-results" id="catalog"></div>
 
@@ -93,7 +90,6 @@
       <div>
         <p class="eyebrow">{% if purchase %}DELIVERY ITEMS{% else %}SALE ITEMS{% endif %}</p>
         <h2>{% if purchase %}Items being received{% else %}Review the cart{% endif %}</h2>
-        <p class="muted">{% if purchase %}Confirm quantities before posting stock.{% else %}Quantities and prices remain visible while you finish customer and payment details.{% endif %}</p>
       </div>
       <span class="pill" id="cart-count">0 lines</span>
     </header>
@@ -110,7 +106,6 @@
     <div>
       <p class="eyebrow">{% if purchase %}STEP 2{% else %}STEP 2{% endif %}</p>
       <h2>{% if purchase %}Supplier & payment{% else %}Customer & payment{% endif %}</h2>
-      <p class="muted">{% if purchase %}Choose the supplier, record payment and post the delivery.{% else %}Choose a customer only when needed, select how they paid, then complete the sale once.{% endif %}</p>
     </div>
     {% if not purchase and held %}
     <button type="button" class="button secondary held-sales-launch" id="open-held-sales">Held sales · {{ held|length }}</button>
@@ -144,7 +139,6 @@
         <button type="button" class="customer-choice-button" data-customer-mode="saved" aria-pressed="false">Saved customer<small>History and debts</small></button>
         <button type="button" class="customer-choice-button" data-customer-mode="new" aria-pressed="false">New customer<small>Keep future records</small></button>
       </div>
-      <p class="customer-choice-note" id="walkin-explanation">Walk-in is for eligible fully paid sales only. Choose a saved or new customer for any unpaid balance.</p>
       <div id="customer-search-wrap" class="hidden">
         <label for="customer-search" class="customer-field-label">Find a saved customer</label>
         <input id="customer-search" type="search" autocomplete="off" placeholder="Search by name or Ghana phone">
@@ -208,9 +202,9 @@
       {% if not purchase %}
       <section id="paystack-momo-panel" class="notice subtle hidden" aria-live="polite">
         <div>
-          <strong>{% if pos_momo_gateway == "hubtel" %}Hubtel Direct Mobile Money{% else %}Paystack direct Mobile Money approval{% endif %}</strong>
+          <strong>{% if pos_momo_gateway == "hubtel" %}Mobile Money · Hubtel{% else %}Mobile Money · Paystack{% endif %}</strong>
           {% if paystack_pos_momo_ready %}
-          <p>{% if pos_momo_gateway == "hubtel" %}Enter the payer’s MoMo number and network, check the registered wallet name with Hubtel, then request payment directly on their phone. No hosted checkout link.{% else %}Enter the MoMo number and send the approval prompt. A full payment can be a walk-in sale; for part payment, choose a customer and due date so the unpaid balance becomes debt. KOFAD posts the sale only after Paystack confirms the deposit.{% endif %}</p>
+
           <div class="two-column">
             <label>Network
               <select id="paystack-momo-provider">
@@ -223,33 +217,37 @@
               <input id="paystack-momo-phone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="0551234567">
             </label>
           </div>
+          {% if pos_momo_gateway != "hubtel" %}
           <label>Customer email (optional for direct MoMo)
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          {% endif %}
           {% if pos_momo_gateway == "paystack" %}
           <p class="hint"><a href="{% url 'pos_momo_payments' %}">View previous MoMo payments and receipts →</a></p>
           {% endif %}
           {% if pos_momo_gateway != "hubtel" %}<p class="hint">No email? Paystack receives a unique processor-only address for this wallet. It is not saved as the customer's email; consented receipts still use KOFAD's SMS/WhatsApp options.</p>{% endif %}
           {% if pos_momo_gateway == "hubtel" %}
-          <div id="hubtel-wallet-review" class="notice subtle" style="margin:12px 0">
-            <p class="hint">Enter a Mobile Money number and network. KOFAD checks the registered wallet name with Hubtel automatically, or tap the button below.</p>
+          <div id="hubtel-wallet-review" class="hubtel-wallet-review">
             <button type="button" id="hubtel-wallet-verify" class="button secondary">Check wallet name</button>
-            <p id="hubtel-wallet-name" role="status" aria-live="polite">Enter a number to look up the wallet holder.</p>
+            <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="hubtel-wallet-name" role="status" aria-live="polite">Not verified</strong></div>
             <label class="hubtel-wallet-authorize"><input id="hubtel-wallet-consent" type="checkbox">
-              <span>Customer has agreed to receive this payment request.</span>
+              <span>Customer consents to receive a payment request</span>
             </label>
-            <p class="hint">Cashier: confirm the displayed name with the customer before sending the prompt. The customer approves securely on their phone; never ask for a MoMo PIN.</p>
           </div>
+          {% endif %}
+          {% if pos_momo_gateway == "hubtel" %}
+          <label>Customer email (optional for direct MoMo)
+            <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
+          </label>
           {% endif %}
           <div id="paystack-momo-challenge" class="hidden">
             <label>One-time payment code
               <input id="paystack-momo-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Code sent for this payment">
             </label>
-            <p class="hint">Only enter the code sent for this payment. Never ask for or enter the customer's MoMo PIN.</p>
             <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
           </div>
           {% if pos_momo_gateway == "paystack" %}<div id="momo-deposit-summary" class="momo-deposit-summary" aria-live="polite"><div><span>MoMo to collect now</span><strong id="momo-deposit-amount">GHS 0.00</strong></div><div><span>Balance to customer debt</span><strong id="momo-balance-amount">GHS 0.00</strong></div></div><p class="hint">Paystack cannot identify the wallet holder by name. Confirm the number directly with the customer. The MoMo PIN is entered only on their phone.</p>{% endif %}
-          <p id="paystack-momo-status" class="hint" role="status">{% if pos_momo_gateway == "hubtel" %}First check the wallet name with Hubtel. A direct payment request then goes to the customer’s phone and is independently verified.{% else %}When you continue, KOFAD will send the MoMo approval request and wait for verified payment.{% endif %}</p>
+          <p id="paystack-momo-status" class="hint" role="status" aria-live="polite"></p>
           {% else %}
           <p>{{ pos_momo_gateway|title }} Mobile Money payment is not activated yet. Check gateway credentials and activation in Payment Settings.</p>
           {% endif %}
@@ -258,7 +256,7 @@
       {% endif %}
 
       <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
-        <label for="due-date">Due date <small>Required while a balance remains</small></label>
+        <label for="due-date">Due date</label>
         <input id="due-date" type="date" max="9999-12-31">
         {% if not purchase %}
         <div class="credit-email-capture">
@@ -268,10 +266,52 @@
             <input id="credit-debt-email-consent" type="checkbox">
             <span><strong>Customer agrees to receive credit statements and debt reminders by email</strong></span>
           </label>
-          <p class="hint">Confirm this address with the customer. Reminders follow Debt Settings, not marketing preferences. Without this choice, no debt emails are sent.</p>
         </div>
         {% endif %}
-        {% if not purchase %}<p class="hint">Credit policy allows up to {{ max_credit_days }} days.</p>{% endif %}
+        {% if can_offer_direct_debit %}
+        <div class="credit-repayment-chooser">
+          <label for="credit-repayment-mode">Debt collection</label>
+          <select id="credit-repayment-mode">
+            <option value="manual">Manual repayment</option>
+            <option value="direct">Hubtel Direct Debit</option>
+          </select>
+          <div id="credit-direct-debit-fields" class="credit-direct-debit-fields hidden">
+            {% if online_debt_policy and online_debt_policy.plan_creation_enabled %}
+            <div class="two-column">
+              <label for="credit-direct-network">Wallet network
+                <select id="credit-direct-network">
+                  {% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN MoMo</option>{% endif %}
+                  {% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}
+                </select>
+              </label>
+              <label for="credit-direct-phone">Wallet number
+                <input id="credit-direct-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0241234567" maxlength="16">
+              </label>
+              <label for="credit-direct-frequency">Collection interval
+                <select id="credit-direct-frequency">
+                  {% if online_debt_policy.allow_once %}<option value="once">Once</option>{% endif %}
+                  {% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}
+                  {% if online_debt_policy.allow_weekly %}<option value="weekly" selected>Weekly</option>{% endif %}
+                  {% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}
+                  {% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}
+                  {% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}
+                </select>
+              </label>
+              <label for="credit-direct-installment">Installment · GHS
+                <input id="credit-direct-installment" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100.00">
+              </label>
+            </div>
+            <div class="direct-wallet-lookup">
+              <button class="button secondary" type="button" id="credit-direct-verify">Check wallet name</button>
+              <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="credit-direct-name" role="status" aria-live="polite">Not verified</strong></div>
+            </div>
+            <p class="hint">Customer approval required before collection.</p>
+            {% else %}
+            <p class="hint">Enable repayment agreements in <a href="{% url 'online_debt_settings' %}" target="_blank" rel="noopener">Online Debt Settings</a>.</p>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
       </div>
 
       {% if policy_controls %}
@@ -293,7 +333,6 @@
         {% if not purchase %}<button class="button secondary" type="button" id="hold">Hold sale</button>{% endif %}
         <button class="button complete-sale-button" id="complete">{% if purchase %}Post purchase & receive stock{% else %}Complete Sale & Generate Receipt{% endif %}</button>
       </div>
-      <p class="hint chalin-submit-hint" id="complete-sale-hint">One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.</p>
     </section>
   </form>
 </section>
@@ -329,6 +368,19 @@
     </div>
   </div>
 
+  {% if can_offer_direct_debit %}
+  <form action="{% url 'hubtel_debt_create' %}" method="post" id="sale-debit-authorization" class="hidden">
+    {% csrf_token %}
+    <input type="hidden" name="party" id="sale-debit-party">
+    <input type="hidden" name="phone" id="sale-debit-phone">
+    <input type="hidden" name="channel" id="sale-debit-network">
+    <input type="hidden" name="frequency" id="sale-debit-frequency">
+    <input type="hidden" name="first_due_date" id="sale-debit-date">
+    <input type="hidden" name="amount" id="sale-debit-amount">
+    <input type="hidden" name="maximum" id="sale-debit-ceiling">
+    <button type="submit" class="button">Continue to customer Direct Debit approval →</button>
+  </form>
+  {% endif %}
   <div id="success-message-status" class="notice subtle hidden" role="status"></div>
   <div class="sale-success-actions">
     <a class="button" id="receipt-print" target="_blank" rel="noopener">Print receipt</a>

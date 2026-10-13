@@ -86,6 +86,73 @@
   const dueDate = document.querySelector("#due-date");
   const creditCustomerEmail = document.querySelector("#credit-customer-email");
   const creditDebtEmailConsent = document.querySelector("#credit-debt-email-consent");
+  const creditRepaymentMode = document.querySelector("#credit-repayment-mode");
+  const creditDirectFields = document.querySelector("#credit-direct-debit-fields");
+  const creditDirectNetwork = document.querySelector("#credit-direct-network");
+  const creditDirectPhone = document.querySelector("#credit-direct-phone");
+  const creditDirectFrequency = document.querySelector("#credit-direct-frequency");
+  const creditDirectInstallment = document.querySelector("#credit-direct-installment");
+  const creditDirectVerify = document.querySelector("#credit-direct-verify");
+  const creditDirectName = document.querySelector("#credit-direct-name");
+  let creditLookupGeneration = 0;
+  const resetCreditVerifiedName = () => {
+    creditLookupGeneration++;
+    if (creditDirectName) creditDirectName.textContent = "Not verified";
+  };
+  creditDirectPhone?.addEventListener("input", resetCreditVerifiedName);
+  creditDirectNetwork?.addEventListener("change", resetCreditVerifiedName);
+  creditDirectVerify?.addEventListener("click", async () => {
+    let phone;
+    try { phone = normalizeGhanaPhone(creditDirectPhone?.value || ""); }
+    catch (_) { if (creditDirectName) creditDirectName.textContent = "Enter a valid wallet number"; return; }
+    const network = creditDirectNetwork?.value === "mtn-gh-direct-debit"
+      ? "mtn-gh" : creditDirectNetwork?.value === "vodafone-gh-direct-debit"
+      ? "vodafone-gh" : "";
+    if (!network) { if (creditDirectName) creditDirectName.textContent = "Choose a wallet network"; return; }
+    const generation = ++creditLookupGeneration;
+    creditDirectVerify.disabled = true;
+    if (creditDirectName) creditDirectName.textContent = "Checking…";
+    try {
+      const result = await api("/api/pos/hubtel/wallet-name/", {phone, channel:network});
+      if (generation === creditLookupGeneration && creditDirectName) {
+        creditDirectName.textContent = result.name || "Name unavailable";
+      }
+    } catch (err) {
+      if (generation === creditLookupGeneration && creditDirectName) {
+        creditDirectName.textContent = "Lookup unavailable: " + err.message;
+      }
+    } finally { creditDirectVerify.disabled = false; }
+  });
+  const debitAuthorizationForm = document.querySelector("#sale-debit-authorization");
+  let pendingDebitSetup = null;
+  function syncDirectDebitFields() {
+    const eligible = !purchase && ["part", "credit"].includes(paymentPlan?.value || "");
+    const selected = eligible && creditRepaymentMode?.value === "direct";
+    creditDirectFields?.classList.toggle("hidden", !selected);
+    if (creditRepaymentMode) creditRepaymentMode.disabled = !eligible;
+  }
+  function validateDirectDebitSetup(grandTotal, paidNow, party, newName) {
+    if (creditRepaymentMode?.value !== "direct") return null;
+    if (!["part", "credit"].includes(paymentPlan?.value || "")) return null;
+    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectInstallment) {
+      throw new Error("Direct Debit planning is disabled. Enable plan creation in Online Debt Settings.");
+    }
+    if (!party && !newName) throw new Error("Choose a customer for Direct Debit.");
+    // Receipt SMS preferences do not confer (or deny) Direct Debit authority.
+    // The customer must independently verify wallet ownership and accept the
+    // exact Hubtel mandate terms via the separate authorization page.
+    const phone = normalizeGhanaPhone(creditDirectPhone.value);
+    const balance = grandTotal - paidNow;
+    const installment = cents(creditDirectInstallment.value);
+    if (balance <= 0 || installment <= 0 || installment > balance) {
+      throw new Error("The installment must be greater than zero and no more than the unpaid balance.");
+    }
+    if (!dueDate?.value || !creditDirectNetwork.value || !creditDirectFrequency.value) {
+      throw new Error("Choose a wallet network, interval, and first payment date.");
+    }
+    return {phone, channel:creditDirectNetwork.value, frequency:creditDirectFrequency.value,
+      first_due_date:dueDate.value, amount:formatted(installment), maximum:formatted(balance)};
+  }
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
   const paystackMomoPanel = document.querySelector("#paystack-momo-panel");
@@ -115,7 +182,7 @@
     walletProof = null;
     walletVerifiedNumber = "";
     walletVerifiedChannel = "";
-    if (walletName) walletName.textContent = "Enter or select a number to check the registered wallet name.";
+    if (walletName) walletName.textContent = "Not verified";
   }
   paystackMomoPhone?.addEventListener("input", clearWalletProof);
   paystackMomoProvider?.addEventListener("change", clearWalletProof);
@@ -140,7 +207,7 @@
       walletProof = result.verification_token;
       walletVerifiedNumber = selection.phone;
       walletVerifiedChannel = selection.channel;
-      if (walletName) walletName.textContent = "Registered wallet holder: " + result.name;
+      if (walletName) walletName.textContent = result.name;
     } catch (err) {
       if (generation !== walletLookupGeneration) return;
       if (walletName) walletName.textContent = "Hubtel name lookup unavailable. " + err.message;
@@ -835,6 +902,11 @@
     customerDuplicateAlert?.classList.add("hidden");
     if (creditCustomerEmail) creditCustomerEmail.value = "";
     if (creditDebtEmailConsent) creditDebtEmailConsent.checked = false;
+    if (creditRepaymentMode) creditRepaymentMode.value = "manual";
+    if (creditDirectPhone) creditDirectPhone.value = "";
+    resetCreditVerifiedName();
+    if (creditDirectInstallment) creditDirectInstallment.value = "";
+    debitAuthorizationForm?.classList.add("hidden");
     changed();
     updateConsentAvailability();
     persist();
@@ -1147,6 +1219,7 @@
     updateConsentAvailability();
     renderCheckoutSummary();
     syncPaystackMomoPanel();
+    syncDirectDebitFields();
     persist();
   }
 
@@ -1168,6 +1241,14 @@
       persist();
     });
   });
+  creditRepaymentMode?.addEventListener("change", () => {
+    changed();
+    syncDirectDebitFields();
+    persist();
+  });
+  creditDirectPhone?.addEventListener("change", () => { changed(); persist(); });
+  creditDirectFrequency?.addEventListener("change", () => { changed(); persist(); });
+  creditDirectInstallment?.addEventListener("input", () => { changed(); persist(); });
   paymentPlan?.addEventListener("change", () => {
     changed();
     applyPaymentPlan();
@@ -1356,6 +1437,7 @@
       }
     }
 
+    pendingDebitSetup = purchase ? null : validateDirectDebitSetup(grandTotal, paidNow, party, newName);
     return {
       kind: root.dataset.kind,
       items: cart.map(({product, newProduct, mode, quantity, price, discount}) => ({
@@ -1617,6 +1699,20 @@
       ? result.customer.name + (result.customer.phone ? " · " + result.customer.phone : "")
       : "Walk-in customer";
 
+    if (debitAuthorizationForm) {
+      const hasDebt = Number(result.total || 0) > Number(result.paid || 0);
+      const ready = Boolean(pendingDebitSetup && hasDebt && result.customer?.id);
+      debitAuthorizationForm.classList.toggle("hidden", !ready);
+      if (ready) {
+        const data = {...pendingDebitSetup, party:String(result.customer.id),
+          maximum:(Number(result.total) - Number(result.paid)).toFixed(2)};
+        for (const [field,value] of Object.entries(data)) {
+          const target = debitAuthorizationForm.querySelector('[name="' + field + '"]');
+          if (target) target.value = value;
+        }
+      }
+    }
+
     const successItems = document.querySelector("#success-items");
     if (successItems) {
       successItems.replaceChildren();
@@ -1672,6 +1768,7 @@
     completed = false;
     lastCompletedSale = null;
     pendingBody = null;
+    pendingDebitSetup = null;
     heldId = null;
     momoReference = null;
     clearTimeout(momoPollTimer);
@@ -1696,7 +1793,7 @@
     if (paystackMomoPhone) paystackMomoPhone.value = "";
     if (paystackMomoEmail) paystackMomoEmail.value = "";
     if (paystackMomoProvider) paystackMomoProvider.value = "mtn";
-    setMomoStatus("When you complete the sale, KOFAD will send the MoMo approval request and wait for verified payment.");
+    setMomoStatus("");
     if (customerConsent) customerConsent.checked = true;
     if (customerWhatsApp) customerWhatsApp.checked = false;
     if (paymentPlan) paymentPlan.value = "full";
