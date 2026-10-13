@@ -1,7 +1,10 @@
 from django.urls import path
-from . import views, mandate_views
+from . import views, mandate_views, payroll_views
 
 urlpatterns = [
+    path("payroll/<int:period_id>/hubtel/prepare/", payroll_views.prepare, name="hubtel_payroll_prepare"),
+    path("payroll/<int:period_id>/hubtel/approve/", payroll_views.approve, name="hubtel_payroll_approve"),
+    path("payroll/<int:period_id>/hubtel/recipients/<int:worker_id>/", payroll_views.verify_recipient, name="hubtel_payroll_recipient"),
     path("debts/hubtel/mandates/", mandate_views.staff_create_mandate, name="hubtel_debt_create"),
     path("debts/hubtel/mandates/<uuid:mandate_id>/cancel/", mandate_views.staff_cancel, name="hubtel_debt_staff_cancel"),
     path("market/debt-authorization/<uuid:mandate_id>/", mandate_views.customer_authorize, name="hubtel_debt_authorize"),
