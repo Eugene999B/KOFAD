@@ -435,10 +435,10 @@ def defer_unresolved_attempt(attempt, now=None):
 
 
 def reconcile_attempts(limit=15):
-    """Use Hubtel's independent >=5-minute status endpoint on KOFAD WEB."""
+    """Read already-sent payment statuses even when NEW debit charges are OFF."""
     from types import SimpleNamespace
     from datetime import timedelta
-    debit_api.gate("charge")
+    client.require_reconciliation_ready("receive")
     now = timezone.now()
     attempts = list(DebtDebitAttempt.objects.filter(
         status__in=["sending", "pending", "unknown"],
