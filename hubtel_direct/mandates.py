@@ -4,17 +4,14 @@ IMPORTANT: direct-debit charge execution is permanently unavailable unless
 its separate deployment switch is enabled after authorization and live UAT.
 No customer-wallet balance API exists. Never probe it with shrinking debits.
 """
-import uuid
 import hashlib
 from datetime import timedelta
 from decimal import Decimal
-from urllib.parse import urlsplit
 
 from calendar import monthrange
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Sum
 from django.utils import timezone
 
 from core import debts as debt_service
