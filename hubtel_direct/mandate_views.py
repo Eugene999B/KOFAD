@@ -92,9 +92,9 @@ def staff_status(request, mandate_id):
         "mandate": mandate,
         "schedule": schedule.for_mandate(mandate),
         "balance": mandates.outstanding(mandate.party),
-        "authorization_url": request.build_absolute_uri(reverse(
+        "authorization_url": str(settings.MARKET_SITE_ORIGIN).rstrip("/") + reverse(
             "hubtel_debt_authorize", kwargs={"mandate_id": mandate.pk},
-        )),
+        ),
         "hubtel_ready": bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)),
     })
 
@@ -163,9 +163,9 @@ def staff_send_schedule(request, mandate_id):
     if not entries:
         messages.error(request, "The signed schedule is not available.")
         return redirect("hubtel_debt_staff_status", mandate_id=mandate_id)
-    url = request.build_absolute_uri(reverse(
+    url = str(settings.MARKET_SITE_ORIGIN).rstrip("/") + reverse(
         "hubtel_debt_authorize", kwargs={"mandate_id": mandate.pk},
-    ))
+    )
     body = (
         f"KOFAD repayment approval: GHS {mandate.maximum_total:.2f} "
         f"in {len(entries)} {mandate.frequency} payment(s), "
