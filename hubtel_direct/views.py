@@ -38,7 +38,38 @@ def internal_reconcile(request):
     # never kofad-sms worker's unlisted egress.
     from core.pos_hubtel import reconcile_due as reconcile_pos_due
     pos_count = reconcile_pos_due(limit=10, include_direct=True)
-    response = JsonResponse({"checked": count, "pos_checked": pos_count})
+    debt_checked = 0
+    debit_dispatched = 0
+    debit_paid = 0
+    debt_cancelled = 0
+    # ALL provider HTTP from the allowlisted WEB service only. The SMS
+    # worker triggers this authenticated endpoint; never calls Hubtel.
+    from . import mandates as debt_mandates
+    if getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False):
+        for mandate in debt_mandates.DebtMandate.objects.filter(
+            status="pending",
+        ).order_by("created_at")[:10]:
+            try:
+                debt_mandates.refresh_preapproval(mandate)
+                debt_checked += 1
+            except (ValidationError, Exception):
+                # Provider outages cannot interrupt regular payments.
+                pass
+        debt_cancelled = debt_mandates.cancel_fully_paid(limit=25)
+    if getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False):
+        try:
+            debit_paid = debt_mandates.reconcile_attempts(limit=10)
+            debt_mandates.enqueue_due(limit=10)
+            debit_dispatched = debt_mandates.dispatch_planned(limit=8)
+        except (ValidationError, Exception):
+            # Fail closed: an uncertain provider response never causes a new
+            # submission of an existing request reference.
+            pass
+    response = JsonResponse({
+        "checked": count, "pos_checked": pos_count,
+        "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
+        "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
+    })
     response["Cache-Control"] = "no-store"
     return response
 
