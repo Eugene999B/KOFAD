@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from core.models import Document
 from core.tests import Fixtures
-from . import mandates
+from . import mandates, debit_api
 from .models import DebtDebitAttempt, DebtMandate, OnlineDebtSettings
 from .policy_forms import OnlineDebtSettingsForm
 
@@ -148,3 +148,39 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, "failed")
         self.assertEqual(plan.next_due_date, timezone.localdate() + timedelta(days=7))
+
+    @patch("hubtel_direct.debit_api._request")
+    def test_cancel_after_scheduling_cannot_be_sent_from_stale_object(self, request):
+        self.policy.plan_creation_enabled = True
+        self.policy.pause_auto_collection = False
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="sending", sent_at=timezone.now(),
+        )
+        stale = DebtDebitAttempt.objects.select_related("mandate").get(pk=attempt.pk)
+        self.assertEqual(stale.mandate.status, "approved")
+        DebtMandate.objects.filter(pk=plan.pk).update(status="cancel_pending")
+        with self.assertRaisesRegex(ValidationError, "current approved mandate"):
+            debit_api.debit_charge(stale)
+        request.assert_not_called()
+
+    @patch("hubtel_direct.mandates.timezone.localdate")
+    def test_provider_paid_finance_review_stops_new_due_attempt(self, localdate):
+        today = timezone.localdate()
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        old_attempt = mandates.plan_due_attempt(plan)
+        DebtDebitAttempt.objects.filter(pk=old_attempt.pk).update(status="finance_review")
+        DebtMandate.objects.filter(pk=plan.pk).update(next_due_date=today + timedelta(days=7))
+        localdate.return_value = today + timedelta(days=7)
+        plan.refresh_from_db()
+        self.assertIsNone(mandates.plan_due_attempt(plan))
+        self.assertEqual(DebtDebitAttempt.objects.filter(mandate=plan).count(), 1)
+
