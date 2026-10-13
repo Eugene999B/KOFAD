@@ -125,7 +125,7 @@
         </details>
         {% elif mandate.status == "approved" or mandate.status == "pending" %}
         <small>Changing an authorized schedule requires cancellation and fresh customer approval.</small>
-        {% endif %>
+        {% endif %}
         {% if perms.core.operate_finance and mandate.status != "cancelled" and mandate.status != "settled" %}
         <form action="{% url 'hubtel_debt_staff_cancel' mandate.pk %}" method="post">{% csrf_token %}
           <button type="submit" class="button secondary" onclick="return confirm('Stop future debit requests for this customer?')">Stop direct debit</button>
