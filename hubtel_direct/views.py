@@ -45,25 +45,39 @@ def internal_reconcile(request):
     # ALL provider HTTP from the allowlisted WEB service only. The SMS
     # worker triggers this authenticated endpoint; never calls Hubtel.
     from . import mandates as debt_mandates
-    if getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False):
-        for mandate in debt_mandates.DebtMandate.objects.filter(
-            status="pending",
-        ).order_by("created_at")[:10]:
-            try:
-                debt_mandates.refresh_preapproval(mandate)
-                debt_checked += 1
-            except (ValidationError, Exception):
-                # Provider outages cannot interrupt regular payments.
-                pass
-        debt_cancelled = debt_mandates.cancel_fully_paid(limit=25)
-    if getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False):
+    # Read-only verification and cancellation remain available when new
+    # customer authorizations or outgoing debits are disabled. A safety
+    # shutdown MUST NOT strand in-flight payments or wallet revocation.
+    from .client import require_reconciliation_ready
+    try:
+        require_reconciliation_ready("receive")
+    except ValidationError:
+        pass
+    else:
+        if getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False):
+            for mandate in debt_mandates.DebtMandate.objects.filter(
+                status="pending",
+            ).order_by("created_at")[:10]:
+                try:
+                    debt_mandates.refresh_preapproval(mandate)
+                    debt_checked += 1
+                except (ValidationError, Exception):
+                    # Provider outages cannot interrupt regular payments.
+                    pass
+        try:
+            debt_cancelled = debt_mandates.cancel_fully_paid(limit=25)
+        except (ValidationError, Exception):
+            pass
         try:
             debit_paid = debt_mandates.reconcile_attempts(limit=10)
+        except (ValidationError, Exception):
+            pass
+    if getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False):
+        try:
             debt_mandates.enqueue_due(limit=10)
             debit_dispatched = debt_mandates.dispatch_planned(limit=8)
         except (ValidationError, Exception):
-            # Fail closed: an uncertain provider response never causes a new
-            # submission of an existing request reference.
+            # Stop new requests without suppressing the verification above.
             pass
     payroll_paid = 0
     if getattr(settings, "HUBTEL_PAYROLL_DISBURSEMENTS_ENABLED", False):
