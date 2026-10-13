@@ -11,7 +11,7 @@ from django.utils import timezone
 from core.models import Document
 from core.tests import Fixtures
 from . import client, mandates, verification
-from .models import DebtMandate, DebtDebitAttempt
+from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 
 
 READY = {
@@ -31,6 +31,7 @@ READY = {
 class DebtMandateTests(Fixtures, TestCase):
     def setUp(self):
         self.setup_data()
+        OnlineDebtSettings.objects.update_or_create(branch=self.branch, defaults={"plan_creation_enabled": True})
         self.customer.phone = "+233241234567"
         self.customer.consent = True
         self.customer.save(update_fields=["phone", "consent"])
@@ -110,17 +111,11 @@ class DebtMandateTests(Fixtures, TestCase):
         plan.maximum_total = Decimal("400.00")
         self.assertEqual(mandates.payment_preview(plan, future), Decimal("250.00"))
 
-    def test_partial_wallet_balance_is_not_probed_by_rapid_automatic_retries(self):
-        plan = self.plan(first_due_date=timezone.localdate(),
-                         allow_one_partial_retry=True, minimum_partial="100")
-        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
-        plan.refresh_from_db()
-        first = mandates.plan_due_attempt(plan)
-        self.assertEqual(first.amount, Decimal("200.00"))
-        self.assertIsNone(mandates.plan_due_attempt(plan))
-        first.status = "failed"
-        first.save(update_fields=["status"])
-        self.assertIsNone(mandates.plan_due_attempt(plan))
+    def test_automatic_shrinking_wallet_probe_is_not_supported(self):
+        with self.assertRaisesRegex(ValidationError, "Automatic lower-amount retry"):
+            self.plan(first_due_date=timezone.localdate(),
+                      allow_one_partial_retry=True, minimum_partial="100")
+        self.assertEqual(DebtMandate.objects.count(), 0)
 
     def test_direct_debit_charge_disabled_until_explicit_live_activation(self):
         plan = self.plan()
