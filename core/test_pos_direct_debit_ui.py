@@ -1,7 +1,4 @@
 """Regression: compact POS, finance-gated Direct Debit setup and safe sale handoff."""
-from datetime import timedelta
-from django.test import TestCase
-from django.utils import timezone
 
 from hubtel_direct.models import OnlineDebtSettings
 from marketplace.tests import MarketFixtures
@@ -18,7 +15,7 @@ class PosDirectDebitEntryTests(MarketFixtures):
 
     def test_credit_sale_shows_schedule_without_initiating_hubtel(self):
         self.login_staff()
-        policy = OnlineDebtSettings.objects.create(
+        OnlineDebtSettings.objects.create(
             branch=self.branch, plan_creation_enabled=True,
             allow_mtn=True, allow_telecel=True, allow_weekly=True,
         )
@@ -34,7 +31,6 @@ class PosDirectDebitEntryTests(MarketFixtures):
         self.assertNotContains(page, "Hubtel Direct Mobile Money")
         self.assertNotContains(page, "COUNTER SALES")
         self.assertNotContains(page, 'class="single-location"')
-        self.assertFalse(policy.pause_auto_collection is False and False)
 
     def test_paused_new_mandates_display_settings_not_live_debit_fields(self):
         self.login_staff()
