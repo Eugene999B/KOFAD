@@ -156,6 +156,7 @@ class PayrollTransferLine(models.Model):
     destination = models.ForeignKey(WorkerTransferProfile, on_delete=models.PROTECT)
     encrypted_account_snapshot = models.TextField()
     recipient_name_snapshot = models.CharField(max_length=140)
+    payment_type_snapshot = models.CharField(max_length=10, choices=[("momo", "Mobile Money"), ("bank", "Bank")], default="momo")
     channel_snapshot = models.CharField(max_length=20, blank=True)
     bank_code_snapshot = models.CharField(max_length=6, blank=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
