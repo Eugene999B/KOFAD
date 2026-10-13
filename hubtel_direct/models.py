@@ -143,6 +143,7 @@ class PayrollTransferBatch(models.Model):
 
 
 class PayrollTransferLine(models.Model):
+    request_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     batch = models.ForeignKey(PayrollTransferBatch, related_name="lines", on_delete=models.PROTECT)
     entry = models.OneToOneField("core.PayrollEntry", related_name="hubtel_transfer_line", on_delete=models.PROTECT)
     destination = models.ForeignKey(WorkerTransferProfile, on_delete=models.PROTECT)
