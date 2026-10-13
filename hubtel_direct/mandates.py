@@ -54,7 +54,7 @@ def _period_next(day, frequency):
 def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 first_due_date, amount_per_period=None, maximum_total=None,
                 final_due_date=None, collection_hour=None, source_document_id=None,
-                allow_one_partial_retry=False, minimum_partial="0.00"):
+                verified_wallet_name="", allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
     # A cashier may PROPOSE a plan when making a credit sale. Only the
     # wallet holder may grant authority, and finance controls real collections.
@@ -174,6 +174,7 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             "customer_can_cancel": True,
             **({
                 "source_document_id": source_reference,
+                "verified_wallet_name": str(verified_wallet_name or "")[:140],
                 "scheduled_periods": computed["count"],
                 "requested_final_date": computed["requested_final_date"].isoformat(),
                 "final_collection_date": computed["final_date"].isoformat(),
