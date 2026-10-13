@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block actions %}
+<div class="actions">
+  <a class="button secondary" href="{% url 'debt_settings' %}">← General debt settings</a>
+  <a class="button secondary" href="{% url 'debts' %}">Open Debt Center</a>
+</div>
+{% endblock %}
+{% block content %}
+<section class="hero-panel settings-hero">
+  <div>
+    <p class="eyebrow">RECEIVABLES / CONTROL CENTER</p>
+    <h2>Online Debt settings</h2>
+    <p>Set who can be offered customer-approved direct debit, repayment amounts and timing, protected collection windows and branch budgets. These rules are for this location. General SMS and email debt reminders are managed separately.</p>
+  </div>
+  <span class="pill">{% if policy.pause_auto_collection %}Auto-debit paused{% elif not policy.plan_creation_enabled %}New plans disabled{% else %}Policy configured{% endif %}</span>
+</section>
+
+<div class="settings-explainer-grid">
+  <article class="panel"><small>NEW REPAYMENT AGREEMENTS</small><strong>{% if policy.plan_creation_enabled %}Allowed{% else %}Disabled{% endif %}</strong><p>Staff can only propose terms. The customer must verify their wallet and separately approve Hubtel preapproval.</p></article>
+  <article class="panel"><small>ACTIVE / WAITING</small><strong>{{ approved_count }} / {{ pending_count }}</strong><p>Approved mandates / drafts, preapprovals and cancellation requests for this location.</p></article>
+  <article class="panel"><small>HUBTEL AUTOMATION</small><strong>{% if not flags.egress_confirmed %}Network not verified{% elif not flags.provider_charges %}Provider debit gate off{% elif policy.pause_auto_collection %}Paused by policy{% else %}Gated collections{% endif %}</strong><p>Railway credentials, whitelisted WEB IP, customer consent and real-money rollout checks are separate from this screen.</p></article>
+</div>
+
+<section class="panel">
+ <div class="section-heading"><div><p class="eyebrow">TODAY'S FINANCE MONITOR</p><h3>Automated debit budget</h3></div><span class="pill">{{ attempts_today }} submitted attempt{{ attempts_today|pluralize }}</span></div>
+ <div class="three-column" style="gap:18px">
+   <div><small>Amounts submitted today</small><strong>GHS {{ submitted_today|floatformat:2 }}</strong></div>
+   <div><small>Remaining submission allowance</small><strong>GHS {{ remaining_today|floatformat:2 }}</strong></div>
+   <div><small>Daily policy ceiling</small><strong>GHS {{ policy.daily_collection_limit|floatformat:2 }}</strong></div>
+ </div>
+ <p class="muted">These totals include pending, failed and unconfirmed debit submissions. They are not confirmed collections or customer's wallet balances.</p>
+</section>
+
+{% if verified_unposted_count %}
+<section class="panel">
+  <div class="section-heading"><div><p class="eyebrow">HUBTEL VERIFIED / ACCOUNTING PENDING</p>
+    <h3>{{ verified_unposted_count }} confirmed payment{{ verified_unposted_count|pluralize }} awaiting KOFAD receipts</h3></div>
+    <strong>GHS {{ verified_unposted_amount|floatformat:2 }}</strong>
+  </div>
+  <p>Hubtel confirmed these payments, but posting the KOFAD accounting receipt has not completed. No new debit should be sent for these agreements. The system may retry <strong>ledger posting only</strong> using the original transaction evidence.</p>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Customer</th><th>Original reference</th><th>Hubtel verified</th><th>Amount</th><th>Review</th></tr></thead>
+    <tbody>
+    {% for item in verified_unposted_items %}
+    <tr>
+      <td>{{ item.mandate.party.name }}</td>
+      <td><code>{{ item.reference }}</code></td>
+      <td>{{ item.provider_verified_paid_at|date:"d M Y H:i" }}</td>
+      <td>GHS {{ item.amount|floatformat:2 }}</td>
+      <td><a href="{% url 'debts' %}?customer={{ item.mandate.party_id }}&type=direct">Open debt account →</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if verified_unposted_count > 15 %}<p class="muted">Displaying the 15 oldest unresolved receipts first.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if needs_attention_count %}
+<section class="panel">
+ <div class="section-heading"><div><p class="eyebrow">FINANCE RECONCILIATION</p><h3>{{ needs_attention_count }} case{{ needs_attention_count|pluralize }} need attention</h3></div></div>
+ <p>These include suspended mandates and unresolved or provider-paid/unposted debit attempts. Never repeat a charge while its result is uncertain. Review the original customer debt record, the transaction reference and Hubtel evidence before resolving it.</p>
+ <a class="button secondary" href="{% url 'debts' %}?type=direct">Open direct debtors →</a>
+</section>
+{% endif %}
+<form method="post" class="panel policy-workspace">
+{% csrf_token %}
+{{ form.non_field_errors }}
+
+<div class="policy-section">
+  <div class="section-heading"><div><p class="eyebrow">1 · CONTROL & EMERGENCY STOP</p><h2>Offer online repayments safely</h2><p>New agreements are disabled and automatic charges paused by default.</p></div></div>
+  <div class="check-grid">
+    <label class="switch-row">{{ form.plan_creation_enabled }}<span><strong>{{ form.plan_creation_enabled.label }}</strong><small>{{ form.plan_creation_enabled.help_text }}</small>{{ form.plan_creation_enabled.errors }}</span></label>
+    <label class="switch-row">{{ form.pause_auto_collection }}<span><strong>{{ form.pause_auto_collection.label }}</strong><small>{{ form.pause_auto_collection.help_text }}</small>{{ form.pause_auto_collection.errors }}</span></label>
+  </div>
+  <div class="notice subtle"><strong>Always enforced:</strong> Customer wallet ownership verification, Hubtel preapproval, right to cancel, maximum signed debt amount, and finance transaction logs. Staff cannot turn these protections off here.</div>
+</div>
+
+<div class="policy-section">
+  <div class="section-heading"><div><p class="eyebrow">2 · ELIGIBLE NETWORKS</p><h2>Allowed debit networks</h2><p>Hubtel direct debit supports MTN and Telecel only. Ordinary MoMo checkout may support additional networks.</p></div></div>
+  <div class="check-grid">
+    <label class="switch-row">{{ form.allow_mtn }}<span><strong>{{ form.allow_mtn.label }}</strong>{{ form.allow_mtn.errors }}</span></label>
+    <label class="switch-row">{{ form.allow_telecel }}<span><strong>{{ form.allow_telecel.label }}</strong>{{ form.allow_telecel.errors }}</span></label>
+  </div>
+</div>
+
+<div class="policy-section">
+  <div class="section-heading"><div><p class="eyebrow">3 · REPAYMENT FREQUENCIES</p><h2>Which plans may staff offer?</h2><p>Choose the schedules visible for new agreements. Existing approved schedules never change retroactively.</p></div></div>
+  <div class="check-grid">
+    <label class="switch-row">{{ form.allow_once }}<span><strong>{{ form.allow_once.label }}</strong>{{ form.allow_once.errors }}</span></label>
+    <label class="switch-row">{{ form.allow_daily }}<span><strong>{{ form.allow_daily.label }}</strong>{{ form.allow_daily.errors }}</span></label>
+    <label class="switch-row">{{ form.allow_weekly }}<span><strong>{{ form.allow_weekly.label }}</strong>{{ form.allow_weekly.errors }}</span></label>
+    <label class="switch-row">{{ form.allow_monthly }}<span><strong>{{ form.allow_monthly.label }}</strong>{{ form.allow_monthly.errors }}</span></label>
+    <label class="switch-row">{{ form.allow_quarterly }}<span><strong>{{ form.allow_quarterly.label }}</strong>{{ form.allow_quarterly.errors }}</span></label>
+    <label class="switch-row">{{ form.allow_yearly }}<span><strong>{{ form.allow_yearly.label }}</strong>{{ form.allow_yearly.errors }}</span></label>
+  </div>
+  <label>{{ form.default_frequency.label }}{{ form.default_frequency }}{{ form.default_frequency.errors }}</label>
+</div>
+
+<div class="policy-section">
+  <div class="section-heading"><div><p class="eyebrow">4 · CUSTOMER & INSTALLMENT LIMITS</p><h2>Control the debt amounts</h2><p>Only actual KOFAD sales debt can be financed. Signed total can never exceed the outstanding ledger balance.</p></div></div>
+  <div class="two-column">
+    <label>{{ form.min_open_balance.label }}{{ form.min_open_balance }}{{ form.min_open_balance.errors }}</label>
+    <label>{{ form.max_open_balance.label }}{{ form.max_open_balance }}{{ form.max_open_balance.errors }}</label>
+    <label>{{ form.min_installment.label }}{{ form.min_installment }}{{ form.min_installment.errors }}</label>
+    <label>{{ form.max_installment.label }}{{ form.max_installment }}{{ form.max_installment.errors }}</label>
+  </div>
+</div>
+
+<div class="policy-section">
+  <div class="section-heading"><div><p class="eyebrow">5 · DATES, GRACE & CARRY FORWARD</p><h2>When is payment due?</h2><p>These values constrain new plans; the customer's exact accepted terms remain the source of authority.</p></div></div>
+  <div class="three-column">
+    <label>{{ form.min_first_due_days.label }}{{ form.min_first_due_days }}{{ form.min_first_due_days.errors }}</label>
+    <label>{{ form.max_first_due_days.label }}{{ form.max_first_due_days }}{{ form.max_first_due_days.errors }}</label>
+    <label>{{ form.auto_collection_grace_days.label }}{{ form.auto_collection_grace_days }}{{ form.auto_collection_grace_days.errors }}</label>
+  </div>
+  <div class="check-grid"><label class="switch-row">{{ form.rollover_unpaid }}<span><strong>{{ form.rollover_unpaid.label }}</strong><small>{{ form.rollover_unpaid.help_text }}</small>{{ form.rollover_unpaid.errors }}</span></label></div>
+  <div class="notice subtle">A failed or unconfirmed Hubtel transfer never triggers rapid shrinking debit attempts. Arrears only roll into a later scheduled payment when that option was agreed and the provider failure is confirmed. No debit may exceed outstanding debt or the original signed ceiling.</div>
+</div>
+
+<div class="policy-section">
+  <div class="section-heading"><div><p class="eyebrow">6 · AUTOMATIC COLLECTION LIMITS</p><h2>Time windows & daily ceilings</h2><p>Only KOFAD Web's whitelisted IP may initiate a provider debit. All monetary totals are in Ghana cedis.</p></div></div>
+  <div class="check-grid"><label class="switch-row">{{ form.skip_weekends }}<span><strong>{{ form.skip_weekends.label }}</strong>{{ form.skip_weekends.errors }}</span></label></div>
+  <div class="two-column">
+    <label>{{ form.collection_from_hour.label }}{{ form.collection_from_hour }}{{ form.collection_from_hour.errors }}</label>
+    <label>{{ form.collection_until_hour.label }}{{ form.collection_until_hour }}{{ form.collection_until_hour.errors }}</label>
+    <label>{{ form.daily_collection_limit.label }}{{ form.daily_collection_limit }}<small>{{ form.daily_collection_limit.help_text }}</small>{{ form.daily_collection_limit.errors }}</label>
+    <label>{{ form.daily_attempt_limit.label }}{{ form.daily_attempt_limit }}<small>{{ form.daily_attempt_limit.help_text }}</small>{{ form.daily_attempt_limit.errors }}</label>
+  </div>
+  <div class="section-heading"><div><p class="eyebrow">UNCONFIRMED TRANSACTIONS</p><h3>Financial review and recovery</h3><p>Stop new charges when Hubtel cannot confirm what happened to a previous debit.</p></div></div>
+  <div class="two-column">
+    <label>{{ form.pending_review_hours.label }}{{ form.pending_review_hours }}<small>{{ form.pending_review_hours.help_text }}</small>{{ form.pending_review_hours.errors }}</label>
+    <label>{{ form.unresolved_poll_hours.label }}{{ form.unresolved_poll_hours }}<small>{{ form.unresolved_poll_hours.help_text }}</small>{{ form.unresolved_poll_hours.errors }}</label>
+  </div>
+</div>
+
+<div class="notice subtle"><strong>About debt reminders:</strong> SMS delivery time, email mode, message templates, contact consent and frequency caps remain in <a href="{% url 'debt_settings' %}">General Debt Settings</a>. Changing this online policy never enables Hubtel's real-money services. The customer can stop future collection from the verified authorization page.</div>
+
+<button class="button" type="submit">Save Online Debt policy</button>
+</form>
+{% endblock %}

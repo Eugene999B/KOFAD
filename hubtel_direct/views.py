@@ -38,7 +38,67 @@ def internal_reconcile(request):
     # never kofad-sms worker's unlisted egress.
     from core.pos_hubtel import reconcile_due as reconcile_pos_due
     pos_count = reconcile_pos_due(limit=10, include_direct=True)
-    response = JsonResponse({"checked": count, "pos_checked": pos_count})
+    debt_checked = 0
+    debit_dispatched = 0
+    debit_paid = 0
+    debt_cancelled = 0
+    # ALL provider HTTP from the allowlisted WEB service only. The SMS
+    # worker triggers this authenticated endpoint; never calls Hubtel.
+    from . import mandates as debt_mandates
+    # Read-only verification and cancellation remain available when new
+    # customer authorizations or outgoing debits are disabled. A safety
+    # shutdown MUST NOT strand in-flight payments or wallet revocation.
+    from .client import require_reconciliation_ready
+    try:
+        require_reconciliation_ready("receive")
+    except ValidationError:
+        pass
+    else:
+        if getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False):
+            for mandate in debt_mandates.DebtMandate.objects.filter(
+                status="pending",
+            ).order_by("created_at")[:10]:
+                try:
+                    debt_mandates.refresh_preapproval(mandate)
+                    debt_checked += 1
+                except (ValidationError, Exception):
+                    # Provider outages cannot interrupt regular payments.
+                    pass
+        try:
+            debt_cancelled = debt_mandates.cancel_fully_paid(limit=25)
+        except (ValidationError, Exception):
+            pass
+        try:
+            debit_paid = debt_mandates.reconcile_attempts(limit=10)
+        except (ValidationError, Exception):
+            pass
+    # An already VERIFIED paid debit is an accounting obligation even when
+    # Hubtel is unavailable or outbound collections have been switched off.
+    # Never issue a provider POST from this ledger-only recovery path.
+    debt_ledger_recovered = 0
+    try:
+        debt_ledger_recovered = debt_mandates.post_verified_collections(limit=15)
+    except Exception:
+        # Preserve finance review records for investigation.
+        pass
+    if getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False):
+        try:
+            debt_mandates.enqueue_due(limit=10)
+            debit_dispatched = debt_mandates.dispatch_planned(limit=8)
+        except (ValidationError, Exception):
+            # Stop new requests without suppressing the verification above.
+            pass
+    payroll_paid = 0
+    if getattr(settings, "HUBTEL_PAYROLL_DISBURSEMENTS_ENABLED", False):
+        from .payroll import settle_confirmed
+        payroll_paid = settle_confirmed(limit=20)
+    response = JsonResponse({
+        "checked": count, "pos_checked": pos_count,
+        "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
+        "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
+        "debit_ledger_recovered": debt_ledger_recovered,
+        "payroll_settled": payroll_paid,
+    })
     response["Cache-Control"] = "no-store"
     return response
 
@@ -235,9 +295,17 @@ def finance_dashboard(request):
     if not manager:
         qs = qs.filter(requested_by=request.user)
     from .client import BANK_CODES, enabled
+    from .models import HubtelRefundCase
+    refunds = HubtelRefundCase.objects.select_related(
+        "return_request__order", "created_by", "approved_by",
+    )
+    if not manager:
+        refunds = refunds.filter(created_by=request.user)
     response = render(request, "hubtel_direct/finance_dashboard.html", {
         "title": "Hubtel Direct transfers",
         "direct_transactions": qs.order_by("-created_at")[:80],
+        "hubtel_refund_cases": refunds.order_by("-created_at")[:60],
+        "refund_enabled": getattr(settings, "HUBTEL_REFUNDS_ENABLED", False),
         "can_approve": manager,
         "wallet_enabled": enabled("send_momo"),
         "bank_enabled": enabled("send_bank"),
@@ -246,6 +314,38 @@ def finance_dashboard(request):
     })
     response["Cache-Control"] = "private, no-store"
     return response
+
+
+@login_required
+@require_POST
+def recipient_name(request):
+    """Server-only Hubtel lookup; no payment is initiated."""
+    try:
+        user = _finance_staff(request)
+        from . import verification
+        body = _json(request)
+        kind = body.get("kind")
+        if kind == "momo" and set(body) == {"kind", "phone", "channel"}:
+            verification.staff_throttle(user.pk, body["phone"])
+            result = verification.inquiry(body["phone"], body["channel"])
+            data = {"registered_name": result["wallet_name"],
+                    "destination_suffix": result["phone"][-4:],
+                    "channel": result["channel"], "verified": True}
+        elif kind == "bank" and set(body) == {"kind", "bank_code", "account"}:
+            verification.staff_throttle(user.pk, body["account"])
+            result = verification.bank_inquiry(body["bank_code"], body["account"])
+            data = {"registered_name": result["name"],
+                    "destination_suffix": result["account_suffix"],
+                    "bank_code": result["bank_code"], "verified": True}
+        else:
+            raise ValidationError("Choose MoMo network and wallet number, or a bank and account number.")
+        response = JsonResponse(data)
+        response["Cache-Control"] = "private, no-store"
+        return response
+    except PermissionDenied as exc:
+        return _error(exc, 403)
+    except (ValidationError, ValueError, TypeError) as exc:
+        return _error(exc)
 
 
 @login_required

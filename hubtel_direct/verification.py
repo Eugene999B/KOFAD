@@ -22,7 +22,7 @@ def inquiry(phone, channel):
         raise ValidationError("Choose MTN, Telecel, or AirtelTigo.")
     msisdn = normalize_ghana_phone(phone).lstrip("+")
     url = (
-        f"{VERIFY_ORIGIN}/merchantaccount/merchants/"
+        f"{VERIFY_ORIGIN}/v2/merchantaccount/merchants/"
         f"{settings.HUBTEL_COLLECTION_ACCOUNT}/mobilemoney/verify"
     )
     try:
@@ -73,3 +73,36 @@ def staff_throttle(user_id, phone):
             count = 1
         if count > limit:
             raise ValidationError("Too many wallet verification requests. Try again later.")
+
+
+def bank_inquiry(bank_code, bank_number):
+    """Registered bank-account name from Hubtel, not a guessed payroll alias."""
+    client.require_enabled("receive")  # API keys and only web service's IP.
+    bank_code = str(bank_code or "")
+    number = str(bank_number or "").strip()
+    if bank_code not in client.BANK_CODES or not number.isdigit() or not 4 <= len(number) <= 30:
+        raise ValidationError("Enter a listed Ghana bank and valid account number.")
+    url = (
+        f"{VERIFY_ORIGIN}/v2/merchantaccount/merchants/"
+        f"{settings.HUBTEL_COLLECTION_ACCOUNT}/bank/verify/{bank_code}/{number}"
+    )
+    try:
+        response = requests.get(
+            url, headers=client._headers(),
+            timeout=min(settings.HUBTEL_TIMEOUT_SECONDS, 12),
+            allow_redirects=False,
+        )
+        if response.status_code in (401, 403):
+            raise ValidationError("Hubtel bank-name verification is not enabled for these credentials or whitelisted IP.")
+        if not 200 <= response.status_code < 300:
+            raise ValidationError("Hubtel could not confirm this bank account.")
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ValidationError("Bank verification is temporarily unavailable.") from exc
+    if not isinstance(body, dict) or str(client._field(body, "responseCode")) != "0000":
+        raise ValidationError("Hubtel has not verified this bank account.")
+    data = client._field(body, "data")
+    name = client._field(data, "name")
+    if not isinstance(name, str) or not 2 <= len(name.strip()) <= 140:
+        raise ValidationError("Hubtel has not returned a verified bank account name.")
+    return {"bank_code": bank_code, "account_suffix": number[-4:], "name": name.strip(), "verified": True}

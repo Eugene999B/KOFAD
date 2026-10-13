@@ -1327,6 +1327,25 @@ def debts(request, branch):
 
     overview = debt_service.debt_overview(branch, query)
     rows = overview["rows"]
+    from hubtel_direct.models import DebtMandate, OnlineDebtSettings
+    online_debt_policy = OnlineDebtSettings.objects.filter(branch=branch).first()
+    agreement_rows = list(DebtMandate.objects.filter(
+        branch=branch, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"],
+    ).select_related("party"))
+    # Staff drafts and unapproved wallet prompts are still manual debtors.
+    # Only provider-confirmed agreements (including suspended or cancelled-
+    # pending ones needing reconciliation) count as Direct Debit debtors.
+    agreement_ids = {
+        item.party_id for item in agreement_rows
+        if item.status in {"approved", "suspended", "cancel_pending"}
+    }
+    debtor_type = request.GET.get("type", "all")
+    if debtor_type == "manual":
+        rows = [item for item in rows if item["party"].pk not in agreement_ids]
+    elif debtor_type == "direct":
+        rows = [item for item in rows if item["party"].pk in agreement_ids]
+    else:
+        debtor_type = "all"
     if status == "overdue":
         rows = [row for row in rows if row["overdue"] > 0]
     elif status == "due_today":
@@ -1357,6 +1376,9 @@ def debts(request, branch):
         "status": status,
         "overview": overview,
         "rows": rows,
+        "debtor_type": debtor_type,
+        "selected_mandates": [item for item in agreement_rows if selected and item.party_id == selected["party"].pk],
+        "online_debt_policy": online_debt_policy,
         "selected": selected,
         "methods": s.active_payment_methods(),
         "key": request.POST.get("key") or str(uuid.uuid4()),

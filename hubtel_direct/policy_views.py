@@ -1,0 +1,70 @@
+"""Dedicated, company-managed, audited Online Debt settings."""
+from django.conf import settings
+from django.contrib import messages
+from decimal import Decimal
+
+from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
+from django.shortcuts import redirect, render
+
+from core import services as core_services
+from core.views import protected
+
+from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
+from .policy_forms import OnlineDebtSettingsForm
+
+
+@protected("manage_company")
+def online_debt_settings(request, branch):
+    policy, _ = OnlineDebtSettings.objects.get_or_create(branch=branch)
+    form = OnlineDebtSettingsForm(request.POST or None, instance=policy)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            # Use the same lock order as the debit dispatcher (branch, policy)
+            # to prevent manager edits and money workers from deadlocking.
+            core_services.lock_branch(branch)
+            row = OnlineDebtSettings.objects.select_for_update().get(pk=policy.pk)
+            previous = {field: str(getattr(row, field)) for field in form.fields}
+            form.instance = row
+            updated = form.save(commit=False)
+            updated.changed_by = request.user
+            updated.save()
+            current = {field: str(getattr(updated, field)) for field in form.fields}
+            core_services.audit(
+                request.user, branch, "settings.online_debt.updated",
+                str(updated.pk), {"before": previous, "after": current},
+                category="finance", severity="high",
+            )
+        messages.success(request, "Online Debt policy saved for this location. Existing customer agreements are unchanged.")
+        return redirect("online_debt_settings")
+
+    today_attempts = DebtDebitAttempt.objects.filter(mandate__branch=branch, sent_at__date=timezone.localdate())
+    submitted_total = today_attempts.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    # Manager-only read view: independently confirmed Hubtel receipts waiting
+    # for KOFAD bookkeeping, not a request to charge the customer again.
+    verified_unposted = DebtDebitAttempt.objects.filter(
+        mandate__branch=branch, status="finance_review",
+        provider_verified_paid_at__isnull=False,
+        collection_document__isnull=True,
+    ).select_related("mandate__party").order_by("provider_verified_paid_at", "pk")
+    status = {
+        "provider_preapproval": getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False),
+        "provider_charges": getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False),
+        "egress_confirmed": getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False),
+    }
+    return render(request, "hubtel_direct/online_debt_settings.html", {
+        "title": "Online Debt settings",
+        "form": form, "policy": policy, "flags": status,
+        "attempts_today": today_attempts.count(),
+        "submitted_today": submitted_total,
+        "remaining_today": max(Decimal("0.00"), policy.daily_collection_limit - submitted_total),
+        "verified_unposted_count": verified_unposted.count(),
+        "verified_unposted_amount": verified_unposted.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
+        "verified_unposted_items": verified_unposted[:15],
+        "approved_count": DebtMandate.objects.filter(branch=branch, status="approved").count(),
+        "pending_count": DebtMandate.objects.filter(branch=branch, status__in=["draft", "pending", "cancel_pending"]).count(),
+        "needs_attention_count": DebtDebitAttempt.objects.filter(
+            mandate__branch=branch, status__in=["unknown", "finance_review"],
+        ).count() + DebtMandate.objects.filter(branch=branch, status="suspended").count(),
+    })

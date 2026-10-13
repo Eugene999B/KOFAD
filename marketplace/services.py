@@ -1399,7 +1399,7 @@ def _apply_refund_provider_state(item, data, message=""):
 
 
 def initiate_paystack_refund(item):
-    if MarketPaymentAttempt.objects.filter(order=item.order, reference=item.order.payment_reference, provider="hubtel").exists():
+    if MarketPaymentAttempt.objects.filter(order=item.order, reference=item.order.payment_reference, provider__in=["hubtel", "hubtel_direct"]).exists():
         raise ValidationError("Hubtel refund requires staff reconciliation through Hubtel. Do not submit it to Paystack.")
     item = MarketReturnRequest.objects.select_related(
         "order", "core_return_request"
@@ -1486,7 +1486,7 @@ def initiate_paystack_refund(item):
 
 
 def refresh_paystack_refund(item):
-    if MarketPaymentAttempt.objects.filter(order=item.order, reference=item.order.payment_reference, provider="hubtel").exists():
+    if MarketPaymentAttempt.objects.filter(order=item.order, reference=item.order.payment_reference, provider__in=["hubtel", "hubtel_direct"]).exists():
         raise ValidationError("Hubtel refund requires staff reconciliation through Hubtel. Do not submit it to Paystack.")
     item = MarketReturnRequest.objects.select_related("order").get(pk=item.pk)
     if not item.provider_refund_id:

@@ -1,5 +1,24 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'hubtel_direct/finance.js' %}"></script>{% endblock %}
+{% block head %}<script defer src="{% static 'hubtel_direct/finance.js' %}"></script>
+<section class="panel">
+ <div class="section-heading"><div><p class="eyebrow">ONLINE RETURNS / HUBTEL</p><h2>Refund review and reconciliation</h2></div></div>
+ {% if not refund_enabled %}<p class="notice subtle"><strong>Live Hubtel refunds are disabled.</strong> Approved KOFAD returns may be reviewed, but no refund will be submitted until the original Order ID is verified and the release is approved.</p>{% endif %}
+ <div class="table-wrap"><table class="data-table">
+ <thead><tr><th>Created</th><th>KOFAD order</th><th>Original payment</th><th>Amount</th><th>State</th><th>Finance action</th></tr></thead><tbody>
+ {% for item in hubtel_refund_cases %}
+  <tr>
+   <td>{{ item.created_at|date:"d M Y H:i" }}</td>
+   <td>{{ item.return_request.order.customer_reference }}</td>
+   <td><code>{{ item.original_transaction_reference }}</code></td>
+   <td>GHS {{ item.amount|floatformat:2 }}</td>
+   <td><strong>{{ item.status|title }}</strong>{% if not item.original_hubtel_order_id %}<small>Original Hubtel Order ID must be verified</small>{% endif %}</td>
+   <td><a href="{% url 'staff_market_return' item.return_request_id %}">Review original return →</a></td>
+  </tr>
+ {% empty %}<tr><td colspan="6">No Hubtel refund cases have been prepared yet.</td></tr>{% endfor %}
+ </tbody></table></div>
+ <p class="muted">Callbacks and timeouts are not proof of a completed refund. Reconcile pending cases with original Hubtel evidence before communicating payment completion to the customer.</p>
+</section>
+{% endblock %}
 {% block actions %}<div class="actions"><a class="button secondary" href="/finance/">Finance</a><a class="button secondary" href="/settings/online-payments/">Online payments</a></div>{% endblock %}
 {% block content %}
 <section class="panel">

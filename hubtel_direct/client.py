@@ -88,6 +88,27 @@ def require_enabled(kind):
         raise ValidationError("Hubtel Direct is not enabled or its whitelisted egress is not confirmed.")
 
 
+def require_reconciliation_ready(kind):
+    """Allow safe GET status recovery after outbound payment switches are OFF.
+
+    Turning off a charge/payout is not permission to abandon funds already
+    moving. Status checks still require credentials, the intended merchant
+    account, and an explicitly confirmed whitelisted WEB network path.
+    """
+    if kind not in {"receive", "send_momo", "send_bank"}:
+        raise ValidationError("Unexpected Hubtel transaction kind.")
+    account_number = (getattr(settings, "HUBTEL_COLLECTION_ACCOUNT", "")
+                      if kind == "receive" else
+                      getattr(settings, "HUBTEL_DISBURSEMENT_ACCOUNT", ""))
+    if not (
+        getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False)
+        and getattr(settings, "HUBTEL_API_ID", "")
+        and getattr(settings, "HUBTEL_API_KEY", "")
+        and re.fullmatch(r"[0-9]{1,32}", str(account_number))
+    ):
+        raise ValidationError("Hubtel status checking requires confirmed WEB egress and merchant credentials.")
+
+
 def _headers():
     token = base64.b64encode((settings.HUBTEL_API_ID + ":" + settings.HUBTEL_API_KEY).encode()).decode()
     return {"Authorization": "Basic " + token, "Accept": "application/json", "Content-Type": "application/json"}
@@ -181,7 +202,7 @@ def submit(tx):
 
 def check(tx):
     """Independently verify a persisted reference, not a browser/callback claim."""
-    require_enabled(tx.kind)
+    require_reconciliation_ready(tx.kind)
     acc = _account(tx.kind)
     url = (
         f"{RECEIVE_STATUS_ORIGIN}/transactions/{acc}/status" if tx.kind == "receive"

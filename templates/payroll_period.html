@@ -4,6 +4,60 @@
 <section class="payroll-status panel"><div><p class="eyebrow">{{ period.label|upper }}</p><h2>{{ period.get_status_display }}</h2><p>{{ period.rule.name }} · effective {{ period.rule.effective_from|date:"j M Y" }}</p></div><div class="status-rail"><span class="{% if period.status != 'draft' %}done{% endif %}">1 Draft</span><span class="{% if period.status == 'prepared' or period.status == 'approved' or period.status == 'locked' or period.status == 'reconciled' %}done{% endif %}">2 Prepared</span><span class="{% if period.status == 'approved' or period.status == 'locked' or period.status == 'reconciled' %}done{% endif %}">3 Approved</span><span class="{% if period.status == 'locked' or period.status == 'reconciled' %}done{% endif %}">4 Locked</span><span class="{% if period.status == 'reconciled' %}done{% endif %}">5 Reconciled</span></div></section>
 <div class="metrics"><article><p>Gross pay</p><strong><small>{{ company.currency }}</small> {{ summary.gross|floatformat:2 }}</strong><span>{{ summary.workers }} workers</span></article><article><p>Total taxes</p><strong><small>{{ company.currency }}</small> {{ summary.tax_total|floatformat:2 }}</strong><span>PAYE + bonus + overtime tax</span></article><article><p>Employee SSNIT</p><strong><small>{{ company.currency }}</small> {{ summary.employee_ssnit|floatformat:2 }}</strong><span>Worker contribution</span></article><article><p>Outstanding net pay</p><strong><small>{{ company.currency }}</small> {{ summary.balance|floatformat:2 }}</strong><span>{{ summary.paid_workers }} workers fully paid</span></article></div>
 {% if can_manage %}<section class="panel workflow-actions"><div><h2>Payroll controls</h2><p class="muted">Preparation freezes calculations for review. Approval must be performed by a different authorised reviewer.</p></div><form method="post" action="/payroll/{{ period.pk }}/action/">{% csrf_token %}{% if period.status == 'draft' %}<button class="button secondary" name="action" value="recalculate">Recalculate</button><button class="button" name="action" value="prepare">Prepare for review</button>{% elif period.status == 'prepared' and can_approve %}<button class="button secondary" name="action" value="return_to_draft">Return for correction</button><button class="button" name="action" value="approve">Approve payroll</button>{% elif period.status == 'approved' and can_approve %}<button class="button secondary" name="action" value="return_to_draft">Return for correction</button><button class="button" name="action" value="lock">Lock for payment</button>{% elif period.status == 'locked' %}<button class="button" name="action" value="reconcile">Run reconciliation</button>{% elif period.status == 'reconciled' %}<span class="pill success">Fully reconciled</span>{% endif %}</form></section>{% endif %}
+{% if can_manage %}
+<section class="panel payroll-hubtel-transfer">
+ <div class="section-heading"><div>
+  <p class="eyebrow">DIRECT HUBTEL DISBURSEMENTS</p>
+  <h2>Pay salaries online — Mobile Money or bank</h2>
+  <p class="muted">Employee net pay is calculated by payroll rules. Company management must verify recipient names, a different manager approves the batch, and individual salaries are marked paid only after provider confirmation.</p>
+ </div></div>
+ {% if not hubtel_payroll_enabled %}
+ <div class="notice subtle"><strong>Not active for live salary transfers yet.</strong> Requires the Hubtel Disbursement Account, bank/MoMo Send Money scopes, approved payment limits and a verified small-value test. No money will move until enabled.</div>
+ {% endif %}
+ {% if hubtel_batch %}
+ <div class="notice subtle"><strong>Batch status: {{ hubtel_batch.status|title }}</strong>
+  <span>GHS {{ hubtel_batch.expected_amount|floatformat:2 }} · prepared by {{ hubtel_batch.created_by.get_full_name|default:hubtel_batch.created_by.username }}</span>
+ </div>
+ {% if hubtel_batch.status == "awaiting_approval" and can_transfer_approve and hubtel_batch.created_by_id != request.user.pk and hubtel_payroll_enabled %}
+ <form method="post" action="{% url 'hubtel_payroll_approve' period.pk %}" onsubmit="return confirm('Approve KOFAD Hubtel salary transfers for every verified worker in this payroll batch?')">{% csrf_token %}
+  <button class="button" type="submit">Authorize Hubtel salary batch</button>
+ </form>
+ {% endif %}
+ <div class="table-wrap"><table class="data-table"><thead><tr><th>Worker</th><th>Salary amount</th><th>Registered recipient</th><th>Status</th></tr></thead>
+  <tbody>{% for line in hubtel_batch.lines.all %}
+   <tr><td>{{ line.entry.worker.full_name }}</td><td>GHS {{ line.amount|floatformat:2 }}</td><td>{{ line.recipient_name_snapshot }} · ending {{ line.destination.destination_suffix }}</td><td>{{ line.status|title }}{% if line.transaction %} · {{ line.transaction.status|title }}{% endif %}</td></tr>
+  {% endfor %}</tbody></table></div>
+ {% elif period.status == "locked" %}
+ <form method="post" action="{% url 'hubtel_payroll_prepare' period.pk %}">{% csrf_token %}
+  <button class="button secondary" type="submit">Prepare all verified salary transfers for approval</button>
+ </form>
+ {% endif %}
+ <details style="margin-top:15px"><summary class="button secondary" style="cursor:pointer">Verify worker salary bank or MoMo details</summary>
+ <div style="display:grid;gap:16px;margin-top:14px">
+ {% for entry in entries %}
+ <article class="notice subtle" style="padding:14px">
+  <strong>{{ entry.worker.full_name }} · {{ entry.worker.employee_code }}</strong>
+  <p>Net unpaid: GHS {{ entry.balance|floatformat:2 }}.
+   {% if entry.worker.hubtel_salary_destination %}Verified: {{ entry.worker.hubtel_salary_destination.provider_name }} ({{ entry.worker.hubtel_salary_destination.get_payment_type_display }} ****{{ entry.worker.hubtel_salary_destination.destination_suffix }})
+   {% else %}No verified Hubtel salary destination saved.{% endif %}
+  </p>
+  {% if can_transfer_approve %}
+  <form method="post" action="{% url 'hubtel_payroll_recipient' period.pk entry.worker.pk %}" class="form-grid three">
+   {% csrf_token %}
+   <label>Pay via<select name="payment_type" required><option value="momo">Mobile Money</option><option value="bank">Bank transfer</option></select></label>
+   <label>MoMo network<select name="channel"><option value="mtn-gh">MTN</option><option value="vodafone-gh">Telecel</option><option value="tigo-gh">AirtelTigo</option></select></label>
+   <label>Bank name<select name="bank_code"><option value="">Choose bank</option>{% for code,name in hubtel_banks %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
+   <label>Wallet / bank account<input name="destination" inputmode="numeric" autocomplete="off" required minlength="6" maxlength="30" placeholder="Account number"></label>
+   <div><button type="submit" class="button secondary">Verify name with Hubtel & save</button></div>
+  </form>
+  <p class="muted">For MoMo select a network; for bank select the bank. The bank/MoMo account holder name is fetched from Hubtel, never guessed. Only company management may change payment destinations.</p>
+  {% endif %}
+ </article>
+ {% endfor %}
+ </div>
+ </details>
+</section>
+{% endif %}
 <section class="panel"><form class="searchbar advanced-filter"><label>Search worker<input name="q" value="{{ q }}" placeholder="Name, employee ID or phone"></label><label>Department<select name="department"><option value="">All departments</option>{% for item in departments %}<option value="{{ item }}" {% if department == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label><label class="check-row"><input type="checkbox" name="issue" value="1" {% if issue == '1' %}checked{% endif %}> Issues only</label><button class="button">Apply</button></form>
 <div class="table-wrap"><table class="payroll-table"><thead><tr><th>Worker</th><th class="number">Gross</th><th class="number">SSNIT</th><th class="number">Tax</th><th class="number">Net</th><th class="number">Paid</th><th class="number">Balance</th><th>Review</th><th></th></tr></thead><tbody>{% for entry in entries %}<tr><td><strong>{{ entry.worker.full_name }}</strong><small class="table-sub">{{ entry.worker.employee_code }} · {{ entry.worker.department|default:"No department" }}</small></td><td class="number">{{ entry.gross_pay|floatformat:2 }}</td><td class="number">{{ entry.ssnit_employee|floatformat:2 }}</td><td class="number">{{ entry.paye_tax|add:entry.bonus_tax|add:entry.overtime_tax|floatformat:2 }}</td><td class="number"><strong>{{ entry.net_pay|floatformat:2 }}</strong></td><td class="number">{{ entry.paid_amount|floatformat:2 }}</td><td class="number">{{ entry.balance|floatformat:2 }}</td><td>{% if entry.validation_flags %}{% for flag in entry.validation_flags %}<span class="flag">{{ flag }}</span>{% endfor %}{% else %}<span class="pill success">Clear</span>{% endif %}</td><td><a href="/payroll/{{ period.pk }}/payslip/{{ entry.pk }}/pdf/">Payslip</a></td></tr>
 {% if period.status == 'draft' and can_manage %}<tr class="detail-row"><td colspan="9"><details><summary>Edit earnings & deductions · {{ entry.worker.full_name }}</summary><form method="post" action="/payroll/{{ period.pk }}/entries/{{ entry.pk }}/" class="payroll-edit-grid">{% csrf_token %}<label>Basic<input type="number" step=".01" min="0" name="basic_salary" value="{{ entry.basic_salary }}"></label><label>Allowances<input type="number" step=".01" min="0" name="allowances" value="{{ entry.allowances }}"></label><label>Bonus<input type="number" step=".01" min="0" name="bonus" value="{{ entry.bonus }}"></label><label>Overtime<input type="number" step=".01" min="0" name="overtime" value="{{ entry.overtime }}"></label><label>Other earnings<input type="number" step=".01" min="0" name="other_earnings" value="{{ entry.other_earnings }}"></label><label>Pre-tax relief<input type="number" step=".01" min="0" name="pretax_relief" value="{{ entry.pretax_relief }}"></label><label>Other deductions<input type="number" step=".01" min="0" name="other_deductions" value="{{ entry.other_deductions }}"></label><button class="button">Update calculation</button></form></details></td></tr>{% elif period.status == 'locked' and can_manage and entry.balance > 0 %}<tr class="detail-row"><td colspan="9"><details><summary>Post salary payment · {{ entry.worker.full_name }}</summary><form method="post" action="/payroll/{{ period.pk }}/entries/{{ entry.pk }}/payment/" class="payroll-edit-grid">{% csrf_token %}<label>Amount<input type="number" step=".01" min=".01" max="{{ entry.balance }}" name="amount" value="{{ entry.balance }}"></label><label>Method<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label><label>Reference<input name="reference" placeholder="Bank/MoMo reference"></label><label class="span-2">Note<input name="note"></label><button class="button">Post payment</button></form></details></td></tr>{% endif %}

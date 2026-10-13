@@ -3,6 +3,8 @@
 {% block content %}
 <section class="hero-panel settings-hero"><div><p class="eyebrow">RECEIVABLES POLICY</p><h2>Debt settings</h2><p>Control when an unpaid receipt becomes overdue, when customers are reminded, how often KOFAD may contact them and the wording used for customer reminders.</p></div><span class="pill">{% if item.delivery_mode == "off" %}Automation off{% elif item.delivery_mode == "draft" %}Drafts only{% else %}Automatic send{% endif %}</span></section>
 
+<section class="panel" style="margin:16px 0"><p class="eyebrow">DIRECT DEBIT & DIGITAL REPAYMENT POLICIES</p><h3>Online Debt settings</h3><p>Control customer-approved MTN/Telecel debit agreements, allowed schedules, eligibility, grace periods, wallet charge windows, daily limits and emergency pause, separately for each location.</p><a class="button" href="{% url 'online_debt_settings' %}">Configure Online Debt →</a></section>
+
 <div class="settings-explainer-grid">
 <article class="panel"><small>OVERDUE RULE</small><strong>{{ item.overdue_grace_value }} {{ item.get_overdue_grace_unit_display }}</strong><p>A receipt becomes overdue after its due date plus this grace period. Zero means the next day is overdue.</p></article>
 <article class="panel"><small>REMINDER TIME</small><strong>{{ item.reminder_time|time:"H:i" }}</strong><p>Africa/Accra time. Automatic runs still respect consent, frequency limits and provider availability.</p></article>

@@ -37,22 +37,28 @@
     <div class="debt-toolbar">
       <form method="get" class="debt-search-form">
         <input type="hidden" name="status" value="{{ status }}">
+        <input type="hidden" name="type" value="{{ debtor_type }}">
         <span aria-hidden="true">⌕</span>
         <input id="debt-q" name="q" value="{{ q }}" placeholder="Search customer name or Ghana phone" autocomplete="off">
-        {% if q %}<a href="/debts/?status={{ status }}" aria-label="Clear debt search">×</a>{% endif %}
+        {% if q %}<a href="/debts/?status={{ status }}&type={{ debtor_type }}" aria-label="Clear debt search">×</a>{% endif %}
         <button class="button secondary">Search</button>
       </form>
+      <div class="debt-filter-row" role="group" aria-label="Account payment agreement">
+        <a href="/debts/?q={{ q|urlencode }}&status={{ status }}&type=all" class="{% if debtor_type == 'all' %}active{% endif %}">All customers</a>
+        <a href="/debts/?q={{ q|urlencode }}&status={{ status }}&type=manual" class="{% if debtor_type == 'manual' %}active{% endif %}">Manual debtors</a>
+        <a href="/debts/?q={{ q|urlencode }}&status={{ status }}&type=direct" class="{% if debtor_type == 'direct' %}active{% endif %}">Direct Debit debtors</a>
+      </div>
       <div class="debt-filter-row">
-        <a href="/debts/?q={{ q|urlencode }}&status=all" class="{% if status == 'all' %}active{% endif %}">All</a>
-        <a href="/debts/?q={{ q|urlencode }}&status=overdue" class="{% if status == 'overdue' %}active{% endif %}">Overdue</a>
-        <a href="/debts/?q={{ q|urlencode }}&status=due_today" class="{% if status == 'due_today' %}active{% endif %}">Due today</a>
-        <a href="/debts/?q={{ q|urlencode }}&status=current" class="{% if status == 'current' %}active{% endif %}">Not overdue</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=all&type={{ debtor_type }}" class="{% if status == 'all' %}active{% endif %}">All</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=overdue&type={{ debtor_type }}" class="{% if status == 'overdue' %}active{% endif %}">Overdue</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=due_today&type={{ debtor_type }}" class="{% if status == 'due_today' %}active{% endif %}">Due today</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=current&type={{ debtor_type }}" class="{% if status == 'current' %}active{% endif %}">Not overdue</a>
       </div>
     </div>
     <div class="debt-list-heading"><strong>{{ rows|length }} account{{ rows|length|pluralize }}</strong><small>Select a customer to open the account</small></div>
     <div class="debt-account-list">
       {% for row in rows %}
-      <a class="debt-account-card {% if selected.party.pk == row.party.pk %}selected{% endif %} {% if row.overdue %}overdue{% endif %}" href="/debts/?q={{ q|urlencode }}&status={{ status }}&customer={{ row.party.pk }}">
+      <a class="debt-account-card {% if selected.party.pk == row.party.pk %}selected{% endif %} {% if row.overdue %}overdue{% endif %}" href="/debts/?q={{ q|urlencode }}&status={{ status }}&type={{ debtor_type }}&customer={{ row.party.pk }}">
         <span class="debt-avatar">{{ row.party.name|first|upper }}</span>
         <span class="debt-account-copy">
           <strong>{{ row.party.name }}</strong>
@@ -72,12 +78,57 @@
 
   <aside class="debt-detail-pane">
     {% if selected %}
-    <a class="debt-mobile-back" href="/debts/?q={{ q|urlencode }}&status={{ status }}">← Back to customer accounts</a>
+    <a class="debt-mobile-back" href="/debts/?q={{ q|urlencode }}&status={{ status }}&type={{ debtor_type }}">← Back to customer accounts</a>
     <header class="debt-customer-header">
       <div class="debt-avatar large">{{ selected.party.name|first|upper }}</div>
       <div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ selected.party.name }}</h2><p>{{ selected.party.phone }}{% if selected.party.address %} · {{ selected.party.address }}{% endif %}</p></div>
       <a class="button secondary" href="{% url 'customer_profile' selected.party.pk %}">Full profile</a>
     </header>
+
+    <section class="debt-section" aria-labelledby="direct-debit-title">
+      <div class="section-heading"><div>
+        <p class="eyebrow">CONSENTED MOBILE MONEY REPAYMENTS</p>
+        <h3 id="direct-debit-title">Hubtel Direct Debit</h3>
+        {% if perms.core.manage_company %}<p><a href="{% url 'online_debt_settings' %}">Manage Online Debt policy</a></p>{% endif %}
+        <p class="muted">The customer's wallet owner must approve the mandate independently before any automated installment can begin. MTN and Telecel only.</p>
+      </div></div>
+      {% for mandate in selected_mandates %}
+      <div class="notice subtle" style="display:grid;gap:8px;margin:12px 0">
+        <strong>{{ mandate.get_status_display }} · {{ mandate.get_frequency_display }}</strong>
+        <span>Wallet ending {{ mandate.phone_suffix }} · GHS {{ mandate.amount_per_period|floatformat:2 }} per period · maximum GHS {{ mandate.maximum_total|floatformat:2 }}</span>
+        <span>Next due {{ mandate.next_due_date|date:"d M Y" }} · paid GHS {{ mandate.collected_total|floatformat:2 }}</span>
+        {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Collection suspended.</strong> Do not start another automatic debit until finance resolves the existing provider authorization or transaction evidence. Customer can still make a manual payment.</p>{% endif %}
+        <p><a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval/cancellation page ↗</a></p>
+        {% if perms.core.operate_finance and mandate.status != "cancelled" and mandate.status != "settled" %}
+        <form action="{% url 'hubtel_debt_staff_cancel' mandate.pk %}" method="post">{% csrf_token %}
+          <button type="submit" class="button secondary" onclick="return confirm('Stop future debit requests for this customer?')">Stop direct debit</button>
+        </form>
+        {% endif %}
+      </div>
+      {% empty %}
+      <div class="notice subtle">This customer is currently a manual debtor, without a Direct Debit agreement.</div>
+      {% if perms.core.operate_finance and online_debt_policy and online_debt_policy.plan_creation_enabled %}
+      <details class="debt-direct-setup" style="margin-top:15px">
+       <summary class="button secondary" style="cursor:pointer">Offer a Direct Debit repayment plan</summary>
+       <form method="post" action="{% url 'hubtel_debt_create' %}" style="display:grid;gap:12px;max-width:640px;margin-top:16px">
+        {% csrf_token %}<input type="hidden" name="party" value="{{ selected.party.pk }}">
+        <p><strong>The customer must explicitly approve these terms and verify wallet ownership.</strong> Creating this plan will not debit or preapprove the wallet.</p>
+        <label>Wallet number<input type="tel" name="phone" value="{{ selected.party.phone }}" autocomplete="off" required></label>
+        <label>Network<select name="channel">{% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN Mobile Money</option>{% endif %}{% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}</select></label>
+        <label>Payment schedule<select name="frequency">{% if online_debt_policy.allow_weekly %}<option value="weekly">Weekly</option>{% endif %}{% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}{% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}{% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}{% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}{% if online_debt_policy.allow_once %}<option value="once">Once after agreed grace period</option>{% endif %}</select></label>
+        <label>First payment due<input type="date" name="first_due_date" required></label>
+        <label>Agreed amount per payment (GHS)<input type="number" min="{{ online_debt_policy.min_installment }}" max="{{ online_debt_policy.max_installment }}" step="0.01" name="amount" required><small>Allowed GHS {{ online_debt_policy.min_installment }} – GHS {{ online_debt_policy.max_installment }}</small></label>
+        <label>Absolute maximum amount authorized (GHS)<input type="number" min="0.01" max="{{ selected.outstanding }}" step="0.01" name="maximum" value="{{ selected.outstanding }}" required><small>Not more than the recorded customer debt of GHS {{ selected.outstanding|floatformat:2 }}.</small></label>
+        <p class="muted">Repeated shrinking debit attempts are not supported. A confirmed failed installment may carry forward to the next date only when the customer has agreed to that arrangement.</p>
+        <p class="muted">KOFAD will not query or attempt to drain a customer's wallet balance. An unsuccessful installment stays due; all debits must fit the customer's agreement, provider approval and recorded outstanding debt.</p>
+        <button type="submit" class="button">Create agreement for customer authorization</button>
+       </form>
+      </details>
+      {% elif perms.core.operate_finance %}
+      <div class="notice subtle">Management has disabled new Online Debt arrangements for this location. Manual debt collection is still available.</div>
+      {% endif %}
+      {% endfor %}
+    </section>
 
     <div class="notice subtle"><strong>Debt email:</strong> {% if selected.party.debt_email_opt_in and selected.party.email %}Enabled for {{ selected.party.email }}{% elif selected.party.email %}Off · customer email saved, but debt email preference is disabled{% else %}Off · no customer email confirmed{% endif %}. <a href="{% url 'customer_profile' selected.party.pk %}">View customer record</a>.</div>
     <section class="debt-balance-card">

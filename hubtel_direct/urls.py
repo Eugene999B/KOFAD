@@ -1,7 +1,20 @@
 from django.urls import path
-from . import views
+from . import views, mandate_views, payroll_views, policy_views, refund_views
 
 urlpatterns = [
+    path("settings/debt/online/", policy_views.online_debt_settings, name="online_debt_settings"),
+    path("online-returns/<uuid:return_id>/hubtel-refund/prepare/", refund_views.prepare, name="hubtel_refund_prepare"),
+    path("online-returns/<uuid:return_id>/hubtel-refund/approve/", refund_views.approve, name="hubtel_refund_approve"),
+    path("market/payments/hubtel-direct/refund/callback/", refund_views.callback, name="hubtel_refund_callback"),
+    path("payroll/<int:period_id>/hubtel/prepare/", payroll_views.prepare, name="hubtel_payroll_prepare"),
+    path("payroll/<int:period_id>/hubtel/approve/", payroll_views.approve, name="hubtel_payroll_approve"),
+    path("payroll/<int:period_id>/hubtel/recipients/<int:worker_id>/", payroll_views.verify_recipient, name="hubtel_payroll_recipient"),
+    path("debts/hubtel/mandates/", mandate_views.staff_create_mandate, name="hubtel_debt_create"),
+    path("debts/hubtel/mandates/<uuid:mandate_id>/cancel/", mandate_views.staff_cancel, name="hubtel_debt_staff_cancel"),
+    path("market/debt-authorization/<uuid:mandate_id>/", mandate_views.customer_authorize, name="hubtel_debt_authorize"),
+    path("market/debt-authorization/<uuid:mandate_id>/action/", mandate_views.customer_authorize_action, name="hubtel_debt_authorize_action"),
+    path("market/debt-authorization/<uuid:mandate_id>/cancel/", mandate_views.customer_cancel_action, name="hubtel_debt_cancel"),
+    path("market/payments/hubtel-direct/preapproval/callback/", mandate_views.callback, name="hubtel_debt_preapproval_callback"),
     path("api/pos/hubtel/wallet-name/", views.staff_wallet_name, name="hubtel_direct_wallet_name"),
     path("internal/hubtel-direct/reconcile/", views.internal_reconcile, name="hubtel_direct_internal_reconcile"),
     path("market/orders/<uuid:order_id>/hubtel-direct/", views.collect, name="hubtel_direct_collect"),
@@ -9,6 +22,7 @@ urlpatterns = [
     path("market/orders/<uuid:order_id>/hubtel-direct/status/", views.collect_status, name="hubtel_direct_collect_status"),
     path("market/payments/hubtel-direct/callback/", views.callback, name="hubtel_direct_callback"),
     path("finance/hubtel-direct/", views.finance_dashboard, name="hubtel_direct_finance"),
+    path("finance/hubtel-direct/verify-beneficiary/", views.recipient_name, name="hubtel_direct_recipient_name"),
     path("finance/hubtel-direct/payouts/", views.payout, name="hubtel_direct_payout"),
     path("finance/hubtel-direct/payouts/<uuid:tx_id>/approve/", views.payout_approve, name="hubtel_direct_approve"),
     path("finance/hubtel-direct/payouts/<uuid:tx_id>/", views.payout_detail, name="hubtel_direct_payout_detail"),
