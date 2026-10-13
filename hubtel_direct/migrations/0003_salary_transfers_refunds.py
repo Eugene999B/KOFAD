@@ -38,6 +38,10 @@ class Migration(migrations.Migration):
         migrations.CreateModel(name="PayrollTransferLine", fields=[
             ("id", models.BigAutoField(primary_key=True, serialize=False)),
             ("amount", models.DecimalField(max_digits=14, decimal_places=2)),
+            ("encrypted_account_snapshot", models.TextField()),
+            ("recipient_name_snapshot", models.CharField(max_length=140)),
+            ("channel_snapshot", models.CharField(max_length=20, blank=True)),
+            ("bank_code_snapshot", models.CharField(max_length=6, blank=True)),
             ("status", models.CharField(max_length=24, default="draft", db_index=True)),
             ("created_at", models.DateTimeField(auto_now_add=True)),
             ("batch", models.ForeignKey(to="hubtel_direct.payrolltransferbatch", related_name="lines", on_delete=django.db.models.deletion.PROTECT)),
