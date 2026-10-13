@@ -5,6 +5,7 @@ its separate deployment switch is enabled after authorization and live UAT.
 No customer-wallet balance API exists. Never probe it with shrinking debits.
 """
 import uuid
+import hashlib
 from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import urlsplit
@@ -86,13 +87,14 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
     if allow_one_partial_retry and (minimum < Decimal("1.00") or minimum >= amt):
         raise ValidationError("A partial retry minimum must be at least GHS 1 and below the installment.")
     digits = debit_api.number(phone)
+    fingerprint = hashlib.sha256((settings.SECRET_KEY + "|hubtel-debt-wallet|" + digits).encode()).hexdigest()
     if not party.consent:
         raise ValidationError("Record the customer's consent to payment communications first.")
     if DebtMandate.objects.filter(party=party, status__in=["draft", "pending", "approved", "cancel_pending"]).exists():
         raise ValidationError("This customer already has an active or pending direct-debit arrangement.")
     mandate = DebtMandate.objects.create(
         branch=branch, party=party, created_by=user,
-        phone_encrypted=client.seal(digits), phone_suffix=digits[-4:],
+        phone_encrypted=client.seal(digits), phone_fingerprint=fingerprint, phone_suffix=digits[-4:],
         channel=channel, client_reference=debit_api.reference(),
         frequency=frequency, first_due_date=first_due_date, next_due_date=first_due_date,
         amount_per_period=amt, maximum_total=maximum,
