@@ -40,6 +40,9 @@ def save_recipient(user, worker, *, payment_type, destination, channel="", bank_
     else:
         raise ValidationError("Choose Mobile Money or a verified Ghana bank.")
     with transaction.atomic():
+        # Serialize recipient changes against snapshot preparation. Both
+        # operations lock the same branch before reading/writing salary data.
+        core_services.lock_branch(worker.branch)
         # Editing a recipient while a prepared/processing batch exists cannot
         # silently re-route payroll. Finish or explicitly review that batch
         # before accepting new beneficiary instructions.
@@ -81,6 +84,8 @@ def save_recipient(user, worker, *, payment_type, destination, channel="", bank_
 def prepare_batch(user, period):
     if not user.has_perm("core.operate_finance"):
         raise PermissionDenied("Finance permission is required to prepare salary payments.")
+    core_services.lock_branch(period.branch)
+    period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
     if period.status != "locked":
         raise ValidationError("Payroll must be approved and locked before online disbursement.")
     existing = PayrollTransferBatch.objects.filter(period=period).first()
@@ -100,12 +105,13 @@ def prepare_batch(user, period):
     requested = sum((entry.balance for entry in outstanding), Decimal("0.00"))
     if requested > max_daily:
         raise ValidationError("Payroll exceeds today's approved total Hubtel disbursement limit.")
+    profiles = {}
     for entry in outstanding:
         if entry.balance > max_single:
             raise ValidationError(
                 f"{entry.worker.employee_code}: salary exceeds the approved single-payment limit."
             )
-        profile = WorkerTransferProfile.objects.filter(worker=entry.worker).first()
+        profile = WorkerTransferProfile.objects.select_for_update().filter(worker=entry.worker).first()
         if not profile or profile.verified_at < timezone.now() - timedelta(days=30):
             raise ValidationError(
                 f"{entry.worker.employee_code}: verify salary bank/MoMo destination within 30 days."
@@ -114,11 +120,14 @@ def prepare_batch(user, period):
             raise ValidationError("Invalid worker Mobile Money network.")
         if profile.payment_type == "bank" and profile.bank_code not in client.BANK_CODES:
             raise ValidationError("Invalid worker bank code.")
+        profiles[entry.worker_id] = profile
     batch = PayrollTransferBatch.objects.create(
         period=period, created_by=user, expected_amount=requested, status="awaiting_approval",
     )
     for entry in outstanding:
-        profile = WorkerTransferProfile.objects.get(worker=entry.worker)
+        # Use the very same locked and verified profile that was validated.
+        # Never refetch an account after checking its network/bank type.
+        profile = profiles[entry.worker_id]
         PayrollTransferLine.objects.create(
             batch=batch, entry=entry, destination=profile, amount=entry.balance,
             encrypted_account_snapshot=profile.destination_encrypted,
