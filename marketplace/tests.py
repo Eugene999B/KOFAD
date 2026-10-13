@@ -914,6 +914,40 @@ class MarketV2SupportTests(MarketFixtures):
         session["branch"] = self.branch.pk
         session.save()
 
+    def test_staff_inbox_handles_guests_without_customer_accounts(self):
+        guest = Conversation.objects.create(
+            branch=self.branch, public_name="Guest Visitor",
+            public_phone="0245556677", subject="Guest delivery enquiry",
+        )
+        anonymous = Conversation.objects.create(
+            branch=self.branch, public_name="", public_phone="",
+            subject="Orphaned visitor enquiry",
+        )
+        registered = Conversation.objects.create(
+            branch=self.branch, customer=self.customer, public_name="",
+            public_phone="", subject="Registered enquiry",
+        )
+        self.staff_session()
+        for url in (
+            "/online-inbox/",
+            "/online-inbox/?status=waiting",
+            f"/online-inbox/{guest.pk}/",
+            f"/online-inbox/{anonymous.pk}/",
+            f"/online-inbox/{registered.pk}/",
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+        queue = self.client.get("/online-inbox/")
+        self.assertContains(queue, "Guest Visitor")
+        self.assertContains(queue, "Market Customer")
+        self.assertContains(queue, "Orphaned visitor enquiry")
+        self.assertContains(self.client.get(f"/online-inbox/{guest.pk}/"), "0245556677")
+        self.assertEqual(anonymous.inbox_display_name, "Customer")
+        self.assertEqual(anonymous.inbox_phone, "")
+        self.assertEqual(registered.inbox_display_name, "Market Customer")
+        self.assertEqual(registered.inbox_phone, self.customer.phone)
+
     def test_customer_can_start_chat_and_staff_can_reply_live(self):
         self.customer_session()
         created = self.client.post("/market/messages/", {
