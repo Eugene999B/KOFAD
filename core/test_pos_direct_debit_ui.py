@@ -27,7 +27,7 @@ class PosDirectDebitEntryTests(MarketFixtures):
         self.assertContains(page, 'value="mtn-gh-direct-debit"')
         self.assertContains(page, 'value="weekly"')
         self.assertContains(page, 'id="sale-debit-authorization"')
-        self.assertContains(page, 'id="hubtel-wallet-name"')
+        self.assertContains(page, 'id="credit-direct-name"')
         self.assertNotContains(page, "Hubtel Direct Mobile Money")
         self.assertNotContains(page, "COUNTER SALES")
         self.assertNotContains(page, 'class="single-location"')
