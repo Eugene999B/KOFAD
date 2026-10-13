@@ -56,6 +56,9 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
     core_services.permit(user, branch, "operate_finance")
+    # Serialize two customers trying to bind the same merchant wallet before
+    # the database uniqueness constraint resolves any remaining race.
+    core_services.lock_branch(branch)
     policy, _ = OnlineDebtSettings.objects.select_for_update().get_or_create(branch=branch)
     if not policy.plan_creation_enabled:
         raise ValidationError("Online Debt agreements are disabled in Debt Settings for this location.")
