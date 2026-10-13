@@ -14,7 +14,6 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from core import accounting
 from core import payroll_engine
 from core import services as core_services
 from core.models import Company, PayrollEntry, PayrollPeriod, Worker
@@ -59,7 +58,7 @@ def save_recipient(user, worker, *, payment_type, destination, channel="", bank_
         obj.verified_at = timezone.now()
         obj.verified_by = user
         obj.save()
-    accounting.audit(user, worker.branch, "payroll.hubtel_beneficiary_verified",
+    core_services.audit(user, worker.branch, "payroll.hubtel_beneficiary_verified",
                      str(worker.pk), {
                          "employee_code": worker.employee_code,
                          "payment_type": payment_type, "destination_last4": number[-4:],
@@ -117,7 +116,7 @@ def prepare_batch(user, period):
             channel_snapshot=profile.channel,
             bank_code_snapshot=profile.bank_code,
         )
-    accounting.audit(user, period.branch, "payroll.hubtel_batch_prepared",
+    core_services.audit(user, period.branch, "payroll.hubtel_batch_prepared",
                      str(batch.pk), {"period": period.label, "total": str(requested),
                                      "count": len(outstanding)}, category="finance", severity="high")
     return batch
