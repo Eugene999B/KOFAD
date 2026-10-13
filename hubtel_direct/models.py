@@ -96,6 +96,12 @@ class DebtMandate(models.Model):
         ]
         constraints = [models.UniqueConstraint(fields=["phone_fingerprint"], condition=models.Q(status__in=["draft", "pending", "approved", "cancel_pending"]), name="hubtel_one_active_mandate_wallet")]
 
+    @property
+    def rollover_unpaid(self):
+        """Older approved contracts retain their original rollover behavior."""
+        return self.terms_snapshot.get("rollover_unpaid", True) is not False
+
+
 
 class DebtDebitAttempt(models.Model):
     """One immutable amount/reference; no reuse after unknown HTTP outcomes."""
