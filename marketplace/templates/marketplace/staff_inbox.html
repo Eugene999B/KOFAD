@@ -16,8 +16,8 @@
 <div class="support-queue-list">
 {% for item in conversations %}
 <a href="/online-inbox/{{ item.pk }}/?status={{ selected_status }}" class="support-queue-item {% if conversation.pk == item.pk %}active{% endif %}">
-<span class="support-queue-avatar">{{ item.public_name|default:item.customer.full_name|first|upper }}</span>
-<div class="support-queue-copy"><div><strong>{{ item.public_name|default:item.customer.full_name|default:"Customer" }}</strong>{% if item.status == 'closed' %}<i class="closed">Closed</i>{% elif item.assigned_to %}<i class="connected">With {{ item.assigned_to.get_full_name|default:item.assigned_to.username }}</i>{% else %}<i class="waiting">Waiting</i>{% endif %}</div><p>{{ item.subject }}</p><small>{% with last=item.messages.last %}{% if last %}{{ last.body|default:"Attachment"|truncatechars:48 }} · {% endif %}{% endwith %}{{ item.updated_at|date:"H:i" }}{% if item.order %} · {{ item.order.public_reference }}{% endif %}</small></div>
+<span class="support-queue-avatar">{{ item.inbox_display_name|first|upper }}</span>
+<div class="support-queue-copy"><div><strong>{{ item.inbox_display_name }}</strong>{% if item.status == 'closed' %}<i class="closed">Closed</i>{% elif item.assigned_to %}<i class="connected">With {{ item.assigned_to.get_full_name|default:item.assigned_to.username }}</i>{% else %}<i class="waiting">Waiting</i>{% endif %}</div><p>{{ item.subject }}</p><small>{% with last=item.messages.last %}{% if last %}{{ last.body|default:"Attachment"|truncatechars:48 }} · {% endif %}{% endwith %}{{ item.updated_at|date:"H:i" }}{% if item.order %} · {{ item.order.public_reference }}{% endif %}</small></div>
 <span class="support-queue-arrow">›</span>
 </a>
 {% empty %}<div class="support-queue-empty"><span>✓</span><strong>Nothing waiting here.</strong><small>New customer chats will appear automatically.</small></div>{% endfor %}
@@ -28,7 +28,7 @@
 {% if conversation %}
 <header class="support-agent-head">
 <a class="support-mobile-back" href="/online-inbox/?status={{ selected_status }}">‹ Inbox</a>
-<div class="support-agent-customer"><span class="support-agent-avatar">{{ conversation.public_name|default:conversation.customer.full_name|first|upper }}</span><div><p>{{ conversation.status|upper }} · {{ conversation.subject }}</p><h3>{{ conversation.public_name|default:conversation.customer.full_name|default:"Customer" }}</h3><small>{{ conversation.public_phone|default:conversation.customer.phone }}{% if conversation.order %} · {{ conversation.order.public_reference }}{% endif %}</small></div></div>
+<div class="support-agent-customer"><span class="support-agent-avatar">{{ conversation.inbox_display_name|first|upper }}</span><div><p>{{ conversation.status|upper }} · {{ conversation.subject }}</p><h3>{{ conversation.inbox_display_name }}</h3><small>{{ conversation.inbox_phone }}{% if conversation.order %} · {{ conversation.order.public_reference }}{% endif %}</small></div></div>
 <div class="support-agent-actions">
 {% if conversation.status == 'open' %}
 {% if not conversation.assigned_to %}<form method="post">{% csrf_token %}<button class="support-action primary" name="action" value="accept">Accept chat</button></form>
