@@ -1,13 +1,17 @@
 """Dedicated, company-managed, audited Online Debt settings."""
 from django.conf import settings
 from django.contrib import messages
+from decimal import Decimal
+
 from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
 from django.shortcuts import redirect, render
 
 from core import services as core_services
 from core.views import protected
 
-from .models import DebtMandate, OnlineDebtSettings
+from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 from .policy_forms import OnlineDebtSettingsForm
 
 
@@ -35,6 +39,8 @@ def online_debt_settings(request, branch):
         messages.success(request, "Online Debt policy saved for this location. Existing customer agreements are unchanged.")
         return redirect("online_debt_settings")
 
+    today_attempts = DebtDebitAttempt.objects.filter(mandate__branch=branch, sent_at__date=timezone.localdate())
+    submitted_total = today_attempts.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
     status = {
         "provider_preapproval": getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False),
         "provider_charges": getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False),
@@ -43,6 +49,9 @@ def online_debt_settings(request, branch):
     return render(request, "hubtel_direct/online_debt_settings.html", {
         "title": "Online Debt settings",
         "form": form, "policy": policy, "flags": status,
+        "attempts_today": today_attempts.count(),
+        "submitted_today": submitted_total,
+        "remaining_today": max(Decimal("0.00"), policy.daily_collection_limit - submitted_total),
         "approved_count": DebtMandate.objects.filter(branch=branch, status="approved").count(),
         "pending_count": DebtMandate.objects.filter(branch=branch, status__in=["draft", "pending", "cancel_pending"]).count(),
     })
