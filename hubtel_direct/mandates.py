@@ -257,6 +257,147 @@ def enqueue_due(limit=10):
     return count
 
 
+def dispatch_planned(limit=8):
+    """Exactly one provider POST per durable attempt; requires explicit debit gate."""
+    from datetime import timedelta
+    debit_api.gate("charge")
+    posted = 0
+    for attempt_id in list(DebtDebitAttempt.objects.filter(
+        status="planned"
+    ).order_by("created_at").values_list("pk", flat=True)[:limit]):
+        with transaction.atomic():
+            from core.models import Branch
+            prelim = DebtDebitAttempt.objects.select_related("mandate").get(pk=attempt_id)
+            core_services.lock_branch(prelim.mandate.branch)
+            attempt = DebtDebitAttempt.objects.select_for_update().select_related("mandate", "mandate__party").get(pk=attempt_id)
+            mandate = DebtMandate.objects.select_for_update().get(pk=attempt.mandate_id)
+            if (attempt.status != "planned" or mandate.status != "approved"
+                    or attempt.amount > outstanding(mandate.party)
+                    or attempt.amount > mandate.maximum_total - mandate.collected_total
+                    or attempt.period_due_date > timezone.localdate()
+                    or DebtDebitAttempt.objects.filter(
+                        mandate=mandate, status__in=["sending", "pending", "unknown"],
+                    ).exclude(pk=attempt.pk).exists()):
+                if attempt.status == "planned":
+                    attempt.status = "cancelled"
+                    attempt.save(update_fields=["status", "updated_at"])
+                continue
+            # Repeat Hubtel preapproval check immediately before a debit.
+            # This must not trust the previously cached approval flag.
+        try:
+            mandate = refresh_preapproval(mandate)
+        except (client.StatusUnconfirmed, ValidationError):
+            continue
+        if mandate.status != "approved":
+            continue
+        with transaction.atomic():
+            core_services.lock_branch(mandate.branch)
+            attempt = DebtDebitAttempt.objects.select_for_update().select_related("mandate").get(pk=attempt_id)
+            mandate = DebtMandate.objects.select_for_update().get(pk=attempt.mandate_id)
+            if attempt.status != "planned" or mandate.status != "approved":
+                continue
+            attempt.status = "sending"  # store before any irreversible POST
+            attempt.next_check_at = timezone.now() + timedelta(minutes=5)
+            attempt.save(update_fields=["status", "next_check_at", "updated_at"])
+        try:
+            provider_id = debit_api.debit_charge(attempt)
+        except (client.StatusUnconfirmed, client.SubmissionUnknown, ValidationError):
+            # Network outcome may be unknown. Never POST again for this ref.
+            DebtDebitAttempt.objects.filter(pk=attempt_id, status="sending").update(
+                status="unknown",
+            )
+        else:
+            DebtDebitAttempt.objects.filter(pk=attempt_id, status="sending").update(
+                status="pending", hubtel_transaction_id=provider_id,
+            )
+        posted += 1
+    return posted
+
+
+def reconcile_attempts(limit=15):
+    """Use Hubtel's independent >=5-minute status endpoint on KOFAD WEB."""
+    from types import SimpleNamespace
+    from datetime import timedelta
+    debit_api.gate("charge")
+    now = timezone.now()
+    attempts = list(DebtDebitAttempt.objects.filter(
+        status__in=["sending", "pending", "unknown"],
+        next_check_at__lte=now,
+    ).select_related("mandate")[:limit])
+    completed = 0
+    for attempt in attempts:
+        if now < attempt.created_at + timedelta(minutes=5):
+            continue
+        tx = SimpleNamespace(
+            kind="receive", client_reference=attempt.reference,
+            amount=attempt.amount,
+            hubtel_transaction_id=attempt.hubtel_transaction_id,
+        )
+        try:
+            result, provider_id = client.check(tx)
+        except (client.StatusUnconfirmed, ValidationError):
+            DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+                next_check_at=now + timedelta(minutes=5)
+            )
+            continue
+        if result == "pending":
+            DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+                next_check_at=now + timedelta(minutes=5)
+            )
+            continue
+        with transaction.atomic():
+            row = DebtDebitAttempt.objects.select_for_update().select_related("mandate", "mandate__party").get(pk=attempt.pk)
+            if row.status not in {"sending", "pending", "unknown"}:
+                continue
+            if result != "success":
+                row.status = "failed" if result == "failed" else "finance_review"
+                row.provider_code = result[:24]
+                row.next_check_at = None
+                row.save(update_fields=["status", "provider_code", "next_check_at", "updated_at"])
+                continue
+            row.hubtel_transaction_id = provider_id
+            row.status = "finance_review"
+            row.save(update_fields=["hubtel_transaction_id", "status", "updated_at"])
+            # Keep provider-paid evidence if ledger posting fails. Never
+            # resubmit a money request for this attempt.
+        try:
+            with transaction.atomic():
+                from core import debts as ledger
+                from core.models import Branch
+                core_services.lock_branch(attempt.mandate.branch)
+                row = DebtDebitAttempt.objects.select_for_update().select_related(
+                    "mandate", "mandate__party", "mandate__created_by",
+                ).get(pk=attempt.pk)
+                if row.collection_document_id or row.status != "finance_review":
+                    continue
+                mandate = row.mandate
+                doc = ledger.post_customer_payment(
+                    mandate.created_by, mandate.branch, {
+                        "party": mandate.party_id, "amount": str(row.amount),
+                        "method": "momo", "reference": row.reference,
+                        "note": "Hubtel approved direct debit; settlement verified independently",
+                    }, key=str(row.pk),
+                )
+                row.collection_document = doc
+                row.status = "settled"
+                row.next_check_at = None
+                row.save(update_fields=["collection_document", "status", "next_check_at", "updated_at"])
+                mandate.collected_total += row.amount
+                next_day = _period_next(row.period_due_date, mandate.frequency)
+                mandate.next_due_date = next_day or mandate.next_due_date
+                mandate.save(update_fields=["collected_total", "next_due_date", "updated_at"])
+                completed += 1
+        except (ValidationError, PermissionDenied):
+            # Provider has paid, but local accounting needs manual handling:
+            # keep full evidence and STOP further mandates for this customer.
+            DebtMandate.objects.filter(pk=attempt.mandate_id, status="approved").update(status="suspended")
+        if completed:
+            current = DebtMandate.objects.select_related("party").get(pk=attempt.mandate_id)
+            if outstanding(current.party) == ZERO:
+                request_cancel(current)
+    return completed
+
+
 def cancel_fully_paid(limit=50):
     """Cancel locally whenever an account settles, then revoke Hubtel approval."""
     # Should run from the web process, not the unwhitelisted SMS worker.
