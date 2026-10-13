@@ -1,7 +1,8 @@
 from django.urls import path
-from . import views, mandate_views, payroll_views
+from . import views, mandate_views, payroll_views, policy_views
 
 urlpatterns = [
+    path("settings/debt/online/", policy_views.online_debt_settings, name="online_debt_settings"),
     path("payroll/<int:period_id>/hubtel/prepare/", payroll_views.prepare, name="hubtel_payroll_prepare"),
     path("payroll/<int:period_id>/hubtel/approve/", payroll_views.approve, name="hubtel_payroll_approve"),
     path("payroll/<int:period_id>/hubtel/recipients/<int:worker_id>/", payroll_views.verify_recipient, name="hubtel_payroll_recipient"),
