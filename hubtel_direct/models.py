@@ -175,3 +175,64 @@ class HubtelRefundCase(models.Model):
     confirmed_at = models.DateTimeField(null=True, blank=True)
     last_provider_code = models.CharField(max_length=24, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class OnlineDebtSettings(models.Model):
+    """Branch-scoped guardrails for NEW consenting debt mandates.
+
+    Saving the policy never authorizes Hubtel preapproval or actual debits.
+    Existing signed terms are immutable; automatic debit flags still live
+    behind independent, default-off Railway environment switches.
+    """
+    branch = models.OneToOneField(
+        "core.Branch", related_name="online_debt_settings",
+        on_delete=models.PROTECT,
+    )
+    plan_creation_enabled = models.BooleanField(default=False)
+    pause_auto_collection = models.BooleanField(default=True)
+    allow_mtn = models.BooleanField(default=True)
+    allow_telecel = models.BooleanField(default=True)
+    allow_once = models.BooleanField(default=True)
+    allow_daily = models.BooleanField(default=False)
+    allow_weekly = models.BooleanField(default=True)
+    allow_monthly = models.BooleanField(default=True)
+    allow_quarterly = models.BooleanField(default=True)
+    allow_yearly = models.BooleanField(default=False)
+    default_frequency = models.CharField(
+        max_length=12, choices=DebtMandate.FREQUENCIES, default="weekly",
+    )
+    min_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="10.00")
+    max_open_balance = models.DecimalField(max_digits=14, decimal_places=2, default="10000.00")
+    min_installment = models.DecimalField(max_digits=14, decimal_places=2, default="5.00")
+    max_installment = models.DecimalField(max_digits=14, decimal_places=2, default="2000.00")
+    min_first_due_days = models.PositiveSmallIntegerField(default=0)
+    max_first_due_days = models.PositiveSmallIntegerField(default=90)
+    auto_collection_grace_days = models.PositiveSmallIntegerField(default=0)
+    collection_from_hour = models.PositiveSmallIntegerField(default=8)
+    collection_until_hour = models.PositiveSmallIntegerField(default=19)
+    skip_weekends = models.BooleanField(default=True)
+    rollover_unpaid = models.BooleanField(default=True)
+    daily_collection_limit = models.DecimalField(max_digits=14, decimal_places=2, default="5000.00")
+    daily_attempt_limit = models.PositiveSmallIntegerField(default=20)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="+", null=True, blank=True,
+        on_delete=models.PROTECT,
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Online debt settings"
+        verbose_name_plural = "Online debt settings"
+
+    def allows_frequency(self, frequency):
+        return bool(getattr(self, "allow_" + str(frequency), False))
+
+    def allows_channel(self, channel):
+        channels = {
+            "mtn-gh-direct-debit": self.allow_mtn,
+            "vodafone-gh-direct-debit": self.allow_telecel,
+        }
+        return bool(channels.get(channel, False))
+
+    def __str__(self):
+        return f"Online debt policy: {self.branch}"
