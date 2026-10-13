@@ -434,10 +434,91 @@ def defer_unresolved_attempt(attempt, now=None):
         return overdue
 
 
+def settle_verified_collection(attempt_id):
+    """Post an already verified paid Hubtel debit to KOFAD exactly once.
+
+    There is NO Hubtel HTTP or charge operation here. Only a provider-paid
+    marker written by independent, reference+amount+currency+ID verification
+    can enter this function; callbacks and unknown statuses are excluded.
+    """
+    from django.db import DatabaseError
+    from core import debts as ledger
+
+    prelim = DebtDebitAttempt.objects.select_related("mandate__branch").get(pk=attempt_id)
+    try:
+        with transaction.atomic():
+            # Same branch -> row -> mandate lock order as debit dispatch.
+            core_services.lock_branch(prelim.mandate.branch)
+            row = DebtDebitAttempt.objects.select_for_update().select_related(
+                "mandate__party", "mandate__created_by",
+            ).get(pk=attempt_id)
+            if (row.status != "finance_review"
+                    or row.collection_document_id
+                    or not row.provider_verified_paid_at
+                    or not row.hubtel_transaction_id):
+                return False
+            mandate = DebtMandate.objects.select_for_update().get(pk=row.mandate_id)
+            doc = ledger.post_customer_payment(
+                mandate.created_by, mandate.branch, {
+                    "party": mandate.party_id, "amount": str(row.amount),
+                    "method": "momo", "reference": row.reference,
+                    "note": "Hubtel direct debit; paid status independently verified",
+                }, key=str(row.pk),
+            )
+            row.collection_document = doc
+            row.status = "settled"
+            row.next_check_at = None
+            row.save(update_fields=["collection_document", "status", "next_check_at", "updated_at"])
+            mandate.collected_total += row.amount
+            following = _period_next(row.period_due_date, mandate.frequency)
+            if following and following > mandate.next_due_date:
+                mandate.next_due_date = following
+            mandate.save(update_fields=["collected_total", "next_due_date", "updated_at"])
+    except (ValidationError, PermissionDenied, DatabaseError):
+        # Do not discard paid evidence or attempt a second customer charge.
+        # Insufficient remaining debt, deactivated operator, or closed books
+        # need a finance adjustment; keep the amount under explicit review.
+        DebtMandate.objects.filter(pk=prelim.mandate_id, status="approved").update(
+            status="suspended",
+        )
+        return False
+
+    # The provider-side wallet authority should be revoked as soon as the
+    # final verified payment settles, even if the debit gate is now disabled.
+    current = DebtMandate.objects.select_related("party").get(pk=prelim.mandate_id)
+    if current.status in {"approved", "suspended"} and outstanding(current.party) == ZERO:
+        try:
+            request_cancel(current)
+        except (client.StatusUnconfirmed, ValidationError):
+            # The customer cannot be charged again if local cancellation has
+            # begun. The normal cancellation reconciler retries with cooldown.
+            pass
+    return True
+
+
+def post_verified_collections(limit=20):
+    """Retry ONLY KOFAD ledger posting for independently paid debit receipts.
+
+    Safe to run with every outgoing money feature disabled: never calls the
+    Hubtel charge endpoint and never treats unknown payments as paid.
+    """
+    limit = max(1, min(int(limit), 100))
+    ids = list(DebtDebitAttempt.objects.filter(
+        status="finance_review", provider_verified_paid_at__isnull=False,
+        collection_document__isnull=True,
+    ).order_by("provider_verified_paid_at", "pk").values_list("pk", flat=True)[:limit])
+    completed = 0
+    for attempt_id in ids:
+        if settle_verified_collection(attempt_id):
+            completed += 1
+    return completed
+
+
 def reconcile_attempts(limit=15):
     """Read already-sent payment statuses even when NEW debit charges are OFF."""
     from types import SimpleNamespace
     from datetime import timedelta
+
     client.require_reconciliation_ready("receive")
     now = timezone.now()
     attempts = list(DebtDebitAttempt.objects.filter(
@@ -462,7 +543,10 @@ def reconcile_attempts(limit=15):
             defer_unresolved_attempt(attempt, now=now)
             continue
         with transaction.atomic():
-            row = DebtDebitAttempt.objects.select_for_update().select_related("mandate", "mandate__party").get(pk=attempt.pk)
+            core_services.lock_branch(attempt.mandate.branch)
+            row = DebtDebitAttempt.objects.select_for_update().select_related(
+                "mandate", "mandate__party",
+            ).get(pk=attempt.pk)
             if row.status not in {"sending", "pending", "unknown"}:
                 continue
             if result != "success":
@@ -470,11 +554,9 @@ def reconcile_attempts(limit=15):
                 row.provider_code = result[:24]
                 row.next_check_at = None
                 row.save(update_fields=["status", "provider_code", "next_check_at", "updated_at"])
-                # Only a conclusively FAILED provider status may advance the
-                # repayment cycle. Unknown/Unpaid never triggers a new debit.
-                # A missed installment carries forward only under its signed
-                # agreement; the once-only plan needs human review.
                 if result == "failed":
+                    # A provider-verified failed charge may roll into the next
+                    # contractual period, never as a rapid smaller wallet probe.
                     mandate = DebtMandate.objects.select_for_update().get(pk=row.mandate_id)
                     if mandate.status == "approved" and mandate.next_due_date == row.period_due_date:
                         following = _period_next(row.period_due_date, mandate.frequency)
@@ -485,45 +567,26 @@ def reconcile_attempts(limit=15):
                             mandate.next_due_date = following
                             mandate.save(update_fields=["next_due_date", "updated_at"])
                 continue
-            row.hubtel_transaction_id = provider_id
-            row.status = "finance_review"
-            row.save(update_fields=["hubtel_transaction_id", "status", "updated_at"])
-            # Keep provider-paid evidence if ledger posting fails. Never
-            # resubmit a money request for this attempt.
-        try:
-            with transaction.atomic():
-                from core import debts as ledger
-                from core.models import Branch
-                core_services.lock_branch(attempt.mandate.branch)
-                row = DebtDebitAttempt.objects.select_for_update().select_related(
-                    "mandate", "mandate__party", "mandate__created_by",
-                ).get(pk=attempt.pk)
-                if row.collection_document_id or row.status != "finance_review":
-                    continue
-                mandate = row.mandate
-                doc = ledger.post_customer_payment(
-                    mandate.created_by, mandate.branch, {
-                        "party": mandate.party_id, "amount": str(row.amount),
-                        "method": "momo", "reference": row.reference,
-                        "note": "Hubtel approved direct debit; settlement verified independently",
-                    }, key=str(row.pk),
-                )
-                row.collection_document = doc
-                row.status = "settled"
+            if not provider_id:
+                # Defense in depth: client.check requires a provider ID; do
+                # not record a paid marker without it even if mocked.
+                row.status = "finance_review"
+                row.provider_code = "missing_provider_id"
                 row.next_check_at = None
-                row.save(update_fields=["collection_document", "status", "next_check_at", "updated_at"])
-                mandate.collected_total += row.amount
-                next_day = _period_next(row.period_due_date, mandate.frequency)
-                mandate.next_due_date = next_day or mandate.next_due_date
-                mandate.save(update_fields=["collected_total", "next_due_date", "updated_at"])
-                completed += 1
-        except (ValidationError, PermissionDenied):
-            # Provider has paid, but local accounting needs manual handling:
-            # keep full evidence and STOP further mandates for this customer.
-            DebtMandate.objects.filter(pk=attempt.mandate_id, status="approved").update(status="suspended")
-        current = DebtMandate.objects.select_related("party").get(pk=attempt.mandate_id)
-        if current.status == "approved" and outstanding(current.party) == ZERO:
-            request_cancel(current)
+                row.save(update_fields=["status", "provider_code", "next_check_at", "updated_at"])
+                continue
+            row.hubtel_transaction_id = provider_id
+            row.provider_verified_paid_at = timezone.now()
+            row.status = "finance_review"
+            row.next_check_at = None
+            row.save(update_fields=[
+                "hubtel_transaction_id", "provider_verified_paid_at",
+                "status", "next_check_at", "updated_at",
+            ])
+        # Provider receipt is now durably confirmed. All retries from here
+        # operate on KOFAD's own ledger, NEVER another Hubtel debit POST.
+        if settle_verified_collection(attempt.pk):
+            completed += 1
     return completed
 
 
