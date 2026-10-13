@@ -92,7 +92,10 @@ two active debt mandates for the same wallet.
 - Old `finance_review` rows lacking paid evidence must NOT be
   automatically credited. Finance must verify original Hubtel records.
 - A suspended mandate retains its wallet exclusivity until provider
-  cancellation and any earlier payment uncertainty are resolved.
+  cancellation and any earlier payment uncertainty are resolved. A mandate
+  that is locally marked cancelled also cannot be replaced if an earlier
+  payment attempt remains sending, pending, unknown or under finance review;
+  verify the original payment first.
 - Test disabling outbound collection during a provider outage; verify
   independent status checks, customer cancellation, original payment
   ledger recovery and no duplicate charge still work.
