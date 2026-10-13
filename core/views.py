@@ -618,7 +618,8 @@ def trade_screen(request, branch, kind):
         "online_debt_policy": online_debt_policy,
         "can_offer_direct_debit": (
             kind == "sale" and company.allow_credit_sales
-            and (request.user.is_superuser or request.user.has_perm("core.operate_finance"))
+            and (request.user.is_superuser or request.user.has_perm("core.operate_sales")
+                 or request.user.has_perm("core.operate_finance"))
         ),
         "max_credit_days": company.max_credit_days,
         "policy_controls": kind == "sale" and (
