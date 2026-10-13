@@ -48,8 +48,18 @@ def reference():
     return uuid.uuid4().hex
 
 
-def callback():
-    return client._callback()
+def callback(kind="preapproval"):
+    base = str(settings.MARKET_SITE_ORIGIN).rstrip("/")
+    if base != "https://market.kofadimpex.com":
+        raise ValidationError("Verified KOFAD Market HTTPS callback required.")
+    route = {
+        "preapproval": "/market/payments/hubtel-direct/preapproval/callback/",
+        "charge": "/market/payments/hubtel-direct/callback/",
+        "refund": "/market/payments/hubtel-direct/refund/callback/",
+    }.get(kind)
+    if not route:
+        raise ValidationError("Invalid callback purpose.")
+    return base + route
 
 
 def _request(method, url, *, payload=None):
@@ -163,15 +173,15 @@ def reactivate_preapproval(phone):
 def debit_charge(tx):
     """Only an independently approved bounded agreement may call this; no retries."""
     gate("charge")
-    if tx.channel not in DEBIT_CHANNELS:
+    if tx.mandate.channel not in DEBIT_CHANNELS:
         raise ValidationError("Direct Debit only supports MTN and Telecel.")
     if not re.fullmatch(r"[a-f0-9]{32}", tx.reference):
         raise ValidationError("An immutable transaction reference is required.")
     amount = client.money(tx.amount)
     payload = {
         "CustomerMsisdn": number(client.unseal(tx.mandate.phone_encrypted)),
-        "Channel": tx.channel, "Amount": float(amount),
-        "PrimaryCallbackURL": callback(),
+        "Channel": tx.mandate.channel, "Amount": float(amount),
+        "PrimaryCallbackURL": callback("charge"),
         "Description": "KOFAD authorized debt installment",
         "ClientReference": tx.reference,
     }
@@ -192,7 +202,7 @@ def submit_refund(*, hubtel_order_id, callback_url=None):
     if not re.fullmatch(r"[a-fA-F0-9]{24,64}", str(hubtel_order_id or "")):
         raise ValidationError("A verified original Hubtel order ID is mandatory.")
     url = f"{REFUND_ORIGIN}/refund/{account()}/order/{hubtel_order_id}"
-    body = _request("POST", url, payload={"callbackUrl": callback_url or callback()})
+    body = _request("POST", url, payload={"callbackUrl": callback("refund")})
     data = _record(body)
     if str(client._field(body, "responseCode")) != "0001" or str(client._field(data, "orderId")) != hubtel_order_id:
         raise client.StatusUnconfirmed("Refund status is unresolved; do not submit again for this order.")
