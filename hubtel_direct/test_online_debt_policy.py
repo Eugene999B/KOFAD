@@ -224,7 +224,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         attempt = mandates.plan_due_attempt(plan)
         sent = timezone.now() - timedelta(minutes=10)
         DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
-            status="pending", sent_at=sent, next_check_at=sent,
+            status="pending", sent_at=sent, created_at=sent, next_check_at=sent,
         )
         with patch("hubtel_direct.client.check", return_value=("success", "verified-provider-payment")) as get, \
              patch("hubtel_direct.debit_api.debit_charge") as send:
@@ -255,7 +255,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         attempt = mandates.plan_due_attempt(plan)
         sent = timezone.now() - timedelta(minutes=10)
         DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
-            status="pending", sent_at=sent, next_check_at=sent,
+            status="pending", sent_at=sent, created_at=sent, next_check_at=sent,
         )
         with patch("hubtel_direct.client.check", return_value=("success", "verified-provider-payment")), \
              patch("core.debts.post_customer_payment", side_effect=ValidationError("Ledger temporarily unavailable")):
