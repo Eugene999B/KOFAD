@@ -54,4 +54,7 @@ def online_debt_settings(request, branch):
         "remaining_today": max(Decimal("0.00"), policy.daily_collection_limit - submitted_total),
         "approved_count": DebtMandate.objects.filter(branch=branch, status="approved").count(),
         "pending_count": DebtMandate.objects.filter(branch=branch, status__in=["draft", "pending", "cancel_pending"]).count(),
+        "needs_attention_count": DebtDebitAttempt.objects.filter(
+            mandate__branch=branch, status__in=["unknown", "finance_review"],
+        ).count() + DebtMandate.objects.filter(branch=branch, status="suspended").count(),
     })
