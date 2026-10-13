@@ -24,6 +24,10 @@ ORDER_ID_PATTERN = re.compile(r"^[a-fA-F0-9]{24,64}$")
 def _verified_original(item):
     """Resolve a successful, original payment from KOFAD's immutable ledger."""
     order = item.order
+    # Hubtel's provided Refund API is for Mobile Money only. Hubtel card
+    # checkout is a different rail and must never reach this endpoint.
+    if order.payment_channel != "mobile_money":
+        raise ValidationError("Hubtel's Mobile Money Refund API cannot refund a card or bank payment.")
     if order.payment_status != "paid" or not order.payment_reference or not order.paid_at:
         raise ValidationError("The original order must have a confirmed Hubtel payment.")
     if order.paid_at < timezone.now() - timedelta(days=45):
