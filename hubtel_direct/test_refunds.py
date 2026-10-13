@@ -86,6 +86,7 @@ class HubtelRefundSafetyTests(MarketFixtures):
         self.assertEqual(HubtelRefundCase.objects.count(), 1)
         self.assertEqual(row.status, "review_pending")
         self.assertEqual(row.original_hubtel_order_id, "a" * 32)
+        self.assertEqual(row.original_order_id, self.order_row.pk)
         network.assert_not_called()
 
     def test_partial_returns_are_never_sent_as_full_hubtel_refunds(self):
