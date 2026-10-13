@@ -185,3 +185,28 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         self.assertIsNone(mandates.plan_due_attempt(plan))
         self.assertEqual(DebtDebitAttempt.objects.filter(mandate=plan).count(), 1)
 
+    @patch("hubtel_direct.mandates.client.check", return_value=("pending", "hubtel-unpaid-status"))
+    def test_old_pending_status_suspends_debits_but_keeps_polling_same_reference(self, check):
+        self.policy.plan_creation_enabled = True
+        self.policy.pending_review_hours = 6
+        self.policy.unresolved_poll_hours = 3
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        earlier = timezone.now() - timedelta(hours=7)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="pending", sent_at=earlier, created_at=earlier,
+            next_check_at=timezone.now() - timedelta(minutes=1),
+            hubtel_transaction_id="hubtel-unpaid-status",
+        )
+        self.assertEqual(mandates.reconcile_attempts(), 0)
+        plan.refresh_from_db()
+        attempt.refresh_from_db()
+        self.assertEqual(plan.status, "suspended")
+        self.assertEqual(attempt.status, "pending")
+        self.assertGreater(attempt.next_check_at, timezone.now() + timedelta(hours=2))
+        check.assert_called_once()
+        self.assertIsNone(mandates.plan_due_attempt(plan))
+
