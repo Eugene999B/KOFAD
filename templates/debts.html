@@ -37,9 +37,10 @@
     <div class="debt-toolbar">
       <form method="get" class="debt-search-form">
         <input type="hidden" name="status" value="{{ status }}">
+        <input type="hidden" name="type" value="{{ debtor_type }}">
         <span aria-hidden="true">⌕</span>
         <input id="debt-q" name="q" value="{{ q }}" placeholder="Search customer name or Ghana phone" autocomplete="off">
-        {% if q %}<a href="/debts/?status={{ status }}" aria-label="Clear debt search">×</a>{% endif %}
+        {% if q %}<a href="/debts/?status={{ status }}&type={{ debtor_type }}" aria-label="Clear debt search">×</a>{% endif %}
         <button class="button secondary">Search</button>
       </form>
       <div class="debt-filter-row" role="group" aria-label="Account payment agreement">
@@ -48,16 +49,16 @@
         <a href="/debts/?q={{ q|urlencode }}&status={{ status }}&type=direct" class="{% if debtor_type == 'direct' %}active{% endif %}">Direct Debit debtors</a>
       </div>
       <div class="debt-filter-row">
-        <a href="/debts/?q={{ q|urlencode }}&status=all" class="{% if status == 'all' %}active{% endif %}">All</a>
-        <a href="/debts/?q={{ q|urlencode }}&status=overdue" class="{% if status == 'overdue' %}active{% endif %}">Overdue</a>
-        <a href="/debts/?q={{ q|urlencode }}&status=due_today" class="{% if status == 'due_today' %}active{% endif %}">Due today</a>
-        <a href="/debts/?q={{ q|urlencode }}&status=current" class="{% if status == 'current' %}active{% endif %}">Not overdue</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=all&type={{ debtor_type }}" class="{% if status == 'all' %}active{% endif %}">All</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=overdue&type={{ debtor_type }}" class="{% if status == 'overdue' %}active{% endif %}">Overdue</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=due_today&type={{ debtor_type }}" class="{% if status == 'due_today' %}active{% endif %}">Due today</a>
+        <a href="/debts/?q={{ q|urlencode }}&status=current&type={{ debtor_type }}" class="{% if status == 'current' %}active{% endif %}">Not overdue</a>
       </div>
     </div>
     <div class="debt-list-heading"><strong>{{ rows|length }} account{{ rows|length|pluralize }}</strong><small>Select a customer to open the account</small></div>
     <div class="debt-account-list">
       {% for row in rows %}
-      <a class="debt-account-card {% if selected.party.pk == row.party.pk %}selected{% endif %} {% if row.overdue %}overdue{% endif %}" href="/debts/?q={{ q|urlencode }}&status={{ status }}&customer={{ row.party.pk }}">
+      <a class="debt-account-card {% if selected.party.pk == row.party.pk %}selected{% endif %} {% if row.overdue %}overdue{% endif %}" href="/debts/?q={{ q|urlencode }}&status={{ status }}&type={{ debtor_type }}&customer={{ row.party.pk }}">
         <span class="debt-avatar">{{ row.party.name|first|upper }}</span>
         <span class="debt-account-copy">
           <strong>{{ row.party.name }}</strong>
@@ -77,7 +78,7 @@
 
   <aside class="debt-detail-pane">
     {% if selected %}
-    <a class="debt-mobile-back" href="/debts/?q={{ q|urlencode }}&status={{ status }}">← Back to customer accounts</a>
+    <a class="debt-mobile-back" href="/debts/?q={{ q|urlencode }}&status={{ status }}&type={{ debtor_type }}">← Back to customer accounts</a>
     <header class="debt-customer-header">
       <div class="debt-avatar large">{{ selected.party.name|first|upper }}</div>
       <div><p class="eyebrow">CUSTOMER ACCOUNT</p><h2>{{ selected.party.name }}</h2><p>{{ selected.party.phone }}{% if selected.party.address %} · {{ selected.party.address }}{% endif %}</p></div>
