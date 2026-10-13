@@ -45,6 +45,12 @@ def _validate_return(item):
         "processing", "refund_attention",
     }:
         raise ValidationError("Physical return approval is required before preparing the payment refund.")
+    # A return approved for a DIFFERENT original KOFAD sale cannot authorize
+    # this online order's Hubtel money to be returned.
+    if (not item.order.sale_document_id
+            or item.core_return_request.sale_id != item.order.sale_document_id
+            or not item.core_return_request.posted_id):
+        raise ValidationError("The approved and posted physical return must match this exact original sale.")
     from marketplace.services import market_return_value
     amount = market_return_value(item)
     if amount < Decimal("1.00") or amount != item.order.total:
@@ -158,7 +164,6 @@ def note_callback(payload):
     order_id = client._field(data, "orderId")
     if not isinstance(order_id, str) or not ORDER_ID_PATTERN.fullmatch(order_id):
         return False
-    from django.db.models import Q
     with transaction.atomic():
         row = HubtelRefundCase.objects.select_for_update().filter(
             original_hubtel_order_id=order_id,
