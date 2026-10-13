@@ -10,12 +10,14 @@
    <div><dt>Wallet</dt><dd><strong>{{ payment_channel }} · ending {{ mandate.phone_suffix }}</strong></dd></div>
    <div><dt>Payment frequency</dt><dd><strong>{{ mandate.get_frequency_display }}</strong></dd></div>
    <div><dt>First payment date</dt><dd><strong>{{ mandate.first_due_date|date:"d M Y" }}</strong></dd></div>
+   <div><dt>Collection grace after due date</dt><dd><strong>{{ mandate.terms_snapshot.auto_collection_grace_days|default:0 }} day(s)</strong></dd></div>
+   <div><dt>Missed installment policy</dt><dd><strong>{% if mandate.terms_snapshot.rollover_unpaid %}Carry forward unpaid installments{% else %}Do not accumulate installments{% endif %}</strong></dd></div>
    <div><dt>Scheduled installment</dt><dd><strong>GHS {{ mandate.amount_per_period|floatformat:2 }}</strong></dd></div>
    <div><dt>Absolute authorization ceiling</dt><dd><strong>GHS {{ mandate.maximum_total|floatformat:2 }}</strong></dd></div>
    <div><dt>Currently owed</dt><dd><strong>GHS {{ debt_balance|floatformat:2 }}</strong></dd></div>
    <div><dt>Authorization status</dt><dd><strong>{{ mandate.get_status_display }}</strong></dd></div>
   </dl>
-  <p style="padding:14px;background:#f0f6f7;color:#1a4050;border-radius:10px">Any charge is capped by the amount you owe and by this agreement's ceiling. {% if mandate.lower_partial_payment %}One additional smaller attempt may be made under your agreed minimum of GHS {{ mandate.minimum_partial|floatformat:2 }}; no rapid wallet-balance probing is allowed.{% else %}No automatic smaller-amount retries are authorized.{% endif %} KOFAD never asks for your MoMo PIN.</p>
+  <p style="padding:14px;background:#f0f6f7;color:#1a4050;border-radius:10px">The first automatic attempt may occur only after the due date and the agreed grace period. {% if mandate.terms_snapshot.rollover_unpaid %}Any missed installment may be included in a later scheduled payment, but never above the total debt or authorized ceiling.{% else %}Missed installments will not be bundled into later debits.{% endif %} Any charge is capped by the amount you owe and by this agreement's ceiling. {% if mandate.lower_partial_payment %}One additional smaller attempt may be made under your agreed minimum of GHS {{ mandate.minimum_partial|floatformat:2 }}; no rapid wallet-balance probing is allowed.{% else %}No automatic smaller-amount retries are authorized.{% endif %} KOFAD never asks for your MoMo PIN.</p>
   {% if mandate.status == "draft" %}
   <h2>1. Verify ownership of this wallet</h2>
   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
