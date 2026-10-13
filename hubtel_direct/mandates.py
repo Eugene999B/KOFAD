@@ -52,7 +52,8 @@ def _period_next(day, frequency):
 
 @transaction.atomic
 def create_plan(user, branch, *, party_id, phone, channel, frequency,
-                first_due_date, amount_per_period, maximum_total,
+                first_due_date, amount_per_period=None, maximum_total=None,
+                final_due_date=None, collection_hour=None, source_document_id=None,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
     # A cashier may PROPOSE a plan when making a credit sale. Only the
@@ -97,7 +98,32 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
         raise ValidationError("This account has no unpaid customer invoices.")
     if not policy.min_open_balance <= due <= policy.max_open_balance:
         raise ValidationError("This customer's outstanding balance is outside Online Debt eligibility limits.")
-    amt, maximum = _money(amount_per_period), _money(maximum_total)
+    from . import schedule
+    source_reference = ""
+    if source_document_id:
+        from core.models import Document
+        source = Document.objects.filter(
+            pk=source_document_id, party=party, branch=branch, kind="sale",
+            finalized=True,
+        ).first()
+        if not source or source.balance <= ZERO:
+            raise ValidationError("The recorded credit sale could not be verified.")
+        source_reference = str(source.pk)
+        # Never use a client-provided total in place of an actual posted sale.
+        maximum = _money(source.balance)
+    else:
+        maximum = _money(maximum_total) if maximum_total is not None else due
+    computed = None
+    if final_due_date:
+        computed = schedule.calculate(
+            maximum, first_due_date, final_due_date, frequency,
+            collection_hour if collection_hour not in (None, "") else policy.collection_from_hour,
+        )
+        if not policy.collection_from_hour <= computed["hour"] < policy.collection_until_hour:
+            raise ValidationError("Collection hour must fall within the permitted business window.")
+        amt = computed["amount"]
+    else:
+        amt = _money(amount_per_period)
     if maximum > due:
         raise ValidationError("The mandate ceiling cannot exceed recorded debt.")
     if not policy.min_installment <= amt <= policy.max_installment:
@@ -146,6 +172,16 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             "auto_collection_grace_days": policy.auto_collection_grace_days,
             "policy_version": policy.updated_at.isoformat(),
             "customer_can_cancel": True,
+            **({
+                "source_document_id": source_reference,
+                "scheduled_periods": computed["count"],
+                "requested_final_date": computed["requested_final_date"].isoformat(),
+                "final_collection_date": computed["final_date"].isoformat(),
+                "final_installment": str(computed["last_amount"]),
+                "collection_hour": computed["hour"],
+                "timezone": "Africa/Accra",
+                "skip_weekends": bool(policy.skip_weekends),
+            } if computed else {}),
         },
     )
     core_services.audit(user, branch, "hubtel_debt.mandate_drafted", str(mandate.pk), {
