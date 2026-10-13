@@ -79,6 +79,24 @@ two active debt mandates for the same wallet.
   endpoints, callback handling, identity binding and ledger reconciliation
   are implemented and UAT-tested.
 
+## In-flight money and authorization recovery
+- Management may disable NEW preapprovals or NEW automatic debit POSTs
+  without disabling GET-only Hubtel transaction status checks and wallet
+  cancellation. Status recovery still requires verified KOFAD Web static egress,
+  Hubtel credentials, and the correct original merchant collection account.
+- On independently verified paid debt, the durable `provider_verified_paid_at`
+  marker and exact Hubtel transaction identity are written before KOFAD
+  attempts to post a collection receipt. Failed ledger posting cannot
+  create another customer charge. Recovery replays only KOFAD's idempotent
+  **ledger posting**, never Hubtel's payment endpoint.
+- Old `finance_review` rows lacking paid evidence must NOT be
+  automatically credited. Finance must verify original Hubtel records.
+- A suspended mandate retains its wallet exclusivity until provider
+  cancellation and any earlier payment uncertainty are resolved.
+- Test disabling outbound collection during a provider outage; verify
+  independent status checks, customer cancellation, original payment
+  ledger recovery and no duplicate charge still work.
+
 ## Launch checklist
 - [ ] Merge up-to-date feature code into current release only after CI passes:
       Django checks/migrations, finance/Hubtel tests, POS/order/returns, AI,
