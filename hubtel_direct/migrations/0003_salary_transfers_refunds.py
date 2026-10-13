@@ -37,6 +37,7 @@ class Migration(migrations.Migration):
         ]),
         migrations.CreateModel(name="PayrollTransferLine", fields=[
             ("id", models.BigAutoField(primary_key=True, serialize=False)),
+            ("request_key", models.UUIDField(default=uuid.uuid4, unique=True, editable=False)),
             ("amount", models.DecimalField(max_digits=14, decimal_places=2)),
             ("encrypted_account_snapshot", models.TextField()),
             ("recipient_name_snapshot", models.CharField(max_length=140)),
