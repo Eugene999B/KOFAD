@@ -11,6 +11,11 @@ urlpatterns = [
     path("payroll/<int:period_id>/hubtel/recipients/<int:worker_id>/", payroll_views.verify_recipient, name="hubtel_payroll_recipient"),
     path("debts/hubtel/mandates/", mandate_views.staff_create_mandate, name="hubtel_debt_create"),
     path("debts/hubtel/mandates/<uuid:mandate_id>/edit/", mandate_views.staff_edit_draft, name="hubtel_debt_edit_draft"),
+    path("debts/hubtel/mandates/<uuid:mandate_id>/waiting/", mandate_views.staff_status, name="hubtel_debt_staff_status"),
+    path("debts/hubtel/mandates/<uuid:mandate_id>/waiting/status/", mandate_views.staff_status_json, name="hubtel_debt_staff_json"),
+    path("debts/hubtel/mandates/<uuid:mandate_id>/waiting/check/", mandate_views.staff_check_approval, name="hubtel_debt_staff_check"),
+    path("debts/hubtel/mandates/<uuid:mandate_id>/waiting/send-schedule/", mandate_views.staff_send_schedule, name="hubtel_debt_staff_sms"),
+
     path("debts/hubtel/mandates/<uuid:mandate_id>/cancel/", mandate_views.staff_cancel, name="hubtel_debt_staff_cancel"),
     path("market/debt-authorization/<uuid:mandate_id>/", mandate_views.customer_authorize, name="hubtel_debt_authorize"),
     path("market/debt-authorization/<uuid:mandate_id>/action/", mandate_views.customer_authorize_action, name="hubtel_debt_authorize_action"),
