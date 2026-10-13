@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
         ], options={"indexes": [models.Index(fields=["batch", "status"], name="hubtel_pay_line_status_idx")]}),
         migrations.CreateModel(name="HubtelRefundCase", fields=[
             ("id", models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, serialize=False)),
-            ("original_hubtel_order_id", models.CharField(max_length=64)),
+            ("original_hubtel_order_id", models.CharField(max_length=64, unique=True)),
             ("original_transaction_reference", models.CharField(max_length=100)),
             ("amount", models.DecimalField(max_digits=14, decimal_places=2)),
             ("status", models.CharField(max_length=24, default="review_pending", db_index=True)),
