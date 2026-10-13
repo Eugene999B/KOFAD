@@ -5,13 +5,12 @@ from unittest.mock import Mock, patch
 import uuid
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core.models import Document
 from core.tests import Fixtures
-from . import client, debit_api, mandates, verification
+from . import client, mandates, verification
 from .models import DebtMandate, DebtDebitAttempt
 
 
