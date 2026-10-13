@@ -224,6 +224,12 @@ with sync_playwright() as p:
     assert page.locator("#pay-cash").input_value() == page.locator("#total").inner_text()
     assert page.get_by_role("button", name="Complete Sale & Generate Receipt", exact=True).is_visible()
     page.screenshot(path=str(out / "pos-payment-desktop.png"), full_page=True)
+    assert page.locator("#checkout").evaluate("(f) => f.checkValidity()"), (
+        "A hidden Direct Debit input must not invalidate a normal fully paid cash sale."
+    )
+    assert not page.locator("#credit-direct-end-date").is_enabled(), (
+        "Direct Debit final-date input must be disabled for cash checkout."
+    )
 
     lost_response = []
     def lose_confirmed_response(route):
