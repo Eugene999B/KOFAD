@@ -217,9 +217,11 @@
               <input id="paystack-momo-phone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="0551234567">
             </label>
           </div>
+          {% if pos_momo_gateway != "hubtel" %}
           <label>Customer email (optional for direct MoMo)
             <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           </label>
+          {% endif %}
           {% if pos_momo_gateway == "paystack" %}
           <p class="hint"><a href="{% url 'pos_momo_payments' %}">View previous MoMo payments and receipts →</a></p>
           {% endif %}
@@ -232,6 +234,11 @@
               <span>Customer approved the payment request</span>
             </label>
           </div>
+          {% endif %}
+          {% if pos_momo_gateway == "hubtel" %}
+          <label>Customer email (optional for direct MoMo)
+            <input id="paystack-momo-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
+          </label>
           {% endif %}
           <div id="paystack-momo-challenge" class="hidden">
             <label>One-time payment code
