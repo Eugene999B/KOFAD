@@ -332,9 +332,40 @@ def dispatch_planned(limit=8):
             mandate = DebtMandate.objects.select_for_update().get(pk=attempt.mandate_id)
             if attempt.status != "planned" or mandate.status != "approved":
                 continue
-            attempt.status = "sending"  # store before any irreversible POST
+            policy = OnlineDebtSettings.objects.select_for_update().filter(
+                branch=mandate.branch,
+            ).first()
+            if not policy or policy.pause_auto_collection:
+                continue
+            local_now = timezone.localtime()
+            today = timezone.localdate()
+            if policy.skip_weekends and today.weekday() >= 5:
+                continue
+            if not policy.collection_from_hour <= local_now.hour < policy.collection_until_hour:
+                continue
+            grace = int(mandate.terms_snapshot.get("auto_collection_grace_days", 0))
+            if attempt.period_due_date + timedelta(days=grace) > today:
+                continue
+            if (attempt.amount > outstanding(mandate.party)
+                    or attempt.amount > mandate.maximum_total - mandate.collected_total):
+                attempt.status = "cancelled"
+                attempt.save(update_fields=["status", "updated_at"])
+                continue
+            # The branch row is locked by lock_branch: two concurrent workers
+            # cannot both consume the same daily spending/attempt budget.
+            sent_today = DebtDebitAttempt.objects.filter(
+                mandate__branch=mandate.branch, sent_at__date=today,
+            )
+            totals = sent_today.aggregate(total=Sum("amount"))
+            spent = totals["total"] or ZERO
+            if (sent_today.count() >= policy.daily_attempt_limit
+                    or spent + attempt.amount > policy.daily_collection_limit
+                    or sent_today.filter(mandate=mandate).exists()):
+                continue
+            attempt.status = "sending"  # durable claim before irreversible POST
+            attempt.sent_at = timezone.now()
             attempt.next_check_at = timezone.now() + timedelta(minutes=5)
-            attempt.save(update_fields=["status", "next_check_at", "updated_at"])
+            attempt.save(update_fields=["status", "sent_at", "next_check_at", "updated_at"])
         try:
             provider_id = debit_api.debit_charge(attempt)
         except (client.StatusUnconfirmed, client.SubmissionUnknown, ValidationError):
@@ -390,6 +421,20 @@ def reconcile_attempts(limit=15):
                 row.provider_code = result[:24]
                 row.next_check_at = None
                 row.save(update_fields=["status", "provider_code", "next_check_at", "updated_at"])
+                # Only a conclusively FAILED provider status may advance the
+                # repayment cycle. Unknown/Unpaid never triggers a new debit.
+                # A missed installment carries forward only under its signed
+                # agreement; the once-only plan needs human review.
+                if result == "failed":
+                    mandate = DebtMandate.objects.select_for_update().get(pk=row.mandate_id)
+                    if mandate.status == "approved" and mandate.next_due_date == row.period_due_date:
+                        following = _period_next(row.period_due_date, mandate.frequency)
+                        if following is None:
+                            mandate.status = "suspended"
+                            mandate.save(update_fields=["status", "updated_at"])
+                        else:
+                            mandate.next_due_date = following
+                            mandate.save(update_fields=["next_due_date", "updated_at"])
                 continue
             row.hubtel_transaction_id = provider_id
             row.status = "finance_review"
