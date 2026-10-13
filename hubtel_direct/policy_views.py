@@ -41,6 +41,13 @@ def online_debt_settings(request, branch):
 
     today_attempts = DebtDebitAttempt.objects.filter(mandate__branch=branch, sent_at__date=timezone.localdate())
     submitted_total = today_attempts.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    # Manager-only read view: independently confirmed Hubtel receipts waiting
+    # for KOFAD bookkeeping, not a request to charge the customer again.
+    verified_unposted = DebtDebitAttempt.objects.filter(
+        mandate__branch=branch, status="finance_review",
+        provider_verified_paid_at__isnull=False,
+        collection_document__isnull=True,
+    ).select_related("mandate__party").order_by("provider_verified_paid_at", "pk")
     status = {
         "provider_preapproval": getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False),
         "provider_charges": getattr(settings, "HUBTEL_DEBT_AUTO_DEBIT_ENABLED", False),
@@ -52,6 +59,9 @@ def online_debt_settings(request, branch):
         "attempts_today": today_attempts.count(),
         "submitted_today": submitted_total,
         "remaining_today": max(Decimal("0.00"), policy.daily_collection_limit - submitted_total),
+        "verified_unposted_count": verified_unposted.count(),
+        "verified_unposted_amount": verified_unposted.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
+        "verified_unposted_items": verified_unposted[:15],
         "approved_count": DebtMandate.objects.filter(branch=branch, status="approved").count(),
         "pending_count": DebtMandate.objects.filter(branch=branch, status__in=["draft", "pending", "cancel_pending"]).count(),
         "needs_attention_count": DebtDebitAttempt.objects.filter(
