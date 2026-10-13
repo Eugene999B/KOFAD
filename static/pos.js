@@ -143,7 +143,7 @@
     const frequency = creditDirectFrequency?.value || "";
     const final = frequency === "once" ? first : (creditDirectEnd?.value || "");
     const hour = Number(creditDirectHour?.value || 9);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(first) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(final)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(final)) {
       throw new Error("Choose first and final repayment dates.");
     }
     let cursor = new Date(first + "T00:00:00Z");
