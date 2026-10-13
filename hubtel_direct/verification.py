@@ -22,7 +22,7 @@ def inquiry(phone, channel):
         raise ValidationError("Choose MTN, Telecel, or AirtelTigo.")
     msisdn = normalize_ghana_phone(phone).lstrip("+")
     url = (
-        f"{VERIFY_ORIGIN}/merchantaccount/merchants/"
+        f"{VERIFY_ORIGIN}/v2/merchantaccount/merchants/"
         f"{settings.HUBTEL_COLLECTION_ACCOUNT}/mobilemoney/verify"
     )
     try:
