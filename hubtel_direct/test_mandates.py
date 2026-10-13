@@ -100,6 +100,35 @@ class DebtMandateTests(Fixtures, TestCase):
         # Different debtor may not bind an already-active wallet to a
         # separate commitment under the same Hubtel merchant account.
 
+    def test_suspended_wallet_cannot_receive_another_authorization(self):
+        from core.models import Party
+
+        original = self.plan()
+        DebtMandate.objects.filter(pk=original.pk).update(status="suspended")
+        with self.assertRaisesRegex(ValidationError, "suspended"):
+            self.plan()
+
+        # A different customer must not reuse a still-suspended wallet under
+        # the same Hubtel merchant account even when their own debt is valid.
+        other = Party.objects.create(
+            branch=self.branch, kind="customer", name="Different debtor",
+            phone="+233241234567", consent=True, credit_limit=Decimal("1000.00"),
+        )
+        Document.objects.create(
+            branch=self.branch, party=other, kind="sale",
+            total=Decimal("600.00"), paid=Decimal("0.00"),
+            due_date=timezone.localdate(), reference="OTHER-WALLET-DEBT",
+            created_by=self.user,
+        )
+        with self.assertRaisesRegex(ValidationError, "wallet is still linked"):
+            mandates.create_plan(
+                self.user, self.branch, party_id=other.pk, phone="0241234567",
+                channel="mtn-gh-direct-debit", frequency="weekly",
+                first_due_date=timezone.localdate() + timedelta(days=7),
+                amount_per_period="200", maximum_total="600",
+            )
+        self.assertEqual(DebtMandate.objects.count(), 1)
+
     def test_installment_arrears_never_exceed_contract_ceiling_or_real_debt(self):
         plan = self.plan(first_due_date=timezone.localdate())
         DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
