@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core import signing
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import JsonResponse
 from django.urls import reverse
@@ -24,6 +25,27 @@ def staff_create_mandate(request):
     try:
         amount = request.POST.get("amount")
         ceiling = request.POST.get("maximum")
+        verified_name = ""
+        if request.POST.get("source_document_id"):
+            try:
+                proof = signing.loads(
+                    request.POST.get("verification_token") or "",
+                    salt="kofad-hubtel-staff-wallet-verify-v1", max_age=600,
+                )
+            except signing.BadSignature as exc:
+                raise ValidationError("Wallet verification expired. Check the registered account name again.") from exc
+            channel = request.POST.get("channel")
+            lookup_channel = {
+                "mtn-gh-direct-debit": "mtn-gh",
+                "vodafone-gh-direct-debit": "vodafone-gh",
+            }.get(channel)
+            if (proof.get("user") != request.user.pk
+                    or proof.get("branch") != branch.pk
+                    or proof.get("phone") != debit_api.number(request.POST.get("phone"))
+                    or proof.get("channel") != lookup_channel
+                    or not str(proof.get("name") or "").strip()):
+                raise ValidationError("Wallet verification does not match this customer and network.")
+            verified_name = str(proof["name"])[:140]
         mandate = mandates.create_plan(
             request.user, branch, party_id=request.POST.get("party"),
             phone=request.POST.get("phone"), channel=request.POST.get("channel"),
@@ -33,6 +55,7 @@ def staff_create_mandate(request):
             final_due_date=request.POST.get("final_due_date") or None,
             collection_hour=request.POST.get("collection_hour") or None,
             source_document_id=request.POST.get("source_document_id") or None,
+            verified_wallet_name=verified_name,
             allow_one_partial_retry=request.POST.get("partial_retry") == "yes",
             minimum_partial=request.POST.get("minimum_partial") or "0.00",
         )
