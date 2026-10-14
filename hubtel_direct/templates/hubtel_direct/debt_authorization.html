@@ -4,7 +4,7 @@
  <section class="market-card" style="padding:25px;border:1px solid #bed7df;border-radius:18px">
   <p class="market-eyebrow">KOFAD • CUSTOMER REPAYMENT AUTHORIZATION</p>
   <h1 style="font-size:27px">Your repayment agreement</h1>
-  <p>KOFAD cannot debit your Mobile Money account unless you authorize the arrangement. You can cancel later, and the mandate is cancelled when your linked debt is fully paid.</p>
+  <p><strong>Your wallet cannot be debited until you approve Hubtel's separate preapproval prompt.</strong> KOFAD will cancel authorization when the debt is paid in full. You can also revoke authorization yourself.</p>
   <dl style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
    <div><dt>Customer</dt><dd><strong>{{ mandate.party.name }}</strong></dd></div>
    <div><dt>Wallet</dt><dd><strong>{{ payment_channel }} · ending {{ mandate.phone_suffix }}</strong></dd></div>
@@ -12,19 +12,33 @@
    <div><dt>First payment date</dt><dd><strong>{{ mandate.first_due_date|date:"d M Y" }}</strong></dd></div>
    <div><dt>Collection grace after due date</dt><dd><strong>{{ mandate.terms_snapshot.auto_collection_grace_days|default:0 }} day(s)</strong></dd></div>
    <div><dt>Missed installment policy</dt><dd><strong>{% if mandate.rollover_unpaid %}Carry forward unpaid installments{% else %}Do not accumulate installments{% endif %}</strong></dd></div>
-   <div><dt>Scheduled installment</dt><dd><strong>GHS {{ mandate.amount_per_period|floatformat:2 }}</strong></dd></div>
+   <div><dt>Regular installment</dt><dd><strong>GHS {{ mandate.amount_per_period|floatformat:2 }}</strong></dd></div>
+   {% if mandate.terms_snapshot.installment_count %}<div><dt>Number of payments</dt><dd><strong>{{ mandate.terms_snapshot.installment_count }}</strong></dd></div>
+   <div><dt>Last payment</dt><dd><strong>GHS {{ mandate.terms_snapshot.final_installment }} on {{ mandate.terms_snapshot.last_due_date }}</strong></dd></div>{% endif %}
+   {% if mandate.terms_snapshot.collection_window %}<div><dt>Collection time window</dt><dd><strong>{{ mandate.terms_snapshot.collection_window }}</strong></dd></div>{% endif %}
    <div><dt>Absolute authorization ceiling</dt><dd><strong>GHS {{ mandate.maximum_total|floatformat:2 }}</strong></dd></div>
    <div><dt>Currently owed</dt><dd><strong>GHS {{ debt_balance|floatformat:2 }}</strong></dd></div>
    <div><dt>Authorization status</dt><dd><strong>{{ mandate.get_status_display }}</strong></dd></div>
   </dl>
+  {% if mandate.terms_snapshot.schedule %}
+  <h2>Every scheduled collection</h2>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <thead><tr><th style="text-align:left;padding:8px">Payment</th><th style="text-align:left;padding:8px">Date</th><th style="text-align:right;padding:8px">Amount</th></tr></thead>
+    <tbody>{% for entry in mandate.terms_snapshot.schedule %}
+      <tr><td style="padding:8px;border-top:1px solid #d6e4e8">{{ entry.number }}</td>
+        <td style="padding:8px;border-top:1px solid #d6e4e8">{{ entry.date }}</td>
+        <td style="padding:8px;border-top:1px solid #d6e4e8;text-align:right">GHS {{ entry.amount }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% endif %}
   <p style="padding:14px;background:#f0f6f7;color:#1a4050;border-radius:10px">The first automatic attempt may occur only after the due date and the agreed grace period. {% if mandate.rollover_unpaid %}Any missed installment may be included in a later scheduled payment, but never above the total debt or authorized ceiling.{% else %}Missed installments will not be bundled into later debits.{% endif %} Any charge is capped by the amount you owe and by this agreement's ceiling. KOFAD does not make repeated smaller-amount retries to discover your wallet balance. A confirmed missed payment may be carried into a future agreed installment as shown above. KOFAD never asks for your MoMo PIN.</p>
   {% if mandate.status == "draft" %}
-  <h2>1. Verify ownership of this wallet</h2>
+  <h2>Step 1: Confirm this is your wallet</h2>
   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
    <input type="hidden" name="action" value="send">
    <button class="market-button ghost" type="submit">Send my six-digit code</button>
   </form>
-  <h2>2. Agree and authorize</h2>
+  <h2>Step 2: Request your Hubtel approval prompt</h2>
   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
    <input type="hidden" name="action" value="confirm">
    <label for="wallet-code">SMS code sent to your wallet</label>
@@ -33,10 +47,10 @@
      <input type="checkbox" name="accepted_terms" value="yes" required>
      <span>I authorize only this repayment schedule, maximum amount and wallet. I understand how to cancel.</span>
    </label>
-   <button class="market-button primary" type="submit">Request Hubtel preapproval</button>
+   <button class="market-button primary" type="submit">Send approval prompt to my MoMo wallet</button>
   </form>
   {% elif mandate.status == "pending" %}
-  <h2>Hubtel preapproval is pending</h2>
+  <h2>Waiting for your MoMo approval</h2>
   {% if mandate.verification_type == "USSD" %}
   <p>Approve the secure prompt on your {{ payment_channel }} phone. MTN customers may also find it at *170# → My Wallet → My Approvals → PreApprovals.</p>
   {% elif mandate.verification_type == "OTP" %}
