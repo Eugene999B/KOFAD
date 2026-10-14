@@ -173,6 +173,15 @@ def post_customer_payment(user, branch, payload, key):
         raise ValidationError("Choose a valid customer account.")
 
     invoices = open_customer_invoices(party, for_update=True)
+    customer_outstanding = sum((amount for _, amount in invoices), ZERO)
+    # Hubtel V2 passes the signed source invoice. Normal desk payments still
+    # allocate oldest-first unless an invoice is explicitly selected.
+    source_invoice_id = payload.get("invoice_id") or None
+    if source_invoice_id:
+        invoices = [(invoice, due) for invoice, due in invoices
+                    if str(invoice.pk) == str(source_invoice_id)]
+        if not invoices:
+            raise ValidationError("The agreement's specific invoice has no unpaid balance.")
     total_outstanding = sum((amount for _, amount in invoices), ZERO)
     if total_outstanding <= 0:
         raise ValidationError("This customer has no outstanding debt.")
@@ -198,7 +207,8 @@ def post_customer_payment(user, branch, payload, key):
         reference=s.reference("collection", branch),
         total=amount,
         paid=amount,
-        note=("Customer account payment · oldest due first" + (f" · {note}" if note else "")),
+        note=(("Customer invoice-specific payment" if source_invoice_id else "Customer account payment · oldest due first")
+              + (f" · {note}" if note else "")),
         created_by=user,
     )
     s.payments(doc, [{"method": method, "amount": amount, "reference": reference}], 1)
@@ -227,9 +237,9 @@ def post_customer_payment(user, branch, payload, key):
         "amount": str(amount),
         "method": method,
         "reference": reference,
-        "allocation_method": "oldest_due_first",
+        "allocation_method": "specified_invoice" if source_invoice_id else "oldest_due_first",
         "allocations": allocations,
-        "remaining_customer_debt": str(total_outstanding - amount),
+        "remaining_customer_debt": str(customer_outstanding - amount),
         "note": note,
     })
     from .debt_email import safe_queue_debt_payment
