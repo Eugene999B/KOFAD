@@ -1,7 +1,7 @@
 """Deterministic debt schedules from KOFAD's actual unpaid account balance.
 
-The user supplies the installment COUNT, frequency, and first date, not a
-duplicate handwritten price. These dates are the presented authorization
+The sales user supplies first and final dates plus frequency; KOFAD derives
+the installment count and amounts, never a duplicate handwritten price. These dates are the presented authorization
 terms; a provider charge can only happen later with confirmed consent and
 all independent deployment/finance gates enabled.
 """
@@ -28,6 +28,40 @@ def next_date(day, frequency):
         month = (day.month - 1 + months) % 12 + 1
         return day.replace(year=year, month=month, day=min(day.day, monthrange(year, month)[1]))
     raise ValidationError("Choose a supported repayment interval.")
+
+
+def preview_by_end_date(total, frequency, first_date, final_date, *, from_hour=8, until_hour=19):
+    """Derive the number of agreed collection dates from a date range.
+
+    The last actual payment date may precede the requested cutoff when it
+    does not fall exactly on the chosen interval; the dated table is binding.
+    """
+    if isinstance(first_date, str):
+        try:
+            first_date = date.fromisoformat(first_date)
+        except ValueError as exc:
+            raise ValidationError("Choose a valid first collection date.") from exc
+    if isinstance(final_date, str):
+        try:
+            final_date = date.fromisoformat(final_date)
+        except ValueError as exc:
+            raise ValidationError("Choose a valid final collection date.") from exc
+    if (not isinstance(first_date, date) or not isinstance(final_date, date)
+            or final_date < first_date or (final_date - first_date).days > 3660):
+        raise ValidationError("Final collection date must be on or after the first date, within ten years.")
+    if frequency == "once" and final_date != first_date:
+        raise ValidationError("One-time repayment must have the same first and final date.")
+    cursor = first_date
+    count = 0
+    while cursor is not None and cursor <= final_date:
+        count += 1
+        if count > MAX_INSTALLMENTS:
+            raise ValidationError("The chosen dates require more than 120 installments.")
+        cursor = next_date(cursor, frequency)
+    result = preview(total, frequency, first_date, count,
+                     from_hour=from_hour, until_hour=until_hour)
+    result["requested_end_date"] = final_date.isoformat()
+    return result
 
 
 def preview(total, frequency, first_date, installments, *, from_hour=8, until_hour=19):
