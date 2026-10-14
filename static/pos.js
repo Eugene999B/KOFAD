@@ -161,7 +161,7 @@
     const freq = creditDirectFrequency?.value || "";
     const date = creditDirectDate?.value || "";
     if (!Number.isInteger(count) || count < 1 || count > 120 ||
-        !date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date) ||
+        !date || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
         balance <= 0 || balance < count || (freq === "once" && count !== 1)) {
       creditDirectPreview.textContent = "Choose the first collection date and number of payments to calculate the schedule.";
       return;
