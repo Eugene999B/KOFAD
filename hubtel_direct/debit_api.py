@@ -85,6 +85,7 @@ def callback(kind="preapproval"):
         raise ValidationError("Verified KOFAD Market HTTPS callback required.")
     route = {
         "preapproval": "/market/payments/hubtel-direct/preapproval/callback/",
+        "sale_intent": "/market/payments/hubtel-direct/sale-intent/callback/",
         "charge": "/market/payments/hubtel-direct/callback/",
         "refund": "/market/payments/hubtel-direct/refund/callback/",
     }.get(kind)
@@ -126,14 +127,16 @@ def _record(body):
     return data
 
 
-def initiate_preapproval(*, phone, channel, client_reference):
+def initiate_preapproval(*, phone, channel, client_reference, callback_url=None):
     gate("preapproval")
     if channel not in DEBIT_CHANNELS or not re.fullmatch(r"[a-zA-Z0-9]{1,36}", client_reference):
         raise ValidationError("Unsupported debit channel or preapproval reference.")
+    if callback_url and callback_url != callback("sale_intent"):
+        raise ValidationError("The Hubtel callback must be on the verified KOFAD Market origin.")
     url = f"{PREAPPROVAL_ORIGIN}/api/v2/merchant/{account()}/preapproval/initiate"
     body = _request("POST", url, payload={
         "clientReferenceId": client_reference, "customerMsisdn": number(phone),
-        "channel": channel, "callbackUrl": callback(),
+        "channel": channel, "callbackUrl": callback_url or callback(),
     })
     code = str(client._field(body, "responseCode") or client._field(body, "code") or "")
     if code != "2000":
