@@ -74,6 +74,58 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         prompt.assert_not_called()
         charge.assert_not_called()
 
+    def test_staff_request_requires_explicit_customer_consent_and_provider_activation(self):
+        from django.urls import reverse
+        plan = mandates.create_plan(
+            self.user, self.branch, party_id=self.customer.pk,
+            phone="0241234567", channel="mtn-gh-direct-debit", frequency="weekly",
+            first_due_date=timezone.localdate() + timedelta(days=7), installment_count="4",
+        )
+        self.authenticate_client()
+        url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
+        with patch("hubtel_direct.debit_api.initiate_preapproval") as send:
+            missing = self.client.post(url, {})
+            self.assertEqual(missing.status_code, 302)
+            send.assert_not_called()
+            disabled = self.client.post(url, {"customer_requested_prompt": "yes"})
+            self.assertEqual(disabled.status_code, 302)
+            send.assert_not_called()
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "draft")
+
+    @override_settings(
+        HUBTEL_API_ID="offline-test-id", HUBTEL_API_KEY="offline-test-key",
+        HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_DIRECT_EGRESS_CONFIRMED=True,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=True, HUBTEL_DEBT_PREAPPROVAL_ENABLED=True,
+        MARKET_SITE_ORIGIN="https://market.kofadimpex.com",
+    )
+    def test_staff_hubtel_prompt_is_one_time_and_not_a_debit(self):
+        from django.urls import reverse
+        plan = mandates.create_plan(
+            self.user, self.branch, party_id=self.customer.pk,
+            phone="0241234567", channel="mtn-gh-direct-debit", frequency="weekly",
+            first_due_date=timezone.localdate() + timedelta(days=7), installment_count="4",
+        )
+        self.authenticate_client()
+        url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
+        with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+            "provider_id": "hubtel-authorization-123", "verification_type": "USSD",
+            "otp_prefix": "", "status": "PENDING",
+        }) as provider, patch("hubtel_direct.debit_api.debit_charge") as debit:
+            r = self.client.post(url, {"customer_requested_prompt": "yes"})
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(provider.call_count, 1)
+            repeat = self.client.post(url, {"customer_requested_prompt": "yes"})
+            self.assertEqual(repeat.status_code, 302)
+            self.assertEqual(provider.call_count, 1)
+            debit.assert_not_called()
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "pending")
+        self.assertEqual(plan.verification_type, "USSD")
+        # Prompt submission is not wallet approval. Only Hubtel's independent
+        # authenticated status check can change the mandate to approved.
+        self.assertIsNone(plan.provider_approved_at)
+
     def test_staff_waiting_page_and_draft_edit_show_exact_dates(self):
         plan = mandates.create_plan(
             self.user, self.branch, party_id=self.customer.pk,
