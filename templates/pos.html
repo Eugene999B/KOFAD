@@ -308,7 +308,11 @@
             </div>
             <label class="switch-row">
               <input id="credit-direct-contact-consent" type="checkbox">
-              <span>Customer agrees to receive Direct Debit authorization SMS</span>
+              <span>Customer agrees to receive the proposed repayment agreement and authorization details. This is not authorization to debit the wallet.</span>
+            </label>
+            <label class="switch-row" style="margin-top:8px">
+              <input id="credit-direct-prompt-consent" type="checkbox">
+              <span><strong>The customer has reviewed the displayed payment schedule and has asked KOFAD to send a real Hubtel approval prompt to their MoMo wallet.</strong> Only the customer can approve the USSD/OTP request; the sale itself does not debit their wallet.</span>
             </label>
             <div class="direct-wallet-lookup">
               <button class="button secondary" type="button" id="credit-direct-verify">Check wallet name</button>
@@ -317,7 +321,7 @@
             <section id="credit-direct-preview" class="notice subtle" aria-live="polite" style="margin-top:12px">
               Enter the first and final dates; KOFAD calculates the number of payments and each amount.
             </section>
-            <p class="hint">Customer authorization is separate from the sale. Hubtel prompts appear only when merchant preapproval is enabled.</p>
+            <p class="hint"><strong>Direct Debit is not a payment method at checkout.</strong> The credit sale is posted as outstanding debt; Hubtel preapproval is a separate wallet request. {% if hubtel_debt_preapproval_ready %}Hubtel wallet authorization requests are enabled; KOFAD will request a USSD/OTP approval after saving the sale.{% else %}<strong>Hubtel wallet prompts are not activated on this deployment.</strong> KOFAD will show the authorization status and cannot claim customer approval.{% endif %}</p>
             {% else %}
             <p class="hint">Enable repayment agreements in <a href="{% url 'online_debt_settings' %}" target="_blank" rel="noopener">Online Debt Settings</a>.</p>
             {% endif %}
@@ -363,8 +367,8 @@
 
 <dialog id="sale-success-dialog" class="kofad-dialog sale-success-dialog chalin-receipt-dialog">
   <div class="sale-success-mark" aria-hidden="true">✓</div>
-  <p class="eyebrow">SALE COMPLETE</p>
-  <h2>Receipt ready</h2>
+  <p class="eyebrow" id="sale-success-eyebrow">SALE COMPLETE</p>
+  <h2 id="sale-success-headline">Receipt ready</h2>
   <strong class="sale-success-reference" id="success-reference">—</strong>
 
   <div class="success-mini-receipt">
@@ -390,7 +394,7 @@
     <input type="hidden" name="first_due_date" id="sale-debit-date">
     <input type="hidden" name="final_due_date" id="sale-debit-end-date">
     <input type="hidden" name="source_document_id" id="sale-debit-document">
-    <button type="submit" class="button">Open authorization waiting page →</button>
+    <button type="submit" class="button">Continue to Hubtel authorization →</button>
   </form>
   {% endif %}
   <div id="success-message-status" class="notice subtle hidden" role="status"></div>
