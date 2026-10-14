@@ -18,7 +18,7 @@ from django.utils import timezone
 from core import debts as debt_service
 from core import services as core_services
 from core.models import Party
-from . import client, debit_api
+from . import client, debit_api, schedules
 from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 
 ZERO = Decimal("0.00")
@@ -52,7 +52,8 @@ def _period_next(day, frequency):
 
 @transaction.atomic
 def create_plan(user, branch, *, party_id, phone, channel, frequency,
-                first_due_date, amount_per_period, maximum_total,
+                first_due_date, amount_per_period=None, maximum_total=None,
+                installment_count=None,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
     # A cashier may PROPOSE a plan when making a credit sale. Only the
@@ -97,7 +98,18 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
         raise ValidationError("This account has no unpaid customer invoices.")
     if not policy.min_open_balance <= due <= policy.max_open_balance:
         raise ValidationError("This customer's outstanding balance is outside Online Debt eligibility limits.")
-    amt, maximum = _money(amount_per_period), _money(maximum_total)
+    # POS passes payment count, not an editable price. The actual recorded
+    # unpaid balance is authoritative and the last installment self-adjusts.
+    calculated = None
+    if installment_count is not None:
+        calculated = schedules.preview(
+            due, frequency, first_due_date, installment_count,
+            from_hour=policy.collection_from_hour,
+            until_hour=policy.collection_until_hour,
+        )
+        amt, maximum = calculated["amount_per_period"], due
+    else:
+        amt, maximum = _money(amount_per_period), _money(maximum_total)
     if maximum > due:
         raise ValidationError("The mandate ceiling cannot exceed recorded debt.")
     if not policy.min_installment <= amt <= policy.max_installment:
@@ -146,6 +158,13 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             "auto_collection_grace_days": policy.auto_collection_grace_days,
             "policy_version": policy.updated_at.isoformat(),
             "customer_can_cancel": True,
+            **({
+                "installment_count": calculated["installment_count"],
+                "schedule": calculated["schedule"],
+                "final_installment": str(calculated["last_amount"]),
+                "last_due_date": calculated["end_date"],
+                "collection_window": calculated["collection_window"],
+            } if calculated else {}),
         },
     )
     core_services.audit(user, branch, "hubtel_debt.mandate_drafted", str(mandate.pk), {
@@ -158,7 +177,7 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
 @transaction.atomic
 def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
                       frequency=None, first_due_date=None,
-                      amount_per_period=None, maximum_total=None):
+                      amount_per_period=None, maximum_total=None, installment_count=None):
     """Revise UNSIGNED terms. Hubtel-approved/pending contracts are immutable.
 
     A cashier cannot silently change wallet authority: new terms on a signed
@@ -204,8 +223,18 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
     balance = outstanding(row.party)
     if not policy.min_open_balance <= balance <= policy.max_open_balance:
         raise ValidationError("The customer's outstanding balance is outside the repayment limits.")
-    installment = _money(amount_per_period if amount_per_period is not None else row.amount_per_period)
-    ceiling = _money(maximum_total if maximum_total is not None else row.maximum_total)
+    calculated = None
+    count = installment_count if installment_count is not None else row.terms_snapshot.get("installment_count")
+    if count is not None:
+        calculated = schedules.preview(
+            balance, frequency, start, count,
+            from_hour=policy.collection_from_hour,
+            until_hour=policy.collection_until_hour,
+        )
+        installment, ceiling = calculated["amount_per_period"], balance
+    else:
+        installment = _money(amount_per_period if amount_per_period is not None else row.amount_per_period)
+        ceiling = _money(maximum_total if maximum_total is not None else row.maximum_total)
     if not policy.min_installment <= installment <= policy.max_installment:
         raise ValidationError("Installment amount is outside the configured repayment limits.")
     if ceiling <= ZERO or ceiling > balance or installment > ceiling:
@@ -254,6 +283,13 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
         "auto_collection_grace_days": policy.auto_collection_grace_days,
         "policy_version": policy.updated_at.isoformat(),
         "customer_can_cancel": True,
+        **({
+            "installment_count": calculated["installment_count"],
+            "schedule": calculated["schedule"],
+            "final_installment": str(calculated["last_amount"]),
+            "last_due_date": calculated["end_date"],
+            "collection_window": calculated["collection_window"],
+        } if calculated else {}),
     }
     row.save()
     core_services.audit(
