@@ -27,9 +27,9 @@
       <label>Final payment date<input name="final_due_date" type="date" min="{{ today|date:'Y-m-d' }}" required></label>
     </div>
     <p class="muted">KOFAD calculates the number and value of installments using this invoice's real unpaid amount, never the customer's older account debt.</p>
-    <label class="switch-row"><input type="checkbox" name="accepted_schedule" value="yes" required> I reviewed the complete proposed payment frequency and dates with the customer.</label>
-    <label class="switch-row"><input type="checkbox" name="customer_requested_prompt" value="yes" required> The wallet holder explicitly asked to receive Hubtel's USSD/OTP preapproval request. They understand that no payment is made now and the authorized ceiling is the unpaid invoice.</label>
-    <button type="submit" class="button">Request real Hubtel wallet preapproval for this invoice</button>
+    <label class="switch-row"><input type="checkbox" name="accepted_schedule" value="yes" required> The customer agrees to review the full server-calculated amount-by-date repayment schedule on the next page before any Hubtel prompt.</label>
+    <label class="switch-row"><input type="checkbox" name="customer_requested_prompt" value="yes" required> The customer wants to begin Direct Debit setup for this exact invoice, and understands that Hubtel preapproval is requested separately after the final schedule is reviewed.</label>
+    <button type="submit" class="button">Calculate exact schedule and review wallet approval →</button>
     <a class="button secondary" href="{% url 'document' invoice.pk %}">Return to existing sale</a>
   </form>
 </section>
