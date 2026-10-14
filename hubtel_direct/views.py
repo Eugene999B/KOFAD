@@ -38,6 +38,10 @@ def internal_reconcile(request):
     # never kofad-sms worker's unlisted egress.
     from core.pos_hubtel import reconcile_due as reconcile_pos_due
     pos_count = reconcile_pos_due(limit=10, include_direct=True)
+    # Reconcile V2 PRE-SALE customer wallet approvals. GET-only provider
+    # checks are safe with real money collection switches kept OFF.
+    from . import sale_intents as v2_sale_intents
+    v2_checked = v2_sale_intents.reconcile_due(limit=8)
     debt_checked = 0
     debit_dispatched = 0
     debit_paid = 0
@@ -94,7 +98,7 @@ def internal_reconcile(request):
         payroll_paid = settle_confirmed(limit=20)
     response = JsonResponse({
         "checked": count, "pos_checked": pos_count,
-        "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
+        "v2_intents_checked": v2_checked, "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
         "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
         "debit_ledger_recovered": debt_ledger_recovered,
         "payroll_settled": payroll_paid,
