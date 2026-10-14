@@ -30,6 +30,18 @@ def outstanding(party):
     return sum((amount for _, amount in debt_service.open_customer_invoices(party)), ZERO)
 
 
+def mandate_outstanding(mandate):
+    """Never spend an invoice-scoped agreement on a customer's older debt."""
+    source_id = (mandate.terms_snapshot or {}).get("source_document_id")
+    if source_id:
+        invoice = Document.objects.filter(
+            pk=source_id, branch=mandate.branch, party=mandate.party,
+            kind="sale", finalized=True,
+        ).first()
+        return max(ZERO, core_services.balance(invoice)) if invoice else ZERO
+    return outstanding(mandate.party)
+
+
 def _money(v):
     return client.money(v)
 
@@ -96,8 +108,8 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
     due = outstanding(party)
     if due <= ZERO:
         raise ValidationError("This account has no unpaid customer invoices.")
-    if not policy.min_open_balance <= due <= policy.max_open_balance:
-        raise ValidationError("This customer's outstanding balance is outside Online Debt eligibility limits.")
+    # A new sale is eligible on its OWN outstanding amount; older unrelated
+    # invoices never inflate the new customer-approved maximum.
     # For a newly posted sale, use the server's finalized sale balance, never
     # a price or payment amount submitted by a cashier's browser.
     source = None
@@ -107,16 +119,13 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             pk=source_document_id, party=party, branch=branch,
             kind="sale", finalized=True,
         ).first()
-        if source is None or source.balance <= ZERO:
+        if source is None or core_services.balance(source) <= ZERO:
             raise ValidationError("The posted credit sale could not be verified.")
-        # The collection ledger applies payments across customer invoices.
-        # Do not misrepresent an existing customer's whole debt as this sale.
-        if source.balance != due:
-            raise ValidationError(
-                "This customer has other unpaid invoices. Prepare a consolidated "
-                "Direct Debit plan from the Debt Center instead."
-            )
-        plan_balance = source.balance
+        # The provider debit and its eventual ledger receipt are now bound to
+        # THIS invoice, even when older unpaid invoices exist.
+        plan_balance = core_services.balance(source)
+    if not policy.min_open_balance <= plan_balance <= policy.max_open_balance:
+        raise ValidationError("This agreement's unpaid balance is outside Online Debt eligibility limits.")
     calculated = None
     if final_due_date:
         calculated = schedules.preview_by_end_date(
@@ -478,7 +487,7 @@ def payment_preview(mandate, today=None):
     grace = int(mandate.terms_snapshot.get("auto_collection_grace_days", 0))
     if mandate.status != "approved" or mandate.next_due_date + timedelta(days=grace) > today:
         return ZERO
-    debt = outstanding(mandate.party)
+    debt = mandate_outstanding(mandate)
     remaining_cap = mandate.maximum_total - mandate.collected_total
     if debt <= ZERO or remaining_cap <= ZERO:
         return ZERO
@@ -560,7 +569,7 @@ def dispatch_planned(limit=8):
             attempt = DebtDebitAttempt.objects.select_for_update().select_related("mandate", "mandate__party").get(pk=attempt_id)
             mandate = DebtMandate.objects.select_for_update().get(pk=attempt.mandate_id)
             if (attempt.status != "planned" or mandate.status != "approved"
-                    or attempt.amount > outstanding(mandate.party)
+                    or attempt.amount > mandate_outstanding(mandate)
                     or attempt.amount > mandate.maximum_total - mandate.collected_total
                     or attempt.period_due_date > timezone.localdate()
                     or (mandate.terms_snapshot.get("last_due_date")
@@ -616,7 +625,7 @@ def dispatch_planned(limit=8):
             grace = int(mandate.terms_snapshot.get("auto_collection_grace_days", 0))
             if attempt.period_due_date + timedelta(days=grace) > today:
                 continue
-            if (attempt.amount > outstanding(mandate.party)
+            if (attempt.amount > mandate_outstanding(mandate)
                     or attempt.amount > mandate.maximum_total - mandate.collected_total):
                 attempt.status = "cancelled"
                 attempt.save(update_fields=["status", "updated_at"])
@@ -714,6 +723,7 @@ def settle_verified_collection(attempt_id):
             doc = ledger.post_customer_payment(
                 mandate.created_by, mandate.branch, {
                     "party": mandate.party_id, "amount": str(row.amount),
+                    "invoice_id": (mandate.terms_snapshot or {}).get("source_document_id"),
                     "method": "momo", "reference": row.reference,
                     "note": "Hubtel direct debit; paid status independently verified",
                 }, key=str(row.pk),
@@ -739,7 +749,7 @@ def settle_verified_collection(attempt_id):
     # The provider-side wallet authority should be revoked as soon as the
     # final verified payment settles, even if the debit gate is now disabled.
     current = DebtMandate.objects.select_related("party").get(pk=prelim.mandate_id)
-    if current.status in {"approved", "suspended"} and outstanding(current.party) == ZERO:
+    if current.status in {"approved", "suspended"} and mandate_outstanding(current) == ZERO:
         try:
             request_cancel(current)
         except (client.StatusUnconfirmed, ValidationError):
@@ -878,7 +888,7 @@ def cancel_fully_paid(limit=50):
         return confirmed
     cache.set(cursor_key, str(rows[-1].pk), timeout=86400)
     for mandate in rows:
-        if outstanding(mandate.party) == ZERO:
+        if mandate_outstanding(mandate) == ZERO:
             if request_cancel(mandate).status == "cancelled":
                 confirmed += 1
     return confirmed
