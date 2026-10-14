@@ -1547,6 +1547,10 @@
         send_sms: Boolean(!pendingDebitSetup && (party || newName) && customerConsent?.checked),
         send_whatsapp: Boolean(!pendingDebitSetup && (party || newName) && customerWhatsApp?.checked)
       } : {}),
+      // V2 is NEVER allowed to fall back silently to ordinary sale posting
+      // after a refresh, retry, or a lost API response.
+      direct_debit_v2: Boolean(pendingDebitSetup),
+      ...(pendingDebitSetup ? {direct_debit_terms: pendingDebitSetup} : {}),
       due_date: dueDate?.value || "",
       ...(purchase ? {external_reference: purchaseReference?.value.trim() || "", document_date: purchaseDocumentDate?.value || "", note: purchaseNote?.value.trim() || ""} : {}),
       override_reason: document.querySelector("#override-reason")?.value || "",
@@ -1765,41 +1769,8 @@
     successMessageStatus.classList.toggle("subtle", tone !== "error");
   }
 
-  async function submitSavedDirectDebit(sale) {
-    if (!debitAuthorizationForm || !pendingDebitSetup || !sale?.document_id || !sale?.customer?.id) return;
-    const btn = debitAuthorizationForm.querySelector("button[type=submit]");
-    if (btn) { btn.disabled = true; btn.textContent = "Requesting Hubtel wallet approval…"; }
-    setSuccessStatus("Credit sale recorded. KOFAD is requesting the separate Hubtel preapproval; the wallet has NOT yet authorized deductions.");
-    const payload = {...pendingDebitSetup, party:String(sale.customer.id),
-      source_document_id:String(sale.document_id)};
-    try {
-      const authorization = await api(debitAuthorizationForm.action, payload);
-      if (!authorization.staff_url) throw new Error("KOFAD did not return the authorization waiting-page address.");
-      debitAuthorizationForm.dataset.waitingUrl = authorization.staff_url;
-      setSuccessStatus(authorization.message || "Wallet authorization has not yet been approved.",
-        authorization.prompt_state === "unavailable" || authorization.prompt_state === "unconfirmed" ? "error" : "subtle");
-      if (btn) { btn.textContent = "Open Direct Debit authorization status →"; btn.disabled = false; }
-      // The waiting room is not a payment success page; it shows true Hubtel
-      // status and how to complete USSD/OTP or resolve unavailable merchant setup.
-      window.location.assign(authorization.staff_url);
-    } catch (error) {
-      if (btn) { btn.textContent = "Retry Direct Debit setup without another sale →"; btn.disabled = false; }
-      setSuccessStatus(
-        "The credit sale was recorded, but the Direct Debit agreement or Hubtel prompt was NOT completed: " +
-        error.message + " Do not repeat the sale. Retry agreement setup here.",
-        "error");
-    }
-  }
-
-  debitAuthorizationForm?.addEventListener("submit", event => {
-    event.preventDefault();
-    const sale = lastCompletedSale;
-    if (debitAuthorizationForm.dataset.waitingUrl) {
-      window.location.assign(debitAuthorizationForm.dataset.waitingUrl);
-    } else if (sale?.document_id) {
-      void submitSavedDirectDebit(sale);
-    }
-  });
+  // V2 submits a durable authorization intent BEFORE sale issuance.
+  // The old "post sale then create mandate" side path is intentionally retired.
 
   function showSaleSuccess(result) {
     lastCompletedSale = result;
@@ -1890,12 +1861,7 @@
     }
     if (typeof successDialog?.showModal === "function") successDialog.showModal();
     else successDialog?.setAttribute("open", "");
-    if (pendingDebitSetup && result.document_id && debitAuthorizationForm &&
-        !debitAuthorizationForm.classList.contains("hidden")) {
-      // Don't navigate using a blind HTML POST: a validation redirect previously
-      // hid the failure and left a sales "success" receipt on screen.
-      void submitSavedDirectDebit(result);
-    }
+    // No Hubtel Direct Debit agreement is created from a completed receipt.
   }
 
   function resetForNextSale() {
@@ -1997,6 +1963,20 @@
 
       root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
       button.disabled = false;
+      if (pendingBody?.direct_debit_v2) {
+        // The ONLY supported Direct Debit sale path. The server validates a
+        // reversible sale preview, saves an intent and contacts Hubtel before
+        // issuing any sale/inventory movement/receipt or collection.
+        const terms = pendingBody.direct_debit_terms;
+        if (!terms) throw new Error("Direct Debit terms were lost. No sale was posted; review the agreement again.");
+        const intent = await api("/api/direct-debit/sale-intents/",
+          {sale:pendingBody, direct_debit:terms}, requestKey);
+        if (!intent?.staff_url) throw new Error("The authorization server did not return an approval waiting page. No sale was issued.");
+        completed = true;
+        clearStored();
+        window.location.assign(intent.staff_url);
+        return;
+      }
       const result = await api("/api/trades/", pendingBody, requestKey);
       if (heldId) {
         try { await api("/api/held/" + heldId + "/", {}); } catch (_) {}
