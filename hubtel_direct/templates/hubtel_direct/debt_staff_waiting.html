@@ -53,6 +53,11 @@
   {% endif %}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
     <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval page ↗</a>
+    {% if mandate.status == "draft" or mandate.status == "pending" %}
+    <form method="post" action="{% url 'hubtel_debt_staff_send_agreement' mandate.pk %}">
+      {% csrf_token %}<button class="button secondary" type="submit">SMS repayment timetable and approval link</button>
+    </form>
+    {% endif %}
     {% if mandate.status == "pending" %}
     <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
       {% csrf_token %}<button class="button secondary" type="submit">Check Hubtel approval status</button>
@@ -77,6 +82,7 @@
   {% else %}
   <p>GHS {{ mandate.amount_per_period|floatformat:2 }} per {{ mandate.get_frequency_display|lower }} period, capped at the recorded balance.</p>
   {% endif %}
+  <p class="muted">The SMS contains the first and final dates, payment amounts, collection hours and a link to the complete timetable. It is not a debit instruction or customer approval.</p>
   <p class="muted">A dated schedule is an authorization limit, not confirmation of a payment. Provider status is independently checked before KOFAD posts a collection receipt. Cancelled or fully paid debt is never eligible for a new debit.</p>
 </section>
 {% endblock %}
