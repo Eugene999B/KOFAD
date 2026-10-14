@@ -3,6 +3,7 @@ from . import views, mandate_views, payroll_views, policy_views, refund_views, s
 
 urlpatterns = [
     path("api/direct-debit/sale-intents/", sale_intent_views.prepare_sale, name="hubtel_v2_prepare_sale"),
+    path("debts/hubtel/invoices/<uuid:invoice_id>/attach/", sale_intent_views.attach_to_existing_invoice, name="hubtel_v2_attach_invoice"),
     path("debts/hubtel/intents/<uuid:intent_id>/", sale_intent_views.staff_wait, name="hubtel_v2_staff_wait"),
     path("debts/hubtel/intents/<uuid:intent_id>/status.json", sale_intent_views.staff_status_json, name="hubtel_v2_staff_status"),
     path("debts/hubtel/intents/<uuid:intent_id>/check/", sale_intent_views.staff_check, name="hubtel_v2_staff_check"),
