@@ -77,7 +77,11 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
     # Serialize two customers trying to bind the same merchant wallet before
     # the database uniqueness constraint resolves any remaining race.
     core_services.lock_branch(branch)
-    policy, _ = OnlineDebtSettings.objects.select_for_update().get_or_create(branch=branch)
+    policy, created = OnlineDebtSettings.objects.select_for_update().get_or_create(branch=branch)
+    if created:
+        # DecimalField string defaults on a newly instantiated model are not
+        # normalized until reloaded from the database (str <= Decimal fails).
+        policy.refresh_from_db()
     if not policy.plan_creation_enabled:
         raise ValidationError("Online Debt agreements are disabled in Debt Settings for this location.")
     if not policy.allows_channel(channel):
