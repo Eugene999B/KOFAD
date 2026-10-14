@@ -11,6 +11,7 @@ urlpatterns = [
     path("payroll/<int:period_id>/hubtel/recipients/<int:worker_id>/", payroll_views.verify_recipient, name="hubtel_payroll_recipient"),
     path("debts/hubtel/mandates/", mandate_views.staff_create_mandate, name="hubtel_debt_create"),
     path("debts/hubtel/mandates/<uuid:mandate_id>/status/", mandate_views.staff_status, name="hubtel_debt_staff_status"),
+    path("debts/hubtel/mandates/<uuid:mandate_id>/status.json", mandate_views.staff_authorization_status_json, name="hubtel_debt_staff_status_json"),
     path("debts/hubtel/mandates/<uuid:mandate_id>/check/", mandate_views.staff_check_status, name="hubtel_debt_staff_check"),
     path("debts/hubtel/mandates/<uuid:mandate_id>/prompt/", mandate_views.staff_request_prompt, name="hubtel_debt_staff_prompt"),
     path("debts/hubtel/mandates/<uuid:mandate_id>/send-agreement/", mandate_views.staff_send_agreement, name="hubtel_debt_staff_send_agreement"),
