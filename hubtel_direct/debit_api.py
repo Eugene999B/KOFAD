@@ -18,6 +18,35 @@ DEBIT_CHANNELS = frozenset(("mtn-gh-direct-debit", "vodafone-gh-direct-debit"))
 FREQUENCIES = frozenset(("once", "daily", "weekly", "monthly", "quarterly", "yearly"))
 
 
+class ProviderDenied(ValidationError):
+    """Hubtel definitely rejected an HTTP/API request before accepting a prompt."""
+
+
+def _preapproval_rejection(code, http_status=None):
+    if http_status == 403:
+        return "Hubtel rejected the request (HTTP 403). Confirm the web service's outbound IP is allowlisted for the Preapproval API."
+    if code == "4101":
+        return "Hubtel has not enabled the merchant's mobilemoney-receive-direct scope or the credentials/collection account do not match."
+    if code == "4103":
+        return "Hubtel has denied this collection account access to this Direct Debit channel."
+    if code == "4204":
+        return "Hubtel did not accept the preapproval request. Check wallet network, account and provider setup."
+    if code == "4000":
+        return "Hubtel rejected one or more preapproval parameters; check wallet number, network and merchant account."
+    return "Hubtel did not accept the preapproval request" + (f" (code {code})." if code else ".")
+
+
+def preapproval_ready():
+    """Preapproval is independent of KOFAD's ordinary POS Receive Money switch."""
+    if not getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False):
+        return False
+    try:
+        client.require_reconciliation_ready("receive")
+    except ValidationError:
+        return False
+    return True
+
+
 def gate(feature):
     flags = {
         "preapproval": "HUBTEL_DEBT_PREAPPROVAL_ENABLED",
@@ -26,7 +55,12 @@ def gate(feature):
     }
     if feature not in flags or not getattr(settings, flags[feature], False):
         raise ValidationError("This Hubtel financial service is awaiting activation.")
-    client.require_enabled("receive")
+    if feature == "preapproval":
+        # Verify credentials, collection account and whitelisted web egress;
+        # DO NOT activate the separate one-off POS Receive Money gateway.
+        client.require_reconciliation_ready("receive")
+    else:
+        client.require_enabled("receive")
 
 
 def account():
@@ -67,7 +101,16 @@ def _request(method, url, *, payload=None):
             timeout=min(settings.HUBTEL_TIMEOUT_SECONDS, 15),
         )
         if not 200 <= response.status_code < 300:
-            raise client.StatusUnconfirmed("Hubtel authorization or refund service is unavailable.")
+            # An explicit HTTP 4xx from Hubtel is a definitive refusal; an
+            # outage/timeout is NOT, and must never trigger a second POST.
+            if 400 <= response.status_code < 500:
+                try:
+                    rejected = response.json()
+                except ValueError:
+                    rejected = {}
+                code = str(client._field(rejected, "responseCode") or client._field(rejected, "code") or "")
+                raise ProviderDenied(_preapproval_rejection(code, response.status_code))
+            raise client.StatusUnconfirmed("Hubtel request outcome is unconfirmed; do not submit a duplicate request.")
         body = response.json()
         if not isinstance(body, dict):
             raise client.StatusUnconfirmed("Hubtel returned invalid transaction evidence.")
@@ -92,9 +135,10 @@ def initiate_preapproval(*, phone, channel, client_reference):
         "clientReferenceId": client_reference, "customerMsisdn": number(phone),
         "channel": channel, "callbackUrl": callback(),
     })
+    code = str(client._field(body, "responseCode") or client._field(body, "code") or "")
+    if code != "2000":
+        raise ProviderDenied(_preapproval_rejection(code))
     data = _record(body)
-    if str(client._field(body, "responseCode")) != "2000":
-        raise client.StatusUnconfirmed("Hubtel preapproval has not been accepted.")
     if client._field(data, "clientReferenceId") != client_reference:
         raise ValidationError("Hubtel preapproval reference did not match.")
     provider_id = str(client._field(data, "hubtelPreApprovalId") or "")
