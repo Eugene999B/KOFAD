@@ -193,7 +193,9 @@ class V2SaleIntentTests(Fixtures, TestCase):
         self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
         self.assertEqual(Movement.objects.count(), 0)
         self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before)
-        hubtel.assert_called_once()
+        hubtel.assert_not_called()
+        self.assertEqual(plan.status, "draft")
+        self.assertIn(str(plan.pk), response.url)
 
     def test_refused_preapproval_does_not_issue_sale(self):
         with patch("hubtel_direct.debit_api.initiate_preapproval",
