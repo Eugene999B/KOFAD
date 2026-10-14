@@ -239,14 +239,12 @@ def attach_to_existing_invoice(request, invoice_id):
                 first_due_date=request.POST.get("first_due_date"),
                 final_due_date=request.POST.get("final_due_date"),
             )
-            try:
-                if debit_api.preapproval_ready():
-                    mandates.prepare_customer_authorization(mandate)
-                    messages.info(request, "Hubtel received an authorization request. Awaiting the wallet holder's independent approval.")
-                else:
-                    messages.warning(request, "Agreement recorded but Hubtel preapproval is unavailable. No wallet prompt was sent.")
-            except (ValidationError, client.StatusUnconfirmed, client.SubmissionUnknown, client.ProviderRejected) as exc:
-                messages.warning(request, "Hubtel preapproval was NOT confirmed: " + str(exc))
+            # Do not initiate a provider request before the full SERVER-
+            # computed amount-by-date timetable has been shown. Cashier and
+            # wallet holder review it on the staff waiting page first.
+            messages.info(request,
+                "Existing sale linked without creating another receipt. Review every dated "
+                "installment below, then request the real Hubtel wallet prompt with the customer's consent.")
             return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
         except (ValidationError, ValueError, TypeError) as exc:
             messages.error(request, str(exc))
