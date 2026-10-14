@@ -120,22 +120,26 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         prompt.assert_not_called()
         charge.assert_not_called()
 
-    def test_sale_plan_blocks_silent_inclusion_of_older_debt(self):
+    def test_sale_plan_excludes_older_debt_by_invoice_scope(self):
         source = Document.objects.get(reference="AUTO-SCHEDULE-TEST")
-        Document.objects.create(
+        older = Document.objects.create(
             branch=self.branch, party=self.customer, kind="sale",
             total=Decimal("20.00"), paid=Decimal("0.00"),
             reference="OLD-UNPAID-SALE", created_by=self.user,
         )
         first = timezone.localdate() + timedelta(days=7)
-        with self.assertRaisesRegex(ValidationError, "consolidated"):
-            mandates.create_plan(
-                self.user, self.branch, party_id=self.customer.pk,
-                phone="0241234567", channel="mtn-gh-direct-debit",
-                frequency="weekly", first_due_date=first,
-                final_due_date=first + timedelta(days=7),
-                source_document_id=source.pk,
-            )
+        plan = mandates.create_plan(
+            self.user, self.branch, party_id=self.customer.pk,
+            phone="0241234567", channel="mtn-gh-direct-debit",
+            frequency="weekly", first_due_date=first,
+            final_due_date=first + timedelta(days=7),
+            source_document_id=source.pk,
+        )
+        self.assertEqual(plan.maximum_total, Decimal("800.00"))
+        self.assertEqual(mandates.mandate_outstanding(plan), Decimal("800.00"))
+        self.assertEqual(plan.terms_snapshot["source_document_id"], str(source.pk))
+        from core.services import balance
+        self.assertEqual(balance(older), Decimal("20.00"))
 
     def test_collections_do_not_create_extra_payment_after_signed_final_date(self):
         first = timezone.localdate() + timedelta(days=7)
