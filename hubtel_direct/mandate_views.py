@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
@@ -61,6 +62,27 @@ def staff_status(request, mandate_id):
         "real_balance": mandates.outstanding(mandate.party),
         "preapproval_active": bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)),
     })
+
+
+@login_required
+@require_GET
+def staff_authorization_status_json(request, mandate_id):
+    """Read persisted provider-verified state without creating payment traffic."""
+    branch = branch_for(request)
+    core_services.permit(
+        request.user, branch,
+        "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
+    )
+    mandate = get_object_or_404(DebtMandate, pk=mandate_id, branch=branch)
+    response = JsonResponse({
+        "status": mandate.status,
+        "status_label": mandate.get_status_display(),
+        "provider_confirmed": mandate.status == "approved" and bool(mandate.provider_approved_at),
+        "provider_checked_at": (mandate.last_provider_check_at.isoformat()
+                                if mandate.last_provider_check_at else None),
+    })
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @login_required
