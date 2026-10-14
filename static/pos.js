@@ -375,6 +375,7 @@
       const percent = grandTotal > 0 ? Math.min(100, Math.round((paidNow / grandTotal) * 100)) : 0;
       progress.style.width = percent + "%";
     }
+    renderDirectDebitPreview();
   }
   function normalizeGhanaPhone(value) {
     let digits = String(value || "").replace(/\D/g, "");
@@ -1311,7 +1312,10 @@
     persist();
   });
   creditDirectPhone?.addEventListener("change", () => { changed(); persist(); });
-  creditDirectFrequency?.addEventListener("change", () => { changed(); persist(); });
+  creditDirectFrequency?.addEventListener("change", () => {
+    if (creditDirectFrequency.value === "once" && creditDirectCount) creditDirectCount.value = "1";
+    changed(); renderDirectDebitPreview(); persist();
+  });
   creditDirectCount?.addEventListener("input", () => { changed(); renderDirectDebitPreview(); persist(); });
   creditDirectDate?.addEventListener("change", () => {
     if (dueDate) dueDate.value = creditDirectDate.value;
