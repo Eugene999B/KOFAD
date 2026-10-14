@@ -299,8 +299,8 @@
                   {% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}
                 </select>
               </label>
-              <label for="credit-direct-count">Number of payments
-                <input id="credit-direct-count" type="number" inputmode="numeric" min="1" max="120" step="1" value="4">
+              <label for="credit-direct-end-date">Repayment end date
+                <input id="credit-direct-end-date" type="date" max="9999-12-31">
               </label>
               <label for="credit-direct-date">First collection date
                 <input id="credit-direct-date" type="date" max="9999-12-31">
@@ -315,7 +315,7 @@
               <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="credit-direct-name" role="status" aria-live="polite">Not verified</strong></div>
             </div>
             <section id="credit-direct-preview" class="notice subtle" aria-live="polite" style="margin-top:12px">
-              Select repayment terms to see the payment dates and amounts.
+              Enter the first and final dates; KOFAD calculates the number of payments and each amount.
             </section>
             <p class="hint">Customer authorization is separate from the sale. Hubtel prompts appear only when merchant preapproval is enabled.</p>
             {% else %}
@@ -388,7 +388,8 @@
     <input type="hidden" name="channel" id="sale-debit-network">
     <input type="hidden" name="frequency" id="sale-debit-frequency">
     <input type="hidden" name="first_due_date" id="sale-debit-date">
-    <input type="hidden" name="installment_count" id="sale-debit-count">
+    <input type="hidden" name="final_due_date" id="sale-debit-end-date">
+    <input type="hidden" name="source_document_id" id="sale-debit-document">
     <button type="submit" class="button">Open authorization waiting page →</button>
   </form>
   {% endif %}
