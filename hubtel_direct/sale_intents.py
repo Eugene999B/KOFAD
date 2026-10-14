@@ -121,7 +121,11 @@ def prepare_intent(user, branch, body, request_key):
         raise ValidationError("Choose MTN or Telecel Direct Debit.")
 
     branch = sale_service.lock_branch(branch)
-    total, paid, party_id = _quote(user, branch, sale)
+    total, paid, preview_party_id = _quote(user, branch, sale)
+    # When a NEW customer is validated in the rolled-back preview, their
+    # temporary Party PK does not exist. Only persist an existing customer FK;
+    # the new customer's permanent record is created on final issuance.
+    party_id = sale.get("party") or None
     balance = total - paid
     if balance <= ZERO:
         raise ValidationError("The sale is already fully paid; Direct Debit cannot be created.")
