@@ -256,8 +256,10 @@
       {% endif %}
 
       <div id="credit-fields" {% if not purchase %}class="hidden"{% endif %}>
-        <label for="due-date">Due date</label>
-        <input id="due-date" type="date" max="9999-12-31">
+        <div id="credit-manual-due-field">
+          <label for="due-date">Payment due date</label>
+          <input id="due-date" type="date" max="9999-12-31">
+        </div>
         {% if not purchase %}
         <div class="credit-email-capture">
           <label for="credit-customer-email">Customer email for credit records <small>Optional</small></label>
@@ -297,8 +299,11 @@
                   {% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}
                 </select>
               </label>
-              <label for="credit-direct-installment">Installment · GHS
-                <input id="credit-direct-installment" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100.00">
+              <label for="credit-direct-end-date">Repayment end date
+                <input id="credit-direct-end-date" type="date" max="9999-12-31">
+              </label>
+              <label for="credit-direct-date">First collection date
+                <input id="credit-direct-date" type="date" max="9999-12-31">
               </label>
             </div>
             <label class="switch-row">
@@ -309,7 +314,10 @@
               <button class="button secondary" type="button" id="credit-direct-verify">Check wallet name</button>
               <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="credit-direct-name" role="status" aria-live="polite">Not verified</strong></div>
             </div>
-            <p class="hint">Customer approval required before collection.</p>
+            <section id="credit-direct-preview" class="notice subtle" aria-live="polite" style="margin-top:12px">
+              Enter the first and final dates; KOFAD calculates the number of payments and each amount.
+            </section>
+            <p class="hint">Customer authorization is separate from the sale. Hubtel prompts appear only when merchant preapproval is enabled.</p>
             {% else %}
             <p class="hint">Enable repayment agreements in <a href="{% url 'online_debt_settings' %}" target="_blank" rel="noopener">Online Debt Settings</a>.</p>
             {% endif %}
@@ -380,9 +388,9 @@
     <input type="hidden" name="channel" id="sale-debit-network">
     <input type="hidden" name="frequency" id="sale-debit-frequency">
     <input type="hidden" name="first_due_date" id="sale-debit-date">
-    <input type="hidden" name="amount" id="sale-debit-amount">
-    <input type="hidden" name="maximum" id="sale-debit-ceiling">
-    <button type="submit" class="button">Continue to customer Direct Debit approval →</button>
+    <input type="hidden" name="final_due_date" id="sale-debit-end-date">
+    <input type="hidden" name="source_document_id" id="sale-debit-document">
+    <button type="submit" class="button">Open authorization waiting page →</button>
   </form>
   {% endif %}
   <div id="success-message-status" class="notice subtle hidden" role="status"></div>

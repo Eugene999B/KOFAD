@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
+  <div class="section-heading"><div>
+    <p class="eyebrow">SALES / DIRECT DEBIT</p>
+    <h2>Customer authorization</h2>
+  </div><span class="pill" id="debit-provider-status">{{ mandate.get_status_display }}</span></div>
+
+  <div class="two-column" style="gap:14px">
+    <div class="notice subtle">
+      <small>CUSTOMER</small>
+      <h3>{{ mandate.party.name }}</h3>
+      <p>{{ mandate.get_channel_display|default:mandate.channel }} · wallet ending {{ mandate.phone_suffix }}</p>
+      <p>Current account balance: <strong>GHS {{ real_balance|floatformat:2 }}</strong></p>
+    </div>
+    <div class="notice subtle">
+      <small>AUTHORIZATION</small>
+      {% if mandate.status == "approved" %}
+      <h3>Approved by Hubtel</h3>
+      <p>Provider-confirmed approval; eligible collections follow the signed dates and merchant safety switches.</p>
+      {% elif mandate.status == "pending" %}
+      <h3>Waiting for wallet approval</h3>
+      <p>Customer must approve the Hubtel prompt (USSD) or provide Hubtel's OTP on their own secure page.</p>
+      {% elif mandate.status == "draft" %}
+      <h3>Waiting for the customer</h3>
+      {% if preapproval_active %}
+      <p>Open the customer link below to confirm ownership and request a real Hubtel wallet approval prompt.</p>
+      {% else %}
+      <p>Hubtel preapproval has not been activated for this merchant. The repayment plan is saved, but no USSD prompt can be sent yet.</p>
+      {% endif %}
+      {% else %}
+      <h3>{{ mandate.get_status_display }}</h3>
+      <p>No new debit authorization will be submitted from this page.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% if mandate.status == "draft" %}
+  {% if preapproval_active %}
+  <form method="post" action="{% url 'hubtel_debt_staff_prompt' mandate.pk %}" class="notice subtle" style="margin-top:16px;padding:16px">
+    {% csrf_token %}
+    <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <input type="checkbox" name="customer_requested_prompt" value="yes" required>
+      <span>The customer has reviewed the dates and amounts below and asked KOFAD to send a Hubtel preapproval prompt to their wallet.</span>
+    </label>
+    <button type="submit" class="button">Send Hubtel approval prompt to customer phone</button>
+    <p class="muted">This initiates only the provider's USSD/OTP authorization request. It does not debit or approve the wallet.</p>
+  </form>
+  {% else %}
+  <div class="notice subtle" role="status" style="margin-top:16px">
+    <strong>Hubtel prompt activation required.</strong> The schedule is saved; a real wallet prompt cannot be sent until this merchant's provider preapproval switch is configured and verified.
+  </div>
+  {% endif %}
+  {% endif %}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
+    <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval page ↗</a>
+    {% if mandate.status == "draft" or mandate.status == "pending" %}
+    <form method="post" action="{% url 'hubtel_debt_staff_send_agreement' mandate.pk %}">
+      {% csrf_token %}<button class="button secondary" type="submit">SMS repayment timetable and approval link</button>
+    </form>
+    {% endif %}
+    {% if mandate.status == "pending" %}
+    <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
+      {% csrf_token %}<button class="button secondary" type="submit">Check Hubtel approval status</button>
+    </form>
+    {% endif %}
+    <a class="button secondary" href="{% url 'debts' %}?type=direct&customer={{ mandate.party_id }}">Open debtor account</a>
+  </div>
+
+  <div class="section-heading"><div><h3>Repayment schedule</h3>
+    <p class="muted">{{ mandate.get_frequency_display }} · First debit {{ mandate.first_due_date|date:"d M Y" }}
+    {% if mandate.terms_snapshot.collection_window %} · {{ mandate.terms_snapshot.collection_window }}{% endif %}</p></div></div>
+  <p><strong>Maximum authorized: GHS {{ mandate.maximum_total|floatformat:2 }}</strong>
+  {% if mandate.terms_snapshot.installment_count %} · {{ mandate.terms_snapshot.installment_count }} scheduled payment{{ mandate.terms_snapshot.installment_count|pluralize }}{% endif %}</p>
+  {% if mandate.terms_snapshot.schedule %}
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>#</th><th>Collection date</th><th>Amount</th><th>State</th></tr></thead>
+    <tbody>
+    {% for entry in mandate.terms_snapshot.schedule %}
+    <tr><td>{{ entry.number }}</td><td>{{ entry.date }}</td><td>GHS {{ entry.amount }}</td><td>Scheduled, subject to wallet approval</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <p>GHS {{ mandate.amount_per_period|floatformat:2 }} per {{ mandate.get_frequency_display|lower }} period, capped at the recorded balance.</p>
+  {% endif %}
+  <p class="muted">The SMS contains the first and final dates, payment amounts, collection hours and a link to the complete timetable. It is not a debit instruction or customer approval.</p>
+  <p class="muted" id="debit-status-refresh-note" role="status" aria-live="polite">Authorization status is checked on KOFAD automatically. Use “Check Hubtel approval status” while a provider request is pending to verify with Hubtel directly.</p>
+  <p class="muted">A dated schedule is an authorization limit, not confirmation of a payment. Provider status is independently checked before KOFAD posts a collection receipt. Cancelled or fully paid debt is never eligible for a new debit.</p>
+</section>
+{% if mandate.status == "draft" or mandate.status == "pending" %}
+<script>
+(() => {
+  const badge = document.getElementById("debit-provider-status");
+  const note = document.getElementById("debit-status-refresh-note");
+  const original = "{{ mandate.status|escapejs }}";
+  const statusUrl = "{% url 'hubtel_debt_staff_status_json' mandate.pk %}";
+  let lastStatus = original;
+  async function checkLocalStatus() {
+    if (document.hidden) return;
+    try {
+      const response = await fetch(statusUrl, {credentials:"same-origin",cache:"no-store"});
+      if (!response.ok) return;
+      const result = await response.json();
+      if (result.status !== lastStatus) {
+        badge.textContent = result.status_label;
+        note.textContent = result.provider_confirmed
+          ? "Hubtel authorization independently confirmed. Updating status…"
+          : "Authorization status has changed. Updating details…";
+        lastStatus = result.status;
+        window.location.reload();
+      }
+    } catch (_) { /* The cashier can still check status manually. */ }
+  }
+  setInterval(checkLocalStatus, 15000);
+})();
+</script>
+{% endif %}
+{% endblock %}

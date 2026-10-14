@@ -98,7 +98,10 @@
         <span>Wallet ending {{ mandate.phone_suffix }} · GHS {{ mandate.amount_per_period|floatformat:2 }} per period · maximum GHS {{ mandate.maximum_total|floatformat:2 }}</span>
         <span>Next due {{ mandate.next_due_date|date:"d M Y" }} · paid GHS {{ mandate.collected_total|floatformat:2 }}</span>
         {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Collection suspended.</strong> Do not start another automatic debit until finance resolves the existing provider authorization or transaction evidence. Customer can still make a manual payment.</p>{% endif %}
-        <p><a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">{% if mandate.status == "draft" %}Customer approval ↗{% else %}Approval / cancellation ↗{% endif %}</a></p>
+        <p><a class="button secondary" href="{% url 'hubtel_debt_staff_status' mandate.pk %}">Approval status & payment dates →</a> <a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Customer approval ↗</a></p>
+        {% if mandate.terms_snapshot.installment_count %}
+        <span>{{ mandate.terms_snapshot.installment_count }} payments · final collection {{ mandate.terms_snapshot.last_due_date }} · {{ mandate.terms_snapshot.collection_window }}</span>
+        {% endif %}
         {% if mandate.status == "draft" and perms.core.operate_finance %}
         <details class="debt-draft-editor">
           <summary class="button secondary" style="cursor:pointer">Edit draft terms</summary>
@@ -118,8 +121,13 @@
               <option value="yearly" {% if mandate.frequency == "yearly" %}selected{% endif %}>Yearly</option>
             </select></label>
             <label>First payment date<input type="date" name="first_due_date" value="{{ mandate.first_due_date|date:'Y-m-d' }}" required></label>
-            <label>Installment (GHS)<input type="number" name="amount" step="0.01" min="1.00" value="{{ mandate.amount_per_period }}" required></label>
-            <label>Maximum authorized amount (GHS)<input type="number" name="maximum" step="0.01" min="1.00" value="{{ mandate.maximum_total }}" required></label>
+            {% if mandate.terms_snapshot.installment_count %}
+            <label>Repayment end date<input type="date" name="final_due_date" value="{{ mandate.terms_snapshot.requested_end_date|default:mandate.terms_snapshot.last_due_date }}" required></label>
+            <small>KOFAD recalculates the amounts from the recorded unpaid balance. Date and frequency changes require a new customer approval.</small>
+            {% else %}
+            <label>Legacy installment (GHS)<input type="number" name="amount" step="0.01" min="1.00" value="{{ mandate.amount_per_period }}" required></label>
+            <label>Legacy authorization limit (GHS)<input type="number" name="maximum" step="0.01" min="1.00" value="{{ mandate.maximum_total }}" required></label>
+            {% endif %}
             <button class="button" type="submit">Save draft terms</button>
           </form>
         </details>
@@ -144,8 +152,8 @@
         <label>Network<select name="channel">{% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN Mobile Money</option>{% endif %}{% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}</select></label>
         <label>Payment schedule<select name="frequency">{% if online_debt_policy.allow_weekly %}<option value="weekly">Weekly</option>{% endif %}{% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}{% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}{% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}{% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}{% if online_debt_policy.allow_once %}<option value="once">Once after agreed grace period</option>{% endif %}</select></label>
         <label>First payment due<input type="date" name="first_due_date" required></label>
-        <label>Agreed amount per payment (GHS)<input type="number" min="{{ online_debt_policy.min_installment }}" max="{{ online_debt_policy.max_installment }}" step="0.01" name="amount" required><small>Allowed GHS {{ online_debt_policy.min_installment }} – GHS {{ online_debt_policy.max_installment }}</small></label>
-        <label>Absolute maximum amount authorized (GHS)<input type="number" min="0.01" max="{{ selected.outstanding }}" step="0.01" name="maximum" value="{{ selected.outstanding }}" required><small>Not more than the recorded customer debt of GHS {{ selected.outstanding|floatformat:2 }}.</small></label>
+        <label>Repayment end date<input type="date" name="final_due_date" required></label>
+        <p class="muted">Outstanding balance: GHS {{ selected.outstanding|floatformat:2 }}. KOFAD calculates the number of payments and all amounts from the first date, final date and frequency.</p>
 
         <button type="submit" class="button">Create agreement for customer authorization</button>
        </form>
