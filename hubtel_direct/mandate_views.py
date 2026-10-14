@@ -62,6 +62,36 @@ def staff_status(request, mandate_id):
 
 @login_required
 @require_POST
+def staff_request_prompt(request, mandate_id):
+    """Send the REAL provider preapproval prompt; not a payment or KOFAD SMS.
+
+    This can only initiate an independent Hubtel wallet approval. It cannot
+    grant authority and cannot submit any debit. Pending is durably persisted
+    before the provider POST to prevent replay on unknown outcomes.
+    """
+    branch = branch_for(request)
+    core_services.permit(
+        request.user, branch,
+        "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
+    )
+    mandate = get_object_or_404(DebtMandate, pk=mandate_id, branch=branch)
+    try:
+        if request.POST.get("customer_requested_prompt") != "yes":
+            raise ValidationError("Confirm the customer asked for this Hubtel approval prompt.")
+        if mandate.status != "draft":
+            raise ValidationError("This wallet authorization has already been requested.")
+        result = mandates.prepare_customer_authorization(mandate)
+        if result["verification_type"] == "USSD":
+            messages.success(request, "Hubtel approval prompt sent to the customer's MoMo phone. Waiting for the customer to approve.")
+        else:
+            messages.success(request, "Hubtel OTP preapproval initiated. Ask the customer to enter the Hubtel code on their secure approval page.")
+    except (ValidationError, client.StatusUnconfirmed, client.SubmissionUnknown) as exc:
+        messages.error(request, str(exc))
+    return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
+
+
+@login_required
+@require_POST
 def staff_check_status(request, mandate_id):
     branch = branch_for(request)
     core_services.permit(
