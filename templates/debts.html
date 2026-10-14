@@ -122,7 +122,7 @@
             </select></label>
             <label>First payment date<input type="date" name="first_due_date" value="{{ mandate.first_due_date|date:'Y-m-d' }}" required></label>
             {% if mandate.terms_snapshot.installment_count %}
-            <label>Number of scheduled payments<input type="number" name="installment_count" min="1" max="120" step="1" value="{{ mandate.terms_snapshot.installment_count }}" required></label>
+            <label>Repayment end date<input type="date" name="final_due_date" value="{{ mandate.terms_snapshot.requested_end_date|default:mandate.terms_snapshot.last_due_date }}" required></label>
             <small>KOFAD recalculates the amounts from the recorded unpaid balance. Date and frequency changes require a new customer approval.</small>
             {% else %}
             <label>Legacy installment (GHS)<input type="number" name="amount" step="0.01" min="1.00" value="{{ mandate.amount_per_period }}" required></label>
@@ -152,8 +152,8 @@
         <label>Network<select name="channel">{% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN Mobile Money</option>{% endif %}{% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}</select></label>
         <label>Payment schedule<select name="frequency">{% if online_debt_policy.allow_weekly %}<option value="weekly">Weekly</option>{% endif %}{% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}{% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}{% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}{% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}{% if online_debt_policy.allow_once %}<option value="once">Once after agreed grace period</option>{% endif %}</select></label>
         <label>First payment due<input type="date" name="first_due_date" required></label>
-        <label>Number of scheduled payments<input type="number" min="1" max="120" step="1" name="installment_count" value="4" required></label>
-        <p class="muted">Outstanding balance: GHS {{ selected.outstanding|floatformat:2 }}. KOFAD calculates each amount and the final collection date automatically.</p>
+        <label>Repayment end date<input type="date" name="final_due_date" required></label>
+        <p class="muted">Outstanding balance: GHS {{ selected.outstanding|floatformat:2 }}. KOFAD calculates the number of payments and all amounts from the first date, final date and frequency.</p>
 
         <button type="submit" class="button">Create agreement for customer authorization</button>
        </form>
