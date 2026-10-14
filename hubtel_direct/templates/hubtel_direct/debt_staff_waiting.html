@@ -4,7 +4,7 @@
   <div class="section-heading"><div>
     <p class="eyebrow">SALES / DIRECT DEBIT</p>
     <h2>Customer authorization</h2>
-  </div><span class="pill">{{ mandate.get_status_display }}</span></div>
+  </div><span class="pill" id="debit-provider-status">{{ mandate.get_status_display }}</span></div>
 
   <div class="two-column" style="gap:14px">
     <div class="notice subtle">
@@ -83,6 +83,35 @@
   <p>GHS {{ mandate.amount_per_period|floatformat:2 }} per {{ mandate.get_frequency_display|lower }} period, capped at the recorded balance.</p>
   {% endif %}
   <p class="muted">The SMS contains the first and final dates, payment amounts, collection hours and a link to the complete timetable. It is not a debit instruction or customer approval.</p>
+  <p class="muted" id="debit-status-refresh-note" role="status" aria-live="polite">Authorization status is checked on KOFAD automatically. Use “Check Hubtel approval status” while a provider request is pending to verify with Hubtel directly.</p>
   <p class="muted">A dated schedule is an authorization limit, not confirmation of a payment. Provider status is independently checked before KOFAD posts a collection receipt. Cancelled or fully paid debt is never eligible for a new debit.</p>
 </section>
+{% if mandate.status == "draft" or mandate.status == "pending" %}
+<script>
+(() => {
+  const badge = document.getElementById("debit-provider-status");
+  const note = document.getElementById("debit-status-refresh-note");
+  const original = "{{ mandate.status|escapejs }}";
+  const statusUrl = "{% url 'hubtel_debt_staff_status_json' mandate.pk %}";
+  let lastStatus = original;
+  async function checkLocalStatus() {
+    if (document.hidden) return;
+    try {
+      const response = await fetch(statusUrl, {credentials:"same-origin",cache:"no-store"});
+      if (!response.ok) return;
+      const result = await response.json();
+      if (result.status !== lastStatus) {
+        badge.textContent = result.status_label;
+        note.textContent = result.provider_confirmed
+          ? "Hubtel authorization independently confirmed. Updating status…"
+          : "Authorization status has changed. Updating details…";
+        lastStatus = result.status;
+        window.location.reload();
+      }
+    } catch (_) { /* The cashier can still check status manually. */ }
+  }
+  setInterval(checkLocalStatus, 15000);
+})();
+</script>
+{% endif %}
 {% endblock %}
