@@ -151,7 +151,7 @@ def staff_status(request, mandate_id):
         "real_balance": mandates.outstanding(mandate.party),
         "preapproval_active": bool(
             getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)
-            and client.enabled("receive")
+            and debit_api.preapproval_ready()
         ),
     })
 
