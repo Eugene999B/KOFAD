@@ -722,6 +722,11 @@ def complete_trade(request):
         data = json.loads(request.body)
         if not isinstance(data, dict):
             raise ValidationError("Expected a transaction object.")
+        if data.get("direct_debit_v2"):
+            raise ValidationError(
+                "Hubtel Direct Debit must use pre-sale wallet authorization. "
+                "No ordinary credit sale was posted. Reopen your authorization intent."
+            )
         if data.get("kind", "sale") == "sale":
             for payment in data.get("payments") or []:
                 if not isinstance(payment, dict) or payment.get("method") != "momo":
