@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
+  <div class="section-heading"><div>
+    <p class="eyebrow">SALES / DIRECT DEBIT</p>
+    <h2>Customer authorization</h2>
+  </div><span class="pill">{{ mandate.get_status_display }}</span></div>
+
+  <div class="two-column" style="gap:14px">
+    <div class="notice subtle">
+      <small>CUSTOMER</small>
+      <h3>{{ mandate.party.name }}</h3>
+      <p>{{ mandate.get_channel_display|default:mandate.channel }} · wallet ending {{ mandate.phone_suffix }}</p>
+      <p>Current account balance: <strong>GHS {{ real_balance|floatformat:2 }}</strong></p>
+    </div>
+    <div class="notice subtle">
+      <small>AUTHORIZATION</small>
+      {% if mandate.status == "approved" %}
+      <h3>Approved by Hubtel</h3>
+      <p>Provider-confirmed approval; eligible collections follow the signed dates and merchant safety switches.</p>
+      {% elif mandate.status == "pending" %}
+      <h3>Waiting for wallet approval</h3>
+      <p>Customer must approve the Hubtel prompt (USSD) or provide Hubtel's OTP on their own secure page.</p>
+      {% elif mandate.status == "draft" %}
+      <h3>Waiting for the customer</h3>
+      {% if preapproval_active %}
+      <p>Open the customer link below to confirm ownership and request a real Hubtel wallet approval prompt.</p>
+      {% else %}
+      <p>Hubtel preapproval has not been activated for this merchant. The repayment plan is saved, but no USSD prompt can be sent yet.</p>
+      {% endif %}
+      {% else %}
+      <h3>{{ mandate.get_status_display }}</h3>
+      <p>No new debit authorization will be submitted from this page.</p>
+      {% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
+    <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval page ↗</a>
+    {% if mandate.status == "pending" %}
+    <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
+      {% csrf_token %}<button class="button secondary" type="submit">Check Hubtel approval status</button>
+    </form>
+    {% endif %}
+    <a class="button secondary" href="{% url 'debts' %}?type=direct&customer={{ mandate.party_id }}">Open debtor account</a>
+  </div>
+
+  <div class="section-heading"><div><h3>Repayment schedule</h3>
+    <p class="muted">{{ mandate.get_frequency_display }} · First debit {{ mandate.first_due_date|date:"d M Y" }}
+    {% if mandate.terms_snapshot.collection_window %} · {{ mandate.terms_snapshot.collection_window }}{% endif %}</p></div></div>
+  <p><strong>Maximum authorized: GHS {{ mandate.maximum_total|floatformat:2 }}</strong>
+  {% if mandate.terms_snapshot.installment_count %} · {{ mandate.terms_snapshot.installment_count }} scheduled payment{{ mandate.terms_snapshot.installment_count|pluralize }}{% endif %}</p>
+  {% if mandate.terms_snapshot.schedule %}
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>#</th><th>Collection date</th><th>Amount</th><th>State</th></tr></thead>
+    <tbody>
+    {% for entry in mandate.terms_snapshot.schedule %}
+    <tr><td>{{ entry.number }}</td><td>{{ entry.date }}</td><td>GHS {{ entry.amount }}</td><td>Scheduled, subject to wallet approval</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <p>GHS {{ mandate.amount_per_period|floatformat:2 }} per {{ mandate.get_frequency_display|lower }} period, capped at the recorded balance.</p>
+  {% endif %}
+  <p class="muted">A dated schedule is an authorization limit, not confirmation of a payment. Provider status is independently checked before KOFAD posts a collection receipt. Cancelled or fully paid debt is never eligible for a new debit.</p>
+</section>
+{% endblock %}
