@@ -91,7 +91,7 @@
   const creditDirectNetwork = document.querySelector("#credit-direct-network");
   const creditDirectPhone = document.querySelector("#credit-direct-phone");
   const creditDirectFrequency = document.querySelector("#credit-direct-frequency");
-  const creditDirectCount = document.querySelector("#credit-direct-count");
+  const creditDirectEndDate = document.querySelector("#credit-direct-end-date");
   const creditDirectDate = document.querySelector("#credit-direct-date");
   const creditDirectPreview = document.querySelector("#credit-direct-preview");
   const manualDueField = document.querySelector("#credit-manual-due-field");
@@ -154,66 +154,66 @@
     }
     return next;
   }
+  function directDates(first, final, frequency) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(final)) return null;
+    let day = new Date(first + "T00:00:00Z");
+    const end = new Date(final + "T00:00:00Z");
+    if (!Number.isFinite(day.getTime()) || !Number.isFinite(end.getTime()) ||
+        day.toISOString().slice(0,10) !== first || end.toISOString().slice(0,10) !== final ||
+        day > end || (end - day) > 3660*86400000) return null;
+    if (frequency === "once") return first === final ? [day] : null;
+    if (!["daily","weekly","monthly","quarterly","yearly"].includes(frequency)) return null;
+    const result = [];
+    while (day <= end && result.length <= 120) {
+      result.push(day);
+      day = collectionNextDate(day, frequency);
+    }
+    if (result.length > 120) return null;
+    return result;
+  }
   function renderDirectDebitPreview() {
     if (!creditDirectPreview || creditRepaymentMode?.value !== "direct") return;
     const balance = total() - paymentTotal();
-    const count = Number(creditDirectCount?.value || 0);
     const freq = creditDirectFrequency?.value || "";
-    const date = creditDirectDate?.value || "";
-    if (!Number.isInteger(count) || count < 1 || count > 120 ||
-        !date || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-        balance <= 0 || balance < count || (freq === "once" && count !== 1)) {
-      creditDirectPreview.textContent = "Choose the first collection date and number of payments to calculate the schedule.";
+    const dates = directDates(creditDirectDate?.value || "", creditDirectEndDate?.value || "", freq);
+    if (!dates || !dates.length || balance <= 0 || balance < dates.length) {
+      creditDirectPreview.textContent = "Choose first and final dates (up to 120 collections), frequency and an unpaid sale balance.";
       return;
     }
-    const rows = [];
-    let day = new Date(date + "T00:00:00Z");
-    if (!Number.isFinite(day.getTime())) {
-      creditDirectPreview.textContent = "Choose a valid date.";
-      return;
-    }
-    const regular = Math.ceil(balance / count);
+    const regular = Math.ceil(balance / dates.length);
     let remaining = balance;
-    for (let i = 1; i <= count; i++) {
-      const amount = Math.min(regular, remaining);
-      rows.push({date:day.toLocaleDateString("en-GH",{timeZone:"UTC",day:"2-digit",month:"short",year:"numeric"}),amount});
-      remaining -= amount;
-      if (i !== count) day = collectionNextDate(day,freq);
-    }
     const overview = el("p");
-    overview.append(el("strong", root.dataset.currency + " " + formatted(balance) + " due"), " · " + count + " scheduled payment" + (count===1?"":"s"));
+    overview.append(el("strong", root.dataset.currency + " " + formatted(balance) + " due"),
+      " · " + dates.length + " scheduled payment" + (dates.length === 1 ? "" : "s"));
     const details = el("ol");
     details.className = "direct-schedule-preview";
-    for (const row of rows) details.append(el("li", row.date + " · " + root.dataset.currency + " " + formatted(row.amount)));
-    const notice = el("small","Indicative from this sale; the final agreement uses KOFAD's recorded debt. Collection occurs within the branch's Ghana-time window, after independent Hubtel approval.");
+    for (const day of dates) {
+      const amount = Math.min(regular, remaining);
+      remaining -= amount;
+      details.append(el("li", day.toLocaleDateString("en-GH", {timeZone:"UTC",day:"2-digit",month:"short",year:"numeric"}) +
+        " · " + root.dataset.currency + " " + formatted(amount)));
+    }
+    const notice = el("small", "Calculated from this sale; KOFAD rechecks the recorded unpaid sale before presenting final terms. Hubtel collection uses the displayed Ghana-time window after separate wallet approval. A collection may occur after its due date if a configured grace period applies.");
     creditDirectPreview.replaceChildren(overview, details, notice);
   }
   function validateDirectDebitSetup(grandTotal, paidNow, party, newName) {
     if (creditRepaymentMode?.value !== "direct") return null;
     if (!["part", "credit"].includes(paymentPlan?.value || "")) return null;
-    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectCount || !creditDirectDate) {
-      throw new Error("Direct Debit planning is disabled. Enable plan creation in Online Debt Settings.");
+    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectEndDate || !creditDirectDate) {
+      throw new Error("Direct Debit planning is not available. Check Online Debt Settings.");
     }
     if (!party && !newName) throw new Error("Choose a customer for Direct Debit.");
     if (!creditDirectContactConsent?.checked) throw new Error("Confirm the customer agreed to receive a Direct Debit authorization SMS.");
-    // Receipt SMS preferences do not confer (or deny) Direct Debit authority.
-    // The customer must independently verify wallet ownership and accept the
-    // exact Hubtel mandate terms via the separate authorization page.
     const phone = normalizeGhanaPhone(creditDirectPhone.value);
     const balance = grandTotal - paidNow;
-    const count = Number(creditDirectCount.value);
-    if (balance <= 0 || !Number.isInteger(count) || count < 1 || count > 120 || count > balance) {
-      throw new Error("Choose 1–120 payments; each installment must be at least GHS 0.01.");
+    const dates = directDates(creditDirectDate.value, creditDirectEndDate.value, creditDirectFrequency.value);
+    if (balance <= 0 || !dates || !dates.length || dates.length > balance) {
+      throw new Error("Choose valid first/final dates and interval; each calculated payment must be at least GHS 0.01.");
     }
-    if (creditDirectFrequency.value === "once" && count !== 1) {
-      throw new Error("A one-time debit must have exactly one payment.");
-    }
-    if (!creditDirectDate.value || !creditDirectNetwork.value || !creditDirectFrequency.value) {
-      throw new Error("Choose a wallet network, repayment interval and first collection date.");
-    }
+    if (!creditDirectNetwork.value) throw new Error("Choose the customer's MoMo network.");
     if (dueDate) dueDate.value = creditDirectDate.value;
     return {phone, channel:creditDirectNetwork.value, frequency:creditDirectFrequency.value,
-      first_due_date:creditDirectDate.value, installment_count:String(count)};
+      first_due_date:creditDirectDate.value, final_due_date:creditDirectEndDate.value};
   }
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
@@ -968,7 +968,7 @@
     if (creditRepaymentMode) creditRepaymentMode.value = "manual";
     if (creditDirectPhone) creditDirectPhone.value = "";
     resetCreditVerifiedName();
-    if (creditDirectCount) creditDirectCount.value = "4";
+    if (creditDirectEndDate) creditDirectEndDate.value = "";
     if (creditDirectDate) creditDirectDate.value = "";
     if (creditDirectContactConsent) creditDirectContactConsent.checked = false;
     debitAuthorizationForm?.classList.add("hidden");
@@ -1313,12 +1313,13 @@
   });
   creditDirectPhone?.addEventListener("change", () => { changed(); persist(); });
   creditDirectFrequency?.addEventListener("change", () => {
-    if (creditDirectFrequency.value === "once" && creditDirectCount) creditDirectCount.value = "1";
+    if (creditDirectFrequency.value === "once" && creditDirectEndDate && creditDirectDate?.value) creditDirectEndDate.value = creditDirectDate.value;
     changed(); renderDirectDebitPreview(); persist();
   });
-  creditDirectCount?.addEventListener("input", () => { changed(); renderDirectDebitPreview(); persist(); });
+  creditDirectEndDate?.addEventListener("change", () => { changed(); renderDirectDebitPreview(); persist(); });
   creditDirectDate?.addEventListener("change", () => {
     if (dueDate) dueDate.value = creditDirectDate.value;
+    if (creditDirectFrequency?.value === "once" && creditDirectEndDate) creditDirectEndDate.value = creditDirectDate.value;
     changed(); renderDirectDebitPreview(); persist();
   });
   paymentPlan?.addEventListener("change", () => {
@@ -1779,7 +1780,8 @@
       const ready = Boolean(pendingDebitSetup && hasDebt && result.customer?.id);
       debitAuthorizationForm.classList.toggle("hidden", !ready);
       if (ready) {
-        const data = {...pendingDebitSetup, party:String(result.customer.id)};
+        const data = {...pendingDebitSetup, party:String(result.customer.id),
+          source_document_id:String(result.document_id || "")};
         for (const [field,value] of Object.entries(data)) {
           const target = debitAuthorizationForm.querySelector('[name="' + field + '"]');
           if (target) target.value = value;
