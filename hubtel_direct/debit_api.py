@@ -36,6 +36,17 @@ def _preapproval_rejection(code, http_status=None):
     return "Hubtel did not accept the preapproval request" + (f" (code {code})." if code else ".")
 
 
+def preapproval_ready():
+    """Preapproval is independent of KOFAD's ordinary POS Receive Money switch."""
+    if not getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False):
+        return False
+    try:
+        client.require_reconciliation_ready("receive")
+    except ValidationError:
+        return False
+    return True
+
+
 def gate(feature):
     flags = {
         "preapproval": "HUBTEL_DEBT_PREAPPROVAL_ENABLED",
@@ -44,7 +55,12 @@ def gate(feature):
     }
     if feature not in flags or not getattr(settings, flags[feature], False):
         raise ValidationError("This Hubtel financial service is awaiting activation.")
-    client.require_enabled("receive")
+    if feature == "preapproval":
+        # Verify credentials, collection account and whitelisted web egress;
+        # DO NOT activate the separate one-off POS Receive Money gateway.
+        client.require_reconciliation_ready("receive")
+    else:
+        client.require_enabled("receive")
 
 
 def account():
