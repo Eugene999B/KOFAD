@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET, require_POST
 from core import services
 from core.views import branch_for
 from . import client, debit_api, sale_intents
-from .models import DirectDebitSaleIntent
+from .models import DirectDebitSaleIntent, DebtMandate
 
 logger = logging.getLogger(__name__)
 
@@ -188,3 +188,69 @@ def provider_callback(request):
             callback_seen_at=timezone.now(), next_provider_check_at=timezone.now(),
         )
     return JsonResponse({"ok": True})
+
+
+@login_required
+def attach_to_existing_invoice(request, invoice_id):
+    """Recover a previously issued credit sale WITHOUT posting another sale.
+
+    Staff explicitly selects the existing invoice, the exact remaining
+    balance and a fresh consented schedule. This endpoint never creates a
+    receipt or stock movement and cannot silently consolidate older debts.
+    """
+    from django.contrib import messages
+    from django.shortcuts import render
+    from core.models import Document
+    from core import services as s
+    from . import mandates
+    branch = branch_for(request)
+    s.permit(request.user, branch, "operate_sales")
+    invoice = get_object_or_404(
+        Document.objects.select_related("party"), pk=invoice_id, branch=branch,
+        kind="sale", finalized=True, party__kind="customer",
+    )
+    unpaid = s.balance(invoice)
+    if unpaid <= 0:
+        messages.error(request, "The selected invoice is already settled.")
+        return redirect("document", pk=invoice.pk)
+    existing = DebtMandate.objects.filter(
+        branch=branch, terms_snapshot__source_document_id=str(invoice.pk)
+    ).order_by("-created_at").first()
+    if existing:
+        messages.info(request, "This invoice already has a Direct Debit agreement. Review the original; do not create a duplicate.")
+        return redirect("hubtel_debt_staff_status", mandate_id=existing.pk)
+    if request.method == "POST":
+        try:
+            if (request.POST.get("customer_requested_prompt") != "yes"
+                    or request.POST.get("accepted_schedule") != "yes"):
+                raise ValidationError("Customer must review and request a real Hubtel preapproval for this exact invoice.")
+            if not invoice.party.consent:
+                # Customer explicitly agrees to payment communication during
+                # recovery, not to debit authorization. Hubtel verifies that.
+                invoice.party.consent = True
+                invoice.party.save(update_fields=["consent"])
+            mandate = mandates.create_plan(
+                request.user, branch,
+                party_id=invoice.party_id,
+                source_document_id=invoice.pk,
+                phone=request.POST.get("phone"),
+                channel=request.POST.get("channel"),
+                frequency=request.POST.get("frequency"),
+                first_due_date=request.POST.get("first_due_date"),
+                final_due_date=request.POST.get("final_due_date"),
+            )
+            try:
+                if debit_api.preapproval_ready():
+                    mandates.prepare_customer_authorization(mandate)
+                    messages.info(request, "Hubtel received an authorization request. Awaiting the wallet holder's independent approval.")
+                else:
+                    messages.warning(request, "Agreement recorded but Hubtel preapproval is unavailable. No wallet prompt was sent.")
+            except (ValidationError, client.StatusUnconfirmed, client.SubmissionUnknown, client.ProviderRejected) as exc:
+                messages.warning(request, "Hubtel preapproval was NOT confirmed: " + str(exc))
+            return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
+        except (ValidationError, ValueError, TypeError) as exc:
+            messages.error(request, str(exc))
+    return render(request, "hubtel_direct/attach_invoice.html", {
+        "invoice": invoice, "unpaid": unpaid,
+        "today": timezone.localdate(), "customer": invoice.party,
+    })
