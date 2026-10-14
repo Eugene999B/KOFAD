@@ -372,8 +372,19 @@ def prepare_customer_authorization(mandate):
             phone=mandate_phone(mandate), channel=mandate.channel,
             client_reference=mandate.client_reference,
         )
+    except debit_api.ProviderDenied:
+        # Hubtel explicitly rejected the POST (including an IP/scopes 4xx).
+        # No preapproval was accepted: restore draft so finance can correct
+        # provider setup without creating a new sale or a duplicate mandate.
+        with transaction.atomic():
+            locked = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
+            if locked.status == "pending" and not locked.hubtel_preapproval_id:
+                locked.status = "draft"
+                locked.save(update_fields=["status", "updated_at"])
+        raise
     except Exception:
-        # The POST may have reached Hubtel. Leave pending, only query status.
+        # Timeout/transport outage could have reached Hubtel. Never infer a
+        # negative result, never send a second prompt for the same reference.
         raise
     with transaction.atomic():
         locked = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
