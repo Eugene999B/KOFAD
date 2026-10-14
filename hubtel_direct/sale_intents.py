@@ -58,7 +58,9 @@ def _phone_hash(phone):
 
 
 def _validate_policy(branch, channel, frequency, first, amount, preview):
-    policy, _ = OnlineDebtSettings.objects.get_or_create(branch=branch)
+    policy, created = OnlineDebtSettings.objects.get_or_create(branch=branch)
+    if created:
+        policy.refresh_from_db()
     if not policy.plan_creation_enabled:
         raise ValidationError("Direct Debit agreements are disabled in Online Debt Settings.")
     if not policy.allows_channel(channel) or channel not in debit_api.DEBIT_CHANNELS:
