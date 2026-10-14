@@ -21,15 +21,17 @@ def staff_create_mandate(request):
     branch = branch_for(request)
     try:
         count = request.POST.get("installment_count") or None
-        amount = request.POST.get("amount") if count is None else None
-        ceiling = request.POST.get("maximum") if count is None else None
+        end_date = request.POST.get("final_due_date") or None
+        amount = request.POST.get("amount") if count is None and not end_date else None
+        ceiling = request.POST.get("maximum") if count is None and not end_date else None
         mandate = mandates.create_plan(
             request.user, branch, party_id=request.POST.get("party"),
             phone=request.POST.get("phone"), channel=request.POST.get("channel"),
             frequency=request.POST.get("frequency"),
             first_due_date=request.POST.get("first_due_date"),
             amount_per_period=amount, maximum_total=ceiling,
-            installment_count=count,
+            installment_count=count, final_due_date=end_date,
+            source_document_id=request.POST.get("source_document_id") or None,
             allow_one_partial_retry=request.POST.get("partial_retry") == "yes",
             minimum_partial=request.POST.get("minimum_partial") or "0.00",
         )
@@ -128,6 +130,7 @@ def staff_edit_draft(request, mandate_id):
             amount_per_period=request.POST.get("amount"),
             maximum_total=request.POST.get("maximum"),
             installment_count=request.POST.get("installment_count") or None,
+            final_due_date=request.POST.get("final_due_date") or None,
         )
         messages.success(
             request,
@@ -147,8 +150,8 @@ def _safe_mandate(mandate_id):
 @require_GET
 def customer_authorize(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
-    # Random UUID is a bearer access link, without showing the whole phone
-    # or banking credentials. SMS ownership still required for any action.
+    # Random UUID is an unguessable bearer link, showing only the wallet suffix.
+    # The actual wallet holder authorizes using Hubtel's USSD or provider OTP.
     return render(request, "hubtel_direct/debt_authorization.html", {
         "mandate": mandate,
         "debt_balance": mandates.outstanding(mandate.party),
@@ -160,29 +163,24 @@ def customer_authorize(request, mandate_id):
 def customer_authorize_action(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
     action = request.POST.get("action")
-    if action not in {"send", "confirm", "hubtel_otp", "check"}:
+    if action not in {"start", "confirm", "hubtel_otp", "check"}:
         messages.error(request, "Choose an authorization action.")
         return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
     try:
-        if action in {"send", "confirm"} and mandate.status != "draft":
+        if action in {"start", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
-        if action == "send":
-            if not mandates.outstanding(mandate.party) > 0:
-                raise ValidationError("No debt remains to authorize.")
-            sms_service.send_otp(mandates.mandate_phone(mandate), "momo", request=request)
-            messages.success(request, "A six-digit ownership code was sent to the wallet being authorized.")
-        elif action == "confirm":
+        if action in {"start", "confirm"}:
             if request.POST.get("accepted_terms") != "yes":
-                raise ValidationError("Read and accept the displayed payment schedule, limits and cancellation terms.")
-            sms_service.verify_otp(
-                mandates.mandate_phone(mandate), request.POST.get("code", ""),
-                "momo",
-            )
+                raise ValidationError("Read and accept the exact scheduled payment amounts, dates and cancellation terms.")
+            if mandates.outstanding(mandate.party) <= 0:
+                raise ValidationError("No debt remains to authorize.")
+            # Hubtel itself verifies the wallet owner via USSD/OTP.
+            # A KOFAD SMS code is never represented as payment authorization.
             result = mandates.prepare_customer_authorization(mandate)
             if result["verification_type"] == "OTP":
-                messages.success(request, "Ownership confirmed. Enter the separate Hubtel preapproval OTP shown below.")
+                messages.success(request, "Hubtel sent its approval code. Complete the Hubtel OTP step below.")
             else:
-                messages.success(request, "Ownership confirmed. Approve Hubtel's preapproval on your mobile phone.")
+                messages.success(request, "Hubtel requested wallet approval. Please approve the USSD prompt on your phone.")
         elif action == "hubtel_otp":
             if mandate.status != "pending" or mandate.verification_type != "OTP":
                 raise ValidationError("This mandate does not have a pending Hubtel OTP request.")
