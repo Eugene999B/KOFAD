@@ -1,7 +1,15 @@
 from django.urls import path
-from . import views, mandate_views, payroll_views, policy_views, refund_views
+from . import views, mandate_views, payroll_views, policy_views, refund_views, sale_intent_views
 
 urlpatterns = [
+    path("api/direct-debit/sale-intents/", sale_intent_views.prepare_sale, name="hubtel_v2_prepare_sale"),
+    path("debts/hubtel/invoices/<uuid:invoice_id>/attach/", sale_intent_views.attach_to_existing_invoice, name="hubtel_v2_attach_invoice"),
+    path("debts/hubtel/intents/<uuid:intent_id>/", sale_intent_views.staff_wait, name="hubtel_v2_staff_wait"),
+    path("debts/hubtel/intents/<uuid:intent_id>/status.json", sale_intent_views.staff_status_json, name="hubtel_v2_staff_status"),
+    path("debts/hubtel/intents/<uuid:intent_id>/check/", sale_intent_views.staff_check, name="hubtel_v2_staff_check"),
+    path("market/direct-debit/<uuid:intent_id>/", sale_intent_views.customer_wait, name="hubtel_v2_customer_wait"),
+    path("market/direct-debit/<uuid:intent_id>/otp/", sale_intent_views.customer_otp, name="hubtel_v2_customer_otp"),
+    path("market/payments/hubtel-direct/sale-intent/callback/", sale_intent_views.provider_callback, name="hubtel_v2_callback"),
     path("settings/debt/online/", policy_views.online_debt_settings, name="online_debt_settings"),
     path("online-returns/<uuid:return_id>/hubtel-refund/prepare/", refund_views.prepare, name="hubtel_refund_prepare"),
     path("online-returns/<uuid:return_id>/hubtel-refund/approve/", refund_views.approve, name="hubtel_refund_approve"),

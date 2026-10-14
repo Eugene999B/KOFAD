@@ -43,6 +43,55 @@ class DirectTransaction(models.Model):
         return f"{self.kind} {self.client_reference[-8:]} {self.status}"
 
 
+
+class DirectDebitSaleIntent(models.Model):
+    """Draft checkout and one provider preapproval; no issued sale until approval.
+
+    The JSON contains the cashier's entire proposed sale and must never be
+    exposed via public status endpoints. Replaying request_key returns this
+    original intent rather than issuing another sale or Hubtel request.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request_key = models.UUIDField(unique=True)
+    request_fingerprint = models.CharField(max_length=64)
+    branch = models.ForeignKey("core.Branch", on_delete=models.PROTECT, related_name="direct_debit_sale_intents")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="direct_debit_sale_intents")
+    party = models.ForeignKey("core.Party", null=True, blank=True, on_delete=models.PROTECT)
+    checkout_payload = models.JSONField(default=dict)
+    terms_snapshot = models.JSONField(default=dict)
+    phone_encrypted = models.TextField()
+    phone_fingerprint = models.CharField(max_length=64, db_index=True)
+    phone_suffix = models.CharField(max_length=4)
+    channel = models.CharField(max_length=28)
+    frequency = models.CharField(max_length=12)
+    first_due_date = models.DateField()
+    final_due_date = models.DateField()
+    quoted_total = models.DecimalField(max_digits=14, decimal_places=2)
+    quoted_paid = models.DecimalField(max_digits=14, decimal_places=2)
+    outstanding = models.DecimalField(max_digits=14, decimal_places=2)
+    client_reference = models.CharField(max_length=36, unique=True)
+    hubtel_preapproval_id = models.CharField(max_length=100, blank=True)
+    verification_type = models.CharField(max_length=8, blank=True)
+    otp_prefix = models.CharField(max_length=8, blank=True)
+    status = models.CharField(max_length=20, default="draft", db_index=True)
+    provider_approved_at = models.DateTimeField(null=True, blank=True)
+    last_provider_check_at = models.DateTimeField(null=True, blank=True)
+    next_provider_check_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    request_sent_at = models.DateTimeField(null=True, blank=True)
+    callback_seen_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    document = models.OneToOneField("core.Document", null=True, blank=True, on_delete=models.PROTECT)
+    mandate = models.OneToOneField("hubtel_direct.DebtMandate", null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status", "next_provider_check_at"], name="hubtel_v2_intent_due_idx"),
+            models.Index(fields=["branch", "-created_at"], name="hubtel_v2_intent_branch_idx"),
+        ]
+
+
 class DebtMandate(models.Model):
     """A bounded, customer-authorized repayment agreement, not blanket wallet access.
 

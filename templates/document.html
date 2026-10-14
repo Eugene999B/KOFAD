@@ -3,6 +3,7 @@
 {% block actions %}
 <div class="actions receipt-actions">
 {% if doc.party and doc.kind == "sale" and outstanding and perms.core.operate_sales %}
+<a class="button secondary" href="{% url 'hubtel_v2_attach_invoice' doc.pk %}">Attach Hubtel approval to this unpaid sale</a>
 <form method="post" action="/communications/">{% csrf_token %}<input type="hidden" name="action" value="document"><input type="hidden" name="document" value="{{ doc.pk }}"><button class="text-button" name="template" value="debt">Prepare debt reminder</button></form>
 {% endif %}
 <a class="button secondary" href="{% url 'document_pdf' doc.pk 'a4' %}" target="_blank" rel="noopener">A4 PDF / print</a>

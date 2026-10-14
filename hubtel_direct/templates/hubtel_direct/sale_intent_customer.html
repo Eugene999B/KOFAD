@@ -1,0 +1,41 @@
+{% extends "marketplace/base.html" %}
+{% block content %}
+<main class="market-shell" style="max-width:740px;margin:32px auto;padding:18px">
+ <section class="market-card" style="padding:25px;border-radius:18px">
+  <p class="market-eyebrow">KOFAD · HUBTEL DIRECT DEBIT AUTHORIZATION</p>
+  <h1 style="font-size:26px">Review your installment agreement</h1>
+  <p>No sale has been issued and no wallet deduction will take place at this stage. Hubtel independently checks your ownership by USSD or OTP. KOFAD will never ask for your MoMo PIN.</p>
+  <p><strong>Proposed sale:</strong> GHS {{ intent.quoted_total|floatformat:2 }}</p>
+  <p><strong>Deposit:</strong> GHS {{ intent.quoted_paid|floatformat:2 }}</p>
+  <p><strong>Agreed debt maximum:</strong> GHS {{ intent.outstanding|floatformat:2 }}</p>
+  <p><strong>Wallet:</strong> {{ intent.channel }} · ending {{ intent.phone_suffix }}</p>
+  <p><strong>Collection window:</strong> {{ intent.terms_snapshot.collection_window }}</p>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <thead><tr><th style="text-align:left;padding:10px">Date</th><th style="text-align:right;padding:10px">Amount (GHS)</th></tr></thead>
+    <tbody>{% for row in schedule %}<tr><td style="padding:10px;border-top:1px solid #d6e4e8">{{ row.date }}</td><td style="text-align:right;padding:10px;border-top:1px solid #d6e4e8">{{ row.amount }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if error %}<p role="alert" style="color:#a52424">{{ error }}</p>{% endif %}
+  {% if intent.status == "pending" %}
+   <h2>Awaiting Hubtel authorization</h2>
+   {% if intent.verification_type == "OTP" %}
+    <p>Enter the four digits sent directly by Hubtel. Do not provide a MoMo PIN.</p>
+    <form method="post" action="{% url 'hubtel_v2_customer_otp' intent.pk %}">{% csrf_token %}
+      <label>Hubtel 4-digit OTP <input type="text" name="code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="one-time-code"></label>
+      <button class="market-button primary" type="submit">Verify Hubtel OTP</button>
+    </form>
+   {% else %}
+    <p>Check your phone for Hubtel's USSD prompt. MTN fallback: *170# → My Wallet → My Approvals → PreApprovals.</p>
+   {% endif %}
+  {% elif intent.status == "issued" %}
+   <h2>Wallet approval verified · sale issued</h2><p>Your sales receipt has been issued by KOFAD. Deductions will only follow the agreement and enabled merchant collection policy.</p>
+  {% elif intent.status == "rejected" %}
+   <h2>Authorization not approved</h2><p>No sale has been issued through this Direct Debit checkout. Contact KOFAD to arrange an alternative.</p>
+  {% elif intent.status == "attention" %}
+   <h2>Wallet verified · final review needed</h2><p>Your wallet was approved; KOFAD needs to finish verifying the sale. Do not send a second approval request.</p>
+  {% else %}
+   <h2>Checking original authorization</h2><p>The sale remains unissued. Contact KOFAD if the waiting status does not change.</p>
+  {% endif %}
+  <p>For questions or cancellation of a later active agreement, contact KOFAD. A wallet preapproval is not itself proof that money was charged.</p>
+ </section>
+</main>
+{% endblock %}
