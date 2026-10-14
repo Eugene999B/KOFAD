@@ -77,7 +77,7 @@ def staff_create_mandate(request):
             if not bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)):
                 prompt_state = "unavailable"
                 prompt_message = "Real Hubtel preapproval is not activated for this merchant. No wallet prompt was sent."
-            elif not client.enabled("receive"):
+            elif not debit_api.preapproval_ready():
                 prompt_state = "unavailable"
                 prompt_message = "Hubtel's whitelisted collection service is not fully enabled. No wallet prompt was sent."
             else:
