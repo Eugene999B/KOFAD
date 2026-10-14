@@ -34,6 +34,23 @@
       {% endif %}
     </div>
   </div>
+  {% if mandate.status == "draft" %}
+  {% if preapproval_active %}
+  <form method="post" action="{% url 'hubtel_debt_staff_prompt' mandate.pk %}" class="notice subtle" style="margin-top:16px;padding:16px">
+    {% csrf_token %}
+    <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <input type="checkbox" name="customer_requested_prompt" value="yes" required>
+      <span>The customer has reviewed the dates and amounts below and asked KOFAD to send a Hubtel preapproval prompt to their wallet.</span>
+    </label>
+    <button type="submit" class="button">Send Hubtel approval prompt to customer phone</button>
+    <p class="muted">This initiates only the provider's USSD/OTP authorization request. It does not debit or approve the wallet.</p>
+  </form>
+  {% else %}
+  <div class="notice subtle" role="status" style="margin-top:16px">
+    <strong>Hubtel prompt activation required.</strong> The schedule is saved; a real wallet prompt cannot be sent until this merchant's provider preapproval switch is configured and verified.
+  </div>
+  {% endif %}
+  {% endif %}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
     <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval page ↗</a>
     {% if mandate.status == "pending" %}
