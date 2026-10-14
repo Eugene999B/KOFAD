@@ -94,11 +94,12 @@ def staff_create_mandate(request):
                     # Network uncertainty is not proof of either delivery or
                     # rejection, and must never trigger an automatic duplicate.
                     mandate.refresh_from_db()
-                    prompt_state = "unconfirmed"
+                    prompt_state = "rejected" if isinstance(exc, debit_api.ProviderDenied) else "unconfirmed"
                     prompt_message = (
-                        "Hubtel did not confirm an approval prompt. KOFAD has blocked automatic resubmission; "
-                        "check the original preapproval reference before requesting a new one. "
-                        + str(exc)
+                        str(exc) + " No wallet approval request was accepted. Resolve the merchant configuration first."
+                        if prompt_state == "rejected" else
+                        "Hubtel did not confirm the approval prompt's outcome. Do not send a second request; "
+                        "check the original preapproval reference first. " + str(exc)
                     )
                     logger.warning("Hubtel preapproval was not confirmed; mandate state=%s", mandate.status)
         elif wants_prompt and mandate.status == "pending":
@@ -107,7 +108,12 @@ def staff_create_mandate(request):
         elif wants_prompt and mandate.status == "approved":
             prompt_state = "approved"
             prompt_message = "Hubtel previously verified this wallet authorization. No new prompt was sent."
+        mandate.refresh_from_db()
         url = reverse("hubtel_debt_staff_status", kwargs={"mandate_id": mandate.pk})
+        if prompt_state in {"unavailable", "rejected", "unconfirmed"}:
+            messages.warning(request, prompt_message)
+        else:
+            messages.info(request, prompt_message)
         if json_mode:
             response = JsonResponse({
                 "mandate_id": str(mandate.pk), "staff_url": url,
@@ -116,7 +122,6 @@ def staff_create_mandate(request):
             }, status=202 if mandate.status in {"draft", "pending"} else 200)
             response["Cache-Control"] = "no-store"
             return response
-        messages.info(request, prompt_message)
         return redirect(url)
     except (ValidationError, ValueError, TypeError, json.JSONDecodeError) as exc:
         logger.warning("Direct Debit agreement setup rejected: %s", exc)
