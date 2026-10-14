@@ -238,7 +238,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
     @override_settings(
         HUBTEL_API_ID="offline-test-id", HUBTEL_API_KEY="offline-test-key",
         HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_DIRECT_EGRESS_CONFIRMED=True,
-        HUBTEL_DIRECT_RECEIVE_ENABLED=True, HUBTEL_DEBT_PREAPPROVAL_ENABLED=True,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=False, HUBTEL_DEBT_PREAPPROVAL_ENABLED=True,
         MARKET_SITE_ORIGIN="https://market.kofadimpex.com",
     )
     def test_pos_sends_one_real_preapproval_and_never_debits(self):
