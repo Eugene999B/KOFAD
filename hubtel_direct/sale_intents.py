@@ -254,6 +254,17 @@ def _finish_approved(intent_id):
                 final_due_date=intent.final_due_date,
                 source_document_id=document.pk,
             )
+            # Never permit policy edits between consent and issuance to
+            # silently change dates, amounts, or collection hours.
+            signed = intent.terms_snapshot or {}
+            calculated = mandate.terms_snapshot or {}
+            if (calculated.get("schedule") != signed.get("schedule")
+                    or calculated.get("collection_window") != signed.get("collection_window")
+                    or str(mandate.maximum_total) != str(intent.outstanding)
+                    or calculated.get("last_due_date") != signed.get("last_due_date")):
+                raise ValidationError(
+                    "The repayment policy changed after customer consent; signed terms cannot be altered."
+                )
             # The actual Hubtel preapproval identity belongs to the INTENT's
             # unique client reference, not a new synthetic mandate reference.
             mandate.client_reference = intent.client_reference
