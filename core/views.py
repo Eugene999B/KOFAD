@@ -618,7 +618,7 @@ def trade_screen(request, branch, kind):
         "online_debt_policy": online_debt_policy,
         "hubtel_debt_preapproval_ready": bool(
             getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)
-            and __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive")
+            and __import__("hubtel_direct.debit_api", fromlist=["preapproval_ready"]).preapproval_ready()
         ),
         "can_offer_direct_debit": (
             kind == "sale" and company.allow_credit_sales
