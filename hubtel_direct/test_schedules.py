@@ -1,5 +1,5 @@
 """Offline Direct Debit dates and amounts; NO merchant wallet operations."""
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -50,13 +50,13 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         Document.objects.create(
             branch=self.branch, party=self.customer, kind="sale",
             total=Decimal("800.00"), paid=Decimal("0.00"),
-            due_date=timezone.localdate() + timezone.timedelta(days=14),
+            due_date=timezone.localdate() + timedelta(days=14),
             reference="AUTO-SCHEDULE-TEST", created_by=self.user,
         )
         OnlineDebtSettings.objects.get_or_create(branch=self.branch)
 
     def test_staff_count_creates_signed_preview_not_wallet_charge(self):
-        first = timezone.localdate() + timezone.timedelta(days=7)
+        first = timezone.localdate() + timedelta(days=7)
         with patch("hubtel_direct.debit_api.initiate_preapproval") as prompt, \
              patch("hubtel_direct.debit_api.debit_charge") as charge:
             plan = mandates.create_plan(
@@ -68,7 +68,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertEqual(plan.maximum_total, Decimal("800.00"))
         self.assertEqual(plan.terms_snapshot["installment_count"], 3)
         self.assertEqual(plan.terms_snapshot["final_installment"], "266.66")
-        self.assertEqual(plan.terms_snapshot["last_due_date"], (first + timezone.timedelta(days=14)).isoformat())
+        self.assertEqual(plan.terms_snapshot["last_due_date"], (first + timedelta(days=14)).isoformat())
         self.assertEqual(plan.status, "draft")
         self.assertFalse(DebtDebitAttempt.objects.exists())
         prompt.assert_not_called()
@@ -78,7 +78,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         plan = mandates.create_plan(
             self.user, self.branch, party_id=self.customer.pk,
             phone="0241234567", channel="mtn-gh-direct-debit", frequency="weekly",
-            first_due_date=timezone.localdate() + timezone.timedelta(days=7),
+            first_due_date=timezone.localdate() + timedelta(days=7),
             installment_count="4",
         )
         self.authenticate_client()
@@ -93,7 +93,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
 
         edit = mandates.update_draft_plan(
             self.user, self.branch, plan.pk, frequency="monthly",
-            first_due_date=timezone.localdate() + timezone.timedelta(days=14),
+            first_due_date=timezone.localdate() + timedelta(days=14),
             installment_count="2",
         )
         self.assertEqual(edit.terms_snapshot["installment_count"], 2)
