@@ -167,6 +167,39 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertContains(response, "Hubtel, not KOFAD SMS")
         self.assertNotContains(response, "Send my six-digit code")
 
+    def test_agreement_sms_is_disclosure_only_not_hubtel_authorization(self):
+        from django.urls import reverse
+        plan = mandates.create_plan(
+            self.user, self.branch, party_id=self.customer.pk,
+            phone="0241234567", channel="mtn-gh-direct-debit", frequency="weekly",
+            first_due_date=timezone.localdate() + timedelta(days=7),
+            final_due_date=timezone.localdate() + timedelta(days=21),
+        )
+        self.authenticate_client()
+        url = reverse("hubtel_debt_staff_send_agreement", args=[plan.pk])
+        with patch("hubtel_direct.mandate_views.sms_service.send_transactional_sms",
+                   return_value="accepted") as sms, \
+             patch("hubtel_direct.debit_api.initiate_preapproval") as hubtel, \
+             patch("hubtel_direct.debit_api.debit_charge") as debit:
+            result = self.client.post(url)
+            self.assertEqual(result.status_code, 302)
+            sms.assert_called_once()
+            body = sms.call_args.args[1]
+            self.assertIn("collection(s)", body)
+            self.assertIn("Collection window:", body)
+            self.assertIn("This SMS is not authorization", body)
+            self.assertIn("Hubtel's USSD/OTP", body)
+            self.assertIn(str(plan.pk), body)
+            hubtel.assert_not_called()
+            debit.assert_not_called()
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "draft")
+        self.customer.consent = False
+        self.customer.save(update_fields=["consent"])
+        with patch("hubtel_direct.mandate_views.sms_service.send_transactional_sms") as sms:
+            self.client.post(url)
+            sms.assert_not_called()
+
     def test_staff_request_requires_explicit_customer_consent_and_provider_activation(self):
         from django.urls import reverse
         plan = mandates.create_plan(
