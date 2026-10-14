@@ -200,6 +200,9 @@
   function validateDirectDebitSetup(grandTotal, paidNow, party, newName) {
     if (creditRepaymentMode?.value !== "direct") return null;
     if (!["part", "credit"].includes(paymentPlan?.value || "")) return null;
+    if (root.dataset.debtPreapprovalReady !== "true") {
+      throw new Error("Real Hubtel wallet preapproval is not activated on this merchant account. No Direct Debit sale was posted. Choose manual credit or contact management to activate Hubtel before selecting Direct Debit.");
+    }
     if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectEndDate || !creditDirectDate) {
       throw new Error("Direct Debit planning is not available. Check Online Debt Settings.");
     }
