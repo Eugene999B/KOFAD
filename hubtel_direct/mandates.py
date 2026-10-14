@@ -186,7 +186,7 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
         lower_partial_payment=False, minimum_partial=minimum,
         maximum_attempts_per_period=1,
         terms_snapshot={
-            "starting_outstanding": str(due), "amount": str(amt),
+            "starting_outstanding": str(plan_balance), "amount": str(amt),
             "maximum_total": str(maximum), "frequency": frequency,
             "starts": first_due_date.isoformat(), "network": channel,
             "partial_retry_enabled": False,
