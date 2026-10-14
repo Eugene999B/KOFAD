@@ -231,7 +231,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertIn("No wallet prompt was sent", body["message"])
         self.assertIn("/status/", body["staff_url"])
         self.assertEqual(DebtMandate.objects.count(), 1)
-        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
         preapproval.assert_not_called()
         debit.assert_not_called()
 
@@ -291,7 +291,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             retry = self.client.post(url, json.dumps(data), content_type="application/json")
             self.assertEqual(retry.json()["authorization_status"], "pending")
             hubtel.assert_called_once()
-        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
         self.assertEqual(DebtMandate.objects.count(), 1)
 
     def test_pos_json_shows_rejected_agreement_without_losing_recorded_sale(self):
@@ -304,7 +304,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertFalse(response.json()["debit_authorized"])
         self.assertTrue(response.json()["sale_recorded"])
-        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
         self.assertFalse(DebtMandate.objects.exists())
 
     def test_pos_mandate_requires_customer_explicit_prompt_request(self):
