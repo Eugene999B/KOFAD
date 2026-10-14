@@ -164,6 +164,8 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 "final_installment": str(calculated["last_amount"]),
                 "last_due_date": calculated["end_date"],
                 "collection_window": calculated["collection_window"],
+                "collection_from_hour": policy.collection_from_hour,
+                "collection_until_hour": policy.collection_until_hour,
             } if calculated else {}),
         },
     )
@@ -289,6 +291,8 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
             "final_installment": str(calculated["last_amount"]),
             "last_due_date": calculated["end_date"],
             "collection_window": calculated["collection_window"],
+            "collection_from_hour": policy.collection_from_hour,
+            "collection_until_hour": policy.collection_until_hour,
         } if calculated else {}),
     }
     row.save()
@@ -533,7 +537,17 @@ def dispatch_planned(limit=8):
             today = timezone.localdate()
             if policy.skip_weekends and today.weekday() >= 5:
                 continue
-            if not policy.collection_from_hour <= local_now.hour < policy.collection_until_hour:
+            # A finance policy edit can restrict, but never expand, the
+            # customer's original signed collection time window.
+            signed_from = int(mandate.terms_snapshot.get(
+                "collection_from_hour", policy.collection_from_hour,
+            ))
+            signed_until = int(mandate.terms_snapshot.get(
+                "collection_until_hour", policy.collection_until_hour,
+            ))
+            from_hour = max(policy.collection_from_hour, signed_from)
+            until_hour = min(policy.collection_until_hour, signed_until)
+            if not from_hour <= local_now.hour < until_hour:
                 continue
             grace = int(mandate.terms_snapshot.get("auto_collection_grace_days", 0))
             if attempt.period_due_date + timedelta(days=grace) > today:
