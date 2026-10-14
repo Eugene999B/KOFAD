@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
+  <p class="eyebrow">SALES / DIRECT DEBIT V2</p>
+  <div class="section-heading">
+    <div><h2>Customer wallet authorization</h2><p class="muted">No credit sale or stock movement is issued until Hubtel independently confirms approval.</p></div>
+    <span class="pill" id="v2-state">{{ intent.status|title }}</span>
+  </div>
+  {% if intent.status == "issued" %}
+  <div class="notice" role="status">
+    <h3>Hubtel approved · credit sale issued</h3>
+    <p>The approved repayment agreement is now linked to the sale. The first deduction will occur only on the agreed collection schedule, after the separate collection switch is activated.</p>
+    <a class="button" href="/documents/{{ intent.document_id }}/">View issued sale and receipt</a>
+    <a class="button secondary" href="{% url 'hubtel_debt_staff_status' intent.mandate_id %}">View repayment agreement</a>
+  </div>
+  {% elif intent.status == "rejected" %}
+  <div class="notice error" role="alert"><h3>Hubtel rejected authorization</h3><p>No sale was issued. {{ intent.last_error }}</p><p>Correct provider access with management; do not record the sale again.</p></div>
+  {% elif intent.status == "attention" %}
+  <div class="notice error" role="alert"><h3>Approved wallet · invoice requires management review</h3><p>{{ intent.last_error }}</p><p>Do not repeat the wallet prompt or charge. The unissued sale remains recoverable.</p></div>
+  {% elif intent.status == "unknown" or intent.status == "sending" %}
+  <div class="notice error" role="status"><h3>Hubtel request outcome uncertain</h3><p>{{ intent.last_error|default:"Hubtel may have received the original request. Check status; never initiate a duplicate." }}</p></div>
+  {% elif intent.status == "pending" %}
+  <div class="notice" role="status"><h3>Waiting for customer's Hubtel approval</h3>
+    <p><strong>{{ intent.verification_type|default:"USSD or OTP" }}</strong> · wallet ending {{ intent.phone_suffix }}. This is NOT a payment and NOT a completed sale.</p>
+    {% if intent.verification_type == "USSD" %}<p>Customer should approve the prompt on their phone. MTN fallback: *170# → My Wallet → My Approvals → PreApprovals.</p>{% endif %}
+    {% if intent.verification_type == "OTP" %}<p>Customer must enter Hubtel's four-digit OTP on the customer approval page; never request their MoMo PIN.</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="notice" role="status"><h3>Authorization not initiated</h3><p>No sale has been issued.</p></div>
+  {% endif %}
+
+  <div class="two-column" style="margin-top:16px;gap:16px">
+    <div class="notice subtle"><small>PROPOSED SALE (UNISSUED)</small>
+      <h3>GHS {{ intent.quoted_total|floatformat:2 }}</h3>
+      <p>Deposit on final issuance: GHS {{ intent.quoted_paid|floatformat:2 }}</p>
+      <p>To authorize: <strong>GHS {{ intent.outstanding|floatformat:2 }}</strong></p>
+    </div>
+    <div class="notice subtle"><small>AUTHORIZATION REFERENCE</small>
+      <p style="overflow-wrap:anywhere">{{ intent.client_reference }}</p>
+      <p>Customer wallet: {{ intent.get_channel_display|default:intent.channel }} · ****{{ intent.phone_suffix }}</p>
+      <p>Checked: {{ intent.last_provider_check_at|default:"Not yet" }}</p>
+    </div>
+  </div>
+
+  <h3>Exact proposed collection schedule</h3>
+  <p>{{ intent.frequency|title }} · {{ intent.terms_snapshot.collection_window }}</p>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr><th>#</th><th>Collection date</th><th>Amount (GHS)</th></tr></thead>
+    <tbody>{% for row in schedule %}<tr><td>{{ row.number }}</td><td>{{ row.date }}</td><td>{{ row.amount }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
+    <a class="button" href="{{ customer_url }}" target="_blank" rel="noopener">Open customer OTP / approval page ↗</a>
+    {% if intent.status == "pending" or intent.status == "unknown" or intent.status == "sending" %}
+    <form method="post" action="{% url 'hubtel_v2_staff_check' intent.pk %}">{% csrf_token %}<button class="button secondary">Check original request with Hubtel</button></form>
+    {% endif %}
+    <a class="button secondary" href="/sales/new/">Back to sales</a>
+  </div>
+  <p class="muted" id="v2-live-info" aria-live="polite">This page checks KOFAD's saved status periodically. The server independently verifies Hubtel before marking the wallet approved.</p>
+</section>
+{% if intent.status == "pending" or intent.status == "unknown" or intent.status == "sending" or intent.status == "approved" %}
+<script>
+(() => {
+ const uri="{% url 'hubtel_v2_staff_status' intent.pk %}";
+ let prior="{{ intent.status|escapejs }}";
+ async function refresh() {
+  if (document.hidden) return;
+  try {
+   const r=await fetch(uri,{credentials:"same-origin",cache:"no-store"});
+   if (!r.ok) return;
+   const j=await r.json();
+   if (j.status!==prior) { prior=j.status; location.reload(); }
+  } catch(_){}
+ }
+ setInterval(refresh,10000);
+})();
+</script>
+{% endif %}
+{% endblock %}
