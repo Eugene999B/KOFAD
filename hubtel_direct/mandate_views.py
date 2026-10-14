@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
 
@@ -109,6 +110,47 @@ def staff_check_status(request, mandate_id):
             messages.info(request, "No pending provider approval to check.")
     except (ValidationError, client.StatusUnconfirmed) as exc:
         messages.error(request, str(exc))
+    return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
+
+
+@login_required
+@require_POST
+def staff_send_agreement(request, mandate_id):
+    """Send terms to the wallet holder. SMS is an invitation, NOT debit consent."""
+    branch = branch_for(request)
+    core_services.permit(
+        request.user, branch,
+        "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
+    )
+    mandate = get_object_or_404(DebtMandate.objects.select_related("party"), pk=mandate_id, branch=branch)
+    if mandate.status not in {"draft", "pending"}:
+        messages.error(request, "This agreement is not awaiting customer authorization.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
+    if not mandate.party.consent:
+        messages.error(request, "Customer permission to receive debt authorization messages is required.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
+    snapshot = mandate.terms_snapshot or {}
+    plan = snapshot.get("schedule") or []
+    if not plan:
+        messages.error(request, "No dated schedule is available for this agreement.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
+    origin = str(settings.MARKET_SITE_ORIGIN).rstrip("/")
+    link = origin + reverse("hubtel_debt_authorize", kwargs={"mandate_id": mandate.pk})
+    body = (
+        f"KOFAD Direct Debit proposal: GHS {mandate.maximum_total:.2f}, "
+        f"{len(plan)} {mandate.frequency} collection(s), "
+        f"first {plan[0]['date']} GHS {plan[0]['amount']}; "
+        f"final {plan[-1]['date']} GHS {plan[-1]['amount']}. "
+        f"Collection window: {snapshot.get('collection_window', 'see agreement')}. "
+        f"See EVERY date and amount at {link}. "
+        "This SMS is not authorization. You must separately approve Hubtel's USSD/OTP. "
+        "Never share your MoMo PIN."
+    )
+    delivery = sms_service.send_transactional_sms(mandates.mandate_phone(mandate), body)
+    if delivery in {"accepted", "delivered", "sending", "simulated"}:
+        messages.success(request, "Agreement invitation submitted to the SMS provider. Wallet approval remains pending.")
+    else:
+        messages.warning(request, "Agreement SMS was not accepted. Share the approval link securely instead.")
     return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
 
 
