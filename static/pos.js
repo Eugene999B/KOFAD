@@ -1837,6 +1837,13 @@
     }
     if (typeof successDialog?.showModal === "function") successDialog.showModal();
     else successDialog?.setAttribute("open", "");
+    // A confirmed credit sale immediately proceeds to the cashier's waiting
+    // room. This POST only records an unsigned plan; it never initiates Hubtel
+    // preapproval or a wallet deduction. Other sales keep the receipt modal.
+    if (pendingDebitSetup && result.document_id && debitAuthorizationForm &&
+        !debitAuthorizationForm.classList.contains("hidden")) {
+      debitAuthorizationForm.requestSubmit();
+    }
   }
 
   function resetForNextSale() {
