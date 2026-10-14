@@ -122,6 +122,79 @@ class V2SaleIntentTests(Fixtures, TestCase):
         self.assertEqual(again.status, "issued")
         self.assertEqual(Movement.objects.count(), 1)
 
+    def test_new_customer_preview_does_not_create_customer_before_wallet_approval(self):
+        from core.models import Party
+        data = self.data()
+        data["sale"]["party"] = None
+        data["sale"]["customer_name"] = "Fresh V2 Customer"
+        data["sale"]["customer_phone"] = "0559876543"
+        with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+            "provider_id": "new-customer-preapproval", "verification_type": "USSD",
+            "otp_prefix": "", "status": "PENDING",
+        }):
+            result = self.submit(data)
+        self.assertEqual(result.status_code, 202, result.content)
+        intent = DirectDebitSaleIntent.objects.get()
+        self.assertIsNone(intent.party_id)
+        self.assertFalse(Party.objects.filter(name="Fresh V2 Customer").exists())
+        self.assertFalse(Document.objects.filter(kind="sale").exists())
+
+    def test_invoice_specific_collection_does_not_clear_older_customer_debt(self):
+        from core import debts as ledger
+        older = Document.objects.create(
+            branch=self.branch, party=self.customer, kind="sale",
+            total=Decimal("70.00"), paid=Decimal("0.00"),
+            due_date=self.first, reference="V2-OLD-FIRST",
+            created_by=self.user,
+        )
+        new = Document.objects.create(
+            branch=self.branch, party=self.customer, kind="sale",
+            total=Decimal("100.00"), paid=Decimal("0.00"),
+            due_date=self.end, reference="V2-NEW-SIGNED",
+            created_by=self.user,
+        )
+        paid = ledger.post_customer_payment(
+            self.user, self.branch, {
+                "party": self.customer.pk, "invoice_id": str(new.pk),
+                "amount": "30.00", "method": "cash",
+                "note": "Specific invoice only",
+            }, key=str(uuid.uuid4()),
+        )
+        self.assertEqual(services.balance(older), Decimal("70.00"))
+        self.assertEqual(services.balance(new), Decimal("70.00"))
+        self.assertEqual(paid.allocations.count(), 1)
+        self.assertEqual(paid.allocations.get().invoice_id, new.pk)
+
+    def test_existing_invoice_recovery_never_issues_another_sale(self):
+        existing = Document.objects.create(
+            branch=self.branch, party=self.customer, kind="sale",
+            total=Decimal("100.00"), paid=Decimal("0.00"),
+            due_date=self.end, reference="RECOVER-PREVIOUSLY-ISSUED",
+            created_by=self.user,
+        )
+        before = Stock.objects.get(branch=self.branch, product=self.product).quantity
+        with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+            "provider_id": "recover-authority", "verification_type": "USSD",
+            "otp_prefix": "", "status": "PENDING",
+        }) as hubtel:
+            response = self.client.post(
+                reverse("hubtel_v2_attach_invoice", kwargs={"invoice_id": existing.pk}),
+                {
+                    "phone": "0241234567", "channel": "mtn-gh-direct-debit",
+                    "frequency": "weekly", "first_due_date": self.first.isoformat(),
+                    "final_due_date": self.end.isoformat(),
+                    "accepted_schedule": "yes", "customer_requested_prompt": "yes",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        plan = DebtMandate.objects.get()
+        self.assertEqual(plan.maximum_total, Decimal("100.00"))
+        self.assertEqual(plan.terms_snapshot["source_document_id"], str(existing.pk))
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(Movement.objects.count(), 0)
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, before)
+        hubtel.assert_called_once()
+
     def test_refused_preapproval_does_not_issue_sale(self):
         with patch("hubtel_direct.debit_api.initiate_preapproval",
                    side_effect=debit_api.ProviderDenied("Hubtel IP not allowlisted")):
