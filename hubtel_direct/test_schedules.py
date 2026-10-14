@@ -1,4 +1,5 @@
 """Offline Direct Debit dates and amounts; NO merchant wallet operations."""
+import json
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -9,7 +10,7 @@ from django.utils import timezone
 
 from core.models import Document
 from core.tests import Fixtures
-from . import mandates, schedules
+from . import debit_api, mandates, schedules
 from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 
 
@@ -199,6 +200,122 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         with patch("hubtel_direct.mandate_views.sms_service.send_transactional_sms") as sms:
             self.client.post(url)
             sms.assert_not_called()
+
+    def _credit_sale_payload(self):
+        sale = Document.objects.get(reference="AUTO-SCHEDULE-TEST")
+        first = timezone.localdate() + timedelta(days=7)
+        return {
+            "party": self.customer.pk,
+            "source_document_id": str(sale.pk),
+            "phone": "0241234567",
+            "channel": "mtn-gh-direct-debit",
+            "frequency": "weekly",
+            "first_due_date": first.isoformat(),
+            "final_due_date": (first + timedelta(days=14)).isoformat(),
+            "customer_requested_prompt": "yes",
+            "customer_reviewed_schedule": "yes",
+        }
+
+    def test_pos_mandate_returns_honest_disabled_state_without_hubtel_or_debit(self):
+        from django.urls import reverse
+        self.authenticate_client()
+        data = self._credit_sale_payload()
+        with patch("hubtel_direct.debit_api.initiate_preapproval") as preapproval, \
+             patch("hubtel_direct.debit_api.debit_charge") as debit:
+            response = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
+                                        content_type="application/json")
+        self.assertEqual(response.status_code, 202)
+        body = response.json()
+        self.assertEqual(body["authorization_status"], "draft")
+        self.assertEqual(body["prompt_state"], "unavailable")
+        self.assertIn("No wallet prompt was sent", body["message"])
+        self.assertIn("/status/", body["staff_url"])
+        self.assertEqual(DebtMandate.objects.count(), 1)
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        preapproval.assert_not_called()
+        debit.assert_not_called()
+
+    @override_settings(
+        HUBTEL_API_ID="offline-test-id", HUBTEL_API_KEY="offline-test-key",
+        HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_DIRECT_EGRESS_CONFIRMED=True,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=True, HUBTEL_DEBT_PREAPPROVAL_ENABLED=True,
+        MARKET_SITE_ORIGIN="https://market.kofadimpex.com",
+    )
+    def test_pos_sends_one_real_preapproval_and_never_debits(self):
+        from django.urls import reverse
+        self.authenticate_client()
+        data = self._credit_sale_payload()
+        with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+            "provider_id": "hubtel-authorization-one", "verification_type": "USSD",
+            "otp_prefix": "", "status": "PENDING"
+        }) as hubtel, patch("hubtel_direct.debit_api.debit_charge") as debit:
+            first = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
+                                     content_type="application/json")
+            self.assertEqual(first.status_code, 202)
+            self.assertEqual(first.json()["authorization_status"], "pending")
+            self.assertEqual(first.json()["prompt_state"], "pending")
+            again = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
+                                     content_type="application/json")
+            self.assertEqual(again.status_code, 202)
+            self.assertEqual(again.json()["prompt_state"], "pending")
+            hubtel.assert_called_once()
+            debit.assert_not_called()
+        plan = DebtMandate.objects.get()
+        self.assertEqual(plan.status, "pending")
+        self.assertIsNone(plan.provider_approved_at)
+        self.assertEqual(plan.terms_snapshot["installment_count"], 3)
+
+    @override_settings(
+        HUBTEL_API_ID="offline-test-id", HUBTEL_API_KEY="offline-test-key",
+        HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_DIRECT_EGRESS_CONFIRMED=True,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=True, HUBTEL_DEBT_PREAPPROVAL_ENABLED=True,
+        MARKET_SITE_ORIGIN="https://market.kofadimpex.com",
+    )
+    def test_hubtel_definite_rejection_keeps_sale_and_allows_corrected_retry(self):
+        from django.urls import reverse
+        self.authenticate_client()
+        data = self._credit_sale_payload()
+        url = reverse("hubtel_debt_create")
+        with patch("hubtel_direct.debit_api.initiate_preapproval",
+                   side_effect=debit_api.ProviderDenied("Hubtel IP is not allowlisted")):
+            first = self.client.post(url, json.dumps(data), content_type="application/json")
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(first.json()["authorization_status"], "draft")
+        self.assertEqual(first.json()["prompt_state"], "rejected")
+        self.assertIn("IP is not allowlisted", first.json()["message"])
+        self.assertEqual(DebtMandate.objects.count(), 1)
+        with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+            "provider_id": "authorized-on-retry", "verification_type": "USSD",
+            "otp_prefix": "", "status": "PENDING"
+        }) as hubtel:
+            retry = self.client.post(url, json.dumps(data), content_type="application/json")
+            self.assertEqual(retry.json()["authorization_status"], "pending")
+            hubtel.assert_called_once()
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertEqual(DebtMandate.objects.count(), 1)
+
+    def test_pos_json_shows_rejected_agreement_without_losing_recorded_sale(self):
+        from django.urls import reverse
+        self.authenticate_client()
+        data = self._credit_sale_payload()
+        data["final_due_date"] = "2026-01-01"
+        response = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["debit_authorized"])
+        self.assertTrue(response.json()["sale_recorded"])
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 1)
+        self.assertFalse(DebtMandate.objects.exists())
+
+    def test_pos_mandate_requires_customer_explicit_prompt_request(self):
+        from django.urls import reverse
+        self.authenticate_client()
+        data = self._credit_sale_payload()
+        data["customer_reviewed_schedule"] = "no"
+        response = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(DebtMandate.objects.exists())
 
     def test_staff_request_requires_explicit_customer_consent_and_provider_activation(self):
         from django.urls import reverse
