@@ -186,7 +186,9 @@ class V2SaleIntentTests(Fixtures, TestCase):
                     "accepted_schedule": "yes", "customer_requested_prompt": "yes",
                 },
             )
-        self.assertEqual(response.status_code, 302)
+        from django.contrib.messages import get_messages
+        detail = "; ".join(str(message) for message in get_messages(response.wsgi_request))
+        self.assertEqual(response.status_code, 302, detail or response.content[:300])
         plan = DebtMandate.objects.get()
         self.assertEqual(plan.maximum_total, Decimal("100.00"))
         self.assertEqual(plan.terms_snapshot["source_document_id"], str(existing.pk))
