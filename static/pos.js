@@ -91,7 +91,10 @@
   const creditDirectNetwork = document.querySelector("#credit-direct-network");
   const creditDirectPhone = document.querySelector("#credit-direct-phone");
   const creditDirectFrequency = document.querySelector("#credit-direct-frequency");
-  const creditDirectInstallment = document.querySelector("#credit-direct-installment");
+  const creditDirectCount = document.querySelector("#credit-direct-count");
+  const creditDirectDate = document.querySelector("#credit-direct-date");
+  const creditDirectPreview = document.querySelector("#credit-direct-preview");
+  const manualDueField = document.querySelector("#credit-manual-due-field");
   const creditDirectContactConsent = document.querySelector("#credit-direct-contact-consent");
   const creditDirectVerify = document.querySelector("#credit-direct-verify");
   const creditDirectName = document.querySelector("#credit-direct-name");
@@ -130,12 +133,65 @@
     const eligible = !purchase && ["part", "credit"].includes(paymentPlan?.value || "");
     const selected = eligible && creditRepaymentMode?.value === "direct";
     creditDirectFields?.classList.toggle("hidden", !selected);
+    manualDueField?.classList.toggle("hidden", selected);
     if (creditRepaymentMode) creditRepaymentMode.disabled = !eligible;
+    if (selected && creditDirectDate && !creditDirectDate.value && dueDate?.value) creditDirectDate.value = dueDate.value;
+    if (selected && dueDate) dueDate.value = creditDirectDate?.value || "";
+    renderDirectDebitPreview();
+  }
+  function collectionNextDate(date, frequency) {
+    const next = new Date(date.getTime());
+    if (frequency === "daily") next.setUTCDate(next.getUTCDate() + 1);
+    else if (frequency === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+    else {
+      const months = ({monthly:1, quarterly:3, yearly:12})[frequency];
+      if (!months) return next;
+      const day = next.getUTCDate();
+      next.setUTCDate(1);
+      next.setUTCMonth(next.getUTCMonth() + months);
+      const last = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth()+1, 0)).getUTCDate();
+      next.setUTCDate(Math.min(day,last));
+    }
+    return next;
+  }
+  function renderDirectDebitPreview() {
+    if (!creditDirectPreview || creditRepaymentMode?.value !== "direct") return;
+    const balance = total() - paymentTotal();
+    const count = Number(creditDirectCount?.value || 0);
+    const freq = creditDirectFrequency?.value || "";
+    const date = creditDirectDate?.value || "";
+    if (!Number.isInteger(count) || count < 1 || count > 120 ||
+        !date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(date) ||
+        balance <= 0 || balance < count || (freq === "once" && count !== 1)) {
+      creditDirectPreview.textContent = "Choose the first collection date and number of payments to calculate the schedule.";
+      return;
+    }
+    const rows = [];
+    let day = new Date(date + "T00:00:00Z");
+    if (!Number.isFinite(day.getTime())) {
+      creditDirectPreview.textContent = "Choose a valid date.";
+      return;
+    }
+    const regular = Math.ceil(balance / count);
+    let remaining = balance;
+    for (let i = 1; i <= count; i++) {
+      const amount = Math.min(regular, remaining);
+      rows.push({date:day.toLocaleDateString("en-GH",{timeZone:"UTC",day:"2-digit",month:"short",year:"numeric"}),amount});
+      remaining -= amount;
+      if (i !== count) day = collectionNextDate(day,freq);
+    }
+    const overview = el("p");
+    overview.append(el("strong", root.dataset.currency + " " + formatted(balance) + " due"), " · " + count + " scheduled payment" + (count===1?"":"s"));
+    const details = el("ol");
+    details.className = "direct-schedule-preview";
+    for (const row of rows) details.append(el("li", row.date + " · " + root.dataset.currency + " " + formatted(row.amount)));
+    const notice = el("small","Indicative from this sale; the final agreement uses KOFAD's recorded debt. Collection occurs within the branch's Ghana-time window, after independent Hubtel approval.");
+    creditDirectPreview.replaceChildren(overview, details, notice);
   }
   function validateDirectDebitSetup(grandTotal, paidNow, party, newName) {
     if (creditRepaymentMode?.value !== "direct") return null;
     if (!["part", "credit"].includes(paymentPlan?.value || "")) return null;
-    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectInstallment) {
+    if (!creditDirectNetwork || !creditDirectPhone || !creditDirectFrequency || !creditDirectCount || !creditDirectDate) {
       throw new Error("Direct Debit planning is disabled. Enable plan creation in Online Debt Settings.");
     }
     if (!party && !newName) throw new Error("Choose a customer for Direct Debit.");
@@ -145,15 +201,19 @@
     // exact Hubtel mandate terms via the separate authorization page.
     const phone = normalizeGhanaPhone(creditDirectPhone.value);
     const balance = grandTotal - paidNow;
-    const installment = cents(creditDirectInstallment.value);
-    if (balance <= 0 || installment <= 0 || installment > balance) {
-      throw new Error("The installment must be greater than zero and no more than the unpaid balance.");
+    const count = Number(creditDirectCount.value);
+    if (balance <= 0 || !Number.isInteger(count) || count < 1 || count > 120 || count > balance) {
+      throw new Error("Choose 1–120 payments; each installment must be at least GHS 0.01.");
     }
-    if (!dueDate?.value || !creditDirectNetwork.value || !creditDirectFrequency.value) {
-      throw new Error("Choose a wallet network, interval, and first payment date.");
+    if (creditDirectFrequency.value === "once" && count !== 1) {
+      throw new Error("A one-time debit must have exactly one payment.");
     }
+    if (!creditDirectDate.value || !creditDirectNetwork.value || !creditDirectFrequency.value) {
+      throw new Error("Choose a wallet network, repayment interval and first collection date.");
+    }
+    if (dueDate) dueDate.value = creditDirectDate.value;
     return {phone, channel:creditDirectNetwork.value, frequency:creditDirectFrequency.value,
-      first_due_date:dueDate.value, amount:formatted(installment), maximum:formatted(balance)};
+      first_due_date:creditDirectDate.value, installment_count:String(count)};
   }
   const customerConsent = document.querySelector("#customer-consent");
   const customerWhatsApp = document.querySelector("#customer-whatsapp");
@@ -907,7 +967,8 @@
     if (creditRepaymentMode) creditRepaymentMode.value = "manual";
     if (creditDirectPhone) creditDirectPhone.value = "";
     resetCreditVerifiedName();
-    if (creditDirectInstallment) creditDirectInstallment.value = "";
+    if (creditDirectCount) creditDirectCount.value = "4";
+    if (creditDirectDate) creditDirectDate.value = "";
     if (creditDirectContactConsent) creditDirectContactConsent.checked = false;
     debitAuthorizationForm?.classList.add("hidden");
     changed();
@@ -1251,7 +1312,11 @@
   });
   creditDirectPhone?.addEventListener("change", () => { changed(); persist(); });
   creditDirectFrequency?.addEventListener("change", () => { changed(); persist(); });
-  creditDirectInstallment?.addEventListener("input", () => { changed(); persist(); });
+  creditDirectCount?.addEventListener("input", () => { changed(); renderDirectDebitPreview(); persist(); });
+  creditDirectDate?.addEventListener("change", () => {
+    if (dueDate) dueDate.value = creditDirectDate.value;
+    changed(); renderDirectDebitPreview(); persist();
+  });
   paymentPlan?.addEventListener("change", () => {
     changed();
     applyPaymentPlan();
@@ -1710,8 +1775,7 @@
       const ready = Boolean(pendingDebitSetup && hasDebt && result.customer?.id);
       debitAuthorizationForm.classList.toggle("hidden", !ready);
       if (ready) {
-        const data = {...pendingDebitSetup, party:String(result.customer.id),
-          maximum:(Number(result.total) - Number(result.paid)).toFixed(2)};
+        const data = {...pendingDebitSetup, party:String(result.customer.id)};
         for (const [field,value] of Object.entries(data)) {
           const target = debitAuthorizationForm.querySelector('[name="' + field + '"]');
           if (target) target.value = value;
