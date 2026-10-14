@@ -146,7 +146,10 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         plan.status = "approved"
         plan.next_due_date = first + timedelta(days=14)
         plan.save(update_fields=["status", "next_due_date"])
-        self.assertIsNone(mandates.plan_due_attempt(plan))
+        # Move the clock beyond the final signed installment, otherwise this
+        # would be an early/no-op attempt rather than an overrun of the mandate.
+        with patch("hubtel_direct.mandates.timezone.localdate", return_value=first + timedelta(days=21)):
+            self.assertIsNone(mandates.plan_due_attempt(plan))
         plan.refresh_from_db()
         self.assertEqual(plan.status, "suspended")
         self.assertFalse(DebtDebitAttempt.objects.exists())
