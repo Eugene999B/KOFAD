@@ -33,16 +33,10 @@
   {% endif %}
   <p style="padding:14px;background:#f0f6f7;color:#1a4050;border-radius:10px">The first automatic attempt may occur only after the due date and the agreed grace period. {% if mandate.rollover_unpaid %}Any missed installment may be included in a later scheduled payment, but never above the total debt or authorized ceiling.{% else %}Missed installments will not be bundled into later debits.{% endif %} Any charge is capped by the amount you owe and by this agreement's ceiling. KOFAD does not make repeated smaller-amount retries to discover your wallet balance. A confirmed missed payment may be carried into a future agreed installment as shown above. KOFAD never asks for your MoMo PIN.</p>
   {% if mandate.status == "draft" %}
-  <h2>Step 1: Confirm this is your wallet</h2>
+  <h2>Request your secure Hubtel wallet approval</h2>
+  <p>Hubtel, not KOFAD SMS, will verify your wallet ownership through its USSD prompt or a Hubtel approval OTP.</p>
   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
-   <input type="hidden" name="action" value="send">
-   <button class="market-button ghost" type="submit">Send my six-digit code</button>
-  </form>
-  <h2>Step 2: Request your Hubtel approval prompt</h2>
-  <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
-   <input type="hidden" name="action" value="confirm">
-   <label for="wallet-code">SMS code sent to your wallet</label>
-   <input id="wallet-code" name="code" inputmode="numeric" maxlength="6" minlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="6-digit code" required>
+   <input type="hidden" name="action" value="start">
    <label style="display:flex;gap:10px;align-items:flex-start;margin:12px 0">
      <input type="checkbox" name="accepted_terms" value="yes" required>
      <span>I authorize only this repayment schedule, maximum amount and wallet. I understand how to cancel.</span>
