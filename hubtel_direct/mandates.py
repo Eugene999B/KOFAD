@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from core import debts as debt_service
 from core import services as core_services
-from core.models import Party
+from core.models import Party, Document
 from . import client, debit_api, schedules
 from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
 
@@ -53,7 +53,7 @@ def _period_next(day, frequency):
 @transaction.atomic
 def create_plan(user, branch, *, party_id, phone, channel, frequency,
                 first_due_date, amount_per_period=None, maximum_total=None,
-                installment_count=None,
+                installment_count=None, final_due_date=None, source_document_id=None,
                 allow_one_partial_retry=False, minimum_partial="0.00"):
     """Prepare an agreement; creating it alone never initiates Hubtel preapproval."""
     # A cashier may PROPOSE a plan when making a credit sale. Only the
@@ -98,16 +98,40 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
         raise ValidationError("This account has no unpaid customer invoices.")
     if not policy.min_open_balance <= due <= policy.max_open_balance:
         raise ValidationError("This customer's outstanding balance is outside Online Debt eligibility limits.")
-    # POS passes payment count, not an editable price. The actual recorded
-    # unpaid balance is authoritative and the last installment self-adjusts.
+    # For a newly posted sale, use the server's finalized sale balance, never
+    # a price or payment amount submitted by a cashier's browser.
+    source = None
+    plan_balance = due
+    if source_document_id:
+        source = Document.objects.select_for_update().filter(
+            pk=source_document_id, party=party, branch=branch,
+            kind="sale", finalized=True,
+        ).first()
+        if source is None or source.balance <= ZERO:
+            raise ValidationError("The posted credit sale could not be verified.")
+        # The collection ledger applies payments across customer invoices.
+        # Do not misrepresent an existing customer's whole debt as this sale.
+        if source.balance != due:
+            raise ValidationError(
+                "This customer has other unpaid invoices. Prepare a consolidated "
+                "Direct Debit plan from the Debt Center instead."
+            )
+        plan_balance = source.balance
     calculated = None
-    if installment_count is not None:
-        calculated = schedules.preview(
-            due, frequency, first_due_date, installment_count,
+    if final_due_date:
+        calculated = schedules.preview_by_end_date(
+            plan_balance, frequency, first_due_date, final_due_date,
             from_hour=policy.collection_from_hour,
             until_hour=policy.collection_until_hour,
         )
-        amt, maximum = calculated["amount_per_period"], due
+    elif installment_count is not None:
+        calculated = schedules.preview(
+            plan_balance, frequency, first_due_date, installment_count,
+            from_hour=policy.collection_from_hour,
+            until_hour=policy.collection_until_hour,
+        )
+    if calculated is not None:
+        amt, maximum = calculated["amount_per_period"], plan_balance
     else:
         amt, maximum = _money(amount_per_period), _money(maximum_total)
     if maximum > due:
@@ -158,11 +182,13 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
             "auto_collection_grace_days": policy.auto_collection_grace_days,
             "policy_version": policy.updated_at.isoformat(),
             "customer_can_cancel": True,
+            **({"source_document_id": str(source.pk)} if source else {}),
             **({
                 "installment_count": calculated["installment_count"],
                 "schedule": calculated["schedule"],
                 "final_installment": str(calculated["last_amount"]),
                 "last_due_date": calculated["end_date"],
+                "requested_end_date": calculated.get("requested_end_date", calculated["end_date"]),
                 "collection_window": calculated["collection_window"],
                 "collection_from_hour": policy.collection_from_hour,
                 "collection_until_hour": policy.collection_until_hour,
@@ -179,7 +205,8 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
 @transaction.atomic
 def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
                       frequency=None, first_due_date=None,
-                      amount_per_period=None, maximum_total=None, installment_count=None):
+                      amount_per_period=None, maximum_total=None,
+                      installment_count=None, final_due_date=None):
     """Revise UNSIGNED terms. Hubtel-approved/pending contracts are immutable.
 
     A cashier cannot silently change wallet authority: new terms on a signed
@@ -223,16 +250,29 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
         raise ValidationError("First due date is outside the configured date limit.")
 
     balance = outstanding(row.party)
+    source_id = (row.terms_snapshot or {}).get("source_document_id")
+    if source_id:
+        source = Document.objects.filter(pk=source_id, branch=branch, party=row.party,
+                                         kind="sale", finalized=True).first()
+        if source is None or source.balance <= ZERO or source.balance != balance:
+            raise ValidationError("Sale balance has changed or other invoices exist. Reconcile the account first.")
     if not policy.min_open_balance <= balance <= policy.max_open_balance:
         raise ValidationError("The customer's outstanding balance is outside the repayment limits.")
     calculated = None
     count = installment_count if installment_count is not None else row.terms_snapshot.get("installment_count")
-    if count is not None:
+    if final_due_date:
+        calculated = schedules.preview_by_end_date(
+            balance, frequency, start, final_due_date,
+            from_hour=policy.collection_from_hour,
+            until_hour=policy.collection_until_hour,
+        )
+    elif count is not None:
         calculated = schedules.preview(
             balance, frequency, start, count,
             from_hour=policy.collection_from_hour,
             until_hour=policy.collection_until_hour,
         )
+    if calculated is not None:
         installment, ceiling = calculated["amount_per_period"], balance
     else:
         installment = _money(amount_per_period if amount_per_period is not None else row.amount_per_period)
@@ -285,11 +325,13 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
         "auto_collection_grace_days": policy.auto_collection_grace_days,
         "policy_version": policy.updated_at.isoformat(),
         "customer_can_cancel": True,
+        **({"source_document_id": source_id} if source_id else {}),
         **({
             "installment_count": calculated["installment_count"],
             "schedule": calculated["schedule"],
             "final_installment": str(calculated["last_amount"]),
             "last_due_date": calculated["end_date"],
+            "requested_end_date": calculated.get("requested_end_date", calculated["end_date"]),
             "collection_window": calculated["collection_window"],
             "collection_from_hour": policy.collection_from_hour,
             "collection_until_hour": policy.collection_until_hour,
@@ -313,7 +355,7 @@ def mandate_phone(mandate):
 
 
 def prepare_customer_authorization(mandate):
-    """Only the wallet holder completing a one-time KOFAD SMS can call this."""
+    """Request one Hubtel USSD/OTP wallet preapproval; never a wallet charge."""
     if mandate.status != "draft":
         raise ValidationError("This agreement is no longer awaiting authorization.")
     # The customer has already seen and confirmed exact agreement terms.
@@ -429,11 +471,15 @@ def payment_preview(mandate, today=None):
     remaining_cap = mandate.maximum_total - mandate.collected_total
     if debt <= ZERO or remaining_cap <= ZERO:
         return ZERO
+    # Never accrue periods beyond the customer's explicitly signed timetable.
+    signed_periods = int((mandate.terms_snapshot or {}).get("installment_count") or 400)
+    if mandate.terms_snapshot.get("last_due_date") and mandate.next_due_date.isoformat() > mandate.terms_snapshot["last_due_date"]:
+        return ZERO
     # Current installment plus previously unpaid installments, capped by debt.
     scheduled = mandate.amount_per_period
     next_date = mandate.first_due_date
     ticks = 0
-    while next_date and next_date <= today and ticks < 400:
+    while next_date and next_date <= today and ticks < min(400, signed_periods):
         if ticks:
             scheduled += mandate.amount_per_period
         next_date = _period_next(next_date, mandate.frequency)
@@ -450,6 +496,11 @@ def plan_due_attempt(mandate):
     with transaction.atomic():
         row = DebtMandate.objects.select_for_update().select_related("party").get(pk=mandate.pk)
         if row.status != "approved" or row.next_due_date > timezone.localdate():
+            return None
+        signed_last = row.terms_snapshot.get("last_due_date")
+        if signed_last and row.next_due_date.isoformat() > signed_last:
+            row.status = "suspended"
+            row.save(update_fields=["status", "updated_at"])
             return None
         grace = int(row.terms_snapshot.get("auto_collection_grace_days", 0))
         if row.next_due_date + timedelta(days=grace) > timezone.localdate():
@@ -501,6 +552,8 @@ def dispatch_planned(limit=8):
                     or attempt.amount > outstanding(mandate.party)
                     or attempt.amount > mandate.maximum_total - mandate.collected_total
                     or attempt.period_due_date > timezone.localdate()
+                    or (mandate.terms_snapshot.get("last_due_date")
+                        and attempt.period_due_date.isoformat() > mandate.terms_snapshot["last_due_date"])
                     or DebtDebitAttempt.objects.filter(
                         mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
                     ).exclude(pk=attempt.pk).exists()):
