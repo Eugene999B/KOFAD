@@ -3,6 +3,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
@@ -19,26 +20,64 @@ from .models import DebtMandate
 def staff_create_mandate(request):
     branch = branch_for(request)
     try:
-        amount = request.POST.get("amount")
-        ceiling = request.POST.get("maximum")
+        count = request.POST.get("installment_count") or None
+        amount = request.POST.get("amount") if count is None else None
+        ceiling = request.POST.get("maximum") if count is None else None
         mandate = mandates.create_plan(
             request.user, branch, party_id=request.POST.get("party"),
             phone=request.POST.get("phone"), channel=request.POST.get("channel"),
             frequency=request.POST.get("frequency"),
             first_due_date=request.POST.get("first_due_date"),
             amount_per_period=amount, maximum_total=ceiling,
+            installment_count=count,
             allow_one_partial_retry=request.POST.get("partial_retry") == "yes",
             minimum_partial=request.POST.get("minimum_partial") or "0.00",
         )
-        messages.success(
-            request, "Repayment terms saved. Show the customer the authorization page; "
-                     "no direct debit can start until the customer authorizes and Hubtel confirms.",
-        )
-        return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
+        messages.success(request, "Repayment schedule calculated. Customer wallet approval is still required.")
+        return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
     except (ValidationError, ValueError, TypeError) as exc:
         messages.error(request, str(exc))
         return redirect("/debts/?customer=" + str(request.POST.get("party") or ""))
 
+
+
+@login_required
+@require_GET
+def staff_status(request, mandate_id):
+    """Cashier's waiting screen. Staff cannot approve a customer's wallet."""
+    branch = branch_for(request)
+    core_services.permit(
+        request.user, branch,
+        "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
+    )
+    mandate = get_object_or_404(
+        DebtMandate.objects.select_related("party"), pk=mandate_id, branch=branch,
+    )
+    return render(request, "hubtel_direct/debt_staff_waiting.html", {
+        "mandate": mandate,
+        "real_balance": mandates.outstanding(mandate.party),
+        "preapproval_active": bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)),
+    })
+
+
+@login_required
+@require_POST
+def staff_check_status(request, mandate_id):
+    branch = branch_for(request)
+    core_services.permit(
+        request.user, branch,
+        "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
+    )
+    mandate = get_object_or_404(DebtMandate, pk=mandate_id, branch=branch)
+    try:
+        if mandate.status == "pending":
+            mandates.refresh_preapproval(mandate)
+            messages.success(request, "Approval status checked directly with Hubtel.")
+        else:
+            messages.info(request, "No pending provider approval to check.")
+    except (ValidationError, client.StatusUnconfirmed) as exc:
+        messages.error(request, str(exc))
+    return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
 
 
 @login_required
@@ -58,6 +97,7 @@ def staff_edit_draft(request, mandate_id):
             first_due_date=request.POST.get("first_due_date"),
             amount_per_period=request.POST.get("amount"),
             maximum_total=request.POST.get("maximum"),
+            installment_count=request.POST.get("installment_count") or None,
         )
         messages.success(
             request,
