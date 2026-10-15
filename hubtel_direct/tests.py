@@ -243,6 +243,8 @@ class DirectWorkflowTests(MarketFixtures):
         post.assert_not_called()
         self.client.force_login(self.staff)
         session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
         session["mfa_verified_at"] = timezone.now().timestamp()
         session.save()
         verification_page = self.client.get(
