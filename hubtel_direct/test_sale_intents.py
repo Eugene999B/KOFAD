@@ -72,6 +72,19 @@ class V2SaleIntentSafetyTests(Fixtures, TestCase):
         self.assertEqual(intent.status, "pending")
         return intent
 
+    def test_new_sale_is_simple_and_has_no_inline_direct_debit_payment(self):
+        response = self.client.get("/sales/new/")
+        self.assertEqual(response.status_code, 200)
+        markup = response.content.decode("utf-8")
+        self.assertIn("pos-simple-v3.css", markup)
+        self.assertIn("Receipt messages", markup)
+        self.assertIn("Record sale", markup)
+        self.assertIn("Set up Direct Debit for this unpaid invoice", markup)
+        self.assertNotIn('id="credit-repayment-mode"', markup)
+        self.assertNotIn('id="credit-direct-debit-fields"', markup)
+        self.assertNotIn('id="sale-debit-authorization"', markup)
+        self.assertNotIn("Complete Sale &amp; Generate Receipt", markup)
+
     def test_combined_pos_endpoint_retired_without_side_effects(self):
         with patch("hubtel_direct.debit_api.initiate_preapproval") as gateway, \
              patch("hubtel_direct.debit_api.debit_charge") as charge:
