@@ -224,6 +224,12 @@ def verify_registered_phone(request, order_id):
                 "verified": True, "registered_name": record["wallet_name"],
                 "phone_suffix": record["phone"][-4:],
             }
+            from django.utils import timezone as django_timezone
+            request.session["checkout_wallet_verified:" + str(order.pk)] = {
+                "phone": phone, "channel": body["channel"],
+                "at": django_timezone.now().timestamp(),
+            }
+            request.session.modified = True
         elif action == "check" and set(body) == {"action", "phone"}:
             result = {"verified": already_verified,
                       "message": "Wallet already verified for this account." if already_verified
@@ -257,6 +263,19 @@ def collect(request, order_id):
         body = _json(request)
         if set(body) != {"channel", "phone", "customer_authorized"} or body.get("customer_authorized") is not True:
             raise ValidationError("Enter the MoMo number, choose its network and confirm this payment.")
+        # Enforce name inquiry for this exact order + wallet. Frontend
+        # confirmation alone is not authorization and cannot be forged.
+        from core.identity import normalize_ghana_phone
+        from django.utils import timezone as django_timezone
+        verified = request.session.get("checkout_wallet_verified:" + str(order.pk), {})
+        try:
+            age = django_timezone.now().timestamp() - float(verified.get("at", 0))
+        except (TypeError, ValueError, AttributeError):
+            age = 999999
+        if (not isinstance(verified, dict) or not 0 <= age <= 900
+                or verified.get("phone") != normalize_ghana_phone(body["phone"])
+                or verified.get("channel") != body["channel"]):
+            raise ValidationError("Verify and confirm the registered wallet name before requesting payment.")
         tx = service.create_collection(customer, order.pk, body["channel"], body["phone"])
         return _answer(tx, 202)
     except PermissionDenied as exc:
