@@ -1,36 +1,30 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block content %}
-<section class="panel" style="max-width:820px;margin:0 auto;padding:24px">
-  <p class="eyebrow">DEBT DESK / RECOVER EXISTING INVOICE</p>
-  <h2>Attach Hubtel wallet approval without making another sale</h2>
-  <p>This invoice is ALREADY issued. No new product sale, payment receipt or inventory movement will be created here. Hubtel authorization remains separate from the sale.</p>
-  <div class="notice subtle">
-    <h3>{{ invoice.reference }}</h3>
-    <p><strong>Customer:</strong> {{ customer.name }}</p>
-    <p><strong>Original value:</strong> GHS {{ invoice.total|floatformat:2 }} · <strong>Remaining on THIS invoice:</strong> GHS {{ unpaid|floatformat:2 }}</p>
-    <p>Older unpaid invoices are excluded. The customer authorizes only this outstanding amount and the dates below.</p>
-  </div>
-  <form method="post" style="display:grid;gap:16px;max-width:640px">
-    {% csrf_token %}
-    <div class="two-column">
-      <label>Wallet number<input name="phone" type="tel" value="{{ customer.phone }}" required inputmode="tel" autocomplete="off"></label>
-      <label>Wallet network<select name="channel" required>
-        <option value="mtn-gh-direct-debit">MTN Mobile Money</option>
-        <option value="vodafone-gh-direct-debit">Telecel Cash</option>
+<link rel="stylesheet" href="{% static 'hubtel_direct/payments_clean.css' %}">
+<main class="payment-workspace">
+<header class="payment-top"><div><p class="eyebrow">KOFAD / CUSTOMER REPAYMENTS</p><h1>Set up repayments</h1><p>Create an agreement for this unpaid sale. No new sale or payment will be recorded.</p></div><a class="button secondary" href="{% url 'document' invoice.pk %}">Back to invoice</a></header>
+<section class="panel payment-panel">
+  <div class="payment-status"><div><small>{{ customer.name }} · {{ invoice.reference }}</small><div class="payment-primary-number">GHS {{ unpaid|floatformat:2 }}</div><small>Balance remaining</small></div></div>
+  <h2 style="margin-top:20px">Wallet & schedule</h2>
+  <form method="post">{% csrf_token %}
+    <div class="payment-grid">
+      <label>Wallet number<input name="phone" type="tel" value="{{ customer.phone }}" required inputmode="tel" autocomplete="tel"></label>
+      <label>Mobile Money network<select name="channel" required>
+        <option value="mtn-gh-direct-debit">MTN</option>
+        <option value="vodafone-gh-direct-debit">Telecel</option>
       </select></label>
-      <label>Collection frequency<select name="frequency">
-        <option value="weekly">Weekly</option><option value="daily">Daily</option>
-        <option value="monthly">Monthly</option><option value="quarterly">Quarterly</option>
-        <option value="yearly">Yearly</option><option value="once">One-time</option>
+      <label>Payment frequency<select name="frequency" required>
+        <option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+        <option value="daily">Daily</option><option value="quarterly">Quarterly</option>
+        <option value="yearly">Yearly</option><option value="once">Once</option>
       </select></label>
-      <label>First payment date<input name="first_due_date" type="date" min="{{ today|date:'Y-m-d' }}" required></label>
-      <label>Final payment date<input name="final_due_date" type="date" min="{{ today|date:'Y-m-d' }}" required></label>
+      <label>First payment<input name="first_due_date" type="date" min="{{ today|date:'Y-m-d' }}" required></label>
+      <label>Last payment<input name="final_due_date" type="date" min="{{ today|date:'Y-m-d' }}" required></label>
     </div>
-    <p class="muted">KOFAD calculates the number and value of installments using this invoice's real unpaid amount, never the customer's older account debt.</p>
-    <label class="switch-row"><input type="checkbox" name="accepted_schedule" value="yes" required> The customer agrees to review the full server-calculated amount-by-date repayment schedule on the next page before any Hubtel prompt.</label>
-    <label class="switch-row"><input type="checkbox" name="customer_requested_prompt" value="yes" required> The customer wants to begin Direct Debit setup for this exact invoice, and understands that Hubtel preapproval is requested separately after the final schedule is reviewed.</label>
-    <button type="submit" class="button">Calculate exact schedule and review wallet approval →</button>
-    <a class="button secondary" href="{% url 'document' invoice.pk %}">Return to existing sale</a>
+    <label class="payment-check"><input name="accepted_schedule" type="checkbox" value="yes" required> I discussed the repayment dates with the customer.</label>
+    <label class="payment-check"><input name="customer_requested_prompt" type="checkbox" value="yes" required> The customer agrees to review and authorize this plan on their own phone.</label>
+    <button class="button" type="submit">Prepare repayment plan</button>
+    <p class="payment-hint">KOFAD calculates the instalments from the unpaid invoice. The customer verifies their wallet name and approves separately.</p>
   </form>
-</section>
+</section></main>
 {% endblock %}
