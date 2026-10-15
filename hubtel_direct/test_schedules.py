@@ -420,6 +420,23 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertContains(response, "GHS 800.00")
         self.assertContains(response, "Open customer approval page")
         self.assertContains(response, "Repayment timetable")
+        self.assertContains(response, 'data-kpay-mode="authorization"')
+        approval_page = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
+        self.assertEqual(approval_page.status_code, 200)
+        self.assertContains(approval_page, 'data-kpay-mode="authorization"')
+        status_url = reverse("hubtel_debt_customer_status_json", args=[plan.pk])
+        not_yet = self.client.get(status_url).json()
+        self.assertEqual(not_yet["status"], "draft")
+        self.assertFalse(not_yet["provider_confirmed"])
+        DebtMandate.objects.filter(pk=plan.pk).update(
+            status="approved", provider_approved_at=timezone.now()
+        )
+        approved = self.client.get(status_url).json()
+        self.assertTrue(approved["provider_confirmed"])
+        DebtMandate.objects.filter(pk=plan.pk).update(
+            status="draft", provider_approved_at=None
+        )
+
 
         edit = mandates.update_draft_plan(
             self.user, self.branch, plan.pk, frequency="monthly",
