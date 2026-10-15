@@ -242,6 +242,7 @@ class DirectWorkflowTests(MarketFixtures):
         self.assertEqual(tx.status, "approval_pending")
         post.assert_not_called()
         self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
         session = self.client.session
         session["access_version"] = self.staff.access.session_version
         session["branch"] = self.branch.pk
