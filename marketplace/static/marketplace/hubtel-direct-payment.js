@@ -85,8 +85,9 @@
       verifiedPhone = result.verified ? phone : '';
       verifyPanel.hidden = Boolean(result.verified);
       verifiedMessage.hidden = !result.verified;
-      notify(result.message || (result.verified ? 'Number verified.' : 'Verify your new wallet once by SMS.'));
-      return result.verified;
+      if (result.verified) return verifyRegisteredName(phone, channelInput.value);
+      notify(result.message || 'Verify your wallet by SMS to continue.');
+      return false;
     }
     phoneInput.addEventListener('blur', () => {
       if (phoneInput.value.trim()) void checkWallet().catch(err => notify(err.message));
