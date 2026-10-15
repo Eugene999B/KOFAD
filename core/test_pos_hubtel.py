@@ -98,6 +98,32 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.assertEqual(body["Channel"], "mtn-gh")
         self.assertEqual(body["Amount"], 50.0)
 
+    @patch("hubtel_direct.client.requests.get")
+    @patch("hubtel_direct.client.requests.post")
+    def test_verified_walkin_full_payment_waits_for_confirmation(self, post, get):
+        post.side_effect = self.accepted
+        sale = self.payload()
+        sale["party"] = None
+        key = uuid.uuid4()
+        result = pos_hubtel.start(
+            self.user, self.branch, sale, key, "0551234567", "mtn", "",
+            wallet_proof=self.proof(), customer_authorized=True,
+        )
+        self.assertTrue(result["waiting"])
+        self.assertEqual(Document.objects.filter(kind="sale").count(), 0)
+        held = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
+        self.assertIsNone(held.cart["sale_payload"]["party"])
+        self.mature(key)
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "responseCode": "0000",
+            "data": {"clientReference": key.hex, "transactionId": "txn-test-walkin",
+                     "status": "Paid", "amount": 50.0, "paymentMethod": "mobilemoney"},
+        })
+        confirmed = pos_hubtel.reconcile(key.hex, force=True)
+        self.assertTrue(confirmed["paid"])
+        self.assertIsNone(Document.objects.get(kind="sale").party_id)
+        self.assertEqual(Payment.objects.filter(document__kind="sale", method="momo").count(), 1)
+
     @patch("hubtel_direct.client.requests.post")
     def test_duplicate_submit_idempotency_and_uncertain_outcome(self, post):
         post.side_effect = self.accepted
