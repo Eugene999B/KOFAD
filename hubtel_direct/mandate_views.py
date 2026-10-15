@@ -348,9 +348,18 @@ def customer_authorize_action(request, mandate_id):
         if action in {"start", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
         if action in {"start", "confirm"}:
+            from django.utils import timezone
+            verified = request.session.get("wallet_identity:" + str(mandate.pk), {})
+            try:
+                verified_age = timezone.now().timestamp() - float(verified.get("at", 0))
+            except (TypeError, ValueError, AttributeError):
+                verified_age = 999999
+            if (verified_age >= 1800 or verified.get("fingerprint") != mandate.phone_fingerprint
+                    or not verified.get("name")):
+                raise ValidationError("Verify your wallet number and registered name before requesting approval.")
             if request.POST.get("accepted_terms") != "yes":
                 raise ValidationError("Read and accept the exact scheduled payment amounts, dates and cancellation terms.")
-            if mandates.outstanding(mandate.party) <= 0:
+            if mandates.mandate_outstanding(mandate) <= 0:
                 raise ValidationError("No debt remains to authorize.")
             # Hubtel itself verifies the wallet owner via USSD/OTP.
             # A KOFAD SMS code is never represented as payment authorization.
