@@ -34,6 +34,16 @@ def internal_reconcile(request):
         return response
     from .service import reconcile_due
     count = reconcile_due(limit=10)
+    # Historical hosted Hubtel transactions are STILL outstanding records.
+    # Only this whitelisted web service may check their status; the SMS
+    # worker has no permission to use its own outbound IP for Hubtel.
+    legacy_count = 0
+    try:
+        from marketplace.hubtel import reconcile_due as reconcile_legacy_market
+        legacy_count = reconcile_legacy_market(limit=10) or 0
+    except Exception:
+        # Keep other independent status checks running during provider outages.
+        pass
     # Direct POS payments must also use this web service's whitelisted IPs,
     # never kofad-sms worker's unlisted egress.
     from core.pos_hubtel import reconcile_due as reconcile_pos_due
@@ -97,7 +107,7 @@ def internal_reconcile(request):
         from .payroll import settle_confirmed
         payroll_paid = settle_confirmed(limit=20)
     response = JsonResponse({
-        "checked": count, "pos_checked": pos_count,
+        "checked": count, "legacy_checked": legacy_count, "pos_checked": pos_count,
         "v2_intents_checked": v2_checked, "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
         "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
         "debit_ledger_recovered": debt_ledger_recovered,
