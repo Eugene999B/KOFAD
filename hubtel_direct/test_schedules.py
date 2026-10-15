@@ -392,6 +392,9 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         )
         self.authenticate_client()
         url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
+        enabled_page = self.client.get(reverse("hubtel_debt_staff_status", args=[plan.pk]))
+        self.assertContains(enabled_page, "Request wallet approval")
+        self.assertContains(enabled_page, "Confirmed wallet holder name")
         with patch("hubtel_direct.verification.inquiry", return_value={
             "wallet_name": "Verified Wallet Owner",
         }) as wallet, patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
@@ -440,8 +443,8 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         response = self.client.get(reverse("hubtel_debt_staff_status", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No network authorization has been sent yet")
-        self.assertContains(response, "Request wallet approval")
-        self.assertContains(response, "Confirmed wallet holder name")
+        self.assertContains(response, "Network preapproval is not configured.")
+        self.assertNotContains(response, '<button class="button" type="submit">Request wallet approval</button>')
         self.assertContains(response, "GHS 800.00")
         self.assertContains(response, "Open customer approval page")
         self.assertContains(response, "Repayment timetable")
