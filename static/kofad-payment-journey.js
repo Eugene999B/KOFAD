@@ -81,6 +81,32 @@
         if (!stopped) timer = setTimeout(check, 7000);
       }
     }
+    root.querySelector('[data-kpay-pos-otp]')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const field = form.querySelector('[name=otp]');
+      const button = form.querySelector('[type=submit]');
+      const code = String(field?.value || '').trim();
+      const reference = root.dataset.reference || '';
+      if (!/^[0-9]{4,8}$/.test(code) || !reference) {
+        if (detail) detail.textContent = 'Enter the transaction-specific code, never a wallet PIN.';
+        return;
+      }
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/pos/paystack-momo/' + encodeURIComponent(reference) + '/otp/', {
+          method:'POST', credentials:'same-origin', redirect:'error',
+          headers:{'Content-Type':'application/json','X-CSRFToken':form.querySelector('[name=csrfmiddlewaretoken]')?.value || ''},
+          body:JSON.stringify({otp:code})
+        });
+        const data = await response.json();
+        if (field) field.value = '';
+        if (detail) detail.textContent = data.error || data.message || 'Code submitted. Checking confirmation.';
+        if (response.ok) { stopped = false; void check(); }
+      } catch (_) {
+        if (detail) detail.textContent = 'The code response is unknown. Check the original payment status before retrying.';
+      } finally { button.disabled = false; }
+    });
     checkButton?.addEventListener('click', () => { clearTimeout(timer); void check(); });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && !stopped) { clearTimeout(timer); void check(); }
