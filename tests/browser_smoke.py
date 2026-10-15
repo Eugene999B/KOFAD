@@ -175,7 +175,7 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
     assert page.locator(".search-result-card").count() == 0
-    assert page.get_by_text("Search to add a product", exact=True).is_visible()
+    assert page.locator("#catalog-status").count() == 1, "Empty-search guidance must be present"
     counter_panel = page.locator("#checkout-panel")
     assert page.locator("#sale-payment-dialog").count() == 0
     assert page.locator("#open-payment").count() == 0
