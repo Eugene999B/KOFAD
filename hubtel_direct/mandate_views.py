@@ -40,7 +40,7 @@ def staff_create_mandate(request):
         count = data.get("installment_count") or None
         end_date = data.get("final_due_date") or None
         source_id = str(data.get("source_document_id") or "").strip()
-        wants_prompt = data.get("customer_requested_prompt") == "yes"
+        wants_prompt = False  # Customer alone initiates wallet consent after phone/name verification.
         if json_mode and not source_id:
             raise ValidationError("The posted credit sale reference is missing. Do not resubmit the sale.")
         if wants_prompt and data.get("customer_reviewed_schedule") != "yes":
