@@ -2,7 +2,7 @@
 {% block content %}
 <section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
   <div class="section-heading"><div>
-    <p class="eyebrow">SALES / DIRECT DEBIT</p>
+    <p class="eyebrow">CUSTOMER REPAYMENT / DIRECT DEBIT</p>
     <h2>Customer authorization</h2>
   </div><span class="pill" id="debit-provider-status">{{ mandate.get_status_display }}</span></div>
 
@@ -11,13 +11,13 @@
       <small>CUSTOMER</small>
       <h3>{{ mandate.party.name }}</h3>
       <p>{{ mandate.get_channel_display|default:mandate.channel }} · wallet ending {{ mandate.phone_suffix }}</p>
-      <p>Current account balance: <strong>GHS {{ real_balance|floatformat:2 }}</strong></p>
+      <p>This agreement's unpaid invoice balance: <strong>GHS {{ real_balance|floatformat:2 }}</strong></p>
     </div>
     <div class="notice subtle">
       <small>AUTHORIZATION</small>
       {% if mandate.status == "approved" %}
       <h3>Approved by Hubtel</h3>
-      <p>Provider-confirmed approval; eligible collections follow the signed dates and merchant safety switches.</p>
+      <p>Wallet holder approved the collection authority. No sale, receipt, or payment has been created by this approval. Eligible future charges follow the agreed schedule and merchant safety switches.</p>
       {% elif mandate.status == "pending" %}
       <h3>Waiting for wallet approval</h3>
       <p>Customer must approve the Hubtel prompt (USSD) or provide Hubtel's OTP on their own secure page.</p>
