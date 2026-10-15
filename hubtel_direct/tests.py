@@ -84,6 +84,12 @@ class ContractTests(SimpleTestCase):
             client.submit(tx)
         self.assertEqual(denied.exception.code, "403")
         post.assert_called_once()
+        post.reset_mock()
+        post.return_value = Mock(status_code=403, json=Mock(side_effect=ValueError("HTML from gateway")))
+        with self.assertRaises(client.ProviderRejected) as denied:
+            client.submit(tx)
+        self.assertEqual(denied.exception.code, "403")
+        post.assert_called_once()
 
     @override_settings(**READY)
     @patch("hubtel_direct.client.requests.post")
