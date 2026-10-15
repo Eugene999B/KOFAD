@@ -174,6 +174,26 @@ with sync_playwright() as p:
     page.get_by_role("heading",name="Command centre",exact=True).wait_for()
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
+    # Regression: stale provider references once disabled ALL checkout controls
+    # and the page offered no way out. A different sale must remain accessible
+    # without cancelling or resubmitting the original payment.
+    page.evaluate("""() => {
+      const root = document.querySelector('#pos');
+      const key = ['kofad-cart',root.dataset.user,root.dataset.branch,root.dataset.kind].join(':');
+      sessionStorage.setItem(key, JSON.stringify({
+        cart:[], requestKey:root.dataset.key, momoReference:'pending-wallet-test-reference'
+      }));
+    }""")
+    page.reload()
+    assert page.locator("#pos-interrupted-checkout").is_visible()
+    assert page.locator("#pos-recovery-reference").inner_text().endswith("pending-wallet-test-reference")
+    assert page.locator("#product-query").is_disabled()
+    assert page.locator("#pos-recovery-detail").get_attribute("href") == "/documents/"
+    page.get_by_role("link",name="Start a different sale",exact=True).click()
+    page.wait_for_url("**/sales/new/?new=1")
+    assert page.locator("#product-query").is_enabled(), "Cashier must be able to search again"
+    assert page.locator("#pos-interrupted-checkout").is_hidden()
+    page.goto("http://127.0.0.1:8000/sales/new/")
     assert page.locator(".search-result-card").count() == 0
     assert page.locator("#catalog-status").count() == 1, "Empty-search guidance must be present"
     counter_panel = page.locator("#checkout-panel")
