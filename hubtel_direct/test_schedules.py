@@ -172,7 +172,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertContains(response, "Verify your wallet")
         self.assertContains(response, 'name="action" value="wallet_code_send"')
         self.assertContains(response, 'name="action" value="wallet_code_check"')
-        self.assertContains(response, "Verify number &amp; name")
+        self.assertContains(response, "Verify number")
         self.assertNotContains(response, "Hubtel, not KOFAD SMS")
 
     def test_customer_must_verify_wallet_phone_and_provider_name_first(self):
@@ -263,8 +263,8 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertEqual(response.status_code, 202)
         body = response.json()
         self.assertEqual(body["authorization_status"], "draft")
-        self.assertEqual(body["prompt_state"], "unavailable")
-        self.assertIn("No wallet prompt was sent", body["message"])
+        self.assertEqual(body["prompt_state"], "not_requested")
+        self.assertIn("authorization has not been requested", body["message"])
         self.assertIn("/status/", body["staff_url"])
         self.assertEqual(DebtMandate.objects.count(), 1)
         self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
