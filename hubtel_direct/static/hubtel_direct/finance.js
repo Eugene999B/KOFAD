@@ -24,7 +24,7 @@
       verifiedSnapshot = '';
       if (nameInput) nameInput.value = '';
       if (confirmIdentity) { confirmIdentity.checked = false; confirmIdentity.disabled = true; }
-      if (submitButton) submitButton.setAttribute('aria-disabled', 'true');
+      if (submitButton) submitButton.dataset.verificationReady = 'false';
       if (verifiedStatus) verifiedStatus.textContent = 'Not verified';
     };
     for (const input of [kind, form.elements.destination, form.elements.channel, form.elements.bank_code]) {
@@ -32,7 +32,7 @@
       if (input === form.elements.destination) input.addEventListener('input', invalidate);
     }
     confirmIdentity?.addEventListener('change', () => {
-      if (submitButton) submitButton.setAttribute('aria-disabled', String(!(confirmIdentity.checked && verifiedSnapshot === identityKey())));
+      if (submitButton) submitButton.dataset.verificationReady = String(confirmIdentity.checked && verifiedSnapshot === identityKey());
     });
     verifyButton?.addEventListener('click', async () => {
       invalidate();
