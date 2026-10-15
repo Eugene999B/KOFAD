@@ -316,6 +316,27 @@ def customer_authorize(request, mandate_id):
     })
 
 
+@require_GET
+def customer_authorization_status_json(request, mandate_id):
+    """Bearer-link status only. Never reveals wallet, schedule, identity or tokens."""
+    mandate = _safe_mandate(mandate_id)
+    confirmed = mandate.status == "approved" and bool(mandate.provider_approved_at)
+    response = JsonResponse({
+        "status": mandate.status,
+        "provider_confirmed": confirmed,
+        "verification_type": mandate.verification_type if mandate.status == "pending" else "",
+        "message": (
+            "The wallet owner has approved this agreement. No payment has been made."
+            if confirmed else "Please approve the original request on your wallet phone."
+            if mandate.status == "pending" else "Review the agreement and verify your phone to begin."
+            if mandate.status == "draft" else "Authorization is not active. Contact KOFAD."
+        ),
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
 @require_POST
 def customer_authorize_action(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
