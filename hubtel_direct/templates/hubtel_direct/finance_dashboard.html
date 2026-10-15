@@ -33,7 +33,7 @@
         <label>Reason<input name="purpose" minlength="6" maxlength="180" required placeholder="Supplier invoice or payroll reference"></label>
       </div>
       <label class="payment-check"><input type="checkbox" data-recipient-confirm required disabled> I have checked the verified name and amount.</label>
-      <button class="button" type="submit" data-submit-transfer aria-disabled="true">Request transfer approval</button>
+      <button class="button" type="submit" data-submit-transfer data-verification-ready="false">Request transfer approval</button>
       <p class="payment-hint">A second authorized person approves the transfer. Money is not sent by submitting this form.</p>
       <p data-direct-payout-message role="status" aria-live="polite"></p>
     </form>
