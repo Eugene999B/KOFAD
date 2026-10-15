@@ -317,16 +317,16 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             first = self.client.post(url, json.dumps(data), content_type="application/json")
         self.assertEqual(first.status_code, 202)
         self.assertEqual(first.json()["authorization_status"], "draft")
-        self.assertEqual(first.json()["prompt_state"], "rejected")
-        self.assertIn("IP is not allowlisted", first.json()["message"])
+        self.assertEqual(first.json()["prompt_state"], "not_requested")
+        self.assertIn("authorization has not been requested", first.json()["message"])
         self.assertEqual(DebtMandate.objects.count(), 1)
         with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
             "provider_id": "authorized-on-retry", "verification_type": "USSD",
             "otp_prefix": "", "status": "PENDING"
         }) as hubtel:
             retry = self.client.post(url, json.dumps(data), content_type="application/json")
-            self.assertEqual(retry.json()["authorization_status"], "pending")
-            hubtel.assert_called_once()
+            self.assertEqual(retry.json()["authorization_status"], "draft")
+            hubtel.assert_not_called()
         self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
         self.assertEqual(DebtMandate.objects.count(), 1)
 
