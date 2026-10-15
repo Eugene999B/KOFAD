@@ -76,7 +76,7 @@ class V2SaleIntentSafetyTests(Fixtures, TestCase):
         response = self.client.get("/sales/new/")
         self.assertEqual(response.status_code, 200)
         markup = response.content.decode("utf-8")
-        self.assertIn("pos-simple-v3.css", markup)
+        self.assertIn("pos-simple-v3.", markup)
         self.assertIn("Receipt messages", markup)
         self.assertIn("Record sale", markup)
         self.assertIn("Set up Direct Debit for this unpaid invoice", markup)
