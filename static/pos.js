@@ -2063,7 +2063,7 @@
         if (Object.prototype.hasOwnProperty.call(saved, "customer_consent")) {
                 customerConsent.checked = Boolean(saved.customer_consent);
         } else {
-                customerConsent.checked = true;
+                customerConsent.checked = false;
         }
       }
       applyPaymentPlan();
@@ -2101,7 +2101,7 @@
       if (Object.prototype.hasOwnProperty.call(restoredState, "customerConsent")) {
             customerConsent.checked = Boolean(restoredState.customerConsent);
       } else {
-            customerConsent.checked = true;
+            customerConsent.checked = false;
       }
     }
     if (purchaseReference) purchaseReference.value = restoredState.purchaseReference || "";
@@ -2161,7 +2161,7 @@
       pollMomoPayment({immediate: true});
     } else {
       document.querySelector("#complete").disabled = false;
-      fail("A checkout was interrupted. Review the unchanged checkout and click Complete Sale & Generate Receipt to recover the original result.");
+      fail("A checkout was interrupted. Review the unchanged checkout and click Record sale to recover the original request (do not post a second sale).");
     }
   } else if (momoReference) {
     setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
