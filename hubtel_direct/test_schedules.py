@@ -439,7 +439,9 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         from django.urls import reverse
         response = self.client.get(reverse("hubtel_debt_staff_status", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Not requested")
+        self.assertContains(response, "No network authorization has been sent yet")
+        self.assertContains(response, "Request wallet approval")
+        self.assertContains(response, "Confirmed wallet holder name")
         self.assertContains(response, "GHS 800.00")
         self.assertContains(response, "Open customer approval page")
         self.assertContains(response, "Repayment timetable")
