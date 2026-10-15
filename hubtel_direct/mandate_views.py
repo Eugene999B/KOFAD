@@ -43,7 +43,7 @@ def staff_create_mandate(request):
         wants_prompt = False  # Customer alone initiates wallet consent after phone/name verification.
         if json_mode and not source_id:
             raise ValidationError("The posted credit sale reference is missing. Do not resubmit the sale.")
-        if wants_prompt and data.get("customer_reviewed_schedule") != "yes":
+        if data.get("customer_requested_prompt") == "yes" and data.get("customer_reviewed_schedule") != "yes":
             raise ValidationError("Confirm the customer reviewed the exact amounts, dates and wallet before requesting Hubtel preapproval.")
 
         # The posted sale is the idempotency key: retrying this form must NEVER
