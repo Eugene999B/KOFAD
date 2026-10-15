@@ -127,3 +127,31 @@
   #pos[data-kind="sale"] .customer-choice-button{padding:7px!important;font-size:11px!important}
   #pos[data-kind="sale"] .customer-choice-button small{display:none}
 }
+
+/* Actionable escape from an earlier payment still awaiting provider checks. */
+#pos[data-kind="sale"] .pos-recovery-banner{
+  display:block;margin:0 0 20px;padding:17px 20px;
+  border:1px solid #e2c581;border-radius:17px;
+  background:#fff8e5;color:#513f1c;
+}
+#pos[data-kind="sale"] .pos-recovery-banner.hidden{display:none!important}
+#pos[data-kind="sale"] .pos-recovery-banner h3{
+  margin:0 0 6px;font-size:17px;letter-spacing:-.02em
+}
+#pos[data-kind="sale"] .pos-recovery-banner p{
+  margin:0 0 10px;font-size:13px;line-height:1.55
+}
+#pos[data-kind="sale"] .pos-recovery-reference{
+  font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere
+}
+#pos[data-kind="sale"] .pos-recovery-actions{
+  display:flex;gap:10px;flex-wrap:wrap;margin-top:12px
+}
+#pos[data-kind="sale"] .pos-recovery-actions a{
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:11px;padding:10px 13px;font-size:13px;text-decoration:none
+}
+@media(max-width:480px){
+  #pos[data-kind="sale"] .pos-recovery-banner{padding:14px}
+  #pos[data-kind="sale"] .pos-recovery-actions a{flex:1 1 140px}
+}
