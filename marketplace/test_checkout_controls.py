@@ -79,17 +79,16 @@ class CheckoutControlsTests(MarketFixtures):
         form = CheckoutForm(data)
         self.assertFalse(form.is_valid())
 
-    def test_owner_sees_status_without_secrets_and_can_switch_provider(self):
+    def test_owner_sees_direct_only_status_without_legacy_provider_selector(self):
         self.staff_session()
         response = self.client.get("/settings/online-payments/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Connected · testing pending")
+        self.assertContains(response, "Direct Mobile Money")
+        self.assertNotContains(response, "Save checkout provider")
         self.assertContains(response, "Where does the money go?")
         self.assertNotContains(response, "private-test-key")
         self.client.post("/settings/online-payments/", {"provider": "paystack"})
-        self.assertEqual(PaymentConfiguration.objects.get(pk=1).provider, "paystack")
-        self.client.post("/settings/online-payments/", {"provider": "invalid"})
-        self.assertEqual(PaymentConfiguration.objects.get(pk=1).provider, "paystack")
+        self.assertFalse(PaymentConfiguration.objects.exists())
 
     def test_payment_settings_deny_unprivileged_staff(self):
         user = User.objects.create_user("ordinary", password="test-only-strong-password")
