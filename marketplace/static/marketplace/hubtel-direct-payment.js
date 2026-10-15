@@ -58,6 +58,25 @@
       if (!response.ok) throw Error(data.error || 'The request could not be completed.');
       return data;
     }
+    async function verifyRegisteredName(phone, channel) {
+      if (verifiedPhone !== phone) return false;
+      const result = await post(base + 'verify-phone/', {action:'name', phone, channel});
+      if (!result.verified || !result.registered_name) throw Error('Wallet name could not be verified.');
+      if (selectedPhone() !== phone || channelInput.value !== channel) return false;
+      verifiedName = result.registered_name;
+      verifiedChannel = channel;
+      registeredName.textContent = result.registered_name;
+      nameReview.hidden = false;
+      confirmName.checked = false;
+      payButton.disabled = true;
+      notify('Check the registered name, then confirm it belongs to you.');
+      return true;
+    }
+    confirmName?.addEventListener('change', () => {
+      payButton.disabled = !(confirmName.checked && verifiedName && verifiedPhone === selectedPhone() &&
+        verifiedChannel === channelInput.value);
+    });
+    payButton.disabled = true;
     async function checkWallet() {
       const phone = selectedPhone();
       const current = ++generation;
