@@ -39,6 +39,7 @@ urlpatterns = [
     path("market/orders/<uuid:pk>/momo-phone/verify/", views.customer_momo_phone_verify, name="customer_momo_phone_verify"),
     path("market/orders/<uuid:pk>/payment-otp/", views.customer_payment_otp, name="customer_payment_otp"),
     path("market/orders/<uuid:pk>/payment-status/", views.customer_payment_status, name="customer_payment_status"),
+    path("market/orders/<uuid:pk>/checkout/verification/", views.payment_verification, name="market_payment_verification"),
     path("settings/online-payments/", views.online_payments, name="online_payments"),
     path("settings/online-payments/hubtel-evidence/<int:attempt_id>/", views.hubtel_evidence_list, name="hubtel_evidence_list"),
     path("settings/online-payments/hubtel-evidence/download/<int:evidence_id>/", views.hubtel_evidence_download, name="hubtel_evidence_download"),
