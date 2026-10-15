@@ -215,7 +215,16 @@ def verify_registered_phone(request, order_id):
         phone = normalize_ghana_phone(body.get("phone"))
         action = body.get("action")
         already_verified = VerifiedMomoPhone.objects.filter(customer=customer, phone=phone).exists()
-        if action == "check" and set(body) == {"action", "phone"}:
+        if action == "name" and set(body) == {"action", "phone", "channel"}:
+            if not already_verified:
+                raise ValidationError("Verify your wallet number by SMS first.")
+            from . import verification
+            record = verification.inquiry(phone, body.get("channel"))
+            result = {
+                "verified": True, "registered_name": record["wallet_name"],
+                "phone_suffix": record["phone"][-4:],
+            }
+        elif action == "check" and set(body) == {"action", "phone"}:
             result = {"verified": already_verified,
                       "message": "Wallet already verified for this account." if already_verified
                                  else "Verify this wallet once using an SMS code."}
