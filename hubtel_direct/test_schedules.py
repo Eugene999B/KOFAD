@@ -362,13 +362,18 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         )
         self.authenticate_client()
         url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
-        with patch("hubtel_direct.debit_api.initiate_preapproval") as send:
-            missing = self.client.post(url, {})
-            self.assertEqual(missing.status_code, 405)
-            send.assert_not_called()
-            disabled = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(disabled.status_code, 405)
-            send.assert_not_called()
+        with patch("hubtel_direct.debit_api.initiate_preapproval") as provider, \
+             patch("hubtel_direct.verification.inquiry") as inquiry:
+            self.assertEqual(self.client.post(url, {}).status_code, 302)
+            provider.assert_not_called()
+            inquiry.assert_not_called()
+            self.assertEqual(self.client.post(url, {
+                "customer_requested_prompt": "yes",
+                "customer_reviewed_schedule": "yes",
+                "confirmed_wallet_name": "Wallet Owner",
+            }).status_code, 302)
+            provider.assert_not_called()
+            inquiry.assert_not_called()
         plan.refresh_from_db()
         self.assertEqual(plan.status, "draft")
 
@@ -387,22 +392,40 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         )
         self.authenticate_client()
         url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
-        with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+        with patch("hubtel_direct.verification.inquiry", return_value={
+            "wallet_name": "Verified Wallet Owner",
+        }) as wallet, patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
             "provider_id": "hubtel-authorization-123", "verification_type": "USSD",
             "otp_prefix": "", "status": "PENDING",
         }) as provider, patch("hubtel_direct.debit_api.debit_charge") as debit:
-            r = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(r.status_code, 405)
+            missing_name = self.client.post(url, {
+                "customer_requested_prompt": "yes",
+                "customer_reviewed_schedule": "yes",
+                "confirmed_wallet_name": "Different Name",
+            })
+            self.assertEqual(missing_name.status_code, 302)
             provider.assert_not_called()
-            repeat = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(repeat.status_code, 405)
-            provider.assert_not_called()
+            first = self.client.post(url, {
+                "customer_requested_prompt": "yes",
+                "customer_reviewed_schedule": "yes",
+                "confirmed_wallet_name": "Verified Wallet Owner",
+            })
+            self.assertEqual(first.status_code, 302)
+            provider.assert_called_once()
+            wallet.assert_called()
+            repeat = self.client.post(url, {
+                "customer_requested_prompt": "yes",
+                "customer_reviewed_schedule": "yes",
+                "confirmed_wallet_name": "Verified Wallet Owner",
+            })
+            self.assertEqual(repeat.status_code, 302)
+            provider.assert_called_once()
             debit.assert_not_called()
         plan.refresh_from_db()
-        self.assertEqual(plan.status, "draft")
-        self.assertEqual(plan.verification_type, "")
-        # Prompt submission is not wallet approval. Only Hubtel's independent
-        # authenticated status check can change the mandate to approved.
+        self.assertEqual(plan.status, "pending")
+        self.assertEqual(plan.verification_type, "USSD")
+        # The merchant initiated a wallet request, NOT a paid debit or an
+        # approved mandate. Independent provider confirmation is required.
         self.assertIsNone(plan.provider_approved_at)
 
     def test_staff_waiting_page_and_draft_edit_show_exact_dates(self):
