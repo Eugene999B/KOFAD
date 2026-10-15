@@ -16,6 +16,7 @@
   let pendingBody = null;
   let heldId = null;
   let completed = false;
+  let leavingForDifferentSale = false;
   let selectedCustomer = null;
   let selectedSupplier = null;
   let newCustomerMode = false;
@@ -57,6 +58,34 @@
   } catch (_) { restoredState = null; }
 
   const errorBox = document.querySelector("#pos-error");
+  // Historical online payment requests can remain unresolved while provider
+  // reconciliation continues. Lock the OLD request, not the cashier forever.
+  // These are navigation links, not form controls, and still work when the
+  // abandoned checkout disables all inputs and buttons.
+  const recoveryBanner = document.querySelector("#pos-interrupted-checkout");
+  const recoveryReference = document.querySelector("#pos-recovery-reference");
+  const recoveryDetail = document.querySelector("#pos-recovery-detail");
+  const recoveryNew = document.querySelector("#pos-recovery-new");
+  if (!purchase && (pendingBody || momoReference) && recoveryBanner) {
+    recoveryBanner.classList.remove("hidden");
+    if (recoveryReference) {
+      recoveryReference.textContent = momoReference
+        ? "Original payment reference: " + momoReference
+        : "An earlier sale submission may still be processing.";
+    }
+    if (recoveryDetail) {
+      recoveryDetail.href = momoReference
+        ? "/payments/momo/" + encodeURIComponent(momoReference) + "/"
+        : "/documents/";
+      recoveryDetail.textContent = momoReference
+        ? "Check original payment" : "Check sales history";
+    }
+  }
+  recoveryNew?.addEventListener("click", () => {
+    // A new page with ?new=1 clears ONLY this tab's saved cart. It does not
+    // cancel any provider request, resubmit payment, or change accounting.
+    leavingForDifferentSale = true;
+  });
   const partyInput = document.querySelector("#party");
   const customerSearch = document.querySelector("#customer-search");
   const customerResults = document.querySelector("#customer-results");
@@ -2075,7 +2104,7 @@
   }));
 
   window.addEventListener("beforeunload", event => {
-    if (cart.length && !completed) {
+    if (cart.length && !completed && !leavingForDifferentSale) {
       event.preventDefault();
       event.returnValue = "";
     }
