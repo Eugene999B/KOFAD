@@ -131,7 +131,7 @@ class CheckoutControlsTests(MarketFixtures):
             amount=order.total, status="pending",
         )
         response = self.client.get(f"/market/orders/{order.pk}/")
-        self.assertContains(response, "Waiting for payment confirmation")
+        self.assertContains(response, "Payment verification in progress")
         self.assertNotContains(response, "Check Hubtel payment")
         self.assertNotContains(response, "private-progress-reference")
         status = self.client.get(f"/market/orders/{order.pk}/payment-status/")
