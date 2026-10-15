@@ -72,7 +72,7 @@ def staff_create_mandate(request):
                 minimum_partial=data.get("minimum_partial") or "0.00",
             )
         prompt_state = "not_requested"
-        prompt_message = "Repayment plan saved. Customer wallet approval is the next step."
+        prompt_message = "Repayment plan saved; wallet authorization has not been requested."
         if wants_prompt and mandate.status == "draft":
             if not bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)):
                 prompt_state = "unavailable"
