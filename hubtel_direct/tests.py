@@ -1,6 +1,7 @@
 """Offline provider contract and no-duplicate-money regression tests."""
 from datetime import timedelta
 import uuid
+from pathlib import Path
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -44,6 +45,19 @@ class ContractTests(SimpleTestCase):
         self.assertEqual(client.money("0.50"), Decimal("0.50"))
         self.assertIn("300311", client.BANK_CODES)
         self.assertNotIn("300399", client.BANK_CODES)
+
+    def test_transfer_submission_button_is_actionable_with_safe_verification_gate(self):
+        root = Path(__file__).resolve().parent
+        template = (root / "templates/hubtel_direct/finance_dashboard.html").read_text()
+        script = (root / "static/hubtel_direct/finance.js").read_text()
+        self.assertIn('data-submit-transfer', template)
+        self.assertNotIn('disabled data-submit-transfer', template)
+        self.assertIn('novalidate', template)
+        self.assertIn("Verify recipient", script)
+        self.assertIn("verifiedSnapshot !== identityKey()", script)
+        self.assertIn("form.reportValidity()", script)
+        self.assertIn("if (attempted) return", script)
+        self.assertNotIn("submitButton.disabled = true", script)
 
     @override_settings(**READY)
     def test_destination_round_trip_is_encrypted(self):
