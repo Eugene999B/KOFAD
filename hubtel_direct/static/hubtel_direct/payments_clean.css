@@ -1,0 +1,56 @@
+/* KOFAD payments: compact, customer-first panels */
+.payment-workspace{max-width:1120px;margin:0 auto;display:grid;gap:18px}
+.payment-top{display:flex;gap:22px;align-items:center;justify-content:space-between;background:linear-gradient(115deg,var(--white,#fff),var(--soft,#f4f8fa));border:1px solid var(--line,#dce5ea);border-radius:22px;padding:22px 25px}
+.payment-top h1{font-size:clamp(26px,3vw,36px);line-height:1.13;letter-spacing:-.04em;margin:4px 0 8px}
+.payment-top p:not(.eyebrow){color:var(--muted,#687985);font-size:13px;margin:0}
+.payment-panel{padding:22px!important;border:1px solid var(--line,#dce5ea)!important;border-radius:21px!important;box-shadow:0 8px 28px rgba(20,35,45,.035)!important}
+.payment-panel h2{font-size:20px;margin:0 0 17px;letter-spacing:-.02em}
+.payment-panel label{display:grid;gap:6px;font-size:12px;font-weight:700}
+.payment-panel :is(input,select){width:100%;min-height:45px;border-radius:10px;padding:9px 12px;font-size:14px}
+.payment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.payment-verify-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0 14px}
+.payment-verify-row [data-recipient-verification]{color:var(--muted,#6b7780);font-size:12px}
+.payment-registered-name{margin-bottom:14px}
+.payment-registered-name input{background:var(--soft,#f2f6f7);font-weight:750}
+.payment-check{display:flex!important;align-items:flex-start;gap:10px;margin:16px 0;font-size:12px!important}
+.payment-check input{width:auto;min-height:0;margin:3px 0}
+.payment-hint{font-size:12px;color:var(--muted,#697880);line-height:1.5}
+.payment-panel .table-wrap{border:1px solid var(--line,#dce5ea);border-radius:12px;overflow:auto}
+.payment-panel .data-table{width:100%}
+.payment-panel .data-table td,.payment-panel .data-table th{padding:12px 10px}
+.payment-secondary summary{cursor:pointer;font-size:14px;font-weight:750}
+.payment-status{display:flex;justify-content:space-between;gap:14px;align-items:center;background:var(--soft,#f4f8fa);padding:14px 17px;border-radius:14px}
+.payment-primary-number{font-size:clamp(24px,4vw,36px);font-weight:850;letter-spacing:-.03em}
+.payment-step{border-top:1px solid var(--line,#dae2e6);padding:16px 0}
+.payment-step h2{font-size:17px;font-weight:800;margin:0 0 9px}
+.payment-step p{font-size:13px;line-height:1.6}
+.payment-step form{display:grid;gap:11px}
+.payment-step .payment-inline{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.payment-step .payment-inline input{width:min(240px,100%);min-height:45px}
+.payment-step .payment-inline button{min-height:44px}
+.payment-step .payment-inline label{font-weight:700;font-size:12px}
+.payment-step [type=checkbox]{width:auto;min-height:0}
+.payment-card{max-width:660px;margin:28px auto;padding:24px;border-radius:23px;border:1px solid var(--line,#dce5ea);background:var(--white,#fff)}
+.payment-card h1{font-size:clamp(25px,4vw,34px);letter-spacing:-.035em;margin:4px 0 12px}
+.payment-card .payment-muted{color:var(--muted,#64737d);font-size:13px;line-height:1.55}
+.payment-card .payment-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:18px 0}
+.payment-card .payment-fact{padding:12px;background:var(--soft,#f4f8fa);border-radius:12px;min-width:0}
+.payment-card .payment-fact small{display:block;color:var(--muted,#75838c);font-size:11px;margin-bottom:5px}
+.payment-card .payment-fact strong{font-size:15px;overflow-wrap:anywhere}
+.payment-card .market-button{margin:0;max-width:100%}
+.payment-card details{border-top:1px solid var(--line,#dce5ea);padding:15px 0;margin:8px 0}
+.payment-card details summary{font-size:13px;font-weight:750;cursor:pointer}
+.payment-card table{width:100%;border-collapse:collapse;font-size:12px}
+.payment-card td,.payment-card th{border-bottom:1px solid var(--line,#e0e7eb);padding:10px;text-align:left}
+.payment-card td:last-child,.payment-card th:last-child{text-align:right}
+.payment-card form button{margin-top:4px}
+@media(max-width:650px){
+.payment-top{padding:16px;flex-wrap:wrap;gap:12px;border-radius:15px}
+.payment-top h1{font-size:27px}
+.payment-panel{padding:16px!important;border-radius:15px!important}
+.payment-grid{grid-template-columns:1fr}
+.payment-card{margin:12px auto;padding:17px;border-radius:16px}
+.payment-card .payment-facts{gap:7px}
+.payment-card .payment-fact{padding:10px}
+.payment-card .payment-fact strong{font-size:13px}
+}
