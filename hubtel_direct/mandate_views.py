@@ -323,6 +323,28 @@ def customer_authorize_action(request, mandate_id):
         messages.error(request, "Choose an authorization action.")
         return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
     try:
+        if action == "wallet_code_send":
+            if mandate.status != "draft":
+                raise ValidationError("This agreement is already awaiting approval.")
+            sms_service.send_otp(mandates.mandate_phone(mandate), "momo", request=request)
+            messages.success(request, "A six-digit code has been sent to your wallet phone.")
+        elif action == "wallet_code_check":
+            if mandate.status != "draft":
+                raise ValidationError("This agreement is already awaiting approval.")
+            sms_service.verify_otp(mandates.mandate_phone(mandate), request.POST.get("code", ""), "momo")
+            from . import verification
+            from django.utils import timezone
+            found = verification.inquiry(
+                mandates.mandate_phone(mandate),
+                mandate.channel.replace("-direct-debit", ""),
+            )
+            request.session["wallet_identity:" + str(mandate.pk)] = {
+                "fingerprint": mandate.phone_fingerprint,
+                "name": found["wallet_name"],
+                "at": timezone.now().timestamp(),
+            }
+            request.session.modified = True
+            messages.success(request, "Phone verified. Confirm the registered name on this page.")
         if action in {"start", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
         if action in {"start", "confirm"}:
