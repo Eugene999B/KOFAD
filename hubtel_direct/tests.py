@@ -245,12 +245,12 @@ class DirectWorkflowTests(MarketFixtures):
         session["mfa_verified_at"] = timezone.now().timestamp()
         session.save()
         verification_page = self.client.get(
-            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/"
+            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/", HTTP_HOST="staff.kofadimpex.com"
         )
         self.assertEqual(verification_page.status_code, 200)
         self.assertContains(verification_page, 'data-kpay-mode="transfer"')
         status_read = self.client.get(
-            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/?format=json"
+            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/?format=json", HTTP_HOST="staff.kofadimpex.com"
         )
         self.assertEqual(status_read.json()["status"], "approval_pending")
         self.assertEqual(status_read.json()["id"], str(tx.pk))
