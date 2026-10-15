@@ -217,6 +217,7 @@ class DirectWorkflowTests(MarketFixtures):
         self.assertEqual(tx.status, "attention")
         self.assertNotEqual(order.payment_status, "paid")
 
+    @override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com"])
     @patch("hubtel_direct.client.requests.post")
     def test_payout_requires_second_person_and_uses_distinct_disbursement_account(self, post):
         post.side_effect = self.accepted
