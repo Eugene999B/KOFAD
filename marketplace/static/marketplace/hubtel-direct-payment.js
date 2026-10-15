@@ -100,7 +100,15 @@
       catch (error) { notify(error.message || 'Unable to complete request. Check status before retrying.'); }
       finally {
         busy = false;
-        for (const button of form.querySelectorAll('button')) if (button !== payButton) button.disabled = false;
+        for (const button of form.querySelectorAll('button')) {
+          if (button !== payButton) button.disabled = false;
+        }
+        // Never leave the payment action frozen after a verification error.
+        let sameWallet = false;
+        try {
+          sameWallet = verifiedPhone === selectedPhone() && verifiedChannel === channelInput.value;
+        } catch (_) { /* Invalid input stays blocked. */ }
+        payButton.disabled = !(sameWallet && verifiedName && confirmName?.checked);
       }
     }
     form.querySelector('[data-hubtel-verify-send]')?.addEventListener('click', () => {
@@ -136,10 +144,30 @@
           const ok = await checkWallet();
           if (!ok) return;
         }
-        const data = await post(base, {phone, channel, customer_authorized: true});
-        if (data.reference) {
-          // A separate status page tracks the persisted request, not another charge.
-          window.location.assign('/market/orders/' + encodeURIComponent(order) + '/payment/verification/');
+        const destination = '/market/orders/' + encodeURIComponent(order) + '/payment/verification/';
+        try {
+          const data = await post(base, {phone, channel, customer_authorized: true});
+          if (data.reference) {
+            // Stay on KOFAD. Poll only the persisted reference.
+            window.location.assign(destination);
+          }
+        } catch (error) {
+          // A lost HTTP response can conceal an accepted money request. Check
+          // the saved original reference; NEVER send another provider POST.
+          try {
+            const check = await fetch(base + 'status/', {
+              method:'GET', credentials:'same-origin', cache:'no-store',
+              headers:{'Accept':'application/json'}
+            });
+            if (check.ok) {
+              const saved = await check.json();
+              if (saved.reference) {
+                window.location.assign(destination);
+                return;
+              }
+            }
+          } catch (_) { /* Network still unavailable; don't resubmit. */ }
+          notify('Payment status could not be confirmed. Open this order again and check for a pending request before retrying. ' + (error.message || ''));
         }
       });
     });
