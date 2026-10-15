@@ -1362,7 +1362,7 @@ def payment_return(request):
         messages.error(request, problem(exc))
     customer = services.customer_from_session(request)
     if customer and order.customer_id == customer.pk:
-        return redirect("market_order", pk=order.pk)
+        return redirect("market_payment_verification", pk=order.pk)
     return render(request, "marketplace/payment_result.html", _market_context(
         request, title="Payment result", order=None,
     ))
@@ -2763,6 +2763,48 @@ def online_payments(request, branch):
         "pos_momo_rows": pos_rows,
         "online_price_markup_percent": configuration.online_price_markup_percent,
     })
+
+
+@market_customer_required
+@require_GET
+def payment_verification(request, customer, pk):
+    """A standalone confirmation page for hosted/online checkout attempts."""
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    attempt = order.payment_attempts.order_by("-created_at").first()
+    if not attempt:
+        return redirect("market_order", pk=order.pk)
+    if attempt.provider == "hubtel_direct":
+        return redirect("hubtel_direct_collection_verification", order_id=order.pk)
+    paid = (
+        order.payment_status == "paid" and order.ledger_status == "posted"
+        and bool(order.sale_document_id)
+    )
+    status = (
+        "success" if paid else "attention" if order.payment_status == "paid"
+        or attempt.status in {"attention", "submission_unknown"} else
+        "failed" if attempt.status in {"failed", "abandoned", "reversed"} else "pending"
+    )
+    data = {
+        "status": status, "paid": paid, "attention": status == "attention",
+        "failed": status == "failed",
+        "reference": attempt.reference,
+        "message": (
+            "The original payment has been independently verified and recorded." if paid
+            else "KOFAD is reviewing this payment. Do not start another request." if status == "attention"
+            else "Payment was unsuccessful. Review the original order before retrying." if status == "failed"
+            else "Complete approval using the secure payment instructions and return here."
+        ),
+    }
+    if request.GET.get("format") == "json":
+        response = JsonResponse(data)
+    else:
+        response = render(request, "marketplace/payment_verification.html", _market_context(
+            request, order=order, attempt=attempt, journey=data,
+            title="Secure payment verification",
+        ))
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
 
 
 @market_customer_required
