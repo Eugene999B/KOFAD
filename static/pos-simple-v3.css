@@ -1,0 +1,129 @@
+/* KOFAD Counter V3 — clean checkout; scoped to sales only.
+   Purchasing keeps its established, separate multi-field workflow. */
+#pos[data-kind="sale"]{
+  --simple-edge:color-mix(in srgb,var(--line) 78%,transparent);
+  --simple-wash:color-mix(in srgb,var(--soft) 52%,var(--white));
+  max-width:1500px;margin:auto;
+}
+#pos[data-kind="sale"] .simple-sale-intro{
+ display:flex;align-items:center;justify-content:space-between;gap:24px;
+ padding:22px 25px;margin:0 0 19px;border:1px solid var(--simple-edge);
+ border-radius:22px;background:linear-gradient(125deg,var(--white),var(--simple-wash));
+}
+#pos[data-kind="sale"] .simple-sale-intro .eyebrow{letter-spacing:.12em;margin:0 0 4px}
+#pos[data-kind="sale"] .simple-sale-intro h2{font-size:clamp(25px,2.8vw,34px);line-height:1.18;letter-spacing:-.035em;margin:0 0 6px;font-weight:850}
+#pos[data-kind="sale"] .simple-sale-intro p:not(.eyebrow){margin:0;color:var(--muted);font-size:13px}
+#pos[data-kind="sale"] .simple-debit-link{
+  border:1px solid var(--simple-edge);padding:12px 17px;border-radius:13px;
+  color:var(--ink);background:var(--white);font-weight:750;white-space:nowrap;
+  text-decoration:none;min-height:44px;display:inline-flex;align-items:center;
+}
+#pos[data-kind="sale"] .simple-debit-link:hover{border-color:var(--green);color:var(--green)}
+#pos[data-kind="sale"] .counter-layout{
+  display:grid!important;grid-template-columns:minmax(0,1.13fr) minmax(330px,.87fr)!important;
+  align-items:start!important;gap:20px!important;
+}
+#pos[data-kind="sale"] .counter-layout>*{min-width:0!important;width:100%!important;max-width:none!important}
+#pos[data-kind="sale"] .counter-products{display:grid;gap:14px;min-width:0}
+#pos[data-kind="sale"] .counter-sale-panel{
+  position:sticky;top:20px;border:1px solid var(--simple-edge);
+  box-shadow:0 10px 30px rgba(20,37,50,.045);
+  border-radius:22px!important;padding:23px!important;background:var(--white)!important;
+  min-width:0;
+}
+#pos[data-kind="sale"] .sale-search-shell{
+  padding:12px!important;border:1px solid var(--simple-edge)!important;
+  background:var(--white)!important;border-radius:17px!important;box-shadow:none!important;
+}
+#pos[data-kind="sale"] #product-query{min-height:50px;font-size:15px}
+#pos[data-kind="sale"] #catalog-status{padding:18px!important;min-height:70px!important;border:1px dashed var(--simple-edge);border-radius:16px}
+#pos[data-kind="sale"] #catalog-status .catalog-empty-icon{display:none}
+#pos[data-kind="sale"] #catalog-status h3{font-size:13px;margin:0;color:var(--muted);font-weight:600}
+#pos[data-kind="sale"] .chalin-cart-panel{
+  border:1px solid var(--simple-edge)!important;border-radius:20px!important;
+  padding:19px!important;box-shadow:none!important;margin:0!important;
+  background:var(--white)!important;
+}
+#pos[data-kind="sale"] .counter-sale-head{margin-bottom:12px}
+#pos[data-kind="sale"] .counter-sale-head h2,#pos[data-kind="sale"] .chalin-checkout-head h2{font-size:19px!important;letter-spacing:-.025em}
+#pos[data-kind="sale"] .counter-sale-head .eyebrow,
+#pos[data-kind="sale"] .chalin-checkout-head .eyebrow{font-size:10px;letter-spacing:.11em}
+#pos[data-kind="sale"] .counter-cart .cart-line{
+  margin:7px 0!important;padding:12px!important;border-radius:13px!important;
+  box-shadow:none!important;background:var(--simple-wash)!important;
+}
+#pos[data-kind="sale"] .cart-product-name{font-size:14px!important}
+#pos[data-kind="sale"] .counter-sale-panel .chalin-customer-card,
+#pos[data-kind="sale"] .counter-sale-panel .chalin-payment-card{
+  padding:16px 0!important;margin:0!important;border:0!important;
+  border-bottom:1px solid var(--simple-edge)!important;border-radius:0!important;
+  box-shadow:none!important;background:transparent!important;
+}
+#pos[data-kind="sale"] .counter-customer-title{margin:0 0 9px}
+#pos[data-kind="sale"] .counter-customer-title label,
+#pos[data-kind="sale"] .chalin-payment-card>label{font-weight:750;font-size:13px}
+#pos[data-kind="sale"] .customer-choice{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:8px 0}
+#pos[data-kind="sale"] .customer-choice-button{
+  min-height:54px!important;padding:10px!important;border-radius:11px!important;
+  font-size:12px!important;box-shadow:none!important;
+}
+#pos[data-kind="sale"] .customer-choice-button small{font-size:10px}
+#pos[data-kind="sale"] #customer-search-wrap{margin:10px 0}
+#pos[data-kind="sale"] .chalin-section-title{margin-bottom:12px}
+#pos[data-kind="sale"] .chalin-section-title h3{font-size:14px!important}
+#pos[data-kind="sale"] #payment-plan{margin:5px 0 14px;min-height:44px}
+#pos[data-kind="sale"] .counter-payment-fieldset{padding:0!important;margin:0!important;border:none!important}
+#pos[data-kind="sale"] .counter-payment-fieldset legend{font-size:12px;font-weight:650;margin-bottom:7px;color:var(--muted)}
+#pos[data-kind="sale"] .payment-method-picker{gap:7px}
+#pos[data-kind="sale"] .payment-method-option{border-radius:10px!important;min-height:44px!important;font-size:12px!important;padding:9px 13px!important}
+#pos[data-kind="sale"] .chalin-single-payment{margin:12px 0 0}
+#pos[data-kind="sale"] .chalin-total-panel{
+ padding:17px!important;border-radius:16px!important;
+ margin-top:16px!important;background:var(--simple-wash)!important;
+ border:1px solid var(--simple-edge)!important;box-shadow:none!important;
+}
+#pos[data-kind="sale"] .chalin-total-row{padding:5px 0!important;font-size:13px}
+#pos[data-kind="sale"] .chalin-total-row strong{font-variant-numeric:tabular-nums}
+#pos[data-kind="sale"] .chalin-total-row:first-of-type strong{font-size:20px}
+#pos[data-kind="sale"] .chalin-balance-row{border-top:1px solid var(--simple-edge);padding-top:12px!important}
+#pos[data-kind="sale"] .checkout-progress{margin-top:11px}
+#pos[data-kind="sale"] .chalin-complete-actions{display:flex;gap:10px;margin-top:14px}
+#pos[data-kind="sale"] #complete{min-height:50px!important;font-size:14px;font-weight:850;flex:1}
+#pos[data-kind="sale"] .simple-options{
+  margin:12px 0 0;padding:9px 12px;border:1px solid var(--simple-edge);
+  background:var(--simple-wash);border-radius:11px;
+}
+#pos[data-kind="sale"] .simple-options summary{
+  font-size:12px;font-weight:750;color:var(--ink);cursor:pointer;list-style-position:inside;
+}
+#pos[data-kind="sale"] .simple-options summary small{font-weight:500;color:var(--muted)}
+#pos[data-kind="sale"] .simple-options-inner{margin-top:10px;display:grid;gap:8px}
+#pos[data-kind="sale"] .simple-options-inner label{font-size:12px;line-height:1.5}
+#pos[data-kind="sale"] #credit-fields{padding-top:12px}
+#pos[data-kind="sale"] #credit-manual-due-field label{font-size:12px;font-weight:750}
+#pos[data-kind="sale"] .simple-debit-info{
+  margin:12px 0 0;padding:12px 13px;border:1px solid var(--simple-edge);
+  border-radius:12px;background:var(--simple-wash);font-size:12px;line-height:1.65;color:var(--ink)
+}
+#pos[data-kind="sale"] .simple-debit-info strong{font-weight:850}
+#pos[data-kind="sale"] .sale-success-dialog .sale-success-reference{font-size:14px}
+#pos[data-kind="sale"] :is(button,input,select,textarea,a):focus-visible{outline:3px solid var(--green);outline-offset:2px}
+@media(max-width:1080px){
+  #pos[data-kind="sale"] .counter-layout{grid-template-columns:minmax(0,1fr)!important}
+  #pos[data-kind="sale"] .counter-sale-panel{position:static}
+}
+@media(max-width:680px){
+  #pos[data-kind="sale"] .simple-sale-intro{padding:16px;align-items:flex-start;flex-wrap:wrap;gap:13px;border-radius:17px}
+  #pos[data-kind="sale"] .simple-sale-intro h2{font-size:25px}
+  #pos[data-kind="sale"] .simple-debit-link{min-height:42px;font-size:12px}
+  #pos[data-kind="sale"] .counter-layout{gap:12px!important}
+  #pos[data-kind="sale"] .counter-sale-panel{padding:16px!important;border-radius:16px!important}
+  #pos[data-kind="sale"] .chalin-cart-panel{padding:14px!important}
+  #pos[data-kind="sale"] .chalin-complete-actions{flex-wrap:wrap}
+  #pos[data-kind="sale"] #complete{min-width:180px}
+}
+@media(max-width:360px){
+  #pos[data-kind="sale"] .customer-choice{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  #pos[data-kind="sale"] .customer-choice-button{padding:7px!important;font-size:11px!important}
+  #pos[data-kind="sale"] .customer-choice-button small{display:none}
+}
