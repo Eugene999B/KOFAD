@@ -197,6 +197,11 @@ def staff_request_prompt(request, mandate_id):
             raise ValidationError("Customer consent and review of the exact repayment schedule are required.")
         if mandate.status != "draft":
             raise ValidationError("This wallet authorization has already been requested. Check the original status.")
+        # Do not spend a wallet-name lookup or imply a prompt is available when
+        # the merchant's independent preapproval service is disabled.
+        debit_api.gate("preapproval")
+        if mandates.mandate_outstanding(mandate) <= 0:
+            raise ValidationError("There is no unpaid amount to authorize.")
         # A wallet-name inquiry is NOT customer authorization. It protects
         # against directing a preapproval to an unexpected wallet owner.
         from . import verification
@@ -209,8 +214,6 @@ def staff_request_prompt(request, mandate_id):
         ).casefold()
         if not customer_confirmation or customer_confirmation != " ".join(verified["wallet_name"].split()).casefold():
             raise ValidationError("The wallet holder name was not confirmed. No approval request was sent.")
-        if mandates.mandate_outstanding(mandate) <= 0:
-            raise ValidationError("There is no unpaid amount to authorize.")
         result = mandates.prepare_customer_authorization(mandate)
         if result["verification_type"] == "USSD":
             messages.info(request, "The payment network accepted the wallet authorization request. Ask the customer to check their phone. Delivery is not yet confirmed.")
