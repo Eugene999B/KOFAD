@@ -261,6 +261,7 @@
   const paystackMomoPhone = document.querySelector("#paystack-momo-phone");
   const paystackMomoEmail = document.querySelector("#paystack-momo-email");
   const paystackMomoStatus = document.querySelector("#paystack-momo-status");
+  const momoCheckStatus = document.querySelector("#momo-check-status");
   const completeButton = document.querySelector("#complete");
   const completeSaleHint = document.querySelector("#complete-sale-hint");
   const paystackMomoReady = root.dataset.paystackPosMomoReady === "true";
@@ -1261,7 +1262,7 @@
     }
     if (completeButton && !purchase) {
       completeButton.textContent = active && paystackMomoReady
-        ? (momoGateway === "hubtel" ? "Send Hubtel Direct MoMo Request" : "Send MoMo Approval Request")
+        ? (momoGateway === "hubtel" ? "Send Direct MoMo Request" : "Send MoMo Approval Request")
         : (paymentPlan?.value === "credit"
           ? "Record unpaid credit sale" : paymentPlan?.value === "part"
           ? "Record part-paid sale" : "Record sale");
@@ -1270,7 +1271,7 @@
       completeSaleHint.textContent = active && paystackMomoReady
         ? (momoGateway === "hubtel"
           ? "Confirm the wallet name first, then KOFAD sends a direct Mobile Money prompt and posts the sale after verified payment."
-          : "KOFAD verifies the MoMo deposit with Paystack before recording the sale and any remaining customer debt. The receipt shows paid and balance due.")
+          : "KOFAD records the sale only after the Mobile Money payment is verified. Any unpaid balance must belong to an identified customer.")
         : (paymentPlan?.value === "credit"
           ? "Record an unpaid credit invoice only. To request instalment authorization, open that invoice and choose Set up Direct Debit."
           : "Recording a genuine sale creates its sales invoice. It does not grant permission to debit a wallet.");
@@ -1599,7 +1600,14 @@
     };
   }
 
+  function updateMomoStatusAction() {
+    if (!momoCheckStatus) return;
+    momoCheckStatus.classList.toggle("hidden", !momoReference);
+    momoCheckStatus.disabled = !momoReference;
+  }
+
   function setMomoStatus(message, tone = "subtle") {
+    updateMomoStatusAction();
     if (!paystackMomoStatus) return;
     paystackMomoStatus.textContent = message || "";
     paystackMomoStatus.classList.toggle("error", tone === "error");
@@ -1650,6 +1658,10 @@
       // Keep a provider-requested one-time code available while the sale is locked.
       // No other cart or payment details can be changed until verification finishes.
       if (control.closest("#paystack-momo-challenge")) return;
+      if (control === momoCheckStatus) {
+        control.disabled = !momoReference;
+        return;
+      }
       control.disabled = locked;
     });
     if (!locked) {
@@ -1719,6 +1731,14 @@
       momoPollTimer = setTimeout(() => pollMomoPayment({immediate: true}), 10000);
     }
   }
+
+  momoCheckStatus?.addEventListener("click", async () => {
+    if (!momoReference || momoCheckStatus.disabled) return;
+    momoCheckStatus.disabled = true;
+    setMomoStatus("Checking the original payment request…");
+    try { await pollMomoPayment({immediate: true}); }
+    finally { updateMomoStatusAction(); }
+  });
 
   async function startPaystackMomo() {
     if (!directMomoSelected() || !paystackMomoReady) return false;
@@ -2190,14 +2210,15 @@
     openPayment();
     if (momoReference) {
       syncPaystackMomoPanel();
-      setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
+      lockCheckoutForMomo(true);
+      setMomoStatus("Restored pending MoMo request. KOFAD is checking payment confirmation.");
       pollMomoPayment({immediate: true});
     } else {
       document.querySelector("#complete").disabled = false;
       fail("A checkout was interrupted. Review the unchanged checkout and click Record sale to recover the original request (do not post a second sale).");
     }
   } else if (momoReference) {
-    setMomoStatus("Restored pending MoMo payment. KOFAD is checking Paystack automatically.");
+    setMomoStatus("Restored pending MoMo request. KOFAD is checking payment confirmation.");
     lockCheckoutForMomo(true);
     pollMomoPayment({immediate: true});
   }
