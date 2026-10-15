@@ -13,7 +13,7 @@ class PosDirectDebitEntryTests(MarketFixtures):
         session["branch"] = self.branch.pk
         session.save()
 
-    def test_credit_sale_shows_schedule_without_initiating_hubtel(self):
+    def test_sale_page_offers_separate_invoice_authorization_not_inline_prompt(self):
         self.login_staff()
         OnlineDebtSettings.objects.create(
             branch=self.branch, plan_creation_enabled=True,
@@ -21,33 +21,31 @@ class PosDirectDebitEntryTests(MarketFixtures):
         )
         page = self.client.get("/sales/new/")
         self.assertEqual(page.status_code, 200)
-        self.assertContains(page, 'id="credit-repayment-mode"')
-        self.assertContains(page, 'id="credit-direct-phone"')
-        self.assertContains(page, 'id="credit-direct-end-date"')
-        self.assertNotContains(page, 'id="credit-direct-count"')
-        self.assertContains(page, 'id="credit-direct-date"')
-        self.assertContains(page, 'id="credit-direct-preview"')
-        self.assertNotContains(page, 'id="credit-direct-installment"')
-        self.assertContains(page, 'value="mtn-gh-direct-debit"')
-        self.assertContains(page, 'value="weekly"')
-        self.assertContains(page, 'id="sale-debit-authorization"')
-        self.assertContains(page, 'name="source_document_id"')
-        self.assertContains(page, 'name="final_due_date"')
-        self.assertContains(page, 'id="credit-direct-name"')
+        self.assertContains(page, "Record sale")
+        self.assertContains(page, "Set up Direct Debit for this unpaid invoice")
+        self.assertContains(page, 'id="sale-direct-debit-link"')
+        self.assertContains(page, 'href="/debts/"')
+        for old in ('id="credit-repayment-mode"', 'id="credit-direct-phone"',
+                    'id="credit-direct-end-date"', 'id="credit-direct-date"',
+                    'id="credit-direct-preview"', 'id="credit-direct-installment"',
+                    'id="sale-debit-authorization"'):
+            self.assertNotContains(page, old)
         self.assertNotContains(page, "Hubtel Direct Mobile Money")
         self.assertNotContains(page, "COUNTER SALES")
         self.assertNotContains(page, 'class="single-location"')
 
-    def test_paused_new_mandates_display_settings_not_live_debit_fields(self):
+    def test_paused_new_mandates_keep_sale_checkout_simple_and_independent(self):
         self.login_staff()
         OnlineDebtSettings.objects.create(
             branch=self.branch, plan_creation_enabled=False,
         )
         page = self.client.get("/sales/new/")
         self.assertEqual(page.status_code, 200)
-        self.assertContains(page, "Online Debt Settings")
+        self.assertContains(page, "Manage Direct Debit")
+        self.assertContains(page, "Record sale")
         self.assertNotContains(page, 'id="credit-direct-phone"')
-        self.assertContains(page, 'id="credit-repayment-mode"')
+        self.assertNotContains(page, 'id="credit-repayment-mode"')
+        self.assertNotContains(page, 'id="sale-debit-authorization"')
 
     def test_one_branch_hides_location_chrome_but_keeps_page_accessible(self):
         self.login_staff()
