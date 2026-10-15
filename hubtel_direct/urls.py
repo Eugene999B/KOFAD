@@ -34,6 +34,7 @@ urlpatterns = [
     path("market/orders/<uuid:order_id>/hubtel-direct/", views.collect, name="hubtel_direct_collect"),
     path("market/orders/<uuid:order_id>/hubtel-direct/verify-phone/", views.verify_registered_phone, name="hubtel_direct_verify_phone"),
     path("market/orders/<uuid:order_id>/hubtel-direct/status/", views.collect_status, name="hubtel_direct_collect_status"),
+    path("market/orders/<uuid:order_id>/payment/verification/", views.collection_verification, name="hubtel_direct_collection_verification"),
     path("market/payments/hubtel-direct/callback/", views.callback, name="hubtel_direct_callback"),
     path("finance/hubtel-direct/", views.finance_dashboard, name="hubtel_direct_finance"),
     path("finance/hubtel-direct/verify-beneficiary/", views.recipient_name, name="hubtel_direct_recipient_name"),
