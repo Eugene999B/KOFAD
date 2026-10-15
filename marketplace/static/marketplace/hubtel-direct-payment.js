@@ -50,11 +50,16 @@
     phoneInput.addEventListener('input', reset);
     channelInput.addEventListener('change', reset);
     async function post(url, payload) {
-      const response = await fetch(url, {
-        method: 'POST', credentials: 'same-origin', redirect: 'error',
-        headers: {'X-CSRFToken': token, 'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: JSON.stringify(payload),
-      });
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 20000);
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST', credentials: 'same-origin', redirect: 'error',
+          headers: {'X-CSRFToken': token, 'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: JSON.stringify(payload), signal: controller.signal,
+        });
+      } finally { clearTimeout(deadline); }
       const data = await response.json();
       if (!response.ok) {
         const error = new Error(data.error || 'The request could not be completed.');
