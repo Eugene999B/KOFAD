@@ -125,6 +125,24 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.assertEqual(Payment.objects.filter(document__kind="sale", method="momo").count(), 1)
 
     @patch("hubtel_direct.client.requests.post")
+    def test_direct_receive_has_separate_read_only_verification_page(self, post):
+        post.side_effect = self.accepted
+        key, state = self.start()
+        self.authenticate_client()
+        url = "/payments/momo/" + key.hex + "/"
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Secure payment")
+        self.assertContains(page, 'data-kpay-mode="payment"')
+        self.assertContains(page, key.hex)
+        self.assertNotContains(page, "Send Hubtel Direct")
+        status = self.client.get(url + "?format=json")
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(status.json()["status"], "pending")
+        self.assertFalse(status.json()["paid"])
+        post.assert_called_once()
+
+    @patch("hubtel_direct.client.requests.post")
     def test_duplicate_submit_idempotency_and_uncertain_outcome(self, post):
         post.side_effect = self.accepted
         key, _ = self.start()
