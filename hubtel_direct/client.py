@@ -215,6 +215,10 @@ def submit(tx):
     except (ValueError, TypeError):
         log.warning("Hubtel direct submit malformed-response kind=%s ref=%s http=%s",
                     tx.kind, reference_tag, response.status_code)
+        # Hubtel's IP allowlist or authentication middleware can return HTML
+        # rather than JSON on a definitive 401/403 refusal.
+        if response.status_code in {400, 401, 403, 404, 422}:
+            raise ProviderRejected(str(response.status_code))
         raise SubmissionUnknown("Hubtel returned no verifiable response; check the original reference.")
     if not isinstance(body, dict):
         raise SubmissionUnknown("Hubtel response could not be verified.")
