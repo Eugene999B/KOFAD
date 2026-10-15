@@ -8,13 +8,13 @@
 {% block content %}
 <main class="payment-workspace">
   <header class="payment-top">
-    <div><p class="eyebrow">KOFAD / FINANCE</p><h1>Send money</h1><p>Verify the recipient. Submit the transfer. Track the result.</p></div>
+    <div><p class="eyebrow">KOFAD / FINANCE</p><h1>Send money</h1><p>Verify the recipient, then request a transfer.</p></div>
     <a class="button secondary" href="/debts/">Customer repayments</a>
   </header>
   {% if wallet_enabled or bank_enabled %}
   <section class="panel payment-panel">
-    <h2>New transfer</h2>
-    <form data-direct-payout-request autocomplete="off">{% csrf_token %}
+    <h2>Direct transfer request</h2>
+    <form data-direct-payout-request autocomplete="off" novalidate>{% csrf_token %}
       <div class="payment-grid">
         <label>Send to<select name="kind" required>{% if wallet_enabled %}<option value="send_momo">Mobile Money</option>{% endif %}{% if bank_enabled %}<option value="send_bank">Bank account</option>{% endif %}</select></label>
         <label data-momo-network>Network<select name="channel"><option value="mtn-gh">MTN</option><option value="vodafone-gh">Telecel</option><option value="tigo-gh">AirtelTigo</option></select></label>
@@ -33,8 +33,8 @@
         <label>Reason<input name="purpose" minlength="6" maxlength="180" required placeholder="Supplier invoice or payroll reference"></label>
       </div>
       <label class="payment-check"><input type="checkbox" data-recipient-confirm required disabled> I have checked the verified name and amount.</label>
-      <button class="button" type="submit" disabled data-submit-transfer>Submit for approval</button>
-      <p class="payment-hint">A different authorized approver must release this transfer. Submission is not confirmation of payment.</p>
+      <button class="button" type="submit" data-submit-transfer aria-disabled="true">Request transfer approval</button>
+      <p class="payment-hint">A second authorized person approves the transfer. Money is not sent by submitting this form.</p>
       <p data-direct-payout-message role="status" aria-live="polite"></p>
     </form>
   </section>
