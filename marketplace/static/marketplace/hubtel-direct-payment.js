@@ -19,11 +19,16 @@
     const verifiedMessage = form?.querySelector('[data-direct-verified]');
     const message = form?.querySelector('[data-hubtel-direct-message]');
     const payButton = form?.querySelector('[data-direct-pay]');
+    const nameReview = form?.querySelector('[data-direct-name-review]');
+    const registeredName = form?.querySelector('[data-direct-registered-name]');
+    const confirmName = form?.querySelector('[data-direct-name-confirm]');
     const token = form?.querySelector('[name=csrfmiddlewaretoken]')?.value;
     const order = card.dataset.orderId;
     if (!order || !token || !phoneInput || !channelInput || !message) continue;
     const base = '/market/orders/' + encodeURIComponent(order) + '/hubtel-direct/';
     let verifiedPhone = '';
+    let verifiedName = '';
+    let verifiedChannel = '';
     let busy = false;
     let generation = 0;
     function selectedPhone() { return normalizePhone(phoneInput.value); }
@@ -31,9 +36,14 @@
     function reset() {
       generation++;
       verifiedPhone = '';
+      verifiedName = '';
+      verifiedChannel = '';
+      if (nameReview) nameReview.hidden = true;
+      if (registeredName) registeredName.textContent = '';
+      if (confirmName) confirmName.checked = false;
       verifyPanel.hidden = true;
       verifiedMessage.hidden = true;
-      payButton.disabled = false;
+      payButton.disabled = true;
       notify('');
     }
     phoneInput.addEventListener('input', reset);
