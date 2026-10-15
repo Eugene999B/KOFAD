@@ -104,6 +104,25 @@ class DirectWorkflowTests(MarketFixtures):
         self.assertEqual(payload["PrimaryCallbackURL"], "https://market.kofadimpex.com/market/payments/hubtel-direct/callback/")
         self.assertEqual(MarketPaymentAttempt.objects.filter(reference=first.client_reference).count(), 1)
 
+    @patch("hubtel_direct.client.requests.post")
+    def test_customer_direct_receive_verification_is_private_and_read_only(self, post):
+        post.side_effect = self.accepted
+        order = self.order()
+        tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
+        url = "/market/orders/" + str(order.pk) + "/payment/verification/"
+        self.assertEqual(self.client.get(url).status_code, 403)
+        session = self.client.session
+        session["market_customer_id"] = str(self.customer.pk)
+        session.save()
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'data-kpay-mode="payment"')
+        self.assertContains(page, tx.client_reference)
+        state = self.client.get(url + "?format=json")
+        self.assertEqual(state.json()["status"], "pending")
+        self.assertFalse(state.json()["paid"])
+        post.assert_called_once()
+
     @patch("hubtel_direct.client.requests.post", side_effect=requests.Timeout())
     def test_lost_response_never_resends(self, post):
         order = self.order()
