@@ -337,7 +337,7 @@ def collection_verification(request, order_id):
             "Payment independently confirmed and recorded."
             if paid else "This payment needs KOFAD review. Do not send another request."
             if review else "Payment was not completed. No payment was recorded."
-            if status == "failed" else "Approve the original Mobile Money request on your phone."
+            if status == "failed" else "Check your wallet phone for the approval request. An accepted API request does not confirm that a network prompt was delivered. Do not pay twice."
         ),
     }
     if request.GET.get("format") == "json":
