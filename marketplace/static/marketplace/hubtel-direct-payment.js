@@ -138,8 +138,8 @@
         }
         const data = await post(base, {phone, channel, customer_authorized: true});
         if (data.reference) {
-          notify('Payment request sent. Approve only on your own mobile network prompt; do not request another charge.');
-          window.location.reload();
+          // A separate status page tracks the persisted request, not another charge.
+          window.location.assign('/market/orders/' + encodeURIComponent(order) + '/payment/verification/');
         }
       });
     });
