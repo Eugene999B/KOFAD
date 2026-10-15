@@ -1,4 +1,4 @@
-{% extends "marketplace/base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market-payment-audit.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}"><script defer src="{% static 'marketplace/payment-choice.js' %}"></script><script defer src="{% static 'marketplace/payment-progress.js' %}"></script>{% endblock %}{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/select-affordances.css' %}">{% endblock %}
+{% extends "marketplace/base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market-payment-audit.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}"><script defer src="{% static 'marketplace/payment-progress.js' %}"></script>{% endblock %}{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/select-affordances.css' %}">{% endblock %}
 {% block content %}
 <section class="order-v2-page">
 <nav class="commerce-breadcrumb"><a href="/market/account/">My KOFAD</a><span>›</span><a href="/market/orders/">Orders</a><span>›</span><strong>{{ order.customer_reference }}</strong></nav>
@@ -39,15 +39,20 @@
 </form>
 <p class="company-fineprint">Only approve a Mobile Money prompt you recognise. Never enter your MoMo PIN on this website.</p>
 {% elif payment_waiting %}
-<h2>Waiting for payment confirmation</h2><p data-payment-progress-message role="status" aria-live="polite">{% if payment_attempt.provider_message %}{{ payment_attempt.provider_message }}{% else %}Complete approval on the payment page or your phone.{% endif %} Your order will update automatically after payment is confirmed. If money has been deducted, please do not pay again.</p>
-{% elif payment_available %}
-<h2>Complete payment</h2><p>Pay by card using secure checkout, or select Mobile Money for a direct approval prompt on your phone. Your order updates only after verified payment.</p>
+<h2>Payment verification in progress</h2><p data-payment-progress-message role="status" aria-live="polite">Your original payment request is being verified. Approve only on your own phone. If money was deducted, do not send another request.</p>
+{% if payment_attempt.provider == "hubtel_direct" %}
+<a class="market-button primary wide" href="{% url 'hubtel_direct_collection_verification' order.pk %}">View payment verification →</a>
 {% else %}
-{% if hubtel_direct_available %}<h2>Direct Mobile Money payment</h2><p>Use the secure Mobile Money option below. Your registered phone must be verified before a payment request can be sent.</p>{% else %}<h2>Payment is not open yet</h2><p>This order is saved. Online payments are awaiting final testing. You have not been charged by saving this order.</p>{% endif %}
+<a class="market-button primary wide" href="{% url 'market_payment_verification' order.pk %}">View original payment status →</a>
+{% endif %}
+{% elif hubtel_direct_available %}
+<h2>Pay with Direct Mobile Money</h2><p>Verify your wallet's registered name. KOFAD sends a direct request to your phone—no external checkout page.</p>
+{% else %}
+<h2>Direct Mobile Money is unavailable</h2><p>Your order is saved. No payment has been requested. Contact KOFAD for help.</p>
 {% endif %}
 {% if not momo_phone_verification and payment_waiting and payment_attempt.verification_summary.charge_status == "send_otp" %}<form method="post" action="/market/orders/{{ order.pk }}/payment-otp/">{% csrf_token %}<label for="payment-otp">One-time payment code</label><input id="payment-otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4,8}" minlength="4" maxlength="8" required><p>Use the code sent for this payment. Never enter your Mobile Money PIN.</p><button class="market-button primary wide">Verify payment code</button></form>{% endif %}
 {% if hubtel_direct_available and not payment_waiting and not momo_phone_verification and order.status == 'awaiting_payment' %}{% include "marketplace/partials/hubtel_direct_payment.html" %}{% endif %}
-{% if not momo_phone_verification and payment_available and not payment_waiting or payment_attempt.authorization_url %}<form method="post" action="/market/orders/{{ order.pk }}/pay/">{% csrf_token %}{% if not payment_waiting %}{% include "marketplace/payment_choices.html" %}{% endif %}<button class="market-button primary wide">{% if payment_waiting %}Continue payment{% else %}Pay GHS {{ order.total|floatformat:2 }}{% endif %} <span>→</span></button></form>{% endif %}
+
 {% if not payment_waiting and not momo_phone_verification %}<form method="post" action="/market/orders/{{ order.pk }}/cancel/" class="cancel-order-form">{% csrf_token %}<button>Cancel unpaid order</button></form>{% endif %}
 </section>
 {% elif order.payment_status == 'paid' %}<section class="payment-done-card order-payment-done"><span>✓</span><div><strong>Payment confirmed</strong>{% if order.confirmed_reference %}<small>{{ order.confirmed_reference }}</small>{% endif %}</div></section>{% endif %}
