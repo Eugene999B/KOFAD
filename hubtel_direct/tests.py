@@ -1,6 +1,7 @@
 """Offline provider contract and no-duplicate-money regression tests."""
 from datetime import timedelta
 import uuid
+from types import SimpleNamespace
 from pathlib import Path
 from decimal import Decimal
 from unittest.mock import Mock, patch
@@ -58,6 +59,56 @@ class ContractTests(SimpleTestCase):
         self.assertIn("form.reportValidity()", script)
         self.assertIn("if (attempted) return", script)
         self.assertNotIn("submitButton.disabled = true", script)
+
+    @override_settings(**READY)
+    @patch("hubtel_direct.client.requests.post")
+    def test_receive_definitive_denial_without_data_is_not_a_pending_prompt(self, post):
+        tx = SimpleNamespace(
+            kind="receive", channel="mtn-gh", bank_code="",
+            recipient_name="Verified Wallet Owner", amount=Decimal("1.00"),
+            client_reference="test-ref-unique-2026",
+            destination_encrypted=client.seal("233241234567"),
+        )
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "ResponseCode": "4101", "Message": "scope denied",
+        })
+        with self.assertRaises(client.ProviderRejected) as denied:
+            client.submit(tx)
+        self.assertEqual(denied.exception.code, "4101")
+        post.assert_called_once()
+        post.reset_mock()
+        post.return_value = Mock(status_code=403, json=lambda: {
+            "Message": "IP not allowlisted",
+        })
+        with self.assertRaises(client.ProviderRejected) as denied:
+            client.submit(tx)
+        self.assertEqual(denied.exception.code, "403")
+        post.assert_called_once()
+        post.reset_mock()
+        post.return_value = Mock(status_code=403, json=Mock(side_effect=ValueError("HTML from gateway")))
+        with self.assertRaises(client.ProviderRejected) as denied:
+            client.submit(tx)
+        self.assertEqual(denied.exception.code, "403")
+        post.assert_called_once()
+
+    @override_settings(**READY)
+    @patch("hubtel_direct.client.requests.post")
+    def test_hubtel_accepted_receive_is_pending_not_a_confirmed_payment(self, post):
+        tx = SimpleNamespace(
+            kind="receive", channel="mtn-gh", bank_code="",
+            recipient_name="Verified Wallet Owner", amount=Decimal("1.00"),
+            client_reference="test-ref-unique-2026",
+            destination_encrypted=client.seal("233241234567"),
+        )
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "ResponseCode": "0001", "Data": {
+                "ClientReference": tx.client_reference, "TransactionId": "hubtel-pending-123",
+            },
+        })
+        code, provider_id = client.submit(tx)
+        self.assertEqual(code, "0001")
+        self.assertEqual(provider_id, "hubtel-pending-123")
+        post.assert_called_once()
 
     @override_settings(**READY)
     def test_destination_round_trip_is_encrypted(self):

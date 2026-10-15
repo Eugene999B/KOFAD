@@ -4,6 +4,8 @@ Sensitive actions are gated and use the whitelisted WEB service only.
 A client-side callback is NEVER sufficient to create authorization or settle debt.
 """
 import re
+import hashlib
+import logging
 import uuid
 
 import requests
@@ -11,6 +13,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 
 from . import client
+
+log = logging.getLogger(__name__)
 
 PREAPPROVAL_ORIGIN = "https://preapproval.hubtel.com"
 REFUND_ORIGIN = "https://refund-api.hubtel.com"
@@ -110,6 +114,8 @@ def _request(method, url, *, payload=None):
                 except ValueError:
                     rejected = {}
                 code = str(client._field(rejected, "responseCode") or client._field(rejected, "code") or "")
+                log.warning("Hubtel preapproval/API request definitively rejected http=%s code=%s",
+                            response.status_code, code[:20] or "absent")
                 raise ProviderDenied(_preapproval_rejection(code, response.status_code))
             raise client.StatusUnconfirmed("Hubtel request outcome is unconfirmed; do not submit a duplicate request.")
         body = response.json()
@@ -139,6 +145,8 @@ def initiate_preapproval(*, phone, channel, client_reference, callback_url=None)
         "channel": channel, "callbackUrl": callback_url or callback(),
     })
     code = str(client._field(body, "responseCode") or client._field(body, "code") or "")
+    log.info("Hubtel preapproval initiation response ref=%s code=%s",
+             hashlib.sha256(client_reference.encode()).hexdigest()[:12], code[:20] or "absent")
     if code != "2000":
         raise ProviderDenied(_preapproval_rejection(code))
     data = _record(body)

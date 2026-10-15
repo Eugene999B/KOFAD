@@ -73,7 +73,7 @@ def create_collection(customer, order_id, network, momo_phone):
         MarketPaymentAttempt.objects.create(
             order=order, provider="hubtel_direct", reference=tx.client_reference,
             amount=tx.amount, currency="GHS", status="initializing",
-            provider_message="Waiting for Mobile Money approval.",
+            provider_message="Awaiting a verified wallet-network response.",
             next_check_at=tx.next_check_at,
             verification_summary={"flow": "hubtel_direct", "network": network},
         )
@@ -202,7 +202,7 @@ def dispatch_once(tx):
         ).update(
             status=status, provider_message=(
                 "Hubtel request outcome uncertain: do not start another payment."
-                if status == "submission_unknown" else "Waiting for Hubtel verification."
+                if status == "submission_unknown" else "Request accepted by the payment network; awaiting wallet approval and final verification."
                 if status == "pending" else "Hubtel rejected this request."
             ),
         )

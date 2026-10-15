@@ -74,6 +74,7 @@ def response_state(held):
         "provider": "hubtel",
         "status": state.get("status", "pending"),
         "message": state.get("message", ""),
+        "network_response_code": str(state.get("provider_code") or "")[:20],
         "display_text": state.get("display_text", ""),
         "authorization_url": state.get("authorization_url", ""),
         "waiting": state.get("status") in PENDING,
@@ -214,7 +215,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
     state.update(
         status="pending", provider_code=response_code, provider_transaction_id=transaction_id,
         authorization_url="",
-        message="Direct Mobile Money prompt sent. Ask the customer to approve it on their own phone.",
+        message="The payment network accepted this request. Ask the customer to check their phone; prompt delivery and payment are not yet confirmed.",
         display_text="Waiting for payment confirmation. Do not charge again or ask for a MoMo PIN.",
         next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
     )

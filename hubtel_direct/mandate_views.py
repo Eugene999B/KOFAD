@@ -193,16 +193,33 @@ def staff_request_prompt(request, mandate_id):
     )
     mandate = get_object_or_404(DebtMandate, pk=mandate_id, branch=branch)
     try:
-        if request.POST.get("customer_requested_prompt") != "yes":
-            raise ValidationError("Confirm the customer asked for this Hubtel approval prompt.")
+        if request.POST.get("customer_requested_prompt") != "yes" or request.POST.get("customer_reviewed_schedule") != "yes":
+            raise ValidationError("Customer consent and review of the exact repayment schedule are required.")
         if mandate.status != "draft":
-            raise ValidationError("This wallet authorization has already been requested.")
+            raise ValidationError("This wallet authorization has already been requested. Check the original status.")
+        # Do not spend a wallet-name lookup or imply a prompt is available when
+        # the merchant's independent preapproval service is disabled.
+        debit_api.gate("preapproval")
+        if mandates.mandate_outstanding(mandate) <= 0:
+            raise ValidationError("There is no unpaid amount to authorize.")
+        # A wallet-name inquiry is NOT customer authorization. It protects
+        # against directing a preapproval to an unexpected wallet owner.
+        from . import verification
+        verified = verification.inquiry(
+            mandates.mandate_phone(mandate),
+            mandate.channel.replace("-direct-debit", ""),
+        )
+        customer_confirmation = " ".join(
+            str(request.POST.get("confirmed_wallet_name") or "").split()
+        ).casefold()
+        if not customer_confirmation or customer_confirmation != " ".join(verified["wallet_name"].split()).casefold():
+            raise ValidationError("The wallet holder name was not confirmed. No approval request was sent.")
         result = mandates.prepare_customer_authorization(mandate)
         if result["verification_type"] == "USSD":
-            messages.success(request, "Hubtel approval prompt sent to the customer's MoMo phone. Waiting for the customer to approve.")
+            messages.info(request, "The payment network accepted the wallet authorization request. Ask the customer to check their phone. Delivery is not yet confirmed.")
         else:
-            messages.success(request, "Hubtel OTP preapproval initiated. Ask the customer to enter the Hubtel code on their secure approval page.")
-    except (ValidationError, client.StatusUnconfirmed, client.SubmissionUnknown) as exc:
+            messages.info(request, "The network accepted an OTP authorization request. The customer must enter the network's code on their own approval page.")
+    except (ValidationError, client.StatusUnconfirmed, client.SubmissionUnknown, debit_api.ProviderDenied) as exc:
         messages.error(request, str(exc))
     return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
 

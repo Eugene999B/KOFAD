@@ -48,7 +48,12 @@
    Sale total: GHS {{ payment.sale_total }}{% if payment.balance_due != "0.00" %}<p>Remaining balance: GHS {{ payment.balance_due }}</p>{% endif %}
    <p>Cashier: {{ payment.cashier }}</p>
    <p>Initiated: {{ payment.created_at|date:"d M Y, H:i" }}</p>
+   {% if payment.is_direct %}
+   <p>Network request: {% if payment.network_response_code == "0001" %}Accepted, awaiting the wallet/network result{% elif payment.network_response_code == "0000" %}Acknowledged, awaiting independent payment verification{% elif payment.network_response_code %}Rejected or needs review ({{ payment.network_response_code }}){% else %}Not confirmed — do not request a duplicate{% endif %}</p>
+   <p>Network transaction reference: {{ payment.transaction_id|default:"Not confirmed" }}</p>
+   {% else %}
    <p>Network transaction: {{ payment.transaction_id|default:"Awaiting confirmation" }}</p>
+   {% endif %}
    {% if payment.attention %}<p>This payment needs manager review. Do not create another request for the same sale.</p>{% endif %}
   </div>
  </details>

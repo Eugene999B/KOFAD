@@ -10,7 +10,7 @@
   <h1 data-kpay-title>Customer approval</h1>
   <p class="kpay-description" data-kpay-wait>Waiting for the customer's wallet authorization. Do not send a second approval request.</p>
   <p class="kpay-message" data-kpay-detail role="status" aria-live="polite">
-    {% if mandate.status == "draft" %}Not requested — the customer must start approval on their own secure page.
+    {% if mandate.status == "draft" %}No network authorization has been sent yet. Customer can start on their approval page or staff can request it here after the customer confirms the schedule and wallet.
     {% elif mandate.status == "pending" %}The customer must approve on their phone.
     {% elif mandate.status == "approved" %}The customer's wallet was authorized. No money has been collected.
     {% else %}{{ mandate.get_status_display }}{% endif %}
@@ -34,6 +34,29 @@
   <form method="post" action="{% url 'hubtel_debt_staff_send_agreement' mandate.pk %}">
     {% csrf_token %}<button class="button secondary" type="submit">Send approval link by SMS</button>
   </form>
+  {% if mandate.status == "draft" %}
+  <form method="post" action="{% url 'hubtel_debt_staff_prompt' mandate.pk %}" class="kpay-otp" style="max-width:560px">
+   {% csrf_token %}
+   <p><strong>Request wallet authorization</strong></p>
+   <p class="kpay-hint">The customer must confirm the registered wallet name and agree to the full repayment schedule. This requests one real network approval. No money is collected by this action.</p>
+   {% if preapproval_active %}
+   <label>Confirmed wallet holder name
+    <input type="text" name="confirmed_wallet_name" maxlength="140" autocomplete="off" required placeholder="Name confirmed with the wallet owner">
+   </label>
+   <label style="display:flex;align-items:flex-start;gap:9px;margin:8px 0">
+    <input type="checkbox" name="customer_reviewed_schedule" value="yes" required style="width:auto;min-height:0">
+    <span>Customer reviewed the exact repayment dates and amounts.</span>
+   </label>
+   <label style="display:flex;align-items:flex-start;gap:9px;margin:8px 0">
+    <input type="checkbox" name="customer_requested_prompt" value="yes" required style="width:auto;min-height:0">
+    <span>Customer expressly requested a wallet-network approval prompt.</span>
+   </label>
+   <button class="button" type="submit">Request wallet approval</button>
+   {% else %}
+   <p class="kpay-hint" role="alert">Network preapproval is not configured. No approval prompt was sent. Ask management to check the merchant API permissions and KOFAD Web whitelist.</p>
+   {% endif %}
+  </form>
+  {% endif %}
   {% if mandate.status == "pending" %}
   <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
     {% csrf_token %}<button class="button secondary" type="submit">Verify with payment network</button>
