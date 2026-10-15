@@ -116,7 +116,7 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         self.mature(key)
         get.return_value = Mock(status_code=200, json=lambda: {
             "responseCode": "0000",
-            "data": {"clientReference": key.hex, "transactionId": "txn-test-walkin",
+            "data": {"clientReference": key.hex, "transactionId": "txn-test-123",
                      "status": "Paid", "amount": 50.0, "paymentMethod": "mobilemoney"},
         })
         confirmed = pos_hubtel.reconcile(key.hex, force=True)
