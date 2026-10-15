@@ -175,6 +175,35 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertContains(response, "Verify number &amp; name")
         self.assertNotContains(response, "Hubtel, not KOFAD SMS")
 
+    def test_customer_must_verify_wallet_phone_and_provider_name_first(self):
+        from django.urls import reverse
+        plan = mandates.create_plan(
+            self.user, self.branch, party_id=self.customer.pk,
+            phone="0241234567", channel="mtn-gh-direct-debit", frequency="weekly",
+            first_due_date=timezone.localdate() + timedelta(days=7), installment_count="3",
+        )
+        url = reverse("hubtel_debt_authorize_action", args=[plan.pk])
+        with patch("hubtel_direct.mandates.prepare_customer_authorization") as provider:
+            response = self.client.post(url, {"action": "start", "accepted_terms": "yes"})
+            self.assertEqual(response.status_code, 302)
+            provider.assert_not_called()
+        with patch("hubtel_direct.mandate_views.sms_service.send_otp") as otp:
+            response = self.client.post(url, {"action": "wallet_code_send"})
+            self.assertEqual(response.status_code, 302)
+            otp.assert_called_once()
+        with patch("hubtel_direct.mandate_views.sms_service.verify_otp") as otp_check, \
+             patch("hubtel_direct.verification.inquiry", return_value={
+                "phone": "233241234567", "channel": "mtn-gh",
+                "wallet_name": "Test Wallet Holder", "registered": True,
+             }) as verified:
+            response = self.client.post(url, {"action": "wallet_code_check", "code": "123456"})
+            self.assertEqual(response.status_code, 302)
+            otp_check.assert_called_once()
+            verified.assert_called_once()
+        page = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
+        self.assertContains(page, "Test Wallet Holder")
+        self.assertEqual(plan.status, "draft")
+
     def test_agreement_sms_is_disclosure_only_not_hubtel_authorization(self):
         from django.urls import reverse
         plan = mandates.create_plan(
