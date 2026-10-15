@@ -37,19 +37,19 @@ def inquiry(phone, channel):
         )
         if response.status_code in {401, 403}:
             raise ValidationError(
-                "Hubtel wallet verification is not authorized. Ask Hubtel to enable the verification API scope and IP access."
+                "Wallet-name verification is not enabled for this business account. Ask an administrator to review service access."
             )
         if not 200 <= response.status_code < 300:
-            raise ValidationError("Hubtel could not verify this wallet. No payment request was sent.")
+            raise ValidationError("Could not verify this wallet. No payment request was sent.")
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
-        raise ValidationError("Hubtel wallet verification is temporarily unavailable. No payment request was sent.") from exc
+        raise ValidationError("Wallet-name verification is temporarily unavailable. No payment request was sent.") from exc
     if not isinstance(body, dict):
-        raise ValidationError("Hubtel returned an invalid wallet verification response.")
+        raise ValidationError("The wallet verification service returned an invalid response.")
     code = str(client._field(body, "ResponseCode") or "")
     data = client._field(body, "Data")
     if code != "0000" or not isinstance(data, dict):
-        raise ValidationError("Hubtel could not confirm this Mobile Money wallet.")
+        raise ValidationError("The wallet verification service could not confirm this number.")
     registered = client._field(data, "IsRegistered")
     name = client._field(data, "Name")
     status = str(client._field(data, "Status") or "").strip().lower()
@@ -97,16 +97,16 @@ def bank_inquiry(bank_code, bank_number):
             allow_redirects=False,
         )
         if response.status_code in (401, 403):
-            raise ValidationError("Hubtel bank-name verification is not enabled for these credentials or whitelisted IP.")
+            raise ValidationError("Bank account verification is not enabled. Ask an administrator to review service access.")
         if not 200 <= response.status_code < 300:
-            raise ValidationError("Hubtel could not confirm this bank account.")
+            raise ValidationError("The bank verification service could not confirm this account.")
         body = response.json()
     except (requests.RequestException, ValueError) as exc:
         raise ValidationError("Bank verification is temporarily unavailable.") from exc
     if not isinstance(body, dict) or str(client._field(body, "responseCode")) != "0000":
-        raise ValidationError("Hubtel has not verified this bank account.")
+        raise ValidationError("The bank account could not be verified.")
     data = client._field(body, "data")
     name = client._field(data, "name")
     if not isinstance(name, str) or not 2 <= len(name.strip()) <= 140:
-        raise ValidationError("Hubtel has not returned a verified bank account name.")
+        raise ValidationError("The bank verification service did not return a registered account name.")
     return {"bank_code": bank_code, "account_suffix": number[-4:], "name": name.strip(), "verified": True}

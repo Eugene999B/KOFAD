@@ -39,7 +39,7 @@ def reference_from_key(request_key):
 
 def held_for(reference, *, lock=False):
     if not re.fullmatch(r"[0-9a-f]{32}", str(reference or "")):
-        raise ValidationError("Invalid Hubtel POS reference.")
+        raise ValidationError("Invalid Direct MoMo payment reference.")
     rows = HeldSale.objects.select_related("branch", "user")
     if lock:
         rows = rows.select_for_update()
@@ -112,14 +112,15 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
             raise ValidationError("This payment request could not be found.")
         return response_state(saved)
     if hubtel.selected_provider() != "hubtel":
-        raise ValidationError("Hubtel is not selected for cashier payments.")
+        raise ValidationError("Direct MoMo is not enabled for this cashier.")
     direct_client.require_enabled("receive")
     if customer_authorized is not True:
         raise ValidationError("Confirm the customer agreed to this Mobile Money payment request.")
 
     payload = copy.deepcopy(sale_payload)
-    if not payload.get("party") and len(str(payload.get("customer_name", "")).strip()) < 2:
-        raise ValidationError("Choose or enter the customer before requesting Mobile Money payment.")
+    # Full-pay walk-in sales do not require a named account: wallet
+    # verification identifies the payer, without creating a Party.
+    # A partial payment is still rejected by the exact-total check below.
     phone = normalize_ghana_phone(phone)
     network = {"mtn": "mtn-gh", "vod": "vodafone-gh", "atl": "tigo-gh"}.get(str(network), network)
     if network not in direct_client.CHANNELS:
@@ -158,7 +159,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
         "amount": str(total), "online_markup_percent": str(markup),
         "request_key": str(request_key),
         "authorization_url": "", "display_text": "",
-        "message": "Sending a direct Hubtel Mobile Money approval prompt.",
+        "message": "Sending a Direct MoMo payment request.",
         "created_at": now.timestamp(), "next_check_at": (now + timedelta(minutes=5)).timestamp(),
         "check_count": 0, "document_id": "",
     }
@@ -197,7 +198,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
     except direct_client.ProviderRejected as exc:
         state.update(
             status="failed", provider_code=exc.code,
-            message="Hubtel rejected the payment request (" + exc.code + "). No sale was posted.",
+            message="The payment network rejected this request (" + exc.code + "). No sale was recorded.",
             next_check_at=None,
         )
         save_state(held, state)
@@ -205,7 +206,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
     except (direct_client.SubmissionUnknown, ValidationError):
         state.update(
             status="submission_unknown",
-            message="Hubtel request outcome unknown. Do not send another prompt; KOFAD will check it.",
+            message="Request status unknown. Do not send another prompt; KOFAD will check it.",
             next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
         )
         save_state(held, state)
@@ -214,7 +215,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
         status="pending", provider_code=response_code, provider_transaction_id=transaction_id,
         authorization_url="",
         message="Direct Mobile Money prompt sent. Ask the customer to approve it on their own phone.",
-        display_text="Waiting for Hubtel confirmation. Do not charge again or ask for a MoMo PIN.",
+        display_text="Waiting for payment confirmation. Do not charge again or ask for a MoMo PIN.",
         next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
     )
     save_state(held, state)
@@ -226,7 +227,7 @@ def reconcile(reference, *, force=False):
     with transaction.atomic():
         held = held_for(reference, lock=True)
         if not held:
-            raise ValidationError("Unknown Hubtel POS payment.")
+            raise ValidationError("Direct MoMo payment request not found.")
         state = state_of(held)
         if state.get("status") == "success":
             return response_state(held)
@@ -257,7 +258,7 @@ def reconcile(reference, *, force=False):
         except direct_client.StatusUnconfirmed:
             return response_state(held_for(reference))
         except ValidationError:
-            mark_attention(reference, "Hubtel status information did not match this cashier sale. Manager review required.")
+            mark_attention(reference, "Payment status did not match this sale. Manager review is required.")
             return response_state(held_for(reference))
         if outcome == "failed":
             with transaction.atomic():
@@ -265,11 +266,11 @@ def reconcile(reference, *, force=False):
                 result = state_of(held)
                 if result.get("status") in PENDING:
                     result.update(status="failed", next_check_at=None,
-                                  message="Hubtel confirmed the Mobile Money request was unsuccessful.")
+                                  message="The Mobile Money request was unsuccessful.")
                     save_state(held, result)
             return response_state(held_for(reference))
         if outcome == "attention":
-            mark_attention(reference, "Hubtel reported a disputed payment. Manager review required.")
+            mark_attention(reference, "A disputed payment needs manager review.")
             return response_state(held_for(reference))
         if outcome != "success":
             return response_state(held_for(reference))
@@ -297,9 +298,9 @@ def reconcile(reference, *, force=False):
             or verified.get("clientReference") != reference
             or channel not in {"mobilemoney", "momo"}
         ):
-            raise ValidationError("Hubtel transaction details do not match this cashier sale.")
+            raise ValidationError("Payment details do not match this cashier sale.")
     except (TypeError, ValueError, InvalidOperation, ValidationError) as exc:
-        mark_attention(reference, "Hubtel confirmed a transaction but the amount or payment channel needs manager review.")
+        mark_attention(reference, "The amount or payment channel needs manager review.")
         raise ValidationError("Verified payment requires manager review.") from exc
 
     try:
@@ -325,7 +326,7 @@ def reconcile(reference, *, force=False):
             state.update(
                 status="success", document_id=str(doc.pk), verified_at=timezone.now().timestamp(),
                 transaction_id=str(verified["transactionId"])[:80], next_check_at=None,
-                message="Payment independently confirmed by Hubtel; sale posted.",
+                message="Payment independently confirmed; sale recorded.",
             )
             save_state(held, state)
             transaction.on_commit(lambda: pos_paystack._send_receipts(
@@ -374,7 +375,7 @@ def reconcile_due(limit=10, *, include_direct=False):
             continue
         reference = state.get("reference")
         if now - held.created_at >= timedelta(hours=72):
-            mark_attention(reference, "Hubtel has not supplied a final answer after 72 hours. Manager review required.")
+            mark_attention(reference, "This payment is unresolved after 72 hours. Manager review is required.")
             continue
         try:
             reconcile(reference)

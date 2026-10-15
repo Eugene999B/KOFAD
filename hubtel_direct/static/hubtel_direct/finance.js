@@ -3,6 +3,9 @@
   const form = document.querySelector('[data-direct-payout-request]');
   if (form) {
     let attempted = false;
+    // Submission is always clickable; an unmet verification requirement must
+    // explain itself instead of looking like a frozen button.
+    form.noValidate = true;
     const kind = form.querySelector('[name=kind]');
     const network = form.querySelector('[data-momo-network]');
     const bank = form.querySelector('[data-bank-choice]');
@@ -21,7 +24,7 @@
       verifiedSnapshot = '';
       if (nameInput) nameInput.value = '';
       if (confirmIdentity) { confirmIdentity.checked = false; confirmIdentity.disabled = true; }
-      if (submitButton) submitButton.disabled = true;
+      if (submitButton) submitButton.dataset.verificationReady = 'false';
       if (verifiedStatus) verifiedStatus.textContent = 'Not verified';
     };
     for (const input of [kind, form.elements.destination, form.elements.channel, form.elements.bank_code]) {
@@ -29,7 +32,7 @@
       if (input === form.elements.destination) input.addEventListener('input', invalidate);
     }
     confirmIdentity?.addEventListener('change', () => {
-      if (submitButton) submitButton.disabled = !(confirmIdentity.checked && verifiedSnapshot === identityKey());
+      if (submitButton) submitButton.dataset.verificationReady = String(confirmIdentity.checked && verifiedSnapshot === identityKey());
     });
     verifyButton?.addEventListener('click', async () => {
       invalidate();
@@ -41,9 +44,11 @@
       const payload = kind.value === 'send_bank'
         ? {kind:'bank', bank_code:form.elements.bank_code.value, account:destination}
         : {kind:'momo', phone:destination, channel:form.elements.channel.value};
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       try {
         const response = await fetch('/finance/hubtel-direct/verify-beneficiary/', {
-          method:'POST', credentials:'same-origin', redirect:'error',
+          method:'POST', credentials:'same-origin', redirect:'error', signal:controller.signal,
           headers:{'X-CSRFToken':form.elements.csrfmiddlewaretoken.value,
                    'Content-Type':'application/json'},
           body:JSON.stringify(payload),
@@ -59,8 +64,8 @@
         verifiedStatus.textContent = 'Verified: ' + data.registered_name + ' · ****' + data.destination_suffix;
         confirmIdentity.disabled = false;
       } catch (_) {
-        verifiedStatus.textContent = 'Verification unavailable. No transfer was submitted.';
-      } finally { verifyButton.disabled = false; }
+        verifiedStatus.textContent = 'Could not verify the account. Check the connection and try again. No transfer was submitted.';
+      } finally { clearTimeout(timeout); verifyButton.disabled = false; }
     });
     const update = () => {
       const isBank = kind.value === 'send_bank';
@@ -75,7 +80,12 @@
       event.preventDefault();
       if (attempted) return;
       if (!verifiedSnapshot || verifiedSnapshot !== identityKey() || !confirmIdentity?.checked) {
-        output.textContent = 'Verify the registered recipient name before submitting.';
+        output.textContent = 'First enter the recipient, tap Verify recipient, and confirm the name before requesting a transfer.';
+        verifyButton?.focus();
+        return;
+      }
+      if (!form.reportValidity()) {
+        output.textContent = 'Enter the amount and reason to continue.';
         return;
       }
       attempted = true;
@@ -107,7 +117,7 @@
         output.textContent = 'Saved for approval. Reference: ' + data.reference;
         location.reload();
       } catch (_) {
-        output.textContent = 'Request result unknown. Check the transfer history before creating a new request.';
+        output.textContent = 'Request status unknown. Check transfer history before trying again to prevent duplicates.';
       }
     });
   }

@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'pos.js' %}?v=20261015-recover-checkout"></script>{% endblock %}
+{% block head %}<script defer src="{% static 'pos.js' %}?v=20261015-walkin-momo-fix"></script>{% endblock %}
 {% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">{% if not purchase %}<link rel="stylesheet" href="{% static 'pos-simple-v3.css' %}">{% endif %}{% endblock %}
 {% block actions %}
 <div class="actions">
@@ -237,7 +237,7 @@
           {% if pos_momo_gateway == "paystack" %}
           <p class="hint"><a href="{% url 'pos_momo_payments' %}">View previous MoMo payments and receipts →</a></p>
           {% endif %}
-          {% if pos_momo_gateway != "hubtel" %}<p class="hint">No email? Paystack receives a unique processor-only address for this wallet. It is not saved as the customer's email; consented receipts still use KOFAD's SMS/WhatsApp options.</p>{% endif %}
+          {% if pos_momo_gateway != "hubtel" %}<p class="hint">Email is optional. An address used only to process this payment is not saved to the customer record. Receipts require separate consent.</p>{% endif %}
           {% if pos_momo_gateway == "hubtel" %}
           <div id="hubtel-wallet-review" class="hubtel-wallet-review">
             <button type="button" id="hubtel-wallet-verify" class="button secondary">Check wallet name</button>
@@ -258,10 +258,11 @@
             </label>
             <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
           </div>
-          {% if pos_momo_gateway == "paystack" %}<div id="momo-deposit-summary" class="momo-deposit-summary" aria-live="polite"><div><span>MoMo to collect now</span><strong id="momo-deposit-amount">GHS 0.00</strong></div><div><span>Balance to customer debt</span><strong id="momo-balance-amount">GHS 0.00</strong></div></div><p class="hint">Paystack cannot identify the wallet holder by name. Confirm the number directly with the customer. The MoMo PIN is entered only on their phone.</p>{% endif %}
-          <p id="paystack-momo-status" class="hint" role="status" aria-live="polite"></p>
+          {% if pos_momo_gateway == "paystack" %}<div id="momo-deposit-summary" class="momo-deposit-summary" aria-live="polite"><div><span>MoMo to collect now</span><strong id="momo-deposit-amount">GHS 0.00</strong></div><div><span>Balance to customer debt</span><strong id="momo-balance-amount">GHS 0.00</strong></div></div><p class="hint">Confirm the wallet number with the customer. Their MoMo PIN must only be entered on their own phone.</p>{% endif %}
+          <p id="paystack-momo-status" class="notice subtle" role="status" aria-live="polite"></p>
+           <button type="button" class="button secondary hidden" id="momo-check-status">Check payment status</button>
           {% else %}
-          <p>{{ pos_momo_gateway|title }} Mobile Money payment is not activated yet. Check gateway credentials and activation in Payment Settings.</p>
+          <p>Direct Mobile Money is not active. Ask an administrator to check the payment setup.</p>
           {% endif %}
         </div>
       </section>
