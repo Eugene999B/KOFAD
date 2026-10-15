@@ -299,7 +299,7 @@
     const generation = ++walletLookupGeneration;
     walletProof = null;
     walletVerify.disabled = true;
-    if (walletName) walletName.textContent = "Checking wallet name with Hubtel…";
+    if (walletName) walletName.textContent = "Checking registered wallet name…";
     try {
       const result = await api("/api/pos/hubtel/wallet-name/", {
         phone: selection.phone, channel: selection.channel
@@ -312,7 +312,7 @@
       if (walletName) walletName.textContent = result.name;
     } catch (err) {
       if (generation !== walletLookupGeneration) return;
-      if (walletName) walletName.textContent = "Hubtel name lookup unavailable. " + err.message;
+      if (walletName) walletName.textContent = "Wallet-name verification unavailable. " + err.message;
     } finally { walletVerify.disabled = false; }
   }
   walletVerify?.addEventListener("click", () => { void verifyWalletName(); });
