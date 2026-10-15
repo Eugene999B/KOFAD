@@ -1,0 +1,28 @@
+{% extends "marketplace/base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'kofad-payment-journey.css' %}">{% endblock %}
+{% block content %}
+<main class="kpay" data-kpay data-kpay-mode="payment" data-initial-state="{{ journey.status }}"
+  data-reload-on-change="true" data-status-url="?format=json">
+ <section class="kpay-card">
+  <p class="kpay-brand">KOFAD · Secure checkout</p>
+  <div class="kpay-visual" aria-hidden="true"><span class="kpay-ring"></span><span class="kpay-mark" data-kpay-mark>••</span></div>
+  <h1 data-kpay-title>Verifying payment</h1>
+  <p class="kpay-description" data-kpay-wait>The original payment is being verified. You can return to this screen without being charged again.</p>
+  <p class="kpay-message" data-kpay-detail role="status" aria-live="polite">{{ journey.message }}</p>
+  <div class="kpay-facts">
+    <div class="kpay-fact"><small>Amount</small><strong class="kpay-amount">GHS {{ attempt.amount|floatformat:2 }}</strong></div>
+    <div class="kpay-fact"><small>Order</small><strong>{{ order.customer_reference }}</strong></div>
+  </div>
+  <p class="kpay-reference">Payment reference: {{ journey.reference }}</p>
+  <div class="kpay-actions">
+    <button type="button" class="market-button ghost" data-kpay-check>Check latest status</button>
+    <a class="market-button ghost" href="{% url 'market_order' order.pk %}">Back to order</a>
+  </div>
+  <div data-kpay-receipt {% if not journey.paid %}hidden{% endif %}>
+    <div class="kpay-actions"><a class="market-button primary" href="{% url 'market_order' order.pk %}">View paid order</a></div>
+  </div>
+  <p class="kpay-secure">A payment is only confirmed when the payment service and KOFAD's records match. Never submit a duplicate payment while status is pending.</p>
+ </section>
+</main>
+<script defer src="{% static 'kofad-payment-journey.js' %}"></script>
+{% endblock %}

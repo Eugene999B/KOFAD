@@ -117,10 +117,10 @@ class AllInclusiveOnlinePricingTests(MarketFixtures):
         self.assertEqual(config.online_price_markup_percent, Decimal("1.950"))
         selected.assert_called()
 
-    def test_provider_configuration_update_does_not_erase_saved_percentage(self):
+    def test_retired_provider_switch_cannot_change_saved_percentage(self):
         self.staff_session()
         PaymentConfiguration.objects.create(provider="hubtel", online_price_markup_percent=Decimal("1.950"))
         self.client.post("/settings/online-payments/", {"provider": "paystack"})
         config = PaymentConfiguration.objects.get(pk=1)
-        self.assertEqual(config.provider, "paystack")
+        self.assertEqual(config.provider, "hubtel")
         self.assertEqual(config.online_price_markup_percent, Decimal("1.950"))

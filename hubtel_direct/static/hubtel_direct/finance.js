@@ -115,7 +115,8 @@
           return;
         }
         output.textContent = 'Saved for approval. Reference: ' + data.reference;
-        location.reload();
+        if (data.id) location.assign('/finance/hubtel-direct/payouts/' + encodeURIComponent(data.id) + '/');
+        else location.reload();
       } catch (_) {
         output.textContent = 'Request status unknown. Check transfer history before trying again to prevent duplicates.';
       }
@@ -142,7 +143,8 @@
           return;
         }
         output.textContent = 'Approval recorded. Transfer confirmation is pending.';
-        location.reload();
+        if (data.id) location.assign('/finance/hubtel-direct/payouts/' + encodeURIComponent(data.id) + '/');
+        else location.reload();
       } catch (_) {
         output.textContent = 'Approval outcome unknown. Check the transfer history; do not approve again blindly.';
       }

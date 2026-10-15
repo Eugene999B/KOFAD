@@ -23,7 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from core.identity import normalize_ghana_phone
 from core.models import Company, Product, Stock
@@ -1166,19 +1166,20 @@ def checkout(request, customer):
     if not has_delivery:
         initial["fulfilment"] = "pickup"
     form = CheckoutForm(request.POST or None, initial=initial, delivery_enabled=has_delivery)
+    # All NEW customer payments use the native Direct Receive API from KOFAD Web.
+    # Historic hosted attempts still reconcile through their original provider.
     from hubtel_direct.client import enabled as direct_enabled
-    direct_checkout = hubtel.selected_provider() == "hubtel"
-    payment_ready = direct_enabled("receive") if direct_checkout else hubtel.ready()
-    momo_available = not direct_checkout and paystack_momo.ready()
-    payment_form = CheckoutPaymentForm(request.POST or None,
-        initial={"momo_phone": customer.phone or ""}, momo_available=momo_available)
+    payment_ready = direct_enabled("receive")
+    direct_checkout = True
+    momo_available = False
+    payment_form = None
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
     wallet_number = (request.POST.get("direct_momo_phone", "") if request.method == "POST" else
                      customer.phone or "")
     wallet_channel = (request.POST.get("direct_momo_channel", "") if request.method == "POST" else "mtn-gh")
     direct_wallet_valid = True
-    if direct_checkout and request.method == "POST":
+    if request.method == "POST":
         try:
             from core.identity import normalize_ghana_phone as checked_phone
             wallet_number = checked_phone(wallet_number)
@@ -1187,7 +1188,7 @@ def checkout(request, customer):
         except ValidationError as exc:
             form.add_error(None, str(exc.messages[0]))
             direct_wallet_valid = False
-    if request.method == "POST" and payment_ready and direct_wallet_valid and form.is_valid() and (direct_checkout or payment_form.is_valid()):
+    if request.method == "POST" and payment_ready and direct_wallet_valid and form.is_valid():
         try:
             order = services.create_order(customer, request.session.get("market_cart", {}), form.cleaned_data)
             if order.fulfilment == "delivery":
@@ -1202,33 +1203,14 @@ def checkout(request, customer):
                 )
             request.session["market_cart"] = {}
             request.session.modified = True
-            if direct_checkout:
-                # Keep selected wallet separate from delivery/contact phone.
-                # Session defaults only; the final debit is gated on DB-backed
-                # customer-specific first-use OTP for this exact wallet number.
-                request.session["direct_wallet_for_order"] = {
-                    "order": str(order.pk), "phone": wallet_number, "channel": wallet_channel
-                }
-                request.session.modified = True
-                return redirect("market_order", pk=order.pk)
-            try:
-                if payment_form.cleaned_data["payment_method"] == "momo":
-                    # First use: verify control of the number before requesting a
-                    # charge; subsequent verified numbers can proceed directly.
-                    momo_security.begin(
-                        request, customer, order,
-                        payment_form.cleaned_data["momo_phone"],
-                        payment_form.cleaned_data["momo_network"],
-                    )
-                    return redirect("market_order", pk=order.pk)
-                if hubtel.selected_provider() == "paystack":
-                    services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
-                else:
-                    hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
-                return redirect("market_payment_launch", pk=order.pk)
-            except ValidationError as exc:
-                messages.error(request, problem(exc))
-                return redirect("market_order", pk=order.pk)
+            # Save customer-selected payment wallet; it is deliberately
+            # different from the delivery/contact number and never a charge.
+            # The next KOFAD-only step verifies the wallet number and owner.
+            request.session["direct_wallet_for_order"] = {
+                "order": str(order.pk), "phone": wallet_number, "channel": wallet_channel
+            }
+            request.session.modified = True
+            return redirect("market_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
     subtotal = sum((row["total"] for row in rows), Decimal("0"))
@@ -1245,7 +1227,7 @@ def checkout(request, customer):
         checkout_total=subtotal + (initial_quote["fee"] if initial_quote else Decimal("0")),
         delivery_company=company, payment_ready=payment_ready,
         hubtel_direct_checkout=direct_checkout,
-        payment_notice="Online payment is awaiting final testing and activation.", payment_form=payment_form,
+        payment_notice="Direct MoMo is not enabled. No payment has been requested.", payment_form=payment_form,
         momo_available=momo_available,
         direct_wallet_number=wallet_number, direct_wallet_channel=wallet_channel,
     ))
@@ -1254,92 +1236,25 @@ def checkout(request, customer):
 @market_customer_required
 @require_POST
 def order_pay(request, customer, pk):
+    """Legacy payment POST: never initialize hosted checkout for new orders."""
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
-    if order.payment_status == "paid":
-        return redirect("market_order", pk=order.pk)
-    existing = order.payment_attempts.filter(status__in=paystack_momo.ACTIVE_STATUSES).first()
-    if existing and not existing.authorization_url:
-        messages.info(request, "Your original payment is being checked. Please do not pay again.")
-        return redirect("market_order", pk=order.pk)
-    if existing:
-        return redirect("market_payment_launch", pk=order.pk)
-    if hubtel.selected_provider() == "hubtel":
-        # No new hosted checkout. Pending historic checkout requests keep
-        # their previous payment-link route above, but new direct payments
-        # are initiated from the locked-number order interface.
-        return redirect("market_order", pk=order.pk)
-    form = CheckoutPaymentForm(request.POST,
-        momo_available=paystack_momo.ready())
-    if not form.is_valid():
-        messages.error(request, "Check your Mobile Money number and network, then try again.")
-        return redirect("market_order", pk=order.pk)
-    try:
-        if form.cleaned_data["payment_method"] == "momo":
-            momo_security.begin(
-                request, customer, order,
-                form.cleaned_data["momo_phone"], form.cleaned_data["momo_network"],
-            )
-            return redirect("market_order", pk=order.pk)
-        # Hosted card checkout follows the merchant-selected provider;
-        # unresolved attempts are already blocked above.
-        if hubtel.selected_provider() == "paystack":
-            services.initialize_paystack(order, request.build_absolute_uri("/market/payment/return/"))
-        else:
-            hubtel.initialize_payment(order, request.build_absolute_uri("/market/payment/return/"))
-        return redirect("market_payment_launch", pk=order.pk)
-    except ValidationError as exc:
-        messages.error(request, problem(exc))
-        return redirect("market_order", pk=order.pk)
+    if order.payment_status != "paid":
+        messages.info(request, "Pay directly through KOFAD's Mobile Money request on this order. No external payment page is needed.")
+    return redirect("market_order", pk=order.pk)
 
 @market_customer_required
+@require_GET
 def payment_launch(request, customer, pk):
-    """Render a same-origin handoff page before navigating to the external payment host.
+    """Legacy hosted-checkout URLs stay valid, but never redirect externally.
 
-    Mobile Safari can refuse an external redirect that is part of a POST form navigation.
-    Ending the POST on this page and then starting a normal browser navigation makes the
-    handoff reliable while retaining a visible fallback link.
+    Retain historical provider references and callbacks for reconciliation.
+    New KOFAD payments use Direct Receive only.
     """
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
-    if order.payment_status == "paid":
+    if not order.payment_attempts.exists():
         return redirect("market_order", pk=order.pk)
+    return redirect("market_payment_verification", pk=order.pk)
 
-    attempt = order.payment_attempts.filter(
-        status__in=["initializing", "submission_unknown", "pending", "attention"]
-    ).order_by("-created_at").first()
-    if not attempt or not attempt.authorization_url:
-        messages.error(
-            request,
-            "The secure payment page is not ready yet. Your order is saved; please try again shortly.",
-        )
-        return redirect("market_order", pk=order.pk)
-
-    parsed = urlsplit(attempt.authorization_url)
-    allowed_hosts = {
-        "hubtel": {"pay.hubtel.com"},
-        "paystack": {"checkout.paystack.com"},
-    }
-    if (
-        parsed.scheme != "https"
-        or parsed.username
-        or parsed.password
-        or parsed.hostname not in allowed_hosts.get(attempt.provider, set())
-    ):
-        attempt.status = "attention"
-        attempt.provider_message = "Saved checkout URL failed KOFAD security validation."
-        attempt.next_check_at = None
-        attempt.save(update_fields=["status", "provider_message", "next_check_at"])
-        messages.error(request, "KOFAD blocked an invalid payment destination. Please contact support.")
-        return redirect("market_order", pk=order.pk)
-
-    response = render(request, "marketplace/payment_launch.html", _market_context(
-        request,
-        title="Opening secure payment",
-        order=order,
-        checkout_url=attempt.authorization_url,
-        payment_provider=attempt.provider,
-    ))
-    response["Cache-Control"] = "no-store, private"
-    return response
 
 
 def payment_return(request):
@@ -1362,7 +1277,7 @@ def payment_return(request):
         messages.error(request, problem(exc))
     customer = services.customer_from_session(request)
     if customer and order.customer_id == customer.pk:
-        return redirect("market_order", pk=order.pk)
+        return redirect("market_payment_verification", pk=order.pk)
     return render(request, "marketplace/payment_result.html", _market_context(
         request, title="Payment result", order=None,
     ))
@@ -1493,18 +1408,19 @@ def customer_order(request, customer, pk):
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
-        payment_available=hubtel.ready() if hubtel.selected_provider() == "paystack" else False,
+        payment_available=hubtel_direct.enabled("receive"),
         direct_wallet_number=wallet_default,
         direct_wallet_channel=wallet_channel_default,
         hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED),
-        hubtel_direct_available=hubtel_direct.enabled("receive") and hubtel.selected_provider() == "hubtel",
+        hubtel_direct_available=hubtel_direct.enabled("receive"),
         hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
             customer=customer, phone=normalize_ghana_phone(customer.phone)
         ).exists()),
-        momo_phone_verification=momo_security.pending_for_order(request, customer, order) if hubtel.selected_provider() == "paystack" else None,
-        payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
-            momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
-        momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready(),
+        # Old, not-yet-completed Paystack SMS checks can finish safely, but new
+        # payments cannot be started with Paystack or hosted checkout.
+        momo_phone_verification=momo_security.pending_for_order(request, customer, order),
+        payment_form=None,
+        momo_available=False,
         payment_attempt=order.payment_attempts.first(),
         payment_waiting=order.payment_attempts.filter(status__in=["initializing", "submission_unknown", "pending", "attention"]).exists(),
         can_request_return=bool(returnable),
@@ -2715,15 +2631,10 @@ def online_payments(request, branch):
             messages.success(request, "All-inclusive online product prices updated. Existing orders and payment requests are unchanged.")
         return redirect("online_payments")
     elif request.method == "POST":
-        provider = request.POST.get("provider")
-        if provider not in {"hubtel", "paystack"}:
-            messages.error(request, "Choose Hubtel or Paystack.")
-        else:
-            PaymentConfiguration.objects.update_or_create(pk=1, defaults={"provider": provider})
-            core_services.audit(request.user, branch, "market.payment_provider_saved", "1", {"provider": provider})
-            messages.success(request, "Provider saved for new payments. Existing payments keep their original provider.")
-            if not hubtel.ready(provider):
-                messages.warning(request, "This provider is not accepting new payments yet. Check its status below.")
+        # Retired hosted-checkout settings must not silently re-enable a
+        # third-party handoff for new customer orders. Preserve historical
+        # PaymentConfiguration for POS and old provider records.
+        messages.warning(request, "Hosted checkout switching is retired. New KOFAD Market payments use Direct Mobile Money only.")
         return redirect("online_payments")
     rows = MarketPaymentAttempt.objects.filter(order__branch=branch).select_related("order")
     provider_filter = request.GET.get("provider", "")
@@ -2753,16 +2664,55 @@ def online_payments(request, branch):
         "hubtel_ready": __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive"),
         "paystack_ready": hubtel.ready("paystack"),
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
-        "payment_ready": (
-            __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive")
-            if hubtel.selected_provider() == "hubtel" else hubtel.ready()
-        ),
+        "payment_ready": __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive"),
         "payment_notice": "Hubtel Direct requires a verified registered Mobile Money number.",
 
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
         "pos_momo_rows": pos_rows,
         "online_price_markup_percent": configuration.online_price_markup_percent,
     })
+
+
+@market_customer_required
+@require_GET
+def payment_verification(request, customer, pk):
+    """A standalone confirmation page for hosted/online checkout attempts."""
+    order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
+    attempt = order.payment_attempts.order_by("-created_at").first()
+    if not attempt:
+        return redirect("market_order", pk=order.pk)
+    if attempt.provider == "hubtel_direct":
+        return redirect("hubtel_direct_collection_verification", order_id=order.pk)
+    paid = (
+        order.payment_status == "paid" and order.ledger_status == "posted"
+        and bool(order.sale_document_id)
+    )
+    status = (
+        "success" if paid else "attention" if order.payment_status == "paid"
+        or attempt.status in {"attention", "submission_unknown"} else
+        "failed" if attempt.status in {"failed", "abandoned", "reversed"} else "pending"
+    )
+    data = {
+        "status": status, "paid": paid, "attention": status == "attention",
+        "failed": status == "failed",
+        "reference": attempt.reference,
+        "message": (
+            "The original payment has been independently verified and recorded." if paid
+            else "KOFAD is reviewing this payment. Do not start another request." if status == "attention"
+            else "Payment was unsuccessful. Review the original order before retrying." if status == "failed"
+            else "Complete approval using the secure payment instructions and return here."
+        ),
+    }
+    if request.GET.get("format") == "json":
+        response = JsonResponse(data)
+    else:
+        response = render(request, "marketplace/payment_verification.html", _market_context(
+            request, order=order, attempt=attempt, journey=data,
+            title="Secure payment verification",
+        ))
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
 
 
 @market_customer_required

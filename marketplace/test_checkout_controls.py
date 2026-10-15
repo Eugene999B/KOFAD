@@ -51,16 +51,14 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertContains(response, "marketplace/select-affordances.")
         self.assertContains(response, 'name="fulfilment"')
 
-    def test_payment_and_network_dropdowns_show_change_hint(self):
-        from django.template.loader import render_to_string
-        from .forms import CheckoutPaymentForm
-        body = render_to_string("marketplace/payment_choices.html", {
-            "momo_available": True,
-            "payment_form": CheckoutPaymentForm(momo_available=True),
-        })
-        self.assertIn("Tap to choose payment option", body)
-        self.assertIn("Tap to choose your MoMo network", body)
-        self.assertIn("momo_network", body)
+    def test_checkout_shows_direct_wallet_and_never_hosted_provider(self):
+        self.customer_session()
+        page = self.client.get("/market/checkout/")
+        self.assertContains(page, 'name="direct_momo_phone"')
+        self.assertContains(page, 'name="direct_momo_channel"')
+        self.assertContains(page, "Continue to wallet verification")
+        self.assertNotContains(page, "Choose how to pay")
+        self.assertNotContains(page, "checkout.paystack.com")
 
     def test_pickup_needs_no_address_or_coordinates(self):
         data = self.pickup_data()
@@ -79,17 +77,16 @@ class CheckoutControlsTests(MarketFixtures):
         form = CheckoutForm(data)
         self.assertFalse(form.is_valid())
 
-    def test_owner_sees_status_without_secrets_and_can_switch_provider(self):
+    def test_owner_sees_direct_only_status_without_legacy_provider_selector(self):
         self.staff_session()
         response = self.client.get("/settings/online-payments/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Connected · testing pending")
+        self.assertContains(response, "Direct Mobile Money")
+        self.assertNotContains(response, "Save checkout provider")
         self.assertContains(response, "Where does the money go?")
         self.assertNotContains(response, "private-test-key")
         self.client.post("/settings/online-payments/", {"provider": "paystack"})
-        self.assertEqual(PaymentConfiguration.objects.get(pk=1).provider, "paystack")
-        self.client.post("/settings/online-payments/", {"provider": "invalid"})
-        self.assertEqual(PaymentConfiguration.objects.get(pk=1).provider, "paystack")
+        self.assertFalse(PaymentConfiguration.objects.exists())
 
     def test_payment_settings_deny_unprivileged_staff(self):
         user = User.objects.create_user("ordinary", password="test-only-strong-password")
@@ -134,7 +131,7 @@ class CheckoutControlsTests(MarketFixtures):
             amount=order.total, status="pending",
         )
         response = self.client.get(f"/market/orders/{order.pk}/")
-        self.assertContains(response, "Waiting for payment confirmation")
+        self.assertContains(response, "Payment verification in progress")
         self.assertNotContains(response, "Check Hubtel payment")
         self.assertNotContains(response, "private-progress-reference")
         status = self.client.get(f"/market/orders/{order.pk}/payment-status/")

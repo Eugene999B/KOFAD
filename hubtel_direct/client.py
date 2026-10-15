@@ -6,6 +6,7 @@ A lost POST response is NEVER retried; reconcile by saved ClientReference.
 """
 import base64
 import hashlib
+import os
 import re
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlsplit
@@ -67,6 +68,16 @@ def unseal(value):
     return Fernet(key).decrypt(value.encode()).decode()
 
 
+def whitelisted_web_process():
+    """Never send Hubtel HTTP from a different Railway service's outbound IP.
+
+    Railway injects RAILWAY_SERVICE_NAME. Local/unit-test processes without
+    a Railway identity continue to rely on explicit feature/egress gates.
+    """
+    deployed = os.environ.get("RAILWAY_SERVICE_NAME", "").strip().lower()
+    return not deployed or deployed == "kofad-web"
+
+
 def enabled(kind):
     flag = {
         "receive": "HUBTEL_DIRECT_RECEIVE_ENABLED",
@@ -78,6 +89,7 @@ def enabled(kind):
     return bool(
         flag and getattr(settings, flag, False)
         and getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False)
+        and whitelisted_web_process()
         and settings.HUBTEL_API_ID and settings.HUBTEL_API_KEY
         and re.fullmatch(r"[0-9]{1,32}", str(account))
     )
@@ -102,6 +114,7 @@ def require_reconciliation_ready(kind):
                       getattr(settings, "HUBTEL_DISBURSEMENT_ACCOUNT", ""))
     if not (
         getattr(settings, "HUBTEL_DIRECT_EGRESS_CONFIRMED", False)
+        and whitelisted_web_process()
         and getattr(settings, "HUBTEL_API_ID", "")
         and getattr(settings, "HUBTEL_API_KEY", "")
         and re.fullmatch(r"[0-9]{1,32}", str(account_number))

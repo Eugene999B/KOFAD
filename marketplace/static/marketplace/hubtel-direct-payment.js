@@ -30,6 +30,7 @@
     let verifiedName = '';
     let verifiedChannel = '';
     let busy = false;
+    let submissionUncertain = false;
     let generation = 0;
     function selectedPhone() { return normalizePhone(phoneInput.value); }
     function notify(text) { message.textContent = text; }
@@ -49,13 +50,22 @@
     phoneInput.addEventListener('input', reset);
     channelInput.addEventListener('change', reset);
     async function post(url, payload) {
-      const response = await fetch(url, {
-        method: 'POST', credentials: 'same-origin', redirect: 'error',
-        headers: {'X-CSRFToken': token, 'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: JSON.stringify(payload),
-      });
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 20000);
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST', credentials: 'same-origin', redirect: 'error',
+          headers: {'X-CSRFToken': token, 'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: JSON.stringify(payload), signal: controller.signal,
+        });
+      } finally { clearTimeout(deadline); }
       const data = await response.json();
-      if (!response.ok) throw Error(data.error || 'The request could not be completed.');
+      if (!response.ok) {
+        const error = new Error(data.error || 'The request could not be completed.');
+        error.rejected = response.status >= 400 && response.status < 500;
+        throw error;
+      }
       return data;
     }
     async function verifyRegisteredName(phone, channel) {
@@ -100,7 +110,15 @@
       catch (error) { notify(error.message || 'Unable to complete request. Check status before retrying.'); }
       finally {
         busy = false;
-        for (const button of form.querySelectorAll('button')) if (button !== payButton) button.disabled = false;
+        for (const button of form.querySelectorAll('button')) {
+          if (button !== payButton) button.disabled = false;
+        }
+        // Never leave the payment action frozen after a verification error.
+        let sameWallet = false;
+        try {
+          sameWallet = verifiedPhone === selectedPhone() && verifiedChannel === channelInput.value;
+        } catch (_) { /* Invalid input stays blocked. */ }
+        payButton.disabled = submissionUncertain || !(sameWallet && verifiedName && confirmName?.checked);
       }
     }
     form.querySelector('[data-hubtel-verify-send]')?.addEventListener('click', () => {
@@ -136,10 +154,33 @@
           const ok = await checkWallet();
           if (!ok) return;
         }
-        const data = await post(base, {phone, channel, customer_authorized: true});
-        if (data.reference) {
-          notify('Payment request sent. Approve only on your own mobile network prompt; do not request another charge.');
-          window.location.reload();
+        const destination = '/market/orders/' + encodeURIComponent(order) + '/payment/verification/';
+        try {
+          const data = await post(base, {phone, channel, customer_authorized: true});
+          if (data.reference) {
+            // Stay on KOFAD. Poll only the persisted reference.
+            window.location.assign(destination);
+          }
+        } catch (error) {
+          // A lost HTTP response can conceal an accepted money request. Check
+          // the saved original reference; NEVER send another provider POST.
+          try {
+            const check = await fetch(base + 'status/', {
+              method:'GET', credentials:'same-origin', cache:'no-store',
+              headers:{'Accept':'application/json'}
+            });
+            if (check.ok) {
+              const saved = await check.json();
+              if (saved.reference) {
+                window.location.assign(destination);
+                return;
+              }
+            }
+          } catch (_) { /* Network still unavailable; don't resubmit. */ }
+          if (!error.rejected) submissionUncertain = true;
+          notify(error.rejected
+            ? error.message
+            : 'Payment request outcome unknown. Check your original order/payment status before attempting another request. Do not approve a duplicate.');
         }
       });
     });

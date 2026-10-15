@@ -4,6 +4,7 @@ Paystack does not expose a documented Ghana MoMo payer-wallet name lookup.
 The recipient review below shows the trusted KOFAD customer record, or the
 cashier-entered name, clearly distinguishing it from a network-verified name.
 """
+import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -136,12 +137,61 @@ def payments_history(request):
     return result
 
 
+def _direct_snapshot(request, branch, reference):
+    """Authenticated read of the original Direct MoMo request; never initiates payment."""
+    from . import pos_hubtel
+    services.permit(request.user, branch, "operate_sales")
+    held = pos_hubtel.held_for(reference)
+    if not held or held.branch_id != branch.pk or held.user_id != request.user.pk:
+        raise Http404("Payment request not found.")
+    status = pos_hubtel.status_for_staff(request.user, branch, reference)
+    held.refresh_from_db()
+    state = pos_hubtel.state_of(held)
+    payload = (held.cart or {}).get("sale_payload") or {}
+    name = str(payload.get("customer_name") or "").strip()
+    if payload.get("party"):
+        party = Party.objects.filter(pk=payload["party"], branch=branch, kind="customer").first()
+        if party:
+            name = party.name
+    doc = None
+    if status.get("paid") and state.get("document_id"):
+        doc = pos_hubtel.Document.objects.filter(pk=state["document_id"], branch=branch).first()
+    raw_phone = str(state.get("phone") or "")
+    phase = status.get("status") or "pending"
+    if phase == "success" and not doc:
+        phase = "attention"  # Missing receipt must not be painted as a completed sale.
+    return {
+        "reference": reference, "status": phase,
+        "display_status": "Payment confirmed" if doc else "Payment needs review" if status.get("attention")
+                          else "Payment unsuccessful" if status.get("failed") else "Waiting for payment",
+        "message": str(status.get("message") or status.get("display_text") or "")[:240],
+        "currency": "GHS", "amount": str(state.get("amount") or "0.00"),
+        "sale_total": str(state.get("amount") or "0.00"), "balance_due": "0.00",
+        "due_date": "", "phone": ("•••• " + raw_phone[-4:]) if raw_phone else "Not available",
+        "network": str(state.get("network") or "").replace("-gh", "").upper(),
+        "customer_name": name or "Walk-in customer",
+        "cashier": held.user.get_full_name() or held.user.get_username(),
+        "created_at": held.created_at, "transaction_id": str(state.get("transaction_id") or ""),
+        "paid": bool(doc), "pending": bool(status.get("waiting")),
+        "failed": bool(status.get("failed")), "attention": phase == "attention",
+        "needs_otp": False, "is_direct": True,
+        "receipt": "/documents/" + str(doc.pk) + "/" if doc else "",
+        "receipt_thermal": "/documents/" + str(doc.pk) + "/pdf/thermal80/" if doc else "",
+        "receipt_a4": "/documents/" + str(doc.pk) + "/pdf/a4/" if doc else "",
+    }
+
+
 @login_required
 @require_GET
 def payment_detail(request, reference):
     branch = _branch(request)
-    held = _payment(request, branch, reference)
-    snapshot = _snapshot(held)
+    if re.fullmatch(r"[0-9a-f]{32}", reference or ""):
+        snapshot = _direct_snapshot(request, branch, reference)
+        held = None
+    else:
+        held = _payment(request, branch, reference)
+        snapshot = _snapshot(held)
+        snapshot["is_direct"] = False
     if request.GET.get("format") == "json":
         data = {k: v for k, v in snapshot.items() if k != "created_at"}
         response = JsonResponse(data)

@@ -34,6 +34,16 @@ def internal_reconcile(request):
         return response
     from .service import reconcile_due
     count = reconcile_due(limit=10)
+    # Historical hosted Hubtel transactions are STILL outstanding records.
+    # Only this whitelisted web service may check their status; the SMS
+    # worker has no permission to use its own outbound IP for Hubtel.
+    legacy_count = 0
+    try:
+        from marketplace.hubtel import reconcile_due as reconcile_legacy_market
+        legacy_count = reconcile_legacy_market(limit=10) or 0
+    except Exception:
+        # Keep other independent status checks running during provider outages.
+        pass
     # Direct POS payments must also use this web service's whitelisted IPs,
     # never kofad-sms worker's unlisted egress.
     from core.pos_hubtel import reconcile_due as reconcile_pos_due
@@ -97,7 +107,7 @@ def internal_reconcile(request):
         from .payroll import settle_confirmed
         payroll_paid = settle_confirmed(limit=20)
     response = JsonResponse({
-        "checked": count, "pos_checked": pos_count,
+        "checked": count, "legacy_checked": legacy_count, "pos_checked": pos_count,
         "v2_intents_checked": v2_checked, "preapprovals_checked": debt_checked, "debts_cancelled": debt_cancelled,
         "debit_submitted": debit_dispatched, "debit_settled": debit_paid,
         "debit_ledger_recovered": debt_ledger_recovered,
@@ -121,8 +131,17 @@ def _json(request):
 
 def _answer(tx, code=200):
     response = JsonResponse({
-        "reference": tx.client_reference, "kind": tx.kind, "status": tx.status,
+        "id": str(tx.pk), "reference": tx.client_reference, "kind": tx.kind, "status": tx.status,
         "amount": str(tx.amount), "currency": "GHS",
+        "message": (
+            "Awaiting approval by another authorized person. No money has been sent."
+            if tx.status == "approval_pending" else
+            "Transfer request is processing. Do not submit another transfer."
+            if tx.status in service.ACTIVE else
+            "Transfer verified and completed." if tx.status == "success" else
+            "Transfer needs review. Do not submit it again." if tx.status == "attention" else
+            "Transfer not completed."
+        ),
         "next_check_after_seconds": 300 if tx.status in service.ACTIVE else None,
     }, status=code)
     response["Cache-Control"] = "no-store"
@@ -296,6 +315,43 @@ def collect_status(request, order_id):
     return _answer(tx)
 
 
+@require_GET
+def collection_verification(request, order_id):
+    """Separate customer-facing Direct Receive status. NEVER submits a new debit."""
+    customer, order = _customer(request, order_id)
+    tx = DirectTransaction.objects.filter(
+        order=order, customer=customer, kind="receive"
+    ).order_by("-created_at").first()
+    if not tx:
+        raise Http404("No payment request for this order.")
+    status = tx.status
+    paid = status == "success" and order.payment_status == "paid"
+    review = status == "attention" or (status == "success" and not paid)
+    data = {
+        "reference": tx.client_reference,
+        "status": "attention" if review else status,
+        "paid": paid,
+        "failed": status == "failed",
+        "attention": review,
+        "message": (
+            "Payment independently confirmed and recorded."
+            if paid else "This payment needs KOFAD review. Do not send another request."
+            if review else "Payment was not completed. No payment was recorded."
+            if status == "failed" else "Approve the original Mobile Money request on your phone."
+        ),
+    }
+    if request.GET.get("format") == "json":
+        response = JsonResponse(data)
+    else:
+        from django.shortcuts import render
+        response = render(request, "hubtel_direct/collection_verification.html", {
+            "order": order, "payment": tx, "journey": data,
+        })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
 @csrf_exempt
 @require_POST
 def callback(request):
@@ -455,8 +511,18 @@ def payout_approve(request, tx_id):
 @require_GET
 def payout_detail(request, tx_id):
     try:
-        _finance_staff(request, approval=True)
+        user = _finance_staff(request)
     except PermissionDenied as exc:
         return _error(exc, 403)
     tx = get_object_or_404(DirectTransaction, pk=tx_id, kind__in=["send_momo", "send_bank"])
-    return _answer(tx)
+    if tx.requested_by_id != user.pk and not user.has_perm("core.manage_company"):
+        return _error(PermissionDenied("This transfer is not accessible."), 403)
+    if request.GET.get("format") == "json":
+        return _answer(tx)
+    from django.shortcuts import render
+    response = render(request, "hubtel_direct/transfer_verification.html", {
+        "transfer": tx, "transfer_kind": "Mobile Money" if tx.kind == "send_momo" else "Bank transfer",
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response

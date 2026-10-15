@@ -1,97 +1,100 @@
 {% extends "marketplace/base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'kofad-payment-journey.css' %}"><link rel="stylesheet" href="{% static 'hubtel_direct/payments_clean.css' %}">{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'hubtel_direct/payments_clean.css' %}">
-<main class="market-shell">
-<section class="payment-card">
-  <p class="market-eyebrow">KOFAD · REPAYMENTS</p>
-  <h1>Approve repayments</h1>
-  <p class="payment-muted">Verify your wallet, review the dates and approve securely. No payment is made by checking your identity.</p>
-
-  <div class="payment-facts">
-    <div class="payment-fact"><small>Remaining balance</small><strong>GHS {{ debt_balance|floatformat:2 }}</strong></div>
-    <div class="payment-fact"><small>Repayment total limit</small><strong>GHS {{ mandate.maximum_total|floatformat:2 }}</strong></div>
-    <div class="payment-fact"><small>First payment</small><strong>{{ mandate.first_due_date|date:"d M Y" }}</strong></div>
-    <div class="payment-fact"><small>Frequency</small><strong>{{ mandate.get_frequency_display }}</strong></div>
+<main class="kpay" data-kpay data-kpay-mode="authorization"
+      data-initial-state="{{ mandate.status }}" data-confirmed="{% if mandate.provider_approved_at %}true{% else %}false{% endif %}"
+      data-reload-on-change="true" data-status-url="{% url 'hubtel_debt_customer_status_json' mandate.pk %}">
+ <section class="kpay-card">
+  <p class="kpay-brand">KOFAD · Wallet authorization</p>
+  <div class="kpay-visual" aria-hidden="true"><span class="kpay-ring"></span><span class="kpay-mark" data-kpay-mark>••</span></div>
+  <h1 data-kpay-title>Approve repayments</h1>
+  <p class="kpay-description" data-kpay-wait>Authorize your repayment agreement securely on your phone. This step does not deduct money.</p>
+  <p class="kpay-message" data-kpay-detail role="status" aria-live="polite">
+  {% if mandate.status == "pending" %}Waiting for wallet approval. Do not request another code unless instructed.
+  {% elif mandate.status == "approved" and mandate.provider_approved_at %}The wallet agreement is approved. No payment has been collected.
+  {% else %}Review and verify your wallet to continue.{% endif %}</p>
+  <div class="kpay-facts">
+   <div class="kpay-fact"><small>Repayment limit</small><strong class="kpay-amount">GHS {{ mandate.maximum_total|floatformat:2 }}</strong></div>
+   <div class="kpay-fact"><small>Wallet</small><strong>{{ payment_channel }} · •••• {{ mandate.phone_suffix }}</strong></div>
+   <div class="kpay-fact"><small>First scheduled date</small><strong>{{ mandate.first_due_date|date:"d M Y" }}</strong></div>
+   <div class="kpay-fact"><small>Frequency</small><strong>{{ mandate.get_frequency_display }}</strong></div>
   </div>
-
-  <div class="payment-status"><strong>Approval</strong>
-    <span>{% if mandate.status == "approved" %}Confirmed{% elif mandate.status == "pending" %}Waiting for you{% elif mandate.status == "draft" %}Not started{% elif mandate.status == "cancelled" or mandate.status == "settled" %}Closed{% else %}{{ mandate.get_status_display }}{% endif %}</span>
-  </div>
-
-  {% if mandate.status == "draft" %}
-  <section class="payment-step">
-    <h2>1. Verify your wallet</h2>
-    <p class="payment-muted">{{ payment_channel }} · ends in {{ mandate.phone_suffix }}</p>
-    {% if wallet_identity.name %}
-      <div class="payment-status"><div><small>Registered wallet name</small><strong>{{ wallet_identity.name }}</strong></div><strong>Verified</strong></div>
-      <p class="payment-muted">Confirm this name is yours before continuing.</p>
-    {% else %}
-      <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">
-        {% csrf_token %}<input type="hidden" name="action" value="wallet_code_send">
-        <button type="submit" class="market-button ghost">Send verification code</button>
-      </form>
-      <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}" style="margin-top:10px">
-        {% csrf_token %}<input type="hidden" name="action" value="wallet_code_check">
-        <div class="payment-inline"><label>Six-digit code
-          <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000"></label>
-          <button class="market-button primary" type="submit">Verify number & name</button></div>
-      </form>
-    {% endif %}
-  </section>
-
-  <section class="payment-step">
-    <h2>2. Review & approve</h2>
-    <p class="payment-muted">Your agreed repayments total no more than GHS {{ mandate.maximum_total|floatformat:2 }}. The detailed dates and amounts are available below.</p>
-    <details><summary>View all payment dates and amounts</summary>
-      {% if mandate.terms_snapshot.schedule %}
-      <table><thead><tr><th>Date</th><th>Amount</th></tr></thead><tbody>
-      {% for entry in mandate.terms_snapshot.schedule %}<tr><td>{{ entry.date }}</td><td>GHS {{ entry.amount }}</td></tr>{% endfor %}
-      </tbody></table>{% endif %}
-      <p class="payment-muted">Collection window: {{ mandate.terms_snapshot.collection_window|default:"As agreed" }}. You can cancel the authorization below.</p>
-    </details>
-    <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">
-      {% csrf_token %}<input type="hidden" name="action" value="start">
-      <label style="display:flex;gap:10px;align-items:flex-start;font-size:13px"><input type="checkbox" name="accepted_terms" value="yes" required>
-        I confirm the registered wallet name is mine and agree to the listed repayment dates and limit.</label>
-      <button class="market-button primary" type="submit" {% if not wallet_identity.name %}disabled{% endif %}>Request wallet approval</button>
-    </form>
-    {% if not wallet_identity.name %}<p class="payment-muted">Verify your wallet number first to continue.</p>{% endif %}
-  </section>
-  {% elif mandate.status == "pending" %}
-    <section class="payment-step"><h2>Approve on your phone</h2>
-      {% if mandate.verification_type == "OTP" %}
-        <p class="payment-muted">Enter the four-digit wallet approval code. Never enter your wallet PIN here.</p>
-        <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
-          <input type="hidden" name="action" value="hubtel_otp">
-          <div class="payment-inline"><label>Approval code<input name="hubtel_code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
-          <button class="market-button primary">Confirm code</button></div>
-        </form>
-      {% else %}
-        <p class="payment-muted">Check your wallet phone for the secure approval prompt. For MTN, you can also check *170# → My Wallet → My Approvals.</p>
-      {% endif %}
-      <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}" style="margin-top:12px">{% csrf_token %}
-        <input type="hidden" name="action" value="check"><button class="market-button ghost">Refresh status</button>
-      </form>
-    </section>
-  {% elif mandate.status == "approved" %}
-    <section class="payment-step"><h2>Authorization confirmed</h2><p class="payment-muted">Your wallet authorization is verified. This does not mean a payment has been collected. Each payment is recorded only after independent confirmation.</p></section>
+  <div class="kpay-actions"><button class="market-button ghost" type="button" data-kpay-check>Check approval status</button></div>
+  <p class="kpay-secure">Approval does not mean payment. You may revoke the agreement using the cancellation option below.</p>
+ </section>
+ {% if mandate.status == "draft" %}
+ <section class="payment-card" style="margin:16px auto;padding:22px">
+  <h2>Verify your wallet</h2>
+  {% if wallet_identity.name %}
+   <p class="payment-muted">Registered wallet name: <strong>{{ wallet_identity.name }}</strong></p>
   {% else %}
-    <section class="payment-step"><h2>{{ mandate.get_status_display }}</h2><p class="payment-muted">Contact KOFAD if you need help with this agreement.</p></section>
+   <p class="payment-muted">Verify your number and name once before approving.</p>
+   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
+    <input type="hidden" name="action" value="wallet_code_send">
+    <button class="market-button ghost" type="submit">Send verification code</button>
+   </form>
+   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
+    <input type="hidden" name="action" value="wallet_code_check">
+    <label>Six-digit SMS code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000"></label>
+    <button class="market-button primary" type="submit">Verify number and name</button>
+   </form>
   {% endif %}
-
-  {% if mandate.status == "approved" or mandate.status == "pending" or mandate.status == "draft" or mandate.status == "cancel_pending" %}
-  <details><summary>Cancel wallet authorization</summary>
-    <p class="payment-muted">Cancelling blocks future collection attempts. An unpaid balance remains payable by another method.</p>
-    <form method="post" action="{% url 'hubtel_debt_cancel' mandate.pk %}">{% csrf_token %}
-      <input type="hidden" name="action" value="send"><button type="submit" class="market-button ghost">Send cancellation code</button>
-    </form>
-    <form method="post" action="{% url 'hubtel_debt_cancel' mandate.pk %}" style="margin-top:12px">{% csrf_token %}
-      <input type="hidden" name="action" value="confirm">
-      <div class="payment-inline"><label>Six-digit cancellation code<input name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required></label>
-      <button type="submit" class="market-button ghost">Confirm cancellation</button></div>
-    </form>
-  </details>
+  <h2 style="margin-top:18px">Approve agreement</h2>
+  <p class="payment-muted">Read the exact dates and amounts below before agreeing.</p>
+  <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
+   <input type="hidden" name="action" value="start">
+   <label style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" name="accepted_terms" value="yes" required> I own this wallet and agree to the stated repayment schedule and maximum amount.</label>
+   <button class="market-button primary" type="submit" {% if not wallet_identity.name %}disabled{% endif %}>Request wallet approval</button>
+  </form>
+ </section>
+ {% elif mandate.status == "pending" %}
+ <section class="payment-card" style="margin:16px auto;padding:22px">
+  <h2>Approve on your phone</h2>
+  {% if mandate.verification_type == "OTP" %}
+   <p class="payment-muted">Enter the four-digit approval code sent by the payment network. Never enter your MoMo PIN.</p>
+   <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
+    <input type="hidden" name="action" value="hubtel_otp">
+    <label>Four-digit approval code<input name="hubtel_code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4}" maxlength="4" required></label>
+    <button class="market-button primary" type="submit">Verify approval code</button>
+   </form>
+  {% else %}
+   <p class="payment-muted">Approve the USSD prompt on your wallet phone. MTN customers can also dial *170# → My Wallet → My Approvals → PreApprovals.</p>
   {% endif %}
-  <p class="payment-muted">KOFAD uses a licensed payment partner to process wallet requests. We never ask for your Mobile Money PIN.</p>
-</section></main>
+  <form method="post" action="{% url 'hubtel_debt_authorize_action' mandate.pk %}">{% csrf_token %}
+   <input type="hidden" name="action" value="check"><button class="market-button ghost" type="submit">Refresh network status</button>
+  </form>
+ </section>
+ {% elif mandate.status == "approved" %}
+ <p class="kpay-hint" style="text-align:center;margin:14px auto">Authorization confirmed. Scheduled collections are separate transactions, verified individually.</p>
+ {% else %}
+ <p class="kpay-hint" style="text-align:center;margin:14px auto">This authorization is not active. Contact KOFAD to discuss your repayments.</p>
+ {% endif %}
+ <details class="kpay-more">
+  <summary>View every repayment date and amount</summary>
+  <div class="kpay-detail">
+   <p>Maximum agreement total: GHS {{ mandate.maximum_total|floatformat:2 }}. Actual collections cannot exceed the agreed plan.</p>
+   {% if mandate.terms_snapshot.schedule %}<table><thead><tr><th>Date</th><th>Amount</th></tr></thead><tbody>
+   {% for entry in mandate.terms_snapshot.schedule %}<tr><td>{{ entry.date }}</td><td>GHS {{ entry.amount }}</td></tr>{% endfor %}
+   </tbody></table>{% endif %}
+   <p>Collection window: {{ mandate.terms_snapshot.collection_window|default:"As agreed" }}.</p>
+  </div>
+ </details>
+ {% if mandate.status == "approved" or mandate.status == "pending" or mandate.status == "draft" or mandate.status == "cancel_pending" %}
+ <details class="kpay-more">
+  <summary>Cancel authorization</summary>
+  <div class="kpay-detail"><p>Cancelling prevents further wallet deductions but does not erase any outstanding amount.</p>
+   <form method="post" action="{% url 'hubtel_debt_cancel' mandate.pk %}">{% csrf_token %}
+    <input type="hidden" name="action" value="send"><button class="market-button ghost" type="submit">Send cancellation code</button>
+   </form>
+   <form method="post" action="{% url 'hubtel_debt_cancel' mandate.pk %}">{% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <label>Cancellation code<input name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required></label>
+    <button class="market-button ghost" type="submit">Confirm cancellation</button>
+   </form>
+  </div>
+ </details>
+ {% endif %}
+ <p class="kpay-secure" style="text-align:center">KOFAD never asks for your MoMo PIN.</p>
+</main>
+<script defer src="{% static 'kofad-payment-journey.js' %}"></script>
 {% endblock %}

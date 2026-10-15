@@ -89,6 +89,15 @@ class DirectWorkflowTests(MarketFixtures):
             },
         })
 
+    def test_only_kofad_web_service_is_allowed_to_call_hubtel(self):
+        with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "kofad-sms"}):
+            self.assertFalse(client.enabled("receive"))
+            self.assertFalse(client.enabled("send_momo"))
+            with self.assertRaises(ValidationError):
+                client.require_reconciliation_ready("receive")
+        with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "kofad-web"}):
+            self.assertTrue(client.enabled("receive"))
+
     @patch("hubtel_direct.client.requests.post")
     def test_customer_registered_phone_is_locked_and_repeat_post_never_charges_twice(self, post):
         post.side_effect = self.accepted
@@ -103,6 +112,25 @@ class DirectWorkflowTests(MarketFixtures):
         self.assertEqual(payload["Amount"], float(order.total))
         self.assertEqual(payload["PrimaryCallbackURL"], "https://market.kofadimpex.com/market/payments/hubtel-direct/callback/")
         self.assertEqual(MarketPaymentAttempt.objects.filter(reference=first.client_reference).count(), 1)
+
+    @patch("hubtel_direct.client.requests.post")
+    def test_customer_direct_receive_verification_is_private_and_read_only(self, post):
+        post.side_effect = self.accepted
+        order = self.order()
+        tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
+        url = "/market/orders/" + str(order.pk) + "/payment/verification/"
+        self.assertEqual(self.client.get(url).status_code, 403)
+        session = self.client.session
+        session["market_customer_id"] = str(self.customer.pk)
+        session.save()
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'data-kpay-mode="payment"')
+        self.assertContains(page, tx.client_reference)
+        state = self.client.get(url + "?format=json")
+        self.assertEqual(state.json()["status"], "pending")
+        self.assertFalse(state.json()["paid"])
+        post.assert_called_once()
 
     @patch("hubtel_direct.client.requests.post", side_effect=requests.Timeout())
     def test_lost_response_never_resends(self, post):
@@ -189,6 +217,7 @@ class DirectWorkflowTests(MarketFixtures):
         self.assertEqual(tx.status, "attention")
         self.assertNotEqual(order.payment_status, "paid")
 
+    @override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com"])
     @patch("hubtel_direct.client.requests.post")
     def test_payout_requires_second_person_and_uses_distinct_disbursement_account(self, post):
         post.side_effect = self.accepted
@@ -212,6 +241,25 @@ class DirectWorkflowTests(MarketFixtures):
             service.approve_payout(tx.pk, self.staff)
         self.assertEqual(tx.status, "approval_pending")
         post.assert_not_called()
+        self.client.force_login(self.staff)
+        self.staff.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.staff.access.session_version
+        session["branch"] = self.branch.pk
+        session["mfa_verified_at"] = timezone.now().timestamp()
+        session.save()
+        verification_page = self.client.get(
+            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/", HTTP_HOST="staff.kofadimpex.com"
+        )
+        self.assertEqual(verification_page.status_code, 200, verification_page.get("Location"))
+        self.assertContains(verification_page, 'data-kpay-mode="transfer"')
+        status_read = self.client.get(
+            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/?format=json", HTTP_HOST="staff.kofadimpex.com"
+        )
+        self.assertEqual(status_read.json()["status"], "approval_pending")
+        self.assertEqual(status_read.json()["id"], str(tx.pk))
+        post.assert_not_called()
+
         done = service.approve_payout(tx.pk, second)
         self.assertEqual(done.status, "pending")
         self.assertIn("/api/merchants/67890/send/bank/gh/300311", post.call_args.args[0])

@@ -1773,11 +1773,11 @@
       syncMomoChallenge(result);
       syncHubtelCheckoutLink(result);
       persist();
-      if (momoGateway === "paystack") {
-        // Track a durable provider reference, not a fragile payment modal.
-        location.assign("/payments/momo/" + encodeURIComponent(momoReference) + "/");
-        return true;
-      }
+      // Every online MoMo request now opens the standalone verification page.
+      // The server must confirm payment before a sale is recorded.
+      leavingForDifferentSale = true;
+      location.assign("/payments/momo/" + encodeURIComponent(momoReference) + "/");
+      return true;
       if (result.paid && result.sale) {
         completed = true;
         momoReference = null;

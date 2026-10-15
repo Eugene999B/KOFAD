@@ -117,7 +117,9 @@ class CustomerMomoTests(MarketFixtures):
         session.save()
         response = self.client.get("/market/checkout/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Mobile Money number")
+        self.assertContains(response, "MoMo number")
+        self.assertContains(response, 'name="direct_momo_phone"')
+        self.assertNotContains(response, "checkout.paystack.com")
         self.assertContains(response, "Telecel Cash")
 
     def test_pending_paystack_is_polled_and_cannot_be_cancelled(self):

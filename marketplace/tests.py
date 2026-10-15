@@ -615,7 +615,9 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         checkout = self.client.get("/market/checkout/")
         self.assertEqual(checkout.status_code, 200)
         self.assertNotContains(checkout, "Paystack")
-        self.assertContains(checkout, "Make payment")
+        self.assertContains(checkout, "Continue to wallet verification")
+        self.assertContains(checkout, "MoMo number")
+        self.assertNotContains(checkout, "checkout.paystack.com")
 
         order = self.order()
         attempt = MarketPaymentAttempt.objects.create(
@@ -634,16 +636,14 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertNotContains(response, attempt.reference)
         self.assertNotContains(response, "mobile_money")
 
-    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    @patch("hubtel_direct.client.enabled", return_value=True)
     @patch("marketplace.views.services.initialize_paystack")
-    def test_checkout_make_payment_uses_same_origin_handoff(self, initialize_payment):
+    def test_checkout_make_payment_uses_same_origin_handoff(self, initialize_payment, ready):
+        """New orders stay on KOFAD; no legacy hosted gateway is invoked."""
         self.customer_session()
         session = self.client.session
         session["market_cart"] = {str(self.listing.pk): 1}
         session.save()
-        initialize_payment.return_value = Mock(
-            authorization_url="https://checkout.paystack.com/test-checkout"
-        )
         response = self.client.post("/market/checkout/", {
             "fulfilment": "pickup",
             "recipient_name": self.customer.full_name,
@@ -658,18 +658,19 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             "latitude": "",
             "longitude": "",
             "customer_note": "",
+            "direct_momo_phone": self.customer.phone,
+            "direct_momo_channel": "mtn-gh",
         })
         order = OnlineOrder.objects.latest("created_at")
-        self.assertRedirects(
-            response,
-            f"/market/orders/{order.pk}/payment/launch/",
-            fetch_redirect_response=False,
-        )
-        initialize_payment.assert_called_once()
-        self.assertEqual(initialize_payment.call_args.args[0].pk, order.pk)
+        self.assertRedirects(response, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        initialize_payment.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
+        self.assertEqual(order.payment_status, "unpaid")
         self.assertEqual(self.client.session["market_cart"], {})
+        self.assertEqual(self.client.session["direct_wallet_for_order"]["order"], str(order.pk))
 
     def test_payment_launch_page_has_automatic_and_manual_hubtel_handoff(self):
+        """Legacy link must stay inside KOFAD, not open the provider checkout."""
         self.customer_session()
         order = self.order()
         MarketPaymentAttempt.objects.create(
@@ -678,11 +679,15 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             authorization_url="https://pay.hubtel.com/test-checkout",
         )
         response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "payment-launch.")
-        self.assertContains(response, "https://pay.hubtel.com/test-checkout")
-        self.assertContains(response, "Continue to secure payment")
-        self.assertIn("no-store", response["Cache-Control"])
+        self.assertRedirects(
+            response, f"/market/orders/{order.pk}/checkout/verification/",
+            fetch_redirect_response=False,
+        )
+        self.assertNotIn("pay.hubtel.com", response.get("Location", ""))
+        status = self.client.get(f"/market/orders/{order.pk}/checkout/verification/?format=json")
+        self.assertEqual(status.status_code, 200)
+        self.assertFalse(status.json()["paid"])
+        self.assertEqual(status.json()["status"], "pending")
 
     def test_payment_launch_blocks_untrusted_checkout_host(self):
         self.customer_session()
@@ -693,9 +698,13 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             authorization_url="https://pay.hubtel.com.evil.example/checkout",
         )
         response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
-        self.assertRedirects(response, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        self.assertRedirects(
+            response, f"/market/orders/{order.pk}/checkout/verification/",
+            fetch_redirect_response=False,
+        )
+        self.assertNotIn("evil.example", response.get("Location", ""))
         attempt.refresh_from_db()
-        self.assertEqual(attempt.status, "attention")
+        self.assertEqual(attempt.status, "pending")
 
     @patch("marketplace.services._google_route")
     def test_distance_delivery_price_is_proportional_and_saved_on_order(self, google_route):
@@ -1778,72 +1787,34 @@ class DirectMomoPhoneVerificationTests(MarketFixtures):
         session["market_customer_id"] = self.customer.pk
         session.save()
 
-    @override_settings(
-        PAYSTACK_SECRET_KEY="sk_test_example",
-        PAYSTACK_CUSTOMER_MOMO_ENABLED=True,
-        CUSTOMER_OTP_ENABLED=True,
-    )
     @patch("marketplace.paystack_momo.requests.post")
     @patch("marketplace.momo_security.services.send_otp")
-    def test_first_momo_payment_sends_sms_before_any_charge(self, send_otp, charge):
+    def test_retired_legacy_payment_form_sends_no_sms_or_charge(self, send_otp, charge):
         self.sign_in()
         order = self.order()
         result = self.client.post(f"/market/orders/{order.pk}/pay/", {
-            "payment_method": "momo", "momo_phone": "0241234567",
+            "payment_method": "momo", "momo_phone": self.customer.phone,
             "momo_network": "mtn",
         })
-        self.assertRedirects(result, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
-        send_otp.assert_called_once()
-        self.assertEqual(send_otp.call_args.args, (self.customer.phone, "momo"))
+        self.assertRedirects(result, f"/market/orders/{order.pk}/",
+                             fetch_redirect_response=False)
+        send_otp.assert_not_called()
         charge.assert_not_called()
         self.assertFalse(order.payment_attempts.exists())
-        self.assertContains(self.client.get(f"/market/orders/{order.pk}/"), "Verify your Mobile Money number")
 
-    @override_settings(
-        PAYSTACK_SECRET_KEY="sk_test_example",
-        PAYSTACK_CUSTOMER_MOMO_ENABLED=True,
-        CUSTOMER_OTP_ENABLED=True,
-    )
-    @patch("marketplace.momo_security.services.send_otp")
-    @patch("marketplace.momo_security.services.verify_otp")
     @patch("marketplace.paystack_momo.requests.post")
-    def test_sms_verified_number_starts_one_direct_charge(self, charge, verify_otp, send_otp):
-        from .models import VerifiedMomoPhone
+    @patch("marketplace.momo_security.services.verify_otp")
+    def test_old_sms_endpoint_without_pending_request_cannot_charge(self, verify_otp, charge):
         self.sign_in()
         order = self.order()
-        send_otp.return_value = self.customer.phone
-        first = self.client.post(f"/market/orders/{order.pk}/pay/", {
-            "payment_method": "momo", "momo_phone": "0241234567",
-            "momo_network": "mtn",
-        })
-        self.assertEqual(first.status_code, 302)
-        def charge_response(*args, **kwargs):
-            reference = kwargs["json"]["reference"]
-            return Mock(status_code=200, json=Mock(return_value={
-                "status": True, "data": {
-                    "reference": reference, "status": "pay_offline",
-                    "display_text": "Approve on your phone.",
-                },
-            }))
-        charge.side_effect = charge_response
         result = self.client.post(f"/market/orders/{order.pk}/momo-phone/verify/", {
             "action": "verify", "code": "123456",
         })
-        self.assertRedirects(result, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
-        verify_otp.assert_called_once_with(self.customer.phone, "123456", "momo")
-        self.assertTrue(VerifiedMomoPhone.objects.filter(
-            customer=self.customer, phone=self.customer.phone,
-        ).exists())
-        self.assertEqual(charge.call_count, 1)
-        self.assertEqual(order.payment_attempts.count(), 1)
-        self.assertEqual(order.payment_attempts.get().verification_summary["flow"], "mobile_money")
-        self.assertEqual(order.payment_attempts.get().status, "pending")
-        self.assertEqual(self.client.session.get("market_momo_phone_pending"), None)
-        # An old SMS code cannot generate another attempt while the first is pending.
-        self.client.post(f"/market/orders/{order.pk}/momo-phone/verify/", {
-            "action": "verify", "code": "123456",
-        })
-        self.assertEqual(charge.call_count, 1)
+        self.assertRedirects(result, f"/market/orders/{order.pk}/",
+                             fetch_redirect_response=False)
+        verify_otp.assert_not_called()
+        charge.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
 
     @override_settings(PAYSTACK_SECRET_KEY="sk_test_example", PAYSTACK_CUSTOMER_MOMO_ENABLED=True)
     @patch("marketplace.paystack_momo.requests.post")
@@ -1864,9 +1835,9 @@ class DirectMomoPhoneVerificationTests(MarketFixtures):
         result = self.client.post(f"/market/orders/{order.pk}/pay/", {
             "payment_method": "hosted",
         })
-        self.assertRedirects(result, f"/market/orders/{order.pk}/payment/launch/",
+        self.assertRedirects(result, f"/market/orders/{order.pk}/",
                              fetch_redirect_response=False)
-        card.assert_called_once()
+        card.assert_not_called()
         hubtel_charge.assert_not_called()
 
     def test_card_attempt_rejects_mobile_money_success_even_with_matching_amount(self):
