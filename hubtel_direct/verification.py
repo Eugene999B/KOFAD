@@ -17,7 +17,9 @@ VERIFY_ORIGIN = "https://rnv.hubtel.com"
 
 
 def inquiry(phone, channel):
-    client.require_enabled("receive")
+    # Name-only inquiry uses verified collection credentials and whitelisted web egress.
+    # A disabled payment-collection switch must not disable harmless name verification.
+    client.require_reconciliation_ready("receive")
     if channel not in client.CHANNELS:
         raise ValidationError("Choose MTN, Telecel, or AirtelTigo.")
     msisdn = normalize_ghana_phone(phone).lstrip("+")
@@ -77,7 +79,9 @@ def staff_throttle(user_id, phone):
 
 def bank_inquiry(bank_code, bank_number):
     """Registered bank-account name from Hubtel, not a guessed payroll alias."""
-    client.require_enabled("receive")  # API keys and only web service's IP.
+    # Name-only inquiry uses verified collection credentials and whitelisted web egress.
+    # A disabled payment-collection switch must not disable harmless name verification.
+    client.require_reconciliation_ready("receive")  # API keys and only web service's IP.
     bank_code = str(bank_code or "")
     number = str(bank_number or "").strip()
     if bank_code not in client.BANK_CODES or not number.isdigit() or not 4 <= len(number) <= 30:

@@ -169,8 +169,40 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         response = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="action" value="start"')
-        self.assertContains(response, "Hubtel, not KOFAD SMS")
-        self.assertNotContains(response, "Send my six-digit code")
+        self.assertContains(response, "Verify your wallet")
+        self.assertContains(response, 'name="action" value="wallet_code_send"')
+        self.assertContains(response, 'name="action" value="wallet_code_check"')
+        self.assertContains(response, "Verify number")
+        self.assertNotContains(response, "Hubtel, not KOFAD SMS")
+
+    def test_customer_must_verify_wallet_phone_and_provider_name_first(self):
+        from django.urls import reverse
+        plan = mandates.create_plan(
+            self.user, self.branch, party_id=self.customer.pk,
+            phone="0241234567", channel="mtn-gh-direct-debit", frequency="weekly",
+            first_due_date=timezone.localdate() + timedelta(days=7), installment_count="3",
+        )
+        url = reverse("hubtel_debt_authorize_action", args=[plan.pk])
+        with patch("hubtel_direct.mandates.prepare_customer_authorization") as provider:
+            response = self.client.post(url, {"action": "start", "accepted_terms": "yes"})
+            self.assertEqual(response.status_code, 302)
+            provider.assert_not_called()
+        with patch("hubtel_direct.mandate_views.sms_service.send_otp") as otp:
+            response = self.client.post(url, {"action": "wallet_code_send"})
+            self.assertEqual(response.status_code, 302)
+            otp.assert_called_once()
+        with patch("hubtel_direct.mandate_views.sms_service.verify_otp") as otp_check, \
+             patch("hubtel_direct.verification.inquiry", return_value={
+                "phone": "233241234567", "channel": "mtn-gh",
+                "wallet_name": "Test Wallet Holder", "registered": True,
+             }) as verified:
+            response = self.client.post(url, {"action": "wallet_code_check", "code": "123456"})
+            self.assertEqual(response.status_code, 302)
+            otp_check.assert_called_once()
+            verified.assert_called_once()
+        page = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
+        self.assertContains(page, "Test Wallet Holder")
+        self.assertEqual(plan.status, "draft")
 
     def test_agreement_sms_is_disclosure_only_not_hubtel_authorization(self):
         from django.urls import reverse
@@ -231,8 +263,8 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         self.assertEqual(response.status_code, 202)
         body = response.json()
         self.assertEqual(body["authorization_status"], "draft")
-        self.assertEqual(body["prompt_state"], "unavailable")
-        self.assertIn("No wallet prompt was sent", body["message"])
+        self.assertEqual(body["prompt_state"], "not_requested")
+        self.assertIn("authorization has not been requested", body["message"])
         self.assertIn("/status/", body["staff_url"])
         self.assertEqual(DebtMandate.objects.count(), 1)
         self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
@@ -256,16 +288,16 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             first = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
                                      content_type="application/json")
             self.assertEqual(first.status_code, 202)
-            self.assertEqual(first.json()["authorization_status"], "pending")
-            self.assertEqual(first.json()["prompt_state"], "pending")
+            self.assertEqual(first.json()["authorization_status"], "draft")
+            self.assertEqual(first.json()["prompt_state"], "not_requested")
             again = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
                                      content_type="application/json")
             self.assertEqual(again.status_code, 202)
-            self.assertEqual(again.json()["prompt_state"], "pending")
-            hubtel.assert_called_once()
+            self.assertEqual(again.json()["prompt_state"], "not_requested")
+            hubtel.assert_not_called()
             debit.assert_not_called()
         plan = DebtMandate.objects.get()
-        self.assertEqual(plan.status, "pending")
+        self.assertEqual(plan.status, "draft")
         self.assertIsNone(plan.provider_approved_at)
         self.assertEqual(plan.terms_snapshot["installment_count"], 3)
 
@@ -285,16 +317,16 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             first = self.client.post(url, json.dumps(data), content_type="application/json")
         self.assertEqual(first.status_code, 202)
         self.assertEqual(first.json()["authorization_status"], "draft")
-        self.assertEqual(first.json()["prompt_state"], "rejected")
-        self.assertIn("IP is not allowlisted", first.json()["message"])
+        self.assertEqual(first.json()["prompt_state"], "not_requested")
+        self.assertIn("authorization has not been requested", first.json()["message"])
         self.assertEqual(DebtMandate.objects.count(), 1)
         with patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
             "provider_id": "authorized-on-retry", "verification_type": "USSD",
             "otp_prefix": "", "status": "PENDING"
         }) as hubtel:
             retry = self.client.post(url, json.dumps(data), content_type="application/json")
-            self.assertEqual(retry.json()["authorization_status"], "pending")
-            hubtel.assert_called_once()
+            self.assertEqual(retry.json()["authorization_status"], "draft")
+            hubtel.assert_not_called()
         self.assertEqual(Document.objects.filter(reference="AUTO-SCHEDULE-TEST").count(), 1)
         self.assertEqual(DebtMandate.objects.count(), 1)
 
@@ -332,10 +364,10 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
         with patch("hubtel_direct.debit_api.initiate_preapproval") as send:
             missing = self.client.post(url, {})
-            self.assertEqual(missing.status_code, 302)
+            self.assertEqual(missing.status_code, 405)
             send.assert_not_called()
             disabled = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(disabled.status_code, 302)
+            self.assertEqual(disabled.status_code, 405)
             send.assert_not_called()
         plan.refresh_from_db()
         self.assertEqual(plan.status, "draft")
@@ -360,15 +392,15 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             "otp_prefix": "", "status": "PENDING",
         }) as provider, patch("hubtel_direct.debit_api.debit_charge") as debit:
             r = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(r.status_code, 302)
-            self.assertEqual(provider.call_count, 1)
+            self.assertEqual(r.status_code, 405)
+            provider.assert_not_called()
             repeat = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(repeat.status_code, 302)
-            self.assertEqual(provider.call_count, 1)
+            self.assertEqual(repeat.status_code, 405)
+            provider.assert_not_called()
             debit.assert_not_called()
         plan.refresh_from_db()
-        self.assertEqual(plan.status, "pending")
-        self.assertEqual(plan.verification_type, "USSD")
+        self.assertEqual(plan.status, "draft")
+        self.assertEqual(plan.verification_type, "")
         # Prompt submission is not wallet approval. Only Hubtel's independent
         # authenticated status check can change the mandate to approved.
         self.assertIsNone(plan.provider_approved_at)
@@ -384,11 +416,10 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         from django.urls import reverse
         response = self.client.get(reverse("hubtel_debt_staff_status", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Waiting for the customer")
-        self.assertContains(response, "GHS 200.00")
-        self.assertContains(response, "Hubtel preapproval has not been activated")
+        self.assertContains(response, "Not requested")
+        self.assertContains(response, "GHS 800.00")
         self.assertContains(response, "Open customer approval page")
-        self.assertContains(response, "4 scheduled payments")
+        self.assertContains(response, "Repayment timetable")
 
         edit = mandates.update_draft_plan(
             self.user, self.branch, plan.pk, frequency="monthly",

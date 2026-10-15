@@ -209,13 +209,28 @@ def verify_registered_phone(request, order_id):
         if order.status != "awaiting_payment" or order.payment_status in {"paid", "refunded"}:
             raise ValidationError("This order cannot accept a new payment request.")
         body = _json(request)
-        if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}):
+        if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}, {"action", "phone", "channel"}):
             raise ValidationError("Enter the Mobile Money number and verification action.")
         from core.identity import normalize_ghana_phone
         phone = normalize_ghana_phone(body.get("phone"))
         action = body.get("action")
         already_verified = VerifiedMomoPhone.objects.filter(customer=customer, phone=phone).exists()
-        if action == "check" and set(body) == {"action", "phone"}:
+        if action == "name" and set(body) == {"action", "phone", "channel"}:
+            if not already_verified:
+                raise ValidationError("Verify your wallet number by SMS first.")
+            from . import verification
+            record = verification.inquiry(phone, body.get("channel"))
+            result = {
+                "verified": True, "registered_name": record["wallet_name"],
+                "phone_suffix": record["phone"][-4:],
+            }
+            from django.utils import timezone as django_timezone
+            request.session["checkout_wallet_verified:" + str(order.pk)] = {
+                "phone": phone, "channel": body["channel"],
+                "at": django_timezone.now().timestamp(),
+            }
+            request.session.modified = True
+        elif action == "check" and set(body) == {"action", "phone"}:
             result = {"verified": already_verified,
                       "message": "Wallet already verified for this account." if already_verified
                                  else "Verify this wallet once using an SMS code."}
@@ -248,6 +263,19 @@ def collect(request, order_id):
         body = _json(request)
         if set(body) != {"channel", "phone", "customer_authorized"} or body.get("customer_authorized") is not True:
             raise ValidationError("Enter the MoMo number, choose its network and confirm this payment.")
+        # Enforce name inquiry for this exact order + wallet. Frontend
+        # confirmation alone is not authorization and cannot be forged.
+        from core.identity import normalize_ghana_phone
+        from django.utils import timezone as django_timezone
+        verified = request.session.get("checkout_wallet_verified:" + str(order.pk), {})
+        try:
+            age = django_timezone.now().timestamp() - float(verified.get("at", 0))
+        except (TypeError, ValueError, AttributeError):
+            age = 999999
+        if (not isinstance(verified, dict) or not 0 <= age <= 900
+                or verified.get("phone") != normalize_ghana_phone(body["phone"])
+                or verified.get("channel") != body["channel"]):
+            raise ValidationError("Verify and confirm the registered wallet name before requesting payment.")
         tx = service.create_collection(customer, order.pk, body["channel"], body["phone"])
         return _answer(tx, 202)
     except PermissionDenied as exc:
@@ -306,7 +334,7 @@ def finance_dashboard(request):
     if not manager:
         refunds = refunds.filter(created_by=request.user)
     response = render(request, "hubtel_direct/finance_dashboard.html", {
-        "title": "Hubtel Direct transfers",
+        "title": "Send money",
         "direct_transactions": qs.order_by("-created_at")[:80],
         "hubtel_refund_cases": refunds.order_by("-created_at")[:60],
         "refund_enabled": getattr(settings, "HUBTEL_REFUNDS_ENABLED", False),
@@ -343,6 +371,18 @@ def recipient_name(request):
                     "bank_code": result["bank_code"], "verified": True}
         else:
             raise ValidationError("Choose MoMo network and wallet number, or a bank and account number.")
+        # Trust the provider-backed result, not the client-supplied display name.
+        # Proof is session-bound to this exact destination/network for 15 min.
+        from django.utils import timezone as django_timezone
+        from core.identity import normalize_ghana_phone
+        request.session["finance_verified_recipient"] = {
+            "kind": kind,
+            "destination": normalize_ghana_phone(body["phone"]) if kind == "momo" else str(body["account"]).strip(),
+            "network": body["channel"] if kind == "momo" else body["bank_code"],
+            "registered_name": data["registered_name"],
+            "at": django_timezone.now().timestamp(),
+        }
+        request.session.modified = True
         response = JsonResponse(data)
         response["Cache-Control"] = "private, no-store"
         return response
@@ -360,6 +400,31 @@ def payout(request):
         body = _json(request)
         if set(body) - {"kind", "amount", "destination", "recipient_name", "channel", "bank_code", "purpose"}:
             raise ValidationError("Unsupported payout fields.")
+        # Refuse client-only "verified" flags or fabricated recipient names.
+        # The server must have looked up the SAME account recently.
+        from django.utils import timezone as django_timezone
+        from core.identity import normalize_ghana_phone
+        checked = request.session.get("finance_verified_recipient")
+        if not isinstance(checked, dict):
+            raise ValidationError("Verify the recipient's registered name before submitting.")
+        kind = body.get("kind")
+        expected_kind = "momo" if kind == "send_momo" else "bank" if kind == "send_bank" else ""
+        destination = (
+            normalize_ghana_phone(body.get("destination"))
+            if expected_kind == "momo" else str(body.get("destination") or "").strip()
+        )
+        network = body.get("channel") if expected_kind == "momo" else body.get("bank_code")
+        try:
+            age = django_timezone.now().timestamp() - float(checked.get("at", 0))
+        except (TypeError, ValueError):
+            age = 999999
+        if (not expected_kind or not 0 <= age <= 900
+                or checked.get("kind") != expected_kind
+                or checked.get("destination") != destination
+                or checked.get("network") != network
+                or str(checked.get("registered_name") or "").strip().casefold()
+                   != str(body.get("recipient_name") or "").strip().casefold()):
+            raise ValidationError("The verified recipient no longer matches this transfer. Verify the name again.")
         tx = service.create_payout(
             user, body.get("kind"), body.get("amount"), body.get("destination"),
             body.get("recipient_name"), body.get("channel", ""), body.get("bank_code", ""),

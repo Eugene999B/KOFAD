@@ -19,11 +19,16 @@
     const verifiedMessage = form?.querySelector('[data-direct-verified]');
     const message = form?.querySelector('[data-hubtel-direct-message]');
     const payButton = form?.querySelector('[data-direct-pay]');
+    const nameReview = form?.querySelector('[data-direct-name-review]');
+    const registeredName = form?.querySelector('[data-direct-registered-name]');
+    const confirmName = form?.querySelector('[data-direct-name-confirm]');
     const token = form?.querySelector('[name=csrfmiddlewaretoken]')?.value;
     const order = card.dataset.orderId;
     if (!order || !token || !phoneInput || !channelInput || !message) continue;
     const base = '/market/orders/' + encodeURIComponent(order) + '/hubtel-direct/';
     let verifiedPhone = '';
+    let verifiedName = '';
+    let verifiedChannel = '';
     let busy = false;
     let generation = 0;
     function selectedPhone() { return normalizePhone(phoneInput.value); }
@@ -31,9 +36,14 @@
     function reset() {
       generation++;
       verifiedPhone = '';
+      verifiedName = '';
+      verifiedChannel = '';
+      if (nameReview) nameReview.hidden = true;
+      if (registeredName) registeredName.textContent = '';
+      if (confirmName) confirmName.checked = false;
       verifyPanel.hidden = true;
       verifiedMessage.hidden = true;
-      payButton.disabled = false;
+      payButton.disabled = true;
       notify('');
     }
     phoneInput.addEventListener('input', reset);
@@ -48,6 +58,25 @@
       if (!response.ok) throw Error(data.error || 'The request could not be completed.');
       return data;
     }
+    async function verifyRegisteredName(phone, channel) {
+      if (verifiedPhone !== phone) return false;
+      const result = await post(base + 'verify-phone/', {action:'name', phone, channel});
+      if (!result.verified || !result.registered_name) throw Error('Wallet name could not be verified.');
+      if (selectedPhone() !== phone || channelInput.value !== channel) return false;
+      verifiedName = result.registered_name;
+      verifiedChannel = channel;
+      registeredName.textContent = result.registered_name;
+      nameReview.hidden = false;
+      confirmName.checked = false;
+      payButton.disabled = true;
+      notify('Check the registered name, then confirm it belongs to you.');
+      return true;
+    }
+    confirmName?.addEventListener('change', () => {
+      payButton.disabled = !(confirmName.checked && verifiedName && verifiedPhone === selectedPhone() &&
+        verifiedChannel === channelInput.value);
+    });
+    payButton.disabled = true;
     async function checkWallet() {
       const phone = selectedPhone();
       const current = ++generation;
@@ -56,8 +85,9 @@
       verifiedPhone = result.verified ? phone : '';
       verifyPanel.hidden = Boolean(result.verified);
       verifiedMessage.hidden = !result.verified;
-      notify(result.message || (result.verified ? 'Number verified.' : 'Verify your new wallet once by SMS.'));
-      return result.verified;
+      if (result.verified) return verifyRegisteredName(phone, channelInput.value);
+      notify(result.message || 'Verify your wallet by SMS to continue.');
+      return false;
     }
     phoneInput.addEventListener('blur', () => {
       if (phoneInput.value.trim()) void checkWallet().catch(err => notify(err.message));
@@ -70,7 +100,7 @@
       catch (error) { notify(error.message || 'Unable to complete request. Check status before retrying.'); }
       finally {
         busy = false;
-        for (const button of form.querySelectorAll('button')) button.disabled = false;
+        for (const button of form.querySelectorAll('button')) if (button !== payButton) button.disabled = false;
       }
     }
     form.querySelector('[data-hubtel-verify-send]')?.addEventListener('click', () => {
@@ -91,7 +121,7 @@
           verifyPanel.hidden = true;
           verifiedMessage.hidden = false;
           if (codeInput) codeInput.value = '';
-          notify('Wallet verified. Tap Continue to request payment on your phone.');
+          await verifyRegisteredName(phone, channelInput.value);
         }
       });
     });

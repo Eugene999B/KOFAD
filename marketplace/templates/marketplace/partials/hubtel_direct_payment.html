@@ -25,6 +25,7 @@
    <button type="button" class="market-button ghost wide" data-hubtel-verify-code>Verify number</button>
   </section>
   <p class="direct-momo-wallet-ready" data-direct-verified hidden>Number verified. Ready to request payment.</p>
+  <div data-direct-name-review hidden><small>Registered wallet name</small><strong data-direct-registered-name style="display:block"></strong><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-direct-name-confirm> This wallet belongs to me.</label></div>
   <button type="submit" class="market-button primary wide" data-direct-pay>Continue — GHS {{ order.total|floatformat:2 }}</button>
   <p data-hubtel-direct-message class="company-fineprint" role="status" aria-live="polite"></p>
   <p class="company-fineprint">A secure MTN, Telecel or AirtelTigo prompt lets you approve with your MoMo PIN <strong>on your phone</strong>. KOFAD will never collect your PIN.</p>

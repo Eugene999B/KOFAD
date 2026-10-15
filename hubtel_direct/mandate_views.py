@@ -40,10 +40,10 @@ def staff_create_mandate(request):
         count = data.get("installment_count") or None
         end_date = data.get("final_due_date") or None
         source_id = str(data.get("source_document_id") or "").strip()
-        wants_prompt = data.get("customer_requested_prompt") == "yes"
+        wants_prompt = False  # Customer alone initiates wallet consent after phone/name verification.
         if json_mode and not source_id:
             raise ValidationError("The posted credit sale reference is missing. Do not resubmit the sale.")
-        if wants_prompt and data.get("customer_reviewed_schedule") != "yes":
+        if data.get("customer_requested_prompt") == "yes" and data.get("customer_reviewed_schedule") != "yes":
             raise ValidationError("Confirm the customer reviewed the exact amounts, dates and wallet before requesting Hubtel preapproval.")
 
         # The posted sale is the idempotency key: retrying this form must NEVER
@@ -72,7 +72,7 @@ def staff_create_mandate(request):
                 minimum_partial=data.get("minimum_partial") or "0.00",
             )
         prompt_state = "not_requested"
-        prompt_message = "The repayment plan is saved; Hubtel wallet authorization has not been requested."
+        prompt_message = "Repayment plan saved; wallet authorization has not been requested."
         if wants_prompt and mandate.status == "draft":
             if not bool(getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)):
                 prompt_state = "unavailable"
@@ -312,6 +312,7 @@ def customer_authorize(request, mandate_id):
         "mandate": mandate,
         "debt_balance": mandates.outstanding(mandate.party),
         "payment_channel": "MTN MoMo" if mandate.channel == "mtn-gh-direct-debit" else "Telecel Cash",
+        "wallet_identity": request.session.get("wallet_identity:" + str(mandate.pk), {}),
     })
 
 
@@ -319,16 +320,47 @@ def customer_authorize(request, mandate_id):
 def customer_authorize_action(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
     action = request.POST.get("action")
-    if action not in {"start", "confirm", "hubtel_otp", "check"}:
+    if action not in {"start", "confirm", "hubtel_otp", "check", "wallet_code_send", "wallet_code_check"}:
         messages.error(request, "Choose an authorization action.")
         return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
     try:
+        if action == "wallet_code_send":
+            if mandate.status != "draft":
+                raise ValidationError("This agreement is already awaiting approval.")
+            sms_service.send_otp(mandates.mandate_phone(mandate), "momo", request=request)
+            messages.success(request, "A six-digit code has been sent to your wallet phone.")
+        elif action == "wallet_code_check":
+            if mandate.status != "draft":
+                raise ValidationError("This agreement is already awaiting approval.")
+            sms_service.verify_otp(mandates.mandate_phone(mandate), request.POST.get("code", ""), "momo")
+            from . import verification
+            from django.utils import timezone
+            found = verification.inquiry(
+                mandates.mandate_phone(mandate),
+                mandate.channel.replace("-direct-debit", ""),
+            )
+            request.session["wallet_identity:" + str(mandate.pk)] = {
+                "fingerprint": mandate.phone_fingerprint,
+                "name": found["wallet_name"],
+                "at": timezone.now().timestamp(),
+            }
+            request.session.modified = True
+            messages.success(request, "Phone verified. Registered wallet name: " + found["wallet_name"])
         if action in {"start", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
         if action in {"start", "confirm"}:
+            from django.utils import timezone
+            verified = request.session.get("wallet_identity:" + str(mandate.pk), {})
+            try:
+                verified_age = timezone.now().timestamp() - float(verified.get("at", 0))
+            except (TypeError, ValueError, AttributeError):
+                verified_age = 999999
+            if (verified_age >= 1800 or verified.get("fingerprint") != mandate.phone_fingerprint
+                    or not verified.get("name")):
+                raise ValidationError("Verify your wallet number and registered name before requesting approval.")
             if request.POST.get("accepted_terms") != "yes":
                 raise ValidationError("Read and accept the exact scheduled payment amounts, dates and cancellation terms.")
-            if mandates.outstanding(mandate.party) <= 0:
+            if mandates.mandate_outstanding(mandate) <= 0:
                 raise ValidationError("No debt remains to authorize.")
             # Hubtel itself verifies the wallet owner via USSD/OTP.
             # A KOFAD SMS code is never represented as payment authorization.
