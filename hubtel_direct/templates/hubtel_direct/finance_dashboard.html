@@ -1,64 +1,64 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'hubtel_direct/finance.js' %}"></script>
-<section class="panel">
- <div class="section-heading"><div><p class="eyebrow">ONLINE RETURNS / HUBTEL</p><h2>Refund review and reconciliation</h2></div></div>
- {% if not refund_enabled %}<p class="notice subtle"><strong>Live Hubtel refunds are disabled.</strong> Approved KOFAD returns may be reviewed, but no refund will be submitted until the original Order ID is verified and the release is approved.</p>{% endif %}
- <div class="table-wrap"><table class="data-table">
- <thead><tr><th>Created</th><th>KOFAD order</th><th>Original payment</th><th>Amount</th><th>State</th><th>Finance action</th></tr></thead><tbody>
- {% for item in hubtel_refund_cases %}
-  <tr>
-   <td>{{ item.created_at|date:"d M Y H:i" }}</td>
-   <td>{{ item.return_request.order.customer_reference }}</td>
-   <td><code>{{ item.original_transaction_reference }}</code></td>
-   <td>GHS {{ item.amount|floatformat:2 }}</td>
-   <td><strong>{{ item.status|title }}</strong>{% if not item.original_hubtel_order_id %}<small>Original Hubtel Order ID must be verified</small>{% endif %}</td>
-   <td><a href="{% url 'staff_market_return' item.return_request_id %}">Review original return →</a></td>
-  </tr>
- {% empty %}<tr><td colspan="6">No Hubtel refund cases have been prepared yet.</td></tr>{% endfor %}
- </tbody></table></div>
- <p class="muted">Callbacks and timeouts are not proof of a completed refund. Reconcile pending cases with original Hubtel evidence before communicating payment completion to the customer.</p>
-</section>
+{% block head %}
+{{ block.super }}
+<script defer src="{% static 'hubtel_direct/finance.js' %}"></script>
+<link rel="stylesheet" href="{% static 'hubtel_direct/payments_clean.css' %}">
 {% endblock %}
-{% block actions %}<div class="actions"><a class="button secondary" href="/finance/">Finance</a><a class="button secondary" href="/settings/online-payments/">Online payments</a></div>{% endblock %}
+{% block actions %}<div class="actions"><a class="button secondary" href="/finance/">Finance overview</a></div>{% endblock %}
 {% block content %}
-<section class="panel">
- <p class="eyebrow">HUBTEL FINANCIAL CONTROLS</p>
- <h2>Direct Mobile Money and bank transfers</h2>
- <p>Direct receiving: {% if receive_enabled %}<strong>enabled</strong>{% else %}not activated{% endif %}. Wallet disbursements: {% if wallet_enabled %}<strong>enabled</strong>{% else %}not activated{% endif %}. Bank disbursements: {% if bank_enabled %}<strong>enabled</strong>{% else %}not activated{% endif %}.</p>
- <p class="hint">Outgoing money requires an authenticated finance requester and a different MFA-verified company approver. A pending request never proves that money was sent. No payment PIN or bank secret belongs on this page.</p>
-</section>
-{% if wallet_enabled or bank_enabled %}
-<section class="panel">
- <h2>Request a transfer</h2>
- <form data-direct-payout-request>
-  {% csrf_token %}
-  <div class="form-grid">
-   <label>Transfer type<select name="kind" required>{% if wallet_enabled %}<option value="send_momo">Mobile Money</option>{% endif %}{% if bank_enabled %}<option value="send_bank">Bank account</option>{% endif %}</select></label>
-   <label>Amount (GHS)<input name="amount" type="number" step=".01" min=".01" required></label>
-   <label>Business reason<input name="purpose" minlength="6" maxlength="180" required autocomplete="off" placeholder="Supplier invoice or approved refund reference"></label>
-   <label>Recipient's name<input name="recipient_name" minlength="2" maxlength="140" required autocomplete="off"></label>
-   <label>Phone or bank account number<input name="destination" type="text" inputmode="numeric" minlength="6" maxlength="24" required autocomplete="off"></label>
-   <label data-momo-network>Mobile Money network<select name="channel"><option value="mtn-gh">MTN</option><option value="vodafone-gh">Telecel</option><option value="tigo-gh">AirtelTigo</option></select></label>
-   <label data-bank-choice>Bank<select name="bank_code">
-    {% for code in available_banks %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
-   </select></label>
-  </div>
-  <p class="hint">Double-check the recipient, amount and channel. After submission, a different authorised staff member must approve the request.</p>
-  <button class="button" type="submit">Submit for approval</button><p data-direct-payout-message role="status" aria-live="polite"></p>
- </form>
-</section>
-{% endif %}
-<section class="panel">
- <h2>{% if can_approve %}Transfer approval queue and history{% else %}My transfer requests{% endif %}</h2>
- <div class="table-wrap"><table class="data-table"><thead><tr><th>Created</th><th>Reference</th><th>Transfer</th><th>Amount</th><th>Recipient</th><th>Requester</th><th>Status</th><th>Action</th></tr></thead><tbody>
- {% for row in direct_transactions %}
- <tr><td>{{ row.created_at|date:"d M Y H:i" }}</td><td><code>{{ row.client_reference }}</code></td><td>{{ row.get_kind_display }}</td><td>GHS {{ row.amount|floatformat:2 }}</td><td>{{ row.recipient_name }} · ****{{ row.destination_suffix }}<small>{{ row.purpose }}</small></td><td>{{ row.requested_by.get_full_name|default:row.requested_by.username }}</td><td>{{ row.status|title }}</td><td>
-  {% if can_approve and row.status == "approval_pending" and row.requested_by_id != request.user.pk %}
-   <form data-direct-payout-approve data-id="{{ row.pk }}">{% csrf_token %}<button class="button secondary" type="submit">Review and approve</button></form>
-  {% else %}—{% endif %}
- </td></tr>
- {% empty %}<tr><td colspan="8">No saved transfer requests yet.</td></tr>{% endfor %}
- </tbody></table></div>
- <p data-direct-approval-message class="hint" role="status" aria-live="polite"></p>
-</section>
+<main class="payment-workspace">
+  <header class="payment-top">
+    <div><p class="eyebrow">KOFAD / FINANCE</p><h1>Send money</h1><p>Verify the recipient. Submit the transfer. Track the result.</p></div>
+    <a class="button secondary" href="/debts/">Customer repayments</a>
+  </header>
+  {% if wallet_enabled or bank_enabled %}
+  <section class="panel payment-panel">
+    <h2>New transfer</h2>
+    <form data-direct-payout-request autocomplete="off">{% csrf_token %}
+      <div class="payment-grid">
+        <label>Send to<select name="kind" required>{% if wallet_enabled %}<option value="send_momo">Mobile Money</option>{% endif %}{% if bank_enabled %}<option value="send_bank">Bank account</option>{% endif %}</select></label>
+        <label data-momo-network>Network<select name="channel"><option value="mtn-gh">MTN</option><option value="vodafone-gh">Telecel</option><option value="tigo-gh">AirtelTigo</option></select></label>
+        <label data-bank-choice hidden>Bank<select name="bank_code">{% for code in available_banks %}<option value="{{ code }}">{{ code }}</option>{% endfor %}</select></label>
+        <label>Wallet or account number<input name="destination" type="text" inputmode="numeric" minlength="6" maxlength="24" required></label>
+      </div>
+      <div class="payment-verify-row">
+        <button type="button" class="button secondary" data-verify-recipient>Verify recipient</button>
+        <span data-recipient-verification role="status" aria-live="polite">Not verified</span>
+      </div>
+      <label class="payment-registered-name">Registered recipient name
+        <input name="recipient_name" minlength="2" maxlength="140" required readonly placeholder="Verify recipient to fill automatically">
+      </label>
+      <div class="payment-grid">
+        <label>Amount (GHS)<input name="amount" type="number" step="0.01" min="0.01" required></label>
+        <label>Reason<input name="purpose" minlength="6" maxlength="180" required placeholder="Supplier invoice or payroll reference"></label>
+      </div>
+      <label class="payment-check"><input type="checkbox" data-recipient-confirm required disabled> I have checked the verified name and amount.</label>
+      <button class="button" type="submit" disabled data-submit-transfer>Submit for approval</button>
+      <p class="payment-hint">A different authorized approver must release this transfer. Submission is not confirmation of payment.</p>
+      <p data-direct-payout-message role="status" aria-live="polite"></p>
+    </form>
+  </section>
+  {% else %}
+  <section class="panel payment-panel"><h2>Transfers unavailable</h2><p>Money transfers are not enabled for this business account. No request was submitted. An administrator can review the service setup.</p></section>
+  {% endif %}
+  <section class="panel payment-panel">
+    <h2>{% if can_approve %}Transfer approvals & history{% else %}My transfer requests{% endif %}</h2>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>When</th><th>Reference</th><th>Amount</th><th>Recipient</th><th>Status</th><th>Action</th></tr></thead><tbody>
+    {% for row in direct_transactions %}
+      <tr><td>{{ row.created_at|date:"d M H:i" }}</td><td><code>{{ row.client_reference }}</code></td>
+      <td>GHS {{ row.amount|floatformat:2 }}</td><td>{{ row.recipient_name }} · ****{{ row.destination_suffix }}</td>
+      <td>{{ row.status|title }}</td><td>{% if can_approve and row.status == "approval_pending" and row.requested_by_id != request.user.pk %}
+        <form data-direct-payout-approve data-id="{{ row.pk }}">{% csrf_token %}<button class="button secondary" type="submit">Review & approve</button></form>
+        {% else %}—{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="6">No transfers yet.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p data-direct-approval-message role="status" aria-live="polite"></p>
+  </section>
+  {% if hubtel_refund_cases %}
+  <details class="panel payment-panel payment-secondary"><summary>Returns & refund reviews</summary>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Order</th><th>Amount</th><th>Status</th></tr></thead><tbody>
+    {% for item in hubtel_refund_cases %}<tr><td><a href="{% url 'staff_market_return' item.return_request_id %}">{{ item.return_request.order.customer_reference }}</a></td><td>GHS {{ item.amount|floatformat:2 }}</td><td>{{ item.status|title }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </details>{% endif %}
+</main>
 {% endblock %}
