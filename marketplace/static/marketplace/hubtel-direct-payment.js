@@ -121,7 +121,7 @@
           verifyPanel.hidden = true;
           verifiedMessage.hidden = false;
           if (codeInput) codeInput.value = '';
-          notify('Wallet verified. Tap Continue to request payment on your phone.');
+          await verifyRegisteredName(phone, channelInput.value);
         }
       });
     });
