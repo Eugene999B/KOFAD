@@ -39,7 +39,7 @@ def reference_from_key(request_key):
 
 def held_for(reference, *, lock=False):
     if not re.fullmatch(r"[0-9a-f]{32}", str(reference or "")):
-        raise ValidationError("Invalid Hubtel POS reference.")
+        raise ValidationError("Invalid Direct MoMo payment reference.")
     rows = HeldSale.objects.select_related("branch", "user")
     if lock:
         rows = rows.select_for_update()
@@ -227,7 +227,7 @@ def reconcile(reference, *, force=False):
     with transaction.atomic():
         held = held_for(reference, lock=True)
         if not held:
-            raise ValidationError("Unknown Hubtel POS payment.")
+            raise ValidationError("Direct MoMo payment request not found.")
         state = state_of(held)
         if state.get("status") == "success":
             return response_state(held)
@@ -258,7 +258,7 @@ def reconcile(reference, *, force=False):
         except direct_client.StatusUnconfirmed:
             return response_state(held_for(reference))
         except ValidationError:
-            mark_attention(reference, "Hubtel status information did not match this cashier sale. Manager review required.")
+            mark_attention(reference, "Payment status did not match this sale. Manager review is required.")
             return response_state(held_for(reference))
         if outcome == "failed":
             with transaction.atomic():
@@ -266,11 +266,11 @@ def reconcile(reference, *, force=False):
                 result = state_of(held)
                 if result.get("status") in PENDING:
                     result.update(status="failed", next_check_at=None,
-                                  message="Hubtel confirmed the Mobile Money request was unsuccessful.")
+                                  message="The Mobile Money request was unsuccessful.")
                     save_state(held, result)
             return response_state(held_for(reference))
         if outcome == "attention":
-            mark_attention(reference, "Hubtel reported a disputed payment. Manager review required.")
+            mark_attention(reference, "A disputed payment needs manager review.")
             return response_state(held_for(reference))
         if outcome != "success":
             return response_state(held_for(reference))
@@ -298,9 +298,9 @@ def reconcile(reference, *, force=False):
             or verified.get("clientReference") != reference
             or channel not in {"mobilemoney", "momo"}
         ):
-            raise ValidationError("Hubtel transaction details do not match this cashier sale.")
+            raise ValidationError("Payment details do not match this cashier sale.")
     except (TypeError, ValueError, InvalidOperation, ValidationError) as exc:
-        mark_attention(reference, "Hubtel confirmed a transaction but the amount or payment channel needs manager review.")
+        mark_attention(reference, "The amount or payment channel needs manager review.")
         raise ValidationError("Verified payment requires manager review.") from exc
 
     try:
@@ -326,7 +326,7 @@ def reconcile(reference, *, force=False):
             state.update(
                 status="success", document_id=str(doc.pk), verified_at=timezone.now().timestamp(),
                 transaction_id=str(verified["transactionId"])[:80], next_check_at=None,
-                message="Payment independently confirmed by Hubtel; sale posted.",
+                message="Payment independently confirmed; sale recorded.",
             )
             save_state(held, state)
             transaction.on_commit(lambda: pos_paystack._send_receipts(
@@ -375,7 +375,7 @@ def reconcile_due(limit=10, *, include_direct=False):
             continue
         reference = state.get("reference")
         if now - held.created_at >= timedelta(hours=72):
-            mark_attention(reference, "Hubtel has not supplied a final answer after 72 hours. Manager review required.")
+            mark_attention(reference, "This payment is unresolved after 72 hours. Manager review is required.")
             continue
         try:
             reconcile(reference)
