@@ -227,86 +227,16 @@ def begin_preapproval(intent):
     return DirectDebitSaleIntent.objects.get(pk=intent.pk)
 
 
-def _finish_approved(intent_id):
-    """Issue sale and its invoice-scoped contract in a SINGLE DB transaction."""
-    with transaction.atomic():
-        lookup = DirectDebitSaleIntent.objects.select_related("branch", "created_by").get(pk=intent_id)
-        sale_service.lock_branch(lookup.branch)
-        intent = DirectDebitSaleIntent.objects.select_for_update().get(pk=intent_id)
-        if intent.status == "issued" and intent.document_id and intent.mandate_id:
-            return intent
-        if intent.status != "approved" or not intent.provider_approved_at:
-            return intent
-        try:
-            sale = dict(intent.checkout_payload)
-            document = sale_service.post_trade(
-                lookup.created_by, lookup.branch, sale,
-                intent.request_key, kind="sale",
-            )
-            if (document.total != intent.quoted_total or document.paid != intent.quoted_paid
-                    or sale_service.balance(document) != intent.outstanding):
-                raise ValidationError("Sale price or balance changed since the signed schedule; finance review required.")
-            mandate = mandates.create_plan(
-                lookup.created_by, lookup.branch, party_id=document.party_id,
-                phone=client.unseal(intent.phone_encrypted),
-                channel=intent.channel, frequency=intent.frequency,
-                first_due_date=intent.first_due_date,
-                final_due_date=intent.final_due_date,
-                source_document_id=document.pk,
-            )
-            # Never permit policy edits between consent and issuance to
-            # silently change dates, amounts, or collection hours.
-            signed = intent.terms_snapshot or {}
-            calculated = mandate.terms_snapshot or {}
-            if (calculated.get("schedule") != signed.get("schedule")
-                    or calculated.get("collection_window") != signed.get("collection_window")
-                    or str(mandate.maximum_total) != str(intent.outstanding)
-                    or calculated.get("last_due_date") != signed.get("last_due_date")):
-                raise ValidationError(
-                    "The repayment policy changed after customer consent; signed terms cannot be altered."
-                )
-            # The actual Hubtel preapproval identity belongs to the INTENT's
-            # unique client reference, not a new synthetic mandate reference.
-            mandate.client_reference = intent.client_reference
-            mandate.hubtel_preapproval_id = intent.hubtel_preapproval_id
-            mandate.verification_type = intent.verification_type
-            mandate.otp_prefix = ""
-            mandate.provider_approved_at = intent.provider_approved_at
-            mandate.status = "approved"
-            mandate.terms_snapshot = {
-                **mandate.terms_snapshot,
-                "v2_sale_intent": str(intent.pk),
-                "provider_verified_ref": intent.client_reference,
-            }
-            mandate.save(update_fields=[
-                "client_reference", "hubtel_preapproval_id", "verification_type",
-                "otp_prefix", "provider_approved_at", "status", "terms_snapshot", "updated_at",
-            ])
-            intent.document = document
-            intent.mandate = mandate
-            intent.party = document.party
-            intent.status = "issued"
-            intent.last_error = ""
-            intent.save(update_fields=[
-                "document", "mandate", "party", "status", "last_error", "updated_at",
-            ])
-            sale_service.audit(
-                lookup.created_by, lookup.branch, "hubtel_debt.v2_sale_issued",
-                document.reference, {"intent": str(intent.pk), "mandate": str(mandate.pk)},
-                category="finance",
-            )
-            return intent
-        except (ValidationError, ValueError) as exc:
-            # Ensure the entire transaction rolls back, including inventory
-            # and document writes. A separate transaction records attention.
-            raise ValidationError("Provider approved, but sale finalization requires review: " + str(exc)) from exc
+# Direct Debit preapproval is only authority to request future instalments.
+# It must NEVER call post_trade(), issue a sales receipt, or move stock.
+# Issued invoices are created by the ordinary explicit POS Record Sale action.
 
 
 def reconcile_one(intent, *, force=False):
     if intent.status not in {"pending", "unknown", "sending", "approved"}:
         return intent
     if intent.status == "approved":
-        return _finalize_with_review(intent.pk)
+        return intent
     if not force and intent.next_provider_check_at and intent.next_provider_check_at > timezone.now():
         return intent
     state = debit_api.preapproval_status(
@@ -324,6 +254,8 @@ def reconcile_one(intent, *, force=False):
         if state == "APPROVED":
             row.status = "approved"
             row.provider_approved_at = now
+            row.next_provider_check_at = None
+            row.last_error = "Wallet preapproval verified. No sale, invoice, or payment was recorded; handle sales and debt agreements separately."
         elif state in {"REJECTED", "FAILED", "EXPIRED", "CANCELLED"}:
             row.status = "rejected"
             row.next_provider_check_at = None
@@ -332,27 +264,15 @@ def reconcile_one(intent, *, force=False):
             "last_provider_check_at", "next_provider_check_at", "status",
             "provider_approved_at", "last_error", "updated_at",
         ])
-    if state == "APPROVED":
-        return _finalize_with_review(intent.pk)
+    # Provider approval alone changes no sale, stock, invoice, or payment.
+    # Staff may separately record a credit sale and establish invoice-scoped terms.
     return DirectDebitSaleIntent.objects.get(pk=intent.pk)
-
-
-def _finalize_with_review(intent_id):
-    try:
-        return _finish_approved(intent_id)
-    except (ValidationError, ValueError) as exc:
-        # Approval remains independently verified, but NO sale is issued.
-        DirectDebitSaleIntent.objects.filter(pk=intent_id, status="approved").update(
-            status="attention", last_error=str(exc)[:240],
-            next_provider_check_at=None,
-        )
-        return DirectDebitSaleIntent.objects.get(pk=intent_id)
 
 
 def reconcile_due(limit=10):
     now = timezone.now()
     rows = list(DirectDebitSaleIntent.objects.filter(
-        status__in=["pending", "unknown", "sending", "approved"],
+        status__in=["pending", "unknown", "sending"],
         next_provider_check_at__lte=now,
     ).order_by("next_provider_check_at").values_list("pk", flat=True)[:max(1, min(int(limit), 40))])
     done = 0
