@@ -121,8 +121,17 @@ def _json(request):
 
 def _answer(tx, code=200):
     response = JsonResponse({
-        "reference": tx.client_reference, "kind": tx.kind, "status": tx.status,
+        "id": str(tx.pk), "reference": tx.client_reference, "kind": tx.kind, "status": tx.status,
         "amount": str(tx.amount), "currency": "GHS",
+        "message": (
+            "Awaiting approval by another authorized person. No money has been sent."
+            if tx.status == "approval_pending" else
+            "Transfer request is processing. Do not submit another transfer."
+            if tx.status in service.ACTIVE else
+            "Transfer verified and completed." if tx.status == "success" else
+            "Transfer needs review. Do not submit it again." if tx.status == "attention" else
+            "Transfer not completed."
+        ),
         "next_check_after_seconds": 300 if tx.status in service.ACTIVE else None,
     }, status=code)
     response["Cache-Control"] = "no-store"
@@ -492,8 +501,18 @@ def payout_approve(request, tx_id):
 @require_GET
 def payout_detail(request, tx_id):
     try:
-        _finance_staff(request, approval=True)
+        user = _finance_staff(request)
     except PermissionDenied as exc:
         return _error(exc, 403)
     tx = get_object_or_404(DirectTransaction, pk=tx_id, kind__in=["send_momo", "send_bank"])
-    return _answer(tx)
+    if tx.requested_by_id != user.pk and not user.has_perm("core.manage_company"):
+        return _error(PermissionDenied("This transfer is not accessible."), 403)
+    if request.GET.get("format") == "json":
+        return _answer(tx)
+    from django.shortcuts import render
+    response = render(request, "hubtel_direct/transfer_verification.html", {
+        "transfer": tx, "transfer_kind": "Mobile Money" if tx.kind == "send_momo" else "Bank transfer",
+    })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
