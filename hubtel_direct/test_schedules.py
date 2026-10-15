@@ -169,8 +169,11 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         response = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="action" value="start"')
-        self.assertContains(response, "Hubtel, not KOFAD SMS")
-        self.assertNotContains(response, "Send my six-digit code")
+        self.assertContains(response, "Verify your wallet")
+        self.assertContains(response, 'name="action" value="wallet_code_send"')
+        self.assertContains(response, 'name="action" value="wallet_code_check"')
+        self.assertContains(response, "Verify number &amp; name")
+        self.assertNotContains(response, "Hubtel, not KOFAD SMS")
 
     def test_agreement_sms_is_disclosure_only_not_hubtel_authorization(self):
         from django.urls import reverse
