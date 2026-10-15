@@ -344,7 +344,7 @@ def customer_authorize_action(request, mandate_id):
                 "at": timezone.now().timestamp(),
             }
             request.session.modified = True
-            messages.success(request, "Phone verified. Confirm the registered name on this page.")
+            messages.success(request, "Phone verified. Registered wallet name: " + found["wallet_name"])
         if action in {"start", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
         if action in {"start", "confirm"}:
