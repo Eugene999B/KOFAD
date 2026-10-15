@@ -26,6 +26,8 @@
    {% else %}
     <p>Check your phone for Hubtel's USSD prompt. MTN fallback: *170# → My Wallet → My Approvals → PreApprovals.</p>
    {% endif %}
+  {% elif intent.status == "approved" %}
+   <h2>Wallet authorization confirmed</h2><p>Hubtel approved the wallet preapproval only. KOFAD has not recorded a sale, paid receipt or wallet deduction through this authorization. Contact the business for details about any separate purchase.</p>
   {% elif intent.status == "issued" %}
    <h2>Wallet approval verified · sale issued</h2><p>Your sales receipt has been issued by KOFAD. Deductions will only follow the agreement and enabled merchant collection policy.</p>
   {% elif intent.status == "rejected" %}
