@@ -1103,9 +1103,8 @@
   function updateConsentAvailability() {
     if (!customerConsent) return;
     const available = hasAttachedCustomer();
-    // Keep the receipt-SMS choice user-controlled at all times. It starts ON,
-    // but cashiers must be able to turn it OFF before or after attaching a
-    // customer. The backend still sends only when a valid recipient exists.
+    // Receipt messages are optional and OFF by default. An actual sale
+    // and a Direct Debit agreement never imply consent to send an SMS.
     customerConsent.disabled = false;
     customerConsent.closest("#customer-consent-wrap")?.classList.toggle("no-recipient", !available);
     // A customer lookup must never overwrite the cashier\u0027s choice.
@@ -1230,14 +1229,18 @@
     if (completeButton && !purchase) {
       completeButton.textContent = active && paystackMomoReady
         ? (momoGateway === "hubtel" ? "Send Hubtel Direct MoMo Request" : "Send MoMo Approval Request")
-        : "Complete Sale & Generate Receipt";
+        : (paymentPlan?.value === "credit"
+          ? "Record unpaid credit sale" : paymentPlan?.value === "part"
+          ? "Record part-paid sale" : "Record sale");
     }
     if (completeSaleHint && !purchase) {
       completeSaleHint.textContent = active && paystackMomoReady
         ? (momoGateway === "hubtel"
           ? "Confirm the wallet name first, then KOFAD sends a direct Mobile Money prompt and posts the sale after verified payment."
           : "KOFAD verifies the MoMo deposit with Paystack before recording the sale and any remaining customer debt. The receipt shows paid and balance due.")
-        : "One click posts the transaction. After a sale, the receipt and its Print / PDF / SMS actions appear immediately.";
+        : (paymentPlan?.value === "credit"
+          ? "Record an unpaid credit invoice only. To request instalment authorization, open that invoice and choose Set up Direct Debit."
+          : "Recording a genuine sale creates its sales invoice. It does not grant permission to debit a wallet.");
     }
   }
 
@@ -1517,7 +1520,9 @@
       }
     }
 
-    pendingDebitSetup = purchase ? null : validateDirectDebitSetup(grandTotal, paidNow, party, newName);
+    // Direct Debit is never a checkout payment method and never a sale.
+    // Wallet authorizations are created independently from unpaid invoices.
+    pendingDebitSetup = null;
     return {
       kind: root.dataset.kind,
       items: cart.map(({product, newProduct, mode, quantity, price, discount}) => ({
@@ -1779,9 +1784,10 @@
     document.querySelector("#success-reference").textContent = result.reference || "Receipt";
     const successHeadline = document.querySelector("#sale-success-headline");
     const successEyebrow = document.querySelector("#sale-success-eyebrow");
-    if (successHeadline) successHeadline.textContent = pendingDebitSetup
-      ? "Credit sale saved; Direct Debit not yet authorized" : "Receipt ready";
-    if (successEyebrow) successEyebrow.textContent = pendingDebitSetup ? "CREDIT SALE RECORDED" : "SALE COMPLETE";
+    const saleHasDebt = Number(result.total || 0) > Number(result.paid || 0);
+    if (successHeadline) successHeadline.textContent = saleHasDebt
+      ? "Credit invoice recorded — balance unpaid" : "Sale recorded";
+    if (successEyebrow) successEyebrow.textContent = saleHasDebt ? "UNPAID SALE · NOT A PAYMENT" : "SALE RECORDED";
     document.querySelector("#success-total").textContent = Number(result.total || 0).toFixed(2);
     const successPaid = document.querySelector("#success-paid");
     const successBalance = document.querySelector("#success-balance");
@@ -1789,8 +1795,8 @@
     if (successPaid) successPaid.textContent = Number(result.paid || 0).toFixed(2);
     if (successBalance) successBalance.textContent = Math.max(Number(result.total || 0) - Number(result.paid || 0), 0).toFixed(2);
     if (successPayment) {
-      successPayment.textContent = pendingDebitSetup
-        ? "Credit sale recorded — Hubtel wallet approval not yet confirmed"
+      successPayment.textContent = saleHasDebt
+        ? "Unpaid balance · no Direct Debit approval or collection"
         : selectedPaymentMethod === "split"
         ? "Mixed payment"
         : (selectedPaymentMethod ? selectedPaymentMethod.toUpperCase() + " payment" : "Payment recorded");
@@ -1799,17 +1805,11 @@
       ? result.customer.name + (result.customer.phone ? " · " + result.customer.phone : "")
       : "Walk-in customer";
 
-    if (debitAuthorizationForm) {
-      const hasDebt = Number(result.total || 0) > Number(result.paid || 0);
-      const ready = Boolean(pendingDebitSetup && hasDebt && result.customer?.id);
-      debitAuthorizationForm.classList.toggle("hidden", !ready);
-      if (ready) {
-        const data = {...pendingDebitSetup, party:String(result.customer.id),
-          source_document_id:String(result.document_id || "")};
-        for (const [field,value] of Object.entries(data)) {
-          const target = debitAuthorizationForm.querySelector('[name="' + field + '"]');
-          if (target) target.value = value;
-        }
+    const separateDebitLink = document.querySelector("#sale-direct-debit-link");
+    if (separateDebitLink) {
+      separateDebitLink.classList.toggle("hidden", !(saleHasDebt && result.document_id && result.customer?.id));
+      if (saleHasDebt && result.document_id && result.customer?.id) {
+        separateDebitLink.href = "/debts/hubtel/invoices/" + encodeURIComponent(result.document_id) + "/attach/";
       }
     }
 
@@ -1895,7 +1895,7 @@
     if (paystackMomoEmail) paystackMomoEmail.value = "";
     if (paystackMomoProvider) paystackMomoProvider.value = "mtn";
     setMomoStatus("");
-    if (customerConsent) customerConsent.checked = true;
+    if (customerConsent) customerConsent.checked = false;
     if (customerWhatsApp) customerWhatsApp.checked = false;
     if (paymentPlan) paymentPlan.value = "full";
     if (dueDate) dueDate.value = "";
@@ -1963,19 +1963,11 @@
 
       root.querySelectorAll("input,select,textarea,button").forEach(control => control.disabled = true);
       button.disabled = false;
-      if (pendingBody?.direct_debit_v2) {
-        // The ONLY supported Direct Debit sale path. The server validates a
-        // reversible sale preview, saves an intent and contacts Hubtel before
-        // issuing any sale/inventory movement/receipt or collection.
-        const terms = pendingBody.direct_debit_terms;
-        if (!terms) throw new Error("Direct Debit terms were lost. No sale was posted; review the agreement again.");
-        const intent = await api("/api/direct-debit/sale-intents/",
-          {sale:pendingBody, direct_debit:terms}, requestKey);
-        if (!intent?.staff_url) throw new Error("The authorization server did not return an approval waiting page. No sale was issued.");
-        completed = true;
-        clearStored();
-        window.location.assign(intent.staff_url);
-        return;
+      if (pendingBody?.direct_debit_v2 || pendingBody?.direct_debit_terms) {
+        // A cached, pre-redesign combined checkout must never auto-post an
+        // invoice or initiate Hubtel. We never turn debit consent into sale.
+        pendingBody = null;
+        throw new Error("The combined Direct Debit checkout was retired. No sale or wallet prompt was created. Refresh New Sale to record an actual credit purchase, then open its invoice to set up Direct Debit.");
       }
       const result = await api("/api/trades/", pendingBody, requestKey);
       if (heldId) {
