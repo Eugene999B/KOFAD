@@ -16,17 +16,17 @@
     <div class="notice subtle">
       <small>AUTHORIZATION</small>
       {% if mandate.status == "approved" %}
-      <h3>Approved by Hubtel</h3>
+      <h3>Wallet authorization confirmed</h3>
       <p>Wallet holder approved the collection authority. No sale, receipt, or payment has been created by this approval. Eligible future charges follow the agreed schedule and merchant safety switches.</p>
       {% elif mandate.status == "pending" %}
       <h3>Waiting for wallet approval</h3>
-      <p>Customer must approve the Hubtel prompt (USSD) or provide Hubtel's OTP on their own secure page.</p>
+      <p>Customer needs to approve on their phone. KOFAD will update this status after verification.</p>
       {% elif mandate.status == "draft" %}
       <h3>Waiting for the customer</h3>
       {% if preapproval_active %}
-      <p>Open the customer link below to confirm ownership and request a real Hubtel wallet approval prompt.</p>
+      <p>Share the secure approval link with the customer.</p>
       {% else %}
-      <p>Hubtel preapproval has not been activated for this merchant. The repayment plan is saved, but no USSD prompt can be sent yet.</p>
+      <p>Wallet authorization is unavailable. The agreement is saved, but no approval request was sent.</p>
       {% endif %}
       {% else %}
       <h3>{{ mandate.get_status_display }}</h3>
@@ -40,27 +40,27 @@
     {% csrf_token %}
     <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
       <input type="checkbox" name="customer_requested_prompt" value="yes" required>
-      <span>The customer has reviewed the dates and amounts below and asked KOFAD to send a Hubtel preapproval prompt to their wallet.</span>
+      <span>The customer reviewed the amount and dates and requested wallet authorization.</span>
     </label>
-    <button type="submit" class="button">Send Hubtel approval prompt to customer phone</button>
-    <p class="muted">This initiates only the provider's USSD/OTP authorization request. It does not debit or approve the wallet.</p>
+    <button type="submit" class="button">Request wallet approval</button>
+    <p class="muted">This requests consent only. It does not collect money.</p>
   </form>
   {% else %}
   <div class="notice subtle" role="status" style="margin-top:16px">
-    <strong>Hubtel prompt activation required.</strong> The schedule is saved; a real wallet prompt cannot be sent until this merchant's provider preapproval switch is configured and verified.
+    <strong>Wallet approval unavailable.</strong> The schedule is saved. Contact a system administrator.
   </div>
   {% endif %}
   {% endif %}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
-    <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Open customer approval page ↗</a>
+    <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Customer approval page ↗</a>
     {% if mandate.status == "draft" or mandate.status == "pending" %}
     <form method="post" action="{% url 'hubtel_debt_staff_send_agreement' mandate.pk %}">
-      {% csrf_token %}<button class="button secondary" type="submit">SMS repayment timetable and approval link</button>
+      {% csrf_token %}<button class="button secondary" type="submit">Send customer link</button>
     </form>
     {% endif %}
     {% if mandate.status == "pending" %}
     <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
-      {% csrf_token %}<button class="button secondary" type="submit">Check Hubtel approval status</button>
+      {% csrf_token %}<button class="button secondary" type="submit">Refresh approval status</button>
     </form>
     {% endif %}
     <a class="button secondary" href="{% url 'debts' %}?type=direct&customer={{ mandate.party_id }}">Open debtor account</a>
@@ -82,9 +82,9 @@
   {% else %}
   <p>GHS {{ mandate.amount_per_period|floatformat:2 }} per {{ mandate.get_frequency_display|lower }} period, capped at the recorded balance.</p>
   {% endif %}
-  <p class="muted">The SMS contains the first and final dates, payment amounts, collection hours and a link to the complete timetable. It is not a debit instruction or customer approval.</p>
-  <p class="muted" id="debit-status-refresh-note" role="status" aria-live="polite">Authorization status is checked on KOFAD automatically. Use “Check Hubtel approval status” while a provider request is pending to verify with Hubtel directly.</p>
-  <p class="muted">A dated schedule is an authorization limit, not confirmation of a payment. Provider status is independently checked before KOFAD posts a collection receipt. Cancelled or fully paid debt is never eligible for a new debit.</p>
+  <p class="muted">Customer messages contain the payment schedule and a secure link.</p>
+  <p class="muted" id="debit-status-refresh-note" role="status" aria-live="polite">Authorization status is checked on KOFAD automatically. Use “Refresh approval status” while a provider request is pending to verify with Hubtel directly.</p>
+  <p class="muted">Approval does not mean payment received. Deductions are confirmed separately.</p>
 </section>
 {% if mandate.status == "draft" or mandate.status == "pending" %}
 <script>
@@ -103,7 +103,7 @@
       if (result.status !== lastStatus) {
         badge.textContent = result.status_label;
         note.textContent = result.provider_confirmed
-          ? "Hubtel authorization independently confirmed. Updating status…"
+          ? "Wallet authorization independently confirmed. Updating status…"
           : "Authorization status has changed. Updating details…";
         lastStatus = result.status;
         window.location.reload();
