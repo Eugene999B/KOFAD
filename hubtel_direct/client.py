@@ -6,6 +6,7 @@ A lost POST response is NEVER retried; reconcile by saved ClientReference.
 """
 import base64
 import hashlib
+import logging
 import os
 import re
 from decimal import Decimal, InvalidOperation
@@ -15,6 +16,8 @@ import requests
 from cryptography.fernet import Fernet
 from django.conf import settings
 from django.core.exceptions import ValidationError
+
+log = logging.getLogger(__name__)
 
 RECEIVE_ORIGIN = "https://rmp.hubtel.com"
 SEND_ORIGIN = "https://smp.hubtel.com"
@@ -190,27 +193,57 @@ def _parse(response):
 
 
 def submit(tx):
-    """At most one POST for each persisted reference. Caller owns state transition."""
+    """Submit ONE previously persisted request to Hubtel. Never retry a money POST.
+
+    Diagnostic logs contain only a short reference fingerprint, HTTP status and
+    Hubtel response code. Wallet numbers, account numbers and API keys are not logged.
+    """
     require_enabled(tx.kind)
+    reference_tag = hashlib.sha256(str(tx.client_reference).encode()).hexdigest()[:12]
     try:
         response = requests.post(
             _submit_url(tx), json=_payload(tx), headers=_headers(),
             timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
-        if not 200 <= response.status_code < 300:
-            # Even an HTTP error can hide provider-side acceptance: never auto-retry.
-            raise SubmissionUnknown("Hubtel POST outcome could not be confirmed.")
-        code, data = _parse(response)
-        if code in {"0000", "0001"}:
-            if (_field(data, "ClientReference") != tx.client_reference
-                    or not str(_field(data, "TransactionId") or "").strip()):
-                raise SubmissionUnknown("Hubtel transaction identity could not be confirmed.")
-            return code, str(_field(data, "TransactionId"))[:100]
-        if code in {"2001", "3050", "4000", "4070", "4075", "4101", "4103"}:
-            raise ProviderRejected(code)
-        raise SubmissionUnknown("Hubtel response was not a definitive rejection.")
-    except (requests.RequestException, StatusUnconfirmed) as exc:
-        raise SubmissionUnknown("Hubtel POST outcome unknown; no repeat request is safe.") from exc
+    except requests.RequestException as exc:
+        log.warning("Hubtel direct submit transport-unconfirmed kind=%s ref=%s error=%s",
+                    tx.kind, reference_tag, type(exc).__name__)
+        raise SubmissionUnknown("Hubtel POST outcome unknown; check the original reference before doing anything else.") from exc
+
+    try:
+        body = response.json()
+    except (ValueError, TypeError):
+        log.warning("Hubtel direct submit malformed-response kind=%s ref=%s http=%s",
+                    tx.kind, reference_tag, response.status_code)
+        raise SubmissionUnknown("Hubtel returned no verifiable response; check the original reference.")
+    if not isinstance(body, dict):
+        raise SubmissionUnknown("Hubtel response could not be verified.")
+    # Read the response code BEFORE requiring Data: Hubtel may return 4101,
+    # 4103, 4000 etc. with no Data object. Those are definitive rejections, not
+    # pending wallet prompts. Old parsing obscured this crucial diagnosis.
+    code = str(_field(body, "ResponseCode") or "").strip()[:20]
+    log.info("Hubtel direct submit response kind=%s ref=%s http=%s code=%s",
+             tx.kind, reference_tag, response.status_code, code or "absent")
+    if code in {"2001", "3050", "4000", "4070", "4075", "4101", "4103"}:
+        raise ProviderRejected(code)
+    if response.status_code in {400, 401, 403, 404, 422}:
+        raise ProviderRejected(code or str(response.status_code))
+    if not 200 <= response.status_code < 300:
+        # 5xx and 429 could conceal a provider-side accepted transaction.
+        raise SubmissionUnknown("Provider outcome unknown; never send this request again.")
+    if code not in {"0000", "0001"}:
+        raise SubmissionUnknown("Hubtel has not confirmed acceptance of this original request.")
+    data = _field(body, "Data")
+    if not isinstance(data, dict):
+        raise SubmissionUnknown("Hubtel did not return a verifiable transaction record.")
+    if _field(data, "ClientReference") != tx.client_reference:
+        raise SubmissionUnknown("Hubtel transaction reference did not match.")
+    transaction_id = str(_field(data, "TransactionId") or "").strip()
+    if not transaction_id:
+        raise SubmissionUnknown("Hubtel accepted a request but its transaction ID was not confirmed.")
+    # 0001 means ACCEPTED/PENDING, not that the wallet actually received a
+    # prompt. Only a later verified status/callback can prove collection.
+    return code, transaction_id[:100]
 
 
 def check(tx):
