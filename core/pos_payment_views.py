@@ -158,6 +158,8 @@ def _direct_snapshot(request, branch, reference):
         doc = pos_hubtel.Document.objects.filter(pk=state["document_id"], branch=branch).first()
     raw_phone = str(state.get("phone") or "")
     phase = status.get("status") or "pending"
+    if phase == "success" and not doc:
+        phase = "attention"  # Missing receipt must not be painted as a completed sale.
     return {
         "reference": reference, "status": phase,
         "display_status": "Payment confirmed" if doc else "Payment needs review" if status.get("attention")
@@ -171,7 +173,7 @@ def _direct_snapshot(request, branch, reference):
         "cashier": held.user.get_full_name() or held.user.get_username(),
         "created_at": held.created_at, "transaction_id": str(state.get("transaction_id") or ""),
         "paid": bool(doc), "pending": bool(status.get("waiting")),
-        "failed": bool(status.get("failed")), "attention": bool(status.get("attention")),
+        "failed": bool(status.get("failed")), "attention": phase == "attention",
         "needs_otp": False, "is_direct": True,
         "receipt": "/documents/" + str(doc.pk) + "/" if doc else "",
         "receipt_thermal": "/documents/" + str(doc.pk) + "/pdf/thermal80/" if doc else "",
