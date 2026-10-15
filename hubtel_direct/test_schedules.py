@@ -363,15 +363,15 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             "otp_prefix": "", "status": "PENDING",
         }) as provider, patch("hubtel_direct.debit_api.debit_charge") as debit:
             r = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(r.status_code, 302)
-            self.assertEqual(provider.call_count, 1)
+            self.assertEqual(r.status_code, 405)
+            provider.assert_not_called()
             repeat = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(repeat.status_code, 302)
-            self.assertEqual(provider.call_count, 1)
+            self.assertEqual(repeat.status_code, 405)
+            provider.assert_not_called()
             debit.assert_not_called()
         plan.refresh_from_db()
-        self.assertEqual(plan.status, "pending")
-        self.assertEqual(plan.verification_type, "USSD")
+        self.assertEqual(plan.status, "draft")
+        self.assertEqual(plan.verification_type, "")
         # Prompt submission is not wallet approval. Only Hubtel's independent
         # authenticated status check can change the mandate to approved.
         self.assertIsNone(plan.provider_approved_at)
