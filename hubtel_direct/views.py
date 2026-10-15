@@ -315,7 +315,7 @@ def finance_dashboard(request):
     if not manager:
         refunds = refunds.filter(created_by=request.user)
     response = render(request, "hubtel_direct/finance_dashboard.html", {
-        "title": "Hubtel Direct transfers",
+        "title": "Send money",
         "direct_transactions": qs.order_by("-created_at")[:80],
         "hubtel_refund_cases": refunds.order_by("-created_at")[:60],
         "refund_enabled": getattr(settings, "HUBTEL_REFUNDS_ENABLED", False),
