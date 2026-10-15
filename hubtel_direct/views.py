@@ -209,7 +209,7 @@ def verify_registered_phone(request, order_id):
         if order.status != "awaiting_payment" or order.payment_status in {"paid", "refunded"}:
             raise ValidationError("This order cannot accept a new payment request.")
         body = _json(request)
-        if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}):
+        if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}, {"action", "phone", "channel"}):
             raise ValidationError("Enter the Mobile Money number and verification action.")
         from core.identity import normalize_ghana_phone
         phone = normalize_ghana_phone(body.get("phone"))
