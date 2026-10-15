@@ -1731,10 +1731,10 @@
     if (momoGateway === "hubtel") {
       const mapped = {"mtn": "mtn-gh", "atl": "tigo-gh", "vod": "vodafone-gh"}[provider];
       if (!walletConsent?.checked || !walletProof || walletVerifiedNumber !== normalizeGhanaPhone(phone) || walletVerifiedChannel !== mapped) {
-        throw new Error("First verify the selected Mobile Money number with Hubtel and confirm the wallet owner's name.");
+        throw new Error("Verify the selected MoMo number and confirm the registered wallet name first.");
       }
     }
-    setMomoStatus(momoGateway === "hubtel" ? "Sending direct Mobile Money approval prompt…" : "Sending Mobile Money approval request…");
+    setMomoStatus("Sending Mobile Money approval request…");
     lockCheckoutForMomo(true);
     try {
       const result = await api("/api/pos/paystack-momo/start/", {
@@ -1984,7 +1984,7 @@
         const momoAmount = cents(document.querySelector("#pay-momo")?.value || "0");
         if (momoAmount > 0) {
           if (!paystackMomoReady) {
-            throw new Error("Mobile Money payments through " + (momoGateway === "hubtel" ? "Hubtel" : "Paystack") + " are awaiting activation.");
+            throw new Error("Direct Mobile Money payments are not activated. Ask an administrator to check payment settings.");
           }
           if (!directMomoSelected()) {
             throw new Error("Choose Mobile Money as the single payment method. For a smaller deposit, select Part payment so the balance is recorded as customer debt.");
