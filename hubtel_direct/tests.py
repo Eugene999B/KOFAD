@@ -250,7 +250,7 @@ class DirectWorkflowTests(MarketFixtures):
         verification_page = self.client.get(
             "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/", HTTP_HOST="staff.kofadimpex.com"
         )
-        self.assertEqual(verification_page.status_code, 200)
+        self.assertEqual(verification_page.status_code, 200, verification_page.get("Location"))
         self.assertContains(verification_page, 'data-kpay-mode="transfer"')
         status_read = self.client.get(
             "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/?format=json", HTTP_HOST="staff.kofadimpex.com"
