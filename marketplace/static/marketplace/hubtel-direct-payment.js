@@ -30,6 +30,7 @@
     let verifiedName = '';
     let verifiedChannel = '';
     let busy = false;
+    let submissionUncertain = false;
     let generation = 0;
     function selectedPhone() { return normalizePhone(phoneInput.value); }
     function notify(text) { message.textContent = text; }
@@ -55,7 +56,11 @@
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      if (!response.ok) throw Error(data.error || 'The request could not be completed.');
+      if (!response.ok) {
+        const error = new Error(data.error || 'The request could not be completed.');
+        error.rejected = response.status >= 400 && response.status < 500;
+        throw error;
+      }
       return data;
     }
     async function verifyRegisteredName(phone, channel) {
@@ -108,7 +113,7 @@
         try {
           sameWallet = verifiedPhone === selectedPhone() && verifiedChannel === channelInput.value;
         } catch (_) { /* Invalid input stays blocked. */ }
-        payButton.disabled = !(sameWallet && verifiedName && confirmName?.checked);
+        payButton.disabled = submissionUncertain || !(sameWallet && verifiedName && confirmName?.checked);
       }
     }
     form.querySelector('[data-hubtel-verify-send]')?.addEventListener('click', () => {
@@ -167,7 +172,10 @@
               }
             }
           } catch (_) { /* Network still unavailable; don't resubmit. */ }
-          notify('Payment status could not be confirmed. Open this order again and check for a pending request before retrying. ' + (error.message || ''));
+          if (!error.rejected) submissionUncertain = true;
+          notify(error.rejected
+            ? error.message
+            : 'Payment request outcome unknown. Check your original order/payment status before attempting another request. Do not approve a duplicate.');
         }
       });
     });
