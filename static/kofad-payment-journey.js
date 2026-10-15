@@ -40,7 +40,10 @@
       knownState = state;
       const phase = phaseOf(data);
       root.dataset.phase = phase;
-      if (title) title.textContent = titles[phase];
+      if (title) title.textContent = mode === 'authorization' && state === 'draft'
+        ? 'Review wallet agreement'
+        : mode === 'transfer' && state === 'approval_pending'
+        ? 'Awaiting transfer approval' : titles[phase];
       if (mark) mark.textContent = phase === 'success' ? '✓' : phase === 'failed' ? '×' : phase === 'review' ? '!' : '••';
       if (detail && data.message && phase !== 'success') detail.textContent = String(data.message).slice(0,240);
       if (phase === 'success' && detail) detail.textContent = mode === 'authorization'
