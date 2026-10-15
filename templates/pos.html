@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'pos.js' %}?v=20261015-separate-debit"></script>{% endblock %}
+{% block head %}<script defer src="{% static 'pos.js' %}?v=20261015-recover-checkout"></script>{% endblock %}
 {% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">{% if not purchase %}<link rel="stylesheet" href="{% static 'pos-simple-v3.css' %}">{% endif %}{% endblock %}
 {% block actions %}
 <div class="actions">
@@ -28,6 +28,17 @@
 
 {% if not purchase %}<div class="simple-sale-intro"><div><p class="eyebrow">KOFAD / COUNTER</p><h2>New sale</h2><p>Add products, choose a customer, then record the actual payment.</p></div><a class="simple-debit-link" href="/debts/">Manage Direct Debit ↗</a></div>{% endif %}
 <div id="pos-error" class="notice error hidden" role="alert"></div>
+{% if not purchase %}
+<section id="pos-interrupted-checkout" class="notice subtle pos-recovery-banner hidden" role="status" aria-live="polite">
+  <h3>Previous payment still being checked</h3>
+  <p>The previous checkout is locked to prevent duplicate charges. You may check its original status or begin a <strong>different sale</strong>. Do not charge the same purchase again until the first request is resolved.</p>
+  <p class="pos-recovery-reference" id="pos-recovery-reference"></p>
+  <div class="pos-recovery-actions">
+    <a id="pos-recovery-detail" class="button secondary" href="/payments/momo/">View original payment</a>
+    <a id="pos-recovery-new" class="button" href="/sales/new/?new=1">Start a different sale</a>
+  </div>
+</section>
+{% endif %}
 
 <div class="counter-layout chalin-sale-layout">
 <section class="counter-products chalin-sale-builder" aria-label="Product search and sale items">
