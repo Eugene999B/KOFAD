@@ -259,7 +259,8 @@
             <button id="paystack-momo-otp-submit" type="button">Verify payment code</button>
           </div>
           {% if pos_momo_gateway == "paystack" %}<div id="momo-deposit-summary" class="momo-deposit-summary" aria-live="polite"><div><span>MoMo to collect now</span><strong id="momo-deposit-amount">GHS 0.00</strong></div><div><span>Balance to customer debt</span><strong id="momo-balance-amount">GHS 0.00</strong></div></div><p class="hint">Confirm the wallet number with the customer. Their MoMo PIN must only be entered on their own phone.</p>{% endif %}
-          <p id="paystack-momo-status" class="hint" role="status" aria-live="polite"></p>
+          <p id="paystack-momo-status" class="notice subtle" role="status" aria-live="polite"></p>
+           <button type="button" class="button secondary hidden" id="momo-check-status">Check payment status</button>
           {% else %}
           <p>Direct Mobile Money is not active. Ask an administrator to check the payment setup.</p>
           {% endif %}
