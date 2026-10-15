@@ -1243,54 +1243,18 @@ def order_pay(request, customer, pk):
     return redirect("market_order", pk=order.pk)
 
 @market_customer_required
+@require_GET
 def payment_launch(request, customer, pk):
-    """Render a same-origin handoff page before navigating to the external payment host.
+    """Legacy hosted-checkout URLs stay valid, but never redirect externally.
 
-    Mobile Safari can refuse an external redirect that is part of a POST form navigation.
-    Ending the POST on this page and then starting a normal browser navigation makes the
-    handoff reliable while retaining a visible fallback link.
+    Retain historical provider references and callbacks for reconciliation.
+    New KOFAD payments use Direct Receive only.
     """
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
-    if order.payment_status == "paid":
+    if not order.payment_attempts.exists():
         return redirect("market_order", pk=order.pk)
+    return redirect("market_payment_verification", pk=order.pk)
 
-    attempt = order.payment_attempts.filter(
-        status__in=["initializing", "submission_unknown", "pending", "attention"]
-    ).order_by("-created_at").first()
-    if not attempt or not attempt.authorization_url:
-        messages.error(
-            request,
-            "The secure payment page is not ready yet. Your order is saved; please try again shortly.",
-        )
-        return redirect("market_order", pk=order.pk)
-
-    parsed = urlsplit(attempt.authorization_url)
-    allowed_hosts = {
-        "hubtel": {"pay.hubtel.com"},
-        "paystack": {"checkout.paystack.com"},
-    }
-    if (
-        parsed.scheme != "https"
-        or parsed.username
-        or parsed.password
-        or parsed.hostname not in allowed_hosts.get(attempt.provider, set())
-    ):
-        attempt.status = "attention"
-        attempt.provider_message = "Saved checkout URL failed KOFAD security validation."
-        attempt.next_check_at = None
-        attempt.save(update_fields=["status", "provider_message", "next_check_at"])
-        messages.error(request, "KOFAD blocked an invalid payment destination. Please contact support.")
-        return redirect("market_order", pk=order.pk)
-
-    response = render(request, "marketplace/payment_launch.html", _market_context(
-        request,
-        title="Opening secure payment",
-        order=order,
-        checkout_url=attempt.authorization_url,
-        payment_provider=attempt.provider,
-    ))
-    response["Cache-Control"] = "no-store, private"
-    return response
 
 
 def payment_return(request):
