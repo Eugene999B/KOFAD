@@ -23,7 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from core.identity import normalize_ghana_phone
 from core.models import Company, Product, Stock
