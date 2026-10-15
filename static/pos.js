@@ -74,11 +74,15 @@
         : "An earlier sale submission may still be processing.";
     }
     if (recoveryDetail) {
-      recoveryDetail.href = momoReference
+      // The legacy payment-detail page supports only KFD-POS-* Paystack
+      // references. Newer direct-wallet references must not link to a 404.
+      const hasLegacyDetail = typeof momoReference === "string" &&
+        momoReference.startsWith("KFD-POS-");
+      recoveryDetail.href = hasLegacyDetail
         ? "/payments/momo/" + encodeURIComponent(momoReference) + "/"
         : "/documents/";
-      recoveryDetail.textContent = momoReference
-        ? "Check original payment" : "Check sales history";
+      recoveryDetail.textContent = hasLegacyDetail
+        ? "Check original payment" : "Review sale records";
     }
   }
   recoveryNew?.addEventListener("click", () => {
