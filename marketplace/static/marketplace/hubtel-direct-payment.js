@@ -100,7 +100,7 @@
       catch (error) { notify(error.message || 'Unable to complete request. Check status before retrying.'); }
       finally {
         busy = false;
-        for (const button of form.querySelectorAll('button')) button.disabled = false;
+        for (const button of form.querySelectorAll('button')) if (button !== payButton) button.disabled = false;
       }
     }
     form.querySelector('[data-hubtel-verify-send]')?.addEventListener('click', () => {
