@@ -335,10 +335,10 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
         with patch("hubtel_direct.debit_api.initiate_preapproval") as send:
             missing = self.client.post(url, {})
-            self.assertEqual(missing.status_code, 302)
+            self.assertEqual(missing.status_code, 405)
             send.assert_not_called()
             disabled = self.client.post(url, {"customer_requested_prompt": "yes"})
-            self.assertEqual(disabled.status_code, 302)
+            self.assertEqual(disabled.status_code, 405)
             send.assert_not_called()
         plan.refresh_from_db()
         self.assertEqual(plan.status, "draft")
