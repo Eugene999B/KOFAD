@@ -1,116 +1,59 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block content %}
-<section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
-  <div class="section-heading"><div>
-    <p class="eyebrow">CUSTOMER REPAYMENT / DIRECT DEBIT</p>
-    <h2>Customer authorization</h2>
-  </div><span class="pill" id="debit-provider-status">{{ mandate.get_status_display }}</span></div>
-
-  <div class="two-column" style="gap:14px">
-    <div class="notice subtle">
-      <small>CUSTOMER</small>
-      <h3>{{ mandate.party.name }}</h3>
-      <p>{{ mandate.get_channel_display|default:mandate.channel }} · wallet ending {{ mandate.phone_suffix }}</p>
-      <p>This agreement's unpaid invoice balance: <strong>GHS {{ real_balance|floatformat:2 }}</strong></p>
+<link rel="stylesheet" href="{% static 'hubtel_direct/payments_clean.css' %}">
+<main class="payment-workspace">
+  <header class="payment-top">
+    <div><p class="eyebrow">KOFAD / REPAYMENTS</p><h1>Customer approval</h1><p>Share the secure link. The customer verifies and approves on their own phone.</p></div>
+    <a class="button secondary" href="{% url 'debts' %}?customer={{ mandate.party_id }}">Customer account</a>
+  </header>
+  <section class="panel payment-panel">
+    <div class="payment-status">
+      <div><small>{{ mandate.party.name }} · wallet ends {{ mandate.phone_suffix }}</small>
+      <div class="payment-primary-number">GHS {{ real_balance|floatformat:2 }}</div><small>Outstanding on this agreement</small></div>
+      <div><small>Authorization</small><p id="debit-provider-status"><strong>{% if mandate.status == "approved" %}Confirmed{% elif mandate.status == "pending" %}Awaiting customer{% elif mandate.status == "draft" %}Not requested{% else %}{{ mandate.get_status_display }}{% endif %}</strong></p></div>
     </div>
-    <div class="notice subtle">
-      <small>AUTHORIZATION</small>
-      {% if mandate.status == "approved" %}
-      <h3>Wallet authorization confirmed</h3>
-      <p>Wallet holder approved the collection authority. No sale, receipt, or payment has been created by this approval. Eligible future charges follow the agreed schedule and merchant safety switches.</p>
-      {% elif mandate.status == "pending" %}
-      <h3>Waiting for wallet approval</h3>
-      <p>Customer needs to approve on their phone. KOFAD will update this status after verification.</p>
-      {% elif mandate.status == "draft" %}
-      <h3>Waiting for the customer</h3>
-      {% if preapproval_active %}
-      <p>Share the secure approval link with the customer.</p>
-      {% else %}
-      <p>Wallet authorization is unavailable. The agreement is saved, but no approval request was sent.</p>
-      {% endif %}
-      {% else %}
-      <h3>{{ mandate.get_status_display }}</h3>
-      <p>No new debit authorization will be submitted from this page.</p>
-      {% endif %}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0">
+      <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" rel="noopener" target="_blank">Open customer approval page ↗</a>
+      {% if mandate.status == "draft" or mandate.status == "pending" %}
+      <form method="post" action="{% url 'hubtel_debt_staff_send_agreement' mandate.pk %}">
+        {% csrf_token %}<button class="button secondary">Send link by SMS</button>
+      </form>{% endif %}
+      {% if mandate.status == "pending" %}
+      <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
+        {% csrf_token %}<button class="button secondary">Refresh status</button>
+      </form>{% endif %}
     </div>
-  </div>
-  {% if mandate.status == "draft" %}
-  {% if preapproval_active %}
-  <form method="post" action="{% url 'hubtel_debt_staff_prompt' mandate.pk %}" class="notice subtle" style="margin-top:16px;padding:16px">
-    {% csrf_token %}
-    <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
-      <input type="checkbox" name="customer_requested_prompt" value="yes" required>
-      <span>The customer reviewed the amount and dates and requested wallet authorization.</span>
-    </label>
-    <button type="submit" class="button">Request wallet approval</button>
-    <p class="muted">This requests consent only. It does not collect money.</p>
-  </form>
-  {% else %}
-  <div class="notice subtle" role="status" style="margin-top:16px">
-    <strong>Wallet approval unavailable.</strong> The schedule is saved. Contact a system administrator.
-  </div>
-  {% endif %}
-  {% endif %}
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0">
-    <a class="button" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Customer approval page ↗</a>
-    {% if mandate.status == "draft" or mandate.status == "pending" %}
-    <form method="post" action="{% url 'hubtel_debt_staff_send_agreement' mandate.pk %}">
-      {% csrf_token %}<button class="button secondary" type="submit">Send customer link</button>
-    </form>
-    {% endif %}
-    {% if mandate.status == "pending" %}
-    <form method="post" action="{% url 'hubtel_debt_staff_check' mandate.pk %}">
-      {% csrf_token %}<button class="button secondary" type="submit">Refresh approval status</button>
-    </form>
-    {% endif %}
-    <a class="button secondary" href="{% url 'debts' %}?type=direct&customer={{ mandate.party_id }}">Open debtor account</a>
-  </div>
-
-  <div class="section-heading"><div><h3>Repayment schedule</h3>
-    <p class="muted">{{ mandate.get_frequency_display }} · First debit {{ mandate.first_due_date|date:"d M Y" }}
-    {% if mandate.terms_snapshot.collection_window %} · {{ mandate.terms_snapshot.collection_window }}{% endif %}</p></div></div>
-  <p><strong>Maximum authorized: GHS {{ mandate.maximum_total|floatformat:2 }}</strong>
-  {% if mandate.terms_snapshot.installment_count %} · {{ mandate.terms_snapshot.installment_count }} scheduled payment{{ mandate.terms_snapshot.installment_count|pluralize }}{% endif %}</p>
-  {% if mandate.terms_snapshot.schedule %}
-  <div class="table-wrap"><table class="data-table">
-    <thead><tr><th>#</th><th>Collection date</th><th>Amount</th><th>State</th></tr></thead>
-    <tbody>
-    {% for entry in mandate.terms_snapshot.schedule %}
-    <tr><td>{{ entry.number }}</td><td>{{ entry.date }}</td><td>GHS {{ entry.amount }}</td><td>Scheduled, subject to wallet approval</td></tr>
-    {% endfor %}
-    </tbody></table></div>
-  {% else %}
-  <p>GHS {{ mandate.amount_per_period|floatformat:2 }} per {{ mandate.get_frequency_display|lower }} period, capped at the recorded balance.</p>
-  {% endif %}
-  <p class="muted">Customer messages contain the payment schedule and a secure link.</p>
-  <p class="muted" id="debit-status-refresh-note" role="status" aria-live="polite">Authorization status is checked on KOFAD automatically. Use “Refresh approval status” while a provider request is pending to verify with Hubtel directly.</p>
-  <p class="muted">Approval does not mean payment received. Deductions are confirmed separately.</p>
-</section>
+    {% if mandate.status == "draft" %}
+    <p class="payment-hint">The customer will verify their phone and registered wallet name, then request approval. No money is collected by this step.</p>
+    {% elif mandate.status == "approved" %}
+    <p class="payment-hint">Authorization verified. Payment collection is a separate action and must be independently confirmed.</p>
+    {% elif mandate.status == "pending" %}
+    <p class="payment-hint">Waiting for the customer to approve on their wallet phone. Do not repeat the request.</p>
+    {% else %}
+    <p class="payment-hint">This agreement cannot request another approval in its current status.</p>{% endif %}
+  </section>
+  <details class="panel payment-panel payment-secondary"><summary>Repayment timetable</summary>
+    <p>{{ mandate.get_frequency_display }} · First {{ mandate.first_due_date|date:"d M Y" }} · Maximum GHS {{ mandate.maximum_total|floatformat:2 }}</p>
+    {% if mandate.terms_snapshot.schedule %}
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Amount</th></tr></thead><tbody>
+      {% for entry in mandate.terms_snapshot.schedule %}<tr><td>{{ entry.date }}</td><td>GHS {{ entry.amount }}</td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}
+  </details>
+  <p id="debit-status-refresh-note" class="payment-hint" role="status" aria-live="polite">This page updates when authorization changes.</p>
+</main>
 {% if mandate.status == "draft" or mandate.status == "pending" %}
 <script>
 (() => {
-  const badge = document.getElementById("debit-provider-status");
-  const note = document.getElementById("debit-status-refresh-note");
-  const original = "{{ mandate.status|escapejs }}";
-  const statusUrl = "{% url 'hubtel_debt_staff_status_json' mandate.pk %}";
-  let lastStatus = original;
-  async function checkLocalStatus() {
-    if (document.hidden) return;
-    try {
-      const response = await fetch(statusUrl, {credentials:"same-origin",cache:"no-store"});
-      if (!response.ok) return;
-      const result = await response.json();
-      if (result.status !== lastStatus) {
-        badge.textContent = result.status_label;
-        note.textContent = result.provider_confirmed
-          ? "Wallet authorization independently confirmed. Updating status…"
-          : "Authorization status has changed. Updating details…";
-        lastStatus = result.status;
-        window.location.reload();
-      }
-    } catch (_) { /* The cashier can still check status manually. */ }
-  }
-  setInterval(checkLocalStatus, 15000);
+ let state="{{ mandate.status|escapejs }}";
+ const url="{% url 'hubtel_debt_staff_status_json' mandate.pk %}";
+ async function update() {
+   if(document.hidden) return;
+   try { const r=await fetch(url,{credentials:"same-origin",cache:"no-store"});
+    if(!r.ok)return; const v=await r.json();
+    if(v.status!==state){state=v.status;location.reload();}
+   }catch(_){}
+ }
+ setInterval(update,15000);
 })();
 </script>
 {% endif %}
