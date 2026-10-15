@@ -175,7 +175,7 @@ with sync_playwright() as p:
     page.screenshot(path=str(out / "dashboard-desktop.png"), full_page=True)
     page.goto("http://127.0.0.1:8000/sales/new/")
     assert page.locator(".search-result-card").count() == 0
-    assert page.get_by_text("Find a product", exact=True).is_visible()
+    assert page.locator("#catalog-status").count() == 1, "Empty-search guidance must be present"
     counter_panel = page.locator("#checkout-panel")
     assert page.locator("#sale-payment-dialog").count() == 0
     assert page.locator("#open-payment").count() == 0
@@ -183,14 +183,17 @@ with sync_playwright() as p:
     assert counter_panel.evaluate("el => !['auto','scroll','hidden'].includes(getComputedStyle(el).overflow)")
     receipt_sms_choice = page.locator("#customer-consent")
     assert receipt_sms_choice.is_enabled(), "Receipt SMS choice must remain user-toggleable"
-    assert receipt_sms_choice.is_checked(), "Receipt SMS should start checked on every new sale"
+    assert not receipt_sms_choice.is_checked(), "Receipt SMS must be OFF until explicitly selected"
+    page.locator(".simple-options").filter(has_text="Receipt messages").locator("summary").click()
     receipt_whatsapp_choice = page.locator("#customer-whatsapp")
     assert not receipt_whatsapp_choice.is_checked()
     receipt_whatsapp_choice.check()
     assert receipt_whatsapp_choice.is_checked()
     receipt_whatsapp_choice.uncheck()
+    receipt_sms_choice.check()
+    assert receipt_sms_choice.is_checked(), "Cashier can opt in to SMS only by an explicit action"
     receipt_sms_choice.uncheck()
-    assert not receipt_sms_choice.is_checked(), "Cashier must be able to turn receipt SMS off before choosing a customer"
+    assert not receipt_sms_choice.is_checked(), "Cashier must be able to turn SMS off before choosing a customer"
     page.locator("#product-query").fill("Classic leather")
     page.locator("#catalog-search").get_by_role("button",name="Search",exact=True).click()
     first_product = page.locator(".search-result-card").filter(has_text="Classic leather sandals")
@@ -222,7 +225,7 @@ with sync_playwright() as p:
     assert page.locator("#single-payment-value").is_visible()
     assert page.locator("#single-payment-value").input_value() == page.locator("#total").inner_text()
     assert page.locator("#pay-cash").input_value() == page.locator("#total").inner_text()
-    assert page.get_by_role("button", name="Complete Sale & Generate Receipt", exact=True).is_visible()
+    assert page.get_by_role("button", name="Record sale", exact=True).is_visible()
     page.screenshot(path=str(out / "pos-payment-desktop.png"), full_page=True)
 
     lost_response = []
@@ -232,14 +235,14 @@ with sync_playwright() as p:
         lost_response.append(response.json())
         route.abort()
     page.route("**/api/trades/",lose_confirmed_response)
-    page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).click()
+    page.get_by_role("button",name="Record sale",exact=True).click()
     page.locator("#pos-error").wait_for(state="visible")
     assert page.locator("#party").is_disabled()
     page.unroute("**/api/trades/",lose_confirmed_response)
     page.once("dialog",lambda dialog: dialog.accept())
     page.reload()
     assert page.locator("#cart-count").inner_text() == "2 lines"
-    page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).click()
+    page.get_by_role("button",name="Record sale",exact=True).click()
 
     success_dialog = page.locator("#sale-success-dialog")
     success_dialog.wait_for(state="visible")
@@ -346,7 +349,7 @@ with sync_playwright() as p:
     assert page.locator("#checkout-panel").evaluate("el => el === document.activeElement")
     assert page.locator("#sale-payment-dialog").count() == 0
     assert page.locator("#single-payment-value").is_visible()
-    assert page.get_by_role("button",name="Complete Sale & Generate Receipt",exact=True).is_visible()
+    assert page.get_by_role("button",name="Record sale",exact=True).is_visible()
     page.screenshot(path=str(out / "pos-payment-mobile.png"), full_page=True)
     page.locator("#cart").get_by_role("button",name="Remove",exact=False).click()
     for width in (320, 768):

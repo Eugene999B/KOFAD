@@ -1,10 +1,10 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'pos.js' %}"></script>{% endblock %}
-{% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">{% endblock %}
+{% block head %}<script defer src="{% static 'pos.js' %}?v=20261015-separate-debit"></script>{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">{% if not purchase %}<link rel="stylesheet" href="{% static 'pos-simple-v3.css' %}">{% endif %}{% endblock %}
 {% block actions %}
 <div class="actions">
 {% if purchase %}<a class="button secondary" href="/parties/?kind=supplier">Suppliers</a><a class="button secondary" href="/creditors/">Creditors</a><a class="button secondary" href="/inventory/">Inventory</a>
-{% else %}<a class="button secondary" href="/parties/">Customers</a><a class="button secondary" href="/debts/">Debt Desk</a>{% endif %}
+{% else %}<a class="button secondary" href="/debts/">Direct Debit & debts</a><a class="button secondary" href="/documents/">Sales history</a>{% endif %}
 </div>
 {% endblock %}
 {% block content %}
@@ -26,6 +26,7 @@
  data-paystack-pos-momo-ready="{{ paystack_pos_momo_ready|yesno:"true,false" }}"
  data-paystack-pos-momo-configured="{{ paystack_pos_momo_configured|yesno:"true,false" }}">
 
+{% if not purchase %}<div class="simple-sale-intro"><div><p class="eyebrow">KOFAD / COUNTER</p><h2>New sale</h2><p>Add products, choose a customer, then record the actual payment.</p></div><a class="simple-debit-link" href="/debts/">Manage Direct Debit ↗</a></div>{% endif %}
 <div id="pos-error" class="notice error hidden" role="alert"></div>
 
 <div class="counter-layout chalin-sale-layout">
@@ -34,7 +35,7 @@
     <form method="get" id="catalog-search" class="sale-product-search">
       <span aria-hidden="true">⌕</span>
       <label class="sr-only" for="product-query">Search products</label>
-      <input id="product-query" name="q" value="{{ q }}" placeholder="Search product, SKU, barcode or category…" autofocus autocomplete="off" spellcheck="false">
+      <input id="product-query" name="q" value="{{ q }}" placeholder="Search a product or scan barcode" autofocus autocomplete="off" spellcheck="false">
       <button class="button secondary">Search</button>
     </form>
   </div>
@@ -82,15 +83,15 @@
   {% endif %}
   <div id="catalog-status" class="catalog-status counter-empty-state">
     <span class="catalog-empty-icon">⌕</span>
-    <h3>{% if purchase %}Find an existing product{% else %}Find a product{% endif %}</h3>
+    <h3>{% if purchase %}Find an existing product{% else %}Search to add a product{% endif %}</h3>
   </div>
   <div class="product-grid search-results-grid counter-results" id="catalog"></div>
 
   <section class="panel chalin-cart-panel" aria-label="Sale items">
     <header class="counter-sale-head">
       <div>
-        <p class="eyebrow">{% if purchase %}DELIVERY ITEMS{% else %}SALE ITEMS{% endif %}</p>
-        <h2>{% if purchase %}Items being received{% else %}Review the cart{% endif %}</h2>
+        <p class="eyebrow">{% if purchase %}DELIVERY ITEMS{% else %}YOUR BASKET{% endif %}</p>
+        <h2>{% if purchase %}Items being received{% else %}Items added{% endif %}</h2>
       </div>
       <span class="pill" id="cart-count">0 lines</span>
     </header>
@@ -105,8 +106,8 @@
 <section class="panel counter-sale-panel chalin-checkout-panel" id="checkout-panel" tabindex="-1">
   <header class="chalin-checkout-head">
     <div>
-      <p class="eyebrow">{% if purchase %}STEP 2{% else %}STEP 2{% endif %}</p>
-      <h2>{% if purchase %}Supplier & payment{% else %}Customer & payment{% endif %}</h2>
+      <p class="eyebrow">{% if purchase %}STEP 2{% else %}CHECKOUT{% endif %}</p>
+      <h2>{% if purchase %}Supplier & payment{% else %}Customer and payment{% endif %}</h2>
     </div>
     {% if not purchase and held %}
     <button type="button" class="button secondary held-sales-launch" id="open-held-sales">Held sales · {{ held|length }}</button>
@@ -131,14 +132,14 @@
     <section class="counter-customer chalin-customer-card">
       <input type="hidden" id="party" name="party">
       <div class="counter-customer-title">
-        <label for="customer-search">Customer <small>Optional for a fully paid walk-in sale</small></label>
+        <label for="customer-search">Customer</label>
         <button type="button" class="text-button" id="new-customer-toggle">＋ New customer</button>
         <button type="button" class="text-button hidden" id="clear-customer">Change</button>
       </div>
       <div class="customer-choice" id="customer-mode-picker" role="group" aria-label="Choose customer type">
-        <button type="button" class="customer-choice-button active" data-customer-mode="walkin" aria-pressed="true">Walk-in sale<small>No customer record</small></button>
-        <button type="button" class="customer-choice-button" data-customer-mode="saved" aria-pressed="false">Saved customer<small>History and debts</small></button>
-        <button type="button" class="customer-choice-button" data-customer-mode="new" aria-pressed="false">New customer<small>Keep future records</small></button>
+        <button type="button" class="customer-choice-button active" data-customer-mode="walkin" aria-pressed="true">Walk-in<small>No account</small></button>
+        <button type="button" class="customer-choice-button" data-customer-mode="saved" aria-pressed="false">Existing<small>Search customer</small></button>
+        <button type="button" class="customer-choice-button" data-customer-mode="new" aria-pressed="false">New<small>Create account</small></button>
       </div>
       <div id="customer-search-wrap" class="hidden">
         <label for="customer-search" class="customer-field-label">Find a saved customer</label>
@@ -152,28 +153,27 @@
         <input id="customer-email" type="email" maxlength="254" autocomplete="email" placeholder="Customer email (optional for direct MoMo)">
       </div>
       <div id="customer-duplicate-alert" class="customer-duplicate-alert hidden" role="alert" aria-live="assertive"></div>
-      <label class="checkout-consent compact-consent" id="customer-consent-wrap">
-        <input id="customer-consent" type="checkbox" checked>
-        <span><strong>Send receipt by SMS</strong></span>
-      </label>
-      <label class="checkout-consent compact-consent" id="customer-whatsapp-wrap">
-        <input id="customer-whatsapp" type="checkbox">
-        <span><strong>Send receipt by WhatsApp</strong></span>
-      </label>
+      <details class="simple-options">
+        <summary>Receipt messages <small>Optional</small></summary>
+        <div class="simple-options-inner">
+          <label class="checkout-consent compact-consent" id="customer-consent-wrap"><input id="customer-consent" type="checkbox"><span>Send SMS receipt (with consent)</span></label>
+          <label class="checkout-consent compact-consent" id="customer-whatsapp-wrap"><input id="customer-whatsapp" type="checkbox"><span>Send WhatsApp receipt (with consent)</span></label>
+        </div>
+      </details>
     </section>
     {% endif %}
 
     <section class="chalin-payment-card">
       <div class="chalin-section-title">
-        <div><p class="eyebrow">PAYMENT</p><h3>{% if purchase %}How was this paid?{% else %}How did the customer pay?{% endif %}</h3></div>
+        <div><p class="eyebrow">PAYMENT</p><h3>{% if purchase %}How was this paid?{% else %}Amount received{% endif %}</h3></div>
         <strong>{{ company.currency }} <span id="payment-total">0.00</span></strong>
       </div>
 
       {% if not purchase %}
-      <label for="payment-plan">Settlement</label>
+      <label for="payment-plan">Sale type</label>
       <select id="payment-plan">
-        <option value="full">Paid in full now</option>
-        {% if allow_credit_sales %}<option value="part">Part payment · balance becomes debt</option><option value="credit">Credit · pay later</option>{% endif %}
+        <option value="full">Paid now</option>
+        {% if allow_credit_sales %}<option value="part">Part payment</option><option value="credit">Credit / Pay later</option>{% endif %}
       </select>
       {% endif %}
 
@@ -262,73 +262,16 @@
           <input id="due-date" type="date" max="9999-12-31">
         </div>
         {% if not purchase %}
-        <div class="credit-email-capture">
+        <details class="simple-options"><summary>Email reminders <small>Optional</small></summary><div class="credit-email-capture simple-options-inner">
           <label for="credit-customer-email">Customer email for credit records <small>Optional</small></label>
           <input id="credit-customer-email" type="email" maxlength="254" autocomplete="email" placeholder="customer@example.com">
           <label class="checkout-consent compact-consent" for="credit-debt-email-consent">
             <input id="credit-debt-email-consent" type="checkbox">
-            <span><strong>Customer agrees to receive credit statements and debt reminders by email</strong></span>
+            <span>Email credit reminders (with consent)</span>
           </label>
-        </div>
+        </div></details>
         {% endif %}
-        {% if can_offer_direct_debit %}
-        <div class="credit-repayment-chooser">
-          <label for="credit-repayment-mode">Debt collection</label>
-          <select id="credit-repayment-mode">
-            <option value="manual">Manual repayment</option>
-            <option value="direct">Hubtel Direct Debit</option>
-          </select>
-          <div id="credit-direct-debit-fields" class="credit-direct-debit-fields hidden">
-            {% if online_debt_policy and online_debt_policy.plan_creation_enabled %}
-            <div class="two-column">
-              <label for="credit-direct-network">Wallet network
-                <select id="credit-direct-network">
-                  {% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN MoMo</option>{% endif %}
-                  {% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}
-                </select>
-              </label>
-              <label for="credit-direct-phone">Wallet number
-                <input id="credit-direct-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0241234567" maxlength="16">
-              </label>
-              <label for="credit-direct-frequency">Collection interval
-                <select id="credit-direct-frequency">
-                  {% if online_debt_policy.allow_once %}<option value="once">Once</option>{% endif %}
-                  {% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}
-                  {% if online_debt_policy.allow_weekly %}<option value="weekly" selected>Weekly</option>{% endif %}
-                  {% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}
-                  {% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}
-                  {% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}
-                </select>
-              </label>
-              <label for="credit-direct-end-date">Repayment end date
-                <input id="credit-direct-end-date" type="date" max="9999-12-31">
-              </label>
-              <label for="credit-direct-date">First collection date
-                <input id="credit-direct-date" type="date" max="9999-12-31">
-              </label>
-            </div>
-            <label class="switch-row">
-              <input id="credit-direct-contact-consent" type="checkbox">
-              <span>Customer agrees to receive the proposed repayment agreement and authorization details. This is not authorization to debit the wallet.</span>
-            </label>
-            <label class="switch-row" style="margin-top:8px">
-              <input id="credit-direct-prompt-consent" type="checkbox">
-              <span><strong>The customer has reviewed the displayed payment schedule and has asked KOFAD to send a real Hubtel approval prompt to their MoMo wallet.</strong> Only the customer can approve the USSD/OTP request; the sale itself does not debit their wallet.</span>
-            </label>
-            <div class="direct-wallet-lookup">
-              <button class="button secondary" type="button" id="credit-direct-verify">Check wallet name</button>
-              <div class="hubtel-verified-name"><small>ACCOUNT NAME</small><strong id="credit-direct-name" role="status" aria-live="polite">Not verified</strong></div>
-            </div>
-            <section id="credit-direct-preview" class="notice subtle" aria-live="polite" style="margin-top:12px">
-              Enter the first and final dates; KOFAD calculates the number of payments and each amount.
-            </section>
-            <p class="hint"><strong>Direct Debit is not a payment method at checkout.</strong> The credit sale is posted as outstanding debt; Hubtel preapproval is a separate wallet request. {% if hubtel_debt_preapproval_ready %}Hubtel wallet authorization requests are enabled; KOFAD will request a USSD/OTP approval after saving the sale.{% else %}<strong>Hubtel wallet prompts are not activated on this deployment.</strong> KOFAD will show the authorization status and cannot claim customer approval.{% endif %}</p>
-            {% else %}
-            <p class="hint">Enable repayment agreements in <a href="{% url 'online_debt_settings' %}" target="_blank" rel="noopener">Online Debt Settings</a>.</p>
-            {% endif %}
-          </div>
-        </div>
-        {% endif %}
+        {% if can_offer_direct_debit %}<p class="simple-debit-info"><strong>Instalment deductions?</strong> Record a genuine credit sale first. Then open its unpaid invoice and choose <em>Set up Direct Debit</em>. Authorization does not record a sale or payment.</p>{% endif %}
       </div>
 
       {% if policy_controls %}
@@ -340,15 +283,15 @@
     </section>
 
     <section class="chalin-total-panel">
-      <p class="eyebrow">{% if purchase %}DELIVERY TOTAL{% else %}SALE TOTAL{% endif %}</p>
+      <p class="eyebrow">{% if purchase %}DELIVERY TOTAL{% else %}REVIEW SALE{% endif %}</p>
       <div class="chalin-total-row"><span>Total due</span><strong>{{ company.currency }} <span id="checkout-total-due">0.00</span></strong></div>
       <div class="chalin-total-row"><span>Paid now</span><strong>{{ company.currency }} <span id="checkout-paid-now">0.00</span></strong></div>
-      <div class="chalin-total-row chalin-balance-row"><span>Balance after sale</span><strong>{{ company.currency }} <span id="checkout-balance">0.00</span></strong></div>
+      <div class="chalin-total-row chalin-balance-row"><span>Still owed</span><strong>{{ company.currency }} <span id="checkout-balance">0.00</span></strong></div>
       <div class="checkout-progress"><span id="checkout-progress-fill"></span></div>
 
       <div class="chalin-complete-actions">
         {% if not purchase %}<button class="button secondary" type="button" id="hold">Hold sale</button>{% endif %}
-        <button class="button complete-sale-button" id="complete">{% if purchase %}Post purchase & receive stock{% else %}Complete Sale & Generate Receipt{% endif %}</button>
+        <button class="button complete-sale-button" id="complete">{% if purchase %}Post purchase & receive stock{% else %}Record sale{% endif %}</button>
       </div>
     </section>
   </form>
@@ -385,20 +328,8 @@
     </div>
   </div>
 
-  {% if can_offer_direct_debit %}
-  <form action="{% url 'hubtel_debt_create' %}" method="post" id="sale-debit-authorization" class="hidden">
-    {% csrf_token %}
-    <input type="hidden" name="party" id="sale-debit-party">
-    <input type="hidden" name="phone" id="sale-debit-phone">
-    <input type="hidden" name="channel" id="sale-debit-network">
-    <input type="hidden" name="frequency" id="sale-debit-frequency">
-    <input type="hidden" name="first_due_date" id="sale-debit-date">
-    <input type="hidden" name="final_due_date" id="sale-debit-end-date">
-    <input type="hidden" name="source_document_id" id="sale-debit-document">
-    <button type="submit" class="button">Continue to Hubtel authorization →</button>
-  </form>
-  {% endif %}
   <div id="success-message-status" class="notice subtle hidden" role="status"></div>
+{% if can_offer_direct_debit %}<a id="sale-direct-debit-link" class="button secondary hidden" href="#">Set up Direct Debit for this unpaid invoice →</a>{% endif %}
   <div class="sale-success-actions">
     <a class="button" id="receipt-print" target="_blank" rel="noopener">Print receipt</a>
     <button class="button secondary" type="button" id="receipt-sms">Send SMS receipt</button>

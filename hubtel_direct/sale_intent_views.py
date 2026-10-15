@@ -43,37 +43,27 @@ def _staff_intent(request, intent_id):
 @login_required
 @require_POST
 def prepare_sale(request):
-    """Never posts a sale before the independent provider approval."""
-    try:
-        branch = branch_for(request)
-        services.permit(request.user, branch, "operate_sales")
-        if request.content_type != "application/json":
-            raise ValidationError("Direct Debit requires a JSON sale intent.")
-        body = json.loads(request.body)
-        key = request.headers.get("Idempotency-Key")
-        intent, created = sale_intents.prepare_intent(request.user, branch, body, key)
-        if created:
-            intent = sale_intents.begin_preapproval(intent)
-        url = reverse("hubtel_v2_staff_wait", kwargs={"intent_id": intent.pk})
-        response = JsonResponse({
-            "intent_id": str(intent.pk), "status": intent.status,
-            "sale_issued": intent.status == "issued",
-            "wallet_approved": bool(intent.provider_approved_at),
-            "staff_url": url,
-            "message": (
-                "Hubtel accepted the wallet preapproval request. The customer must complete USSD/OTP approval."
-                if intent.status == "pending" else
-                "The Hubtel authorization outcome must be checked; no sale was issued."
-                if intent.status in {"unknown", "sending"} else
-                "Hubtel rejected the wallet preapproval. The sale has NOT been issued."
-                if intent.status == "rejected" else
-                "Existing Direct Debit request resumed. No duplicate sale or wallet request was sent."
-            ),
-        }, status=202)
-        response["Cache-Control"] = "no-store"
-        return response
-    except (ValidationError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        return _error(exc)
+    """Retired: a Direct Debit approval is not a credit sale.
+
+    Old cached POS clients must not be allowed to create another sale intent,
+    send an orphan preapproval, or turn authorization into an issued receipt.
+    Staff issue a *separate explicit* credit sale, then attach authorization
+    to the invoice from the Debt Desk.
+    """
+    branch = branch_for(request)
+    services.permit(request.user, branch, "operate_sales")
+    response = JsonResponse({
+        "error": (
+            "The old combined Sale + Direct Debit checkout has been retired. "
+            "No sale or wallet request was created. Choose Record Sale for an "
+            "actual purchase, then open its invoice and Set Up Direct Debit "
+            "for the unpaid balance. A wallet approval never means a sale or payment."
+        ),
+        "sale_issued": False, "wallet_approved": False,
+        "next_step": "/sales/new/",
+    }, status=409)
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @login_required

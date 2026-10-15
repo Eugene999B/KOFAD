@@ -334,9 +334,9 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.authenticate_client()
         page = self.client.get("/sales/new/")
         self.assertNotContains(page, 'id="sale-payment-dialog"')
-        self.assertContains(page, "Customer & payment")
+        self.assertContains(page, "Customer and payment")
         self.assertContains(page, "Payment method")
-        self.assertContains(page, "Complete Sale & Generate Receipt")
+        self.assertContains(page, "Record sale")
         self.assertContains(page, 'id="customer-consent"')
 
         self.customer.phone = "+233241234567"
@@ -412,7 +412,7 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
     def test_new_sale_sms_checkbox_has_no_repeated_instruction_copy(self):
         self.authenticate_client()
         response = self.client.get("/sales/new/")
-        self.assertContains(response, "Send receipt by SMS")
+        self.assertContains(response, "Send SMS receipt (with consent)")
         self.assertNotContains(response, "Tick only after this customer agrees to receive the receipt message.")
 
     def test_communications_page_omits_redundant_status_cards(self):
