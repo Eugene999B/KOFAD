@@ -288,16 +288,16 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
             first = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
                                      content_type="application/json")
             self.assertEqual(first.status_code, 202)
-            self.assertEqual(first.json()["authorization_status"], "pending")
-            self.assertEqual(first.json()["prompt_state"], "pending")
+            self.assertEqual(first.json()["authorization_status"], "draft")
+            self.assertEqual(first.json()["prompt_state"], "not_requested")
             again = self.client.post(reverse("hubtel_debt_create"), json.dumps(data),
                                      content_type="application/json")
             self.assertEqual(again.status_code, 202)
-            self.assertEqual(again.json()["prompt_state"], "pending")
-            hubtel.assert_called_once()
+            self.assertEqual(again.json()["prompt_state"], "not_requested")
+            hubtel.assert_not_called()
             debit.assert_not_called()
         plan = DebtMandate.objects.get()
-        self.assertEqual(plan.status, "pending")
+        self.assertEqual(plan.status, "draft")
         self.assertIsNone(plan.provider_approved_at)
         self.assertEqual(plan.terms_snapshot["installment_count"], 3)
 
