@@ -615,7 +615,9 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         checkout = self.client.get("/market/checkout/")
         self.assertEqual(checkout.status_code, 200)
         self.assertNotContains(checkout, "Paystack")
-        self.assertContains(checkout, "Make payment")
+        self.assertContains(checkout, "Continue to wallet verification")
+        self.assertContains(checkout, "MoMo number")
+        self.assertNotContains(checkout, "checkout.paystack.com")
 
         order = self.order()
         attempt = MarketPaymentAttempt.objects.create(
@@ -634,16 +636,14 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         self.assertNotContains(response, attempt.reference)
         self.assertNotContains(response, "mobile_money")
 
-    @override_settings(PAYSTACK_SECRET_KEY="sk_test_example")
+    @patch("hubtel_direct.client.enabled", return_value=True)
     @patch("marketplace.views.services.initialize_paystack")
-    def test_checkout_make_payment_uses_same_origin_handoff(self, initialize_payment):
+    def test_checkout_make_payment_uses_same_origin_handoff(self, initialize_payment, ready):
+        """New orders stay on KOFAD; no legacy hosted gateway is invoked."""
         self.customer_session()
         session = self.client.session
         session["market_cart"] = {str(self.listing.pk): 1}
         session.save()
-        initialize_payment.return_value = Mock(
-            authorization_url="https://checkout.paystack.com/test-checkout"
-        )
         response = self.client.post("/market/checkout/", {
             "fulfilment": "pickup",
             "recipient_name": self.customer.full_name,
@@ -658,18 +658,19 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             "latitude": "",
             "longitude": "",
             "customer_note": "",
+            "direct_momo_phone": self.customer.phone,
+            "direct_momo_channel": "mtn-gh",
         })
         order = OnlineOrder.objects.latest("created_at")
-        self.assertRedirects(
-            response,
-            f"/market/orders/{order.pk}/payment/launch/",
-            fetch_redirect_response=False,
-        )
-        initialize_payment.assert_called_once()
-        self.assertEqual(initialize_payment.call_args.args[0].pk, order.pk)
+        self.assertRedirects(response, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        initialize_payment.assert_not_called()
+        self.assertFalse(order.payment_attempts.exists())
+        self.assertEqual(order.payment_status, "unpaid")
         self.assertEqual(self.client.session["market_cart"], {})
+        self.assertEqual(self.client.session["direct_wallet_for_order"]["order"], str(order.pk))
 
     def test_payment_launch_page_has_automatic_and_manual_hubtel_handoff(self):
+        """Legacy link must stay inside KOFAD, not open the provider checkout."""
         self.customer_session()
         order = self.order()
         MarketPaymentAttempt.objects.create(
@@ -678,11 +679,15 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             authorization_url="https://pay.hubtel.com/test-checkout",
         )
         response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "payment-launch.")
-        self.assertContains(response, "https://pay.hubtel.com/test-checkout")
-        self.assertContains(response, "Continue to secure payment")
-        self.assertIn("no-store", response["Cache-Control"])
+        self.assertRedirects(
+            response, f"/market/orders/{order.pk}/checkout/verification/",
+            fetch_redirect_response=False,
+        )
+        self.assertNotIn("pay.hubtel.com", response.get("Location", ""))
+        status = self.client.get(f"/market/orders/{order.pk}/checkout/verification/?format=json")
+        self.assertEqual(status.status_code, 200)
+        self.assertFalse(status.json()["paid"])
+        self.assertEqual(status.json()["status"], "pending")
 
     def test_payment_launch_blocks_untrusted_checkout_host(self):
         self.customer_session()
@@ -693,9 +698,13 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
             authorization_url="https://pay.hubtel.com.evil.example/checkout",
         )
         response = self.client.get(f"/market/orders/{order.pk}/payment/launch/")
-        self.assertRedirects(response, f"/market/orders/{order.pk}/", fetch_redirect_response=False)
+        self.assertRedirects(
+            response, f"/market/orders/{order.pk}/checkout/verification/",
+            fetch_redirect_response=False,
+        )
+        self.assertNotIn("evil.example", response.get("Location", ""))
         attempt.refresh_from_db()
-        self.assertEqual(attempt.status, "attention")
+        self.assertEqual(attempt.status, "pending")
 
     @patch("marketplace.services._google_route")
     def test_distance_delivery_price_is_proportional_and_saved_on_order(self, google_route):
