@@ -51,16 +51,14 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertContains(response, "marketplace/select-affordances.")
         self.assertContains(response, 'name="fulfilment"')
 
-    def test_payment_and_network_dropdowns_show_change_hint(self):
-        from django.template.loader import render_to_string
-        from .forms import CheckoutPaymentForm
-        body = render_to_string("marketplace/payment_choices.html", {
-            "momo_available": True,
-            "payment_form": CheckoutPaymentForm(momo_available=True),
-        })
-        self.assertIn("Tap to choose payment option", body)
-        self.assertIn("Tap to choose your MoMo network", body)
-        self.assertIn("momo_network", body)
+    def test_checkout_shows_direct_wallet_and_never_hosted_provider(self):
+        self.customer_session()
+        page = self.client.get("/market/checkout/")
+        self.assertContains(page, 'name="direct_momo_phone"')
+        self.assertContains(page, 'name="direct_momo_channel"')
+        self.assertContains(page, "Continue to wallet verification")
+        self.assertNotContains(page, "Choose how to pay")
+        self.assertNotContains(page, "checkout.paystack.com")
 
     def test_pickup_needs_no_address_or_coordinates(self):
         data = self.pickup_data()
