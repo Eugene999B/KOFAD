@@ -312,6 +312,7 @@ def customer_authorize(request, mandate_id):
         "mandate": mandate,
         "debt_balance": mandates.outstanding(mandate.party),
         "payment_channel": "MTN MoMo" if mandate.channel == "mtn-gh-direct-debit" else "Telecel Cash",
+        "wallet_identity": request.session.get("wallet_identity:" + str(mandate.pk), {}),
     })
 
 
