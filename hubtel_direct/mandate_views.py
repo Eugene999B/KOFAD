@@ -148,7 +148,7 @@ def staff_status(request, mandate_id):
     )
     return render(request, "hubtel_direct/debt_staff_waiting.html", {
         "mandate": mandate,
-        "real_balance": mandates.outstanding(mandate.party),
+        "real_balance": mandates.mandate_outstanding(mandate),
         "preapproval_active": bool(
             getattr(settings, "HUBTEL_DEBT_PREAPPROVAL_ENABLED", False)
             and debit_api.preapproval_ready()
