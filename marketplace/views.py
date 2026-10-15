@@ -1444,18 +1444,19 @@ def customer_order(request, customer, pk):
     return render(request, "marketplace/order_detail.html", _market_context(
         request, title=order.public_reference, order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
-        payment_available=hubtel.ready() if hubtel.selected_provider() == "paystack" else False,
+        payment_available=hubtel_direct.enabled("receive"),
         direct_wallet_number=wallet_default,
         direct_wallet_channel=wallet_channel_default,
         hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED),
-        hubtel_direct_available=hubtel_direct.enabled("receive") and hubtel.selected_provider() == "hubtel",
+        hubtel_direct_available=hubtel_direct.enabled("receive"),
         hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
             customer=customer, phone=normalize_ghana_phone(customer.phone)
         ).exists()),
-        momo_phone_verification=momo_security.pending_for_order(request, customer, order) if hubtel.selected_provider() == "paystack" else None,
-        payment_form=CheckoutPaymentForm(initial={"momo_phone": order.phone},
-            momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready()),
-        momo_available=hubtel.selected_provider() == "paystack" and paystack_momo.ready(),
+        # Old, not-yet-completed Paystack SMS checks can finish safely, but new
+        # payments cannot be started with Paystack or hosted checkout.
+        momo_phone_verification=momo_security.pending_for_order(request, customer, order),
+        payment_form=None,
+        momo_available=False,
         payment_attempt=order.payment_attempts.first(),
         payment_waiting=order.payment_attempts.filter(status__in=["initializing", "submission_unknown", "pending", "attention"]).exists(),
         can_request_return=bool(returnable),
