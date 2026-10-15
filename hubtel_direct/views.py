@@ -296,6 +296,43 @@ def collect_status(request, order_id):
     return _answer(tx)
 
 
+@require_GET
+def collection_verification(request, order_id):
+    """Separate customer-facing Direct Receive status. NEVER submits a new debit."""
+    customer, order = _customer(request, order_id)
+    tx = DirectTransaction.objects.filter(
+        order=order, customer=customer, kind="receive"
+    ).order_by("-created_at").first()
+    if not tx:
+        raise Http404("No payment request for this order.")
+    status = tx.status
+    paid = status == "success" and order.payment_status == "paid"
+    review = status == "attention" or (status == "success" and not paid)
+    data = {
+        "reference": tx.client_reference,
+        "status": "attention" if review else status,
+        "paid": paid,
+        "failed": status == "failed",
+        "attention": review,
+        "message": (
+            "Payment independently confirmed and recorded."
+            if paid else "This payment needs KOFAD review. Do not send another request."
+            if review else "Payment was not completed. No payment was recorded."
+            if status == "failed" else "Approve the original Mobile Money request on your phone."
+        ),
+    }
+    if request.GET.get("format") == "json":
+        response = JsonResponse(data)
+    else:
+        from django.shortcuts import render
+        response = render(request, "hubtel_direct/collection_verification.html", {
+            "order": order, "payment": tx, "journey": data,
+        })
+    response["Cache-Control"] = "private, no-store"
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
 @csrf_exempt
 @require_POST
 def callback(request):
