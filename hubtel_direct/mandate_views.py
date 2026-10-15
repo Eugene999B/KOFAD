@@ -319,7 +319,7 @@ def customer_authorize(request, mandate_id):
 def customer_authorize_action(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
     action = request.POST.get("action")
-    if action not in {"start", "confirm", "hubtel_otp", "check"}:
+    if action not in {"start", "confirm", "hubtel_otp", "check", "wallet_code_send", "wallet_code_check"}:
         messages.error(request, "Choose an authorization action.")
         return redirect("hubtel_debt_authorize", mandate_id=mandate.pk)
     try:
