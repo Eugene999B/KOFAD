@@ -42,23 +42,16 @@ class Command(BaseCommand):
             now = time.monotonic()
 
             if now - last_payment_check >= 5:
-                try:
-                    from marketplace.hubtel import reconcile_due
-                    reconcile_due()
-                except Exception:
-                    self.stderr.write("Hubtel reconciliation check failed; will retry.")
+                # Hubtel allowlists only KOFAD Web's Railway static IPs.
+                # Legacy and Direct Hubtel checks must run via the authenticated
+                # web-service relay below; never make Hubtel HTTP from SMS.
                 try:
                     from core.pos_paystack import reconcile_due as reconcile_pos_paystack
                     reconcile_pos_paystack()
                 except Exception:
                     self.stderr.write("Paystack POS reconciliation check failed; will retry.")
-                try:
-                    # Existing cashier Hubtel checkout records need their own
-                    # reconciliation; Market Hubtel does not inspect HeldSale.
-                    from core.pos_hubtel import reconcile_due as reconcile_pos_hubtel
-                    reconcile_pos_hubtel()
-                except Exception:
-                    self.stderr.write("Hubtel POS reconciliation check failed safely; will retry.")
+                # Legacy/direct Hubtel POS statuses also run on Web through
+                # /internal/hubtel-direct/reconcile/ (never this worker's IP).
                 try:
                     from marketplace.paystack_reconciliation import reconcile_due as reconcile_market_paystack
                     reconcile_market_paystack()
