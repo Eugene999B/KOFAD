@@ -89,6 +89,15 @@ class DirectWorkflowTests(MarketFixtures):
             },
         })
 
+    def test_only_kofad_web_service_is_allowed_to_call_hubtel(self):
+        with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "kofad-sms"}):
+            self.assertFalse(client.enabled("receive"))
+            self.assertFalse(client.enabled("send_momo"))
+            with self.assertRaises(ValidationError):
+                client.require_reconciliation_ready("receive")
+        with patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "kofad-web"}):
+            self.assertTrue(client.enabled("receive"))
+
     @patch("hubtel_direct.client.requests.post")
     def test_customer_registered_phone_is_locked_and_repeat_post_never_charges_twice(self, post):
         post.side_effect = self.accepted
