@@ -231,6 +231,22 @@ class DirectWorkflowTests(MarketFixtures):
             service.approve_payout(tx.pk, self.staff)
         self.assertEqual(tx.status, "approval_pending")
         post.assert_not_called()
+        self.client.force_login(self.staff)
+        session = self.client.session
+        session["mfa_verified_at"] = timezone.now().timestamp()
+        session.save()
+        verification_page = self.client.get(
+            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/"
+        )
+        self.assertEqual(verification_page.status_code, 200)
+        self.assertContains(verification_page, 'data-kpay-mode="transfer"')
+        status_read = self.client.get(
+            "/finance/hubtel-direct/payouts/" + str(tx.pk) + "/?format=json"
+        )
+        self.assertEqual(status_read.json()["status"], "approval_pending")
+        self.assertEqual(status_read.json()["id"], str(tx.pk))
+        post.assert_not_called()
+
         done = service.approve_payout(tx.pk, second)
         self.assertEqual(done.status, "pending")
         self.assertIn("/api/merchants/67890/send/bank/gh/300311", post.call_args.args[0])
