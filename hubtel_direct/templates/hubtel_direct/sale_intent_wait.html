@@ -3,16 +3,18 @@
 <section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
   <p class="eyebrow">SALES / DIRECT DEBIT V2</p>
   <div class="section-heading">
-    <div><h2>Customer wallet authorization</h2><p class="muted">No credit sale or stock movement is issued until Hubtel independently confirms approval.</p></div>
+    <div><h2>Customer wallet authorization</h2><p class="muted">Wallet preapproval does NOT issue a sale, create an invoice, move stock or record payment. Those actions are independent.</p></div>
     <span class="pill" id="v2-state">{{ intent.status|title }}</span>
   </div>
   {% if intent.status == "issued" %}
   <div class="notice" role="status">
-    <h3>Hubtel approved · credit sale issued</h3>
-    <p>The approved repayment agreement is now linked to the sale. The first deduction will occur only on the agreed collection schedule, after the separate collection switch is activated.</p>
+    <h3>Historical issued sale — review separately</h3>
+    <p>This older record was issued before Direct Debit and sale processing were separated. No authorization by itself constitutes payment.</p>
     <a class="button" href="/documents/{{ intent.document_id }}/">View issued sale and receipt</a>
     <a class="button secondary" href="{% url 'hubtel_debt_staff_status' intent.mandate_id %}">View repayment agreement</a>
   </div>
+  {% elif intent.status == "approved" %}
+  <div class="notice" role="status"><h3>Wallet authorization verified — no sale or payment recorded</h3><p>Hubtel confirmed preapproval. This is only authorization, not a completed purchase. Staff must handle genuine sales and invoice-specific Direct Debit arrangements separately. Do not repeat the authorization prompt.</p><a href="/debts/" class="button secondary">Open Debt Desk</a></div>
   {% elif intent.status == "rejected" %}
   <div class="notice error" role="alert"><h3>Hubtel rejected authorization</h3><p>No sale was issued. {{ intent.last_error }}</p><p>Correct provider access with management; do not record the sale again.</p></div>
   {% elif intent.status == "attention" %}
