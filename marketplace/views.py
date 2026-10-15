@@ -2631,15 +2631,10 @@ def online_payments(request, branch):
             messages.success(request, "All-inclusive online product prices updated. Existing orders and payment requests are unchanged.")
         return redirect("online_payments")
     elif request.method == "POST":
-        provider = request.POST.get("provider")
-        if provider not in {"hubtel", "paystack"}:
-            messages.error(request, "Choose Hubtel or Paystack.")
-        else:
-            PaymentConfiguration.objects.update_or_create(pk=1, defaults={"provider": provider})
-            core_services.audit(request.user, branch, "market.payment_provider_saved", "1", {"provider": provider})
-            messages.success(request, "Provider saved for new payments. Existing payments keep their original provider.")
-            if not hubtel.ready(provider):
-                messages.warning(request, "This provider is not accepting new payments yet. Check its status below.")
+        # Retired hosted-checkout settings must not silently re-enable a
+        # third-party handoff for new customer orders. Preserve historical
+        # PaymentConfiguration for POS and old provider records.
+        messages.warning(request, "Hosted checkout switching is retired. New KOFAD Market payments use Direct Mobile Money only.")
         return redirect("online_payments")
     rows = MarketPaymentAttempt.objects.filter(order__branch=branch).select_related("order")
     provider_filter = request.GET.get("provider", "")
@@ -2669,10 +2664,7 @@ def online_payments(request, branch):
         "hubtel_ready": __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive"),
         "paystack_ready": hubtel.ready("paystack"),
         "collection_account": settings.HUBTEL_COLLECTION_ACCOUNT if hubtel.configured() else "",
-        "payment_ready": (
-            __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive")
-            if hubtel.selected_provider() == "hubtel" else hubtel.ready()
-        ),
+        "payment_ready": __import__("hubtel_direct.client", fromlist=["enabled"]).enabled("receive"),
         "payment_notice": "Hubtel Direct requires a verified registered Mobile Money number.",
 
         "page_obj": page, "q": query, "selected_provider": provider_filter, "selected_state": state,
