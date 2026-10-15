@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'kofad-payment-journey.css' %}">{% endblock %}
+{% block content %}
+<main class="kpay" data-kpay data-kpay-mode="transfer" data-initial-state="{{ transfer.status }}"
+  data-status-url="?format=json" data-reload-on-change="true">
+ <section class="kpay-card">
+  <p class="kpay-brand">KOFAD · Direct transfer</p>
+  <div class="kpay-visual" aria-hidden="true"><span class="kpay-ring"></span><span class="kpay-mark" data-kpay-mark>••</span></div>
+  <h1 data-kpay-title>{% if transfer.status == "approval_pending" %}Awaiting transfer approval{% else %}Transfer processing{% endif %}</h1>
+  <p class="kpay-description" data-kpay-wait>
+  {% if transfer.status == "approval_pending" %}A second authorized person must approve this transfer before any money can be sent.
+  {% else %}The transfer is being verified. Do not send a duplicate while this request is pending.{% endif %}
+  </p>
+  <p class="kpay-message" data-kpay-detail role="status" aria-live="polite">Your original transfer reference is being tracked securely.</p>
+  <div class="kpay-facts">
+   <div class="kpay-fact"><small>Transfer amount</small><strong class="kpay-amount">GHS {{ transfer.amount|floatformat:2 }}</strong></div>
+   <div class="kpay-fact"><small>Destination</small><strong>{{ transfer_kind }} · ••••{{ transfer.destination_suffix }}</strong></div>
+   <div class="kpay-fact"><small>Verified recipient</small><strong>{{ transfer.recipient_name }}</strong></div>
+   <div class="kpay-fact"><small>Requested</small><strong>{{ transfer.created_at|date:"d M Y, H:i" }}</strong></div>
+  </div>
+  <p class="kpay-reference">Reference: {{ transfer.client_reference }}</p>
+  <div class="kpay-actions">
+   <button type="button" class="button secondary" data-kpay-check>Check transfer status</button>
+   <a class="button secondary" href="{% url 'hubtel_direct_finance' %}">Transfer history</a>
+  </div>
+  <p class="kpay-secure">Request submission is not confirmation that money was sent.</p>
+ </section>
+</main>
+<script defer src="{% static 'kofad-payment-journey.js' %}"></script>
+{% endblock %}
