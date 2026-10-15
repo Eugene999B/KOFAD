@@ -722,10 +722,12 @@ def complete_trade(request):
         data = json.loads(request.body)
         if not isinstance(data, dict):
             raise ValidationError("Expected a transaction object.")
-        if data.get("direct_debit_v2"):
+        if data.get("direct_debit_v2") or data.get("direct_debit_terms"):
             raise ValidationError(
-                "Hubtel Direct Debit must use pre-sale wallet authorization. "
-                "No ordinary credit sale was posted. Reopen your authorization intent."
+                "Direct Debit is a separate customer authorization, not a sale or payment. "
+                "This legacy combined checkout was rejected; no sale was posted. "
+                "Use New Sale only to record actual purchases, then create a Direct Debit "
+                "agreement for an existing unpaid invoice in the Debt Desk."
             )
         if data.get("kind", "sale") == "sale":
             for payment in data.get("payments") or []:
