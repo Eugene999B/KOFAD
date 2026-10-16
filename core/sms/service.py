@@ -283,7 +283,10 @@ def _prepare_direct_attempt(user, message, retry=False):
         raise ValidationError("This message reached its attempt limit.")
 
     message.provider = provider
-    # Resolve the approved sender when this definite, new attempt is submitted.\n    # Do not reuse a historical alias from a failed draft/retry. Completed\n    # messages and unknown submissions are never edited or resent.\n    message.sender = settings.SMS_SENDER_ID
+    # Resolve the approved sender when this definite, new attempt is submitted.
+    # Do not reuse a historical alias from a failed draft/retry. Completed
+    # messages and unknown submissions are never edited or resent.
+    message.sender = settings.SMS_SENDER_ID
     if not retry:
         # Online-order lifecycle notices are transactional receipts/status updates that the
         # customer explicitly expects. Keep general messaging in the configured sandbox,
