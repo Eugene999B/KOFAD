@@ -204,18 +204,10 @@ def staff_request_prompt(request, mandate_id):
         debit_api.gate("preapproval")
         if mandates.mandate_outstanding(mandate) <= 0:
             raise ValidationError("There is no unpaid amount to authorize.")
-        # A wallet-name inquiry is NOT customer authorization. It protects
-        # against directing a preapproval to an unexpected wallet owner.
-        from . import verification
-        verified = verification.inquiry(
-            mandates.mandate_phone(mandate),
-            mandate.channel.replace("-direct-debit", ""),
-        )
-        customer_confirmation = " ".join(
-            str(request.POST.get("confirmed_wallet_name") or "").split()
-        ).casefold()
-        if not customer_confirmation or customer_confirmation != " ".join(verified["wallet_name"].split()).casefold():
-            raise ValidationError("The wallet holder name was not confirmed. No approval request was sent.")
+        # Hubtel validates wallet-owner authority with USSD or provider OTP.
+        # Do not block this consented preapproval on the unrelated wallet-name
+        # inquiry API; that optional staff feature has a separate API scope.
+        # A successful provider initiate is still PENDING, never APPROVED.
         result = mandates.prepare_customer_authorization(mandate)
         if result["verification_type"] == "USSD":
             messages.info(request, "The payment network accepted the wallet authorization request. Ask the customer to check their phone. Delivery is not yet confirmed.")
@@ -349,8 +341,12 @@ def customer_authorization_status_json(request, mandate_id):
         "verification_type": mandate.verification_type if mandate.status == "pending" else "",
         "message": (
             "The wallet owner has approved this agreement. No payment has been made."
-            if confirmed else "Please approve the original request on your wallet phone."
-            if mandate.status == "pending" else "Review the agreement and verify your phone to begin."
+            if confirmed else (
+                "Enter the provider OTP on this page to complete authorization."
+                if mandate.verification_type == "OTP" else
+                "Approve the original USSD preapproval on your wallet phone. "
+                "MTN: *170# → My Wallet → My Approvals → PreApprovals."
+            ) if mandate.status == "pending" else "No wallet request has been sent. Review the agreement and request approval."
             if mandate.status == "draft" else "Authorization is not active. Contact KOFAD."
         ),
     })
@@ -374,34 +370,25 @@ def customer_authorize_action(request, mandate_id):
             sms_service.send_otp(mandates.mandate_phone(mandate), "momo", request=request)
             messages.success(request, "A six-digit code has been sent to your wallet phone.")
         elif action == "wallet_code_check":
+            # Legacy customer links may retain this action; it verifies
+            # KOFAD phone possession only and is never provider consent.
             if mandate.status != "draft":
                 raise ValidationError("This agreement is already awaiting approval.")
             sms_service.verify_otp(mandates.mandate_phone(mandate), request.POST.get("code", ""), "momo")
-            from . import verification
             from django.utils import timezone
-            found = verification.inquiry(
-                mandates.mandate_phone(mandate),
-                mandate.channel.replace("-direct-debit", ""),
-            )
             request.session["wallet_identity:" + str(mandate.pk)] = {
                 "fingerprint": mandate.phone_fingerprint,
-                "name": found["wallet_name"],
                 "at": timezone.now().timestamp(),
             }
             request.session.modified = True
-            messages.success(request, "Phone verified. Registered wallet name: " + found["wallet_name"])
+            messages.info(request, "Number confirmed. Hubtel approval is still required.")
         if action in {"start", "confirm"} and mandate.status != "draft":
             raise ValidationError("This repayment agreement has already been submitted for approval.")
         if action in {"start", "confirm"}:
             from django.utils import timezone
-            verified = request.session.get("wallet_identity:" + str(mandate.pk), {})
-            try:
-                verified_age = timezone.now().timestamp() - float(verified.get("at", 0))
-            except (TypeError, ValueError, AttributeError):
-                verified_age = 999999
-            if (verified_age >= 1800 or verified.get("fingerprint") != mandate.phone_fingerprint
-                    or not verified.get("name")):
-                raise ValidationError("Verify your wallet number and registered name before requesting approval.")
+            # Do not require KOFAD's optional SMS + wallet-name inquiry.
+            # The wallet holder must expressly accept the exact repayment
+            # terms, then authorize on their own handset using Hubtel USSD/OTP.
             if request.POST.get("accepted_terms") != "yes":
                 raise ValidationError("Read and accept the exact scheduled payment amounts, dates and cancellation terms.")
             if mandates.mandate_outstanding(mandate) <= 0:

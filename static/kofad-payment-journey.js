@@ -43,7 +43,7 @@
       const phase = phaseOf(data);
       root.dataset.phase = phase;
       if (title) title.textContent = mode === 'authorization' && state === 'draft'
-        ? 'Review wallet agreement'
+        ? 'Approval request not sent'
         : mode === 'transfer' && state === 'approval_pending'
         ? 'Awaiting transfer approval' : titles[phase];
       if (data.status_label && mode === 'payment' && title) title.textContent = data.status_label;
