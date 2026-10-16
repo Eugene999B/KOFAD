@@ -81,10 +81,11 @@ def _still_authorized(notice):
             pk=identity.owner_id, active=True, verified_at__isnull=False,
         ).exists():
             return False
-        if notice.category == "order":
-            # Never send stale "paid" or "awaiting payment" text after an
-            # order's actual financial state changes. Staff/email/SMS have
-            # independent queues; Telegram must be equally accurate.
+        if notice.category == "order" and notice.source_key.startswith("tg:order:"):
+            # For real order-event notices, never send stale "paid" or
+            # "awaiting payment" text after the financial state changes.
+            # Other explicit linked-account order notices keep their existing
+            # opt-in/credential checks and are not subject to this format.
             parts = notice.source_key.split(":")
             if len(parts) != 4 or parts[0:2] != ["tg", "order"]:
                 return False
