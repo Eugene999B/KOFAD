@@ -205,7 +205,9 @@ def submit(tx):
             _submit_url(tx), json=_payload(tx), headers=_headers(),
             timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
-        from marketplace.hubtel_evidence import capture_response
+        from marketplace.hubtel_evidence import capture_response, capture_request
+        # Only prepared JSON body; no Basic Authorization header is saved.
+        capture_request(response, direction="direct_request", reference=tx.client_reference)
         capture_response(response, direction="direct_submit", reference=tx.client_reference)
     except requests.RequestException as exc:
         log.warning("Hubtel direct submit transport-unconfirmed kind=%s ref=%s error=%s",

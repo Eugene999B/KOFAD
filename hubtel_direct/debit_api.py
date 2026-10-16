@@ -105,6 +105,14 @@ def _request(method, url, *, payload=None):
             headers=client._headers(), allow_redirects=False,
             timeout=min(settings.HUBTEL_TIMEOUT_SECONDS, 15),
         )
+        # Only the initial preapproval request; NEVER log OTP verification
+        # or customer authentication payloads. Stored encrypted, manager-only.
+        if method == "POST" and url.endswith("/preapproval/initiate"):
+            from marketplace.hubtel_evidence import capture_request, capture_response
+            evidence_ref = str((payload or {}).get("clientReferenceId") or "")[:36]
+            if evidence_ref:
+                capture_request(response, direction="preapprove_req", reference=evidence_ref)
+                capture_response(response, direction="preapprove_rsp", reference=evidence_ref)
         if not 200 <= response.status_code < 300:
             # An explicit HTTP 4xx from Hubtel is a definitive refusal; an
             # outage/timeout is NOT, and must never trigger a second POST.

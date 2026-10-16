@@ -6,7 +6,7 @@ The account holder name is provider-supplied and should never be invented.
 import hashlib
 import uuid
 
-from marketplace.hubtel_evidence import capture_response
+from marketplace.hubtel_evidence import capture_response, capture_request
 
 import requests
 from django.conf import settings
@@ -30,6 +30,7 @@ def inquiry(phone, channel):
         f"{VERIFY_ORIGIN}/v2/merchantaccount/merchants/"
         f"{settings.HUBTEL_COLLECTION_ACCOUNT}/mobilemoney/verify"
     )
+    evidence_ref = "wallet-" + uuid.uuid4().hex
     try:
         response = requests.get(
             url,
@@ -38,7 +39,10 @@ def inquiry(phone, channel):
             timeout=min(settings.HUBTEL_TIMEOUT_SECONDS, 12),
             allow_redirects=False,
         )
-        capture_response(response, direction="wallet_verify", reference="wallet-" + uuid.uuid4().hex)
+        # A GET has no JSON request body. Preserve the exact prepared URL
+        # including its query parameters, separately from the provider response.
+        capture_request(response, direction="wallet_query", reference=evidence_ref, capture_url=True)
+        capture_response(response, direction="wallet_verify", reference=evidence_ref)
         if response.status_code in {401, 403}:
             raise ValidationError(
                 "Wallet-name verification is not enabled for this business account. Ask an administrator to review service access."

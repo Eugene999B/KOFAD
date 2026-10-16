@@ -27,7 +27,7 @@ def _cipher():
 
 def save_exchange(*, reference, direction, raw_body, http_status=None, attempt=None):
     """Keep the *actual* provider body, rather than a normalized/rebuilt JSON."""
-    if direction not in {"callback", "status_check", "wallet_verify", "bank_verify", "direct_submit", "direct_status"}:
+    if direction not in {"callback", "status_check", "wallet_verify", "bank_verify", "direct_submit", "direct_status", "wallet_query", "direct_request", "preapprove_req", "preapprove_rsp"}:
         raise ValueError("Unexpected Hubtel evidence direction.")
     if not isinstance(raw_body, bytes):
         raise TypeError("Hubtel evidence body must be bytes.")
@@ -68,4 +68,31 @@ def capture_response(response, *, direction, reference):
     except Exception as exc:
         logging.getLogger(__name__).warning(
             "Hubtel evidence capture unavailable type=%s", type(exc).__name__
+        )
+
+
+def capture_request(response, *, direction, reference, capture_url=False):
+    """Store prepared outbound request bytes, NEVER request Authorization headers.
+
+    Whitelist only wallet-name GET query or non-OTP transaction/preapproval
+    initiation; callers must not use this helper for PIN/OTP/password requests.
+    """
+    if direction not in {"wallet_query", "direct_request", "preapprove_req"}:
+        raise ValueError("Unexpected request evidence type.")
+    prepared = getattr(response, "request", None)
+    if prepared is None:
+        return
+    raw = (getattr(prepared, "url", "") or "").encode("utf-8") if capture_url else getattr(prepared, "body", b"")
+    if raw is None:
+        raw = b""
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    if not isinstance(raw, bytes) or len(raw) > 262144:
+        return
+    try:
+        save_exchange(reference=reference, direction=direction,
+                      raw_body=raw, http_status=response.status_code)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "Hubtel outbound evidence capture unavailable type=%s", type(exc).__name__
         )
