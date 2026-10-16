@@ -7,6 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const title = document.querySelector("#debt-payment-title");
   const submit = document.querySelector("#debt-payment-submit");
   const preview = document.querySelector("#debt-allocation-lines");
+  const method = document.querySelector("#debt-channel-method");
+  const momoFields = document.querySelector("#debt-momo-fields");
+  const momoInputs = [...(momoFields?.querySelectorAll('input, select') || [])];
   const outstanding = Number(box.dataset.outstanding || 0);
   const invoices = [...document.querySelectorAll(".debt-invoice-row")].map(row => ({
     reference: row.dataset.reference,
@@ -50,12 +53,31 @@ document.addEventListener("DOMContentLoaded", () => {
     amount.readOnly = full;
     title.textContent = full ? "Pay the complete customer balance" : "Record a partial customer payment";
     submit.textContent = full ? "Receive " + money(outstanding) + " & issue receipt" : "Save partial payment & issue receipt";
+    syncPaymentMethod();
     if (typeof box.showModal === "function") box.showModal();
     else box.setAttribute("open", "");
     document.body.classList.add("dialog-open");
     renderPreview();
     if (!full) window.setTimeout(() => amount.focus(), 30);
   }
+
+  function syncPaymentMethod() {
+    const isMomo = method?.value === "momo";
+    if (momoFields) {
+      momoFields.hidden = !isMomo;
+      momoFields.style.display = isMomo ? "grid" : "none";
+      momoFields.style.gap = isMomo ? "12px" : "";
+    }
+    momoInputs.forEach(input => { input.disabled = !isMomo; input.required = isMomo; });
+    const value = payFull.value === "1" ? outstanding : Number(amount?.value || 0);
+    submit.textContent = isMomo
+      ? "Request wallet payment" + (value > 0 ? " — GHS " + money(value) : "")
+      : (payFull.value === "1" ? "Receive " + money(outstanding) + " & issue receipt" : "Save partial payment & issue receipt");
+    if (isMomo && title) title.textContent = "Request customer Mobile Money payment";
+  }
+  method?.addEventListener("change", syncPaymentMethod);
+  amount?.addEventListener("input", () => { if (method?.value === "momo") syncPaymentMethod(); });
+  syncPaymentMethod();
 
   document.querySelectorAll("[data-debt-payment-mode]").forEach(button => {
     button.addEventListener("click", () => open(button.dataset.debtPaymentMode));

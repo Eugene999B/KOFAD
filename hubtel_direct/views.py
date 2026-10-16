@@ -1,4 +1,5 @@
 """Small authenticated JSON interfaces. All money-changing methods are POST+CSRF."""
+import logging
 import hmac
 import json
 
@@ -34,6 +35,13 @@ def internal_reconcile(request):
         return response
     from .service import reconcile_due
     count = reconcile_due(limit=10)
+    # Confirm existing debt collections only on this whitelisted web process.
+    from . import debt_momo
+    try:
+        debt_momo_checked = debt_momo.reconcile_due(limit=8)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Debt MoMo reconciliation unavailable (%s)", type(exc).__name__)
+        debt_momo_checked = 0
     # Historical hosted Hubtel transactions are STILL outstanding records.
     # Only this whitelisted web service may check their status; the SMS
     # worker has no permission to use its own outbound IP for Hubtel.

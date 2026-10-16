@@ -1,7 +1,9 @@
 from django.urls import path
-from . import views, mandate_views, payroll_views, policy_views, refund_views, sale_intent_views, evidence_views
+from . import views, mandate_views, payroll_views, policy_views, refund_views, sale_intent_views, evidence_views, debt_momo_views
 
 urlpatterns = [
+    path("debts/mobile-money/<uuid:collection_id>/", debt_momo_views.status, name="hubtel_debt_momo_status"),
+    path("debts/mobile-money/<uuid:collection_id>/check/", debt_momo_views.check, name="hubtel_debt_momo_check"),
     path("settings/online-payments/hubtel-diagnostics/", evidence_views.diagnostics, name="hubtel_diagnostics"),
     path("settings/online-payments/hubtel-diagnostics/<int:evidence_id>/download/", evidence_views.download, name="hubtel_diagnostic_download"),
     path("api/direct-debit/sale-intents/", sale_intent_views.prepare_sale, name="hubtel_v2_prepare_sale"),

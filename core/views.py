@@ -1331,12 +1331,40 @@ def debts(request, branch):
     if request.method == "POST":
         try:
             s.permit(request.user, branch, "operate_finance")
+            if request.POST.get("method") == "momo":
+                # This is NOT a manual receipt: use an immutable, provider-
+                # verified Direct Receive intent. Never deduct on submission.
+                from hubtel_direct import debt_momo
+                amount = request.POST.get("amount")
+                if request.POST.get("pay_full") in {"true", "yes", "1", "on"}:
+                    party = Party.objects.filter(
+                        pk=request.POST.get("party"), branch=branch, kind="customer",
+                    ).first()
+                    if not party:
+                        raise ValidationError("Choose a customer account.")
+                    amount = sum(
+                        (due for _, due in debt_service.open_customer_invoices(party)),
+                        Decimal("0.00"),
+                    )
+                payment = debt_momo.start(
+                    request.user, branch, party_id=request.POST.get("party"),
+                    amount=amount, phone=request.POST.get("momo_phone"),
+                    channel=request.POST.get("momo_channel"),
+                    wallet_name=request.POST.get("wallet_name"),
+                    request_key=request.POST.get("key"),
+                    consent=request.POST.get("momo_consent") == "yes",
+                )
+                if payment.status == "failed":
+                    messages.warning(request, "The payment network rejected this request. No debt payment was recorded.")
+                else:
+                    messages.info(request, "Payment request saved. Check the original reference; the debt balance has not been reduced.")
+                return redirect("hubtel_debt_momo_status", collection_id=payment.pk)
             doc = debt_service.post_customer_payment(
                 request.user, branch, request.POST.dict(), request.POST.get("key")
             )
             messages.success(request, f"Payment recorded. Receipt {doc.reference} is ready.")
             return redirect(f"/debts/?customer={doc.party_id}&payment={doc.pk}")
-        except (ValidationError, ValueError) as exc:
+        except (ValidationError, ValueError, TypeError) as exc:
             messages.error(request, problem(exc))
 
     query = request.GET.get("q", "").strip()[:100]
@@ -1386,6 +1414,10 @@ def debts(request, branch):
             pk=payment_id, branch=branch, kind="collection"
         ).select_related("party").first()
 
+    from hubtel_direct.models import DebtMomoCollection
+    debt_momo_rows = list(DebtMomoCollection.objects.filter(
+        branch=branch, party=selected["party"],
+    ).order_by("-created_at")[:10]) if selected else []
     all_customer_mandates = list(DebtMandate.objects.filter(
         branch=branch, party=selected["party"],
     ).order_by("-created_at")[:30]) if selected else []
@@ -1413,6 +1445,7 @@ def debts(request, branch):
         "debtor_type": debtor_type,
         "selected_mandates": all_customer_mandates,
         "addable_invoices": addable_invoices,
+        "debt_momo_requests": debt_momo_rows,
         "online_debt_policy": online_debt_policy,
         "selected": selected,
         "methods": s.active_payment_methods(),

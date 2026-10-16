@@ -305,3 +305,32 @@ class OnlineDebtSettings(models.Model):
 
     def __str__(self):
         return f"Online debt policy: {self.branch}"
+
+
+class DebtMomoCollection(models.Model):
+    """One cashier-initiated, provider-verified MoMo collection for an existing debt.
+
+    An accepted request is never a customer payment or ledger receipt.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request_key = models.UUIDField(unique=True, editable=False)
+    branch = models.ForeignKey("core.Branch", on_delete=models.PROTECT)
+    party = models.ForeignKey("core.Party", on_delete=models.PROTECT)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    channel = models.CharField(max_length=20)
+    phone_encrypted = models.TextField(editable=False)
+    phone_suffix = models.CharField(max_length=4)
+    wallet_name = models.CharField(max_length=140)
+    reference = models.CharField(max_length=36, unique=True)
+    provider_transaction_id = models.CharField(max_length=100, blank=True)
+    provider_code = models.CharField(max_length=24, blank=True)
+    status = models.CharField(max_length=24, default="initializing", db_index=True)
+    receipt = models.OneToOneField("core.Document", on_delete=models.PROTECT, null=True, blank=True)
+    checked_at = models.DateTimeField(null=True, blank=True)
+    next_check_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "next_check_at"], name="hubtel_debt_momo_due_idx")]

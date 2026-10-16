@@ -212,7 +212,16 @@
           <input type="hidden" name="pay_full" id="debt-pay-full" value="">
           <div class="debt-payment-core">
             <label for="debt-amount">Amount received<input id="debt-amount" name="amount" type="number" min=".01" max="{{ selected.outstanding }}" step=".01" required inputmode="decimal"></label>
-            <label>Payment channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+            <label>Payment channel<select name="method" id="debt-channel-method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+            <div id="debt-momo-fields" hidden style="grid-column:1/-1;background:var(--surface,#f4f8fb);padding:15px;border:1px solid var(--border,#cfdae0);border-radius:14px;display:none">
+              <strong>Secure Mobile Money payment request</strong>
+              <p class="muted">A request will be sent to the customer's wallet. No receipt will be issued until the payment network confirms the money was received.</p>
+              <label>Paying wallet number<input name="momo_phone" type="tel" value="{{ selected.party.phone }}" placeholder="024 123 4567" autocomplete="tel"></label>
+              <label>Network<select name="momo_channel"><option value="mtn-gh">MTN MoMo</option><option value="vodafone-gh">Telecel Cash</option><option value="tigo-gh">AirtelTigo Money</option></select></label>
+              <label>Wallet holder's registered name<input name="wallet_name" maxlength="140" placeholder="Enter the wallet holder's full registered name"></label>
+              <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="momo_consent" value="yes" style="width:20px;height:20px">Customer requested this exact payment and will approve it on their own phone.</label>
+              <small>Verification uses the payment network. If network access is unavailable, no payment will be recorded.</small>
+            </div>
             <label>Provider / bank reference<input name="reference" maxlength="100" placeholder="Optional for cash"></label>
             <label>Collection note<input name="note" maxlength="500" placeholder="Optional note"></label>
           </div>
@@ -236,6 +245,19 @@
       </div>
     </section>
 
+    {% if debt_momo_requests %}
+    <section class="debt-section">
+      <div class="section-heading"><div><h3>Mobile Money requests</h3><p class="muted">A pending request is never a receipt.</p></div></div>
+      <div class="debt-payment-history">
+        {% for payment in debt_momo_requests %}
+        <a href="{% url 'hubtel_debt_momo_status' payment.pk %}">
+          <span><strong>GHS {{ payment.amount|floatformat:2 }} · {{ payment.status|title }}</strong><small>{{ payment.created_at|date:"d M Y H:i" }} · wallet •••• {{ payment.phone_suffix }}</small></span>
+          <b>{% if payment.receipt_id %}Receipt verified{% elif payment.status == 'failed' %}Unsuccessful{% else %}View request →{% endif %}</b>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
     <section class="debt-section">
       <div class="section-heading"><div><h3>Recent debt payments</h3><p class="muted">Collection receipts stay separate from sale receipts.</p></div></div>
       <div class="debt-payment-history">

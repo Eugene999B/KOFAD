@@ -44,7 +44,7 @@
       if (confirmName) confirmName.checked = false;
       verifyPanel.hidden = true;
       verifiedMessage.hidden = true;
-      payButton.disabled = true;
+      payButton.disabled = submissionUncertain;
       notify('');
     }
     phoneInput.addEventListener('input', reset);
@@ -78,15 +78,15 @@
       registeredName.textContent = result.registered_name;
       nameReview.hidden = false;
       confirmName.checked = false;
-      payButton.disabled = true;
-      notify('Check the registered name, then confirm it belongs to you.');
+      payButton.disabled = submissionUncertain;
+      notify('Confirm the registered wallet name, then select Continue.');
       return true;
     }
     confirmName?.addEventListener('change', () => {
-      payButton.disabled = !(confirmName.checked && verifiedName && verifiedPhone === selectedPhone() &&
-        verifiedChannel === channelInput.value);
+      payButton.disabled = submissionUncertain;
     });
-    payButton.disabled = true;
+    // Continue is the first actionable step: do not hide SMS/name checks behind a disabled button.
+    payButton.disabled = false;
     async function checkWallet() {
       const phone = selectedPhone();
       const current = ++generation;
@@ -118,7 +118,12 @@
         try {
           sameWallet = verifiedPhone === selectedPhone() && verifiedChannel === channelInput.value;
         } catch (_) { /* Invalid input stays blocked. */ }
-        payButton.disabled = submissionUncertain || !(sameWallet && verifiedName && confirmName?.checked);
+        payButton.disabled = submissionUncertain;
+        if (!submissionUncertain && payButton) {
+          payButton.textContent = (sameWallet && verifiedName && confirmName?.checked)
+            ? 'Request payment — GHS ' + (card.querySelector('.direct-momo-total')?.textContent || '').replace(/[^\d.]/g, '')
+            : 'Continue to wallet verification';
+        }
       }
     }
     form.querySelector('[data-hubtel-verify-send]')?.addEventListener('click', () => {
@@ -152,7 +157,20 @@
           throw Error('Choose your Mobile Money network.');
         if (verifiedPhone !== phone) {
           const ok = await checkWallet();
-          if (!ok) return;
+          if (!ok) {
+            notify('This number needs a one-time SMS check. Select Send SMS code above, then enter the code.');
+            verifyPanel?.scrollIntoView({behavior:'smooth', block:'nearest'});
+            return;
+          }
+        }
+        if (!verifiedName || verifiedChannel !== channel) {
+          await verifyRegisteredName(phone, channel);
+          return;
+        }
+        if (!confirmName?.checked) {
+          notify('Please review and confirm the registered wallet name before requesting payment.');
+          nameReview?.scrollIntoView({behavior:'smooth', block:'nearest'});
+          return;
         }
         const destination = '/market/orders/' + encodeURIComponent(order) + '/payment/verification/';
         try {

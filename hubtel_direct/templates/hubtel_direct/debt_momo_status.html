@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% load static %}
+{% block head %}<link rel="stylesheet" href="{% static 'kofad-payment-journey.css' %}">{% endblock %}
+{% block content %}
+<main class="kpay" data-debt-collection-status>
+ <section class="kpay-card">
+  <p class="kpay-brand">KOFAD · CUSTOMER PAYMENT</p>
+  <div class="kpay-visual" aria-hidden="true"><span class="kpay-ring" style="{% if collection.status == 'pending' or collection.status == 'submission_unknown' or collection.status == 'initializing' %}{% else %}animation:none{% endif %}"></span><span class="kpay-mark">{% if collection.status == 'success' %}✓{% elif collection.status == 'failed' %}×{% else %}••{% endif %}</span></div>
+  <h1>{% if collection.status == 'success' and collection.receipt %}Payment confirmed{% elif collection.status == 'failed' %}Payment unsuccessful{% elif collection.status == 'attention' %}Payment requires finance review{% elif collection.status == 'submission_unknown' %}Payment outcome uncertain{% else %}Awaiting payment verification{% endif %}</h1>
+  <p class="kpay-description">
+   {% if collection.status == 'success' and collection.receipt %}Your payment was independently verified and recorded against the customer's outstanding invoices.
+   {% elif collection.status == 'failed' %}The request was rejected or confirmed unsuccessful. No receipt was created.
+   {% elif collection.status == 'attention' %}Do not create another payment request or manually credit the account. Finance must reconcile this original reference.
+   {% else %}The customer should check their phone for a payment request. A request alone is not proof of payment. Do not send another charge while this one is unresolved.{% endif %}
+  </p>
+  <div class="kpay-facts">
+   <div class="kpay-fact"><small>Amount</small><strong class="kpay-amount">GHS {{ collection.amount|floatformat:2 }}</strong></div>
+   <div class="kpay-fact"><small>Wallet</small><strong>•••• {{ collection.phone_suffix }}</strong></div>
+   <div class="kpay-fact"><small>Customer</small><strong>{{ collection.party.name }}</strong></div>
+   <div class="kpay-fact"><small>Status</small><strong>{{ collection.status|title }}</strong></div>
+  </div>
+  <p class="kpay-reference">Original reference {{ collection.reference }}</p>
+  <div class="kpay-actions">
+   {% if collection.receipt %}<a class="button" href="{% url 'document' collection.receipt.pk %}">Open confirmed receipt</a>{% endif %}
+   {% if collection.status == 'pending' or collection.status == 'submission_unknown' or collection.status == 'initializing' %}
+   <form method="post" action="{% url 'hubtel_debt_momo_check' collection.pk %}">{% csrf_token %}
+    <button class="button secondary" type="submit" {% if not can_check %}disabled title="First network check becomes available after five minutes"{% endif %}>Check network status</button>
+   </form>{% endif %}
+   <a class="button secondary" href="{% url 'debts' %}?customer={{ collection.party_id }}">Customer debt account</a>
+  </div>
+  <p class="kpay-secure">Only an independently verified successful payment creates a receipt. A pending request never reduces the account balance.</p>
+ </section>
+</main>
+{% endblock %}
