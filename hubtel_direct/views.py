@@ -233,56 +233,95 @@ def staff_wallet_name(request):
 
 @require_POST
 def verify_registered_phone(request, order_id):
-    """A one-time SMS only for a NEW MoMo wallet on this customer's account."""
+    """Fresh six-digit SMS approval for each *different-number* checkout.
+
+    Account-linked numbers require no extra SMS. No wallet-name lookup is
+    offered on customer routes; staff verification remains independent.
+    """
     try:
         customer, order = _customer(request, order_id)
         if order.status != "awaiting_payment" or order.payment_status in {"paid", "refunded"}:
-            raise ValidationError("This order cannot accept a new payment request.")
+            raise ValidationError("This order cannot accept a payment request.")
+        if order.payment_attempts.filter(
+            status__in=["initializing", "submission_unknown", "pending", "attention"]
+        ).exists():
+            raise ValidationError("Check the existing payment reference before making another request.")
         body = _json(request)
-        if set(body) not in ({"action", "phone"}, {"action", "phone", "code"}, {"action", "phone", "channel"}):
-            raise ValidationError("Enter the Mobile Money number and verification action.")
+        if set(body) not in (
+            {"action", "phone", "channel"},
+            {"action", "phone", "channel", "code"},
+        ):
+            raise ValidationError("Choose a payment number and network.")
         from core.identity import normalize_ghana_phone
+        from marketplace.models import OtpThrottle
+        from django.utils import timezone as django_timezone
+        from . import client as gateway
+
         phone = normalize_ghana_phone(body.get("phone"))
+        channel = body.get("channel")
+        if channel not in gateway.CHANNELS:
+            raise ValidationError("Choose a valid Mobile Money network.")
         action = body.get("action")
-        already_verified = VerifiedMomoPhone.objects.filter(customer=customer, phone=phone).exists()
-        if action == "name" and set(body) == {"action", "phone", "channel"}:
-            if not already_verified:
-                raise ValidationError("Verify your wallet number by SMS first.")
-            from . import verification
-            record = verification.inquiry(phone, body.get("channel"))
-            result = {
-                "verified": True, "registered_name": record["wallet_name"],
-                "phone_suffix": record["phone"][-4:],
-            }
-            from django.utils import timezone as django_timezone
-            request.session["checkout_wallet_verified:" + str(order.pk)] = {
-                "phone": phone, "channel": body["channel"],
-                "at": django_timezone.now().timestamp(),
-            }
+        if action not in {"check", "send", "verify"}:
+            raise ValidationError("Choose a valid verification action.")
+        try:
+            linked = normalize_ghana_phone(customer.phone)
+        except ValidationError:
+            linked = ""
+        key = "checkout_alt_momo:" + str(order.pk)
+        if phone == linked:
+            request.session.pop(key, None)
+            response = JsonResponse({"verified": True, "otp_required": False})
+            response["Cache-Control"] = "private, no-store"
+            return response
+
+        entry = request.session.get(key)
+        latest = OtpThrottle.objects.filter(phone=phone, purpose="momo").first()
+        def matches_issuance(data):
+            return (isinstance(data, dict) and data.get("phone") == phone
+                    and data.get("channel") == channel and latest is not None
+                    and latest.last_sent_at is not None
+                    and data.get("issued_at") == latest.last_sent_at.isoformat())
+        proof_valid = (
+            matches_issuance(entry)
+            and entry.get("verified_at")
+            and latest.verified_at is not None
+            and latest.expires_at is not None and latest.expires_at >= django_timezone.now()
+            and 0 <= django_timezone.now().timestamp() - float(entry["verified_at"]) <= 600
+        ) if isinstance(entry, dict) else False
+        if action == "check":
+            result = {"verified": bool(proof_valid), "otp_required": True}
+        elif action == "send":
+            if not settings.CUSTOMER_OTP_ENABLED:
+                raise ValidationError("SMS verification is temporarily unavailable.")
+            # Invalidate the previous proof before any fresh OTP send. A
+            # network timeout is never permission to reuse the old proof.
+            request.session.pop(key, None)
             request.session.modified = True
-        elif action == "check" and set(body) == {"action", "phone"}:
-            result = {"verified": already_verified,
-                      "message": "Wallet already verified for this account." if already_verified
-                                 else "Verify this wallet once using an SMS code."}
-        elif already_verified and action in ("send", "verify"):
-            result = {"verified": True, "message": "Wallet already verified for your account."}
-        elif not settings.CUSTOMER_OTP_ENABLED:
-            raise ValidationError("First-time wallet SMS verification is temporarily unavailable.")
-        elif action == "send" and set(body) == {"action", "phone"}:
             market_services.send_otp(phone, "momo", request=request)
-            result = {"message": "Six-digit verification code sent to the MoMo number you entered."}
-        elif action == "verify" and set(body) == {"action", "phone", "code"}:
-            market_services.verify_otp(phone, body["code"], "momo")
-            VerifiedMomoPhone.objects.get_or_create(customer=customer, phone=phone)
-            result = {"verified": True, "message": "Number verified. You can now request payment."}
-        else:
-            raise ValidationError("Enter the six-digit SMS verification code for this wallet.")
+            row = OtpThrottle.objects.get(phone=phone, purpose="momo")
+            request.session[key] = {
+                "phone": phone, "channel": channel,
+                "issued_at": row.last_sent_at.isoformat(),
+                "verified_at": None,
+            }
+            result = {"verified": False, "otp_required": True, "message": "SMS code sent."}
+        elif action == "verify":
+            if not matches_issuance(entry):
+                raise ValidationError("Send a new code for this payment first.")
+            code = str(body.get("code") or "").strip()
+            market_services.verify_otp(phone, code, "momo")
+            row = OtpThrottle.objects.get(phone=phone, purpose="momo")
+            if row.verified_at is None or row.last_sent_at.isoformat() != entry["issued_at"]:
+                raise ValidationError("Verification expired. Request a new SMS code.")
+            request.session[key] = {**entry, "verified_at": django_timezone.now().timestamp()}
+            result = {"verified": True, "otp_required": True, "message": "Number confirmed."}
         response = JsonResponse(result)
         response["Cache-Control"] = "private, no-store"
         return response
     except PermissionDenied as exc:
         return _error(exc, 403)
-    except ValidationError as exc:
+    except (ValidationError, TypeError, ValueError, OverflowError) as exc:
         return _error(exc)
 
 
@@ -292,25 +331,52 @@ def collect(request, order_id):
         customer, order = _customer(request, order_id)
         body = _json(request)
         if set(body) != {"channel", "phone", "customer_authorized"} or body.get("customer_authorized") is not True:
-            raise ValidationError("Enter the MoMo number, choose its network and confirm this payment.")
-        # Enforce name inquiry for this exact order + wallet. Frontend
-        # confirmation alone is not authorization and cannot be forged.
+            raise ValidationError("Choose your number and Mobile Money network.")
         from core.identity import normalize_ghana_phone
+        from marketplace.models import OtpThrottle
         from django.utils import timezone as django_timezone
-        verified = request.session.get("checkout_wallet_verified:" + str(order.pk), {})
+        from . import client as gateway
+        phone = normalize_ghana_phone(body.get("phone"))
+        channel = body.get("channel")
+        if channel not in gateway.CHANNELS:
+            raise ValidationError("Choose your Mobile Money network.")
         try:
-            age = django_timezone.now().timestamp() - float(verified.get("at", 0))
-        except (TypeError, ValueError, AttributeError):
-            age = 999999
-        if (not isinstance(verified, dict) or not 0 <= age <= 900
-                or verified.get("phone") != normalize_ghana_phone(body["phone"])
-                or verified.get("channel") != body["channel"]):
-            raise ValidationError("Verify and confirm the registered wallet name before requesting payment.")
-        tx = service.create_collection(customer, order.pk, body["channel"], body["phone"])
+            linked_phone = normalize_ghana_phone(customer.phone)
+        except ValidationError:
+            linked_phone = ""
+        needs_otp = phone != linked_phone
+        key = "checkout_alt_momo:" + str(order.pk)
+        proof = request.session.get(key)
+        authorized = False
+        if needs_otp and isinstance(proof, dict):
+            row = OtpThrottle.objects.filter(phone=phone, purpose="momo").first()
+            now = django_timezone.now()
+            try:
+                authorized = bool(
+                    proof.get("phone") == phone and proof.get("channel") == channel
+                    and proof.get("verified_at") and row is not None
+                    and row.verified_at is not None and row.last_sent_at is not None
+                    and proof.get("issued_at") == row.last_sent_at.isoformat()
+                    and row.expires_at and row.expires_at >= now
+                    and 0 <= now.timestamp() - float(proof["verified_at"]) <= 600
+                )
+            except (ValueError, TypeError, OverflowError):
+                authorized = False
+        if needs_otp and not authorized:
+            raise ValidationError("Enter a fresh SMS code for this different number before paying.")
+        # One-time proof is consumed before initiating the external payment.
+        # A failed/uncertain POST must not reuse it; the existing reference
+        # remains persisted and can be checked without sending a second charge.
+        request.session.pop(key, None)
+        request.session.modified = True
+        tx = service.create_collection(
+            customer, order.pk, channel, phone,
+            alternate_phone_verified=authorized,
+        )
         return _answer(tx, 202)
     except PermissionDenied as exc:
         return _error(exc, 403)
-    except ValidationError as exc:
+    except (ValidationError, ValueError, TypeError) as exc:
         return _error(exc)
 
 

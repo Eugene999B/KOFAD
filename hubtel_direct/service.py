@@ -44,18 +44,25 @@ def _persisted(kind, amount, dest, **attributes):
     )
 
 
-def create_collection(customer, order_id, network, momo_phone):
-    """Charge only a phone the signed-in customer verified by SMS once before."""
+def create_collection(customer, order_id, network, momo_phone, *, alternate_phone_verified=False):
+    """Default to the account phone; any other phone needs fresh order-bound OTP.
+
+    This backend check is mandatory even if the browser modifies its inputs.
+    No previous verified-wallet row can authorize a later purchase.
+    """
     client.require_enabled("receive")
     if network not in client.CHANNELS:
         raise ValidationError("Choose MTN, Telecel or AirtelTigo.")
     if not customer or not customer.active:
         raise PermissionDenied("Sign in to your KOFAD account before paying.")
     phone = _normalized_destination(momo_phone)
-    if not VerifiedMomoPhone.objects.filter(
-        customer=customer, phone="+" + phone
-    ).exists():
-        raise ValidationError("Verify this Mobile Money number by SMS before requesting payment.")
+    from core.identity import normalize_ghana_phone
+    try:
+        linked_phone = normalize_ghana_phone(customer.phone).lstrip("+")
+    except ValidationError:
+        linked_phone = ""
+    if phone != linked_phone and not alternate_phone_verified:
+        raise ValidationError("Verify this different payment number with a new SMS code for this transaction.")
     with transaction.atomic():
         order = OnlineOrder.objects.select_for_update().get(pk=order_id, customer=customer)
         if order.status != "awaiting_payment" or order.payment_status in ("paid", "refunded"):

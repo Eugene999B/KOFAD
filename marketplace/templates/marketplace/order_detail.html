@@ -49,7 +49,7 @@
 <a class="market-button primary wide" href="{% url 'market_payment_verification' order.pk %}">View original payment status →</a>
 {% endif %}
 {% elif hubtel_direct_available %}
-<h2>Pay with Mobile Money</h2><p>Enter the wallet you want to pay from, verify its registered name, and follow the approval steps on your phone. Your order stays safely saved until payment is confirmed.</p>
+<h2>Pay with Mobile Money</h2>
 {% else %}
 <h2>Mobile Money is temporarily unavailable</h2><p>Your order is saved. No payment has been requested. Contact KOFAD for help.</p>
 {% endif %}

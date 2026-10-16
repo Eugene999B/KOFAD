@@ -1175,14 +1175,16 @@ def checkout(request, customer):
     payment_form = None
     if request.method == "POST" and not payment_ready:
         form.add_error(None, "Online checkout is awaiting activation. Your cart has been kept.")
-    wallet_number = (request.POST.get("direct_momo_phone", "") if request.method == "POST" else
-                     customer.phone or "")
-    wallet_channel = (request.POST.get("direct_momo_channel", "") if request.method == "POST" else "mtn-gh")
+    # Payment wallet is selected later, inside the customer's order account.
+    # Delivery contact details never authorize a different paying phone.
+    wallet_number = customer.phone or ""
+    wallet_channel = "mtn-gh"
     direct_wallet_valid = True
     if request.method == "POST":
         try:
             from core.identity import normalize_ghana_phone as checked_phone
-            wallet_number = checked_phone(wallet_number)
+            if wallet_number:
+                wallet_number = checked_phone(wallet_number)
             if wallet_channel not in ("mtn-gh", "vodafone-gh", "tigo-gh"):
                 raise ValidationError("Choose your Mobile Money network.")
         except ValidationError as exc:
@@ -1203,9 +1205,8 @@ def checkout(request, customer):
                 )
             request.session["market_cart"] = {}
             request.session.modified = True
-            # Save customer-selected payment wallet; it is deliberately
-            # different from the delivery/contact number and never a charge.
-            # The next KOFAD-only step verifies the wallet number and owner.
+            # Preselect the account-linked payment number. Alternative
+            # wallets are entered at payment time with order-bound SMS OTP.
             request.session["direct_wallet_for_order"] = {
                 "order": str(order.pk), "phone": wallet_number, "channel": wallet_channel
             }
@@ -1387,7 +1388,6 @@ def customer_payment_otp(request, customer, pk):
 @market_customer_required
 def customer_order(request, customer, pk):
     from hubtel_direct import client as hubtel_direct
-    from .models import VerifiedMomoPhone
     order = get_object_or_404(
         OnlineOrder.objects.prefetch_related(
             "lines", "events", "delivery_updates", "return_requests__lines"
@@ -1413,9 +1413,7 @@ def customer_order(request, customer, pk):
         direct_wallet_channel=wallet_channel_default,
         hubtel_direct_can_verify_phone=bool(settings.CUSTOMER_OTP_ENABLED),
         hubtel_direct_available=hubtel_direct.enabled("receive"),
-        hubtel_direct_phone_verified=bool(customer.phone and VerifiedMomoPhone.objects.filter(
-            customer=customer, phone=normalize_ghana_phone(customer.phone)
-        ).exists()),
+        hubtel_direct_phone_verified=bool(customer.phone),
         # Old, not-yet-completed Paystack SMS checks can finish safely, but new
         # payments cannot be started with Paystack or hosted checkout.
         momo_phone_verification=momo_security.pending_for_order(request, customer, order),

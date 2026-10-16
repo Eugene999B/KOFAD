@@ -60,6 +60,8 @@ jobs:
           marketplace.test_order_notifications
           marketplace.test_order_created_email_recovery
           core.test_telegram_enterprise
+          hubtel_direct.test_customer_payment_phone_policy
+          hubtel_direct.tests
           hubtel_direct.test_fast_market_verification
           marketplace.test_card_channel_recovery
           marketplace.test_order_created_email_recovery

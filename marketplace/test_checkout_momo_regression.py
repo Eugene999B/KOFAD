@@ -36,8 +36,8 @@ class FirstCheckoutPaymentRecoveryTests(MarketFixtures):
     def test_new_orders_use_direct_momo_only(self, ready, paystack, hosted):
         self.sign_in_with_cart()
         page = self.client.get("/market/checkout/")
-        self.assertContains(page, 'name="direct_momo_phone"')
-        self.assertContains(page, "Continue to wallet verification")
+        self.assertNotContains(page, 'name="direct_momo_phone"')
+        self.assertContains(page, "Continue to payment")
         payload = self.checkout_payload("hosted")
         payload["direct_momo_phone"] = self.customer.phone
         payload["direct_momo_channel"] = "mtn-gh"

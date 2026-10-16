@@ -36,23 +36,11 @@
 </div></section>
 <section class="checkout-v2-section"><div class="checkout-v2-number">04</div><div class="checkout-v2-content"><p class="market-eyebrow">OPTIONAL</p><h2>Order note</h2><label>Instruction{{ form.customer_note }}</label></div></section>
 <section class="checkout-payment-choice direct-momo-checkout" aria-label="Mobile Money payment">
- <p class="market-eyebrow">PAYMENT</p><h3>Pay securely with Mobile Money</h3>
- <p>Enter the wallet that will pay. This may be different from your delivery phone. If it is your first time using this number on KOFAD, you will verify it once by SMS on the next screen.</p>
- <div class="direct-momo-checkout-grid">
- <label for="direct-momo-phone">MoMo number
-  <input id="direct-momo-phone" type="tel" name="direct_momo_phone" inputmode="tel" autocomplete="tel" maxlength="18" placeholder="024 123 4567" value="{{ direct_wallet_number|default:'' }}" required>
- </label>
- <label for="direct-momo-channel">Network
-  <select id="direct-momo-channel" name="direct_momo_channel" required>
-   <option value="mtn-gh"{% if direct_wallet_channel == "mtn-gh" %} selected{% endif %}>MTN MoMo</option>
-   <option value="vodafone-gh"{% if direct_wallet_channel == "vodafone-gh" %} selected{% endif %}>Telecel Cash</option>
-   <option value="tigo-gh"{% if direct_wallet_channel == "tigo-gh" %} selected{% endif %}>AT Money</option>
-  </select>
- </label>
- </div>
- <p class="company-fineprint">Your order is saved first. KOFAD will verify this wallet's registered name before sending a secure approval request. You approve with your MoMo PIN on your own phone, not this website.</p>
+ <p class="market-eyebrow">PAYMENT</p>
+ <h3>Mobile Money</h3>
+ <p>Choose your payment number after placing the order.</p>
 </section>
-<p class="company-fineprint">Before placing your order, read our <a href="/terms/" target="_blank" rel="noopener">terms</a>, <a href="/delivery/" target="_blank" rel="noopener">delivery policy</a>, <a href="/returns-policy/" target="_blank" rel="noopener">returns policy</a> and <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>. These open in a new tab so you can keep your checkout.</p>{% if not payment_ready %}<div class="checkout-payment-notice" role="status"><strong>Direct Mobile Money is not active yet</strong><p>{{ payment_notice }} Your cart is saved. Please contact KOFAD if you need help with this order.</p><a href="/market/messages/">Contact KOFAD</a></div>{% endif %}<div class="checkout-v2-submit"><div><strong>Total is confirmed before payment.</strong></div><button class="market-button primary"{% if not payment_ready %} disabled{% endif %}>Continue to wallet verification <span>→</span></button></div>
+<p class="company-fineprint">Before placing your order, read our <a href="/terms/" target="_blank" rel="noopener">terms</a>, <a href="/delivery/" target="_blank" rel="noopener">delivery policy</a>, <a href="/returns-policy/" target="_blank" rel="noopener">returns policy</a> and <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>. These open in a new tab so you can keep your checkout.</p>{% if not payment_ready %}<div class="checkout-payment-notice" role="status"><strong>Direct Mobile Money is not active yet</strong><p>{{ payment_notice }} Your cart is saved. Please contact KOFAD if you need help with this order.</p><a href="/market/messages/">Contact KOFAD</a></div>{% endif %}<div class="checkout-v2-submit"><div><strong>Total is confirmed before payment.</strong></div><button class="market-button primary"{% if not payment_ready %} disabled{% endif %}>Continue to payment <span>→</span></button></div>
 </form>
 <aside class="commerce-checkout-summary"><p class="market-eyebrow">YOUR ORDER</p><h2>Order summary</h2><div class="checkout-v2-items">{% for row in rows %}<article><span>{{ row.quantity }}</span><div><strong>{{ row.listing.display_name }}</strong><small>{{ row.listing.selling_label }} · GHS {{ row.price|floatformat:2 }} each</small></div><b>GHS {{ row.total|floatformat:2 }}</b></article>{% endfor %}</div><div class="summary-row"><span>Products</span><strong data-checkout-subtotal="{{ subtotal }}">GHS {{ subtotal|floatformat:2 }}</strong></div><div class="summary-row"><span>Delivery</span><strong data-delivery-fee>GHS {{ delivery_fee_preview|floatformat:2 }}</strong></div><div class="summary-row grand"><span>Total</span><strong data-checkout-total>GHS {{ checkout_total|floatformat:2 }}</strong></div><div class="checkout-account-box"><small>ACCOUNT</small><strong>{{ market_customer.full_name }}</strong></div></aside>
 </div></section>

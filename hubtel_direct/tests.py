@@ -197,17 +197,31 @@ class DirectWorkflowTests(MarketFixtures):
         other_wallet = "+233501112233"
         VerifiedMomoPhone.objects.create(customer=self.customer, phone=other_wallet)
         order = self.order()
-        tx = service.create_collection(self.customer, order.pk, "vodafone-gh", other_wallet)
+        tx = service.create_collection(
+            self.customer, order.pk, "vodafone-gh", other_wallet,
+            alternate_phone_verified=True,
+        )
         self.assertEqual(tx.destination_suffix, "2233")
         self.assertEqual(post.call_args.kwargs["json"]["CustomerMsisdn"], "233501112233")
         self.assertNotEqual(order.phone, other_wallet)
 
     @patch("hubtel_direct.client.requests.post")
-    def test_unverified_number_never_receives_prompt(self, post):
-        VerifiedMomoPhone.objects.all().delete()
-        with self.assertRaises(ValidationError):
-            service.create_collection(self.customer, self.order().pk, "mtn-gh", self.customer.phone)
+    def test_previously_verified_different_number_does_not_bypass_fresh_otp(self, post):
+        other_wallet = "+233501112233"
+        VerifiedMomoPhone.objects.create(customer=self.customer, phone=other_wallet)
+        with self.assertRaisesRegex(ValidationError, "fresh"):
+            service.create_collection(self.customer, self.order().pk, "mtn-gh", other_wallet)
         post.assert_not_called()
+
+    @patch("hubtel_direct.client.requests.post")
+    def test_account_linked_phone_requires_no_extra_wallet_sms(self, post):
+        post.side_effect = self.accepted
+        VerifiedMomoPhone.objects.all().delete()
+        self.assertEqual(
+            service.create_collection(self.customer, self.order().pk, "mtn-gh",
+                                      self.customer.phone).status, "pending"
+        )
+        post.assert_called_once()
 
     @patch("hubtel_direct.client.requests.post")
     def test_spoofed_callback_does_not_settle_order(self, post):

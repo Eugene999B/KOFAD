@@ -97,3 +97,28 @@ html[data-theme="dark"] .direct-momo-review{background:linear-gradient(145deg,#1
 html[data-theme="dark"] .direct-momo-review [data-hubtel-direct-message]:not(:empty){background:#183945;color:#d5edf2!important;border-color:#467082}
 html[data-theme="dark"] .direct-momo-review [data-direct-name-review]{background:#13382f;border-color:#376d60}
 html[data-theme="dark"] .direct-momo-review [data-direct-name-review] strong{color:#b5f5df}
+
+/* Simple customer checkout: account phone first, one-time alternative OTP. */
+.direct-momo-review{display:grid;gap:15px}
+.direct-momo-review .direct-momo-header{margin:0 0 3px}
+.direct-momo-review .direct-momo-header h3{margin:3px 0 4px;font-size:clamp(19px,3vw,23px)}
+.direct-momo-review [data-hubtel-direct-form]{display:grid;gap:15px}
+.direct-momo-phone-options{display:grid;gap:9px}
+.direct-momo-phone-choice{display:flex!important;align-items:center;gap:12px;cursor:pointer;min-height:60px;padding:12px 15px;border:1px solid #d4dfe4;border-radius:14px;background:#fff;color:#143544}
+.direct-momo-phone-choice:has(input:checked){border:2px solid #218378;background:#eefaf5;padding:11px 14px}
+.direct-momo-phone-choice input{width:19px!important;height:19px!important;flex:0 0 19px;accent-color:#147a70}
+.direct-momo-phone-choice span{display:flex;flex-direction:column;gap:3px}
+.direct-momo-phone-choice strong{font-size:14px}
+.direct-momo-phone-choice small{font-size:13px;color:#516776}
+.direct-momo-review [data-direct-other-phone][hidden],.direct-momo-review [data-direct-verify-panel][hidden],.direct-momo-review [data-direct-verified][hidden]{display:none!important}
+.direct-momo-review [data-direct-other-phone] label,.direct-momo-review [data-hubtel-direct-form]>label{display:grid;gap:7px;font-size:13px;font-weight:700}
+.direct-momo-review [data-direct-other-phone] input,.direct-momo-review select,.direct-momo-otp input{width:100%;min-height:48px;border-radius:11px}
+.direct-momo-otp{padding:15px;border:1px solid #c8dfdb;background:#f1faf7;border-radius:14px;display:grid;gap:11px}
+.direct-momo-otp p{margin:0}
+.direct-momo-otp label{display:grid;gap:7px;font-size:13px}
+.direct-momo-wallet-ready{margin:0;color:#197351;font-weight:800}
+.direct-momo-review [data-hubtel-direct-message]:empty{display:none}
+html[data-theme="dark"] .direct-momo-phone-choice{background:#182c33;color:#eef6f5;border-color:#526971}
+html[data-theme="dark"] .direct-momo-phone-choice:has(input:checked){background:#143b33;border-color:#55baa7}
+html[data-theme="dark"] .direct-momo-phone-choice small{color:#b9ced1}
+html[data-theme="dark"] .direct-momo-otp{background:#19342f;border-color:#417568}
