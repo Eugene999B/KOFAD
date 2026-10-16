@@ -104,11 +104,16 @@ class FastMarketVerificationTests(MarketFixtures):
     @patch("hubtel_direct.client.check", return_value=("pending", "provider-tx-id-123"))
     def test_staff_original_reference_check_does_not_claim_payment_is_paid(self, provider):
         self.ready()
-        self.client.force_login(self.staff)
-        response = self.client.post(
+        # Do not reuse the logged-in customer browser session for staff tests:
+        # KOFAD intentionally separates staff and customer session zones.
+        from django.test import Client
+        staff_client = Client()
+        staff_client.force_login(self.staff)
+        response = staff_client.post(
             f"/online-orders/{self.market_order.pk}/",
             {"form_type": "payment_check", "payment_reference": self.ref},
         )
+        self.assertEqual(response["Location"], f"/online-orders/{self.market_order.pk}/")
         self.assertEqual(response.status_code, 302)
         self.market_order.refresh_from_db()
         self.assertNotEqual(self.market_order.payment_status, "paid")
