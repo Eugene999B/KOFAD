@@ -2306,7 +2306,7 @@ def communications(request, branch):
     rows = list(
         Message.objects.filter(branch=branch, archived_at__isnull=True).select_related(
             "party", "management_contact", "created_by", "submitted_by"
-        ).order_by("-created_at")[:120]
+        ).prefetch_related("delivery_attempts").order_by("-created_at")[:120]
     )
     status_labels = {
         "draft": "Ready to send",
@@ -2323,6 +2323,13 @@ def communications(request, branch):
     for row in rows:
         row.whatsapp_url = ""
         row.status_label = status_labels.get(row.status, row.status.replace("_", " ").title())
+        # The sender is the actual configured value used when the SMS was
+        # submitted, not merely the site's current settings. Keep older
+        # records unchanged so a handset mismatch can be investigated.
+        attempts = list(row.delivery_attempts.all()) if row.channel == "sms" else []
+        latest_attempt = max(attempts, key=lambda item: item.number, default=None)
+        row.latest_sms_provider_id = latest_attempt.provider_id if latest_attempt else ""
+        row.latest_sms_http_status = latest_attempt.http_status if latest_attempt else None
         if row.channel == "whatsapp" and row.recipient and row.provider == "whatsapp-link":
             digits = "".join(ch for ch in row.recipient if ch.isdigit())
             row.whatsapp_url = f"https://wa.me/{digits}?text={quote(row.body)}"

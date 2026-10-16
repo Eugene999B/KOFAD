@@ -172,6 +172,7 @@
       <button type="button" data-history-channel="whatsapp">WhatsApp</button>
     </div>
   </div>
+  <p class="muted" style="margin:0 0 12px">For SMS, <strong>Sender submitted</strong> records the exact sender value KOFAD requested from Arkesel when it sent that message. The handset display is controlled by the registered network sender name; Arkesel can investigate differences using the message ID.</p>
   <div class="table-wrap">
     <table class="comms-history-table">
       <thead><tr><th>Recipient</th><th>Message</th><th>Channel / status</th><th>Time</th><th></th></tr></thead>
@@ -183,7 +184,16 @@
           <small>{{ row.recipient }}</small>
         </td>
         <td><span class="message-body-preview">{{ row.body }}</span></td>
-        <td><span class="pill">{{ row.channel|upper }}</span><small data-sms-status="{{ row.pk }}">{{ row.status_label }}</small><small class="comms-status-error{% if not row.last_error %} hidden{% endif %}" data-sms-error="{{ row.pk }}">{{ row.last_error }}</small></td>
+        <td>
+          <span class="pill">{{ row.channel|upper }}</span>
+          <small data-sms-status="{{ row.pk }}">{{ row.status_label }}</small>
+          {% if row.channel == "sms" and row.attempts %}
+          <small>Sender submitted: <strong>{{ row.sender|default:"Not recorded" }}</strong></small>
+          {% if row.latest_sms_provider_id %}<small>Arkesel message ID: <code style="overflow-wrap:anywhere">{{ row.latest_sms_provider_id }}</code></small>{% endif %}
+          {% if row.latest_sms_http_status %}<small>Arkesel HTTP: {{ row.latest_sms_http_status }}</small>{% endif %}
+          {% endif %}
+          <small class="comms-status-error{% if not row.last_error %} hidden{% endif %}" data-sms-error="{{ row.pk }}">{{ row.last_error }}</small>
+        </td>
         <td>{{ row.created_at|date:"d M, H:i" }}</td>
         <td class="comms-row-action">
           {% if row.channel == "whatsapp" and row.whatsapp_url %}

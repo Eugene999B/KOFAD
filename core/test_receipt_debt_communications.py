@@ -353,7 +353,7 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         SMS_SANDBOX=False,
         SMS_PUBLIC_ORIGIN="https://kofad.example.test",
         ARKESEL_API_KEY="ci-test-key",
-        SMS_SENDER_ID="KOFAD",
+        SMS_SENDER_ID="Kofad Impex",
     )
     @patch("core.sms.providers.Arkesel.submit_many")
     def test_checkout_sms_checkbox_sends_receipt_immediately(self, submit_many):
@@ -392,8 +392,18 @@ class ReceiptDebtCommunicationSettingsTests(Fixtures, TestCase):
         self.assertTrue(self.customer.consent)
         message = Message.objects.get(source_key=f"document:receipt:{payload['document_id']}")
         self.assertEqual(message.status, "accepted")
+        self.assertEqual(message.sender, "Kofad Impex")
         self.assertEqual(message.delivery_attempts.get().provider_id, "checkout-sms-1")
         submit_many.assert_called_once()
+        self.assertEqual(submit_many.call_args.args[2], "Kofad Impex")
+
+        # Finance can inspect the sender of this specific sale SMS; it is
+        # not inferred from today's SMS configuration.
+        history = self.client.get("/communications/")
+        self.assertEqual(history.status_code, 200)
+        self.assertContains(history, "Sender submitted:")
+        self.assertContains(history, "Kofad Impex")
+        self.assertContains(history, "checkout-sms-1")
 
     @override_settings(SMS_ENABLED=True)
     def test_sales_history_receipt_detail_stays_focused_on_transaction(self):
