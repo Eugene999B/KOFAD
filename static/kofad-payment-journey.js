@@ -5,6 +5,8 @@
     const url = root.dataset.statusUrl;
     const title = root.querySelector('[data-kpay-title]');
     const detail = root.querySelector('[data-kpay-detail]');
+    const providerStatus = root.querySelector('[data-kpay-provider-status]');
+    const lastCheck = root.querySelector('[data-kpay-last-check]');
     const mark = root.querySelector('[data-kpay-mark]');
     const checkButton = root.querySelector('[data-kpay-check]');
     const receipt = root.querySelector('[data-kpay-receipt]');
@@ -44,7 +46,24 @@
         ? 'Review wallet agreement'
         : mode === 'transfer' && state === 'approval_pending'
         ? 'Awaiting transfer approval' : titles[phase];
+      if (data.status_label && mode === 'payment' && title) title.textContent = data.status_label;
       if (mark) mark.textContent = phase === 'success' ? '✓' : phase === 'failed' ? '×' : phase === 'review' ? '!' : '••';
+      if (providerStatus && data.provider_status) {
+        providerStatus.textContent = ({
+          paid: 'PAID — independently verified',
+          unpaid: 'UNPAID at latest network check',
+          unavailable: 'Network status not available',
+          mismatch: 'Reconciliation required',
+          failed: 'Payment unsuccessful',
+          not_checked: 'Not yet independently checked'
+        })[data.provider_status] || 'Not yet confirmed';
+      }
+      if (lastCheck) {
+        const timestamp = data.last_checked_at;
+        const parsed = timestamp ? new Date(timestamp) : null;
+        lastCheck.textContent = parsed && !Number.isNaN(parsed.getTime())
+          ? parsed.toLocaleString() : 'Not yet checked';
+      }
       if (detail && data.message && phase !== 'success') detail.textContent = String(data.message).slice(0,240);
       if (phase === 'success' && detail) detail.textContent = mode === 'authorization'
         ? 'Your wallet authorization is verified. This is not a payment or a receipt.'
@@ -81,7 +100,7 @@
         busy = false;
         if (checkButton) checkButton.disabled = false;
         clearTimeout(timer);
-        if (!stopped) timer = setTimeout(check, 7000);
+        if (!stopped) timer = setTimeout(check, 5000);
       }
     }
     root.querySelector('[data-kpay-pos-otp]')?.addEventListener('submit', async (event) => {

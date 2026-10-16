@@ -2295,22 +2295,47 @@ def staff_order(request, branch, pk):
         pk=pk,
     )
     if request.method == "POST" and request.POST.get("form_type") == "payment_check":
-        attempts = order.payment_attempts.all()
+        from hubtel_direct import service as direct_service
+        from hubtel_direct.models import DirectTransaction
         reference = request.POST.get("payment_reference", "").strip()
-        attempt = attempts.filter(reference=reference).first() if reference else attempts.first()
-        if attempt:
-            MarketPaymentAttempt.objects.filter(pk=attempt.pk).exclude(status="success").update(
-                next_check_at=timezone.now(),
-                provider_message="Staff requested an immediate provider verification.",
-            )
+        attempt = order.payment_attempts.filter(reference=reference).first() if reference else order.payment_attempts.first()
+        if not attempt:
+            messages.warning(request, "No original payment reference exists for this order.")
+        elif attempt.provider == "hubtel_direct":
+            # Never reset the lease or resubmit the charge. Only the
+            # allowlisted KOFAD Web checks the original reference via GET.
+            tx = DirectTransaction.objects.filter(
+                order=order, kind="receive", client_reference=attempt.reference,
+            ).first()
+            if not tx:
+                messages.warning(request, "Payment reference not found. Finance must investigate the original request.")
+            else:
+                try:
+                    tx = direct_service.reconcile(tx.client_reference) or tx
+                    order.refresh_from_db()
+                    if tx.status == "success" and order.payment_status == "paid":
+                        messages.success(request, "Payment independently confirmed and posted to this order.")
+                    elif tx.status == "failed":
+                        messages.warning(request, "Payment network confirmed failure. No receipt was issued.")
+                    elif tx.status == "attention":
+                        messages.warning(request, "Payment requires reconciliation. Do not charge again or release goods.")
+                    else:
+                        messages.info(request, "The original payment is not yet confirmed. Verification continues automatically; no new request was sent.")
+                except ValidationError as exc:
+                    messages.warning(request, "Network verification could not complete. The original payment remains protected: " + problem(exc))
+        else:
             try:
                 if attempt.provider == "hubtel":
                     hubtel.reconcile(attempt.reference)
                 elif attempt.provider == "paystack":
                     services.finalize_payment(attempt.reference, services.verify_paystack(attempt.reference))
                 else:
-                    raise ValidationError("This payment provider is not supported.")
-                messages.success(request, "Payment verified.")
+                    raise ValidationError("Payment provider not supported.")
+                order.refresh_from_db()
+                if order.payment_status == "paid":
+                    messages.success(request, "Payment independently verified.")
+                else:
+                    messages.info(request, "Payment has not been independently confirmed.")
             except ValidationError as exc:
                 messages.info(request, problem(exc))
         return redirect("staff_online_order", pk=order.pk)
@@ -2337,8 +2362,13 @@ def staff_order(request, branch, pk):
                 return redirect("staff_online_order", pk=order.pk)
         except ValidationError as exc:
             messages.error(request, problem(exc))
+    from hubtel_direct.models import DirectTransaction
+    direct_collections = list(DirectTransaction.objects.filter(
+        order=order, kind="receive",
+    ).order_by("-created_at")[:10])
     return render(request, "marketplace/staff_order_detail.html", {
         "title": order.public_reference, "order": order, "form": form,
+        "direct_collections": direct_collections,
         "tracking_form": tracking_form,
         "handover_code": services.handover_code(order),
         "delivery_updates": order.delivery_updates.all(),
@@ -2717,17 +2747,36 @@ def payment_verification(request, customer, pk):
 
 @market_customer_required
 def customer_payment_status(request, customer, pk):
-    """Read our confirmed state only; the worker performs provider verification."""
+    """One original reference: check via GET, never re-send a charge."""
     order = get_object_or_404(OnlineOrder, pk=pk, customer=customer)
     latest = order.payment_attempts.first()
+    direct_state = {}
+    if latest and latest.provider == "hubtel_direct":
+        from hubtel_direct.models import DirectTransaction
+        from hubtel_direct.views import _verify_original_receive_if_due, _receive_payment_snapshot
+        original = DirectTransaction.objects.filter(
+            order=order, customer=customer, kind="receive",
+            client_reference=latest.reference,
+        ).first()
+        if original:
+            original = _verify_original_receive_if_due(original)
+            order.refresh_from_db()
+            latest.refresh_from_db()
+            direct_state = _receive_payment_snapshot(original, order)
     waiting = order.payment_attempts.filter(
         status__in=["initializing", "submission_unknown", "pending", "attention"]
     ).exists()
     response = JsonResponse({
         "payment_status": order.payment_status, "order_status": order.status,
         "waiting": waiting, "paid": order.payment_status == "paid",
-        "message": latest.provider_message if latest and latest.status != "success" else "",
-        "attention": bool(latest and latest.status == "attention"),
+        "message": direct_state.get("message") or (
+            latest.provider_message if latest and latest.status != "success" else ""
+        ),
+        "attention": direct_state.get("attention", bool(latest and latest.status == "attention")),
+        "status_label": direct_state.get("status_label", ""),
+        "last_checked_at": direct_state.get("last_checked_at"),
+        "provider_status": direct_state.get("provider_status"),
+        "reference": latest.reference if latest else "",
         "needs_otp": bool(latest and latest.status == "pending" and (latest.verification_summary or {}).get("charge_status") == "send_otp"),
     })
     response["Cache-Control"] = "no-store, private"

@@ -6,12 +6,14 @@
  <section class="kpay-card">
   <p class="kpay-brand">KOFAD · Secure Mobile Money</p>
   <div class="kpay-visual" aria-hidden="true"><span class="kpay-ring"></span><span class="kpay-mark" data-kpay-mark>••</span></div>
-  <h1 data-kpay-title>Waiting for payment</h1>
-  <p class="kpay-description" data-kpay-wait>Approve the payment request on your own phone. This is a secure status screen; it will not charge you again.</p>
+  <h1 data-kpay-title>{{ journey.status_label }}</h1>
+  <p class="kpay-description" data-kpay-wait>Your original payment is being checked independently. If you have already approved and were debited, <strong>do not pay again</strong>. This screen never starts another charge.</p>
   <p class="kpay-message" data-kpay-detail role="status" aria-live="polite">{{ journey.message }}</p>
   <div class="kpay-facts">
    <div class="kpay-fact"><small>Amount</small><strong class="kpay-amount">GHS {{ payment.amount|floatformat:2 }}</strong></div>
    <div class="kpay-fact"><small>Order</small><strong>{{ order.customer_reference }}</strong></div>
+   <div class="kpay-fact"><small>Payment verification</small><strong data-kpay-provider-status>{% if journey.provider_status == 'paid' %}PAID — verified{% elif journey.provider_status == 'unpaid' %}UNPAID at last check{% elif journey.provider_status == 'unavailable' %}Status service unavailable{% else %}Waiting for independent check{% endif %}</strong></div>
+   <div class="kpay-fact"><small>Latest network check</small><strong data-kpay-last-check>{% if payment.checked_at %}{{ payment.checked_at|date:"d M Y, H:i:s T" }}{% else %}Not yet checked{% endif %}</strong></div>
   </div>
   <ol class="kpay-progress" aria-label="Payment steps">
     <li><strong>1. Request recorded</strong><small>Original reference saved</small></li>
@@ -19,6 +21,7 @@
     <li><strong>3. Payment verified</strong><small>Waiting for final confirmation</small></li>
   </ol>
   <p class="kpay-reference">Payment reference: {{ journey.reference }}</p>
+  <p class="kpay-secure">An accepted request or network notification is not proof of settlement. Only a verified PAID status matching the original amount and reference confirms a payment.</p>
   <div class="kpay-actions">
    <button type="button" class="market-button ghost" data-kpay-check>Check latest status</button>
    <a class="market-button ghost" href="{% url 'market_order' order.pk %}">Back to order</a>

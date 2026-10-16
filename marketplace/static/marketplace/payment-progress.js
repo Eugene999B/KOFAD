@@ -8,15 +8,12 @@ document.addEventListener("DOMContentLoaded", () => {
   let stopped = false;
   const schedule = () => {
     clearTimeout(timer);
-    if (!stopped) timer = setTimeout(check, 5000);
+    if (!stopped) timer = setTimeout(check, Date.now() - started > 10 * 60 * 1000 ? 15000 : 5000);
   };
   const check = async () => {
     if (stopped || inFlight) return;
-    if (Date.now() - started >= 10 * 60 * 1000) {
-      stopped = true;
-      if (message) message.textContent = "Confirmation is taking longer than expected. We will keep checking in the background. If money was deducted, do not pay again; contact KOFAD for help.";
-      return;
-    }
+    // Do not stop at ten minutes. A delayed genuine payment must not
+    // remain visually stranded; slow down browser polling but keep checking.
     if (document.hidden) { schedule(); return; }
     inFlight = true;
     const controller = new AbortController();
@@ -34,7 +31,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!response.ok) return;
       const data = await response.json();
       if (Boolean(data.needs_otp) !== Boolean(panel.querySelector("#payment-otp"))) { stopped = true; location.reload(); return; }
-      if (message && data.message) message.textContent = data.message;
+      if (message && data.message) {
+        const last = data.last_checked_at ? new Date(data.last_checked_at) : null;
+        const checkedText = last && !Number.isNaN(last.getTime())
+          ? ' Latest network check: ' + last.toLocaleString() + '.' : '';
+        message.textContent = data.message + checkedText;
+      }
       if (data.attention) {
         stopped = true;
         if (message) message.textContent = "Your payment needs review. If money was deducted, do not pay again; contact KOFAD.";

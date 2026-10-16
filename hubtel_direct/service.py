@@ -22,7 +22,10 @@ from .models import DirectTransaction
 
 ACTIVE = ("initializing", "submission_unknown", "pending")
 BLOCKING_ATTEMPTS = ("initializing", "submission_unknown", "pending", "attention")
-MIN_STATUS_WAIT = timedelta(minutes=5)
+MIN_STATUS_WAIT = timedelta(seconds=20)
+# Read-only provider GET checks; this shared database lease prevents duplicate
+# checks across browsers, staff and the background worker.
+STATUS_RECHECK_WAIT = timedelta(seconds=30)
 
 
 def _reference():
@@ -225,13 +228,20 @@ def note_callback(payload):
     ref = client._field(data, "ClientReference")
     if not isinstance(ref, str) or len(ref) > 36:
         return
-    DirectTransaction.objects.filter(
-        client_reference=ref, status__in=ACTIVE, callback_seen_at__isnull=True
-    ).update(callback_seen_at=timezone.now())
+    # Callback is only a hint. Queue an earlier *GET-only* verification of
+    # the original reference. No callback may confirm settlement.
+    row = DirectTransaction.objects.filter(
+        client_reference=ref, status__in=ACTIVE,
+    ).first()
+    if row and row.callback_seen_at is None:
+        due = max(timezone.now(), row.created_at + MIN_STATUS_WAIT)
+        DirectTransaction.objects.filter(
+            pk=row.pk, status__in=ACTIVE, callback_seen_at__isnull=True,
+        ).update(callback_seen_at=timezone.now(), next_check_at=due)
 
 
 def reconcile(reference):
-    """Verify after >=5 minutes, using the separate whitelisted Status Check API."""
+    """Read-only, throttled status check for the original payment reference."""
     now = timezone.now()
     tx = DirectTransaction.objects.filter(client_reference=reference).first()
     if not tx or tx.status not in ACTIVE:
@@ -250,13 +260,23 @@ def reconcile(reference):
     # Claim the next check with a durable lease for cross-worker concurrency.
     claimed = DirectTransaction.objects.filter(
         pk=tx.pk, status__in=ACTIVE, next_check_at__lte=now
-    ).update(next_check_at=now + MIN_STATUS_WAIT, check_count=F("check_count") + 1)
+    ).update(next_check_at=now + STATUS_RECHECK_WAIT, check_count=F("check_count") + 1)
     if not claimed:
         return tx
     try:
         final, provider_id = client.check(tx)
     except client.StatusUnconfirmed:
-        return tx
+        # HTTP 401/5xx, invalid status payload, or a still-unconfirmed
+        # provider answer is NOT a failed payment. Continue GET checks.
+        DirectTransaction.objects.filter(pk=tx.pk, status__in=ACTIVE).update(
+            checked_at=timezone.now(), provider_status="unavailable",
+        )
+        if tx.kind == "receive":
+            MarketPaymentAttempt.objects.filter(
+                reference=tx.client_reference, provider="hubtel_direct",
+                status__in=BLOCKING_ATTEMPTS,
+            ).update(provider_message="Payment network status unavailable. We have not confirmed settlement; do not pay again.")
+        return DirectTransaction.objects.get(pk=tx.pk)
     except ValidationError:
         final, provider_id = "attention", tx.hubtel_transaction_id
 
@@ -266,7 +286,13 @@ def reconcile(reference):
             return current
         if final == "pending":
             current.checked_at = timezone.now()
-            current.save(update_fields=["checked_at", "updated_at"])
+            current.provider_status = "unpaid"
+            current.save(update_fields=["checked_at", "provider_status", "updated_at"])
+            if current.kind == "receive":
+                MarketPaymentAttempt.objects.filter(
+                    reference=current.client_reference, provider="hubtel_direct",
+                    status__in=BLOCKING_ATTEMPTS,
+                ).update(provider_message="Network reports UNPAID as of the last independent check. If debited, do not pay again; verification continues.")
             return current
         if current.kind == "receive":
             attempt = MarketPaymentAttempt.objects.select_for_update().get(
@@ -291,10 +317,11 @@ def reconcile(reference):
                         pk=current.order_id, payment_reference=current.client_reference
                     ).exclude(payment_status__in=["paid", "refunded"]).update(payment_status="failed")
         current.status = final
+        current.provider_status = {"success": "paid", "failed": "failed", "attention": "mismatch"}.get(final, "unknown")
         current.hubtel_transaction_id = provider_id
         current.checked_at = timezone.now()
         current.next_check_at = None
-        current.save(update_fields=["status", "hubtel_transaction_id", "checked_at", "next_check_at", "updated_at"])
+        current.save(update_fields=["status", "provider_status", "hubtel_transaction_id", "checked_at", "next_check_at", "updated_at"])
         accounting.audit(current.requested_by, None, "hubtel.status_verified", current.client_reference,
                          {"kind": current.kind, "verified_status": final},
                          category="finance", severity="high" if final == "attention" else "info")

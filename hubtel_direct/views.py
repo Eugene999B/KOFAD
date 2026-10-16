@@ -314,43 +314,113 @@ def collect(request, order_id):
         return _error(exc)
 
 
+def _verify_original_receive_if_due(tx):
+    """Read-only status lookup through whitelisted KOFAD Web.
+
+    All callers share a DB lease. No GET, callback, poll or staff verification
+    ever resubmits a payment POST or trusts the payer's claimed result.
+    """
+    if tx.status not in service.ACTIVE or tx.kind != "receive":
+        return tx
+    now = timezone.now()
+    if (now - tx.created_at < service.MIN_STATUS_WAIT
+            or (tx.next_check_at and tx.next_check_at > now)):
+        return tx
+    try:
+        checked = service.reconcile(tx.client_reference)
+        return checked or tx
+    except ValidationError as exc:
+        logging.getLogger(__name__).warning(
+            "Direct receive verification unavailable ref_suffix=%s reason=%s",
+            tx.client_reference[-8:], type(exc).__name__,
+        )
+        return DirectTransaction.objects.get(pk=tx.pk)
+
+
+def _receive_payment_snapshot(tx, order):
+    """Status shown identically to customer and staff; no invented settlement."""
+    paid = (tx.status == "success" and order.payment_status == "paid"
+            and order.payment_reference == tx.client_reference)
+    review = tx.status == "attention" or (tx.status == "success" and not paid)
+    failed = tx.status == "failed"
+    if paid:
+        message = "Payment verified against the payment network and recorded by KOFAD."
+        label = "Payment confirmed"
+    elif review:
+        message = ("The network outcome or accounting details need reconciliation. "
+                   "Do not pay again; contact KOFAD with this payment reference.")
+        label = "Reconciliation required"
+    elif failed:
+        message = "The payment network rejected or confirmed failure of this request."
+        label = "Payment unsuccessful"
+    elif tx.status == "submission_unknown":
+        message = ("The payment request outcome is uncertain. KOFAD is checking the "
+                   "original reference. Do not approve or submit another payment.")
+        label = "Request outcome uncertain"
+    elif tx.provider_status == "unpaid":
+        message = ("The last independent network check reported UNPAID. This is not "
+                   "proof that an earlier wallet debit failed. Verification continues; do not pay twice.")
+        label = "Not yet confirmed"
+    elif tx.provider_status == "unavailable":
+        message = ("The network status service did not provide a verifiable result. "
+                   "KOFAD is retaining and checking your original payment; do not pay twice.")
+        label = "Verification temporarily unavailable"
+    elif tx.callback_seen_at:
+        message = ("KOFAD received a network notification and is checking the "
+                   "original payment reference independently. No second charge will be sent.")
+        label = "Checking network payment"
+    else:
+        message = ("A wallet payment request was accepted. Approve it on your "
+                   "own phone if you have not already done so. Do not pay twice.")
+        label = "Awaiting network confirmation"
+    return {
+        "reference": tx.client_reference,
+        "status": "success" if paid else "attention" if review else "failed" if failed else tx.status,
+        "status_label": label,
+        "paid": paid, "failed": failed, "attention": review,
+        "provider_status": tx.provider_status or "not_checked",
+        "request_accepted": tx.provider_code in {"0000", "0001"},
+        "network_notification_received": bool(tx.callback_seen_at),
+        "last_checked_at": tx.checked_at.isoformat() if tx.checked_at else None,
+        "transaction_id": tx.hubtel_transaction_id if (paid or review) else "",
+        "next_check_after_seconds": (
+            max(0, int((tx.next_check_at - timezone.now()).total_seconds()))
+            if tx.status in service.ACTIVE and tx.next_check_at else None
+        ),
+        "message": message,
+    }
+
+
 @require_GET
 def collect_status(request, order_id):
     try:
-        _, order = _customer(request, order_id)
+        customer, order = _customer(request, order_id)
     except PermissionDenied:
         return _error(PermissionDenied("Customer sign-in required."), 403)
-    tx = DirectTransaction.objects.filter(order=order, kind="receive").order_by("-created_at").first()
+    tx = DirectTransaction.objects.filter(
+        order=order, customer=customer, kind="receive",
+    ).order_by("-created_at").first()
     if not tx:
         raise Http404("No direct payment for this order.")
-    return _answer(tx)
+    tx = _verify_original_receive_if_due(tx)
+    order.refresh_from_db()
+    response = JsonResponse(_receive_payment_snapshot(tx, order))
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 @require_GET
 def collection_verification(request, order_id):
-    """Separate customer-facing Direct Receive status. NEVER submits a new debit."""
+    """Customer payment page: one original reference, read-only checks only."""
     customer, order = _customer(request, order_id)
     tx = DirectTransaction.objects.filter(
-        order=order, customer=customer, kind="receive"
+        order=order, customer=customer, kind="receive",
     ).order_by("-created_at").first()
     if not tx:
         raise Http404("No payment request for this order.")
-    status = tx.status
-    paid = status == "success" and order.payment_status == "paid"
-    review = status == "attention" or (status == "success" and not paid)
-    data = {
-        "reference": tx.client_reference,
-        "status": "attention" if review else status,
-        "paid": paid,
-        "failed": status == "failed",
-        "attention": review,
-        "message": (
-            "Payment independently confirmed and recorded."
-            if paid else "This payment needs KOFAD review. Do not send another request."
-            if review else "Payment was not completed. No payment was recorded."
-            if status == "failed" else "Check your wallet phone for the approval request. An accepted API request does not confirm that a network prompt was delivered. Do not pay twice."
-        ),
-    }
+    tx = _verify_original_receive_if_due(tx)
+    order.refresh_from_db()
+    data = _receive_payment_snapshot(tx, order)
     if request.GET.get("format") == "json":
         response = JsonResponse(data)
     else:

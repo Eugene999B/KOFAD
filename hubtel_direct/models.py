@@ -25,6 +25,9 @@ class DirectTransaction(models.Model):
     status = models.CharField(max_length=24, default="approval_pending", db_index=True)
     hubtel_transaction_id = models.CharField(max_length=100, blank=True)
     provider_code = models.CharField(max_length=20, blank=True)
+    # Verified read-only status result: paid, unpaid, unavailable or mismatch.
+    # Acceptance code 0001 is NOT a settlement result.
+    provider_status = models.CharField(max_length=32, blank=True)
     callback_seen_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True, db_index=True)
     next_check_at = models.DateTimeField(null=True, blank=True, db_index=True)
