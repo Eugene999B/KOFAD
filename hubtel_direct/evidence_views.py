@@ -47,13 +47,42 @@ def diagnostics(request):
 def download(request, evidence_id):
     evidence = get_object_or_404(HubtelEvidence.objects.filter(_allowed(request)), pk=evidence_id)
     raw = decrypt_exchange(evidence)
-    try:
-        json.loads(raw)
+    if not raw:
+        # Hubtel sometimes answers 401/403 with no payload at all. An empty
+        # attachment is unusable in Safari, so provide *clearly labelled*
+        # locally generated HTTP metadata, never a fabricated Hubtel response.
+        endpoint = {
+            "wallet_verify": "https://rnv.hubtel.com/v2/merchantaccount/merchants/{merchant_account}/mobilemoney/verify",
+            "bank_verify": "https://rnv.hubtel.com/v2/merchantaccount/merchants/{merchant_account}/bank/verify/{bank_code}/{account_number}",
+            "direct_submit": "Hubtel Direct receive/send API (see reference)",
+            "direct_status": "Hubtel Direct transaction-status API",
+        }.get(evidence.direction)
+        report = {
+            "report_type": "KOFAD-generated Hubtel HTTP diagnostic, NOT a Hubtel JSON response",
+            "evidence_id": evidence.pk,
+            "reference": evidence.reference,
+            "recorded_at_utc": evidence.created_at.isoformat(),
+            "operation": evidence.get_direction_display(),
+            "http_status": evidence.http_status,
+            "method": "GET" if evidence.direction in {"wallet_verify", "bank_verify", "direct_status", "status_check"} else "POST",
+            "endpoint_template": endpoint,
+            "provider_response_body_bytes": 0,
+            "provider_response_body": "",
+            "provider_returned_json_payload": False,
+            "explanation": "The actual Hubtel HTTP response body contained zero bytes. No provider JSON response exists for this attempt. HTTP status and timestamp are retained by KOFAD.",
+        }
+        raw = (json.dumps(report, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
         content_type, extension = "application/json", "json"
-    except (ValueError, UnicodeDecodeError, TypeError):
-        content_type, extension = "text/plain; charset=utf-8", "txt"
+        suffix = "-http-diagnostic"
+    else:
+        try:
+            json.loads(raw)
+            content_type, extension = "application/json", "json"
+        except (ValueError, UnicodeDecodeError, TypeError):
+            content_type, extension = "text/plain; charset=utf-8", "txt"
+        suffix = ""
     response = HttpResponse(raw, content_type=content_type)
     response["Content-Disposition"] = (
-        f'attachment; filename="hubtel-{evidence.direction}-{evidence.pk}.{extension}"'
+        f'attachment; filename="hubtel-{evidence.direction}-{evidence.pk}{suffix}.{extension}"'
     )
     return _private(response)
