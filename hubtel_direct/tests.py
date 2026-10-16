@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import requests
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from marketplace.models import MarketPaymentAttempt, VerifiedMomoPhone
