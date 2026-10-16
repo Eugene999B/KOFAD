@@ -146,7 +146,6 @@ class SmsTests(Fixtures,TestCase):
         self.customer.refresh_from_db()
         self.assertTrue(self.customer.consent)
 
-    @patch("core.sms.providers.Arkesel.submit_many")
     @override_settings(SMS_SENDER_ID="Kofad Impex")
     @patch("core.sms.providers.Arkesel.submit_many")
     def test_sender_id_preserves_space_from_web_config_to_worker(self, submit_many):
@@ -177,6 +176,7 @@ class SmsTests(Fixtures,TestCase):
         self.assertEqual(result.status, "accepted")
         self.assertEqual(post.call_args.kwargs["json"]["sender"], "Kofad Impex")
 
+    @patch("core.sms.providers.Arkesel.submit_many")
     def test_direct_acceptance_is_sent_not_delivery(self, submit_many):
         submit_many.return_value = [
             Submission("accepted", "provider-123", 200, recipient="+233241234567")
