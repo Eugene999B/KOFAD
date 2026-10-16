@@ -173,7 +173,7 @@ class DebtMandateTests(Fixtures, TestCase):
 
         original = self.plan()
         DebtMandate.objects.filter(pk=original.pk).update(status="suspended")
-        with self.assertRaisesRegex(ValidationError, "suspended"):
+        with self.assertRaisesRegex(ValidationError, "specific unpaid invoice"):
             self.plan()
 
         # A different customer must not reuse a still-suspended wallet under
@@ -188,7 +188,7 @@ class DebtMandateTests(Fixtures, TestCase):
             due_date=timezone.localdate(), reference="OTHER-WALLET-DEBT",
             created_by=self.user,
         )
-        with self.assertRaisesRegex(ValidationError, "wallet is still linked"):
+        with self.assertRaisesRegex(ValidationError, "linked to an existing agreement"):
             mandates.create_plan(
                 self.user, self.branch, party_id=other.pk, phone="0241234567",
                 channel="mtn-gh-direct-debit", frequency="weekly",
@@ -206,7 +206,7 @@ class DebtMandateTests(Fixtures, TestCase):
             status="unknown", sent_at=timezone.now(),
         )
         DebtMandate.objects.filter(pk=old.pk).update(status="cancelled")
-        with self.assertRaisesRegex(ValidationError, "not reconciled"):
+        with self.assertRaisesRegex(ValidationError, "reconcile"):
             self.plan()
         self.assertEqual(DebtMandate.objects.count(), 1)
 
