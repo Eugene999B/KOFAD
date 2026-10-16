@@ -49,7 +49,7 @@ class FirstCheckoutPaymentRecoveryTests(MarketFixtures):
         self.assertEqual(order.payment_status, "unpaid")
         paystack.assert_not_called()
         hosted.assert_not_called()
-        self.assertContains(self.client.get(f"/market/orders/{order.pk}/"), "Pay with Direct Mobile Money")
+        self.assertContains(self.client.get(f"/market/orders/{order.pk}/"), "Pay with Mobile Money")
 
     @patch("hubtel_direct.client.enabled", return_value=False)
     def test_disabled_direct_does_not_start_hosted_payment(self, ready):
