@@ -35,3 +35,24 @@
 @keyframes kpay-spin{to{transform:rotate(360deg)}}
 @media(max-width:480px){.kpay{margin:16px auto 36px;padding:0 10px}.kpay-card{border-radius:20px;padding:24px 16px}.kpay-facts{gap:7px}.kpay-fact{padding:11px}.kpay-visual{width:100px;height:100px}.kpay-actions{align-items:stretch}.kpay-actions>a,.kpay-actions>button{width:100%}}
 @media(prefers-reduced-motion:reduce){.kpay-ring{animation:none!important}}
+
+/* Clear, accessible payment status for customer and cashier review. */
+.kpay-card{position:relative;overflow:hidden}
+.kpay-card::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,#166978,#2caa93,#166978);background-size:200% 100%;animation:kpay-progress 3.4s ease infinite}
+.kpay[data-phase="failed"] .kpay-card::before{background:#bb3948;animation:none}
+.kpay[data-phase="review"] .kpay-card::before{background:#ae8331;animation:none}
+.kpay[data-phase="success"] .kpay-card::before{background:#148260;animation:none}
+.kpay-visual::after{content:"";position:absolute;inset:0;border:1px solid rgba(22,122,135,.11);border-radius:50%;animation:kpay-breathe 2.8s ease-in-out infinite}
+.kpay[data-phase="success"] .kpay-visual::after,.kpay[data-phase="failed"] .kpay-visual::after{animation:none}
+.kpay-progress{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:24px 0 2px;padding:0;list-style:none}
+.kpay-progress li{padding:12px 7px;background:var(--kp-soft);border:1px solid var(--kp-line);border-radius:12px;line-height:1.4}
+.kpay-progress li strong{display:block;font-size:12px}
+.kpay-progress li small{display:block;font-size:10px;margin-top:5px;color:#667987}
+.kpay-progress li:first-child{border-color:#8fc6ba;background:#eaf8f3}
+.kpay-progress li:first-child strong{color:#176551}
+.kpay .kpay-actions a,.kpay .kpay-actions button{border-radius:12px;transition:transform .15s ease,box-shadow .15s ease}
+.kpay .kpay-actions a:hover,.kpay .kpay-actions button:hover{transform:translateY(-1px)}
+@keyframes kpay-progress{to{background-position:200% 0}}
+@keyframes kpay-breathe{50%{transform:scale(1.12);opacity:.2}}
+@media(max-width:530px){.kpay-progress{gap:5px}.kpay-progress li{padding:10px 6px}.kpay-progress li strong{font-size:10px}.kpay-progress li small{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.kpay-card::before,.kpay-visual::after{animation:none!important}.kpay .kpay-actions a:hover,.kpay .kpay-actions button:hover{transform:none}}

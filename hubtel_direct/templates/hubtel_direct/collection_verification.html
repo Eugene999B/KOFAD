@@ -13,6 +13,11 @@
    <div class="kpay-fact"><small>Amount</small><strong class="kpay-amount">GHS {{ payment.amount|floatformat:2 }}</strong></div>
    <div class="kpay-fact"><small>Order</small><strong>{{ order.customer_reference }}</strong></div>
   </div>
+  <ol class="kpay-progress" aria-label="Payment steps">
+    <li><strong>1. Request recorded</strong><small>Original reference saved</small></li>
+    <li><strong>2. Wallet approval</strong><small>Confirm on your phone</small></li>
+    <li><strong>3. Payment verified</strong><small>Waiting for final confirmation</small></li>
+  </ol>
   <p class="kpay-reference">Payment reference: {{ journey.reference }}</p>
   <div class="kpay-actions">
    <button type="button" class="market-button ghost" data-kpay-check>Check latest status</button>

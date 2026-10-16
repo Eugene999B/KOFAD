@@ -83,3 +83,17 @@ html[data-theme="dark"] .order-v2-page .market-payment-facts :is(small,strong){c
   .order-v2-page .order-v2-payment strong{font-size:19px!important}
   .order-v2-page .market-payment-audit>p{font-size:14px!important;line-height:1.65!important}
 }
+
+/* Streamlined payment review: one clear action at every step. */
+.direct-momo-review{border-radius:23px;background:linear-gradient(145deg,#fbfeff,#f0f8f7);padding:clamp(16px,3vw,24px);box-shadow:0 16px 38px rgba(14,53,66,.05)}
+.direct-momo-review .direct-momo-total{font-size:clamp(24px,4vw,32px);letter-spacing:-.04em;font-weight:900}
+.direct-momo-review .market-button.primary{min-height:54px;font-weight:850;border-radius:14px}
+.direct-momo-review [data-hubtel-direct-message]:not(:empty){padding:12px 14px;border-radius:12px;background:#eaf3f7;border:1px solid #b9d5df;color:#184d62!important;font-weight:650;line-height:1.5}
+.direct-momo-review [data-direct-name-review]{margin-top:14px;padding:14px;background:#ecf8f2;border:1px solid #b2ddca;border-radius:13px}
+.direct-momo-review [data-direct-name-review] strong{font-size:18px;letter-spacing:-.02em;color:#165740}
+.direct-momo-review input:focus-visible,.direct-momo-review select:focus-visible{outline:3px solid rgba(23,139,149,.24);outline-offset:2px;border-color:#168392}
+.direct-momo-review button:disabled{cursor:wait;opacity:.6}
+html[data-theme="dark"] .direct-momo-review{background:linear-gradient(145deg,#14242c,#192f34)}
+html[data-theme="dark"] .direct-momo-review [data-hubtel-direct-message]:not(:empty){background:#183945;color:#d5edf2!important;border-color:#467082}
+html[data-theme="dark"] .direct-momo-review [data-direct-name-review]{background:#13382f;border-color:#376d60}
+html[data-theme="dark"] .direct-momo-review [data-direct-name-review] strong{color:#b5f5df}

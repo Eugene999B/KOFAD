@@ -155,3 +155,16 @@
   #pos[data-kind="sale"] .pos-recovery-banner{padding:14px}
   #pos[data-kind="sale"] .pos-recovery-actions a{flex:1 1 140px}
 }
+
+/* Counter wallet request: short, readable steps without changing payment logic. */
+#pos[data-kind="sale"] #paystack-momo-panel{margin:15px 0;padding:18px!important;border-radius:17px;border:1px solid var(--simple-edge);background:var(--simple-wash)}
+#pos[data-kind="sale"] #paystack-momo-panel>.two-column{gap:12px}
+#pos[data-kind="sale"] #paystack-momo-panel :is(input,select){min-height:46px;border-radius:10px}
+#pos[data-kind="sale"] #hubtel-wallet-review{display:grid;gap:12px;padding:16px;margin:12px 0;border:1px solid var(--simple-edge);border-radius:15px;background:var(--white)}
+#pos[data-kind="sale"] #hubtel-wallet-review .hint{line-height:1.55;margin:0;font-size:12px}
+#pos[data-kind="sale"] #hubtel-wallet-verify{min-height:44px;justify-self:start;border-radius:11px}
+#pos[data-kind="sale"] .hubtel-verified-name{padding:11px;border:1px solid var(--simple-edge);border-radius:11px}
+#pos[data-kind="sale"] #hubtel-wallet-name{display:block;margin-top:5px;overflow-wrap:anywhere}
+#pos[data-kind="sale"] .hubtel-wallet-authorize{display:flex!important;align-items:flex-start;gap:11px}
+#pos[data-kind="sale"] .hubtel-wallet-authorize input{flex:0 0 20px;width:20px;height:20px}
+@media(max-width:650px){#pos[data-kind="sale"] #hubtel-wallet-verify{width:100%;justify-self:stretch}#pos[data-kind="sale"] #hubtel-wallet-review{padding:12px}}

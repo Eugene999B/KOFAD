@@ -22,8 +22,8 @@
       : {pending:'Waiting for payment', success:'Payment confirmed', failed:'Payment unsuccessful', review:'Payment needs review'};
     function phaseOf(data) {
       const state = String(data.status || data.payment_status || '').toLowerCase();
-      if (data.attention || ['attention','unknown','submission_unknown'].includes(state)) return 'review';
-      if (data.failed || ['failed','rejected','expired','reversed','abandoned','cancelled'].includes(state)) return 'failed';
+      if (data.attention || ['attention','unknown','submission_unknown','suspended','cancel_pending'].includes(state)) return 'review';
+      if (data.failed || ['failed','rejected','expired','expired_review','reversed','abandoned','cancelled'].includes(state)) return 'failed';
       if (data.paid === true || (mode === 'authorization' && data.provider_confirmed === true) ||
           (mode === 'authorization' && data.provider_approved === true) ||
           (mode === 'authorization' && data.status === 'approved' && data.provider_confirmed !== false) ||
