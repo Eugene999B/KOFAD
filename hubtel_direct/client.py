@@ -179,7 +179,11 @@ def _field(obj, name):
     return obj[keys[0]]
 
 
-def _parse(response):
+def _parse(response, *, reference=None):
+    """Accept both direct dict and Hubtel RMSC Data:[transaction] shapes.
+
+    Never choose a different transaction merely because it appears first.
+    """
     try:
         body = response.json()
     except (ValueError, TypeError) as exc:
@@ -187,9 +191,18 @@ def _parse(response):
     if not isinstance(body, dict):
         raise StatusUnconfirmed("Provider returned invalid data.")
     data = _field(body, "Data")
+    if isinstance(data, list):
+        matched = [
+            record for record in data
+            if isinstance(record, dict)
+            and _field(record, "ClientReference") == reference
+        ]
+        if len(matched) != 1:
+            raise StatusUnconfirmed("Provider returned no unique matching transaction.")
+        data = matched[0]
     if not isinstance(data, dict):
         raise StatusUnconfirmed("Provider returned no transaction record.")
-    return str(_field(body, "ResponseCode") or ""), data
+    return str(_field(body, "ResponseCode") or "").strip(), data
 
 
 def submit(tx):
@@ -267,18 +280,24 @@ def check(tx):
             url, params={"clientReference": tx.client_reference},
             headers=_headers(), timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
-        from marketplace.hubtel_evidence import capture_response
+        from marketplace.hubtel_evidence import capture_response, capture_request
+        capture_request(response, direction="direct_check", reference=tx.client_reference, capture_url=True)
         capture_response(response, direction="direct_status", reference=tx.client_reference)
         if not 200 <= response.status_code < 300:
             raise StatusUnconfirmed("Status endpoint unavailable.")
-        code, data = _parse(response)
+        code, data = _parse(response, reference=tx.client_reference)
     except requests.RequestException as exc:
         raise StatusUnconfirmed("Status endpoint unavailable.") from exc
     if code not in {"0000", "success"}:
         raise StatusUnconfirmed("Hubtel has not confirmed a final status.")
     if _field(data, "ClientReference") != tx.client_reference:
         raise ValidationError("Hubtel returned a mismatched transaction reference.")
-    received_amount = money(_field(data, "Amount"))
+    raw_amount = _field(data, "TransactionAmount")
+    if raw_amount is None:
+        raw_amount = _field(data, "Amount")
+    if raw_amount is None:
+        raise ValidationError("Hubtel returned no original transaction amount.")
+    received_amount = money(raw_amount)
     if received_amount != tx.amount:
         raise ValidationError("Hubtel returned a mismatched amount.")
     currency = str(_field(data, "CurrencyCode") or "").upper()
@@ -292,7 +311,20 @@ def check(tx):
         if method and method != "mobilemoney":
             raise ValidationError("Unexpected Hubtel receive channel.")
         state = str(_field(data, "Status") or "").strip().lower()
-        final = {"paid": "success", "unpaid": "pending", "refunded": "attention"}.get(state)
+        transaction_state = str(_field(data, "TransactionStatus") or "").strip().lower()
+        invoice_state = str(_field(data, "InvoiceStatus") or "").strip().lower()
+        result_states = {"paid": "success", "success": "success",
+                         "failed": "failed", "failure": "failed",
+                         "declined": "failed", "rejected": "failed",
+                         "unpaid": "pending", "pending": "pending",
+                         "processing": "pending", "refunded": "attention"}
+        observed = [result_states[k] for k in (transaction_state, invoice_state, state)
+                    if k in result_states]
+        # Contradictory provider statuses are not a trustworthy settlement
+        # result (e.g. Success invoice but Failed transaction).
+        if observed and len(set(observed)) != 1:
+            raise ValidationError("Conflicting Hubtel invoice and transaction status.")
+        final = observed[0] if observed else None
     else:
         channel = str(_field(data, "Channel") or "")
         if channel and tx.kind == "send_momo" and channel != tx.channel:

@@ -27,7 +27,7 @@ def _cipher():
 
 def save_exchange(*, reference, direction, raw_body, http_status=None, attempt=None):
     """Keep the *actual* provider body, rather than a normalized/rebuilt JSON."""
-    if direction not in {"callback", "status_check", "wallet_verify", "bank_verify", "direct_submit", "direct_status", "wallet_query", "direct_request", "preapprove_req", "preapprove_rsp"}:
+    if direction not in {"callback", "status_check", "wallet_verify", "bank_verify", "direct_submit", "direct_status", "wallet_query", "direct_request", "preapprove_req", "preapprove_rsp", "status_request", "direct_check"}:
         raise ValueError("Unexpected Hubtel evidence direction.")
     if not isinstance(raw_body, bytes):
         raise TypeError("Hubtel evidence body must be bytes.")
@@ -77,7 +77,7 @@ def capture_request(response, *, direction, reference, capture_url=False):
     Whitelist only wallet-name GET query or non-OTP transaction/preapproval
     initiation; callers must not use this helper for PIN/OTP/password requests.
     """
-    if direction not in {"wallet_query", "direct_request", "preapprove_req"}:
+    if direction not in {"wallet_query", "direct_request", "preapprove_req", "status_request", "direct_check"}:
         raise ValueError("Unexpected request evidence type.")
     prepared = getattr(response, "request", None)
     if prepared is None:

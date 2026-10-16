@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from marketplace import services as market_services
 from marketplace.models import OnlineOrder, VerifiedMomoPhone
-from . import service
+from . import client, service
 from .models import DirectTransaction
 
 
@@ -509,6 +509,16 @@ def callback(request):
         data = _json(request)
     except ValidationError as exc:
         return _error(exc)
+    # Store the exact, UNTRUSTED provider callback bytes for the engineer,
+    # but never use callback fields to change payment/order status.
+    item = client._field(data, "Data")
+    ref = client._field(item, "ClientReference") if isinstance(item, dict) else ""
+    if isinstance(ref, str) and DirectTransaction.objects.filter(client_reference=ref).exists():
+        from marketplace.hubtel_evidence import save_exchange
+        try:
+            save_exchange(reference=ref, direction="callback", raw_body=request.body)
+        except Exception:
+            logging.getLogger(__name__).exception("Hubtel callback evidence capture failed")
     service.note_callback(data)
     response = JsonResponse({"received": True})
     response["Cache-Control"] = "no-store"

@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from . import services
 from .models import MarketPaymentAttempt, OnlineOrder, OrderEvent, PaymentConfiguration
-from .hubtel_evidence import save_exchange
+from .hubtel_evidence import save_exchange, capture_request
 
 INITIATE_URL = "https://payproxyapi.hubtel.com/items/initiate"
 STATUS_ORIGIN = "https://rmsc.hubtel.com/v1/merchantaccount/merchants/"
@@ -172,6 +172,9 @@ def verify(reference):
         logger.warning("Hubtel status request failed ref_suffix=%s", str(reference)[-6:])
         raise services.PaymentVerificationUnavailable("Payment confirmation is temporarily unavailable.") from exc
 
+    # Save the exact GET endpoint + query for the original ClientReference.
+    # No Authorization header or credentials are stored in the evidence.
+    capture_request(response, direction="status_request", reference=reference, capture_url=True)
     # Preserve the original HTTP response bytes BEFORE parsing or normalizing it.
     # Even Hubtel's 400/429 responses are evidence for the merchant onboarding team.
     raw_body = response.content if isinstance(response.content, bytes) else None

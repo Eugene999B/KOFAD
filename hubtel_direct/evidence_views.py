@@ -1,5 +1,12 @@
 """Owner-only, exact-byte Hubtel response evidence downloads (never public)."""
 import json
+import io
+import re
+import zipfile
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -26,20 +33,164 @@ def _private(response):
     return response
 
 
+def _transaction_for_reference(request, reference):
+    """Only previously saved original refs, never a caller-supplied arbitrary URL."""
+    from marketplace.models import MarketPaymentAttempt
+    from hubtel_direct.models import DirectTransaction, DebtMomoCollection
+    from core.views import branch_for
+    branch = branch_for(request)
+    hosted = MarketPaymentAttempt.objects.filter(
+        reference=reference, provider="hubtel", order__branch=branch,
+    ).first()
+    if hosted:
+        return "hosted", hosted
+    direct = DirectTransaction.objects.filter(client_reference=reference).first()
+    if direct and (
+        (direct.order_id and direct.order.branch_id == branch.pk)
+        or (direct.requested_by_id == request.user.pk)
+    ):
+        return "direct", direct
+    debt = DebtMomoCollection.objects.filter(reference=reference, branch=branch).first()
+    if debt:
+        return "debt_momo", debt
+    return "", None
+
+
+def _reference_allowed(request, reference):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", reference or ""):
+        return False
+    return bool(_transaction_for_reference(request, reference)[0])
+
+
+def _provider_status(record):
+    """Label raw provider fields; do not invent an accounting/payment result."""
+    if record.direction not in {"status_check", "direct_status", "callback"}:
+        return ""
+    try:
+        payload = json.loads(decrypt_exchange(record))
+        if not isinstance(payload, dict):
+            return "Invalid provider JSON"
+        data = payload.get("Data", payload.get("data"))
+        if isinstance(data, list):
+            data = next((
+                item for item in data
+                if isinstance(item, dict)
+                and str(item.get("ClientReference", item.get("clientReference", ""))) == record.reference
+            ), None)
+        if not isinstance(data, dict):
+            return "No matching provider transaction"
+        state = str(data.get("TransactionStatus") or data.get("transactionStatus")
+                    or data.get("Status") or data.get("status") or "").strip()
+        if not state:
+            return "No final status in provider response"
+        prefix = "Callback claimed" if record.direction == "callback" else "Hubtel reported"
+        return f"{prefix}: {state[:30]}"
+    except (ValueError, UnicodeDecodeError, KeyError, TypeError):
+        return "Non-JSON provider response"
+
+
 @login_required
 @require_GET
 def diagnostics(request):
     permitted = _allowed(request)
     kind = request.GET.get("type", "")
+    reference = (request.GET.get("reference") or "").strip()
     choices = dict(HubtelEvidence._meta.get_field("direction").choices)
     entries = HubtelEvidence.objects.filter(permitted)
+    if reference:
+        entries = entries.filter(reference=reference) if _reference_allowed(request, reference) else entries.none()
     if kind in choices:
         entries = entries.filter(direction=kind)
-    entries = entries.order_by("-created_at", "-pk")[:150]
+    entries = list(entries.order_by("-created_at", "-pk")[:150])
+    for record in entries:
+        record.hubtel_outcome = _provider_status(record)
     return _private(render(request, "hubtel_direct/evidence.html", {
-        "title": "Hubtel response downloads",
+        "title": "Hubtel transaction evidence",
         "entries": entries, "kind": kind, "choices": choices,
+        "reference": reference, "reference_valid": _reference_allowed(request, reference) if reference else False,
     }))
+
+
+@login_required
+@require_POST
+def check_status(request):
+    """Management-only, independent provider GET. Never submits or replays money."""
+    _allowed(request)
+    ref = str(request.POST.get("reference") or "").strip()
+    kind, row = _transaction_for_reference(request, ref) if re.fullmatch(r"[A-Za-z0-9_-]{1,100}", ref) else ("", None)
+    if not row:
+        messages.error(request, "Original KOFAD transaction reference not found or not accessible.")
+        return redirect("hubtel_diagnostics")
+    try:
+        if kind == "hosted":
+            from marketplace.hubtel import verify
+            data = verify(ref)
+            status = data.get("status")
+        else:
+            from . import client
+            from .debt_momo import _gateway_transaction
+            if kind == "debt_momo":
+                tx = _gateway_transaction(row)
+            else:
+                tx = row
+            status, _ = client.check(tx)
+        messages.info(request, "Hubtel's original status response was saved. Provider result: " + str(status))
+    except Exception as exc:
+        # The GET may fail, be inconclusive or contain a mismatch. Capture of
+        # an HTTP response happens before parsing; never claim a payment failed
+        # merely because the status-check endpoint returned an error.
+        messages.warning(request, "Provider status could not be safely confirmed: " + str(exc)[:200])
+    from urllib.parse import urlencode
+    return redirect(reverse("hubtel_diagnostics") + "?" + urlencode({"reference": ref}))
+
+
+@login_required
+@require_GET
+def download_bundle(request):
+    """One ZIP with byte-exact original provider callbacks and status results."""
+    _allowed(request)
+    reference = (request.GET.get("reference") or "").strip()
+    if not _reference_allowed(request, reference):
+        from django.http import Http404
+        raise Http404("Unknown payment reference")
+    records = list(HubtelEvidence.objects.filter(
+        _allowed(request), reference=reference,
+    ).order_by("-created_at", "-pk")[:80])
+    if not records:
+        from django.http import Http404
+        raise Http404("No provider evidence captured for this reference")
+    files = []
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for record in records:
+            raw = decrypt_exchange(record)
+            ext = "txt" if record.direction in {"wallet_query", "status_request", "direct_check"} else "json"
+            name = f"{record.direction}-{record.pk}-hubtel-original.{ext}"
+            archive.writestr(name, raw)
+            files.append({
+                "filename": name,
+                "evidence_id": record.pk,
+                "recorded_at_utc": record.created_at.isoformat(),
+                "operation": record.get_direction_display(),
+                "http_status": record.http_status,
+                "byte_length": len(raw),
+                "sha256": record.body_sha256,
+                "body_is_original_provider_data": record.direction not in {
+                    "status_request", "direct_check", "wallet_query",
+                    "direct_request", "preapprove_req",
+                },
+            })
+        archive.writestr("MANIFEST-KOFAD-METADATA.json", json.dumps({
+            "report_type": "KOFAD evidence index; NOT a Hubtel response",
+            "client_reference": reference,
+            "note": "Each *hubtel-original file contains the captured original bytes. "
+                    "Status-check GET files contain URL/query but no authorization headers. "
+                    "Callbacks are untrusted; use the independent provider status response for payment state.",
+            "files": files,
+        }, indent=2))
+    response = HttpResponse(output.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="hubtel-transaction-{reference[:36]}.zip"'
+    return _private(response)
 
 
 @login_required

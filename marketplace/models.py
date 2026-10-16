@@ -402,6 +402,7 @@ class HubtelEvidence(models.Model):
             ("direct_submit", "Direct transfer/collection"), ("direct_status", "Direct transaction status"),
             ("wallet_query", "Wallet verification request URL"), ("direct_request", "Direct payment request body"),
             ("preapprove_req", "Direct Debit approval request body"), ("preapprove_rsp", "Direct Debit approval response"),
+            ("status_request", "Hosted status-check GET URL"), ("direct_check", "Direct status-check GET URL"),
         ]
     )
     http_status = models.PositiveSmallIntegerField(null=True, blank=True)
