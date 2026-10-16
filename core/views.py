@@ -754,6 +754,30 @@ def complete_trade(request):
                         "Direct Mobile Money sales are awaiting " + selected.title()
                         + " activation. Use another payment method for now."
                     )
+        # A Direct Debit-priced counter sale is an UNPAID credit invoice,
+        # not a payment, wallet prompt or mandate. Only this explicit sale
+        # route may use the managed online percentage via normal trade API.
+        route = data.get("payment_pricing", "")
+        if route not in ("", "direct_debit"):
+            raise ValidationError("Choose a supported sale pricing method.")
+        markup = Decimal("0")
+        if route == "direct_debit":
+            if data.get("kind", "sale") != "sale":
+                raise ValidationError("Direct Debit pricing is for sales only.")
+            if not data.get("party") and not str(data.get("customer_name") or "").strip():
+                raise ValidationError("Choose a customer for a Direct Debit-priced credit invoice.")
+            if not str(data.get("due_date") or "").strip():
+                raise ValidationError("Choose the invoice due date before continuing.")
+            raw_payments = data.get("payments")
+            if not isinstance(raw_payments, list):
+                raise ValidationError("Direct Debit pricing cannot record a payment.")
+            for payment in raw_payments:
+                if not isinstance(payment, dict) or s.money(payment.get("amount", "0")) != Decimal("0"):
+                    raise ValidationError("Direct Debit-priced invoices must be unpaid. Record payments separately.")
+            if not s.company_policy().allow_credit_sales:
+                raise ValidationError("Credit sales are disabled by company policy.")
+            from marketplace.pricing import online_markup_percent
+            markup = online_markup_percent()
         branch = branch_for(request)
         doc = s.post_trade(
             request.user,
@@ -761,6 +785,7 @@ def complete_trade(request):
             data,
             request.headers.get("Idempotency-Key"),
             kind=data.get("kind", "sale"),
+            online_markup_percent=markup,
         )
         party = doc.party
         can_send_sms = bool(

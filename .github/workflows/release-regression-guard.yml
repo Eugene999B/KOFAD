@@ -65,6 +65,7 @@ jobs:
           hubtel_direct.test_customer_payment_phone_policy
           hubtel_direct.tests
           core.test_pos_hubtel
+          core.test_pos_online_debit_pricing
           hubtel_direct.test_status_evidence_payloads
           hubtel_direct.test_fast_market_verification
           marketplace.test_card_channel_recovery

@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load static %}
-{% block head %}<script defer src="{% static 'pos.js' %}?v=20261015-walkin-momo-fix"></script>{% endblock %}
+{% block head %}<script defer src="{% static 'pos.js' %}?v=20261016-online-debit-price"></script>{% endblock %}
 {% block after_styles %}<link rel="stylesheet" href="{% static 'pos-refinement.css' %}"><link rel="stylesheet" href="{% static 'marketplace/mobile-payment-clarity.css' %}">{% if not purchase %}<link rel="stylesheet" href="{% static 'pos-simple-v3.css' %}">{% endif %}{% endblock %}
 {% block actions %}
 <div class="actions">
@@ -184,7 +184,7 @@
       <label for="payment-plan">Sale type</label>
       <select id="payment-plan">
         <option value="full">Paid now</option>
-        {% if allow_credit_sales %}<option value="part">Part payment</option><option value="credit">Credit / Pay later</option>{% endif %}
+        {% if allow_credit_sales %}<option value="part">Part payment</option><option value="credit">Credit / Pay later</option>{% if can_offer_direct_debit %}<option value="direct_debit">Direct Debit / Pay later</option>{% endif %}{% endif %}
       </select>
       {% endif %}
 
@@ -283,7 +283,7 @@
           </label>
         </div></details>
         {% endif %}
-        {% if can_offer_direct_debit %}<p class="simple-debit-info"><strong>Instalment deductions?</strong> Record a genuine credit sale first. Then open its unpaid invoice and choose <em>Set up Direct Debit</em>. Authorization does not record a sale or payment.</p>{% endif %}
+        {% if can_offer_direct_debit %}<p class="simple-debit-info"><strong>Direct Debit:</strong> Choose <em>Direct Debit / Pay later</em> in Sale type to apply online prices. Record the unpaid invoice, then open it to request the customer's separate wallet authorization. This step does not debit the wallet.</p>{% endif %}
       </div>
 
       {% if policy_controls %}

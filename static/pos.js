@@ -363,11 +363,12 @@
   // Monetary calculations use integer pesewas; the markup is applied once to
   // the effective unit, AFTER an allowed discount, exactly as on the server.
   const onlineMarkupThousandths = Math.round(Number(root.dataset.onlineMarkupPercent || "0") * 1000);
+  const directDebitPricingSelected = () => !purchase && paymentPlan?.value === "direct_debit";
   const effectiveUnit = line => {
     const price = cents(line.price);
     const discount = percentBasisPoints(line.discount || "0");
     const discounted = Math.round(price * (10000 - discount) / 10000);
-    return !purchase && directMomoSelected() && onlineMarkupThousandths > 0
+    return !purchase && (directMomoSelected() || directDebitPricingSelected()) && onlineMarkupThousandths > 0
       ? Math.round(discounted * (100000 + onlineMarkupThousandths) / 100000)
       : discounted;
   };
@@ -1263,7 +1264,8 @@
     if (completeButton && !purchase) {
       completeButton.textContent = active && paystackMomoReady
         ? (momoGateway === "hubtel" ? "Send Direct MoMo Request" : "Send MoMo Approval Request")
-        : (paymentPlan?.value === "credit"
+        : (directDebitPricingSelected()
+          ? "Record Direct Debit-priced credit sale" : paymentPlan?.value === "credit"
           ? "Record unpaid credit sale" : paymentPlan?.value === "part"
           ? "Record part-paid sale" : "Record sale");
     }
@@ -1272,7 +1274,9 @@
         ? (momoGateway === "hubtel"
           ? "Confirm the wallet name first, then KOFAD sends a direct Mobile Money prompt and posts the sale after verified payment."
           : "KOFAD records the sale only after the Mobile Money payment is verified. Any unpaid balance must belong to an identified customer.")
-        : (paymentPlan?.value === "credit"
+        : (directDebitPricingSelected()
+          ? "Online prices apply to this unpaid invoice. Open it afterward to request separate Hubtel Direct Debit authorization."
+          : paymentPlan?.value === "credit"
           ? "Record an unpaid credit invoice only. To request instalment authorization, open that invoice and choose Set up Direct Debit."
           : "Recording a genuine sale creates its sales invoice. It does not grant permission to debit a wallet.");
     }
@@ -1288,7 +1292,7 @@
     });
     const split = method === "split";
     splitPaymentGrid?.classList.toggle("hidden", !split);
-    singlePaymentWrap?.classList.toggle("hidden", split || paymentPlan?.value === "credit");
+    singlePaymentWrap?.classList.toggle("hidden", split || paymentPlan?.value === "credit" || directDebitPricingSelected());
     if (!split) {
       if (!preserveAmount && singlePaymentValue) {
         singlePaymentValue.value = (!paymentPlan || paymentPlan.value === "full")
@@ -1306,7 +1310,7 @@
 
   function applyPaymentPlan() {
     const plan = purchase ? "purchase" : (paymentPlan?.value || "full");
-    const credit = plan === "credit";
+    const credit = plan === "credit" || plan === "direct_debit";
     const full = plan === "full";
     paymentMethodPicker?.classList.toggle("hidden", credit);
     if (credit) {
@@ -1326,7 +1330,9 @@
       }
     }
     updateConsentAvailability();
-    renderCheckoutSummary();
+    // Switching between cash, MoMo and Direct Debit immediately refreshes
+    // line prices, cart totals and payment amounts using the SAME percentage.
+    render();
     syncPaystackMomoPanel();
     syncDirectDebitFields();
     persist();
@@ -1528,7 +1534,7 @@
       }
       const plan = paymentPlan?.value || "full";
       if (!allowCredit && plan !== "full") throw new Error("Credit sales are disabled by company policy.");
-      if ((plan === "part" || plan === "credit") && !party && !newName) {
+      if (["part", "credit", "direct_debit"].includes(plan) && !party && !newName) {
         throw new Error("Choose or enter a customer for a sale that leaves a balance.");
       }
       if (plan === "full" && paidNow !== grandTotal) {
@@ -1537,13 +1543,13 @@
       if (plan === "part" && !(paidNow > 0 && paidNow < grandTotal)) {
         throw new Error("Part payment must be greater than zero and less than the sale total.");
       }
-      if (plan === "credit" && paidNow !== 0) {
+      if ((plan === "credit" || plan === "direct_debit") && paidNow !== 0) {
         throw new Error("Credit / pay later starts with zero payment.");
       }
-      if ((plan === "part" || plan === "credit") && !dueDate?.value) {
+      if (["part", "credit", "direct_debit"].includes(plan) && !dueDate?.value) {
         throw new Error("Choose a due date for the unpaid balance.");
       }
-      if ((plan === "part" || plan === "credit") && creditDebtEmailConsent?.checked && !(creditCustomerEmail?.value.trim() || customerEmail?.value.trim())) {
+      if (["part", "credit", "direct_debit"].includes(plan) && creditDebtEmailConsent?.checked && !(creditCustomerEmail?.value.trim() || customerEmail?.value.trim())) {
         throw new Error("Enter the customer email before enabling credit email updates.");
       }
     } else {
@@ -1571,7 +1577,7 @@
         customer_phone: newPhone,
         customer_email: customerEmail?.value.trim() || ""
       } : {}),
-      ...(!purchase && (paymentPlan?.value === "part" || paymentPlan?.value === "credit") ? {
+      ...(!purchase && ["part", "credit", "direct_debit"].includes(paymentPlan?.value) ? {
         customer_email: creditCustomerEmail?.value.trim() || customerEmail?.value.trim() || selectedCustomer?.email || "",
         customer_debt_email_opt_in: Boolean(creditDebtEmailConsent?.checked)
       } : {}),
@@ -1589,6 +1595,9 @@
       // V2 is NEVER allowed to fall back silently to ordinary sale posting
       // after a refresh, retry, or a lost API response.
       direct_debit_v2: Boolean(pendingDebitSetup),
+      // This identifies a priced unpaid invoice, NOT a wallet authorization.
+      // The server fetches the live markup and validates zero payments.
+      ...(!purchase && directDebitPricingSelected() ? {payment_pricing: "direct_debit"} : {}),
       ...(pendingDebitSetup ? {direct_debit_terms: pendingDebitSetup} : {}),
       due_date: dueDate?.value || "",
       ...(purchase ? {external_reference: purchaseReference?.value.trim() || "", document_date: purchaseDocumentDate?.value || "", note: purchaseNote?.value.trim() || ""} : {}),
