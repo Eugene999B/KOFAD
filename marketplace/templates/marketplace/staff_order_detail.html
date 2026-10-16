@@ -1,4 +1,47 @@
 {% extends "base.html" %}{% load static %}{% block head %}<link rel="stylesheet" href="{% static 'marketplace/market-payment-audit.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}"><link rel="stylesheet" href="{% static 'marketplace/market-v3.css' %}"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous"><link rel="stylesheet" href="{% static 'marketplace/market-map.css' %}"><script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script><script defer src="{% static 'marketplace/market-map.js' %}"></script>{% endblock %}{% block actions %}<div class="actions"><a class="button secondary" href="/online-orders/">← Online Orders</a><a class="button secondary" href="/online-inbox/">Customer support</a>{% if order.sale_document %}<a class="button secondary" href="/documents/{{ order.sale_document.pk }}/">Sale record</a>{% endif %}</div>{% endblock %}{% block content %}
+<section class="panel" aria-label="Customer communication delivery tracking">
+ <p class="eyebrow">CUSTOMER COMMUNICATIONS</p>
+ <h2>Order notification delivery</h2>
+ <p class="hint">A queued notice is not delivered. SMS provider-delivered, email provider-sent and Telegram API-sent are different stages. No channel bypasses customer verification or consent.</p>
+ <div class="online-order-detail-grid" style="gap:16px">
+  <div>
+   <h3>SMS</h3>
+   {% if order_sms_notices %}
+   {% for notice in order_sms_notices %}
+   <p><strong>{{ notice.source_key|cut:'market-event:'|truncatechars:45 }}</strong> ·
+   {% if notice.status == 'delivered' %}Delivered to handset
+   {% elif notice.status == 'accepted' %}Accepted by SMS provider — delivery not yet confirmed
+   {% elif notice.status == 'simulated' %}Sandbox simulation — not delivered
+   {% elif notice.status == 'unknown' or notice.status == 'sending' %}Submission uncertain — checking
+   {% else %}{{ notice.status|title }}{% endif %}
+   <small>· {{ notice.created_at|date:"d M H:i" }}</small></p>
+   {% endfor %}{% else %}<p class="muted">No SMS notice queued, or SMS unavailable.</p>{% endif %}
+  </div>
+  <div>
+   <h3>Email</h3>
+   <p class="hint">{% if order_email_eligible %}Verified customer email matches this order.{% else %}Customer email is unavailable, unverified, or notifications are disabled. No private notice may be delivered to an unverified address.{% endif %}</p>
+   {% for notice in order_email_notices %}
+    <p><strong>{{ notice.source_key|cut:'market-email:'|truncatechars:45 }}</strong> ·
+    {% if notice.status == 'sent' %}Submitted to email provider (inbox delivery unconfirmed)
+    {% elif notice.status == 'uncertain' %}Submission uncertain — investigate before retry
+    {% else %}{{ notice.status|title }}{% endif %}
+    <small>· {{ notice.created_at|date:"d M H:i" }}</small></p>
+   {% empty %}<p class="muted">No email notice queued for this order.</p>{% endfor %}
+  </div>
+  <div>
+   <h3>Telegram</h3>
+   <p class="hint">{% if order_telegram_eligible %}Customer has a verified, opted-in linked chat.{% else %}Customer Telegram notifications are not linked or enabled. Phone number alone cannot authorize a Telegram message.{% endif %}</p>
+   {% for notice in order_telegram_notices %}
+    <p><strong>{{ notice.source_key|cut:'tg:order:'|truncatechars:45 }}</strong> ·
+    {% if notice.status == 'sent' %}Sent via Telegram API (not a read receipt)
+    {% elif notice.status == 'unknown' %}Submission uncertain — no blind retry
+    {% elif notice.status == 'suppressed' %}Suppressed — access/consent changed
+    {% else %}{{ notice.status|title }}{% endif %}
+    <small>· {{ notice.created_at|date:"d M H:i" }}</small></p>
+   {% empty %}<p class="muted">No Telegram notice queued for this order.</p>{% endfor %}
+  </div>
+ </div>
+</section>
 {% for payment in direct_collections %}
 <section class="panel" aria-label="Mobile Money independent verification">
   <p class="eyebrow">CUSTOMER MOBILE MONEY · INDEPENDENT VERIFICATION</p>

@@ -76,8 +76,31 @@ def _still_authorized(notice):
             ))
         return True
     if identity.kind == "customer":
-        from marketplace.models import CustomerAccount
-        return CustomerAccount.objects.filter(pk=identity.owner_id, active=True).exists()
+        from marketplace.models import CustomerAccount, OnlineOrder
+        if not CustomerAccount.objects.filter(
+            pk=identity.owner_id, active=True, verified_at__isnull=False,
+        ).exists():
+            return False
+        if notice.category == "order":
+            # Never send stale "paid" or "awaiting payment" text after an
+            # order's actual financial state changes. Staff/email/SMS have
+            # independent queues; Telegram must be equally accurate.
+            parts = notice.source_key.split(":")
+            if len(parts) != 4 or parts[0:2] != ["tg", "order"]:
+                return False
+            order = OnlineOrder.objects.filter(
+                pk=parts[2], customer_id=identity.owner_id,
+            ).first()
+            if not order:
+                return False
+            event = parts[3]
+            if event == "paid":
+                return order.payment_status == "paid"
+            if event == "awaiting_payment":
+                return (order.status == "awaiting_payment"
+                        and order.payment_status not in {"paid", "refunded"})
+            return order.status == event and order.payment_status == "paid"
+        return True
     return False
 
 

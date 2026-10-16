@@ -357,8 +357,14 @@ def _may_deliver(notice):
                 and _customer_mailbox_verified(order.customer)
                 and order.email.strip().lower() == notice.recipient.strip().lower()
                 and order.customer.email.strip().lower() == notice.recipient.strip().lower()
-                and order.payment_status == "paid"
-                and (event == "paid" or order.status == event)
+                and (
+                    (event == "paid" and order.payment_status == "paid")
+                    or (event == "awaiting_payment"
+                        and order.status == "awaiting_payment"
+                        and order.payment_status not in {"paid", "refunded"})
+                    or (event not in {"paid", "awaiting_payment"}
+                        and order.payment_status == "paid" and order.status == event)
+                )
             )
         customer = CustomerAccount.objects.filter(pk=notice.recipient_ref).first()
         if not customer or not customer.active or not customer.verified_at:
@@ -483,10 +489,14 @@ def process_email_outbox(limit=15):
 
 def queue_customer_order_email(order, event):
     """Non-sensitive order status email to an account-associated checkout address."""
-    if not getattr(settings, "EMAIL_AUTOMATIONS_ENABLED", False):
+    # Transactional order notices are independent of scheduled/marketing
+    # automations. They still require an enabled sender and verified address.
+    if not getattr(settings, "EMAIL_DELIVERY_ENABLED", False):
         return 0
     customer = order.customer
-    if not (customer.active and customer.verified_at and customer.transactional_email_enabled):
+    if not (customer.active and customer.verified_at
+            and customer.transactional_email_enabled
+            and _customer_mailbox_verified(customer)):
         return 0
     if not order.email or order.email.strip().lower() != customer.email.strip().lower():
         return 0

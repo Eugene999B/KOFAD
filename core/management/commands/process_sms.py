@@ -32,6 +32,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         delivery_updates = 0
         last_automation = 0.0
+        last_email_dispatch = 0.0
         last_payment_check = 0.0
         last_delivery_sync = 0.0
         last_recovery = None
@@ -64,13 +65,8 @@ class Command(BaseCommand):
                     run_scheduled_automations()
                 except Exception:
                     self.stderr.write("Communication automation check failed safely; will retry.")
-                # Independent email queues: one failure must never block receipts,
-                # approved staff letters or verified-account notifications.
-                try:
-                    from core.notification_engine import process_email_outbox
-                    process_email_outbox(limit=10)
-                except Exception:
-                    self.stderr.write("Intelligent email notice delivery failed safely; will retry.")
+                # General email automation remains scheduled; transactional
+                # email queues are dispatched on an independent faster clock.
                 try:
                     from core.email_center import deliver_outgoing
                     deliver_outgoing(limit=10)
@@ -81,11 +77,6 @@ class Command(BaseCommand):
                     queue_active_campaigns(limit=75)
                 except Exception:
                     self.stderr.write("Campaign queuing failed safely; will retry.")
-                try:
-                    from core.email_identity import deliver_pending
-                    deliver_pending(limit=10)
-                except Exception:
-                    self.stderr.write("Verified-account email outbox check failed safely; will retry.")
                 last_automation = now
                 # Direct Hubtel status verification must egress from kofad-web,
                 # whose Railway static IPs are whitelisted by Hubtel.
@@ -107,6 +98,22 @@ class Command(BaseCommand):
                                 self.stderr.write("Hubtel Direct web-egress check was not accepted.")
                         except requests.RequestException:
                             self.stderr.write("Hubtel Direct web-egress status check temporarily unavailable.")
+
+            # Transactional order/payment emails should not wait a whole
+            # minute for the next report cycle. Provider idempotency and
+            # suppression checks remain enforced by the existing outboxes.
+            if now - last_email_dispatch >= 15:
+                try:
+                    from core.notification_engine import process_email_outbox
+                    process_email_outbox(limit=10)
+                except Exception:
+                    self.stderr.write("Order email delivery check failed safely; will retry.")
+                try:
+                    from core.email_identity import deliver_pending
+                    deliver_pending(limit=10)
+                except Exception:
+                    self.stderr.write("Verified-account email delivery failed safely; will retry.")
+                last_email_dispatch = now
 
             if now - last_security_cleanup >= 3600:
                 try:

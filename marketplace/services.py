@@ -818,10 +818,17 @@ def create_order(customer, cart, cleaned):
     # Restore the order-created notification lost in the 2026-10-10 promotion.
     # The newer notice engine independently enforces verified-account email
     # eligibility, current delivery consent, and an idempotent source key.
-    # This callback runs only after a committed order, never before.
+    # Notifications are queued only after the order is committed. Separate
+    # SMS, verified email and linked Telegram deliveries proceed independently.
+    # This is NOT a payment receipt or a request to approve another charge.
     def _queue_order_confirmation():
-        from core.notification_engine import queue_customer_order_email
-        queue_customer_order_email(order, "awaiting_payment")
+        from .notifications import queue_order_sms
+        queue_order_sms(
+            order, "awaiting_payment",
+            f"KOFAD: Order {order.customer_reference} was placed. "
+            f"Total GHS {order.total:.2f}. Payment has NOT been confirmed. "
+            "View your order in KOFAD Market. Do not approve duplicate payments.",
+        )
 
     transaction.on_commit(_queue_order_confirmation, robust=True)
     return order

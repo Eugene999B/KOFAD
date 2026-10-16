@@ -57,6 +57,9 @@ jobs:
           core.test_google_drive_backup
           core.test_branding.BrandingConsistencyTests.test_only_official_logo_asset_is_referenced
           marketplace.test_checkout_momo_regression
+          marketplace.test_order_notifications
+          marketplace.test_order_created_email_recovery
+          core.test_telegram_enterprise
           hubtel_direct.test_fast_market_verification
           marketplace.test_card_channel_recovery
           marketplace.test_order_created_email_recovery

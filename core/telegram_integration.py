@@ -251,12 +251,19 @@ def queue_order_update(order, event):
     identity = linked_identity("customer", order.customer_id)
     if not identity or not order.customer.active or not order.customer.verified_at:
         return False
-    label = dict(order.STATUSES).get(event, event.replace("_", " ").title())
+    if event == "paid" and order.payment_status != "paid":
+        return False
+    if event == "awaiting_payment" and order.status != "awaiting_payment":
+        return False
+    label = "Payment independently verified" if event == "paid" else (
+        "Order placed — payment not confirmed" if event == "awaiting_payment"
+        else dict(order.STATUSES).get(event, event.replace("_", " ").title())
+    )
     body = (
         f"KOFAD order {order.public_reference}\n"
         f"Update: {label}\n"
         "Sign in to your KOFAD Market account to verify details:\n"
-        "https://market.kofadimpex.com/market/orders/\n"
+        f"https://market.kofadimpex.com/market/orders/{order.pk}/\n"
         "Never share payment PINs or OTPs in Telegram."
     )
     return queue_notice(identity, "order", f"tg:order:{order.pk}:{event}", body)

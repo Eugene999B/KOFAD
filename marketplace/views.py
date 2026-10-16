@@ -2363,12 +2363,38 @@ def staff_order(request, branch, pk):
         except ValidationError as exc:
             messages.error(request, problem(exc))
     from hubtel_direct.models import DirectTransaction
+    from core.models import EmailNotice as CustomerNotice, Message as SmsMessage, TelegramOutbound
+    from core.telegram_integration import linked_identity
+    from core.notification_engine import _customer_mailbox_verified
     direct_collections = list(DirectTransaction.objects.filter(
         order=order, kind="receive",
     ).order_by("-created_at")[:10])
+    order_sms_notices = list(SmsMessage.objects.filter(
+        branch=branch, channel="sms",
+        source_key__startswith=f"market-event:{order.pk}:",
+    ).order_by("-created_at")[:12])
+    order_email_notices = list(CustomerNotice.objects.filter(
+        category="order", recipient_ref=str(order.pk),
+        source_key__startswith=f"market-email:{order.pk}:",
+    ).order_by("-created_at")[:12])
+    linked_chat = linked_identity("customer", order.customer_id)
+    order_telegram_notices = list(TelegramOutbound.objects.filter(
+        source_key__startswith=f"tg:order:{order.pk}:",
+        identity__kind="customer", identity__owner_id=order.customer_id,
+    ).order_by("-created_at")[:12])
+    email_eligible = bool(
+        order.customer.transactional_email_enabled
+        and _customer_mailbox_verified(order.customer)
+        and order.email and order.email.strip().casefold() == (order.customer.email or "").strip().casefold()
+    )
     return render(request, "marketplace/staff_order_detail.html", {
         "title": order.public_reference, "order": order, "form": form,
         "direct_collections": direct_collections,
+        "order_sms_notices": order_sms_notices,
+        "order_email_notices": order_email_notices,
+        "order_telegram_notices": order_telegram_notices,
+        "order_email_eligible": email_eligible,
+        "order_telegram_eligible": bool(linked_chat and linked_chat.notifications_enabled),
         "tracking_form": tracking_form,
         "handover_code": services.handover_code(order),
         "delivery_updates": order.delivery_updates.all(),
