@@ -209,7 +209,7 @@ class DirectWorkflowTests(MarketFixtures):
     def test_previously_verified_different_number_does_not_bypass_fresh_otp(self, post):
         other_wallet = "+233501112233"
         VerifiedMomoPhone.objects.create(customer=self.customer, phone=other_wallet)
-        with self.assertRaisesRegex(ValidationError, "fresh"):
+        with self.assertRaisesRegex(ValidationError, "new SMS code"):
             service.create_collection(self.customer, self.order().pk, "mtn-gh", other_wallet)
         post.assert_not_called()
 
