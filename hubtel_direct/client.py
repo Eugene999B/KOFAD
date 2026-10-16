@@ -205,6 +205,8 @@ def submit(tx):
             _submit_url(tx), json=_payload(tx), headers=_headers(),
             timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
+        from marketplace.hubtel_evidence import capture_response
+        capture_response(response, direction="direct_submit", reference=tx.client_reference)
     except requests.RequestException as exc:
         log.warning("Hubtel direct submit transport-unconfirmed kind=%s ref=%s error=%s",
                     tx.kind, reference_tag, type(exc).__name__)
@@ -263,6 +265,8 @@ def check(tx):
             url, params={"clientReference": tx.client_reference},
             headers=_headers(), timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
+        from marketplace.hubtel_evidence import capture_response
+        capture_response(response, direction="direct_status", reference=tx.client_reference)
         if not 200 <= response.status_code < 300:
             raise StatusUnconfirmed("Status endpoint unavailable.")
         code, data = _parse(response)

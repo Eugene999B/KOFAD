@@ -9,7 +9,7 @@
 <main class="payment-workspace">
   <header class="payment-top">
     <div><p class="eyebrow">KOFAD / FINANCE</p><h1>Send money</h1><p>Verify the recipient, then request a transfer.</p></div>
-    <a class="button secondary" href="/debts/">Customer repayments</a>
+    <div class="actions"><a class="button secondary" href="/debts/">Customer repayments</a><a class="button secondary" href="{% url 'hubtel_diagnostics' %}">Download Hubtel payloads</a></div>
   </header>
   {% if wallet_enabled or bank_enabled %}
   <section class="panel payment-panel">

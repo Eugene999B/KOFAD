@@ -6,6 +6,7 @@ Only owners with manage_company rights can retrieve decrypted records.
 import base64
 import hashlib
 import hmac
+import logging
 
 from cryptography.fernet import Fernet
 from django.conf import settings
@@ -26,7 +27,7 @@ def _cipher():
 
 def save_exchange(*, reference, direction, raw_body, http_status=None, attempt=None):
     """Keep the *actual* provider body, rather than a normalized/rebuilt JSON."""
-    if direction not in {"callback", "status_check"}:
+    if direction not in {"callback", "status_check", "wallet_verify", "bank_verify", "direct_submit", "direct_status"}:
         raise ValueError("Unexpected Hubtel evidence direction.")
     if not isinstance(raw_body, bytes):
         raise TypeError("Hubtel evidence body must be bytes.")
@@ -51,3 +52,20 @@ def decrypt_exchange(exchange):
     if hashlib.sha256(raw).hexdigest() != exchange.body_sha256:
         raise ValueError("Stored Hubtel evidence integrity check failed.")
     return raw
+
+
+def capture_response(response, *, direction, reference):
+    """Persist exact provider response bytes, including HTTP 4xx, without affecting payments.
+
+    Never store provider Authorization headers or browser session information.
+    """
+    body = getattr(response, "content", None)
+    if not isinstance(body, bytes) or len(body) > 262144:
+        return
+    try:
+        save_exchange(reference=reference, direction=direction,
+                      raw_body=body, http_status=response.status_code)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "Hubtel evidence capture unavailable type=%s", type(exc).__name__
+        )

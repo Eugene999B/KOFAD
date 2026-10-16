@@ -396,7 +396,11 @@ class HubtelEvidence(models.Model):
     )
     reference = models.CharField(max_length=100, db_index=True)
     direction = models.CharField(
-        max_length=16, choices=[("callback", "Callback"), ("status_check", "Status check")]
+        max_length=16, choices=[
+            ("callback", "Callback"), ("status_check", "Status check"),
+            ("wallet_verify", "Wallet name verification"), ("bank_verify", "Bank name verification"),
+            ("direct_submit", "Direct transfer/collection"), ("direct_status", "Direct transaction status"),
+        ]
     )
     http_status = models.PositiveSmallIntegerField(null=True, blank=True)
     encrypted_body = models.TextField(editable=False)

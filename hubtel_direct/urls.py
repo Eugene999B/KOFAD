@@ -1,7 +1,9 @@
 from django.urls import path
-from . import views, mandate_views, payroll_views, policy_views, refund_views, sale_intent_views
+from . import views, mandate_views, payroll_views, policy_views, refund_views, sale_intent_views, evidence_views
 
 urlpatterns = [
+    path("settings/online-payments/hubtel-diagnostics/", evidence_views.diagnostics, name="hubtel_diagnostics"),
+    path("settings/online-payments/hubtel-diagnostics/<int:evidence_id>/download/", evidence_views.download, name="hubtel_diagnostic_download"),
     path("api/direct-debit/sale-intents/", sale_intent_views.prepare_sale, name="hubtel_v2_prepare_sale"),
     path("debts/hubtel/invoices/<uuid:invoice_id>/attach/", sale_intent_views.attach_to_existing_invoice, name="hubtel_v2_attach_invoice"),
     path("debts/hubtel/intents/<uuid:intent_id>/", sale_intent_views.staff_wait, name="hubtel_v2_staff_wait"),

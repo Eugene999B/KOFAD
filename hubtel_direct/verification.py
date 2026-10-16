@@ -4,6 +4,9 @@ Reference: Verification API / Mobile Money Registration & Username Query.
 The account holder name is provider-supplied and should never be invented.
 """
 import hashlib
+import uuid
+
+from marketplace.hubtel_evidence import capture_response
 
 import requests
 from django.conf import settings
@@ -35,6 +38,7 @@ def inquiry(phone, channel):
             timeout=min(settings.HUBTEL_TIMEOUT_SECONDS, 12),
             allow_redirects=False,
         )
+        capture_response(response, direction="wallet_verify", reference="wallet-" + uuid.uuid4().hex)
         if response.status_code in {401, 403}:
             raise ValidationError(
                 "Wallet-name verification is not enabled for this business account. Ask an administrator to review service access."
@@ -96,6 +100,7 @@ def bank_inquiry(bank_code, bank_number):
             timeout=min(settings.HUBTEL_TIMEOUT_SECONDS, 12),
             allow_redirects=False,
         )
+        capture_response(response, direction="bank_verify", reference="bank-" + uuid.uuid4().hex)
         if response.status_code in (401, 403):
             raise ValidationError("Bank account verification is not enabled. Ask an administrator to review service access.")
         if not 200 <= response.status_code < 300:
