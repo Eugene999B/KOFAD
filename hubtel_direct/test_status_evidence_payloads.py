@@ -114,16 +114,19 @@ class StatusEvidenceContractTests(MarketFixtures):
         original_status = b'{"ResponseCode":"0000","Data":[{"TransactionStatus":"Failed","ClientReference":"fixture-bundle-ref"}]}'
         save_exchange(reference=ref, direction="callback", raw_body=original_callback)
         save_exchange(reference=ref, direction="status_check", raw_body=original_status, http_status=200)
-        self.client.force_login(self.staff)
-        session = self.client.session
-        session["access_version"] = self.staff.access.session_version
-        session["mfa_ok"] = True
-        session["branch"] = self.branch.pk
-        session.save()
-        response = self.client.get(
-            f"/settings/online-payments/hubtel-diagnostics/transaction-bundle/?reference={ref}",
-            HTTP_HOST="staff.kofadimpex.com",
+        # Exercise the owner-only view with an authenticated staff request.
+        # The browser login + MFA lifecycle is tested separately; test
+        # client logins do not create a real staff browser session.
+        from django.test import RequestFactory
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from .evidence_views import download_bundle
+        request = RequestFactory().get(
+            f"/settings/online-payments/hubtel-diagnostics/transaction-bundle/?reference={ref}"
         )
+        request.user = self.staff
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session["branch"] = self.branch.pk
+        response = download_bundle.__wrapped__.__wrapped__(request)
         self.assertEqual(response.status_code, 200, response.content[:300])
         self.assertEqual(response["Content-Type"], "application/zip")
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
