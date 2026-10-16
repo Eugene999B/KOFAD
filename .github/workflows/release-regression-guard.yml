@@ -53,6 +53,7 @@ jobs:
           core.test_pwa
           core.test_worker_identity
           core.test_communication_worker_recovery
+          core.test_sms
           core.test_scheduled_automation_recovery
           core.test_google_drive_backup
           core.test_branding.BrandingConsistencyTests.test_only_official_logo_asset_is_referenced

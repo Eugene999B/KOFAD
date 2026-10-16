@@ -18,6 +18,7 @@
   <div class="comms-live-state">
     <span class="comms-live-dot {% if sms_enabled and not sms_sandbox %}is-live{% endif %}"></span>
     <strong>{% if sms_enabled and not sms_sandbox %}Arkesel live{% elif sms_enabled %}SMS sandbox{% else %}SMS unavailable{% endif %}</strong>
+    {% if sms_enabled %}<small>Sender ID: <strong>{{ sms_sender_id }}</strong></small>{% endif %}
   </div>
 </section>
 

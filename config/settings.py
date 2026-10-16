@@ -132,7 +132,7 @@ NOTIFICATION_CRITICAL_VARIANCE_GHS = os.environ.get("NOTIFICATION_CRITICAL_VARIA
 # SMS credentials belong in deployment variables, never in database exports or the browser.
 SMS_ENABLED = os.environ.get("SMS_ENABLED","0") == "1"
 SMS_PROVIDER = os.environ.get("SMS_PROVIDER","arkesel")
-SMS_SENDER_ID = os.environ.get("SMS_SENDER_ID","KOFAD")
+SMS_SENDER_ID = os.environ.get("SMS_SENDER_ID","Kofad Impex").strip()
 SMS_SANDBOX = os.environ.get("SMS_SANDBOX","1") == "1"
 SMS_PUBLIC_ORIGIN = os.environ.get("SMS_PUBLIC_ORIGIN","").rstrip("/")
 ARKESEL_API_KEY = os.environ.get("ARKESEL_API_KEY","")

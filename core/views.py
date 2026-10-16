@@ -2074,6 +2074,7 @@ def communication_settings(request, branch):
         "sms_enabled": settings.SMS_ENABLED,
         "sms_sandbox": settings.SMS_SANDBOX,
         "sms_provider": settings.SMS_PROVIDER,
+        "sms_sender_id": settings.SMS_SENDER_ID,
     })
 
 

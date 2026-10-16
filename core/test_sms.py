@@ -147,6 +147,36 @@ class SmsTests(Fixtures,TestCase):
         self.assertTrue(self.customer.consent)
 
     @patch("core.sms.providers.Arkesel.submit_many")
+    @override_settings(SMS_SENDER_ID="Kofad Impex")
+    @patch("core.sms.providers.Arkesel.submit_many")
+    def test_sender_id_preserves_space_from_web_config_to_worker(self, submit_many):
+        submit_many.return_value = [
+            Submission("accepted", "sender-001", 200, recipient="+233241234567")
+        ]
+        message = self.draft()
+        # An old draft/retry can have a stale alias; the next definite
+        # submission always uses the current approved deployment Sender ID.
+        message.sender = "kofadimpex"
+        message.save(update_fields=["sender"])
+        sent = send_message_now(self.user, self.branch, message.pk)
+        self.assertEqual(sent.sender, "Kofad Impex")
+        self.assertEqual(submit_many.call_args.args[2], "Kofad Impex")
+        self.assertEqual(len("Kofad Impex"), 11)
+
+    @override_settings(SMS_SENDER_ID="Kofad Impex")
+    @patch("core.sms.providers.requests.post")
+    def test_arkesel_json_sender_keeps_capitalization_and_whitespace(self, post):
+        response = post.return_value
+        response.status_code = 200
+        response.json.return_value = {"status": "success", "data": [{"id": "sms-001"}]}
+        response.text = '{"status":"success"}'
+        result = Arkesel().submit(
+            "+233241234567", "Sender test", "Kofad Impex",
+            "https://kofad.example/sms/delivery/", False,
+        )
+        self.assertEqual(result.status, "accepted")
+        self.assertEqual(post.call_args.kwargs["json"]["sender"], "Kofad Impex")
+
     def test_direct_acceptance_is_sent_not_delivery(self, submit_many):
         submit_many.return_value = [
             Submission("accepted", "provider-123", 200, recipient="+233241234567")
