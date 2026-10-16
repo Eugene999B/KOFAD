@@ -5,6 +5,7 @@ The recipient review below shows the trusted KOFAD customer record, or the
 cashier-entered name, clearly distinguishing it from a network-verified name.
 """
 import re
+from datetime import datetime, timezone as utc_timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -110,7 +111,13 @@ def payments_history(request):
     manager = _manager(request, branch)
     if not manager:
         services.permit(request.user, branch, "operate_sales")
-    rows = HeldSale.objects.filter(branch=branch, label__startswith=pos_paystack.LABEL_PREFIX).select_related("user")
+    from . import pos_hubtel
+    # Both payment engines persist requests in HeldSale with different
+    # prefixes; excluding Hubtel made real requests invisible to cashiers.
+    rows = HeldSale.objects.filter(branch=branch).filter(
+        Q(label__startswith=pos_paystack.LABEL_PREFIX)
+        | Q(label__startswith=pos_hubtel.LABEL_PREFIX)
+    ).select_related("user")
     if not manager:
         rows = rows.filter(user=request.user)
     term = (request.GET.get("q") or "").strip()[:80]
@@ -128,7 +135,15 @@ def payments_history(request):
     elif status == "failed":
         rows = rows.filter(cart__payment_request__status__in=list(pos_paystack.TERMINAL_FAILURES))
     page = Paginator(rows.order_by("-created_at"), 25).get_page(request.GET.get("page"))
-    page.object_list = [{"held": held, "payment": _snapshot(held)} for held in page.object_list]
+    page.object_list = [
+        {"held": held, "payment": (
+            _direct_snapshot(request, branch,
+                held.label[len(pos_hubtel.LABEL_PREFIX):], refresh=False)
+            if held.label.startswith(pos_hubtel.LABEL_PREFIX)
+            else _snapshot(held)
+        )}
+        for held in page.object_list
+    ]
     result = render(request, "pos_momo_history.html", {
         "title": "MoMo payments", "page_obj": page, "q": term,
         "selected_status": status, "manager": manager,
@@ -137,14 +152,16 @@ def payments_history(request):
     return result
 
 
-def _direct_snapshot(request, branch, reference):
+def _direct_snapshot(request, branch, reference, *, refresh=True):
     """Authenticated read of the original Direct MoMo request; never initiates payment."""
     from . import pos_hubtel
     services.permit(request.user, branch, "operate_sales")
     held = pos_hubtel.held_for(reference)
-    if not held or held.branch_id != branch.pk or held.user_id != request.user.pk:
+    if not held or held.branch_id != branch.pk or (
+        held.user_id != request.user.pk and not _manager(request, branch)
+    ):
         raise Http404("Payment request not found.")
-    status = pos_hubtel.status_for_staff(request.user, branch, reference)
+    status = pos_hubtel.status_for_staff(request.user, branch, reference) if refresh else pos_hubtel.response_state(held)
     held.refresh_from_db()
     state = pos_hubtel.state_of(held)
     payload = (held.cart or {}).get("sale_payload") or {}
@@ -163,7 +180,17 @@ def _direct_snapshot(request, branch, reference):
     return {
         "reference": reference, "status": phase,
         "display_status": "Payment confirmed" if doc else "Payment needs review" if status.get("attention")
-                          else "Payment unsuccessful" if status.get("failed") else "Waiting for payment",
+                          else "Payment unsuccessful" if status.get("failed")
+                          else "Hubtel reports no matching record" if status.get("provider_status") == "not_found"
+                          else "Hubtel verification unavailable" if status.get("provider_status") == "unavailable"
+                          else "Hubtel reports Unpaid" if status.get("provider_status") == "unpaid"
+                          else "Awaiting independent confirmation",
+        "status_label": "Payment confirmed" if doc else "Reconciliation required" if status.get("attention")
+                        else "Payment unsuccessful" if status.get("failed")
+                        else "No provider record at last check" if status.get("provider_status") == "not_found"
+                        else "Provider verification unavailable" if status.get("provider_status") == "unavailable"
+                        else "Hubtel reports Unpaid" if status.get("provider_status") == "unpaid"
+                        else "Waiting for independent verification",
         "message": str(status.get("message") or status.get("display_text") or "")[:240],
         "currency": "GHS", "amount": str(state.get("amount") or "0.00"),
         "sale_total": str(state.get("amount") or "0.00"), "balance_due": "0.00",
@@ -174,6 +201,15 @@ def _direct_snapshot(request, branch, reference):
         "created_at": held.created_at,
         "transaction_id": str(state.get("provider_transaction_id") or "")[-16:],
         "network_response_code": str(state.get("provider_code") or "")[:20],
+        "provider_status": status.get("provider_status") or "not_checked",
+        "provider_detail": status.get("provider_detail") or "",
+        "last_checked_at": (
+            datetime.fromtimestamp(float(status["last_checked_at"]), utc_timezone.utc).isoformat()
+            if status.get("last_checked_at") else None
+        ),
+        "callback_received": status.get("callback_received"),
+        "next_check_at": status.get("next_check_at"),
+        "check_count": int(state.get("check_count") or 0),
         "paid": bool(doc), "pending": bool(status.get("waiting")),
         "failed": bool(status.get("failed")), "attention": phase == "attention",
         "needs_otp": False, "is_direct": True,
@@ -209,6 +245,25 @@ def payment_detail(request, reference):
 @require_POST
 def manual_verify(request, reference):
     branch = _branch(request)
+    if re.fullmatch(r"[0-9a-f]{32}", reference or ""):
+        from . import pos_hubtel
+        services.permit(request.user, branch, "operate_sales")
+        held = pos_hubtel.held_for(reference)
+        if not held or held.branch_id != branch.pk or (
+            held.user_id != request.user.pk and not _manager(request, branch)
+        ):
+            raise Http404("Payment request not found.")
+        try:
+            result = pos_hubtel.reconcile(reference, force=True)
+            if result.get("paid"):
+                messages.success(request, "Hubtel payment independently verified and posted.")
+            elif result.get("failed"):
+                messages.warning(request, "Hubtel confirmed this payment failed.")
+            else:
+                messages.info(request, "Only the original transaction was checked. No verified settlement yet.")
+        except ValidationError:
+            messages.warning(request, "The original transaction requires review. No new charge was sent.")
+        return redirect("pos_momo_payment", reference=reference)
     held = _payment(request, branch, reference)
     state = pos_paystack._state(held)
     if state.get("status") in pos_paystack.PENDING_STATES:

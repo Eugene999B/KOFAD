@@ -53,6 +53,13 @@ def _transaction_for_reference(request, reference):
     debt = DebtMomoCollection.objects.filter(reference=reference, branch=branch).first()
     if debt:
         return "debt_momo", debt
+    from core import pos_hubtel
+    try:
+        pos = pos_hubtel.held_for(reference)
+    except Exception:
+        pos = None
+    if pos and pos.branch_id == branch.pk:
+        return "staff_pos", pos
     return "", None
 
 
@@ -78,7 +85,9 @@ def _provider_status(record):
                 and str(item.get("ClientReference", item.get("clientReference", ""))) == record.reference
             ), None)
         if not isinstance(data, dict):
-            return "No matching provider transaction"
+            detail = str(payload.get("Message") or payload.get("message")
+                         or payload.get("Description") or "")[:100]
+            return "Hubtel message: " + detail if detail else "No matching provider transaction"
         state = str(data.get("TransactionStatus") or data.get("transactionStatus")
                     or data.get("Status") or data.get("status") or "").strip()
         if not state:
@@ -104,10 +113,30 @@ def diagnostics(request):
     entries = list(entries.order_by("-created_at", "-pk")[:150])
     for record in entries:
         record.hubtel_outcome = _provider_status(record)
+    from core import pos_hubtel
+    from core.models import HeldSale
+    from core.views import branch_for
+    branch = branch_for(request)
+    pos_rows = HeldSale.objects.filter(
+        branch=branch, label__startswith=pos_hubtel.LABEL_PREFIX
+    ).select_related("user").order_by("-created_at")[:35]
+    recent_pos = []
+    for held in pos_rows:
+        state = pos_hubtel.state_of(held)
+        recent_pos.append({
+            "reference": state.get("reference") or held.label[len(pos_hubtel.LABEL_PREFIX):],
+            "status": state.get("status") or "unknown",
+            "provider_status": state.get("provider_status") or "not_checked",
+            "amount": state.get("amount") or "0.00",
+            "check_count": int(state.get("check_count") or 0),
+            "last_checked_at": state.get("last_checked_at"),
+            "created_at": held.created_at,
+        })
     return _private(render(request, "hubtel_direct/evidence.html", {
         "title": "Hubtel transaction evidence",
         "entries": entries, "kind": kind, "choices": choices,
         "reference": reference, "reference_valid": _reference_allowed(request, reference) if reference else False,
+        "recent_pos": recent_pos,
     }))
 
 
@@ -123,9 +152,13 @@ def check_status(request):
         return redirect("hubtel_diagnostics")
     try:
         if kind == "hosted":
-            from marketplace.hubtel import verify
-            data = verify(ref)
-            status = data.get("status")
+            from marketplace.hubtel import reconcile
+            result = reconcile(ref)
+            status = str(result.get("status") if isinstance(result, dict) else result)
+        elif kind == "staff_pos":
+            from core import pos_hubtel
+            data = pos_hubtel.reconcile(ref, force=True)
+            status = data.get("status", "unknown")
         else:
             from . import client
             from .debt_momo import _gateway_transaction
@@ -134,7 +167,9 @@ def check_status(request):
             else:
                 tx = row
             status, _ = client.check(tx)
-        messages.info(request, "Hubtel's original status response was saved. Provider result: " + str(status))
+        messages.info(request, "Current saved transaction state: " + str(status)
+                      + ". If the request is rate-limited, the next read-only Hubtel check remains scheduled. "
+                        "See exact provider responses below.")
     except Exception as exc:
         # The GET may fail, be inconclusive or contain a mismatch. Capture of
         # an HTTP response happens before parsing; never claim a payment failed

@@ -16,6 +16,17 @@
     <div class="kpay-fact"><small>Network</small><strong>{{ payment.network }}</strong></div>
     <div class="kpay-fact"><small>Customer</small><strong>{{ payment.customer_name }}</strong></div>
     <div class="kpay-fact"><small>Wallet</small><strong>{{ payment.phone }}</strong></div>
+    {% if payment.is_direct %}
+    <div class="kpay-fact"><small>Latest independent Hubtel status</small>
+      <strong data-kpay-provider-status>{% if payment.provider_status == 'paid' %}Paid — verified
+        {% elif payment.provider_status == 'failed' %}Failed — verified
+        {% elif payment.provider_status == 'unpaid' %}Unpaid at latest check
+        {% elif payment.provider_status == 'not_found' %}No matching record at latest check
+        {% elif payment.provider_status == 'unavailable' %}Verification unavailable
+        {% else %}Not yet checked{% endif %}</strong></div>
+    <div class="kpay-fact"><small>Last Hubtel status check</small>
+      <strong data-kpay-last-check>{{ payment.last_checked_at|default:"Not yet checked" }}</strong></div>
+    {% endif %}
   </div>
   <p class="kpay-reference">Reference: {{ payment.reference }}</p>
   <div class="kpay-actions">
@@ -51,6 +62,8 @@
    {% if payment.is_direct %}
    <p>Network request: {% if payment.network_response_code == "0001" %}Accepted, awaiting the wallet/network result{% elif payment.network_response_code == "0000" %}Acknowledged, awaiting independent payment verification{% elif payment.network_response_code %}Rejected or needs review ({{ payment.network_response_code }}){% else %}Not confirmed — do not request a duplicate{% endif %}</p>
    <p>Network transaction reference: {{ payment.transaction_id|default:"Not confirmed" }}</p>
+   <p>Independent checks: {{ payment.check_count }}{% if payment.callback_received %} · Callback received (not proof of payment){% endif %}</p>
+   {% if payment.provider_detail %}<p>Last verification detail: {{ payment.provider_detail }}</p>{% endif %}
    {% else %}
    <p>Network transaction: {{ payment.transaction_id|default:"Awaiting confirmation" }}</p>
    {% endif %}

@@ -513,12 +513,23 @@ def callback(request):
     # but never use callback fields to change payment/order status.
     item = client._field(data, "Data")
     ref = client._field(item, "ClientReference") if isinstance(item, dict) else ""
-    if isinstance(ref, str) and DirectTransaction.objects.filter(client_reference=ref).exists():
+    from core import pos_hubtel
+    staff_request = False
+    if isinstance(ref, str):
+        try:
+            staff_request = bool(pos_hubtel.held_for(ref))
+        except ValidationError:
+            pass
+    if isinstance(ref, str) and (
+        DirectTransaction.objects.filter(client_reference=ref).exists() or staff_request
+    ):
         from marketplace.hubtel_evidence import save_exchange
         try:
             save_exchange(reference=ref, direction="callback", raw_body=request.body)
         except Exception:
             logging.getLogger(__name__).exception("Hubtel callback evidence capture failed")
+    if staff_request:
+        pos_hubtel.note_callback(data)
     service.note_callback(data)
     response = JsonResponse({"received": True})
     response["Cache-Control"] = "no-store"

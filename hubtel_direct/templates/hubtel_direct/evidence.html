@@ -26,6 +26,31 @@
  <p class="notice"><strong>Exact provider evidence:</strong> The original status response is saved byte for byte, even for unsuccessful payments or HTTP errors. The GET URL is saved separately, without API credentials. A provider response that is missing, ambiguous or mismatched must not be reported as a confirmed failure. Download and share only with your assigned Hubtel engineer.</p>
 </section>
 <section class="panel">
+ <p class="eyebrow">STAFF MOBILE MONEY</p>
+ <h2>Recent cashier transactions</h2>
+ <p>These requests are shown even when a receipt has not been issued. Select a reference to view every saved Hubtel response, or run a read-only status check.</p>
+ <div class="table-wrap"><table class="data-table">
+  <thead><tr><th>Started</th><th>Reference</th><th>Amount</th><th>KOFAD state</th><th>Last network result</th><th>Checks</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for payment in recent_pos %}
+   <tr>
+    <td>{{ payment.created_at|date:"d M H:i" }}</td>
+    <td><a href="{% url 'hubtel_diagnostics' %}?reference={{ payment.reference|urlencode }}"><code>{{ payment.reference }}</code></a></td>
+    <td>GHS {{ payment.amount }}</td>
+    <td><strong>{{ payment.status|title }}</strong></td>
+    <td>{{ payment.provider_status|title }}</td>
+    <td>{{ payment.check_count }}</td>
+    <td><form method="post" action="{% url 'hubtel_diagnostic_check_status' %}">
+     {% csrf_token %}<input type="hidden" name="reference" value="{{ payment.reference }}">
+     <button class="button secondary" type="submit">Refresh Hubtel status</button>
+    </form></td>
+   </tr>
+  {% empty %}<tr><td colspan="7">No staff Direct Mobile Money requests have been saved for this branch.</td></tr>{% endfor %}
+  </tbody>
+ </table></div>
+ <p class="hint">A payment marked Pending or Not Found has not been confirmed as failed. Network checks are rate-limited and never send another charge.</p>
+</section>
+<section class="panel">
  <h2>Recorded responses</h2>
  <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
   <label>ClientReference<input name="reference" value="{{ reference }}" placeholder="Find one payment"></label>

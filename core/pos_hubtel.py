@@ -28,6 +28,8 @@ from marketplace.services import PaymentVerificationUnavailable
 logger = logging.getLogger(__name__)
 LABEL_PREFIX = "Hubtel MoMo "
 PENDING = {"initializing", "submission_unknown", "pending", "not_confirmed", "processing"}
+FIRST_STATUS_DELAY = 20
+RECHECK_DELAY = 30
 
 
 def reference_from_key(request_key):
@@ -71,6 +73,11 @@ def response_state(held):
     state = state_of(held)
     result = {
         "reference": state.get("reference", ""),
+        "provider_status": state.get("provider_status") or "not_checked",
+        "provider_detail": str(state.get("provider_detail") or "")[:180],
+        "last_checked_at": state.get("last_checked_at"),
+        "next_check_at": state.get("next_check_at"),
+        "callback_received": bool(state.get("callback_seen_at")),
         "provider": "hubtel",
         "status": state.get("status", "pending"),
         "message": state.get("message", ""),
@@ -161,7 +168,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
         "request_key": str(request_key),
         "authorization_url": "", "display_text": "",
         "message": "Sending a Direct MoMo payment request.",
-        "created_at": now.timestamp(), "next_check_at": (now + timedelta(minutes=5)).timestamp(),
+        "created_at": now.timestamp(), "next_check_at": (now + timedelta(seconds=FIRST_STATUS_DELAY)).timestamp(),
         "check_count": 0, "document_id": "",
     }
     claim_key = uuid.uuid5(uuid.NAMESPACE_URL, "kofad-pos-hubtel:" + reference)
@@ -208,7 +215,7 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
         state.update(
             status="submission_unknown",
             message="Request status unknown. Do not send another prompt; KOFAD will check it.",
-            next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
+            next_check_at=(timezone.now() + timedelta(seconds=FIRST_STATUS_DELAY)).timestamp(),
         )
         save_state(held, state)
         return response_state(held)
@@ -217,11 +224,37 @@ def start(user, branch, sale_payload, request_key, phone, network, email, wallet
         authorization_url="",
         message="The payment network accepted this request. Ask the customer to check their phone; prompt delivery and payment are not yet confirmed.",
         display_text="Waiting for payment confirmation. Do not charge again or ask for a MoMo PIN.",
-        next_check_at=(timezone.now() + timedelta(minutes=5)).timestamp(),
+        next_check_at=(timezone.now() + timedelta(seconds=FIRST_STATUS_DELAY)).timestamp(),
     )
     save_state(held, state)
     held.refresh_from_db()
     return response_state(held)
+
+
+def note_callback(data):
+    """An untrusted callback only accelerates independent status checking."""
+    if not isinstance(data, dict):
+        return False
+    from hubtel_direct.client import _field
+    item = _field(data, "Data")
+    ref = _field(item, "ClientReference") if isinstance(item, dict) else ""
+    if not isinstance(ref, str) or not re.fullmatch(r"[0-9a-f]{32}", ref):
+        return False
+    with transaction.atomic():
+        held = held_for(ref, lock=True)
+        if not held:
+            return False
+        state = state_of(held)
+        if state.get("status") not in PENDING:
+            return True
+        now = timezone.now().timestamp()
+        state["callback_seen_at"] = now
+        state["next_check_at"] = min(
+            float(state.get("next_check_at") or float("inf")),
+            max(now, float(state.get("created_at") or now) + FIRST_STATUS_DELAY),
+        )
+        save_state(held, state)
+        return True
 
 
 def reconcile(reference, *, force=False):
@@ -235,20 +268,24 @@ def reconcile(reference, *, force=False):
         if state.get("status") == "attention":
             raise ValidationError(state.get("message") or "Payment needs manager review.")
         now = timezone.now().timestamp()
-        if not force and float(state.get("next_check_at") or 0) > now:
+        if state.get("flow") == "direct":
+            # Read-only status GET starts after 20s; everyone shares a DB lease.
+            if now - float(state.get("created_at") or now) < FIRST_STATUS_DELAY:
+                return response_state(held)
+            if float(state.get("next_check_at") or 0) > now:
+                return response_state(held)
+        elif not force and float(state.get("next_check_at") or 0) > now:
             return response_state(held)
         if float(state.get("lease_until") or 0) > now:
             return response_state(held)
         state["check_count"] = int(state.get("check_count") or 0) + 1
         state["lease_until"] = now + settings.HUBTEL_TIMEOUT_SECONDS + 5
-        state["next_check_at"] = now + (300 if state.get("flow") == "direct" else 40)
+        state["next_check_at"] = now + (
+            RECHECK_DELAY if state.get("flow") == "direct" else 40
+        )
         save_state(held, state)
 
     if state.get("flow") == "direct":
-        # The receive-status endpoint is mandatory after five minutes when the
-        # provider's final callback was not trusted/verified. No early duplicate.
-        if now - float(state.get("created_at") or now) < 300:
-            return response_state(held_for(reference))
         tx = SimpleNamespace(
             kind="receive", channel=state["network"],
             client_reference=reference, amount=Decimal(str(state["amount"])),
@@ -256,7 +293,23 @@ def reconcile(reference, *, force=False):
         )
         try:
             outcome, tid = direct_client.check(tx)
-        except direct_client.StatusUnconfirmed:
+        except direct_client.StatusUnconfirmed as exc:
+            with transaction.atomic():
+                held = held_for(reference, lock=True)
+                current = state_of(held)
+                if current.get("status") in PENDING:
+                    reason = str(exc)[:180]
+                    missing = "no payment record" in reason.lower() or "no matching" in reason.lower()
+                    current.update(
+                        last_checked_at=timezone.now().timestamp(),
+                        provider_status="not_found" if missing else "unavailable",
+                        provider_detail=reason,
+                        message=("Hubtel has no matching payment record at this check. "
+                                 "The original request needs investigation; do not charge twice.")
+                        if missing else
+                        "The provider has not confirmed this payment. Do not charge twice.",
+                    )
+                    save_state(held, current)
             return response_state(held_for(reference))
         except ValidationError:
             mark_attention(reference, "Payment status did not match this sale. Manager review is required.")
@@ -266,14 +319,27 @@ def reconcile(reference, *, force=False):
                 held = held_for(reference, lock=True)
                 result = state_of(held)
                 if result.get("status") in PENDING:
-                    result.update(status="failed", next_check_at=None,
-                                  message="The Mobile Money request was unsuccessful.")
+                    result.update(status="failed", provider_status="failed",
+                                  provider_transaction_id=tid,
+                                  last_checked_at=timezone.now().timestamp(),
+                                  next_check_at=None,
+                                  message="Hubtel independently confirmed this transaction failed.")
                     save_state(held, result)
             return response_state(held_for(reference))
         if outcome == "attention":
             mark_attention(reference, "A disputed payment needs manager review.")
             return response_state(held_for(reference))
         if outcome != "success":
+            with transaction.atomic():
+                held = held_for(reference, lock=True)
+                current = state_of(held)
+                if current.get("status") in PENDING:
+                    current.update(
+                        provider_status="unpaid",
+                        last_checked_at=timezone.now().timestamp(),
+                        message="Hubtel reports Unpaid at the last check. If the customer was debited, do not charge twice; checks continue.",
+                    )
+                    save_state(held, current)
             return response_state(held_for(reference))
         verified = {
             "status": "Paid", "amount": state["amount"], "currencyCode": "GHS",
@@ -325,7 +391,9 @@ def reconcile(reference, *, force=False):
             if doc.total != amount or doc.paid != doc.total:
                 raise ValidationError("Sale total changed since payment was requested.")
             state.update(
-                status="success", document_id=str(doc.pk), verified_at=timezone.now().timestamp(),
+                status="success", provider_status="paid",
+                last_checked_at=timezone.now().timestamp(),
+                document_id=str(doc.pk), verified_at=timezone.now().timestamp(),
                 transaction_id=str(verified["transactionId"])[:80], next_check_at=None,
                 message="Payment independently confirmed; sale recorded.",
             )
@@ -346,8 +414,12 @@ def reconcile(reference, *, force=False):
 
 def status_for_staff(user, branch, reference):
     held = held_for(reference)
-    if not held or held.user_id != user.pk or held.branch_id != branch.pk:
+    if not held or held.branch_id != branch.pk:
         raise ValidationError("This payment request could not be found.")
+    if held.user_id != user.pk:
+        # Managers may investigate another cashier's reference but the
+        # branch boundary remains mandatory.
+        services.permit(user, branch, "manage_company")
     try:
         reconcile(reference)
     except (PaymentVerificationUnavailable, ValidationError):

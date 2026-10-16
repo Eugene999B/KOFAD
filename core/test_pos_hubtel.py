@@ -273,3 +273,72 @@ class StaffHubtelPaymentTests(Fixtures, TestCase):
         )
         self.assertEqual(response.status_code, 400)
         get.assert_not_called()
+
+    @patch("hubtel_direct.client.requests.post")
+    def test_hubtel_cashier_requests_appear_in_payment_history_before_settlement(self, post):
+        post.side_effect = self.accepted
+        key, result = self.start()
+        self.authenticate_client()
+        response = self.client.get("/payments/momo/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, key.hex)
+        self.assertContains(response, "Awaiting independent confirmation")
+        self.assertFalse(result["paid"])
+        self.assertEqual(Document.objects.count(), 0)
+
+    @patch("hubtel_direct.client.requests.get")
+    @patch("hubtel_direct.client.requests.post")
+    def test_staff_status_checks_within_twenty_seconds_and_uses_original_reference(self, post, get):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        held = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
+        state = held.cart["payment_request"]
+        state["created_at"] = (timezone.now() - timedelta(seconds=25)).timestamp()
+        state["next_check_at"] = 0
+        held.save(update_fields=["cart"])
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "ResponseCode": "0000",
+            "Data": [{"ClientReference": key.hex, "TransactionId": "txn-test-123",
+                      "TransactionAmount": 50, "CurrencyCode": "GHS",
+                      "TransactionStatus": "Unpaid", "InvoiceStatus": "Unpaid",
+                      "PaymentMethod": "MOBILE-MONEY"}],
+        })
+        checked = pos_hubtel.reconcile(key.hex)
+        self.assertEqual(checked["status"], "pending")
+        self.assertEqual(checked["provider_status"], "unpaid")
+        self.assertIsNotNone(checked["last_checked_at"])
+        pos_hubtel.reconcile(key.hex, force=True)
+        get.assert_called_once()
+        self.assertEqual(get.call_args.kwargs["params"]["clientReference"], key.hex)
+        self.assertEqual(Document.objects.count(), 0)
+
+    @patch("hubtel_direct.client.requests.get")
+    @patch("hubtel_direct.client.requests.post")
+    def test_no_matching_hubtel_record_does_not_falsely_mark_failed(self, post, get):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        self.mature(key)
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "ResponseCode": "0000", "Message": "No payment record found", "Data": [],
+        })
+        result = pos_hubtel.reconcile(key.hex, force=True)
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["provider_status"], "not_found")
+        self.assertIn("no matching", result["message"].lower())
+        self.assertEqual(Document.objects.count(), 0)
+        get.assert_called_once()
+
+    @patch("hubtel_direct.client.requests.post")
+    def test_cashier_callback_triggers_get_check_only_not_payment_post(self, post):
+        post.side_effect = self.accepted
+        key, _ = self.start()
+        changed = pos_hubtel.note_callback({
+            "ResponseCode": "0000", "Status": "Success",
+            "Data": {"ClientReference": key.hex, "Status": "Success"},
+        })
+        self.assertTrue(changed)
+        held = HeldSale.objects.get(label=pos_hubtel.LABEL_PREFIX + key.hex)
+        self.assertTrue(held.cart["payment_request"].get("callback_seen_at"))
+        self.assertEqual(held.cart["payment_request"]["status"], "pending")
+        self.assertEqual(Document.objects.count(), 0)
+        post.assert_called_once()

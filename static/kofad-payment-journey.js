@@ -52,7 +52,8 @@
         providerStatus.textContent = ({
           paid: 'PAID — independently verified',
           unpaid: 'UNPAID at latest network check',
-          unavailable: 'Network status not available',
+          unavailable: 'Network status unavailable',
+          not_found: 'Hubtel returned no matching record at this check',
           mismatch: 'Reconciliation required',
           failed: 'Payment unsuccessful',
           not_checked: 'Not yet independently checked'

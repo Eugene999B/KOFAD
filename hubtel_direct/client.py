@@ -198,7 +198,7 @@ def _parse(response, *, reference=None):
             and _field(record, "ClientReference") == reference
         ]
         if len(matched) != 1:
-            raise StatusUnconfirmed("Provider returned no unique matching transaction.")
+            raise StatusUnconfirmed("Hubtel returned no matching payment record for this ClientReference.")
         data = matched[0]
     if not isinstance(data, dict):
         raise StatusUnconfirmed("Provider returned no transaction record.")
@@ -284,12 +284,37 @@ def check(tx):
         capture_request(response, direction="direct_check", reference=tx.client_reference, capture_url=True)
         capture_response(response, direction="direct_status", reference=tx.client_reference)
         if not 200 <= response.status_code < 300:
-            raise StatusUnconfirmed("Status endpoint unavailable.")
-        code, data = _parse(response, reference=tx.client_reference)
+            # Retain the precise provider body in evidence. A 404/no-record
+            # response is not evidence the wallet was never debited.
+            detail = ""
+            try:
+                error_body = response.json()
+                if isinstance(error_body, dict):
+                    detail = str(_field(error_body, "Message")
+                        or _field(error_body, "Description") or "")[:120]
+            except (ValueError, TypeError):
+                pass
+            raise StatusUnconfirmed(
+                "Hubtel status HTTP " + str(response.status_code)
+                + (": " + detail if detail else " (no verified transaction)")
+            )
+        try:
+            code, data = _parse(response, reference=tx.client_reference)
+        except StatusUnconfirmed as exc:
+            raise StatusUnconfirmed(str(exc)) from exc
     except requests.RequestException as exc:
         raise StatusUnconfirmed("Status endpoint unavailable.") from exc
     if code not in {"0000", "success"}:
-        raise StatusUnconfirmed("Hubtel has not confirmed a final status.")
+        try:
+            body = response.json()
+            detail = str(_field(body, "Message")
+                or _field(body, "Description") or "")[:120] if isinstance(body, dict) else ""
+        except (ValueError, TypeError):
+            detail = ""
+        raise StatusUnconfirmed(
+            "Hubtel status code " + code
+            + (": " + detail if detail else "; final status unavailable")
+        )
     if _field(data, "ClientReference") != tx.client_reference:
         raise ValidationError("Hubtel returned a mismatched transaction reference.")
     raw_amount = _field(data, "TransactionAmount")
