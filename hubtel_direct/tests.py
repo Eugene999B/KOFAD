@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import requests
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 
 from marketplace.models import MarketPaymentAttempt, VerifiedMomoPhone
@@ -367,33 +367,3 @@ class DirectWorkflowTests(MarketFixtures):
             with self.assertRaises(ValidationError):
                 service.create_payout(self.staff, *params, idempotency_key=uuid.uuid4(), purpose="Approved test supplier invoice")
         post.assert_not_called()
-
-
-class HubtelWebEgressSupportProbeTests(TestCase):
-    """One empty support POST from the real Web service, never from SMS/CI."""
-
-    @patch("hubtel_direct.views.timezone.now")
-    @patch("requests.post")
-    @patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "kofad-web"})
-    def test_probe_is_zero_byte_single_use(self, outbound, now):
-        from datetime import datetime, timezone as dt_timezone
-        from .views import _hubtel_support_ip_probe_once
-
-        now.return_value = datetime(2026, 10, 16, 12, 0, tzinfo=dt_timezone.utc)
-        outbound.return_value.status_code = 200
-        _hubtel_support_ip_probe_once()
-        _hubtel_support_ip_probe_once()
-        outbound.assert_called_once()
-        args, kwargs = outbound.call_args
-        self.assertEqual(args, ("https://webhook.site/e86c8e48-f74e-40eb-8c19-41d5e7b8c6f9",))
-        self.assertEqual(kwargs["data"], b"")
-        self.assertFalse(kwargs["allow_redirects"])
-        self.assertNotIn("Authorization", kwargs["headers"])
-        self.assertNotIn("Cookie", kwargs["headers"])
-
-    @patch("requests.post")
-    @patch.dict("os.environ", {"RAILWAY_SERVICE_NAME": "kofad-sms"})
-    def test_probe_cannot_leave_sms_worker(self, outbound):
-        from .views import _hubtel_support_ip_probe_once
-        _hubtel_support_ip_probe_once()
-        outbound.assert_not_called()

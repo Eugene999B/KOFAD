@@ -18,60 +18,6 @@ from . import service
 from .models import DirectTransaction
 
 
-
-def _hubtel_support_ip_probe_once():
-    """Single empty POST from the KOFAD WEB runtime, not SMS or CI.
-
-    The shared DB session key is an atomic one-use sentinel across Gunicorn
-    workers. No customer data, API key, wallet number, or auth header is sent.
-    This is a short-lived support diagnostic, not a payment integration.
-    """
-    import logging
-    import os
-    from datetime import timedelta
-
-    import requests
-    from django.contrib.sessions.models import Session
-
-    # Explicitly prevent sending this from any other Railway service, dev,
-    # local tests, or CI. The probe expires after the support test day.
-    if os.environ.get("RAILWAY_SERVICE_NAME", "").lower() != "kofad-web":
-        return
-    if timezone.now().date().isoformat() != "2026-10-16":
-        return
-
-    # The unique session key creates exactly one sender globally; an empty,
-    # unauthenticated session contains no login or customer information.
-    _, created = Session.objects.get_or_create(
-        session_key="kofad-hubtel-web-ip-probe-20261016",
-        defaults={
-            "session_data": "",
-            "expire_date": timezone.now() + timedelta(days=1),
-        },
-    )
-    if not created:
-        return
-    log = logging.getLogger(__name__)
-    try:
-        resp = requests.post(
-            "https://webhook.site/e86c8e48-f74e-40eb-8c19-41d5e7b8c6f9",
-            data=b"",
-            timeout=8,
-            allow_redirects=False,
-            headers={"User-Agent": "KOFAD-Web-IP-Test/1.0"},
-        )
-        log.info(
-            "KOFAD-WEB-EGRESS-PROBE sent empty POST; status=%s; bytes=0",
-            resp.status_code,
-        )
-    except requests.RequestException as exc:
-        log.warning(
-            "KOFAD-WEB-EGRESS-PROBE failed; exception=%s; bytes=0",
-            type(exc).__name__,
-        )
-
-
-
 @csrf_exempt
 @require_POST
 def internal_reconcile(request):
@@ -86,16 +32,6 @@ def internal_reconcile(request):
         response = JsonResponse({"error": "Forbidden"}, status=403)
         response["Cache-Control"] = "no-store"
         return response
-    # Hubtel's one-time public egress test runs from the authenticated Web
-    # process only, with no secrets or application request information.
-    try:
-        _hubtel_support_ip_probe_once()
-    except Exception:
-        # A diagnostics failure must never interrupt payment reconciliation.
-        import logging
-        logging.getLogger(__name__).exception(
-            "KOFAD-WEB-EGRESS-PROBE internal check failed"
-        )
     from .service import reconcile_due
     count = reconcile_due(limit=10)
     # Historical hosted Hubtel transactions are STILL outstanding records.
