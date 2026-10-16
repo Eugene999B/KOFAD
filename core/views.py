@@ -1348,14 +1348,13 @@ def debts(request, branch):
     rows = overview["rows"]
     from hubtel_direct.models import DebtMandate, OnlineDebtSettings
     online_debt_policy, _ = OnlineDebtSettings.objects.get_or_create(branch=branch)
-    agreement_rows = list(DebtMandate.objects.filter(
-        branch=branch, status__in=["draft", "pending", "approved", "cancel_pending", "suspended"],
-    ).select_related("party"))
-    # A debtor with an agreement belongs on the Direct Debit tab from
-    # drafting onward. The status badge clearly says "Awaiting setup" or
-    # "Awaiting customer authorization" until Hubtel confirms consent.
-    # This is classification only: it NEVER authorizes a wallet debit.
-    agreement_ids = {item.party_id for item in agreement_rows}
+    # Only independently approved, ACTIVE provider authority makes a debtor
+    # a Direct Debit debtor. Drafts, pending, expired and suspended records
+    # remain visible on the customer's history but never imply activation.
+    approved_ids = set(DebtMandate.objects.filter(
+        branch=branch, status="approved", provider_approved_at__isnull=False,
+    ).values_list("party_id", flat=True))
+    agreement_ids = approved_ids
     debtor_type = request.GET.get("type", "all")
     if debtor_type == "manual":
         rows = [item for item in rows if item["party"].pk not in agreement_ids]
@@ -1387,6 +1386,24 @@ def debts(request, branch):
             pk=payment_id, branch=branch, kind="collection"
         ).select_related("party").first()
 
+    all_customer_mandates = list(DebtMandate.objects.filter(
+        branch=branch, party=selected["party"],
+    ).order_by("-created_at")[:30]) if selected else []
+    # Each extra invoice gets an independent draft, with separate customer
+    # consent. Previously signed ceilings are never silently increased.
+    used_invoice_ids = {
+        str(m.terms_snapshot.get("source_document_id"))
+        for m in all_customer_mandates
+        if m.status not in {"failed", "cancelled", "settled"}
+        and isinstance(m.terms_snapshot, dict)
+        and m.terms_snapshot.get("source_document_id")
+    }
+    addable_invoices = [
+        (doc, balance)
+        for doc, balance in debt_service.open_customer_invoices(selected["party"])
+        if doc.finalized and str(doc.pk) not in used_invoice_ids
+    ] if selected else []
+
     return render(request, "debts.html", {
         "title": "Customer debts",
         "q": query,
@@ -1394,7 +1411,8 @@ def debts(request, branch):
         "overview": overview,
         "rows": rows,
         "debtor_type": debtor_type,
-        "selected_mandates": [item for item in agreement_rows if selected and item.party_id == selected["party"].pk],
+        "selected_mandates": all_customer_mandates,
+        "addable_invoices": addable_invoices,
         "online_debt_policy": online_debt_policy,
         "selected": selected,
         "methods": s.active_payment_methods(),

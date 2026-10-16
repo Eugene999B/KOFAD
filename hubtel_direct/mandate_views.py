@@ -52,7 +52,7 @@ def staff_create_mandate(request):
         if source_id:
             mandate = DebtMandate.objects.filter(
                 branch=branch, terms_snapshot__source_document_id=source_id
-            ).order_by("-created_at").first()
+            ).exclude(status__in=["cancelled", "failed", "settled"]).order_by("-created_at").first()
             if mandate:
                 if (str(mandate.party_id) != str(data.get("party"))
                         or mandate.channel != data.get("channel")
@@ -146,6 +146,7 @@ def staff_status(request, mandate_id):
     mandate = get_object_or_404(
         DebtMandate.objects.select_related("party"), pk=mandate_id, branch=branch,
     )
+    mandate = mandates.expire_stale_pending(mandate)
     return render(request, "hubtel_direct/debt_staff_waiting.html", {
         "mandate": mandate,
         "real_balance": mandates.mandate_outstanding(mandate),
@@ -166,6 +167,7 @@ def staff_authorization_status_json(request, mandate_id):
         "operate_finance" if request.user.has_perm("core.operate_finance") else "operate_sales",
     )
     mandate = get_object_or_404(DebtMandate, pk=mandate_id, branch=branch)
+    mandate = mandates.expire_stale_pending(mandate)
     response = JsonResponse({
         "status": mandate.status,
         "status_label": mandate.get_status_display(),
@@ -234,11 +236,12 @@ def staff_check_status(request, mandate_id):
     )
     mandate = get_object_or_404(DebtMandate, pk=mandate_id, branch=branch)
     try:
-        if mandate.status == "pending":
+        mandate = mandates.expire_stale_pending(mandate)
+        if mandate.status in {"pending", "expired_review", "cancel_pending", "suspended"}:
             mandates.refresh_preapproval(mandate)
-            messages.success(request, "Approval status checked directly with Hubtel.")
+            messages.info(request, "Provider status checked. A timed-out approval never becomes active automatically.")
         else:
-            messages.info(request, "No pending provider approval to check.")
+            messages.info(request, "There is no unconfirmed provider authorization to check.")
     except (ValidationError, client.StatusUnconfirmed) as exc:
         messages.error(request, str(exc))
     return redirect("hubtel_debt_staff_status", mandate_id=mandate.pk)
@@ -323,6 +326,7 @@ def _safe_mandate(mandate_id):
 @require_GET
 def customer_authorize(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
+    mandate = mandates.expire_stale_pending(mandate)
     # Random UUID is an unguessable bearer link, showing only the wallet suffix.
     # The actual wallet holder authorizes using Hubtel's USSD or provider OTP.
     return render(request, "hubtel_direct/debt_authorization.html", {
@@ -337,6 +341,7 @@ def customer_authorize(request, mandate_id):
 def customer_authorization_status_json(request, mandate_id):
     """Bearer-link status only. Never reveals wallet, schedule, identity or tokens."""
     mandate = _safe_mandate(mandate_id)
+    mandate = mandates.expire_stale_pending(mandate)
     confirmed = mandate.status == "approved" and bool(mandate.provider_approved_at)
     response = JsonResponse({
         "status": mandate.status,
@@ -357,6 +362,7 @@ def customer_authorization_status_json(request, mandate_id):
 @require_POST
 def customer_authorize_action(request, mandate_id):
     mandate = _safe_mandate(mandate_id)
+    mandate = mandates.expire_stale_pending(mandate)
     action = request.POST.get("action")
     if action not in {"start", "confirm", "hubtel_otp", "check", "wallet_code_send", "wallet_code_check"}:
         messages.error(request, "Choose an authorization action.")
@@ -457,11 +463,14 @@ def staff_cancel(request, mandate_id):
     core_services.permit(request.user, branch, "operate_finance")
     if mandate.branch_id != branch.pk:
         raise ValidationError("Mandate belongs to another branch.")
-    mandates.request_cancel(mandate)
+    mandate = mandates.request_cancel(mandate)
     core_services.audit(request.user, branch, "hubtel_debt.revoke_requested", str(mandate.pk), {
         "customer": mandate.party_id, "by": request.user.pk,
     })
-    messages.success(request, "Direct Debit disabled for this customer. Hubtel cancellation has been requested.")
+    if mandate.status in {"cancelled", "failed"}:
+        messages.success(request, "Old wallet authorization cleared. No automatic debits can use this arrangement.")
+    else:
+        messages.warning(request, "Debits blocked immediately. Awaiting confirmation from Hubtel before the wallet can start another authorization.")
     return redirect("/debts/?customer=" + str(mandate.party_id))
 
 

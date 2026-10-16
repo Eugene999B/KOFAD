@@ -101,7 +101,9 @@ class DebtMandate(models.Model):
     STATUSES = [
         ("draft", "Awaiting setup"), ("pending", "Awaiting customer authorization"),
         ("approved", "Approved by wallet holder"), ("cancel_pending", "Cancellation processing"),
-        ("cancelled", "Cancelled"), ("suspended", "Suspended"), ("settled", "Settled"),
+        ("cancelled", "Cancelled"), ("suspended", "Suspended — not active"),
+        ("expired_review", "Unsuccessful — approval timed out; clear provider request"),
+        ("settled", "Settled"),
         ("failed", "Authorization failed"),
     ]
     FREQUENCIES = [
@@ -143,7 +145,7 @@ class DebtMandate(models.Model):
             models.Index(fields=["branch", "status", "next_due_date"], name="hubtel_debt_due_idx"),
             models.Index(fields=["party", "-created_at"], name="hubtel_debt_party_idx"),
         ]
-        constraints = [models.UniqueConstraint(fields=["phone_fingerprint"], condition=models.Q(status__in=["draft", "pending", "approved", "cancel_pending", "suspended"]), name="hubtel_one_active_mandate_wallet")]
+        constraints = [models.UniqueConstraint(fields=["phone_fingerprint"], condition=models.Q(status__in=["pending", "approved", "cancel_pending", "suspended", "expired_review"]), name="hubtel_one_active_mandate_wallet")]
 
     @property
     def rollover_unpaid(self):

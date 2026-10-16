@@ -158,25 +158,30 @@ def create_plan(user, branch, *, party_id, phone, channel, frequency,
     fingerprint = hashlib.sha256((settings.SECRET_KEY + "|hubtel-debt-wallet|" + digits).encode()).hexdigest()
     if not party.consent:
         raise ValidationError("Record the customer's consent to payment communications first.")
-    blocking = ["draft", "pending", "approved", "cancel_pending", "suspended"]
-    if DebtMandate.objects.filter(party=party, status__in=blocking).exists():
-        raise ValidationError("This customer already has an active, suspended or pending direct-debit arrangement.")
-    if DebtMandate.objects.filter(phone_fingerprint=fingerprint, status__in=blocking).exists():
-        raise ValidationError(
-            "This wallet is still linked to an existing or suspended debt mandate. "
-            "The previous agreement must be cancelled and reconciled first."
-        )
-    # An already-cancelled wallet authority can still have a charge in
-    # flight. Do not authorize a replacement while the previous reference
-    # may have moved money. All customers sharing this wallet are covered.
-    if DebtDebitAttempt.objects.filter(
-        mandate__phone_fingerprint=fingerprint,
-        status__in=["sending", "pending", "unknown", "finance_review"],
-    ).exists():
-        raise ValidationError(
-            "A previous Hubtel debit on this wallet is not reconciled. "
-            "Finance must resolve its original payment reference first."
-        )
+    # An additional posted invoice may have its OWN draft schedule, even if
+    # another agreement exists. Never enlarge or reuse existing Hubtel authority:
+    # only one provider authorization per wallet can be in force at a time.
+    blocking = ["draft", "pending", "approved", "cancel_pending", "suspended", "expired_review"]
+    if not source:
+        if DebtMandate.objects.filter(party=party, status__in=blocking).exists():
+            raise ValidationError(
+                "Choose a specific unpaid invoice to add a new repayment draft. "
+                "The existing approval cannot be expanded without the wallet holder's consent."
+            )
+        if DebtMandate.objects.filter(phone_fingerprint=fingerprint, status__in=blocking).exists():
+            raise ValidationError(
+                "This wallet is linked to an existing agreement. "
+                "Select the new invoice to prepare a separate, unapproved draft."
+            )
+        if DebtDebitAttempt.objects.filter(
+            mandate__phone_fingerprint=fingerprint,
+            status__in=["sending", "pending", "unknown", "finance_review"],
+        ).exists():
+            raise ValidationError("Finance must reconcile the previous wallet debit before creating a new general mandate.")
+    elif DebtMandate.objects.filter(
+        party=party, terms_snapshot__source_document_id=str(source.pk),
+    ).exclude(status__in=["failed", "cancelled", "settled"]).exists():
+        raise ValidationError("This invoice already has an unfinished Direct Debit agreement. Open its existing record.")
     mandate = DebtMandate.objects.create(
         branch=branch, party=party, created_by=user,
         phone_encrypted=client.seal(digits), phone_fingerprint=fingerprint, phone_suffix=digits[-4:],
@@ -267,8 +272,11 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
     if source_id:
         source = Document.objects.filter(pk=source_id, branch=branch, party=row.party,
                                          kind="sale", finalized=True).first()
-        if source is None or source.balance <= ZERO or source.balance != balance:
-            raise ValidationError("Sale balance has changed or other invoices exist. Reconcile the account first.")
+        if source is None:
+            raise ValidationError("This sale is no longer available for an agreement.")
+        balance = core_services.balance(source)
+        if balance <= ZERO:
+            raise ValidationError("This invoice is already settled; no fresh authorization is needed.")
     if not policy.min_open_balance <= balance <= policy.max_open_balance:
         raise ValidationError("The customer's outstanding balance is outside the repayment limits.")
     calculated = None
@@ -299,20 +307,24 @@ def update_draft_plan(user, branch, mandate_id, *, phone=None, channel=None,
     fingerprint = hashlib.sha256(
         (settings.SECRET_KEY + "|hubtel-debt-wallet|" + digits).encode()
     ).hexdigest()
-    blocking = ["draft", "pending", "approved", "cancel_pending", "suspended"]
-    if DebtMandate.objects.filter(
-        party=row.party, status__in=blocking,
-    ).exclude(pk=row.pk).exists():
-        raise ValidationError("Another agreement is already active for this customer.")
-    if DebtMandate.objects.filter(
-        phone_fingerprint=fingerprint, status__in=blocking,
-    ).exclude(pk=row.pk).exists():
-        raise ValidationError("This wallet is already linked to another active agreement.")
-    if DebtDebitAttempt.objects.filter(
-        mandate__phone_fingerprint=fingerprint,
-        status__in=["sending", "pending", "unknown", "finance_review"],
-    ).exists():
-        raise ValidationError("Unresolved Hubtel wallet payments must be reconciled first.")
+    # Invoice-scoped drafts may be edited alongside an older authorization;
+    # this does not amend it or submit a network request. Generic whole-account
+    # drafts must remain exclusive to prevent overlapping debt coverage.
+    blocking = ["draft", "pending", "approved", "cancel_pending", "suspended", "expired_review"]
+    if not source_id:
+        if DebtMandate.objects.filter(
+            party=row.party, status__in=blocking,
+        ).exclude(pk=row.pk).exists():
+            raise ValidationError("Select a specific invoice before editing a second debt agreement.")
+        if DebtMandate.objects.filter(
+            phone_fingerprint=fingerprint, status__in=blocking,
+        ).exclude(pk=row.pk).exists():
+            raise ValidationError("This wallet already has an account-wide agreement.")
+        if DebtDebitAttempt.objects.filter(
+            mandate__phone_fingerprint=fingerprint,
+            status__in=["sending", "pending", "unknown", "finance_review"],
+        ).exists():
+            raise ValidationError("Reconcile older wallet debit attempts before editing a new general mandate.")
 
     previous = {
         "frequency": row.frequency, "due": row.first_due_date.isoformat(),
@@ -375,11 +387,31 @@ def prepare_customer_authorization(mandate):
     # Mark pending before provider POST so unknown outcomes are never repeated.
     debit_api.gate("preapproval")
     with transaction.atomic():
+        core_services.lock_branch(mandate.branch)
         locked = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
         if locked.status != "draft":
             raise ValidationError("Authorization has already been requested.")
+        # Multiple invoice drafts are fine; overlapping wallet authorizations
+        # are NOT. Recheck under the branch lock for concurrent cashiers.
+        if DebtMandate.objects.filter(
+            phone_fingerprint=locked.phone_fingerprint,
+            status__in=["pending", "approved", "suspended", "cancel_pending", "expired_review"],
+        ).exclude(pk=locked.pk).exists():
+            raise ValidationError(
+                "A previous wallet authorization must be cleared with Hubtel before requesting this new plan. "
+                "Your new invoice draft has been saved."
+            )
+        if DebtDebitAttempt.objects.filter(
+            mandate__phone_fingerprint=locked.phone_fingerprint,
+            status__in=["sending", "pending", "unknown", "finance_review"],
+        ).exists():
+            raise ValidationError("A previous wallet debit is unresolved. Finance must reconcile it before a new approval.")
         locked.status = "pending"
-        locked.save(update_fields=["status", "updated_at"])
+        locked.terms_snapshot = {
+            **(locked.terms_snapshot or {}),
+            "approval_requested_at": timezone.now().isoformat(),
+        }
+        locked.save(update_fields=["status", "terms_snapshot", "updated_at"])
     try:
         result = debit_api.initiate_preapproval(
             phone=mandate_phone(mandate), channel=mandate.channel,
@@ -411,9 +443,55 @@ def prepare_customer_authorization(mandate):
     return result
 
 
+def expire_stale_pending(mandate, *, now=None):
+    """Locally expire a 10-minute unapproved request; never infer provider cancellation.
+
+    Unknown provider outcomes remain wallet-locked until independently checked
+    or explicitly cancelled. An expired request can never authorize a debit.
+    """
+    from django.utils.dateparse import parse_datetime
+
+    if mandate.status != "pending":
+        return mandate
+    now = now or timezone.now()
+    sent = parse_datetime((mandate.terms_snapshot or {}).get("approval_requested_at", ""))
+    if sent is None:
+        sent = mandate.updated_at
+    if timezone.is_naive(sent):
+        sent = timezone.make_aware(sent, timezone.get_current_timezone())
+    if now - sent < timedelta(minutes=10):
+        return mandate
+    with transaction.atomic():
+        row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
+        if row.status != "pending":
+            return row
+        sent = parse_datetime((row.terms_snapshot or {}).get("approval_requested_at", "")) or row.updated_at
+        if timezone.is_naive(sent):
+            sent = timezone.make_aware(sent, timezone.get_current_timezone())
+        if now - sent >= timedelta(minutes=10):
+            row.status = "expired_review"
+            row.terms_snapshot = {
+                **(row.terms_snapshot or {}),
+                "local_approval_timeout_at": now.isoformat(),
+            }
+            row.save(update_fields=["status", "terms_snapshot", "updated_at"])
+        return row
+
+
+def expire_stale_pending_batch(limit=50):
+    """Local expiry can run even if Hubtel credentials/egress are unavailable."""
+    now = timezone.now()
+    count = 0
+    for mandate in DebtMandate.objects.filter(status="pending").order_by("updated_at", "pk")[:max(1, min(limit, 100))]:
+        if expire_stale_pending(mandate, now=now).status == "expired_review":
+            count += 1
+    return count
+
+
 def refresh_preapproval(mandate):
     """Check Hubtel from the whitelisted web server; callbacks are advisory only."""
-    if mandate.status not in {"pending", "approved", "suspended", "cancel_pending"}:
+    mandate = expire_stale_pending(mandate)
+    if mandate.status not in {"pending", "approved", "suspended", "cancel_pending", "expired_review"}:
         return mandate
     state = debit_api.preapproval_status(
         mandate.client_reference, expected_phone=mandate_phone(mandate),
@@ -423,16 +501,20 @@ def refresh_preapproval(mandate):
         row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
         row.last_provider_check_at = timezone.now()
         if state == "CANCELLED":
-            # A customer may independently revoke the Hubtel-side approval.
-            # Reflect that final cancellation instead of leaving a misleading
-            # suspended/failed label or permitting automatic reactivation.
-            row.status = "cancelled"
+            # Original authority was independently revoked at Hubtel.
+            row.status = ("failed" if (row.terms_snapshot or {}).get("closed_without_approval")
+                          or row.status == "expired_review" else "cancelled")
             row.cancelled_at = timezone.now()
         elif row.status == "pending":
             if state == "APPROVED":
                 row.status = "approved"
                 row.provider_approved_at = timezone.now()
             elif state in {"FAILED", "REJECTED", "EXPIRED"}:
+                row.status = "failed"
+        elif row.status == "expired_review":
+            # A late provider APPROVED does not override the 10-minute local
+            # deadline. It must be explicitly revoked before another plan.
+            if state in {"FAILED", "REJECTED", "EXPIRED"}:
                 row.status = "failed"
         elif row.status == "approved" and state != "APPROVED":
             row.status = "suspended"
@@ -466,9 +548,12 @@ def request_cancel(mandate):
                 return row
             row.save(update_fields=["updated_at"])
         else:
+            old_status = row.status
             row.status = "cancel_pending"
             row.cancellation_requested_at = timezone.now()
-            row.save(update_fields=["status", "cancellation_requested_at", "updated_at"])
+            if old_status in {"pending", "expired_review"}:
+                row.terms_snapshot = {**(row.terms_snapshot or {}), "closed_without_approval": True}
+            row.save(update_fields=["status", "cancellation_requested_at", "terms_snapshot", "updated_at"])
     try:
         debit_api.cancel_preapproval(mandate_phone(row))
     except (client.StatusUnconfirmed, ValidationError):
@@ -479,7 +564,8 @@ def request_cancel(mandate):
     with transaction.atomic():
         row = DebtMandate.objects.select_for_update().get(pk=mandate.pk)
         if row.status == "cancel_pending":
-            row.status = "cancelled"
+            row.status = ("failed" if (row.terms_snapshot or {}).get("closed_without_approval")
+                          else "cancelled")
             row.cancelled_at = timezone.now()
             row.save(update_fields=["status", "cancelled_at", "updated_at"])
     return row
@@ -874,7 +960,7 @@ def cancel_fully_paid(limit=50):
         status="cancel_pending", updated_at__lte=cooldown,
     ).order_by("updated_at", "pk")[:limit]
     for mandate in pending:
-        if request_cancel(mandate).status == "cancelled":
+        if request_cancel(mandate).status in {"cancelled", "failed"}:
             confirmed += 1
 
     # Round-robin scanning prevents the same first 25 unpaid customers from

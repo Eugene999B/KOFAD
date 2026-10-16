@@ -59,6 +59,9 @@ def internal_reconcile(request):
     # ALL provider HTTP from the allowlisted WEB service only. The SMS
     # worker triggers this authenticated endpoint; never calls Hubtel.
     from . import mandates as debt_mandates
+    # A local 10-minute deadline is enforceable even when Hubtel is offline.
+    # This never initiates a debit, resubmits a prompt or claims provider cancellation.
+    debt_mandates.expire_stale_pending_batch(limit=50)
     # Read-only verification and cancellation remain available when new
     # customer authorizations or outgoing debits are disabled. A safety
     # shutdown MUST NOT strand in-flight payments or wallet revocation.

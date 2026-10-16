@@ -52,6 +52,74 @@ class DebtMandateTests(Fixtures, TestCase):
         kw.update(kwargs)
         return mandates.create_plan(self.user, self.branch, **kw)
 
+    def test_pending_approval_expires_at_ten_minutes_without_claiming_provider_failure(self):
+        plan = self.plan()
+        past = timezone.now() - timedelta(minutes=11)
+        snapshot = {**plan.terms_snapshot, "approval_requested_at": past.isoformat()}
+        DebtMandate.objects.filter(pk=plan.pk).update(status="pending", terms_snapshot=snapshot)
+        plan.refresh_from_db()
+        with patch("hubtel_direct.debit_api.preapproval_status") as provider:
+            expired = mandates.expire_stale_pending(plan)
+            self.assertEqual(expired.status, "expired_review")
+            self.assertNotEqual(expired.status, "approved")
+            provider.assert_not_called()
+        with patch("hubtel_direct.debit_api.preapproval_status", return_value="APPROVED"):
+            result = mandates.refresh_preapproval(expired)
+            self.assertEqual(result.status, "expired_review")
+            self.assertIsNone(result.provider_approved_at)
+
+    @patch("hubtel_direct.debit_api.cancel_preapproval", return_value=True)
+    def test_clearing_expired_approval_requires_provider_confirmation(self, provider):
+        plan = self.plan()
+        old = timezone.now() - timedelta(minutes=11)
+        DebtMandate.objects.filter(pk=plan.pk).update(
+            status="pending",
+            terms_snapshot={**plan.terms_snapshot, "approval_requested_at": old.isoformat()},
+        )
+        plan.refresh_from_db()
+        expired = mandates.expire_stale_pending(plan)
+        cleared = mandates.request_cancel(expired)
+        self.assertEqual(cleared.status, "failed")
+        self.assertIsNotNone(cleared.cancelled_at)
+        provider.assert_called_once()
+
+    @patch("hubtel_direct.debit_api.cancel_preapproval",
+           side_effect=client.StatusUnconfirmed("provider unavailable"))
+    def test_uncertain_expired_clear_keeps_wallet_reserved(self, provider):
+        plan = self.plan()
+        old = timezone.now() - timedelta(minutes=11)
+        DebtMandate.objects.filter(pk=plan.pk).update(
+            status="pending",
+            terms_snapshot={**plan.terms_snapshot, "approval_requested_at": old.isoformat()},
+        )
+        expired = mandates.expire_stale_pending(DebtMandate.objects.get(pk=plan.pk))
+        result = mandates.request_cancel(expired)
+        self.assertEqual(result.status, "cancel_pending")
+        self.assertIsNone(result.cancelled_at)
+        provider.assert_called_once()
+
+    def test_additional_invoice_draft_does_not_reuse_existing_wallet_authority(self):
+        previous = self.plan()
+        DebtMandate.objects.filter(pk=previous.pk).update(
+            status="approved", provider_approved_at=timezone.now(),
+        )
+        invoice = Document.objects.create(
+            id=uuid.uuid4(), branch=self.branch, party=self.customer,
+            kind="sale", finalized=True, total=Decimal("400.00"),
+            paid=Decimal("0.00"), due_date=timezone.localdate() + timedelta(days=7),
+            reference="SECOND-CREDIT-INVOICE", created_by=self.user,
+        )
+        new_plan = self.plan(
+            source_document_id=str(invoice.pk),
+            maximum_total="400", amount_per_period="100",
+        )
+        self.assertEqual(new_plan.status, "draft")
+        self.assertEqual(new_plan.terms_snapshot["source_document_id"], str(invoice.pk))
+        with patch("hubtel_direct.debit_api.initiate_preapproval") as submit:
+            with self.assertRaisesRegex(ValidationError, "previous wallet authorization"):
+                mandates.prepare_customer_authorization(new_plan)
+            submit.assert_not_called()
+
     def test_draft_prevents_any_money_movement(self):
         plan = self.plan()
         self.assertEqual(plan.status, "draft")

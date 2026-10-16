@@ -97,7 +97,11 @@
         <strong>{{ mandate.get_status_display }} · {{ mandate.get_frequency_display }}</strong>
         <span>Wallet ending {{ mandate.phone_suffix }} · GHS {{ mandate.amount_per_period|floatformat:2 }} per period · maximum GHS {{ mandate.maximum_total|floatformat:2 }}</span>
         <span>Next due {{ mandate.next_due_date|date:"d M Y" }} · paid GHS {{ mandate.collected_total|floatformat:2 }}</span>
-        {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Collection suspended.</strong> Do not start another automatic debit until finance resolves the existing provider authorization or transaction evidence. Customer can still make a manual payment.</p>{% endif %}
+        {% if mandate.status == "suspended" %}<p class="notice subtle"><strong>Not active — suspended.</strong> No automatic debit may use this agreement. Clear with Hubtel before authorizing another plan.</p>
+        {% elif mandate.status == "expired_review" %}<p class="notice subtle"><strong>Unsuccessful — not approved within 10 minutes.</strong> KOFAD has disabled this request locally. Provider cancellation must be confirmed before the wallet can be used again.</p>
+        {% elif mandate.status == "cancel_pending" %}<p class="notice subtle"><strong>Not active — cancellation awaiting Hubtel confirmation.</strong> Do not assume the old provider authority is cleared yet.</p>
+        {% elif mandate.status == "pending" %}<p class="notice subtle"><strong>Waiting for customer approval (maximum 10 minutes).</strong> Not an active Direct Debit.</p>
+        {% elif mandate.status == "failed" %}<p class="notice subtle"><strong>Unsuccessful.</strong> This agreement cannot make collections. Unpaid invoices remain on the account.</p>{% endif %}
         <p><a class="button secondary" href="{% url 'hubtel_debt_staff_status' mandate.pk %}">Approval status & payment dates →</a> <a class="button secondary" href="{% url 'hubtel_debt_authorize' mandate.pk %}" target="_blank" rel="noopener">Customer approval ↗</a></p>
         {% if mandate.terms_snapshot.installment_count %}
         <span>{{ mandate.terms_snapshot.installment_count }} payments · final collection {{ mandate.terms_snapshot.last_due_date }} · {{ mandate.terms_snapshot.collection_window }}</span>
@@ -136,32 +140,38 @@
         {% endif %}
         {% if perms.core.operate_finance and mandate.status != "cancelled" and mandate.status != "settled" %}
         <form action="{% url 'hubtel_debt_staff_cancel' mandate.pk %}" method="post">{% csrf_token %}
-          <button type="submit" class="button secondary" onclick="return confirm('Stop future debit requests for this customer?')">Stop direct debit</button>
+          <button type="submit" class="button secondary" onclick="return confirm('Disable this arrangement locally and request cancellation with Hubtel? Only provider-confirmed clearing releases the wallet for new approval.')">{% if mandate.status == 'suspended' %}Clear suspended authorization{% elif mandate.status == 'pending' or mandate.status == 'expired_review' %}Clear unsuccessful/pending request{% elif mandate.status == 'cancel_pending' %}Check cancellation{% else %}Stop direct debit{% endif %}</button>
         </form>
         {% endif %}
       </div>
       {% empty %}
-      <div class="notice subtle">This customer is currently a manual debtor, without a Direct Debit agreement.</div>
-      {% if perms.core.operate_finance and online_debt_policy and online_debt_policy.plan_creation_enabled %}
-      <details class="debt-direct-setup" style="margin-top:15px">
-       <summary class="button secondary" style="cursor:pointer">Offer a Direct Debit repayment plan</summary>
-       <form method="post" action="{% url 'hubtel_debt_create' %}" style="display:grid;gap:12px;max-width:640px;margin-top:16px">
+      <div class="notice subtle">No Direct Debit agreement has been recorded for this customer.</div>
+      {% endfor %}
+
+    {% if perms.core.operate_finance and online_debt_policy and online_debt_policy.plan_creation_enabled %}
+    <details class="debt-direct-setup" style="margin-top:15px">
+      <summary class="button secondary" style="cursor:pointer">Add a repayment plan for another invoice</summary>
+      <p class="muted">Adding a new invoice never changes a previous authorization or collects funds. This saves a draft for separate wallet-holder approval. The older provider authority must be cleared before requesting a new approval.</p>
+      {% if addable_invoices %}
+      <form method="post" action="{% url 'hubtel_debt_create' %}" style="display:grid;gap:12px;max-width:640px;margin-top:16px">
         {% csrf_token %}<input type="hidden" name="party" value="{{ selected.party.pk }}">
-        <p class="muted">The wallet holder must approve before collection.</p>
+        <label>Invoice to add<select name="source_document_id" required>
+          {% for invoice, remaining in addable_invoices %}
+            <option value="{{ invoice.pk }}">{{ invoice.reference }} — GHS {{ remaining|floatformat:2 }} remaining</option>
+          {% endfor %}
+        </select></label>
         <label>Wallet number<input type="tel" name="phone" value="{{ selected.party.phone }}" autocomplete="off" required></label>
         <label>Network<select name="channel">{% if online_debt_policy.allow_mtn %}<option value="mtn-gh-direct-debit">MTN Mobile Money</option>{% endif %}{% if online_debt_policy.allow_telecel %}<option value="vodafone-gh-direct-debit">Telecel Cash</option>{% endif %}</select></label>
         <label>Payment schedule<select name="frequency">{% if online_debt_policy.allow_weekly %}<option value="weekly">Weekly</option>{% endif %}{% if online_debt_policy.allow_daily %}<option value="daily">Daily</option>{% endif %}{% if online_debt_policy.allow_monthly %}<option value="monthly">Monthly</option>{% endif %}{% if online_debt_policy.allow_quarterly %}<option value="quarterly">Quarterly</option>{% endif %}{% if online_debt_policy.allow_yearly %}<option value="yearly">Yearly</option>{% endif %}{% if online_debt_policy.allow_once %}<option value="once">Once after agreed grace period</option>{% endif %}</select></label>
         <label>First payment due<input type="date" name="first_due_date" required></label>
         <label>Repayment end date<input type="date" name="final_due_date" required></label>
-        <p class="muted">Outstanding balance: GHS {{ selected.outstanding|floatformat:2 }}. KOFAD calculates the number of payments and all amounts from the first date, final date and frequency.</p>
-
-        <button type="submit" class="button">Create agreement for customer authorization</button>
-       </form>
-      </details>
-      {% elif perms.core.operate_finance %}
-      <div class="notice subtle">New repayment agreement setup is paused by management.</div>
-      {% endif %}
-      {% endfor %}
+        <button type="submit" class="button">Save new invoice repayment draft</button>
+      </form>
+      {% else %}<p class="muted">There is no unpaid invoice available for a new agreement. Existing agreements and their invoices are listed above.</p>{% endif %}
+    </details>
+    {% elif perms.core.operate_finance %}
+    <div class="notice subtle">New repayment agreement setup is paused by management.</div>
+    {% endif %}
     </section>
 
     <div class="notice subtle"><strong>Debt email:</strong> {% if selected.party.debt_email_opt_in and selected.party.email %}Enabled for {{ selected.party.email }}{% elif selected.party.email %}Off · customer email saved, but debt email preference is disabled{% else %}Off · no customer email confirmed{% endif %}. <a href="{% url 'customer_profile' selected.party.pk %}">View customer record</a>.</div>
