@@ -118,7 +118,7 @@ class FastMarketVerificationTests(MarketFixtures):
         request.user = self.staff
         SessionMiddleware(lambda req: None).process_request(request)
         request._messages = FallbackStorage(request)
-        response = staff_order.__wrapped__(request, self.branch, pk=self.market_order.pk)
+        response = staff_order.__wrapped__.__wrapped__(request, self.branch, pk=self.market_order.pk)
         self.assertEqual(response["Location"], f"/online-orders/{self.market_order.pk}/")
         self.assertEqual(response.status_code, 302)
         self.market_order.refresh_from_db()
