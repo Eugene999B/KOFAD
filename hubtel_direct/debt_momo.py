@@ -19,7 +19,18 @@ from . import client, verification
 from .models import DebtMomoCollection, DebtDebitAttempt
 
 IN_FLIGHT = ("initializing", "pending", "submission_unknown")
-CHECK_WAIT = timedelta(minutes=5)
+CHECK_WAIT = timedelta(seconds=20)
+RECHECK_WAIT = timedelta(seconds=30)
+
+
+def ready_for_check(row, now=None):
+    """Read-only status inquiry is due; never starts another payment request."""
+    now = now or timezone.now()
+    return (
+        row.status in IN_FLIGHT
+        and now >= row.created_at + CHECK_WAIT
+        and (row.checked_at is None or now >= row.checked_at + RECHECK_WAIT)
+    )
 
 
 def _gateway_transaction(row):
@@ -120,7 +131,7 @@ def reconcile(row_id):
     if not row or row.status not in IN_FLIGHT:
         return row
     now = timezone.now()
-    if now - row.created_at < CHECK_WAIT:
+    if not ready_for_check(row, now):
         return row
     if now - row.created_at > timedelta(hours=72):
         DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(status="attention", next_check_at=None)
@@ -131,7 +142,7 @@ def reconcile(row_id):
         final, provider_id = gateway.check(_gateway_transaction(row))
     except gateway.StatusUnconfirmed:
         DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
-            checked_at=now, next_check_at=now + CHECK_WAIT,
+            checked_at=now, next_check_at=now + RECHECK_WAIT,
         )
         row.refresh_from_db()
         return row
@@ -145,7 +156,7 @@ def reconcile(row_id):
 
     if final == "pending":
         DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
-            checked_at=now, next_check_at=now + CHECK_WAIT,
+            checked_at=now, next_check_at=now + RECHECK_WAIT,
         )
     elif final == "failed":
         DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
