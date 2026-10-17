@@ -45,6 +45,10 @@ jobs:
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - name: Verify Google Apps Script syntax
         run: node --check --input-type=commonjs < ops/google_drive_weekly_backup.gs
+      - name: Prepare branding and static assets
+        run: |
+          python scripts/prepare_logo.py
+          python manage.py collectstatic --noinput
       - name: Verify Django migration graph
         run: python manage.py migrate --noinput
       - name: Verify opt-in signed export and restorable encryption
