@@ -196,15 +196,24 @@ class HubtelContractTests(TestCase):
     @patch("marketplace.hubtel.requests.get")
     def test_refunded_checkout_can_have_original_success_transaction(self, get):
         get.return_value = Mock(status_code=200)
-        get.return_value.json.return_value = {
-            "ResponseCode": "0000", "Data": [{
-                "ClientReference": "ref1", "Status": "Refunded",
-                "TransactionStatus": "Success", "InvoiceStatus": "Success",
-                "TransactionId": "txn-original", "TransactionAmount": 1,
-                "CurrencyCode": "GHS",
-            }],
-        }
-        self.assertEqual(hubtel.verify("ref1")["status"], "Refunded")
+        # A historical successful transaction cannot override either the
+        # checkout-level or invoice-level refund state.
+        for checkout, invoice in [
+            ("Refunded", "Success"),
+            ("Paid", "Refunded"),
+            ("Unpaid", "Refunded"),
+            ("Paid", "Refund"),
+        ]:
+            with self.subTest(checkout=checkout, invoice=invoice):
+                get.return_value.json.return_value = {
+                    "ResponseCode": "0000", "Data": [{
+                        "ClientReference": "ref1", "Status": checkout,
+                        "TransactionStatus": "Success", "InvoiceStatus": invoice,
+                        "TransactionId": "txn-original", "TransactionAmount": 1,
+                        "CurrencyCode": "GHS",
+                    }],
+                }
+                self.assertEqual(hubtel.verify("ref1")["status"], "Refunded")
 
     @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
