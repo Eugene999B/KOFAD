@@ -143,7 +143,9 @@ class DebtMomoFastVerificationTests(Fixtures, TestCase):
         DebtMomoCollection.objects.filter(pk=self.row.pk).update(status="attention")
         detail_url = reverse("hubtel_debt_momo_status", args=[self.row.pk])
         check_url = reverse("hubtel_debt_momo_check", args=[self.row.pk])
-        self.assertTrue(self.client.get(detail_url).context["can_check"])
+        page = self.client.get(detail_url)
+        self.assertTrue(page.context["can_check"])
+        self.assertContains(page, "Recheck original payment")
         with patch("hubtel_direct.client.check", side_effect=ValidationError("provider mismatch")) as verify, \
              patch("hubtel_direct.client.submit") as charge:
             response = self.client.post(check_url)
