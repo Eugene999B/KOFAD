@@ -286,13 +286,17 @@ def verify(reference):
             invoice_states.get(invoice_status),
         ) if state
     ]
+    # A refund overrides historical "Paid" or "Success" evidence. Otherwise
+    # a checkout with Status=Paid and InvoiceStatus=Refunded could be fulfilled.
     if "refunded" not in observed and len(set(observed)) > 1:
         raise services.PaymentVerificationUnavailable(
             "Hubtel returned contradictory payment statuses; manual reconciliation is required."
         )
 
     status = ""
-    if direct_status in {"paid", "unpaid", "refunded"}:
+    if "refunded" in observed:
+        status = "Refunded"
+    elif direct_status in {"paid", "unpaid", "refunded"}:
         status = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}[direct_status]
     elif transaction_status == "success" and invoice_status in {"success", "paid"}:
         status = "Paid"
