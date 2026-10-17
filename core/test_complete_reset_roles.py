@@ -90,6 +90,9 @@ class RoleEditorCompletenessTests(TestCase):
         self.branch = Branch.objects.create(name="Main", code="main", active=True)
         Company.objects.create()
         self.owner.access.branches.add(self.branch)
+        # Branch membership changes revoke older sessions. Refresh the
+        # signal-incremented access version before creating this test session.
+        self.owner.access.refresh_from_db()
         self.client.force_login(self.owner)
         session = self.client.session
         session["branch"] = self.branch.pk
