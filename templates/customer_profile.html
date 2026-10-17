@@ -15,11 +15,11 @@
 </div>
 
 {% if account.outstanding and perms.core.operate_finance %}
-<section class="panel"><div class="section-heading"><div><h2>Receive account payment</h2><p class="muted">One payment can settle several receipts. KOFAD applies it oldest due first and preserves the allocation on the receipt trail.</p></div></div>
-<div class="two-column">
+<section class="panel"><div class="section-heading"><div><h2>Receive account payment</h2><p class="muted">Cash, bank and other enabled manual payments are applied to the oldest receipt first. For Mobile Money use the <a href="{% url 'debts' %}?customer={{ party.pk }}">Hubtel-verified Debt Desk</a>; a payment request alone never creates a receipt.</p></div></div>
+{% if methods %}<div class="two-column">
 <form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><input type="hidden" name="pay_full" value="1"><label>Channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label><label>Reference<input name="reference" maxlength="100"></label><button class="button wide">Pay full balance · {{ account.outstanding|floatformat:2 }}</button></form>
 <form method="post">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><label>Partial amount<input name="amount" type="number" min=".01" max="{{ account.outstanding }}" step=".01" required></label><label>Channel<select name="method">{% for value,label in methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label><label>Reference<input name="reference" maxlength="100"></label><button class="button secondary wide">Record partial payment</button></form>
-</div></section>
+</div>{% else %}<p class="muted">No manual collection channels are currently enabled. Use the Debt Desk for a verified Mobile Money request.</p>{% endif %}</section>
 {% endif %}
 
 <section class="panel"><div class="section-heading"><div><h2>Open credit receipts</h2><p class="muted">Each sale remains its own accounting record even though the customer has one combined balance.</p></div></div>

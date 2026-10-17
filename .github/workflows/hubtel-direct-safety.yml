@@ -29,6 +29,7 @@ jobs:
       DJANGO_SECRET_KEY: test-only-hubtel-direct-integration-secret-1234
       DJANGO_DEBUG: "1"
       SECURE_SSL_REDIRECT: "0"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,testserver,kofadimpex.com,market.kofadimpex.com,staff.kofadimpex.com"
       HUBTEL_DIRECT_RECEIVE_ENABLED: "0"
       HUBTEL_DIRECT_SEND_MOMO_ENABLED: "0"
       HUBTEL_DIRECT_SEND_BANK_ENABLED: "0"

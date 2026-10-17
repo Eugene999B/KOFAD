@@ -169,13 +169,15 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         response = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="action" value="start"')
-        self.assertContains(response, "Verify your wallet")
-        self.assertContains(response, 'name="action" value="wallet_code_send"')
-        self.assertContains(response, 'name="action" value="wallet_code_check"')
-        self.assertContains(response, "Verify number")
-        self.assertNotContains(response, "Hubtel, not KOFAD SMS")
+        self.assertContains(response, 'name="accepted_terms" value="yes"')
+        self.assertContains(response, "Request Mobile Money approval")
+        self.assertContains(response, "wallet provider")
+        # The KOFAD-owned SMS/name inquiry is not a prerequisite for Hubtel
+        # wallet-holder verification through the provider's USSD/OTP.
+        self.assertNotContains(response, 'name="action" value="wallet_code_send"')
+        self.assertNotContains(response, 'name="action" value="wallet_code_check"')
 
-    def test_customer_must_verify_wallet_phone_and_provider_name_first(self):
+    def test_customer_must_accept_schedule_before_provider_authorization(self):
         from django.urls import reverse
         plan = mandates.create_plan(
             self.user, self.branch, party_id=self.customer.pk,
@@ -184,25 +186,18 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         )
         url = reverse("hubtel_debt_authorize_action", args=[plan.pk])
         with patch("hubtel_direct.mandates.prepare_customer_authorization") as provider:
-            response = self.client.post(url, {"action": "start", "accepted_terms": "yes"})
+            response = self.client.post(url, {"action": "start"})
             self.assertEqual(response.status_code, 302)
             provider.assert_not_called()
-        with patch("hubtel_direct.mandate_views.sms_service.send_otp") as otp:
-            response = self.client.post(url, {"action": "wallet_code_send"})
+        with patch("hubtel_direct.verification.inquiry",
+                   side_effect=AssertionError("optional name inquiry cannot authorize a debit")), \
+             patch("hubtel_direct.mandates.prepare_customer_authorization",
+                   return_value={"verification_type": "USSD"}) as provider:
+            response = self.client.post(url, {"action": "start", "accepted_terms": "yes"})
             self.assertEqual(response.status_code, 302)
-            otp.assert_called_once()
-        with patch("hubtel_direct.mandate_views.sms_service.verify_otp") as otp_check, \
-             patch("hubtel_direct.verification.inquiry", return_value={
-                "phone": "233241234567", "channel": "mtn-gh",
-                "wallet_name": "Test Wallet Holder", "registered": True,
-             }) as verified:
-            response = self.client.post(url, {"action": "wallet_code_check", "code": "123456"})
-            self.assertEqual(response.status_code, 302)
-            otp_check.assert_called_once()
-            verified.assert_called_once()
-        page = self.client.get(reverse("hubtel_debt_authorize", args=[plan.pk]))
-        self.assertContains(page, "Test Wallet Holder")
-        self.assertEqual(plan.status, "draft")
+            provider.assert_called_once()
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "draft")  # Provider POST was mocked; no approval exists.
 
     def test_agreement_sms_is_disclosure_only_not_hubtel_authorization(self):
         from django.urls import reverse
@@ -394,32 +389,27 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         url = reverse("hubtel_debt_staff_prompt", args=[plan.pk])
         enabled_page = self.client.get(reverse("hubtel_debt_staff_status", args=[plan.pk]))
         self.assertContains(enabled_page, "Request wallet approval")
-        self.assertContains(enabled_page, "Confirmed wallet holder name")
-        with patch("hubtel_direct.verification.inquiry", return_value={
-            "wallet_name": "Verified Wallet Owner",
-        }) as wallet, patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
-            "provider_id": "hubtel-authorization-123", "verification_type": "USSD",
-            "otp_prefix": "", "status": "PENDING",
-        }) as provider, patch("hubtel_direct.debit_api.debit_charge") as debit:
-            missing_name = self.client.post(url, {
+        self.assertContains(enabled_page, "Hubtel will send USSD approval")
+        with patch("hubtel_direct.verification.inquiry",
+                   side_effect=AssertionError("optional wallet-name API should not run")), \
+             patch("hubtel_direct.debit_api.initiate_preapproval", return_value={
+                 "provider_id": "hubtel-authorization-123", "verification_type": "USSD",
+                 "otp_prefix": "", "status": "PENDING",
+             }) as provider, patch("hubtel_direct.debit_api.debit_charge") as debit:
+            missing_consent = self.client.post(url, {
                 "customer_requested_prompt": "yes",
-                "customer_reviewed_schedule": "yes",
-                "confirmed_wallet_name": "Different Name",
             })
-            self.assertEqual(missing_name.status_code, 302)
+            self.assertEqual(missing_consent.status_code, 302)
             provider.assert_not_called()
             first = self.client.post(url, {
                 "customer_requested_prompt": "yes",
                 "customer_reviewed_schedule": "yes",
-                "confirmed_wallet_name": "Verified Wallet Owner",
             })
             self.assertEqual(first.status_code, 302)
             provider.assert_called_once()
-            wallet.assert_called()
             repeat = self.client.post(url, {
                 "customer_requested_prompt": "yes",
                 "customer_reviewed_schedule": "yes",
-                "confirmed_wallet_name": "Verified Wallet Owner",
             })
             self.assertEqual(repeat.status_code, 302)
             provider.assert_called_once()
@@ -443,7 +433,7 @@ class AutomaticScheduleIntegrationTests(Fixtures, TestCase):
         response = self.client.get(reverse("hubtel_debt_staff_status", args=[plan.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No network authorization has been sent yet")
-        self.assertContains(response, "Network preapproval is not configured.")
+        self.assertContains(response, "Network preapproval is not enabled")
         self.assertNotContains(response, '<button class="button" type="submit">Request wallet approval</button>')
         self.assertContains(response, "GHS 800.00")
         self.assertContains(response, "Open customer approval page")
