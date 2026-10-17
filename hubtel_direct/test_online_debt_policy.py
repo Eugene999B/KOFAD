@@ -43,6 +43,72 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         )
         self.policy = OnlineDebtSettings.objects.create(branch=self.branch)
 
+    def _saved_staff_momo_intent(self, request_key, *, amount="100.00"):
+        from . import client
+        from .models import DebtMomoCollection
+        return DebtMomoCollection.objects.create(
+            request_key=request_key, branch=self.branch, party=self.customer,
+            requested_by=self.user, amount=Decimal(amount),
+            channel="mtn-gh", phone_encrypted=client.seal("233241234567"),
+            phone_suffix="4567", wallet_name="Verified Customer",
+            reference=uuid.uuid4().hex, status="pending",
+        )
+
+    def test_concurrent_identical_staff_momo_replay_returns_existing_intent(self):
+        """A matching key created during wallet inquiry must not be rejected or sent again."""
+        from . import debt_momo
+        key = uuid.uuid4()
+        created = []
+
+        def concurrent_request(*args, **kwargs):
+            created.append(self._saved_staff_momo_intent(key))
+            return {"wallet_name": "Verified Customer"}
+
+        with patch("hubtel_direct.verification.inquiry", side_effect=concurrent_request) as inquiry, \
+             patch("hubtel_direct.client.submit") as send:
+            existing = debt_momo.start(
+                self.user, self.branch, party_id=self.customer.pk, amount="100.00",
+                phone="0241234567", channel="mtn-gh",
+                wallet_name="Verified Customer", request_key=key, consent=True,
+            )
+        self.assertEqual(existing.pk, created[0].pk)
+        self.assertEqual(existing.status, "pending")
+        inquiry.assert_called_once()
+        send.assert_not_called()
+
+    def test_concurrent_mismatched_staff_momo_replay_cannot_rebind_request_key(self):
+        """Even under the branch lock a request key must keep its original amount."""
+        from . import debt_momo
+        from .models import DebtMomoCollection
+        key = uuid.uuid4()
+
+        def concurrent_request(*args, **kwargs):
+            self._saved_staff_momo_intent(key, amount="100.00")
+            return {"wallet_name": "Verified Customer"}
+
+        with patch("hubtel_direct.verification.inquiry", side_effect=concurrent_request), \
+             patch("hubtel_direct.client.submit") as send:
+            with self.assertRaisesMessage(ValidationError, "belongs to another transaction"):
+                debt_momo.start(
+                    self.user, self.branch, party_id=self.customer.pk, amount="120.00",
+                    phone="0241234567", channel="mtn-gh",
+                    wallet_name="Verified Customer", request_key=key, consent=True,
+                )
+        self.assertEqual(DebtMomoCollection.objects.filter(request_key=key).count(), 1)
+        self.assertEqual(DebtMomoCollection.objects.get(request_key=key).amount, Decimal("100.00"))
+        send.assert_not_called()
+
+    def test_staff_momo_rejects_unicode_and_oversized_customer_ids(self):
+        from . import debt_momo
+        for customer_id in ("²", "12" * 3000, "-1", "9223372036854775808"):
+            with self.subTest(customer_id=customer_id[:30]):
+                with self.assertRaisesMessage(ValidationError, "Select a customer debt account"):
+                    debt_momo.start(
+                        self.user, self.branch, party_id=customer_id, amount="100.00",
+                        phone="0241234567", channel="mtn-gh",
+                        wallet_name="Verified Customer", request_key=uuid.uuid4(), consent=True,
+                    )
+
     def draft(self, **kwargs):
         args = {
             "party_id": self.customer.pk, "phone": "0241234567",
