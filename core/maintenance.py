@@ -29,7 +29,8 @@ from .models import Access, Audit, Branch, Company
 
 
 BACKUP_FORMAT = "kofad-full-system-backup"
-BACKUP_VERSION = 2
+BACKUP_VERSION = 3
+LEGACY_BACKUP_VERSION = 2
 MAX_BACKUP_BYTES = 100 * 1024 * 1024
 MAX_ENCRYPTED_BACKUP_BYTES = MAX_BACKUP_BYTES + 1024 * 1024
 ENCRYPTED_BACKUP_MAGIC = b"KOFAD-ENCRYPTED-BACKUP-V1\n"
@@ -49,7 +50,8 @@ EXCLUDED_BACKUP_MODELS = {
     "marketplace.otpthrottle",
 }
 
-BACKUP_APP_LABELS = ("core", "marketplace")
+LEGACY_BACKUP_APP_LABELS = ("core", "marketplace")
+BACKUP_APP_LABELS = (*LEGACY_BACKUP_APP_LABELS, "hubtel_direct")
 
 FRESH_START_ROLES = {
     "Owner": [
@@ -99,11 +101,17 @@ def backup_model_labels():
     return {model._meta.label_lower for model in backup_models()}
 
 
-def current_migrations():
+def current_migrations(*, legacy=False):
+    # v2 archives predate Hubtel Direct backups. Preserve their original
+    # exact-migration verification so existing encrypted archives remain
+    # recognizable rather than silently becoming unreadable after this fix.
+    app_labels = {"contenttypes", "auth", "admin", *(
+        LEGACY_BACKUP_APP_LABELS if legacy else BACKUP_APP_LABELS
+    )}
     return [
         [app, name]
         for app, name in MigrationRecorder.Migration.objects.order_by("app", "name").values_list("app", "name")
-        if app in {"contenttypes", "auth", "admin", "core", "marketplace"}
+        if app in app_labels
     ]
 
 
@@ -281,7 +289,10 @@ def parse_backup(raw):
 def validate_backup(bundle):
     if not isinstance(bundle, dict):
         raise BackupError("Backup root must be an object.")
-    if bundle.get("format") != BACKUP_FORMAT or bundle.get("version") != BACKUP_VERSION:
+    version = bundle.get("version")
+    if bundle.get("format") != BACKUP_FORMAT or version not in (
+        LEGACY_BACKUP_VERSION, BACKUP_VERSION,
+    ):
         raise BackupError("Unsupported backup format or version.")
     supplied = str(bundle.get("signature", ""))
     expected = _sign(bundle)
@@ -293,7 +304,9 @@ def validate_backup(bundle):
         raise BackupError("Backup fixture is missing.")
     if hashlib.sha256(fixture.encode("utf-8")).hexdigest() != bundle.get("fixture_sha256"):
         raise BackupError("Backup checksum does not match its data.")
-    if bundle.get("migrations") != current_migrations():
+    if bundle.get("migrations") != current_migrations(
+        legacy=version == LEGACY_BACKUP_VERSION,
+    ):
         raise BackupError("Backup schema does not exactly match the currently deployed KOFAD schema.")
 
     try:
@@ -308,6 +321,10 @@ def validate_backup(bundle):
     unexpected = sorted({str(row.get("model", "")) for row in records if row.get("model") not in allowed})
     if unexpected:
         raise BackupError("Backup contains unsupported model data: " + ", ".join(unexpected[:5]))
+    if version == LEGACY_BACKUP_VERSION and any(
+        str(row["model"]).startswith("hubtel_direct.") for row in records
+    ):
+        raise BackupError("Legacy backup cannot contain Hubtel Direct records.")
     if not isinstance(bundle.get("record_count"), int) or len(records) != bundle["record_count"]:
         raise BackupError("Backup record count does not match its manifest.")
 
@@ -343,6 +360,7 @@ def _table_names_for_restore():
             or name.startswith("auth_")
             or name.startswith("core_")
             or name.startswith("marketplace_")
+            or name.startswith("hubtel_direct_")
         )
     }
     return sorted(names)
@@ -367,6 +385,20 @@ def _reset_sequences(models):
 @transaction.atomic
 def restore_backup(bundle, actor_username=""):
     validate_backup(bundle)
+    if bundle["version"] == LEGACY_BACKUP_VERSION:
+        # An old archive cannot resurrect wallet mandates, direct collections,
+        # provider receipts, payroll transfers, or refund records. Never let a
+        # legacy restore silently destroy live Hubtel data through TRUNCATE
+        # CASCADE; use a clean isolated recovery database instead.
+        hubtel_models = [
+            m for m in apps.get_app_config("hubtel_direct").get_models()
+            if _managed(m)
+        ]
+        if any(model._default_manager.exists() for model in hubtel_models):
+            raise BackupError(
+                "This older backup excludes Hubtel Direct records. Restore only "
+                "into an empty isolated database; do not erase active Hubtel records."
+            )
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ["kofad_full_restore_v1"])
     _truncate_tables(_table_names_for_restore())
@@ -425,6 +457,7 @@ def _fresh_start_tables():
     return sorted({
         name for name in existing
         if name.startswith("core_") or name.startswith("marketplace_")
+        or name.startswith("hubtel_direct_")
         or name in {"django_admin_log", "django_session"}
     })
 
@@ -494,7 +527,7 @@ def reset_business_data(actor):
     Session.objects.all().delete()
 
     logger.warning(
-        "KOFAD fresh-start reset completed by administrator=%s; all core and marketplace data cleared",
+        "KOFAD fresh-start reset completed by administrator=%s; all core, marketplace and Hubtel Direct data cleared",
         actor_username,
     )
     return {
