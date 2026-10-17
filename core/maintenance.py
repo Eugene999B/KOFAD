@@ -412,6 +412,17 @@ def restore_backup(bundle, actor_username=""):
             restored_models.append(model)
             seen.add(model)
     _reset_sequences(restored_models)
+    # A restored customer authorization is historical evidence, NOT fresh
+    # permission to submit new wallet debits. Suspend active/pending mandates
+    # and hold unsent/in-flight attempts for manual provider reconciliation.
+    # Do not alter provider-confirmed paid transactions or ledger allocations.
+    from hubtel_direct.models import DebtMandate, DebtDebitAttempt
+    held_mandates = DebtMandate.objects.filter(
+        status__in=["approved", "pending", "cancel_pending"],
+    ).update(status="suspended")
+    held_attempts = DebtDebitAttempt.objects.filter(
+        status__in=["planned", "sending"],
+    ).update(status="finance_review", next_check_at=None)
     # Restoring an old outbox must not resend messages already delivered after the snapshot.
     from .models import WhatsAppBotReply
     WhatsAppBotReply.objects.filter(status__in=["queued", "sending"]).update(
@@ -437,6 +448,8 @@ def restore_backup(bundle, actor_username=""):
             "backup_created_by": bundle.get("created_by"),
             "restored_records": bundle.get("record_count"),
             "schema_migrations": len(bundle.get("migrations") or []),
+            "hubtel_mandates_held_for_provider_review": held_mandates,
+            "hubtel_attempts_held_for_provider_review": held_attempts,
         },
     )
     return backup_summary(bundle)
