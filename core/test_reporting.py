@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from . import services as s
 from .models import Document, PayrollEntry, PayrollPeriod, PayrollRule, Stock, Worker
-from .reporting import branch_comparison, limited
+from .reporting import branch_comparison, build_report, business_kpis, limited
 from .tests import Fixtures
 
 
@@ -22,6 +22,43 @@ class BranchReportingTests(Fixtures, TestCase):
     def report(self, user=None, first=None, last=None):
         rows, _ = branch_comparison(user or self.user, first or self.today, last or self.today)
         return {row["branch"]: row for row in rows}
+
+    def test_trend_includes_backdated_operating_creditor_bills_in_profit(self):
+        business_day = self.today - timedelta(days=3)
+        Document.objects.create(
+            branch=self.branch, party=self.supplier, kind="creditor_charge",
+            reference="ACCRUAL-TREND-UTILITIES", total=Decimal("32.50"),
+            payable_category="utilities", document_date=business_day,
+            created_by=self.user,
+        )
+        # Capital purchases are not operating expenses, even when also
+        # recorded as direct creditor bills in the same business period.
+        Document.objects.create(
+            branch=self.branch, party=self.supplier, kind="creditor_charge",
+            reference="ACCRUAL-TREND-EQUIPMENT", total=Decimal("200.00"),
+            payable_category="equipment", document_date=business_day,
+            created_by=self.user,
+        )
+        executive = business_kpis(self.branch, business_day, business_day)
+        self.assertEqual(executive["expenses"]["value"], Decimal("32.50"))
+        self.assertEqual(executive["operating_result"]["value"], Decimal("-32.50"))
+
+        daily, _ = build_report(self.branch, business_day, business_day, family="trend")
+        self.assertEqual(len(daily), 1)
+        self.assertEqual(daily[0]["period"], business_day.isoformat())
+        self.assertEqual(daily[0]["expenses"], Decimal("32.50"))
+        self.assertEqual(daily[0]["contribution"], Decimal("-32.50"))
+
+        # A wider range switches trend to month buckets. Both views must
+        # recognize the accrual on the bill date, not its entry timestamp.
+        monthly, _ = build_report(
+            self.branch, business_day, business_day + timedelta(days=63),
+            family="trend",
+        )
+        self.assertEqual(len(monthly), 1)
+        self.assertEqual(monthly[0]["period"], business_day.strftime("%Y-%m"))
+        self.assertEqual(monthly[0]["expenses"], Decimal("32.50"))
+        self.assertEqual(monthly[0]["contribution"], Decimal("-32.50"))
 
     def test_sales_returns_and_standard_cost(self):
         sale = self.sale(2)
