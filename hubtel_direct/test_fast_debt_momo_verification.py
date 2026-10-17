@@ -136,6 +136,24 @@ class DebtMomoFastVerificationTests(Fixtures, TestCase):
         self.assertIsNone(held.receipt_id)
         self.assertFalse(debt_momo.ready_for_check(held))
 
+    def test_finance_staff_can_request_read_only_recheck_of_attention_payment(self):
+        from django.core.exceptions import ValidationError
+        self.authenticate_client()
+        self.age_request(75)
+        DebtMomoCollection.objects.filter(pk=self.row.pk).update(status="attention")
+        detail_url = reverse("hubtel_debt_momo_status", args=[self.row.pk])
+        check_url = reverse("hubtel_debt_momo_check", args=[self.row.pk])
+        self.assertTrue(self.client.get(detail_url).context["can_check"])
+        with patch("hubtel_direct.client.check", side_effect=ValidationError("provider mismatch")) as verify, \
+             patch("hubtel_direct.client.submit") as charge:
+            response = self.client.post(check_url)
+        self.assertEqual(response.status_code, 302)
+        verify.assert_called_once()
+        charge.assert_not_called()
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.status, "attention")
+        self.assertFalse(self.client.get(detail_url).context["can_check"])
+
     def test_staff_button_uses_same_cooldown_as_service(self):
         self.authenticate_client()
         self.age_request(25)
