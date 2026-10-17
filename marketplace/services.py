@@ -733,11 +733,29 @@ def _confirmed_reference():
 
 
 def cart_rows(cart):
+    # Cart contents come from persisted sessions, which can be stale or malformed.
+    # Validate before converting; str.isdigit() also accepts superscripts that
+    # int() rejects, causing a 500 on cart, checkout and order review pages.
     clean = {}
-    for key, value in (cart or {}).items():
-        if str(key).isdigit() and str(value).isdigit():
-            quantity = min(max(int(value), 1), 999)
-            clean[int(key)] = quantity
+    if not isinstance(cart, dict):
+        return []
+    for key, value in cart.items():
+        listing_key, raw_quantity = str(key), str(value)
+        if not (
+            listing_key.isascii() and listing_key.isdecimal()
+            and raw_quantity.isascii() and raw_quantity.isdecimal()
+            and 1 <= len(listing_key) <= 20
+            and 1 <= len(raw_quantity) <= 32
+        ):
+            continue
+        try:
+            listing_id = int(listing_key)
+            quantity = min(max(int(raw_quantity), 1), 999)
+        except (ValueError, OverflowError):
+            continue
+        # Listing IDs use Django's signed bigint primary key.
+        if 0 < listing_id <= 9223372036854775807:
+            clean[listing_id] = quantity
     listings = MarketListing.objects.filter(
         pk__in=clean, enabled=True, product__active=True
     ).select_related("product")
