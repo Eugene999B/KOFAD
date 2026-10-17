@@ -167,8 +167,21 @@ def creditor_accounts(branch, query="", include_settled=False):
             Q(email__icontains=query) | Q(address__icontains=query) |
             Q(pk__in=matching_party_ids)
         ).distinct()
+    # Only billed supplier accounts can appear in the overview. Excluding
+    # never-billed contacts avoids wasted snapshot queries and false size caps.
+    parties = parties.filter(pk__in=Document.objects.filter(
+        branch=branch, kind__in=PAYABLE_KINDS, party__isnull=False,
+    ).values("party_id"))
+    candidates = list(parties.order_by("name", "pk")[:601])
+    if len(candidates) > 600:
+        # A silent [:600] truncated payable balances and understated overview
+        # totals. Never present partial financial totals as authoritative.
+        raise ValidationError(
+            "More than 600 creditor accounts match this report. "
+            "Narrow the creditor search to obtain complete and accurate totals."
+        )
     rows = []
-    for party in parties.order_by("name")[:600]:
+    for party in candidates:
         snapshot = supplier_account_snapshot(party)
         if snapshot["outstanding"] > 0 or (include_settled and snapshot["total_billed"] > 0):
             rows.append({"party": party, **snapshot})
