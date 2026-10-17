@@ -16,7 +16,7 @@ from core import debts, services
 from core.identity import normalize_ghana_phone
 from core.models import Party
 from . import client, verification
-from .models import DebtMomoCollection
+from .models import DebtMomoCollection, DebtDebitAttempt
 
 IN_FLIGHT = ("initializing", "pending", "submission_unknown")
 CHECK_WAIT = timedelta(minutes=5)
@@ -70,6 +70,11 @@ def start(user, branch, *, party_id, amount, phone, channel, wallet_name, reques
             raise ValidationError("Choose an existing customer debt account.")
         if DebtMomoCollection.objects.filter(party=party, status__in=IN_FLIGHT + ("attention",)).exists():
             raise ValidationError("An earlier Mobile Money collection remains unresolved. Check the original request first.")
+        if DebtDebitAttempt.objects.filter(
+            mandate__party=party,
+            status__in=("planned", "sending", "pending", "unknown", "finance_review"),
+        ).exists():
+            raise ValidationError("An automatic debit for this customer is planned or unresolved. Reconcile or cancel the original attempt before collecting manually.")
         outstanding = sum((due for _, due in debts.open_customer_invoices(party, for_update=True)), Decimal("0.00"))
         if amount > outstanding:
             raise ValidationError("Payment exceeds the current unpaid balance.")

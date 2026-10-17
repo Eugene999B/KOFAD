@@ -13,7 +13,7 @@ from .models import MarketPaymentAttempt, HubtelEvidence, PaymentConfiguration
 from .tests import MarketFixtures
 
 
-@override_settings(HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-key", HUBTEL_COLLECTION_ACCOUNT="12345")
+@override_settings(HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-key", HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_DIRECT_EGRESS_CONFIRMED=True)
 class HubtelContractTests(TestCase):
     def test_legacy_hubtel_get_denied_from_non_whitelisted_service(self):
         import os
@@ -174,7 +174,7 @@ class HubtelContractTests(TestCase):
 
 
 @override_settings(HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-key",
-                   HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_CHECKOUT_ENABLED=True)
+                   HUBTEL_COLLECTION_ACCOUNT="12345", HUBTEL_CHECKOUT_ENABLED=True, HUBTEL_DIRECT_EGRESS_CONFIRMED=True)
 class HubtelPaymentTests(MarketFixtures):
     def pending(self):
         order = self.order()

@@ -19,7 +19,7 @@ from core import debts as debt_service
 from core import services as core_services
 from core.models import Party, Document
 from . import client, debit_api, schedules
-from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
+from .models import DebtMandate, DebtDebitAttempt, DebtMomoCollection, OnlineDebtSettings
 
 ZERO = Decimal("0.00")
 CHARGE_STATES = ("planned", "sending", "pending", "unknown", "finance_review", "settled", "failed")
@@ -585,11 +585,13 @@ def payment_preview(mandate, today=None):
     signed_periods = int((mandate.terms_snapshot or {}).get("installment_count") or 400)
     if mandate.terms_snapshot.get("last_due_date") and mandate.next_due_date.isoformat() > mandate.terms_snapshot["last_due_date"]:
         return ZERO
-    # Current installment plus previously unpaid installments, capped by debt.
+    # A newer installment cannot be charged until its own signed grace
+    # window has ended, even when the previous installment is overdue.
+    matured_through = today - timedelta(days=grace)
     scheduled = mandate.amount_per_period
     next_date = mandate.first_due_date
     ticks = 0
-    while next_date and next_date <= today and ticks < min(400, signed_periods):
+    while next_date and next_date <= matured_through and ticks < min(400, signed_periods):
         if ticks:
             scheduled += mandate.amount_per_period
         next_date = _period_next(next_date, mandate.frequency)
@@ -604,6 +606,7 @@ def payment_preview(mandate, today=None):
 def plan_due_attempt(mandate):
     """Record a single deterministic due attempt. No provider POST here."""
     with transaction.atomic():
+        core_services.lock_branch(mandate.branch)
         row = DebtMandate.objects.select_for_update().select_related("party").get(pk=mandate.pk)
         if row.status != "approved" or row.next_due_date > timezone.localdate():
             return None
@@ -616,6 +619,11 @@ def plan_due_attempt(mandate):
         if row.next_due_date + timedelta(days=grace) > timezone.localdate():
             return None
         if DebtDebitAttempt.objects.filter(mandate=row, status__in=UNRESOLVED_CHARGE_STATES).exists():
+            return None
+        if DebtMomoCollection.objects.filter(
+            party=row.party,
+            status__in=("initializing", "pending", "submission_unknown", "attention"),
+        ).exists():
             return None
         # No repeated probes: at most one charge attempt per period by default.
         attempts = DebtDebitAttempt.objects.filter(mandate=row, period_due_date=row.next_due_date)
@@ -665,8 +673,12 @@ def dispatch_planned(limit=8):
                     or (mandate.terms_snapshot.get("last_due_date")
                         and attempt.period_due_date.isoformat() > mandate.terms_snapshot["last_due_date"])
                     or DebtDebitAttempt.objects.filter(
-                        mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
-                    ).exclude(pk=attempt.pk).exists()):
+                        mandate__party=mandate.party, status__in=UNRESOLVED_CHARGE_STATES,
+                    ).exclude(pk=attempt.pk).exists()
+                    or DebtMomoCollection.objects.filter(
+                        party=mandate.party,
+                        status__in=("initializing", "pending", "submission_unknown", "attention"),
+                    ).exists()):
                 if attempt.status == "planned":
                     attempt.status = "cancelled"
                     attempt.save(update_fields=["status", "updated_at"])
@@ -687,9 +699,12 @@ def dispatch_planned(limit=8):
                 continue
             # Provider-success and local-ledger-unposted amounts are money
             # in transit, not failed collections. Never start another debit.
-            if DebtDebitAttempt.objects.filter(
-                mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
-            ).exclude(pk=attempt.pk).exists():
+            if (DebtDebitAttempt.objects.filter(
+                mandate__party=mandate.party, status__in=UNRESOLVED_CHARGE_STATES,
+            ).exclude(pk=attempt.pk).exists() or DebtMomoCollection.objects.filter(
+                party=mandate.party,
+                status__in=("initializing", "pending", "submission_unknown", "attention"),
+            ).exists()):
                 continue
             policy = OnlineDebtSettings.objects.select_for_update().filter(
                 branch=mandate.branch,
