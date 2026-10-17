@@ -21,7 +21,7 @@ class HubtelContractTests(TestCase):
         with patch.dict(os.environ, {"RAILWAY_SERVICE_NAME": "kofad-sms"}), patch(
             "marketplace.hubtel.requests.get"
         ) as outbound:
-            with self.assertRaisesRegex(ValidationError, "egress"):
+            with self.assertRaisesRegex(services.PaymentVerificationUnavailable, "unavailable"):
                 hubtel.verify("ref1")
             outbound.assert_not_called()
 

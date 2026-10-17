@@ -167,10 +167,19 @@ def _normalise_keys(payload):
 def verify(reference):
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,32}", str(reference or "")):
         raise ValidationError("Invalid payment reference.")
+    # A missing web-egress authorization is an unavailable status check,
+    # NOT a mismatched payment. Never turn the customer's pending payment
+    # into 'attention' merely because deployment credentials are unavailable.
+    try:
+        status_headers = headers()
+    except ValidationError as exc:
+        raise services.PaymentVerificationUnavailable(
+            "Hubtel verification is unavailable on this service; do not retry payment."
+        ) from exc
     try:
         response = requests.get(
             STATUS_ORIGIN + settings.HUBTEL_COLLECTION_ACCOUNT + "/transactions/status",
-            params={"clientReference": reference}, headers=headers(),
+            params={"clientReference": reference}, headers=status_headers,
             timeout=settings.HUBTEL_TIMEOUT_SECONDS, allow_redirects=False,
         )
     except requests.RequestException as exc:
