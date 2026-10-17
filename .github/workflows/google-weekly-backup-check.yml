@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'core/google_drive_backup.py'
+      - 'core/maintenance.py'
+      - 'core/test_backup_hubtel_coverage.py'
+      - 'core/test_maintenance.py'
       - 'core/test_google_drive_backup.py'
       - 'core/urls.py'
       - 'config/settings.py'
@@ -19,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:16
+        image: postgres:16
         env:
           POSTGRES_USER: kofad
           POSTGRES_PASSWORD: test-only
@@ -42,7 +45,11 @@ jobs:
       - run: pip install -r requirements-dev.txt -c requirements.lock
       - name: Verify Google Apps Script syntax
         run: node --check --input-type=commonjs < ops/google_drive_weekly_backup.gs
+      - name: Prepare branding and static assets
+        run: |
+          python scripts/prepare_logo.py
+          python manage.py collectstatic --noinput
       - name: Verify Django migration graph
         run: python manage.py migrate --noinput
       - name: Verify opt-in signed export and restorable encryption
-        run: python manage.py test core.test_google_drive_backup --noinput
+        run: python manage.py test core.test_google_drive_backup core.test_backup_hubtel_coverage core.test_maintenance --noinput

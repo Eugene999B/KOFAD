@@ -58,6 +58,16 @@ No new Railway service or background polling. Google Apps Script and Drive may b
 - No success email: check Drive folder, Google Apps Script Executions and Script Property \`KOFAD_LAST_BACKUP_SUCCESS_UTC\`; mail delivery can fail separately after a valid upload.
 - If a Sunday schedule fails, fix the problem and rerun manually; do not assume it will retry automatically.
 
+## Hubtel Direct full-system coverage (backup v3)
+
+New full-system archives include `core`, `marketplace`, and `hubtel_direct` models, including direct-provider transaction records, customer debit authorizations/mandates, debt collection requests, payroll transfer state and refund cases. The inner signed backup format is **v3**; the outer AES-256-GCM encrypted file wrapper remains unchanged.
+
+Earlier signed backup **v2** archives were missing `hubtel_direct`. They remain **readable** subject to the original exact-migration checks, but they **must not** overwrite a database containing live Hubtel Direct records. KOFAD rejects that destructive legacy restore and directs recovery to an isolated clean database. An old archive alone cannot recover provider authorization/collection state.
+
+After deploying v3, generate and verify a **new** encrypted archive before considering disaster recovery complete. The October 11, 2026 archive was created before this v3 code and must be treated as **unverified for Hubtel Direct coverage** unless its authenticated inner manifest proves otherwise. Never silently edit or delete existing financial state to make an older restore succeed. A successful validation still does not replace a real isolated restore rehearsal.
+
+**Automatic debit recovery hold:** restoring a v3 snapshot marks restored pending/approved/cancellation-pending customer mandates as `suspended` and moves planned/in-flight debit attempts to `finance_review`. These statuses deliberately block new wallet debits based only on stale backup data. An authorized operator must reconcile current provider mandates, customer consent, outstanding invoices and all unresolved attempts **before** considering reactivation. Provider-confirmed receipts and ledger allocations are preserved; no payout or debit is sent by the restore. The restore audit records counts of held mandates/attempts.
+
 ## Verification evidence required
 
 - Passing Django unit tests \`core.test_google_drive_backup\`, full KOFAD CI and no unintended Android/Hubtel changes.
