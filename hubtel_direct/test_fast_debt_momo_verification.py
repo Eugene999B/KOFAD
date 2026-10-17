@@ -80,6 +80,62 @@ class DebtMomoFastVerificationTests(Fixtures, TestCase):
         self.assertIsNone(checked.next_check_at)
         provider.assert_called_once()
 
+    @patch("hubtel_direct.client.submit")
+    def test_paid_finance_attention_can_be_reverified_after_book_reopens(self, send):
+        """Only a second independently verified PAID lookup posts the receipt."""
+        from django.core.exceptions import ValidationError
+        from core.models import Document, Payment
+
+        Document.objects.create(
+            branch=self.branch, party=self.customer, kind="sale",
+            total=Decimal("20.00"), paid=Decimal("0.00"),
+            created_by=self.user, reference="OFFLINE-STAFF-DEBT-RECOVERY",
+        )
+        self.age_request(35)
+        with patch("hubtel_direct.client.check", return_value=("success", "hubtel-paid-id")) as verify, \
+             patch("core.debts.post_customer_payment", side_effect=ValidationError("Today is closed.")):
+            held = debt_momo.reconcile(self.row.pk)
+        verify.assert_called_once()
+        self.assertEqual(held.status, "attention")
+        self.assertIsNone(held.receipt_id)
+        send.assert_not_called()
+
+        # An old attention item can still be verified using GET; the 72-hour
+        # cutoff must not make a real provider-paid receipt unrecoverable.
+        old = timezone.now() - timedelta(hours=75)
+        DebtMomoCollection.objects.filter(pk=self.row.pk).update(
+            created_at=old, checked_at=old, next_check_at=None,
+        )
+        with patch("hubtel_direct.client.check", return_value=("success", "hubtel-paid-id")) as recheck:
+            settled = debt_momo.reconcile(self.row.pk)
+        recheck.assert_called_once()
+        send.assert_not_called()
+        self.assertEqual(settled.status, "success")
+        self.assertIsNotNone(settled.receipt_id)
+        self.assertEqual(settled.receipt.total, Decimal("2.00"))
+        self.assertEqual(
+            Payment.objects.filter(document=settled.receipt, method="momo").count(), 1,
+        )
+        self.assertEqual(DebtMomoCollection.objects.get(pk=self.row.pk).receipt_id, settled.receipt_id)
+        self.assertEqual(debt_momo.reconcile(self.row.pk).receipt_id, settled.receipt_id)
+
+    @patch("hubtel_direct.client.submit")
+    def test_attention_mismatch_cannot_create_receipt_or_trigger_second_charge(self, send):
+        """Rechecking a mismatched provider response leaves the finance hold."""
+        from django.core.exceptions import ValidationError
+        from core import debts
+        self.age_request(75)
+        DebtMomoCollection.objects.filter(pk=self.row.pk).update(status="attention")
+        with patch("hubtel_direct.client.check", side_effect=ValidationError("amount mismatch")) as verify, \
+             patch.object(debts, "post_customer_payment") as post:
+            held = debt_momo.reconcile(self.row.pk)
+        verify.assert_called_once()
+        post.assert_not_called()
+        send.assert_not_called()
+        self.assertEqual(held.status, "attention")
+        self.assertIsNone(held.receipt_id)
+        self.assertFalse(debt_momo.ready_for_check(held))
+
     def test_staff_button_uses_same_cooldown_as_service(self):
         self.authenticate_client()
         self.age_request(25)
