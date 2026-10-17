@@ -411,16 +411,24 @@ def creditor_statement_rows(party):
         Q(kind="reversal", original__kind__in=["supplier_payment", "creditor_charge"])
     ).select_related("original", "created_by").order_by("created_at", "pk")
 
+    # The exported date and running balance must follow the same chronology.
+    # Bills can be entered later with an earlier document_date; sorting by
+    # created_at alone produced statements where the displayed dates ran
+    # backwards and the intermediate payable balances were misleading.
+    docs = sorted(
+        docs,
+        key=lambda doc: (
+            doc.document_date or timezone.localtime(doc.created_at).date(),
+            doc.created_at,
+            str(doc.pk),
+        ),
+    )
     running = ZERO
     rows = []
     for doc in docs:
         if doc.kind in PAYABLE_KINDS:
-            change = s.balance(doc) + sum(
-                (a.amount for a in doc.settlements.exclude(payment_document__correction__status="approved").all()),
-                ZERO,
-            )
-            # The statement is historical cash/account activity, so show the original
-            # invoice amount as the charge rather than its current outstanding balance.
+            # Historical statement charges use the original invoice amount,
+            # regardless of later payments or corrections.
             change = doc.total
             debit = ZERO
             credit = doc.total
@@ -444,7 +452,7 @@ def creditor_statement_rows(party):
             credit = ZERO
         running += change
         rows.append({
-            "date": doc.document_date or doc.created_at.date(),
+            "date": doc.document_date or timezone.localtime(doc.created_at).date(),
             "entered_at": doc.created_at,
             "reference": doc.reference,
             "external_reference": doc.external_reference,
