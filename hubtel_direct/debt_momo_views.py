@@ -38,7 +38,7 @@ def status(request, collection_id):
 @require_POST
 def check(request, collection_id):
     row = _accessible(request, collection_id)
-    if row.status not in debt_momo.IN_FLIGHT:
+    if row.status not in debt_momo.RECHECKABLE:
         messages.info(request, "This request already has a recorded outcome.")
     elif timezone.now() < row.created_at + debt_momo.CHECK_WAIT:
         messages.info(request, "Wait for the payment network to process the original request. Nothing has been charged again.")
