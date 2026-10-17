@@ -237,7 +237,7 @@ def reactivate_preapproval(phone):
 def debit_charge(tx):
     """Only an independently approved bounded agreement may call this; no retries."""
     gate("charge")
-    from .models import DebtDebitAttempt, OnlineDebtSettings
+    from .models import DebtDebitAttempt, DebtMomoCollection, OnlineDebtSettings
     from .mandates import outstanding, UNRESOLVED_CHARGE_STATES
 
     # tx can have been fetched before a customer cancelled the mandate or
@@ -255,9 +255,14 @@ def debit_charge(tx):
             or current.amount > outstanding(mandate.party)):
         raise ValidationError("The real customer balance or authorized ceiling has changed.")
     if DebtDebitAttempt.objects.filter(
-        mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
+        mandate__party=mandate.party, status__in=UNRESOLVED_CHARGE_STATES,
     ).exclude(pk=current.pk).exists():
-        raise ValidationError("Another debit or provider-paid finance review is not resolved.")
+        raise ValidationError("Another customer debit or provider-paid finance review is not resolved.")
+    if DebtMomoCollection.objects.filter(
+        party=mandate.party,
+        status__in=("initializing", "pending", "submission_unknown", "attention"),
+    ).exists():
+        raise ValidationError("A staff MoMo collection is unresolved. An automatic debit cannot overlap it.")
     tx = current
     if tx.mandate.channel not in DEBIT_CHANNELS:
         raise ValidationError("Direct Debit only supports MTN and Telecel.")

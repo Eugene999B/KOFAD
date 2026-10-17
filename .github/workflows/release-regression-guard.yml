@@ -68,6 +68,9 @@ jobs:
           core.test_pos_online_debit_pricing
           hubtel_direct.test_status_evidence_payloads
           hubtel_direct.test_fast_market_verification
+          hubtel_direct.test_online_debt_policy
+          hubtel_direct.test_mandates
+          marketplace.test_hubtel.HubtelContractTests
           marketplace.test_card_channel_recovery
           marketplace.test_order_created_email_recovery
           marketplace.test_hubtel.HubtelPaymentTests.test_callback_saves_exact_original_json_encrypted_and_allows_download

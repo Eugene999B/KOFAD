@@ -50,6 +50,11 @@ def availability_notice():
 
 
 def headers():
+    # Hosted legacy requests and read-only checks obey the SAME merchant
+    # egress boundary as Direct Receive and Direct Debit. The SMS worker may
+    # coordinate reconciliation, but never connect to Hubtel itself.
+    from hubtel_direct import client as direct_client
+    direct_client.require_reconciliation_ready("receive")
     if not configured():
         raise ValidationError("Hubtel payment is not configured yet. Please contact KOFAD.")
     token = base64.b64encode(

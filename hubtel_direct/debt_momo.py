@@ -162,7 +162,7 @@ def reconcile(row_id):
                     {"party": str(locked.party_id), "amount": str(locked.amount),
                      "method": "momo", "reference": str(provider_id),
                      "note": "Verified Mobile Money debt collection " + locked.reference},
-                    str(locked.id),
+                    str(locked.id), provider_verified_receipt=True,
                 )
                 locked.receipt = receipt
                 locked.status = "success"

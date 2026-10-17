@@ -367,3 +367,114 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
             self.assertEqual(mandates.post_verified_collections(), 0)
         post.assert_not_called()
 
+
+    def test_each_installment_grace_period_is_respected_when_accumulating_arrears(self):
+        self.policy.auto_collection_grace_days = 3
+        self.policy.rollover_unpaid = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        today = timezone.localdate()
+        self.assertEqual(mandates.payment_preview(plan, today + timedelta(days=2)), Decimal("0.00"))
+        self.assertEqual(mandates.payment_preview(plan, today + timedelta(days=3)), Decimal("200.00"))
+        # Week-two installment is due on day 7 but only chargeable on day 10.
+        self.assertEqual(mandates.payment_preview(plan, today + timedelta(days=7)), Decimal("200.00"))
+        self.assertEqual(mandates.payment_preview(plan, today + timedelta(days=9)), Decimal("200.00"))
+        self.assertEqual(mandates.payment_preview(plan, today + timedelta(days=10)), Decimal("400.00"))
+
+    def _pending_staff_momo(self):
+        from .models import DebtMomoCollection
+        from . import client
+        return DebtMomoCollection.objects.create(
+            request_key=uuid.uuid4(), branch=self.branch, party=self.customer,
+            requested_by=self.user, amount=Decimal("100.00"),
+            channel="mtn-gh", phone_encrypted=client.seal("233241234567"),
+            phone_suffix="4567", wallet_name="Test wallet holder",
+            reference=uuid.uuid4().hex, status="pending",
+        )
+
+    def test_staff_momo_cannot_start_during_planned_automatic_debit(self):
+        from . import debt_momo
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        self.assertIsNotNone(mandates.plan_due_attempt(plan))
+        with patch("hubtel_direct.verification.inquiry", return_value={
+            "wallet_name": "Test wallet holder",
+        }), patch("hubtel_direct.client.submit") as post:
+            with self.assertRaisesRegex(ValidationError, "automatic debit"):
+                debt_momo.start(
+                    self.user, self.branch, party_id=self.customer.pk,
+                    amount="100", phone="0241234567", channel="mtn-gh",
+                    wallet_name="Test wallet holder", request_key=uuid.uuid4(),
+                    consent=True,
+                )
+            post.assert_not_called()
+
+    def test_automatic_debit_plan_waits_during_unresolved_staff_momo(self):
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        self._pending_staff_momo()
+        self.assertIsNone(mandates.plan_due_attempt(plan))
+        self.assertFalse(DebtDebitAttempt.objects.exists())
+
+    def test_manual_collection_blocks_unresolved_debit_but_cancels_unsent_plan(self):
+        from core import debts
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        self.assertIsNotNone(attempt)
+        cash = debts.post_customer_payment(
+            self.user, self.branch,
+            {"party": self.customer.pk, "method": "cash", "amount": "40.00"},
+            uuid.uuid4(),
+        )
+        self.assertEqual(cash.total, Decimal("40.00"))
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, "cancelled")
+        # Network POST could already be in flight; staff must reconcile first.
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="unknown", sent_at=timezone.now(),
+        )
+        with self.assertRaisesRegex(ValidationError, "may still settle"):
+            debts.post_customer_payment(
+                self.user, self.branch,
+                {"party": self.customer.pk, "method": "cash", "amount": "10.00"},
+                uuid.uuid4(),
+            )
+
+    def test_manual_collection_is_blocked_by_staff_momo_pending(self):
+        from core import debts
+        self._pending_staff_momo()
+        with self.assertRaisesRegex(ValidationError, "may still settle"):
+            debts.post_customer_payment(
+                self.user, self.branch,
+                {"party": self.customer.pk, "method": "cash", "amount": "10.00"},
+                uuid.uuid4(),
+            )
+
+    @patch("hubtel_direct.debit_api._request")
+    def test_provider_charge_last_moment_guard_blocks_unresolved_staff_momo(self, send):
+        self.policy.plan_creation_enabled = True
+        self.policy.pause_auto_collection = False
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="sending", sent_at=timezone.now(),
+        )
+        self._pending_staff_momo()
+        with self.assertRaisesRegex(ValidationError, "staff MoMo"):
+            debit_api.debit_charge(DebtDebitAttempt.objects.get(pk=attempt.pk))
+        send.assert_not_called()

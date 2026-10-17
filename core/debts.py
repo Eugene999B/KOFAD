@@ -155,7 +155,7 @@ def debt_customers(branch, query=""):
 
 
 @transaction.atomic
-def post_customer_payment(user, branch, payload, key):
+def post_customer_payment(user, branch, payload, key, *, provider_verified_receipt=False):
     """Record one customer-account payment and allocate oldest due invoices first."""
     s.permit(user, branch, "operate_finance")
     branch = s.lock_branch(branch)
@@ -171,6 +171,29 @@ def post_customer_payment(user, branch, payload, key):
     ).first()
     if not party:
         raise ValidationError("Choose a valid customer account.")
+
+    # All staff cash/bank collections share the branch lock with auto debit.
+    # Never record a new manual settlement while an externally submitted
+    # debit/MoMo request could still settle. Internal *provider-verified*
+    # receipt posting is the only exception and cannot be chosen by a form.
+    from hubtel_direct.models import DebtDebitAttempt, DebtMomoCollection
+    if not provider_verified_receipt:
+        if DebtDebitAttempt.objects.filter(
+            mandate__party=party,
+            status__in=("sending", "pending", "unknown", "finance_review"),
+        ).exists() or DebtMomoCollection.objects.filter(
+            party=party,
+            status__in=("initializing", "pending", "submission_unknown", "attention"),
+        ).exists():
+            raise ValidationError(
+                "A Mobile Money collection or automatic debit may still settle. "
+                "Reconcile its original reference before posting another payment."
+            )
+        # A queue entry has not sent money yet. Cancel it atomically before
+        # recording staff money, so dispatch cannot later charge the old due.
+        DebtDebitAttempt.objects.filter(
+            mandate__party=party, status="planned",
+        ).update(status="cancelled", next_check_at=None)
 
     invoices = open_customer_invoices(party, for_update=True)
     customer_outstanding = sum((amount for _, amount in invoices), ZERO)

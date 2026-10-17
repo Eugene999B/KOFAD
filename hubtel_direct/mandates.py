@@ -816,7 +816,7 @@ def settle_verified_collection(attempt_id):
                     "invoice_id": (mandate.terms_snapshot or {}).get("source_document_id"),
                     "method": "momo", "reference": row.reference,
                     "note": "Hubtel direct debit; paid status independently verified",
-                }, key=str(row.pk),
+                }, key=str(row.pk), provider_verified_receipt=True,
             )
             row.collection_document = doc
             row.status = "settled"

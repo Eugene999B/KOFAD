@@ -15,6 +15,23 @@ from .tests import MarketFixtures
 
 @override_settings(HUBTEL_API_ID="test-id", HUBTEL_API_KEY="test-key", HUBTEL_COLLECTION_ACCOUNT="12345")
 class HubtelContractTests(TestCase):
+    def test_legacy_hubtel_get_denied_from_non_whitelisted_service(self):
+        import os
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"RAILWAY_SERVICE_NAME": "kofad-sms"}), patch(
+            "marketplace.hubtel.requests.get"
+        ) as outbound:
+            with self.assertRaisesRegex(ValidationError, "egress"):
+                hubtel.verify("ref1")
+            outbound.assert_not_called()
+
+    @override_settings(HUBTEL_DIRECT_EGRESS_CONFIRMED=False)
+    @patch("marketplace.hubtel.requests.post")
+    def test_hosted_payment_cannot_bypass_unconfirmed_egress(self, post):
+        with self.assertRaisesRegex(ValidationError, "egress"):
+            hubtel.headers()
+        post.assert_not_called()
+
     @patch("marketplace.hubtel.requests.get")
     def test_public_status_endpoint_and_basic_auth(self, get):
         get.return_value = Mock(status_code=200)
