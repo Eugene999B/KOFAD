@@ -229,6 +229,11 @@ def post_customer_payment(user, branch, payload, key, *, provider_verified_recei
         raise ValidationError("Payment cannot exceed the customer's outstanding balance.")
 
     method = payload.get("method")
+    if method == "momo" and not provider_verified_receipt:
+        raise ValidationError(
+            "Mobile Money debt payments require independent Hubtel verification. "
+            "Use the Debt Desk to request and verify the original payment."
+        )
     if not s.payment_method_enabled(method):
         raise ValidationError("Choose an enabled payment channel.")
     reference = str(payload.get("reference", "")).strip()[:100]
