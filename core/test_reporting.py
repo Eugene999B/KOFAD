@@ -27,7 +27,7 @@ class BranchReportingTests(Fixtures, TestCase):
         business_day = self.today - timedelta(days=3)
         Document.objects.create(
             branch=self.branch, party=self.supplier, kind="creditor_charge",
-            reference="ACCRUAL-TREND-UTILITIES", total=Decimal("32.50"),
+            reference="ACCRUAL-TREND-UTILITIES", total=Decimal("32.50"), paid=Decimal("0.00"),
             payable_category="utilities", document_date=business_day,
             created_by=self.user,
         )
@@ -35,7 +35,7 @@ class BranchReportingTests(Fixtures, TestCase):
         # recorded as direct creditor bills in the same business period.
         Document.objects.create(
             branch=self.branch, party=self.supplier, kind="creditor_charge",
-            reference="ACCRUAL-TREND-EQUIPMENT", total=Decimal("200.00"),
+            reference="ACCRUAL-TREND-EQUIPMENT", total=Decimal("200.00"), paid=Decimal("0.00"),
             payable_category="equipment", document_date=business_day,
             created_by=self.user,
         )
