@@ -42,6 +42,37 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertEqual(self.client.session["market_cart"], {str(self.listing.pk): 1})
         post.assert_not_called()
 
+    def test_malformed_cart_values_cannot_crash_checkout_calculations(self):
+        # Python treats superscript digits as isdigit() yet int() rejects them.
+        # A stale or manipulated session must not cause a 500 on cart/checkout.
+        valid_id = str(self.listing.pk)
+        rows = services.cart_rows({
+            valid_id: "2",
+            "²": "1",
+            "9" * 40: "1",
+        })
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["listing"].pk, self.listing.pk)
+        self.assertEqual(rows[0]["quantity"], 2)
+
+        for corrupt_cart in (
+            {valid_id: "²"},
+            {"²": "1"},
+            {valid_id: "9" * 5000},
+            {valid_id: None},
+            {valid_id: "-1"},
+            {"9223372036854775808": "1"},
+            ["unexpected-session-cart"],
+            "unexpected-session-cart",
+        ):
+            with self.subTest(cart=repr(corrupt_cart)[:64]):
+                self.assertEqual(services.cart_rows(corrupt_cart), [])
+
+    def test_valid_cart_quantity_is_still_capped_at_999(self):
+        rows = services.cart_rows({str(self.listing.pk): "999999"})
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["quantity"], 999)
+
     def test_checkout_dropdowns_have_clear_mobile_selection_controls(self):
         self.customer_session()
         response = self.client.get("/market/checkout/")
