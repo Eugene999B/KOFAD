@@ -64,7 +64,9 @@ New full-system archives include `core`, `marketplace`, and `hubtel_direct` mode
 
 Earlier signed backup **v2** archives were missing `hubtel_direct`. They remain **readable** subject to the original exact-migration checks, but they **must not** overwrite a database containing live Hubtel Direct records. KOFAD rejects that destructive legacy restore and directs recovery to an isolated clean database. An old archive alone cannot recover provider authorization/collection state.
 
-After deploying v3, generate and verify a **new** encrypted archive before considering disaster recovery complete. Never assume the October 11, 2026 v2 archive covers Hubtel Direct, and never silently edit or delete existing financial state to make an older restore succeed. A successful validation still does not replace a real isolated restore rehearsal.
+After deploying v3, generate and verify a **new** encrypted archive before considering disaster recovery complete. The October 11, 2026 archive was created before this v3 code and must be treated as **unverified for Hubtel Direct coverage** unless its authenticated inner manifest proves otherwise. Never silently edit or delete existing financial state to make an older restore succeed. A successful validation still does not replace a real isolated restore rehearsal.
+
+**Automatic debit recovery hold:** restoring a v3 snapshot marks restored pending/approved/cancellation-pending customer mandates as `suspended` and moves planned/in-flight debit attempts to `finance_review`. These statuses deliberately block new wallet debits based only on stale backup data. An authorized operator must reconcile current provider mandates, customer consent, outstanding invoices and all unresolved attempts **before** considering reactivation. Provider-confirmed receipts and ledger allocations are preserved; no payout or debit is sent by the restore. The restore audit records counts of held mandates/attempts.
 
 ## Verification evidence required
 
