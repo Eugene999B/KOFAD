@@ -615,8 +615,8 @@ class MarketV2CustomerExperienceTests(MarketFixtures):
         checkout = self.client.get("/market/checkout/")
         self.assertEqual(checkout.status_code, 200)
         self.assertNotContains(checkout, "Paystack")
-        self.assertContains(checkout, "Continue to wallet verification")
-        self.assertContains(checkout, "MoMo number")
+        self.assertContains(checkout, "Continue to payment")
+        self.assertContains(checkout, "Choose your payment number after placing the order.")
         self.assertNotContains(checkout, "checkout.paystack.com")
 
         order = self.order()
