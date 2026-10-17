@@ -20,7 +20,13 @@ class CustomerEmailTests(MarketFixtures):
         session["market_customer_id"] = self.customer.pk
         session.save()
 
+    @override_settings(EMAIL_DELIVERY_ENABLED=True)
     def test_order_email_idempotent_and_pauses_after_opt_out(self):
+        from .models import EmailIdentity
+        EmailIdentity.objects.create(
+            kind="customer", owner_id=self.customer.pk, email=self.customer.email,
+            verified_at=timezone.now(), notifications_enabled=True,
+        )
         order = self.order()
         order.status = "paid"
         order.payment_status = "paid"
@@ -121,13 +127,14 @@ class CustomerEmailTests(MarketFixtures):
         order.status = "paid"
         order.payment_status = "paid"
         order.save(update_fields=["status", "payment_status"])
-        self.assertEqual(queue_customer_order_email(order, "paid"), 1)
+        # A phone-verified customer with an unverified mailbox must never
+        # receive a private order update or even have one queued for delivery.
+        self.assertEqual(queue_customer_order_email(order, "paid"), 0)
         self.assertEqual(process_email_outbox(), 0)
         send.assert_not_called()
-        notice = EmailNotice.objects.get(category="order")
-        self.assertEqual(notice.status, "cancelled")
+        self.assertFalse(EmailNotice.objects.filter(category="order").exists())
 
-        # Once the current mailbox is verified, a different paid order is safe to send.
+        # Once the current mailbox is verified, a paid order is safe to send.
         EmailIdentity.objects.create(
             kind="customer", owner_id=self.customer.pk, email=self.customer.email,
             verified_at=timezone.now(), notifications_enabled=True,
