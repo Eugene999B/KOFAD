@@ -49,9 +49,9 @@ class HubtelFullBackupCoverageTests(TransactionTestCase):
         bundle = maintenance.create_backup(self.owner)
         self.assertEqual(bundle["version"], 3)
         self.assertEqual(bundle["model_counts"]["hubtel_direct.directtransaction"], 1)
-        self.assertIn(["hubtel_direct", "0001_initial"], bundle["migrations"] if
-                      ["hubtel_direct", "0001_initial"] in bundle["migrations"] else
-                      [["hubtel_direct", "0001_initial"]])
+        self.assertTrue(
+            any(app == "hubtel_direct" for app, _name in bundle["migrations"])
+        )
         self.receive("hubtel-backup-temporary-0002")
         self.assertEqual(DirectTransaction.objects.count(), 2)
 
