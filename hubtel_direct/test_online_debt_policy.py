@@ -86,7 +86,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
             self._saved_staff_momo_intent(key, amount="100.00")
             return {"wallet_name": "Verified Customer"}
 
-        with patch("hubtel_direct.verification.inquiry", side_effect=concurrent_request), \\
+        with patch("hubtel_direct.verification.inquiry", side_effect=concurrent_request), \
              patch("hubtel_direct.client.submit") as send:
             with self.assertRaisesMessage(ValidationError, "belongs to another transaction"):
                 debt_momo.start(
