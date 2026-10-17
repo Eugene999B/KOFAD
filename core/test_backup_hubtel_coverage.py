@@ -4,14 +4,15 @@ import hashlib
 import json
 from collections import Counter
 from decimal import Decimal
+from django.utils import timezone
 
 from django.apps import apps
 from django.contrib.auth.models import User
 from django.test import TransactionTestCase
 
 from core import maintenance
-from core.models import Branch, Company
-from hubtel_direct.models import DirectTransaction
+from core.models import Branch, Company, Party
+from hubtel_direct.models import DirectTransaction, DebtMandate
 
 
 class HubtelFullBackupCoverageTests(TransactionTestCase):
@@ -46,9 +47,24 @@ class HubtelFullBackupCoverageTests(TransactionTestCase):
         self.assertTrue(managed.issubset(maintenance.backup_model_labels()))
 
         original = self.receive("hubtel-backup-original-0001")
+        customer = Party.objects.create(
+            branch=self.branch, kind="customer", name="Mandate Test Customer", phone="+233240000001",
+        )
+        today = timezone.localdate()
+        mandate = DebtMandate.objects.create(
+            branch=self.branch, party=customer, created_by=self.owner,
+            phone_encrypted="encrypted-wallet-fixture",
+            phone_fingerprint="test-wallet-hash-0001",
+            phone_suffix="0001", channel="mtn-gh",
+            client_reference="hubtel-backup-mandate-0001",
+            status="approved", frequency="weekly",
+            first_due_date=today, next_due_date=today,
+            amount_per_period=Decimal("5.00"), maximum_total=Decimal("25.00"),
+        )
         bundle = maintenance.create_backup(self.owner)
         self.assertEqual(bundle["version"], 3)
         self.assertEqual(bundle["model_counts"]["hubtel_direct.directtransaction"], 1)
+        self.assertEqual(bundle["model_counts"]["hubtel_direct.debtmandate"], 1)
         self.assertTrue(
             any(app == "hubtel_direct" for app, _name in bundle["migrations"])
         )
@@ -61,6 +77,10 @@ class HubtelFullBackupCoverageTests(TransactionTestCase):
         self.assertEqual(restored.client_reference, original.client_reference)
         self.assertEqual(restored.amount, Decimal("12.50"))
         self.assertEqual(restored.provider_status, "Paid")
+        restored_mandate = DebtMandate.objects.get(pk=mandate.pk)
+        self.assertEqual(restored_mandate.party.name, "Mandate Test Customer")
+        self.assertEqual(restored_mandate.status, "approved")
+        self.assertEqual(restored_mandate.maximum_total, Decimal("25.00"))
 
     def test_legacy_archive_is_recognized_but_cannot_erase_live_hubtel_records(self):
         self.receive("hubtel-old-backup-0003")
