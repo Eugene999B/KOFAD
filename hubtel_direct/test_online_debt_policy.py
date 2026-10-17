@@ -441,6 +441,8 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         self.assertEqual(cash.total, Decimal("40.00"))
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, "cancelled")
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, "suspended")
         # Network POST could already be in flight; staff must reconcile first.
         DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
             status="unknown", sent_at=timezone.now(),

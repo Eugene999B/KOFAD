@@ -189,11 +189,23 @@ def post_customer_payment(user, branch, payload, key, *, provider_verified_recei
                 "A Mobile Money collection or automatic debit may still settle. "
                 "Reconcile its original reference before posting another payment."
             )
-        # A queue entry has not sent money yet. Cancel it atomically before
-        # recording staff money, so dispatch cannot later charge the old due.
-        DebtDebitAttempt.objects.filter(
+        # Unsent queued debit does not represent provider money. Cancel it
+        # atomically and SUSPEND that plan: otherwise an immutable attempted
+        # period would block new scheduling forever. Finance must review and
+        # reauthorize any changed future collection terms with the customer.
+        planned = DebtDebitAttempt.objects.filter(
             mandate__party=party, status="planned",
-        ).update(status="cancelled", next_check_at=None)
+        )
+        mandate_ids = list(planned.values_list("mandate_id", flat=True).distinct())
+        if mandate_ids:
+            from hubtel_direct.models import DebtMandate
+            planned.update(status="cancelled", next_check_at=None)
+            DebtMandate.objects.filter(
+                pk__in=mandate_ids, status="approved",
+            ).update(status="suspended")
+            s.audit(user, branch, "hubtel_debt.manual_collection_paused_queued_debit",
+                    str(party.pk), {"mandates": [str(pk) for pk in mandate_ids]},
+                    category="finance", severity="warning")
 
     invoices = open_customer_invoices(party, for_update=True)
     customer_outstanding = sum((amount for _, amount in invoices), ZERO)
