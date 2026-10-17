@@ -12,7 +12,7 @@ from django.test import TransactionTestCase
 
 from core import maintenance
 from core.models import Branch, Company, Party
-from hubtel_direct.models import DirectTransaction, DebtMandate
+from hubtel_direct.models import DirectTransaction, DebtMandate, DebtDebitAttempt
 
 
 class HubtelFullBackupCoverageTests(TransactionTestCase):
@@ -61,10 +61,15 @@ class HubtelFullBackupCoverageTests(TransactionTestCase):
             first_due_date=today, next_due_date=today,
             amount_per_period=Decimal("5.00"), maximum_total=Decimal("25.00"),
         )
+        attempt = DebtDebitAttempt.objects.create(
+            mandate=mandate, reference="hubtel-backup-charge-0001",
+            period_due_date=today, amount=Decimal("5.00"), status="planned",
+        )
         bundle = maintenance.create_backup(self.owner)
         self.assertEqual(bundle["version"], 3)
         self.assertEqual(bundle["model_counts"]["hubtel_direct.directtransaction"], 1)
         self.assertEqual(bundle["model_counts"]["hubtel_direct.debtmandate"], 1)
+        self.assertEqual(bundle["model_counts"]["hubtel_direct.debtdebitattempt"], 1)
         self.assertTrue(
             any(app == "hubtel_direct" for app, _name in bundle["migrations"])
         )
@@ -79,8 +84,11 @@ class HubtelFullBackupCoverageTests(TransactionTestCase):
         self.assertEqual(restored.provider_status, "Paid")
         restored_mandate = DebtMandate.objects.get(pk=mandate.pk)
         self.assertEqual(restored_mandate.party.name, "Mandate Test Customer")
-        self.assertEqual(restored_mandate.status, "approved")
+        # Post-restore state must not automatically authorize another wallet
+        # debit based on an old snapshot of customer/provider state.
+        self.assertEqual(restored_mandate.status, "suspended")
         self.assertEqual(restored_mandate.maximum_total, Decimal("25.00"))
+        self.assertEqual(DebtDebitAttempt.objects.get(pk=attempt.pk).status, "finance_review")
 
     def test_legacy_archive_is_recognized_but_cannot_erase_live_hubtel_records(self):
         self.receive("hubtel-old-backup-0003")
