@@ -262,6 +262,35 @@ def verify(reference):
     transaction_status = str(data.get("transactionStatus", "")).strip().lower()
     invoice_status = str(data.get("invoiceStatus", "")).strip().lower()
 
+    # Some Hubtel responses carry both checkout Status and Sales-API
+    # TransactionStatus/InvoiceStatus. A Paid label must never override
+    # independently supplied Failed/Pending fields for the SAME reference.
+    # Refunds can legitimately retain an original successful transaction.
+    direct_states = {"paid": "paid", "unpaid": "pending", "refunded": "refunded"}
+    transaction_states = {
+        "success": "paid", "paid": "paid",
+        "failed": "failed", "failure": "failed", "declined": "failed",
+        "cancelled": "failed", "canceled": "failed",
+        "pending": "pending", "unpaid": "pending", "processing": "pending",
+    }
+    invoice_states = {
+        "success": "paid", "paid": "paid",
+        "failed": "failed", "failure": "failed", "declined": "failed",
+        "pending": "pending", "unpaid": "pending", "processing": "pending",
+        "refunded": "refunded", "refund": "refunded",
+    }
+    observed = [
+        state for state in (
+            direct_states.get(direct_status),
+            transaction_states.get(transaction_status),
+            invoice_states.get(invoice_status),
+        ) if state
+    ]
+    if "refunded" not in observed and len(set(observed)) > 1:
+        raise services.PaymentVerificationUnavailable(
+            "Hubtel returned contradictory payment statuses; manual reconciliation is required."
+        )
+
     status = ""
     if direct_status in {"paid", "unpaid", "refunded"}:
         status = {"paid": "Paid", "unpaid": "Unpaid", "refunded": "Refunded"}[direct_status]
