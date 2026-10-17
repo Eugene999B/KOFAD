@@ -41,10 +41,31 @@ class InitialAccessTests(TestCase):
         self.user.set_password("existing-private-password")
         self.user.save()
         call_command("initialize_deployment")
-        command.assert_has_calls([
-            call("migrate", interactive=False),
-            call("complete_showcase_data", confirm_live_showcase=True),
-        ])
-        self.assertEqual(command.call_count, 2)
+        command.assert_has_calls([call("migrate", interactive=False)])
+        self.assertEqual(command.call_count, 1)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("existing-private-password"))
+
+    @patch("core.management.commands.initialize_deployment.call_command")
+    @patch.dict(os.environ, {
+        "KOFAD_LOAD_SHOWCASE_DATA": "1",
+        "KOFAD_INITIAL_ADMIN_PASSWORD": "",
+        "KOFAD_OWNER_ADMIN_PHONE": "",
+        "KOFAD_ADMIN_ROTATION_PASSWORD": "",
+    })
+    def test_stale_showcase_flag_cannot_seed_data_during_startup(self, command):
+        call_command("initialize_deployment")
+        self.assertEqual(command.call_args_list, [call("migrate", interactive=False)])
+
+    @patch("core.management.commands.initialize_deployment.call_command")
+    @patch.dict(os.environ, {
+        "KOFAD_LOAD_SHOWCASE_DATA": "",
+        "KOFAD_INITIAL_ADMIN_PASSWORD": "",
+        "KOFAD_OWNER_ADMIN_PHONE": "",
+        "KOFAD_ADMIN_ROTATION_PASSWORD": "",
+    })
+    def test_startup_never_expands_previous_showcase_data(self, command):
+        # A previously created marker does not authorize adding synthetic
+        # payroll or payables during a later production deploy.
+        call_command("initialize_deployment")
+        self.assertEqual(command.call_args_list, [call("migrate", interactive=False)])
