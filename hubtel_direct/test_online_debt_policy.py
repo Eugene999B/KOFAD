@@ -123,7 +123,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         page = self.client.get(f"/debts/?customer={self.customer.pk}")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "Record partial payment")
-        self.assertContains(page, "Offer a Direct Debit repayment plan")
+        self.assertContains(page, "Add a repayment plan for another invoice")
         draft = self.draft()
         page = self.client.get(f"/debts/?customer={self.customer.pk}&type=direct")
         self.assertEqual(page.status_code, 200)
