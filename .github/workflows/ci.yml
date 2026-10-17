@@ -71,7 +71,19 @@ jobs:
       - run: python manage.py test --noinput
       - name: Verify production container
         run: |
-          docker build -t kofad-verify .
+          # Avoid false-negative CI failures when Public ECR throttles its
+          # mirror of the official Python image. This changes CI only;
+          # production continues to use the normal Dockerfile.
+          set -o pipefail
+          if ! docker build -t kofad-verify . 2>&1 | tee /tmp/kofad-docker-build.log; then
+            if ! grep -Eiq '429 Too Many Requests|toomanyrequests: Data limit exceeded' /tmp/kofad-docker-build.log; then
+              echo "::error::Container build failed for a reason other than an upstream registry rate limit."
+              exit 1
+            fi
+            echo "::warning::Public ECR rate-limited the official Python base; retrying through Docker Hub."
+            sed '1s|^FROM public.ecr.aws/docker/library/python:3.12-slim$|FROM docker.io/library/python:3.12-slim|' Dockerfile > Dockerfile.ci
+            docker build -f Dockerfile.ci -t kofad-verify .
+          fi
           docker run -d --name kofad-verify --network host -e PORT=8080 -e DJANGO_SECRET_KEY -e DATABASE_URL -e DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1 -e DJANGO_DEBUG=0 kofad-verify
           for i in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8080/health/; then break; fi
