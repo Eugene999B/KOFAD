@@ -93,11 +93,15 @@ class EmergencyRotationTests(TestCase):
     def test_matching_password_consumes_id_without_erasing_mfa(self):
         self.admin.set_password(TEMP_PASSWORD)
         self.admin.save(update_fields=["password"])
+        # A normal password change already bumps the session_version through
+        # core.signals; consuming an already-matching request must not bump it.
+        self.access.refresh_from_db()
+        version_before = self.access.session_version
         key = str(uuid.uuid4())
         self.run_initialize(password=TEMP_PASSWORD, request_id=key)
         self.assertTrue(self.admin.check_password(TEMP_PASSWORD))
         self.assertEqual(self.access.totp_secret, "test-enrolled-totp-secret")
-        self.assertEqual(self.access.session_version, 4)
+        self.assertEqual(self.access.session_version, version_before)
         self.assertEqual(self.events().count(), 1)
         self.assertEqual(self.events().first().action, "admin.emergency_credential_rotation_consumed")
 
@@ -105,6 +109,7 @@ class EmergencyRotationTests(TestCase):
         self.admin.save(update_fields=["password"])
         self.run_initialize(password=TEMP_PASSWORD, request_id=key)
         self.assertTrue(self.admin.check_password("Admin-Own-Password-Updated-2026!"))
+        self.assertEqual(self.access.session_version, version_before + 1)
         self.assertEqual(self.events().count(), 1)
 
     def test_disabled_or_demoted_admin_is_not_permission_repaired(self):
