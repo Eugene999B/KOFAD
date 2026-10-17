@@ -86,10 +86,11 @@ class Command(BaseCommand):
                                     access.force_password_change = True
                                     access.totp_secret = ""
                                     access.totp_last_step = -1
-                                    access.session_version += 1
+                                    # User.save(password=...) already increments
+                                    # access.session_version in core.signals;
+                                    # doing it again needlessly invalidates it twice.
                                     access.save(update_fields=[
                                         "force_password_change", "totp_secret", "totp_last_step",
-                                        "session_version",
                                     ])
                                     audit(
                                         None, None, "admin.emergency_credential_rotated", admin.pk,
