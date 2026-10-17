@@ -13,6 +13,10 @@ from .models import (
 from .services import balance
 
 ZERO = Decimal("0")
+OPERATING_CREDITOR_CATEGORIES = (
+    "transport", "fuel", "utilities", "rent", "maintenance",
+    "professional", "tax", "staff", "other",
+)
 REGISTER = [("reference", "Reference"), ("date", "Date"), ("kind", "Type"), ("party", "Party"), ("total", "Total"), ("paid", "Paid"), ("balance", "Balance")]
 FAMILIES = {
     "executive": "Executive performance",
@@ -58,13 +62,9 @@ def _period_metrics(branch, first, last):
         cogs += -amount if line.document.kind == "return" else amount
     gross_profit = net_sales - cogs
     expenses = _sum(docs.filter(kind="expense")) - _sum(docs.filter(kind="reversal", original__kind="expense"))
-    payable_expense_categories = {
-        "transport", "fuel", "utilities", "rent", "maintenance",
-        "professional", "tax", "staff", "other",
-    }
     expenses += _sum(Document.objects.filter(
         branch=branch, kind="creditor_charge", document_date__range=(first, last),
-        payable_category__in=payable_expense_categories,
+        payable_category__in=OPERATING_CREDITOR_CATEGORIES,
     ).exclude(correction__status="approved"))
     losses = _sum(docs.filter(kind="inventory_writeoff"))
     payroll = PayrollEntry.objects.filter(
@@ -137,7 +137,8 @@ def build_report(branch, first, last, family="register", query="", category="", 
         daily = (last - first).days <= 62
         buckets = defaultdict(lambda: {"sales": ZERO, "returns": ZERO, "expenses": ZERO, "losses": ZERO})
         for doc in docs:
-            key = doc.created_at.date().isoformat() if daily else doc.created_at.strftime("%Y-%m")
+            local_date = timezone.localtime(doc.created_at)
+            key = local_date.date().isoformat() if daily else local_date.strftime("%Y-%m")
             if doc.kind == "sale":
                 buckets[key]["sales"] += doc.total
             elif doc.kind == "return":
@@ -153,9 +154,23 @@ def build_report(branch, first, last, family="register", query="", category="", 
             document__branch=branch, document__created_at__date__range=(first, last),
             document__kind__in=["sale", "return"],
         ).select_related("document"):
-            key = line.document.created_at.date().isoformat() if daily else line.document.created_at.strftime("%Y-%m")
+            local_date = timezone.localtime(line.document.created_at)
+            key = local_date.date().isoformat() if daily else local_date.strftime("%Y-%m")
             amount = line.unit_cost * line.quantity * line.factor
             cost_by_bucket[key] += -amount if line.document.kind == "return" else amount
+
+        # Accrued operating creditor bills belong to their business date even
+        # when entered days later. Executive KPIs already include them, but
+        # excluding them here overstated daily and monthly contribution.
+        bills = Document.objects.filter(
+            branch=branch, kind="creditor_charge",
+            document_date__range=(first, last),
+            payable_category__in=OPERATING_CREDITOR_CATEGORIES,
+        ).exclude(correction__status="approved").values("document_date", "total")
+        for bill in bills:
+            day = bill["document_date"]
+            key = day.isoformat() if daily else day.strftime("%Y-%m")
+            buckets[key]["expenses"] += bill["total"]
         rows = []
         for key in sorted(buckets):
             net = buckets[key]["sales"] - buckets[key]["returns"]
