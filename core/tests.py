@@ -65,6 +65,34 @@ class BusinessTests(Fixtures, TestCase):
         self.assertEqual(Document.objects.count(), 0)
         self.assertEqual(Movement.objects.count(), 0)
 
+    def test_malformed_numeric_quantities_never_crash_sales_or_stock(self):
+        invalid = ("²", "--1", "-²", "9" * 5000, " 2 ", None, True)
+        for quantity in invalid:
+            with self.subTest(quantity=repr(quantity)[:40]):
+                with self.assertRaises(ValidationError):
+                    s.units(quantity, signed=True)
+
+        for quantity in ("²", "--1", "9" * 5000):
+            with self.subTest(sale_quantity=quantity[:24]):
+                with self.assertRaises(ValidationError):
+                    s.post_trade(
+                        self.user, self.branch,
+                        {
+                            "items": [{
+                                "product": self.product.pk,
+                                "mode": "retail_unit", "quantity": quantity,
+                            }],
+                            "payments": [{"method": "cash", "amount": "50"}],
+                            "party": self.customer.pk,
+                        },
+                        uuid.uuid4(),
+                    )
+        self.assertEqual(Document.objects.count(), 0)
+        self.assertEqual(Movement.objects.count(), 0)
+        self.assertEqual(Stock.objects.get(branch=self.branch, product=self.product).quantity, 240)
+        self.assertEqual(s.units("000002"), 2)
+        self.assertEqual(s.units("-2", signed=True), -2)
+
     def test_oversell_rolls_back_everything(self):
         with self.assertRaises(ValidationError):
             self.sale(241)

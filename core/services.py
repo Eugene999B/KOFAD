@@ -65,12 +65,22 @@ def payment_method_enabled(method, company=None):
 
 
 def units(value, signed=False):
-    if isinstance(value, bool) or not str(value).lstrip("-").isdigit():
+    # Validate the exact ASCII decimal representation before converting it.
+    # str.isdigit() accepts superscripts (e.g. "²") that int() rejects, while
+    # lstrip("-") also allowed malformed double signs through to int().
+    # Bound input length so huge untrusted numbers cannot crash sales/stock.
+    raw = str(value)
+    digits = raw[1:] if raw.startswith("-") else raw
+    if (isinstance(value, bool) or not digits or len(digits) > 20
+            or not digits.isascii() or not digits.isdecimal()):
         raise ValidationError("Quantity must be a whole number.")
-    value = int(value)
-    if abs(value) > 1000000 or value == 0 or (value < 0 and not signed):
+    try:
+        amount = int(raw)
+    except (ValueError, OverflowError) as exc:
+        raise ValidationError("Quantity must be a whole number.") from exc
+    if abs(amount) > 1000000 or amount == 0 or (amount < 0 and not signed):
         raise ValidationError("Quantity must be between 1 and 1,000,000.")
-    return value
+    return amount
 
 
 def permit(user, branch, permission):
