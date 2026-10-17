@@ -6,16 +6,15 @@
   <div>
     <p class="eyebrow">SYSTEM RECOVERY</p>
     <h2>Backup before you change what cannot be undone.</h2>
-    <p>Full-system backups preserve KOFAD Core and Market data: business records, staff, products, stock, accounting, workers, online customers, orders, support conversations, product galleries, returns, delivery tracking, settings and database-stored files/photos. Restore accepts only an untampered backup created by this KOFAD installation on the exact deployed schema.</p>
+    <p>Full-system encrypted backups preserve KOFAD Core, Market and Hubtel Direct records: business and accounting data, staff, roles and individual permission grants, products and stock, payroll, online orders, customer-service history, database-stored images/files, verified provider transactions, approved-wallet mandate evidence and refunds. Temporary login codes and active sessions are intentionally excluded. Restore accepts only an untampered backup created by this KOFAD installation on the exact deployed schema.</p>
   </div>
   <span class="pill">System administrator only</span>
 </section>
 
 <section class="panel" aria-labelledby="backup-disaster-recovery-warning">
   <div class="notice" role="note">
-    <strong id="backup-disaster-recovery-warning">Disaster-recovery protection is not automated yet.</strong>
-    KOFAD can generate encrypted backups, but this installation has not verified automatic off-site backup storage,
-    a retention schedule, or a successful restoration rehearsal. Downloading a backup is not proof that a safe,
+    <strong id="backup-disaster-recovery-warning">Off-site disaster-recovery status requires independent verification.</strong>
+    KOFAD can generate encrypted full-system backups, and the company may also keep encrypted off-site copies. The existence of an archive alone does not confirm a working schedule, complete provider history, or a successful restoration rehearsal. Downloading a backup is not proof that a safe,
     separate copy exists. Until those controls are verified, keep encrypted copies outside Railway,
     store the passphrase separately, and periodically test a restore into an isolated database.
     Do not store confidential backup files in the public GitHub repository.
@@ -59,7 +58,7 @@
     <div>
       <p class="eyebrow">2 · VALIDATE</p>
       <h2>Check a backup without changing data</h2>
-      <p class="muted">Validation verifies the KOFAD format, HMAC signature, SHA-256 checksum, model manifest and exact migration schema.</p>
+      <p class="muted">Validation verifies the KOFAD format, HMAC signature, SHA-256 checksum, model manifest and exact migration schema. New version-3 archives include Hubtel Direct; old version-2 archives do not and cannot replace a database containing active Hubtel Direct records.</p>
     </div>
   </div>
   <form method="post" enctype="multipart/form-data" class="stack-form">
@@ -85,7 +84,7 @@
     <div>
       <p class="eyebrow">3 · RESTORE</p>
       <h2>Replace the current system from a backup</h2>
-      <p class="muted">Restore replaces the current Core and Marketplace database state with the selected backup snapshot, including customer accounts, online orders, product media, support history and operational records. Active browser sessions are invalidated. You will be signed out after a successful restore.</p>
+      <p class="muted">Restore replaces the current Core, Marketplace and Hubtel Direct database state from a complete version-3 backup, including role groups, assigned staff permissions, customer accounts, online orders, payment evidence and product media. Restored debit mandates and pending charges are held for manual provider reconciliation, never blindly retried. Browser sessions are invalidated and you will be signed out.</p>
     </div>
     <span class="pill amber">Destructive</span>
   </div>
@@ -113,12 +112,12 @@
     <div>
       <p class="eyebrow">4 · RESET</p>
       <h2>Fresh-start reset</h2>
-      <p class="muted">This clears all Core and Marketplace activity: products, stock, customers, suppliers, sales, purchases, finance, workers, payroll, accounting, audit history, Market customers, online orders, OTP records, wishlists, support conversations/files, product galleries, returns/refunds and delivery tracking.</p>
+      <p class="muted">This clears every managed KOFAD Core, Marketplace and Hubtel Direct business model: sales, products, stock, suppliers, customer debts, staff, payroll, accounting, audit history, orders, provider payment/mandate records, refund cases, messages, support files, galleries, returns and delivery data. KOFAD checks the database afterward and aborts the reset if unexpected business records remain.</p>
     </div>
     <span class="pill amber">Fresh start</span>
   </div>
   <div class="notice">
-    <strong>What survives:</strong> only the system administrator account performing the reset, Django permission definitions, deployment secrets and freshly rebuilt standard role templates. Company/contact settings and location details are reset to a clean starting state. Every other staff/demo/customer/business/Market record is removed.
+    <strong>What survives:</strong> the system administrator performing the reset, essential Django schema/permission definitions, deployment secrets and six rebuilt role templates: Owner, Manager, Cashier, Storekeeper, Accountant and Auditor. All 11 server-enforced KOFAD operational grants remain assignable in <a href="/administration/roles/">Administration → Roles</a>. Custom roles, staff grants and location assignments are preserved by full <em>backup/restore</em>, but deliberately cleared by fresh <em>reset</em>.
   </div>
   <form method="post" class="stack-form maintenance-confirm-form" data-required-confirmation="{{ reset_phrase }}">
     {% csrf_token %}
@@ -129,7 +128,7 @@
     <input id="reset-confirm" name="confirmation" autocomplete="off" required>
     <label class="switch-row">
       <input type="checkbox" name="understand" value="yes" required>
-      <span><strong>I understand KOFAD will be returned to a clean launch state.</strong><small>All Core and Marketplace data except the minimum administrator access described above will be removed. A fresh downloaded backup is required first.</small></span>
+      <span><strong>I understand KOFAD will be returned to a clean launch state.</strong><small>All KOFAD Core, Marketplace and Hubtel Direct business records except the minimum administrator access described above will be removed. A fresh downloaded backup is required first.</small></span>
     </label>
     <button class="button danger" data-requires-recent-backup {% if not recent_backup %}disabled title="Download a fresh backup first"{% endif %}>Reset KOFAD to fresh start</button>
   </form>
@@ -137,6 +136,6 @@
 
 <section class="panel">
   <div class="section-heading"><div><p class="eyebrow">RECOVERY RULES</p><h2>What KOFAD protects</h2></div><span class="pill status-good">Server enforced</span></div>
-  <p>Backup files are never trusted by filename. New downloads are encrypted before leaving the server and KOFAD checks authenticated encryption, signature, checksum, record manifest and migration schema during recovery. Legacy signed plaintext backups remain restorable for compatibility. Restore and reset require the signed-in system administrator’s current password, an exact typed phrase, an explicit acknowledgement and a fresh safety backup.</p>
+  <p>Backup files are never trusted by filename. New downloads are encrypted before leaving the server and KOFAD checks authenticated encryption, signature, checksum, record manifest and migration schema during recovery. Legacy signed plaintext backups remain eligible for compatible isolated recovery; legacy archives missing Hubtel data cannot erase an active Hubtel database. Restore and reset require the signed-in system administrator’s current password, an exact typed phrase, an explicit acknowledgement and a fresh safety backup.</p>
 </section>
 {% endblock %}
