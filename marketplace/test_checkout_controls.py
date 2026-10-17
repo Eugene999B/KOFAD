@@ -51,13 +51,13 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertContains(response, "marketplace/select-affordances.")
         self.assertContains(response, 'name="fulfilment"')
 
-    def test_checkout_shows_direct_wallet_and_never_hosted_provider(self):
+    def test_checkout_collects_wallet_after_order_and_never_uses_hosted_provider(self):
         self.customer_session()
         page = self.client.get("/market/checkout/")
-        self.assertContains(page, 'name="direct_momo_phone"')
-        self.assertContains(page, 'name="direct_momo_channel"')
-        self.assertContains(page, "Continue to wallet verification")
-        self.assertNotContains(page, "Choose how to pay")
+        self.assertContains(page, "Choose your payment number after placing the order.")
+        self.assertContains(page, "Continue to payment")
+        self.assertNotContains(page, 'name="direct_momo_phone"')
+        self.assertNotContains(page, 'name="direct_momo_channel"')
         self.assertNotContains(page, "checkout.paystack.com")
 
     def test_pickup_needs_no_address_or_coordinates(self):
@@ -123,7 +123,7 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertEqual(config.bank_account_number, "0001234567")
         self.assertEqual(config.receiving_momo, "+233241234567")
 
-    def test_customer_payment_progress_is_private_and_has_no_provider_button(self):
+    def test_customer_payment_progress_reference_is_private_to_the_order_owner(self):
         self.customer_session()
         order = self.order()
         MarketPaymentAttempt.objects.create(
@@ -133,7 +133,7 @@ class CheckoutControlsTests(MarketFixtures):
         response = self.client.get(f"/market/orders/{order.pk}/")
         self.assertContains(response, "Payment verification in progress")
         self.assertNotContains(response, "Check Hubtel payment")
-        self.assertNotContains(response, "private-progress-reference")
+        self.assertContains(response, "private-progress-reference")  # Visible only to this signed-in owner
         status = self.client.get(f"/market/orders/{order.pk}/payment-status/")
         self.assertEqual(status.json(), {
             "payment_status": order.payment_status, "order_status": order.status,
@@ -145,3 +145,4 @@ class CheckoutControlsTests(MarketFixtures):
         other.customer = CustomerAccount.objects.create(phone="+233249999999", full_name="Other")
         other.save(update_fields=["customer"])
         self.assertEqual(self.client.get(f"/market/orders/{other.pk}/payment-status/").status_code, 404)
+        self.assertEqual(self.client.get(f"/market/orders/{other.pk}/").status_code, 404)
