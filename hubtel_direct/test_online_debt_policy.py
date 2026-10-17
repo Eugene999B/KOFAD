@@ -326,6 +326,57 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
         HUBTEL_DEBT_AUTO_DEBIT_ENABLED=False,
         HUBTEL_DIRECT_RECEIVE_ENABLED=False,
     )
+    def test_provider_paid_debit_posts_after_momo_channel_is_disabled(self):
+        """Disabling NEW MoMo initiation must not lose already-paid Hubtel money."""
+        from core import debts
+        from core.models import Company, Payment
+
+        self.policy.plan_creation_enabled = True
+        self.policy.save()
+        plan = self.draft()
+        DebtMandate.objects.filter(pk=plan.pk).update(status="approved")
+        plan.refresh_from_db()
+        attempt = mandates.plan_due_attempt(plan)
+        sent = timezone.now() - timedelta(minutes=10)
+        DebtDebitAttempt.objects.filter(pk=attempt.pk).update(
+            status="pending", sent_at=sent, created_at=sent, next_check_at=sent,
+        )
+
+        # The company has stopped accepting new Mobile Money payments since
+        # the original customer-authorized debit was submitted.
+        Company.objects.update(payment_momo=False)
+        with patch("hubtel_direct.client.check", return_value=("success", "already-paid-hubtel-id")) as status, \
+             patch("hubtel_direct.debit_api.debit_charge") as charge:
+            self.assertEqual(mandates.reconcile_attempts(), 1)
+        status.assert_called_once()
+        charge.assert_not_called()
+
+        attempt.refresh_from_db()
+        plan.refresh_from_db()
+        self.assertEqual(attempt.status, "settled")
+        self.assertIsNotNone(attempt.collection_document_id)
+        self.assertEqual(plan.collected_total, Decimal("200.00"))
+        self.assertEqual(
+            Payment.objects.filter(
+                document=attempt.collection_document, method="momo",
+                amount=Decimal("200.00"),
+            ).count(), 1,
+        )
+        self.assertEqual(mandates.post_verified_collections(), 0)
+
+        # This exception only permits recording independently verified funds;
+        # regular manual collection still cannot use a disabled channel.
+        with self.assertRaisesMessage(ValidationError, "Mobile Money debt payments require independent Hubtel verification"):
+            debts.post_customer_payment(
+                self.user, self.branch,
+                {"party": self.customer.pk, "amount": "10.00", "method": "momo"},
+                uuid.uuid4(),
+            )
+
+    @override_settings(
+        HUBTEL_DEBT_AUTO_DEBIT_ENABLED=False,
+        HUBTEL_DIRECT_RECEIVE_ENABLED=False,
+    )
     def test_provider_paid_unposted_receipt_can_recover_locally_after_error(self):
         """Only verified paid evidence can recover; never probe wallet again."""
         self.policy.plan_creation_enabled = True

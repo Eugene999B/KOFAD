@@ -234,7 +234,10 @@ def post_customer_payment(user, branch, payload, key, *, provider_verified_recei
             "Mobile Money debt payments require independent Hubtel verification. "
             "Use the Debt Desk to request and verify the original payment."
         )
-    if not s.payment_method_enabled(method):
+    # The settings switch blocks NEW collections, not ledger recovery for a
+    # payment already independently verified as received by Hubtel. Turning
+    # off MoMo must not strand funds already paid or allow a second charge.
+    if not provider_verified_receipt and not s.payment_method_enabled(method):
         raise ValidationError("Choose an enabled payment channel.")
     reference = str(payload.get("reference", "")).strip()[:100]
     note = str(payload.get("note", "")).strip()[:500]
@@ -251,7 +254,10 @@ def post_customer_payment(user, branch, payload, key, *, provider_verified_recei
               + (f" · {note}" if note else "")),
         created_by=user,
     )
-    s.payments(doc, [{"method": method, "amount": amount, "reference": reference}], 1)
+    s.payments(
+        doc, [{"method": method, "amount": amount, "reference": reference}], 1,
+        enforce_enabled=not provider_verified_receipt,
+    )
 
     remaining = amount
     allocations = []
