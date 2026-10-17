@@ -19,6 +19,9 @@ from . import client, verification
 from .models import DebtMomoCollection, DebtDebitAttempt
 
 IN_FLIGHT = ("initializing", "pending", "submission_unknown")
+# "attention" stays blocked from new collections but can be independently
+# rechecked by authorized finance staff without creating another debit.
+RECHECKABLE = IN_FLIGHT + ("attention",)
 CHECK_WAIT = timedelta(seconds=20)
 RECHECK_WAIT = timedelta(seconds=30)
 
@@ -27,7 +30,7 @@ def ready_for_check(row, now=None):
     """Read-only status inquiry is due; never starts another payment request."""
     now = now or timezone.now()
     return (
-        row.status in IN_FLIGHT
+        row.status in RECHECKABLE
         and now >= row.created_at + CHECK_WAIT
         and (row.checked_at is None or now >= row.checked_at + RECHECK_WAIT)
     )
@@ -128,12 +131,12 @@ def start(user, branch, *, party_id, amount, phone, channel, wallet_name, reques
 def reconcile(row_id):
     """Only a provider-confirmed PAID reference and amount can post a receipt."""
     row = DebtMomoCollection.objects.select_related("requested_by", "party", "branch").filter(pk=row_id).first()
-    if not row or row.status not in IN_FLIGHT:
+    if not row or row.status not in RECHECKABLE:
         return row
     now = timezone.now()
     if not ready_for_check(row, now):
         return row
-    if now - row.created_at > timedelta(hours=72):
+    if row.status in IN_FLIGHT and now - row.created_at > timedelta(hours=72):
         DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(status="attention", next_check_at=None)
         row.refresh_from_db()
         return row
@@ -159,16 +162,24 @@ def reconcile(row_id):
             checked_at=now, next_check_at=now + RECHECK_WAIT,
         )
     elif final == "failed":
-        DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
-            status="failed", provider_transaction_id=provider_id,
-            checked_at=now, next_check_at=None,
-        )
+        # An already escalated finance review could include evidence of an
+        # earlier paid response. Conflicting later statuses need human review,
+        # never erase that evidence by declaring the account unpaid.
+        if row.status == "attention":
+            DebtMomoCollection.objects.filter(pk=row.pk, status="attention").update(
+                checked_at=now, next_check_at=None,
+            )
+        else:
+            DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
+                status="failed", provider_transaction_id=provider_id,
+                checked_at=now, next_check_at=None,
+            )
     elif final == "success":
         try:
             with transaction.atomic():
                 services.lock_branch(row.branch)
                 locked = DebtMomoCollection.objects.select_for_update().get(pk=row.pk)
-                if locked.status not in IN_FLIGHT:
+                if locked.status not in RECHECKABLE:
                     return locked
                 # This method verifies nothing itself; it is invoked only
                 # after client.check() confirms the exact provider reference,
@@ -191,9 +202,10 @@ def reconcile(row_id):
                 ])
                 return locked
         except Exception:
-            # Paid at provider but ledger not posted: finance must reconcile
-            # this original reference, never submit another debit.
-            DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
+            # Paid at provider but ledger not posted: preserve the finance hold.
+            # A staff-initiated *read-only* provider recheck may recover the
+            # exact receipt on a later open business day. Never POST again.
+            DebtMomoCollection.objects.filter(pk=row.pk, status__in=RECHECKABLE).update(
                 status="attention", provider_transaction_id=provider_id,
                 checked_at=now, next_check_at=None,
             )
