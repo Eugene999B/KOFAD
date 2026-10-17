@@ -366,7 +366,7 @@ class OnlineDebtPolicyTests(Fixtures, TestCase):
 
         # This exception only permits recording independently verified funds;
         # regular manual collection still cannot use a disabled channel.
-        with self.assertRaisesMessage(ValidationError, "enabled payment channel"):
+        with self.assertRaisesMessage(ValidationError, "Mobile Money debt payments require independent Hubtel verification"):
             debts.post_customer_payment(
                 self.user, self.branch,
                 {"party": self.customer.pk, "amount": "10.00", "method": "momo"},
