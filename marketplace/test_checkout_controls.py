@@ -135,10 +135,15 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertNotContains(response, "Check Hubtel payment")
         self.assertContains(response, "private-progress-reference")  # Visible only to this signed-in owner
         status = self.client.get(f"/market/orders/{order.pk}/payment-status/")
-        self.assertEqual(status.json(), {
+        details = status.json()
+        for key, expected in {
             "payment_status": order.payment_status, "order_status": order.status,
-            "waiting": True, "paid": False, "message": "", "attention": False, "needs_otp": False,
-        })
+            "waiting": True, "paid": False, "message": "", "attention": False,
+            "needs_otp": False, "reference": "private-progress-reference",
+        }.items():
+            self.assertEqual(details[key], expected)
+        self.assertIn("provider_status", details)
+        self.assertIn("last_checked_at", details)
         self.assertIn("no-store", status["Cache-Control"])
         other = self.order()
         from .models import CustomerAccount
