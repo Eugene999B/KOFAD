@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -153,14 +153,19 @@ def creditors(request, branch):
     if status not in {"open", "overdue", "due_7", "current", "settled", "all"}:
         status = "open"
     include_settled = status in {"settled", "all"}
-    due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
-    overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
+    try:
+        due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
+        overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
+    except ValidationError as exc:
+        # Bad date filters and oversized result sets are client errors, not
+        # server faults. Never show truncated creditor totals.
+        return HttpResponseBadRequest(problem(exc))
     rows = _apply_creditor_filters(overview["rows"], status, due_from, due_to)
     overview = _summary_for_rows(overview, rows)
 
     selected = None
     selected_id = request.GET.get("creditor", "") or request.POST.get("party", "")
-    if str(selected_id).isdigit():
+    if str(selected_id).isascii() and str(selected_id).isdigit() and len(str(selected_id)) <= 18:
         party = Party.objects.filter(pk=int(selected_id), branch=branch, kind="supplier").first()
         if party:
             selected = {"party": party, **creditor_service.supplier_account_snapshot(party)}
@@ -170,9 +175,13 @@ def creditors(request, branch):
     selected_invoice = request.GET.get("invoice", "").strip()
     payment_doc = None
     payment_id = request.GET.get("payment", "")
-    if payment_id:
+    try:
+        payment_uuid = uuid.UUID(str(payment_id)) if payment_id else None
+    except (TypeError, ValueError, AttributeError):
+        payment_uuid = None
+    if payment_uuid:
         payment_doc = Document.objects.filter(
-            pk=payment_id, branch=branch, kind="supplier_payment"
+            pk=payment_uuid, branch=branch, kind="supplier_payment"
         ).select_related("party").first()
 
     suppliers = Party.objects.filter(branch=branch, kind="supplier").order_by("name")[:500]
@@ -199,8 +208,13 @@ def creditors_export(request, branch, format):
     query = request.GET.get("q", "").strip()[:100]
     status = request.GET.get("status", "open")
     include_settled = status in {"settled", "all"}
-    due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
-    overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
+    try:
+        due_from, due_to, due_from_raw, due_to_raw = _due_filters(request)
+        overview = creditor_service.creditors_overview(branch, query, include_settled=include_settled)
+    except ValidationError as exc:
+        # Bad date filters and oversized result sets are client errors, not
+        # server faults. Never show truncated creditor totals.
+        return HttpResponseBadRequest(problem(exc))
     rows = _apply_creditor_filters(overview["rows"], status, due_from, due_to)
     overview = _summary_for_rows(overview, rows)
 
