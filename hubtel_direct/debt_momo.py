@@ -41,6 +41,15 @@ def _gateway_transaction(row):
     )
 
 
+def _replayed_intent(previous, *, branch, party_id, actor, amount, channel, phone):
+    """A request key never authorizes another customer's or payer's debit."""
+    if (previous.branch_id != branch.pk or previous.party_id != party_id
+            or previous.requested_by_id != actor.pk or previous.amount != amount
+            or previous.channel != channel or client.unseal(previous.phone_encrypted) != phone):
+        raise ValidationError("This payment request key belongs to another transaction.")
+    return previous
+
+
 def start(user, branch, *, party_id, amount, phone, channel, wallet_name, request_key, consent):
     """Create one immutable network intent; never interpret the request as a receipt."""
     services.permit(user, branch, "operate_finance")
@@ -55,18 +64,25 @@ def start(user, branch, *, party_id, amount, phone, channel, wallet_name, reques
     amount = services.money(amount)
     if amount <= Decimal("0.00"):
         raise ValidationError("Enter a positive collection amount.")
-    if not str(party_id or "").isdigit():
+    # Unicode superscripts pass str.isdigit() but cannot be parsed by int().
+    # Reject malformed and unbounded account IDs without raising a server error.
+    raw_party_id = str(party_id or "")
+    if (not raw_party_id or len(raw_party_id) > 20
+            or not raw_party_id.isascii() or not raw_party_id.isdecimal()):
         raise ValidationError("Select a customer debt account.")
-    party_id = int(party_id)
+    party_id = int(raw_party_id)
+    if not 0 < party_id <= 9223372036854775807:
+        raise ValidationError("Select a customer debt account.")
     try:
         key = uuid.UUID(str(request_key))
     except (TypeError, ValueError, AttributeError) as exc:
         raise ValidationError("The form has expired. Reload and try again.") from exc
     previous = DebtMomoCollection.objects.filter(request_key=key).first()
     if previous:
-        if previous.branch_id != branch.pk or previous.party_id != party_id or previous.requested_by_id != user.pk or previous.amount != amount or previous.channel != channel or client.unseal(previous.phone_encrypted) != phone:
-            raise ValidationError("This payment request key belongs to another transaction.")
-        return previous
+        return _replayed_intent(
+            previous, branch=branch, party_id=party_id, actor=user,
+            amount=amount, channel=channel, phone=phone,
+        )
     # Verification is distinct from wallet authorization. Never forge identity
     # if the merchant's name-inquiry scope returns HTTP 401.
     found = verification.inquiry(phone, channel)
@@ -76,6 +92,15 @@ def start(user, branch, *, party_id, amount, phone, channel, wallet_name, reques
         raise ValidationError("Confirmed wallet name does not match the verified wallet owner.")
     with transaction.atomic():
         services.lock_branch(branch)
+        # Another worker can create the same request while name inquiry runs.
+        # Under the shared branch lock, honor an identical replay BEFORE the
+        # "unresolved collection" conflict check; reject mismatched replays.
+        previous = DebtMomoCollection.objects.filter(request_key=key).first()
+        if previous:
+            return _replayed_intent(
+                previous, branch=branch, party_id=party_id, actor=user,
+                amount=amount, channel=channel, phone=phone,
+            )
         party = Party.objects.select_for_update().filter(pk=party_id, branch=branch, kind="customer").first()
         if not party:
             raise ValidationError("Choose an existing customer debt account.")
@@ -89,9 +114,6 @@ def start(user, branch, *, party_id, amount, phone, channel, wallet_name, reques
         outstanding = sum((due for _, due in debts.open_customer_invoices(party, for_update=True)), Decimal("0.00"))
         if amount > outstanding:
             raise ValidationError("Payment exceeds the current unpaid balance.")
-        previous = DebtMomoCollection.objects.filter(request_key=key).first()
-        if previous:
-            return previous
         row = DebtMomoCollection.objects.create(
             request_key=key, branch=branch, party=party,
             requested_by=user, amount=amount, channel=channel,
