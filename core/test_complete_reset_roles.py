@@ -1,6 +1,7 @@
 """Fresh reset and backup/restore must cover every role and grant KOFAD exposes."""
 from django.contrib.auth.models import Group, Permission, User
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from core import maintenance
 from core.models import Branch, Company
@@ -94,6 +95,7 @@ class RoleEditorCompletenessTests(TestCase):
         session["branch"] = self.branch.pk
         session["access_version"] = self.owner.access.session_version
         session["mfa_ok"] = True
+        session["mfa_verified_at"] = timezone.now().timestamp()
         session.save()
 
     def test_role_editor_exposes_every_enforced_grant_exactly_once(self):
