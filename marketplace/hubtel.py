@@ -50,6 +50,9 @@ def availability_notice():
 
 
 def headers():
+    from hubtel_direct.client import whitelisted_web_process
+    if not whitelisted_web_process():
+        raise ValidationError("Hubtel requests must run on the whitelisted KOFAD web service.")
     if not configured():
         raise ValidationError("Hubtel payment is not configured yet. Please contact KOFAD.")
     token = base64.b64encode(

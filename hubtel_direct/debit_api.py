@@ -116,7 +116,7 @@ def _request(method, url, *, payload=None):
         if not 200 <= response.status_code < 300:
             # An explicit HTTP 4xx from Hubtel is a definitive refusal; an
             # outage/timeout is NOT, and must never trigger a second POST.
-            if 400 <= response.status_code < 500:
+            if response.status_code in {400, 401, 403, 404, 422}:
                 try:
                     rejected = response.json()
                 except ValueError:
@@ -155,8 +155,10 @@ def initiate_preapproval(*, phone, channel, client_reference, callback_url=None)
     code = str(client._field(body, "responseCode") or client._field(body, "code") or "")
     log.info("Hubtel preapproval initiation response ref=%s code=%s",
              hashlib.sha256(client_reference.encode()).hexdigest()[:12], code[:20] or "absent")
-    if code != "2000":
+    if code in {"4000", "4101", "4103", "4204"}:
         raise ProviderDenied(_preapproval_rejection(code))
+    if code != "2000":
+        raise client.StatusUnconfirmed("Hubtel preapproval outcome is unconfirmed; check the original reference.")
     data = _record(body)
     if client._field(data, "clientReferenceId") != client_reference:
         raise ValidationError("Hubtel preapproval reference did not match.")
@@ -238,7 +240,7 @@ def debit_charge(tx):
     """Only an independently approved bounded agreement may call this; no retries."""
     gate("charge")
     from .models import DebtDebitAttempt, OnlineDebtSettings
-    from .mandates import outstanding, UNRESOLVED_CHARGE_STATES
+    from .mandates import mandate_outstanding, UNRESOLVED_CHARGE_STATES
 
     # tx can have been fetched before a customer cancelled the mandate or
     # finance placed the account on hold. Never rely on that stale object.
@@ -252,7 +254,7 @@ def debit_charge(tx):
     if current.reference != tx.reference or current.amount != tx.amount:
         raise ValidationError("Debit attempt changed after it was scheduled.")
     if (current.amount > mandate.maximum_total - mandate.collected_total
-            or current.amount > outstanding(mandate.party)):
+            or current.amount > mandate_outstanding(mandate)):
         raise ValidationError("The real customer balance or authorized ceiling has changed.")
     if DebtDebitAttempt.objects.filter(
         mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,

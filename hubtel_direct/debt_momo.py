@@ -16,7 +16,7 @@ from core import debts, services
 from core.identity import normalize_ghana_phone
 from core.models import Party
 from . import client, verification
-from .models import DebtMomoCollection
+from .models import DebtDebitAttempt, DebtMomoCollection
 
 IN_FLIGHT = ("initializing", "pending", "submission_unknown")
 CHECK_WAIT = timedelta(minutes=5)
@@ -70,6 +70,9 @@ def start(user, branch, *, party_id, amount, phone, channel, wallet_name, reques
             raise ValidationError("Choose an existing customer debt account.")
         if DebtMomoCollection.objects.filter(party=party, status__in=IN_FLIGHT + ("attention",)).exists():
             raise ValidationError("An earlier Mobile Money collection remains unresolved. Check the original request first.")
+        from .mandates import UNRESOLVED_CHARGE_STATES
+        if DebtDebitAttempt.objects.filter(mandate__party=party, status__in=UNRESOLVED_CHARGE_STATES).exists():
+            raise ValidationError("An automatic debit remains unresolved. Check that payment before collecting again.")
         outstanding = sum((due for _, due in debts.open_customer_invoices(party, for_update=True)), Decimal("0.00"))
         if amount > outstanding:
             raise ValidationError("Payment exceeds the current unpaid balance.")
@@ -117,9 +120,15 @@ def reconcile(row_id):
     now = timezone.now()
     if now - row.created_at < CHECK_WAIT:
         return row
+    client.require_reconciliation_ready("receive")
     if now - row.created_at > timedelta(hours=72):
         DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(status="attention", next_check_at=None)
         row.refresh_from_db()
+        return row
+    claimed = DebtMomoCollection.objects.filter(
+        pk=row.pk, status__in=IN_FLIGHT, next_check_at__lte=now,
+    ).update(next_check_at=now + CHECK_WAIT)
+    if not claimed:
         return row
     from . import client as gateway
     try:

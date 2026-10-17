@@ -237,6 +237,17 @@ class DebtMandateTests(Fixtures, TestCase):
                       allow_one_partial_retry=True, minimum_partial="100")
         self.assertEqual(DebtMandate.objects.count(), 0)
 
+    def test_arrears_exclude_installments_still_in_their_grace_period(self):
+        first_due = timezone.localdate()
+        plan = self.plan(first_due_date=first_due)
+        plan.status = "approved"
+        plan.terms_snapshot["auto_collection_grace_days"] = 3
+        self.assertEqual(mandates.payment_preview(plan, first_due + timedelta(days=2)), Decimal("0.00"))
+        self.assertEqual(mandates.payment_preview(plan, first_due + timedelta(days=7)), Decimal("200.00"))
+        self.assertEqual(mandates.payment_preview(plan, first_due + timedelta(days=10)), Decimal("400.00"))
+        plan.collected_total = Decimal("200.00")
+        self.assertEqual(mandates.payment_preview(plan, first_due + timedelta(days=14)), Decimal("200.00"))
+
     def test_direct_debit_charge_disabled_until_explicit_live_activation(self):
         plan = self.plan()
         DebtMandate.objects.filter(pk=plan.pk).update(status="approved")

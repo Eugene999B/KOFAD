@@ -19,7 +19,7 @@ from core import debts as debt_service
 from core import services as core_services
 from core.models import Party, Document
 from . import client, debit_api, schedules
-from .models import DebtMandate, DebtDebitAttempt, OnlineDebtSettings
+from .models import DebtMandate, DebtDebitAttempt, DebtMomoCollection, OnlineDebtSettings
 
 ZERO = Decimal("0.00")
 CHARGE_STATES = ("planned", "sending", "pending", "unknown", "finance_review", "settled", "failed")
@@ -589,7 +589,7 @@ def payment_preview(mandate, today=None):
     scheduled = mandate.amount_per_period
     next_date = mandate.first_due_date
     ticks = 0
-    while next_date and next_date <= today and ticks < min(400, signed_periods):
+    while next_date and next_date + timedelta(days=grace) <= today and ticks < min(400, signed_periods):
         if ticks:
             scheduled += mandate.amount_per_period
         next_date = _period_next(next_date, mandate.frequency)
@@ -690,6 +690,11 @@ def dispatch_planned(limit=8):
             if DebtDebitAttempt.objects.filter(
                 mandate=mandate, status__in=UNRESOLVED_CHARGE_STATES,
             ).exclude(pk=attempt.pk).exists():
+                continue
+            if DebtMomoCollection.objects.filter(
+                party_id=mandate.party_id,
+                status__in=("initializing", "pending", "submission_unknown", "attention"),
+            ).exists():
                 continue
             policy = OnlineDebtSettings.objects.select_for_update().filter(
                 branch=mandate.branch,
