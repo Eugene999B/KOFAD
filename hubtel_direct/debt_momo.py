@@ -144,21 +144,21 @@ def reconcile(row_id):
     try:
         final, provider_id = gateway.check(_gateway_transaction(row))
     except gateway.StatusUnconfirmed:
-        DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
+        DebtMomoCollection.objects.filter(pk=row.pk, status__in=RECHECKABLE).update(
             checked_at=now, next_check_at=now + RECHECK_WAIT,
         )
         row.refresh_from_db()
         return row
     except ValidationError:
         # A provider identity/amount/currency mismatch is never a success.
-        DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
+        DebtMomoCollection.objects.filter(pk=row.pk, status__in=RECHECKABLE).update(
             status="attention", checked_at=now, next_check_at=None,
         )
         row.refresh_from_db()
         return row
 
     if final == "pending":
-        DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
+        DebtMomoCollection.objects.filter(pk=row.pk, status__in=RECHECKABLE).update(
             checked_at=now, next_check_at=now + RECHECK_WAIT,
         )
     elif final == "failed":
@@ -210,7 +210,7 @@ def reconcile(row_id):
                 checked_at=now, next_check_at=None,
             )
     else:
-        DebtMomoCollection.objects.filter(pk=row.pk, status__in=IN_FLIGHT).update(
+        DebtMomoCollection.objects.filter(pk=row.pk, status__in=RECHECKABLE).update(
             status="attention", provider_transaction_id=provider_id,
             checked_at=now, next_check_at=None,
         )
