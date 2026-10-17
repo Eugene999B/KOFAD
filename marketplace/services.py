@@ -130,23 +130,39 @@ def _google_route(origin_lat, origin_lng, destination_lat, destination_lng):
     except (requests.RequestException, ValueError) as exc:
         logger.warning("Google route lookup failed: %s", exc)
         return None
-    routes = body.get("routes") or []
-    if not (200 <= response.status_code < 300 and routes):
-        logger.warning("Google route lookup was unavailable: %s", body.get("error") or body)
+    # Google may return parseable JSON with a malformed shape during an
+    # upstream outage. Treat it as unavailable, never as a checkout 500.
+    if not isinstance(body, dict):
+        logger.warning("Google route lookup returned an unexpected response type.")
+        return None
+    routes = body.get("routes")
+    if not (200 <= response.status_code < 300
+            and isinstance(routes, list) and routes
+            and isinstance(routes[0], dict)):
+        logger.warning("Google route lookup unavailable (HTTP %s).", response.status_code)
         return None
     route = routes[0]
+    try:
+        meters = Decimal(str(route.get("distanceMeters")))
+        if not meters.is_finite() or meters < 0:
+            raise ValueError("Invalid route length.")
+    except (ValueError, ArithmeticError):
+        logger.warning("Google route lookup returned invalid distance data.")
+        return None
+
     duration = str(route.get("duration") or "0s").rstrip("s")
     try:
         duration_seconds = max(int(float(duration or 0)), 0)
-    except ValueError:
+    except (ValueError, OverflowError):
         duration_seconds = 0
+    polyline = route.get("polyline") or {}
+    encoded_polyline = polyline.get("encodedPolyline") if isinstance(polyline, dict) else ""
     return {
-        "distance_km": Decimal(str(route.get("distanceMeters", 0))) / Decimal("1000"),
+        "distance_km": meters / Decimal("1000"),
         "duration_seconds": duration_seconds,
-        "polyline": ((route.get("polyline") or {}).get("encodedPolyline") or "")[:12000],
+        "polyline": encoded_polyline[:12000] if isinstance(encoded_polyline, str) else "",
         "source": "google_route",
     }
-
 
 def delivery_quote(latitude=None, longitude=None):
     company = _delivery_company()
