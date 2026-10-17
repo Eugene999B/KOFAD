@@ -6,6 +6,8 @@ on:
       - 'core/maintenance.py'
       - 'core/test_backup_hubtel_coverage.py'
       - 'core/test_maintenance.py'
+      - 'core/test_complete_reset_roles.py'
+      - 'core/role_catalog.py'
       - 'core/test_google_drive_backup.py'
       - 'core/urls.py'
       - 'config/settings.py'
@@ -52,4 +54,4 @@ jobs:
       - name: Verify Django migration graph
         run: python manage.py migrate --noinput
       - name: Verify opt-in signed export and restorable encryption
-        run: python manage.py test core.test_google_drive_backup core.test_backup_hubtel_coverage core.test_maintenance --noinput
+        run: python manage.py test core.test_google_drive_backup core.test_backup_hubtel_coverage core.test_maintenance core.test_complete_reset_roles --noinput
