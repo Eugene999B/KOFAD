@@ -1,6 +1,4 @@
 """Staff collection status only. A refresh cannot initiate a second payment."""
-from datetime import timedelta
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -30,8 +28,7 @@ def status(request, collection_id):
     response = render(request, "hubtel_direct/debt_momo_status.html", {
         "title": "Mobile Money payment verification",
         "collection": row,
-        "can_check": row.status in debt_momo.IN_FLIGHT
-            and timezone.now() >= row.created_at + debt_momo.CHECK_WAIT,
+        "can_check": debt_momo.ready_for_check(row),
     })
     response["Cache-Control"] = "private, no-store"
     return response
@@ -45,7 +42,7 @@ def check(request, collection_id):
         messages.info(request, "This request already has a recorded outcome.")
     elif timezone.now() < row.created_at + debt_momo.CHECK_WAIT:
         messages.info(request, "Wait for the payment network to process the original request. Nothing has been charged again.")
-    elif row.checked_at and timezone.now() < row.checked_at + timedelta(seconds=60):
+    elif not debt_momo.ready_for_check(row):
         messages.info(request, "The latest check was just completed. Please wait before checking again.")
     else:
         try:
