@@ -106,11 +106,16 @@ class Command(BaseCommand):
                                         "ADMIN emergency credential rotation applied once; "
                                         "replace temporary credential at first sign-in."
                                     )
+            # Deploys must only apply migrations and explicit account bootstrap.
+            # A stale showcase flag (or a previously seeded marker) must never
+            # create payroll, supplier bills, stock, invoices or demo staff on
+            # a real business database. The existing showcase management
+            # commands remain available for deliberately managed test datasets.
             if os.environ.get("KOFAD_LOAD_SHOWCASE_DATA", "").strip() == "1":
-                call_command("load_showcase_data", confirm_live_showcase=True)
-            # Existing showcase environments must keep pace with newly added KOFAD modules.
-            # This command is a guarded no-op unless the SHOWCASE-DATA-V1 marker exists.
-            call_command("complete_showcase_data", confirm_live_showcase=True)
+                self.stderr.write(
+                    "KOFAD_LOAD_SHOWCASE_DATA is ignored during deployment: "
+                    "synthetic data must be seeded manually in a test environment."
+                )
         finally:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT pg_advisory_unlock(734001620)")
