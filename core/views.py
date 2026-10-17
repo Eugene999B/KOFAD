@@ -1345,7 +1345,7 @@ def customer_profile(request, branch, pk):
         "party": party,
         "account": snapshot,
         "activity": activity,
-        "methods": s.active_payment_methods(),
+        "methods": [(code, label) for code, label in s.active_payment_methods() if code != "momo"],
         "key": request.POST.get("key") or str(uuid.uuid4()),
     })
 

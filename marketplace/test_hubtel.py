@@ -166,6 +166,56 @@ class HubtelContractTests(TestCase):
         self.assertEqual(result["transactionStatus"], "Failed")
 
     @patch("marketplace.hubtel.requests.get")
+    def test_conflicting_provider_statuses_cannot_mark_checkout_paid(self, get):
+        get.return_value = Mock(status_code=200)
+        for checkout, transaction, invoice in [
+            ("Paid", "Failed", "Failed"),
+            ("Paid", "Pending", "Pending"),
+            ("Unpaid", "Success", "Success"),
+            ("Paid", "Success", "Failed"),
+            ("", "Failed", "Success"),
+        ]:
+            with self.subTest(checkout=checkout, transaction=transaction, invoice=invoice):
+                get.return_value.json.return_value = {
+                    "ResponseCode": "0000",
+                    "Data": [{
+                        "ClientReference": "ref1",
+                        "Status": checkout,
+                        "TransactionStatus": transaction,
+                        "InvoiceStatus": invoice,
+                        "TransactionId": "txn-original",
+                        "TransactionAmount": 1,
+                        "CurrencyCode": "GHS",
+                    }],
+                }
+                with self.assertRaisesRegex(
+                    services.PaymentVerificationUnavailable, "contradictory"
+                ):
+                    hubtel.verify("ref1")
+
+    @patch("marketplace.hubtel.requests.get")
+    def test_refunded_checkout_can_have_original_success_transaction(self, get):
+        get.return_value = Mock(status_code=200)
+        # A historical successful transaction cannot override either the
+        # checkout-level or invoice-level refund state.
+        for checkout, invoice in [
+            ("Refunded", "Success"),
+            ("Paid", "Refunded"),
+            ("Unpaid", "Refunded"),
+            ("Paid", "Refund"),
+        ]:
+            with self.subTest(checkout=checkout, invoice=invoice):
+                get.return_value.json.return_value = {
+                    "ResponseCode": "0000", "Data": [{
+                        "ClientReference": "ref1", "Status": checkout,
+                        "TransactionStatus": "Success", "InvoiceStatus": invoice,
+                        "TransactionId": "txn-original", "TransactionAmount": 1,
+                        "CurrencyCode": "GHS",
+                    }],
+                }
+                self.assertEqual(hubtel.verify("ref1")["status"], "Refunded")
+
+    @patch("marketplace.hubtel.requests.get")
     def test_reference_cannot_change_status_url(self, get):
         for reference in ("../path", "x?y=1", "", "x" * 33):
             with self.assertRaises(ValidationError):

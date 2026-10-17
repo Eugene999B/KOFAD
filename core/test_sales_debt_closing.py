@@ -253,7 +253,9 @@ class FastSalesCustomerDebtClosingTests(Fixtures, TestCase):
         payment = debt_service.post_customer_payment(self.user, self.branch, {
             "party": self.customer.pk,
             "amount": "70",
-            "method": "momo",
+            # Manual allocation test: Mobile Money uses Hubtel-confirmed
+            # reconciliation, never an unverified staff ledger posting.
+            "method": "cash",
         }, uuid.uuid4())
         allocations = list(payment.allocations.order_by("invoice__due_date", "invoice__created_at"))
         self.assertEqual([(row.invoice_id, row.amount) for row in allocations], [

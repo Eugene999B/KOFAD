@@ -109,7 +109,7 @@ class CustomerMomoTests(MarketFixtures):
         self.assertIn("momo_network", form.errors)
         self.assertFalse(CheckoutPaymentForm({"payment_method": "momo"}, momo_available=False).is_valid())
 
-    def test_customer_sees_momo_choices_when_paystack_is_selected(self):
+    def test_legacy_paystack_setting_does_not_redirect_new_direct_checkout(self):
         PaymentConfiguration.objects.create(provider="paystack")
         self.login_customer()
         session = self.client.session
@@ -117,10 +117,11 @@ class CustomerMomoTests(MarketFixtures):
         session.save()
         response = self.client.get("/market/checkout/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "MoMo number")
-        self.assertContains(response, 'name="direct_momo_phone"')
+        self.assertContains(response, "Mobile Money")
+        self.assertContains(response, "Choose your payment number after placing the order.")
+        self.assertNotContains(response, 'name="direct_momo_phone"')
         self.assertNotContains(response, "checkout.paystack.com")
-        self.assertContains(response, "Telecel Cash")
+        self.assertNotContains(response, "Paystack")
 
     def test_pending_paystack_is_polled_and_cannot_be_cancelled(self):
         self.login_customer()
