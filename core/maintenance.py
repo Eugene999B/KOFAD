@@ -26,6 +26,7 @@ from django.db.migrations.recorder import MigrationRecorder
 from django.utils import timezone
 
 from .models import Access, Audit, Branch, Company
+from .role_catalog import FRESH_START_ROLES, ROLE_PERMISSION_CODES
 
 
 BACKUP_FORMAT = "kofad-full-system-backup"
@@ -53,22 +54,6 @@ EXCLUDED_BACKUP_MODELS = {
 LEGACY_BACKUP_APP_LABELS = ("core", "marketplace")
 BACKUP_APP_LABELS = (*LEGACY_BACKUP_APP_LABELS, "hubtel_direct")
 
-FRESH_START_ROLES = {
-    "Owner": [
-        "operate_sales", "operate_inventory", "operate_finance", "approve_operations",
-        "view_reports", "manage_company", "send_messages",
-        "add_product", "change_product", "add_party", "change_party",
-    ],
-    "Manager": [
-        "send_messages", "operate_sales", "operate_inventory", "operate_finance",
-        "approve_operations", "view_reports",
-        "add_product", "change_product", "add_party", "change_party",
-    ],
-    "Cashier": ["operate_sales", "add_party"],
-    "Storekeeper": ["operate_inventory"],
-    "Accountant": ["operate_finance", "view_reports", "change_party", "add_party"],
-    "Auditor": ["view_reports"],
-}
 
 logger = logging.getLogger(__name__)
 
@@ -466,25 +451,55 @@ def reset_models():
 
 
 def _fresh_start_tables():
+    """Include every current business model, even if it has a custom db_table.
+
+    Auth permission definitions, content types and migration history are
+    *schema infrastructure*, not company business data; deleting them would
+    break role assignment and Django permissions after a reset.
+    """
     existing = set(connection.introspection.table_names())
+    business_models = reset_models()
+    expected = {model._meta.db_table for model in business_models}
+    missing = sorted(expected - existing)
+    if missing:
+        raise BackupError(
+            "Cannot safely reset: missing business tables. Apply migrations first: "
+            + ", ".join(missing[:5])
+        )
+    for model in business_models:
+        for field in model._meta.many_to_many:
+            through = field.remote_field.through
+            if through._meta.managed:
+                expected.add(through._meta.db_table)
     return sorted({
         name for name in existing
-        if name.startswith("core_") or name.startswith("marketplace_")
-        or name.startswith("hubtel_direct_")
+        if name in expected
+        or name.startswith(("core_", "marketplace_", "hubtel_direct_"))
         or name in {"django_admin_log", "django_session"}
     })
 
 
 def _rebuild_standard_roles():
-    Group.objects.all().delete()
-    for name, codes in FRESH_START_ROLES.items():
-        group = Group.objects.create(name=name)
-        group.permissions.set(
-            Permission.objects.filter(
-                content_type__app_label="core",
-                codename__in=codes,
-            )
+    """Rebuild *all* delegable role grants without silently losing a permission."""
+    codes = set(ROLE_PERMISSION_CODES)
+    if any(set(grants) - codes for grants in FRESH_START_ROLES.values()):
+        raise BackupError("Default role definitions contain unrecognized grants.")
+    known = {
+        permission.codename: permission
+        for permission in Permission.objects.filter(
+            content_type__app_label="core", codename__in=codes
         )
+    }
+    missing = sorted(codes - set(known))
+    if missing:
+        raise BackupError(
+            "Cannot rebuild KOFAD roles: role permissions are unavailable. "
+            "Apply Django migrations first: " + ", ".join(missing)
+        )
+    Group.objects.all().delete()
+    for name, grants in FRESH_START_ROLES.items():
+        group = Group.objects.create(name=name)
+        group.permissions.set([known[code] for code in grants])
 
 
 @transaction.atomic
@@ -534,6 +549,19 @@ def reset_business_data(actor):
         totp_last_step=-1,
     )
     access.branches.add(branch)
+
+    # Prove every managed business model was cleared and only the minimal
+    # company, branch and owner-access shell was recreated. A missed model or
+    # stale table must not be reported as a successful complete reset.
+    shell = {"core.company": 1, "core.branch": 1, "core.access": 1}
+    for model in models:
+        actual = model._base_manager.count()
+        expected_count = shell.get(model._meta.label_lower, 0)
+        if actual != expected_count:
+            raise BackupError(
+                f"Business reset left unexpected {model._meta.label_lower} "
+                f"records ({actual} instead of {expected_count})."
+            )
 
     # TRUNCATE already clears sessions, but keep this explicit for non-PostgreSQL
     # test doubles and future storage changes.
