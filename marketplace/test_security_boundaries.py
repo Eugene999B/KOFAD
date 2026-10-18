@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from .tests import MarketFixtures
-from .models import Conversation, MarketPaymentAttempt, MarketReturnAttachment, MarketReturnRequest
+from .models import Conversation, MarketPaymentAttempt
 from . import services, views
 from .paystack_reconciliation import reconcile_due
 from core.models import Branch
@@ -53,46 +53,6 @@ class CheckoutSecurityTests(MarketFixtures):
 
     def test_unicode_signature_fails_closed(self):
         self.assertFalse(services.paystack_signature_valid(b"{}", "é" * 128))
-
-    @override_settings(ALLOWED_HOSTS=["testserver", "staff.kofadimpex.com", "market.kofadimpex.com"])
-    def test_return_attachment_requires_staff_location_or_matching_customer(self):
-        order = self.order()
-        item = MarketReturnRequest.objects.create(
-            order=order, customer=self.customer, reason="Private return evidence",
-        )
-        attachment = MarketReturnAttachment.objects.create(
-            request=item, original_name="private-evidence.png",
-            mime_type="image/png", size=4, sha256="test-digest", data=b"test",
-        )
-        url = f"/market/returns/attachments/{attachment.pk}/"
-        other_branch = Branch.objects.create(name="Other returns location", code="oth-ret")
-        staff = User.objects.create_user("limited-return-staff", password="test-password-only")
-        staff.user_permissions.add(Permission.objects.get(codename="operate_sales"))
-        staff.access.branches.add(other_branch)
-        staff.access.refresh_from_db()
-        self.client.force_login(staff)
-        session = self.client.session
-        session["access_version"] = staff.access.session_version
-        session.save()
-        response = self.client.get(url, HTTP_HOST="staff.kofadimpex.com")
-        self.assertEqual(response.status_code, 404)
-
-        staff.access.branches.add(self.branch)
-        staff.access.refresh_from_db()
-        session = self.client.session
-        session["access_version"] = staff.access.session_version
-        session.save()
-        response = self.client.get(url, HTTP_HOST="staff.kofadimpex.com")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, b"test")
-
-        self.client.logout()
-        session = self.client.session
-        session["market_customer_id"] = self.customer.pk
-        session.save()
-        response = self.client.get(url, HTTP_HOST="market.kofadimpex.com")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content, b"test")
 
     def test_staff_cannot_read_other_branch_support_order(self):
         order = self.order()

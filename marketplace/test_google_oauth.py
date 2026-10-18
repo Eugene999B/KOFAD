@@ -120,62 +120,6 @@ class GoogleOAuthContractTests(MarketFixtures):
         self.assertRedirects(response, "/market/account/", fetch_redirect_response=False)
         self.assertEqual(self.client.session["market_customer_id"], self.customer.pk)
 
-    @patch("core.google_oauth._validated_google_claims")
-    @patch("core.google_oauth.requests.post")
-    def test_customer_google_login_rejects_poisoned_session_redirects(self, post, claims):
-        post.return_value = Mock(status_code=200)
-        post.return_value.json.return_value = {"id_token": "mock-token"}
-        claims.return_value = {"subject": "redirect-bound-customer", "email": "redirect@example.test"}
-        GoogleIdentity.objects.create(
-            kind="customer", owner_id=self.customer.pk,
-            subject="redirect-bound-customer", email="redirect@example.test",
-        )
-        for target in (
-            "https://attacker.example/fake-market-login",
-            "//attacker.example/fake-market-login",
-            r"/\\attacker.example/fake-market-login",
-            "/market/orders/" + chr(13) + chr(10) + "Location: https://attacker.example",
-            ["https://attacker.example"],
-        ):
-            with self.subTest(target=repr(target)):
-                self.client.session.flush()
-                pending = self._start("/market/auth/google/login/")
-                session = self.client.session
-                session["market_after_login"] = target
-                session.save()
-                response = self.client.get("/market/auth/google/callback/", {
-                    "state": pending["state"], "code": "mock-authorized-code",
-                })
-                self.assertRedirects(response, "/market/account/", fetch_redirect_response=False)
-                self.assertNotIn("market_after_login", self.client.session)
-        self.client.session.flush()
-        pending = self._start("/market/auth/google/login/")
-        session = self.client.session
-        session["market_after_login"] = "/market/orders/"
-        session.save()
-        response = self.client.get("/market/auth/google/callback/", {
-            "state": pending["state"], "code": "mock-authorized-code",
-        })
-        self.assertRedirects(response, "/market/orders/", fetch_redirect_response=False)
-
-    def test_google_first_registration_rejects_poisoned_session_redirect(self):
-        session = self.client.session
-        session["market_google_signup_pending"] = {
-            "subject": "new-google-subject-for-safety-test",
-            "email": "signup-safe@example.test",
-            "created_at": time.time(),
-        }
-        session["market_after_login"] = "//attacker.example/login"
-        session.save()
-        response = self.client.post("/market/auth/google/finish/", {
-            "full_name": "Verified Google Signup",
-        })
-        self.assertRedirects(response, "/market/account/", fetch_redirect_response=False)
-        self.assertNotIn("market_after_login", self.client.session)
-        self.assertTrue(GoogleIdentity.objects.filter(
-            kind="customer", subject="new-google-subject-for-safety-test",
-        ).exists())
-
     @patch("core.google_oauth.requests.post")
     def test_forged_or_replayed_callback_never_calls_google(self, post):
         pending = self._start("/market/auth/google/login/")

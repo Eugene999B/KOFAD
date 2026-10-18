@@ -1,0 +1,16 @@
+/* Readable staff login controls in dark mode. Theme changes remain accessible. */
+html[data-theme="dark"] .login-page .login-theme-toggle,
+html[data-theme="dark"] .login-page .login-theme-toggle [data-theme-label],
+html[data-theme="dark"] .login-page .login-theme-toggle [data-theme-icon]{
+  color:#e6f5f8!important;
+}
+html[data-theme="dark"] .login-page .kofad-cookie-footer button{
+  color:#c2d5df!important;
+  text-decoration:underline!important;
+  text-underline-offset:3px;
+}
+html[data-theme="dark"] .login-page .login-theme-toggle:focus-visible,
+html[data-theme="dark"] .login-page .kofad-cookie-footer button:focus-visible{
+  outline:3px solid #79dcd8!important;
+  outline-offset:3px;
+}
