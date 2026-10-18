@@ -20,6 +20,7 @@ from django.db.models.functions import Coalesce, Greatest
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 from django.views.decorators.csrf import csrf_exempt
@@ -1031,13 +1032,22 @@ def cart_add(request, customer, pk):
     if quantity > available:
         messages.error(request, f"Only {available} {listing.selling_label}(s) are currently available.")
         return redirect("market_product", pk=listing.pk)
-    cart = dict(request.session.get("market_cart", {}))
-    current = int(cart.get(str(listing.pk), 0))
-    cart[str(listing.pk)] = min(current + quantity, available)
+    saved_cart = request.session.get("market_cart", {})
+    cart = dict(saved_cart) if isinstance(saved_cart, dict) else {}
+    try:
+        current = int(cart.get(str(listing.pk), 0))
+    except (ValueError, TypeError, OverflowError):
+        current = 0
+    cart[str(listing.pk)] = min(max(current, 0) + quantity, available)
     request.session["market_cart"] = cart
     request.session.modified = True
     messages.success(request, f"{listing.display_name} added to your cart.")
-    return redirect(request.POST.get("next") or "market_cart")
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(next_url)
+    return redirect("market_cart")
 
 
 @market_customer_required
@@ -1708,7 +1718,8 @@ def reorder_order(request, customer, pk):
         OnlineOrder.objects.prefetch_related("lines__listing"),
         pk=pk, customer=customer,
     )
-    cart = request.session.get("market_cart", {})
+    saved_cart = request.session.get("market_cart", {})
+    cart = dict(saved_cart) if isinstance(saved_cart, dict) else {}
     added = 0
     skipped = 0
     for line in order.lines.all():
@@ -1717,8 +1728,11 @@ def reorder_order(request, customer, pk):
             skipped += 1
             continue
         key = str(listing.pk)
-        current = int(cart.get(key, 0) or 0)
-        cart[key] = min(current + line.quantity, 999)
+        try:
+            current = int(cart.get(key, 0) or 0)
+        except (ValueError, TypeError, OverflowError):
+            current = 0
+        cart[key] = min(max(current, 0) + line.quantity, 999)
         added += 1
     request.session["market_cart"] = cart
     request.session.modified = True
