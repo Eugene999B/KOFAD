@@ -152,6 +152,18 @@ def login_view(request):
         market_services.clear_customer_session(request)
     error = ""
     if request.method == "POST":
+        from .turnstile import verify_turnstile
+        if not verify_turnstile(request, kind="staff", action="staff_login"):
+            from .google_oauth import enabled as google_enabled
+            response = render(request, "login.html", {
+                "error": "Verification could not be completed. Reload the page and try again.",
+                "username": request.POST.get("username", ""),
+                "google_ready": google_enabled(),
+                "turnstile_sitekey": settings.KOFAD_TURNSTILE_STAFF_SITE_KEY if settings.KOFAD_TURNSTILE_ENABLED else "",
+            })
+            response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            response["Cache-Control"] = "no-store, private"
+            return response
         identifier = request.POST.get("username", "").strip()[:150]
         canonical, lock_identity = resolve_login_identifier(identifier)
         account_key = hashlib.sha256(lock_identity.encode()).hexdigest()
@@ -235,6 +247,7 @@ def login_view(request):
     response = render(request, "login.html", {
         "error": error, "username": request.POST.get("username", ""),
         "google_ready": google_enabled(),
+        "turnstile_sitekey": settings.KOFAD_TURNSTILE_STAFF_SITE_KEY if settings.KOFAD_TURNSTILE_ENABLED else "",
     })
     response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     response["Cache-Control"] = "no-store, private"

@@ -111,6 +111,11 @@ def _market_context(request, **extra):
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
+        "turnstile_sitekey": (
+            settings.KOFAD_TURNSTILE_MARKET_SITE_KEY
+            if settings.KOFAD_TURNSTILE_ENABLED and request.path in {"/market/access/", "/market/account/login/"}
+            else ""
+        ),
         "google_ready": google_oauth_enabled(),
         "company": getattr(request, "company", None) or Company.objects.first() or Company(),
         "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
@@ -467,6 +472,12 @@ def customer_access(request):
         request.session["market_after_login"] = requested_next
     form = CustomerAccessForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
+        from core.turnstile import verify_turnstile
+        if not verify_turnstile(request, kind="market", action="market_access"):
+            messages.error(request, "Verification could not be completed. Reload the page and try again.")
+            return render(request, "marketplace/access.html", _market_context(
+                request, title="Sign in or create your account", form=form,
+            ))
         phone = form.cleaned_data["phone"]
         try:
             # Returning customers authenticate with their password; do not charge
@@ -849,6 +860,12 @@ def customer_login(request):
     initial_phone = request.session.get("market_login_phone", "")
     form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
     if request.method == "POST" and form.is_valid():
+        from core.turnstile import verify_turnstile
+        if not verify_turnstile(request, kind="market", action="market_login"):
+            messages.error(request, "Verification could not be completed. Reload the page and try again.")
+            return render(request, "marketplace/login.html", _market_context(
+                request, title="Customer sign in", form=form, locked_phone=initial_phone,
+            ))
         identifier = form.cleaned_data["phone"]
         now = timezone.now()
         # Use a stable opaque throttle key for email attempts; never store an
