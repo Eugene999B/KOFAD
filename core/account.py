@@ -74,7 +74,9 @@ PHONE_LINK_SESSION_KEY = "staff_phone_link_verification"
 def _phone_link_budget(user_id):
     now = timezone.now()
     with transaction.atomic():
-        for key, limit in (("staff-phone-link:global", 100), (f"staff-phone-link:{user_id}", 3)):
+        # Check the per-account cap first so blocked users cannot exhaust the
+        # shared SMS budget by repeatedly submitting over-limit requests.
+        for key, limit in ((f"staff-phone-link:{user_id}", 3), ("staff-phone-link:global", 100)):
             row, _ = LoginAttempt.objects.get_or_create(key=digest(key))
             row = LoginAttempt.objects.select_for_update().get(pk=row.pk)
             if not row.blocked_until or row.blocked_until <= now:

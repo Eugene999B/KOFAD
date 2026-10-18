@@ -6,8 +6,9 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 
-from .models import Access, Branch, PasswordRecovery
+from .models import Access, Branch, LoginAttempt, PasswordRecovery
 from .sms.providers import Submission
+from .account import digest
 
 
 @override_settings(SMS_ENABLED=True, SMS_SANDBOX=False, ARKESEL_API_KEY="test-only", SMS_SENDER_ID="KOFAD")
@@ -248,6 +249,7 @@ class AccountRecoveryTests(TestCase):
                     "current_password":"ADMIN",
                 })
         self.assertEqual(self.provider.submit.call_count, 3)
+        self.assertEqual(LoginAttempt.objects.get(key=digest("staff-phone-link:global")).failures, 3)
 
     def test_phone_cannot_be_claimed_from_another_staff_account(self):
         other = User.objects.create_user("other-staff", password="another-password")
