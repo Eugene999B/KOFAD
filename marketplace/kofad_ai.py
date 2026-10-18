@@ -358,7 +358,14 @@ def _public_history(value):
         if role != "user" or not isinstance(content, str):
             continue
         content = " ".join(content.split())[:440]
-        if len(content) < 2 or contains_sensitive_input(content) or PRIVATE_TOPIC.search(content) or INTENT_ORDER.search(content):
+        if (
+            len(content) < 2
+            or contains_sensitive_input(content)
+            or PRIVATE_TOPIC.search(content)
+            or INTENT_ORDER.search(content)
+            or INSTRUCTION_ATTACK.search(content)
+            or META_QUESTION.search(content)
+        ):
             continue
         recent.append({"role": role, "content": content})
     return recent[-6:]
