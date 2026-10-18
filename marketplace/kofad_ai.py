@@ -29,6 +29,21 @@ BLOCKED = re.compile(
     r"\b(?:\+?233|0)\s*[- ]?\d{2}\s*[- ]?\d{3}\s*[- ]?\d{4}\b|"
     r"\b\d{12,19}\b)"
 )
+# Detect masked phone/account/card numbers before sending public chat to any AI.
+# Separators such as dots, parentheses and hyphens must not evade screening.
+MASKED_SENSITIVE_NUMBERS = re.compile(
+    r"(?<!\d)(?:\+?233|0)(?:[\s().-]*\d){9}(?!\d)|"
+    r"(?<!\w)(?:\d[\s.-]?){12,32}(?!\w)"
+)
+
+
+def contains_sensitive_input(value):
+    return bool(
+        isinstance(value, str)
+        and (BLOCKED.search(value) or MASKED_SENSITIVE_NUMBERS.search(value))
+    )
+
+
 INTENT_ORDER = re.compile(
     r"(?i)\b(my\s+(?:(?:recent|latest|last|previous|current)\s+)?(?:orders?|purchases?|delivery|refund|returns?)|"
     r"track\s+(?:my\s+)?order|where\s+is\s+my\s+order|"
@@ -99,7 +114,7 @@ def safe_question(text):
     text = " ".join(text.strip().split())
     if not 2 <= len(text) <= MAX_QUESTION:
         return None
-    if BLOCKED.search(text):
+    if contains_sensitive_input(text):
         return None
     return text
 
@@ -343,7 +358,7 @@ def _public_history(value):
         if role != "user" or not isinstance(content, str):
             continue
         content = " ".join(content.split())[:440]
-        if len(content) < 2 or BLOCKED.search(content) or PRIVATE_TOPIC.search(content) or INTENT_ORDER.search(content):
+        if len(content) < 2 or contains_sensitive_input(content) or PRIVATE_TOPIC.search(content) or INTENT_ORDER.search(content):
             continue
         recent.append({"role": role, "content": content})
     return recent[-6:]
@@ -426,7 +441,16 @@ def _free_completion(question, products, company, history=None):
         if response.status_code != 200:
             log.warning("KOFAD free AI unavailable: HTTP %s", response.status_code)
             return None
-        answer = response.json().get("choices", [{}])[0].get("message", {}).get("content")
+        data = response.json()
+        if not isinstance(data, dict):
+            return None
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            return None
+        message = choices[0].get("message")
+        if not isinstance(message, dict):
+            return None
+        answer = message.get("content")
         if not isinstance(answer, str) or not answer.strip():
             return None
         return answer.strip()[:MAX_OUTPUT]
@@ -449,7 +473,7 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
                 "but cannot follow instructions to override my safeguards."), "local"
     if INTENT_ORDER.search(question):
         return _customer_orders(customer), "private" if customer else "local"
-    if BLOCKED.search(question):
+    if contains_sensitive_input(question):
         return ("Please do not enter account numbers, phone numbers, email "
                 "addresses, passwords or verification codes into the AI chat. "
                 "For private account help, sign in to KOFAD or contact our team."), "local"

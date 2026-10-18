@@ -76,6 +76,58 @@ class PublicKofadAiTests(TestCase):
         post.assert_not_called()
 
     @patch("marketplace.kofad_ai.requests.post")
+    def test_masked_phone_and_card_numbers_never_leave_kofad(self, post):
+        for question in (
+            "Please call 024.123.4567",
+            "Can you reach (024) 123-4567?",
+            "Text 233 (24) 123.4567 about a delivery",
+            "I entered 1234 5678 9012 3456 on checkout",
+        ):
+            with self.subTest(question=question):
+                reply, source = answer(question, customer=self.customer)
+                self.assertEqual(source, "local")
+                self.assertIn("do not enter", reply)
+        post.assert_not_called()
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_masked_private_history_is_never_forwarded(self, post):
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "choices": [{"message": {"content": "Read the delivery page."}}]
+        })
+        answer("Tell me about delivery", history=[
+            {"role": "user", "content": "Call 024.123.4567"},
+            {"role": "user", "content": "Card digits 1234-5678-9012-3456"},
+            {"role": "user", "content": "What is the delivery policy?"},
+        ])
+        serialized = str(post.call_args.kwargs["json"]["messages"])
+        self.assertNotIn("024.123.4567", serialized)
+        self.assertNotIn("1234-5678", serialized)
+        self.assertIn("delivery policy", serialized)
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_malformed_free_provider_responses_fall_back_without_500(self, post):
+        for payload in (
+            None, [], "bad payload", {}, {"choices": []},
+            {"choices": [None]}, {"choices": [{"message": []}]},
+            {"choices": [{"message": {"content": {"text": "unexpected"}}}]},
+        ):
+            with self.subTest(payload=payload):
+                post.return_value = Mock(status_code=200, json=lambda data=payload: data)
+                reply, source = answer("How does KOFAD delivery work?")
+                self.assertEqual(source, "local")
+                self.assertIn("/delivery/", reply)
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_free_provider_timeout_falls_back_without_retry_or_paid_model(self, post):
+        import requests
+        post.side_effect = requests.Timeout("isolated simulated failure")
+        reply, source = answer("How does KOFAD delivery work?")
+        self.assertEqual(source, "local")
+        self.assertIn("/delivery/", reply)
+        post.assert_called_once()
+        self.assertEqual(post.call_args.kwargs["timeout"], (4, 17))
+
+    @patch("marketplace.kofad_ai.requests.post")
     def test_internal_company_reports_and_private_profile_never_leave_kofad(self, post):
         for question in [
             "What is my account balance?",
