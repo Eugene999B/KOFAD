@@ -460,16 +460,16 @@ def product_detail(request, pk):
 
 
 def product_image(request, pk, size="large"):
-    listing = get_object_or_404(MarketListing, pk=pk)
-    if not listing.enabled and not (
-        request.user.is_authenticated and request.user.has_perm("core.change_product")
-    ):
+    listing = get_object_or_404(MarketListing.objects.select_related("product"), pk=pk)
+    published = listing.enabled and listing.product.active
+    staff_allowed = request.user.is_authenticated and request.user.has_perm("core.change_product")
+    if not published and not staff_allowed:
         raise Http404
     data = listing.image_thumb if size == "thumb" else listing.image_data
     if not data:
         raise Http404
     response = HttpResponse(bytes(data), content_type=listing.image_mime or "image/webp")
-    response["Cache-Control"] = "public, max-age=86400" if listing.enabled else "private, no-store"
+    response["Cache-Control"] = "public, max-age=86400" if published else "private, no-store"
     response["Content-Disposition"] = "inline"
     return response
 
@@ -1670,17 +1670,17 @@ def market_search_suggestions(request):
 
 
 def gallery_image(request, pk, size="large"):
-    image = get_object_or_404(MarketListingImage.objects.select_related("listing"), pk=pk)
-    if not image.listing.enabled and not (
-        request.user.is_authenticated and request.user.has_perm("core.change_product")
-    ):
+    image = get_object_or_404(MarketListingImage.objects.select_related("listing__product"), pk=pk)
+    published = image.listing.enabled and image.listing.product.active
+    staff_allowed = request.user.is_authenticated and request.user.has_perm("core.change_product")
+    if not published and not staff_allowed:
         raise Http404
     data = image.image_thumb if size == "thumb" else image.image_data
     if not data:
         raise Http404
     response = HttpResponse(bytes(data), content_type=image.image_mime or "image/webp")
     response["Content-Disposition"] = "inline"
-    response["Cache-Control"] = "public, max-age=86400" if image.listing.enabled else "private, no-store"
+    response["Cache-Control"] = "public, max-age=86400" if published else "private, no-store"
     return response
 
 
