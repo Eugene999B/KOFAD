@@ -28,7 +28,10 @@ class DiscoverySchemaTests(SimpleTestCase):
         graph = self._data("/market/")["@graph"]
         website = next(obj for obj in graph if obj["@type"] == "WebSite")
         self.assertEqual(website["name"], "KOFAD Market")
-        self.assertEqual(website["url"], "https://market.kofadimpex.com/")
+        self.assertEqual(website["url"], "https://market.kofadimpex.com/market/")
+        self.assertEqual(website["@id"], "https://market.kofadimpex.com/market/#website")
+        market_page = next(obj for obj in graph if obj["@type"] == "CollectionPage")
+        self.assertEqual(market_page["isPartOf"]["@id"], website["@id"])
         category = self._data("/market/categories/home-cleaning/", category_name="Home & Cleaning")["@graph"]
         breadcrumb = next(obj for obj in category if obj["@type"] == "BreadcrumbList")
         self.assertEqual(breadcrumb["itemListElement"][-1]["name"], "Home & Cleaning")
@@ -66,12 +69,36 @@ class DiscoverySchemaTests(SimpleTestCase):
 
     def test_unique_titles_and_search_intent_are_truthful(self):
         self.assertIn("Wholesale", page_title("/wholesale/", "Bulk supply"))
+        self.assertIn("Download", page_title("/apps/", "Get app"))
+        self.assertIn("FAQs", page_title("/faq/", "Help"))
+        self.assertIn("Contact", page_title("/contact/", "Enquiries"))
+        self.assertIn("order support", description("/contact/"))
         self.assertIn("Ghana", description("/market/"))
         self.assertNotIn("worldwide shipping", description("/wholesale/").lower())
 
 
 @override_settings(ALLOWED_HOSTS=["kofadimpex.com", "market.kofadimpex.com", "staff.kofadimpex.com"])
 class PublicDiscoveryPagesTests(TestCase):
+    def test_company_home_offers_clear_crawlable_sitelink_navigation(self):
+        response = self.client.get("/", HTTP_HOST="kofadimpex.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'aria-label="Explore KOFAD pages"')
+        self.assertContains(response, "KOFAD IMPEX ENTERPRISE")
+        for path in (
+            "/market/", "/wholesale/", "/apps/", "/delivery/",
+            "/faq/", "/contact/", "/about/", "/returns-policy/",
+        ):
+            with self.subTest(path=path):
+                self.assertContains(response, f'href="{path}"')
+
+    def test_customer_app_page_is_public_and_describes_real_downloads(self):
+        response = self.client.get("/apps/", HTTP_HOST="kofadimpex.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'rel="canonical" href="https://kofadimpex.com/apps/"')
+        self.assertContains(response, "Download KOFAD Market App")
+        self.assertContains(response, '"name":"KOFAD IMPEX ENTERPRISE"')
+        self.assertNotContains(response, 'content="noindex,nofollow,noarchive"')
+
     def test_wholesale_guide_indexable_on_company_domain(self):
         response = self.client.get("/wholesale/", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
