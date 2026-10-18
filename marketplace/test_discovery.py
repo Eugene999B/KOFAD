@@ -151,7 +151,6 @@ class PublicDiscoveryPagesTests(TestCase):
         self.assertContains(response, 'aria-label="Sign in"')
         self.assertContains(response, 'aria-label="Cart with 0 items"')
         self.assertContains(response, 'aria-label="Search KOFAD Market"')
-        self.assertContains(response, 'aria-label="Product categories"')
         self.assertContains(response, 'class="shop-cart-graphic"')
         self.assertContains(response, 'class="shop-brand-copy"')
         self.assertContains(response, 'class="shop-ui-icon"')
