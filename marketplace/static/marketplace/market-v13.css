@@ -617,3 +617,29 @@ html[data-theme="dark"] .market-mobile-dock{
 html[data-theme="dark"] .market-mobile-dock a{color:#9cabb4!important}
 html[data-theme="dark"] .market-mobile-dock a.active{background:#102521!important;color:#88e0db!important}
 html[data-theme="dark"] .market-mobile-dock a.active b{background:#183833!important}
+
+/* Accessibility: legible order history in both appearance modes. */
+.orders-v2-page .order-status{
+  font-size:11px!important;
+  line-height:1.35!important;
+}
+.orders-v2-page .order-status-filter a{
+  font-size:12px!important;
+  min-height:36px!important;
+}
+.orders-v2-page .order-card-main>span,
+.orders-v2-page .order-card-foot i{
+  font-size:12px!important;
+  font-style:normal!important;
+  line-height:1.4!important;
+}
+html[data-theme="dark"] .orders-v2-page .market-eyebrow{
+  color:#a8bac6!important;
+}
+html[data-theme="dark"] .orders-v2-page .order-card-main>span,
+html[data-theme="dark"] .orders-v2-page .order-card-foot i{
+  color:#99e9dd!important;
+}
+html[data-theme="dark"] .orders-v2-page .order-history-card:is(:hover,:focus-visible) .order-card-foot i{
+  color:#d6fff6!important;
+}
