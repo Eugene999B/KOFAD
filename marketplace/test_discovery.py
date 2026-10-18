@@ -103,10 +103,12 @@ class PublicDiscoveryPagesTests(TestCase):
             with self.subTest(path=path):
                 response = self.client.get(path, HTTP_HOST=hostname)
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, "kofad-light-contrast.css")
+                # ManifestStaticFilesStorage fingerprints production assets.
+                # Test stable filename stems and cascade order instead.
+                self.assertContains(response, "kofad-light-contrast.")
                 self.assertLess(
-                    response.content.index(b"kofad-atelier.css"),
-                    response.content.index(b"kofad-light-contrast.css"),
+                    response.content.index(b"kofad-atelier."),
+                    response.content.index(b"kofad-light-contrast."),
                 )
 
     def test_company_home_has_compact_footer_without_oversized_navy_band(self):
