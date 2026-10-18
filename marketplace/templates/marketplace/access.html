@@ -1,5 +1,5 @@
 {% extends "marketplace/base.html" %}{% load static %}
-{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/customer-auth-premium.css' %}">{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/customer-auth-premium.css' %}">{% if turnstile_sitekey %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}{% endblock %}
 {% block content %}
 <section class="kofad-entry simple-customer-access premium-market-access" aria-labelledby="market-access-title">
 <div class="kofad-entry-shell">
@@ -19,6 +19,10 @@
 <label for="{{ form.phone.id_for_label }}">Mobile number</label>
 {{ form.phone }}{{ form.phone.errors }}
 <p class="kofad-phone-help">Use your Ghana mobile number to sign in or register.</p>
+{% if turnstile_sitekey %}
+<div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-action="market_access" data-theme="auto"></div>
+<p class="turnstile-privacy-note">Protected by Cloudflare Turnstile · <a href="/privacy/">Privacy</a></p>
+{% endif %}
 <button class="market-button primary wide" type="submit">Continue with mobile number <span aria-hidden="true">→</span></button>
 </form>
 <div class="kofad-access-bottom"><a class="kofad-password-link" href="/market/account/login/">Already have a password? <strong>Sign in</strong></a>

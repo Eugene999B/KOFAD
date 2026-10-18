@@ -1,5 +1,5 @@
 {% extends "marketplace/base.html" %}{% load static %}
-{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}"><link rel="stylesheet" href="{% static 'marketplace/customer-auth-premium.css' %}">{% endblock %}
+{% block after_styles %}<link rel="stylesheet" href="{% static 'experience-upgrade.css' %}"><link rel="stylesheet" href="{% static 'marketplace/customer-auth-premium.css' %}">{% if turnstile_sitekey %}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>{% endif %}{% endblock %}
 {% block content %}
 <section class="kofad-entry simple-customer-access premium-market-access" aria-labelledby="market-login-title"><div class="kofad-entry-shell">
 
@@ -18,6 +18,10 @@
 {% endif %}
 <label for="{{ form.password.id_for_label }}">Password</label>{{ form.password }}{{ form.password.errors }}
 <a class="kofad-forgot" href="/market/account/password-reset/">Forgot your password?</a>
+{% if turnstile_sitekey %}
+<div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-action="market_login" data-theme="auto"></div>
+<p class="turnstile-privacy-note">Protected by Cloudflare Turnstile · <a href="/privacy/">Privacy</a></p>
+{% endif %}
 <button class="market-button primary wide" type="submit">Sign in securely <span aria-hidden="true">→</span></button>
 </form>
 {% if google_ready %}

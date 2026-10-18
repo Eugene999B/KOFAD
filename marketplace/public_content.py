@@ -1,5 +1,5 @@
-"""Public customer information. Policy version approved for launch on 7 October 2026."""
-POLICY_VERSION = "2026-10-07"
+"""Public customer information and the versioned privacy notice."""
+POLICY_VERSION = "2026-10-18"
 PAGES = {
     "wholesale": {
         "title": "Wholesale & bulk supply in Ghana",
@@ -98,6 +98,7 @@ PAGES = {
         "sections": [
             ("Information we collect", ["Account and order information can include your name, telephone number, email, delivery address, order history, payment reference and support messages. If you choose map-based location assistance, your selected coordinates are used for delivery planning. Security and service logs may include technical request information."]),
             ("Why it is used", ["We use this information to create and protect accounts, verify access, process orders and refunds, arrange fulfilment, provide customer support, maintain transaction records and prevent fraud. Information supplied in the feedback form is used to respond to that enquiry."]),
+            ("Cloudflare Turnstile for account protection", ["Customer and staff sign-in pages use Cloudflare Turnstile to distinguish legitimate visitors from automated requests without a visual CAPTCHA. Cloudflare may process browser and network security signals for this purpose. KOFAD validates short-lived verification tokens on the server and does not use them for advertising. Cloudflare's Turnstile Privacy Addendum applies: https://www.cloudflare.com/turnstile-privacy-policy/."]),
             ("Service providers", ["Where needed for the requested service, information is shared with payment processors, messaging providers, hosting providers and delivery personnel. Payment details are handled by the selected payment provider; do not send full card details or payment PINs in a support message. If an optional map service is used, it may receive your search or selected location under its own privacy terms. Service providers may process information outside Ghana."]),
             ("Google sign-in", ["Google sign-in is optional. When you link a Google account, we receive its verified email address and permanent Google account identifier to connect it to your existing KOFAD account and authenticate later sign-ins. Linking requires your KOFAD password. It does not grant staff permissions or give KOFAD access to your personal Gmail inbox. You can disconnect Google in account security and revoke KOFAD access in your Google Account. Existing phone/password access remains available."]),
             ("Company email connection", ["A company manager may separately authorise a business Gmail sender with send-only permission. KOFAD stores the encrypted connection token and sender identity to send account verification and opted-in service notifications. This does not request permission to read the mailbox or connect customer Gmail inboxes. Managers can disconnect the sender; revoke access in the connected Google Account as well. KOFAD uses Google API information only for the disclosed account and email features and follows the Google API Services User Data Policy, including its Limited Use requirements."]),

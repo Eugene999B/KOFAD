@@ -116,6 +116,19 @@ class AccessMiddleware:
                 "style-src 'self'; img-src 'self' data:; font-src 'self'; "
                 "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
             )
+        elif settings.KOFAD_TURNSTILE_ENABLED and request.path in {
+            settings.STAFF_LOGIN_PATH, "/login/", "/market/access/", "/market/account/login/",
+        }:
+            # Turnstile script and verification iframe are required only on login forms.
+            response["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' https://unpkg.com https://challenges.cloudflare.com; "
+                "style-src 'self' https://unpkg.com; "
+                "img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; "
+                "font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; "
+                "frame-src https://challenges.cloudflare.com; "
+                "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+            )
         else:
             response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         geolocation = "(self)" if request.path.startswith(geolocation_paths) else "()"
