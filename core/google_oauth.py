@@ -29,6 +29,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
 
@@ -129,6 +130,26 @@ def _redirect(kind, success=False):
     if kind == "customer":
         return redirect("market_account" if success else "market_login")
     return redirect("dashboard" if success else "login")
+
+
+def _customer_login_return(request):
+    """Consume only same-origin local paths saved before Google authentication.
+
+    The session value is a navigation hint, never an authority to redirect to
+    a third-party host. Recheck it at the final OAuth/registration sink.
+    """
+    target = request.session.pop("market_after_login", None)
+    if (
+        isinstance(target, str)
+        and len(target) <= 2048
+        and target.startswith("/")
+        and not any(ord(char) < 32 or ord(char) == 92 for char in target)
+        and url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+        )
+    ):
+        return target
+    return "market_account"
 
 
 def _current_owner(request, kind):
@@ -332,7 +353,7 @@ def callback(request, kind):
         binding.last_login_at = timezone.now()
         binding.email = identity["email"]
         binding.save(update_fields=["last_login_at", "email"])
-        return redirect(request.session.pop("market_after_login", None) or "market_account")
+        return redirect(_customer_login_return(request))
     except (requests.RequestException, ValueError, KeyError, ValidationError) as exc:
         # Never disclose tokens, authorization code or credentials to logs/UI.
         logger.warning("Google OAuth sign-in failed for kind=%s", kind)
@@ -395,7 +416,7 @@ def customer_complete(request):
                 market_services.set_customer_session(request, customer)
                 request.session["market_google_authenticated_at"] = time.time()
                 messages.success(request, "Welcome to KOFAD! You can add a phone number later in Account Security.")
-                return redirect(request.session.pop("market_after_login", None) or "market_account")
+                return redirect(_customer_login_return(request))
             except (IntegrityError, ValidationError):
                 messages.error(request, "This Google account is already registered. Please sign in.")
     elif request.method != "GET":
