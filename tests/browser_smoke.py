@@ -718,6 +718,11 @@ with sync_playwright() as p:
     assert market_page.locator(".home-featured-grid .market-product-card").count() <= 3
     assert market_page.locator(".public-mobile-actions").is_visible()
     assert market_page.locator(".market-cart-link").count() == 0
+    # The company homepage uses a compact light policy footer, not the large
+    # dark commerce footer shown previously. Market and inner pages are untouched.
+    assert market_page.locator("footer.market-footer.commerce-footer").count() == 0
+    assert market_page.locator("footer.kfd-compact-footer").count() == 1
+    assert market_page.locator("footer.kfd-compact-footer .company-links a").count() >= 8
     assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 400
     assert market_page.locator("[data-hero-count]").inner_text() == "01 / 06"
     market_page.screenshot(path=str(out / "homepage-market-mobile.png"), full_page=True)
@@ -736,6 +741,13 @@ with sync_playwright() as p:
         return title.top >= hero.top - 1 && cta.bottom <= hero.bottom - 10;
     }""")
     assert market_page.get_by_role("button", name="Next photograph").is_visible()
+    # The contact cards fill the row rather than leaving an unused third column.
+    assert market_page.locator(".commerce-contact-simple .contact-method-grid").evaluate("""grid => {
+        const cards = [...grid.querySelectorAll(".contact-method-card")];
+        if (cards.length !== 2) return true;
+        const bounds = grid.getBoundingClientRect();
+        return cards[cards.length - 1].getBoundingClientRect().right >= bounds.right - 18;
+    }""")
     assert market_page.locator("[data-slide-pause]").count() == 0
     # The slideshow must advance without anybody touching play/pause. Remote
     # image requests are mocked above so this remains deterministic in CI.
@@ -755,6 +767,9 @@ with sync_playwright() as p:
         assert market_page.evaluate(
             "document.documentElement.scrollWidth <= window.innerWidth"
         ), f"Homepage overflow at {width}px"
+        assert market_page.locator("footer.kfd-compact-footer").evaluate(
+            "node => node.getBoundingClientRect().right <= innerWidth + 1"
+        ), f"Homepage footer overflow at {width}px"
         assert market_page.locator(".kfd-hero").evaluate("""el => {
             const hero = el.getBoundingClientRect();
             const head = el.querySelector("h1").getBoundingClientRect();
