@@ -645,12 +645,13 @@ with sync_playwright() as p:
     admin_page.goto("http://127.0.0.1:8000/account/")
     # In CI, SMS is disabled. Requesting a new number must fail closed and
     # preserve the original number until the six-digit SMS code is verified.
-    recovery_before = User.objects.get(username="admin").access.recovery_phone
+    recovery_before = admin_page.get_by_label("Recovery phone number",exact=False).input_value()
     admin_page.get_by_label("Recovery phone number",exact=False).fill("0241234567")
     admin_page.get_by_label("Current password",exact=False).fill("admin")
     admin_page.locator('form:has(input[name="action"][value="recovery"]) button').click()
     assert admin_page.get_by_text("SMS verification is currently unavailable",exact=False).count() >= 1
-    assert User.objects.get(username="admin").access.recovery_phone == recovery_before
+    admin_page.goto("http://127.0.0.1:8000/account/")
+    assert admin_page.get_by_label("Recovery phone number",exact=False).input_value() == recovery_before
     admin_page.screenshot(path=str(out / "account-settings.png"),full_page=True)
     admin_page.get_by_role("link",name="Change password",exact=True).click()
     admin_page.locator("#id_old_password").fill("admin")
