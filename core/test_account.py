@@ -146,13 +146,17 @@ class AccountRecoveryTests(TestCase):
         session["access_version"] = self.user.access.session_version
         session.save()
 
-    def _start_phone_link(self, phone="0241234568"):
+    def _start_phone_link(self, phone="0241234568", should_send=True):
         self._login_staff_for_phone()
         with patch("core.account.secrets.randbelow", return_value=123456):
-            self.assertRedirects(self.client.post("/account/", {
+            response = self.client.post("/account/", {
                 "action":"recovery", "recovery_phone":phone,
                 "current_password":"ADMIN",
-            }), "/account/")
+            })
+        if should_send:
+            self.assertRedirects(response, "/account/")
+        else:
+            self.assertEqual(response.status_code, 200)
         self.user.access.refresh_from_db()
         return self.client.session.get("staff_phone_link_verification")
 
@@ -221,7 +225,7 @@ class AccountRecoveryTests(TestCase):
 
     def test_phone_link_provider_failure_cannot_be_bypassed_with_code(self):
         self.provider.submit.return_value = Submission("failed")
-        self.assertIsNone(self._start_phone_link())
+        self.assertIsNone(self._start_phone_link(should_send=False))
         self.client.post("/account/", {
             "action":"recovery_verify", "phone_code":"123456",
             "current_password":"ADMIN",
@@ -231,7 +235,7 @@ class AccountRecoveryTests(TestCase):
 
     @override_settings(SMS_ENABLED=False)
     def test_unavailable_sms_does_not_allow_unverified_link(self):
-        self.assertIsNone(self._start_phone_link())
+        self.assertIsNone(self._start_phone_link(should_send=False))
         self.assertEqual(self.user.access.recovery_phone, "+233241234567")
         self.assertRedirects(self.client.post("/account/", {
             "action":"recovery", "recovery_phone":"",
