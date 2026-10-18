@@ -189,3 +189,168 @@ body.is-kofad-home .kfd-category:hover .kfd-category-body{background:#f4f7f7}
 .kfd-site-directory-links span{color:#5a7384;font-size:12px;line-height:1.45}
 @media(max-width:950px){.kfd-site-directory-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.kfd-home .kfd-site-directory{padding:28px 15px 0}.kfd-site-directory-head{display:block;margin-bottom:14px}.kfd-site-directory-head p{margin-top:8px}.kfd-site-directory-links{gap:9px}.kfd-site-directory-links a{padding:14px 12px}.kfd-site-directory-links strong{font-size:12px}.kfd-site-directory-links span{font-size:11px}}
+
+/* October 18: calmer company-home finish, replacing the oversized navy band.
+   All rules are restricted to the public company homepage. */
+body.is-kofad-home .kfd-home .kfd-site-directory{
+  padding-top:38px;
+  padding-bottom:20px;
+}
+body.is-kofad-home .kfd-home .kfd-site-directory-links a{
+  border-radius:16px;
+  min-height:105px;
+  box-shadow:0 7px 22px rgba(19,48,65,.045);
+}
+body.is-kofad-home .kfd-home .kfd-site-directory-links a:hover{
+  box-shadow:0 12px 28px rgba(19,48,65,.1);
+}
+body.is-kofad-home .commerce-contact-simple{
+  width:calc(100% - 60px);
+  max-width:1260px!important;
+  box-sizing:border-box;
+  min-height:0!important;
+  margin:22px auto 0!important;
+  padding:30px 32px 26px!important;
+  background:#fff;
+  border:1px solid #e0e7e7;
+  border-radius:23px;
+  box-shadow:0 14px 40px rgba(11,36,53,.045);
+}
+body.is-kofad-home .commerce-contact-simple .commerce-section-title{
+  margin:0 0 19px!important;
+}
+body.is-kofad-home .commerce-contact-simple .commerce-section-title h2{
+  color:#15364c;
+  font-size:clamp(22px,2.4vw,32px);
+  letter-spacing:-.035em;
+}
+body.is-kofad-home .commerce-contact-simple .contact-method-grid{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,275px),1fr))!important;
+  gap:14px!important;
+  width:100%;
+  align-items:stretch;
+}
+body.is-kofad-home .commerce-contact-simple .contact-method-card{
+  box-sizing:border-box;
+  min-height:116px;
+  padding:20px!important;
+  border-radius:15px;
+  transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;
+}
+body.is-kofad-home .commerce-contact-simple a.contact-method-card:hover{
+  transform:translateY(-2px);
+  border-color:#bd9457;
+  box-shadow:0 10px 24px rgba(11,36,53,.08);
+}
+body.is-kofad-home .commerce-contact-simple a.contact-method-card:focus-visible{
+  outline:3px solid #bb9350;
+  outline-offset:3px;
+}
+body.is-kofad-home .kfd-photo-credit{
+  padding:18px 20px 24px;
+  margin:0;
+}
+body.is-kofad-home .kfd-compact-footer{
+  box-sizing:border-box;
+  padding:25px max(24px,calc((100vw - 1200px)/2));
+  color:#20394a;
+  background:#f1f4f3;
+  border-top:1px solid #dce4e4;
+}
+body.is-kofad-home .kfd-compact-footer-top,
+body.is-kofad-home .kfd-compact-footer-bottom{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:12px 24px;
+}
+body.is-kofad-home .kfd-compact-footer-identity{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+body.is-kofad-home .kfd-compact-footer-identity strong{
+  font-size:14px;
+  color:#143348;
+  letter-spacing:.025em;
+}
+body.is-kofad-home .kfd-compact-footer-identity span{
+  font-size:12px;
+  color:#566c77;
+}
+body.is-kofad-home .kfd-compact-footer-contact{
+  color:#153c53;
+  font-weight:750;
+  font-size:13px;
+  text-decoration:none;
+}
+body.is-kofad-home .kfd-compact-footer .company-links{
+  box-sizing:border-box;
+  max-width:none;
+  margin:18px 0 15px!important;
+  padding:16px 0!important;
+  border-top:1px solid #d8e0e0;
+  border-bottom:1px solid #d8e0e0;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:9px 22px;
+  font-size:12px;
+}
+body.is-kofad-home .kfd-compact-footer .company-links a{
+  color:#304d5f;
+  text-decoration:none;
+  line-height:1.5;
+}
+body.is-kofad-home .kfd-compact-footer .company-links a:hover,
+body.is-kofad-home .kfd-compact-footer-contact:hover{
+  text-decoration:underline;
+  text-underline-offset:4px;
+}
+body.is-kofad-home .kfd-compact-footer-bottom{
+  color:#657982;
+  font-size:11px;
+  line-height:1.5;
+}
+html[data-theme="dark"] body.is-kofad-home .commerce-contact-simple{
+  background:#1b2226!important;
+  color:#eef1ef;
+  border-color:#394448;
+}
+html[data-theme="dark"] body.is-kofad-home .commerce-contact-simple .commerce-section-title h2{
+  color:#eef1ef;
+}
+html[data-theme="dark"] body.is-kofad-home .kfd-compact-footer{
+  background:#1c2529;
+  border-color:#394448;
+  color:#e2e9e9;
+}
+html[data-theme="dark"] body.is-kofad-home .kfd-compact-footer :is(.kfd-compact-footer-identity strong,.kfd-compact-footer-contact,.company-links a){
+  color:#e3ebec;
+}
+html[data-theme="dark"] body.is-kofad-home .kfd-compact-footer :is(.kfd-compact-footer-identity span,.kfd-compact-footer-bottom){
+  color:#b4c3c8;
+}
+html[data-theme="dark"] body.is-kofad-home .kfd-compact-footer .company-links{
+  border-color:#394448;
+}
+@media(max-width:700px){
+  body.is-kofad-home .kfd-home .kfd-site-directory{padding:28px 17px 13px}
+  body.is-kofad-home .commerce-contact-simple{
+    width:calc(100% - 34px);
+    margin:17px auto 0!important;
+    padding:23px 18px!important;
+    border-radius:17px;
+  }
+  body.is-kofad-home .commerce-contact-simple .contact-method-grid{gap:10px!important}
+  body.is-kofad-home .commerce-contact-simple .contact-method-card{min-height:98px;padding:16px!important}
+  body.is-kofad-home .kfd-photo-credit{padding:14px 17px 21px}
+  body.is-kofad-home .kfd-compact-footer{padding:23px 18px}
+  body.is-kofad-home .kfd-compact-footer .company-links{gap:11px 17px;margin:15px 0 12px!important}
+  body.is-kofad-home .kfd-compact-footer-bottom{align-items:start}
+}
+@media(prefers-reduced-motion:reduce){
+  body.is-kofad-home .commerce-contact-simple .contact-method-card{transition:none}
+}
