@@ -10,4 +10,5 @@ Pillow>=12.3,<13
 pillow-heif>=1.8,<2
 
 requests>=2.32,<3
+sentry-sdk>=2.72,<2.73
 cryptography>=50.0.2,<51
