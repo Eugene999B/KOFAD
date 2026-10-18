@@ -15,8 +15,8 @@
 <div class="commerce-stock-line">{% if listing.available_sell_qty > 0 %}<span class="stock-ok">● Available now</span>{% else %}<span class="stock-out">● Temporarily unavailable</span>{% endif %}<small>{{ listing.selling_label|title }}</small></div>
 <div class="product-price commerce-product-price"><strong>GHS {{ listing.market_price_value|floatformat:2 }}</strong><span>/ {{ listing.selling_label }}</span></div>
 <div class="product-card-actions commerce-card-actions">
-<a href="/market/products/{{ listing.pk }}/">View product</a>
-{% if market_customer and listing.available_sell_qty > 0 %}<form method="post" action="/market/cart/add/{{ listing.pk }}/">{% csrf_token %}<input type="hidden" name="quantity" value="1"><input type="hidden" name="next" value="/market/"><button>Add to cart</button></form>
-{% elif not market_customer and listing.available_sell_qty > 0 %}<a class="card-order-link" href="/market/access/?next=/market/products/{{ listing.pk }}/">Add to cart</a>{% endif %}
+<a href="/market/products/{{ listing.pk }}/"><svg class="shop-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><span>View product</span></a>
+{% if market_customer and listing.available_sell_qty > 0 %}<form method="post" action="/market/cart/add/{{ listing.pk }}/">{% csrf_token %}<input type="hidden" name="quantity" value="1"><input type="hidden" name="next" value="/market/"><button type="submit"><svg class="shop-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add to cart</span></button></form>
+{% elif not market_customer and listing.available_sell_qty > 0 %}<a class="card-order-link" href="/market/access/?next=/market/products/{{ listing.pk }}/"><svg class="shop-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add to cart</span></a>{% endif %}
 </div>
 </div></article>

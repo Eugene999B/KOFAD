@@ -143,6 +143,23 @@ class PublicDiscoveryPagesTests(TestCase):
         self.assertContains(response, 'rel="canonical" href="https://kofadimpex.com/wholesale/"')
         self.assertContains(response, "application/ld+json")
 
+    def test_market_guest_has_explicit_account_cart_search_and_premium_assets(self):
+        response = self.client.get("/market/", HTTP_HOST="market.kofadimpex.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "market-premium.")
+        self.assertContains(response, 'class="shop-shell-account shop-shell-signin"')
+        self.assertContains(response, 'aria-label="Sign in"')
+        self.assertContains(response, 'aria-label="Cart with 0 items"')
+        self.assertContains(response, 'aria-label="Search KOFAD Market"')
+        self.assertContains(response, 'class="shop-cart-graphic"')
+        self.assertContains(response, 'class="shop-brand-copy"')
+        self.assertContains(response, 'class="shop-ui-icon"')
+
+    def test_market_design_does_not_leak_to_public_company_pages(self):
+        response = self.client.get("/", HTTP_HOST="kofadimpex.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "market-premium.")
+
     def test_market_catalog_has_independent_seo_identity(self):
         response = self.client.get("/market/", HTTP_HOST="market.kofadimpex.com")
         self.assertEqual(response.status_code, 200)
