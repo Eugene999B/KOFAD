@@ -2636,10 +2636,14 @@ def hubtel_callback(request):
         # Store each original callback separately, encrypted and owner-only.
         # A callback is always UNTRUSTED evidence; independent status checks
         # remain the only way to confirm settlement.
-        save_exchange(
+        saved = save_exchange(
             reference=reference, direction="callback", raw_body=request.body,
             attempt=attempt,
         )
+        if saved is None:
+            # A known payment reference must not become a database-write flood.
+            # Scheduled, independently verified reconciliation still runs.
+            return HttpResponse(status=200)
         # Staff event data is redacted; a callback never marks an order paid.
         def callback_value(pascal, camel):
             return data.get(pascal, data.get(camel, ""))
