@@ -753,6 +753,27 @@ with sync_playwright() as p:
             }"""), f"Mobile search not on own row at {width}"
         if width in (320,390):
             guest_market.screenshot(path=str(out / f"market-guest-redesign-{width}.png"), full_page=True)
+    # A real rendered dark marketplace must keep muted captions readable.
+    # Contrast checks cover the filtered strip as well as normal product cards.
+    guest_market.set_viewport_size({"width":1440,"height":920})
+    guest_market.goto("http://127.0.0.1:8000/market/")
+    guest_market.evaluate("document.documentElement.dataset.theme = 'dark'")
+    assert_text_contrast(guest_market, [
+        ".shop-shell-subnav > span",
+        ".shop-catalog-head > div > span",
+        ".shop-sort > span",
+        ".shop-product-grid .commerce-stock-line .stock-ok",
+        ".shop-product-grid .commerce-stock-line small",
+        ".shop-product-grid .commerce-product-price span",
+    ])
+    guest_market.goto("http://127.0.0.1:8000/market/?q=nonexistentbrowserfixture")
+    guest_market.evaluate("document.documentElement.dataset.theme = 'dark'")
+    assert guest_market.locator(".shop-active-filter").is_visible()
+    assert_text_contrast(guest_market, [
+        ".shop-active-filter > span",
+        ".shop-active-filter > a",
+    ])
+    guest_market.screenshot(path=str(out / "market-dark-search-contrast.png"), full_page=True)
     guest_market.close()
 
     market_page = browser.new_page(viewport={"width":390,"height":844})

@@ -574,6 +574,36 @@ html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .
 html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .commerce-card-actions>a:not(.card-order-link){background:#233843!important;border-color:#3a505c!important;color:#e9f7f9!important}
 html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-sort{background:#152631!important;border-color:#344852!important}
 html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-sort select{color:#e8f5f8!important;background:transparent!important}
+/* Guest product-discovery labels: preserve readable text on dark surfaces.
+   These captions previously inherited the light-theme ink and failed WCAG contrast. */
+html[data-theme="dark"] body.market-body .shop-shell-subnav>span{
+  color:#b2cad4!important;
+  font-size:12px!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-catalog-head>div>span{
+  color:#bfd4de!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-sort>span{
+  color:#bcd5dc!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-active-filter>span{
+  color:#b7cdd7!important;
+  font-size:12px!important;
+  font-weight:650!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-active-filter>a{
+  color:#a0ede2!important;
+  font-size:12px!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .commerce-stock-line .stock-ok{
+  color:#9fe5c3!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .commerce-stock-line small{
+  color:#c5d8df!important;
+}
+html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .commerce-product-price span{
+  color:#b8cdd6!important;
+}
 /* 3-column mid-width: keep account and cart readable rather than squeezing them. */
 @media(max-width:1230px){
   body.market-body .shop-shell-main,
