@@ -24,6 +24,33 @@ class OrderNotificationTests(MarketFixtures):
         self.assertEqual(Message.objects.filter(source_key__startswith="market-event:").count(), 1)
         provider.assert_not_called()
 
+    def test_order_created_sms_never_uses_status_as_an_order_number(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            order = self.order()
+        notice = Message.objects.get(source_key=f"market-event:{order.pk}:awaiting_payment")
+        self.assertIn("Your order was placed.", notice.body)
+        self.assertNotIn("Order Awaiting payment", notice.body)
+        self.assertNotIn(order.public_reference, notice.body)
+
+    def test_unpaid_order_cards_show_order_details_once_without_a_fake_reference(self):
+        order = self.order()
+        session = self.client.session
+        session["market_customer_id"] = self.customer.pk
+        session.save()
+        for path in (
+            "/market/account/",
+            "/market/orders/",
+            f"/market/orders/{order.pk}/",
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Order details")
+                self.assertNotContains(response, "Order Awaiting payment")
+                self.assertNotContains(response, order.public_reference)
+        detail = self.client.get(f"/market/orders/{order.pk}/")
+        self.assertContains(detail, "Assigned after payment verification")
+
     def test_rollback_does_not_leave_a_payment_confirmation(self):
         order = self.order()
         order.payment_status = "paid"

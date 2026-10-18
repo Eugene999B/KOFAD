@@ -859,7 +859,7 @@ def create_order(customer, cart, cleaned):
         from .notifications import queue_order_sms
         queue_order_sms(
             order, "awaiting_payment",
-            f"KOFAD: Order {order.customer_reference} was placed. "
+            f"KOFAD: {'Order ' + order.confirmed_reference if order.confirmed_reference else 'Your order'} was placed. "
             f"Total GHS {order.total:.2f}. Payment has NOT been confirmed. "
             "View your order in KOFAD Market. Do not approve duplicate payments.",
         )

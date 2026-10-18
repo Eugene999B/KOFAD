@@ -26,9 +26,14 @@ class NewOrderEmailRecoveryTests(MarketFixtures):
         self.assertEqual(EmailNotice.objects.filter(
             source_key=f"market-email:{order.pk}:awaiting_payment", category="order",
         ).count(), 1)
-        self.assertTrue(_may_deliver(EmailNotice.objects.get(
+        notice = EmailNotice.objects.get(
             source_key=f"market-email:{order.pk}:awaiting_payment",
-        )))
+        )
+        self.assertTrue(_may_deliver(notice))
+        self.assertIn("KOFAD order update: Awaiting payment", notice.subject)
+        self.assertIn("Your KOFAD order has a new update", notice.body)
+        self.assertNotIn("order Awaiting payment", notice.body)
+        self.assertNotIn(order.public_reference, notice.body)
         # Never queue the same order event twice.
         from core.notification_engine import queue_customer_order_email
         self.assertEqual(queue_customer_order_email(order, "awaiting_payment"), 0)
