@@ -30,6 +30,7 @@ class ReleaseSecurityContracts(MarketFixtures):
         staff = User.objects.create_user("security-contract-staff", password="isolated-test-password")
         staff.user_permissions.add(Permission.objects.get(codename="operate_sales"))
         staff.access.branches.add(other)
+        staff.access.refresh_from_db()
         self.client.force_login(staff)
         session = self.client.session
         session["access_version"] = staff.access.session_version
