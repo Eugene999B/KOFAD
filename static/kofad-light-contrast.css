@@ -1,0 +1,124 @@
+/* KOFAD light-theme readability guard.
+   Loaded after legacy style layers on BOTH customer and staff layouts.
+   Preserve dark-mode and intentionally white text on dark hero/action surfaces. */
+html[data-theme="light"] {
+  --kofad-readable-ink:#153246;
+  --kofad-readable-subtle:#465d6a;
+  --kofad-readable-link:#12465c;
+  --kofad-readable-border:#c6d5dc;
+}
+html[data-theme="light"] body.market-body {
+  --atelier-text:var(--kofad-readable-ink);
+  --atelier-muted:var(--kofad-readable-subtle);
+  --ui-text:var(--kofad-readable-ink);
+  --ui-muted:var(--kofad-readable-subtle);
+  --market-muted:var(--kofad-readable-subtle);
+  --muted:var(--kofad-readable-subtle);
+}
+html[data-theme="light"] body[data-session-zone="staff"] {
+  --ops-ink:var(--kofad-readable-ink);
+  --ops-muted:var(--kofad-readable-subtle);
+  --ui-text:var(--kofad-readable-ink);
+  --ui-muted:var(--kofad-readable-subtle);
+  --muted:var(--kofad-readable-subtle);
+}
+
+/* Root cause: v3's dark chat tile uses white text but v8 repaints its
+   background white in light mode. Fix all THREE text layers together. */
+html[data-theme="light"] body.market-body .contact-method-card {
+  color:var(--kofad-readable-ink)!important;
+  background:#fff!important;
+  border-color:var(--kofad-readable-border);
+}
+html[data-theme="light"] body.market-body .contact-method-card>strong,
+html[data-theme="light"] body.market-body .contact-method-chat>strong {
+  color:#153246!important;
+  -webkit-text-fill-color:currentColor;
+}
+html[data-theme="light"] body.market-body .contact-method-card>small,
+html[data-theme="light"] body.market-body .contact-method-chat>small {
+  color:#465d6a!important;
+  -webkit-text-fill-color:currentColor;
+  opacity:1!important;
+}
+html[data-theme="light"] body.market-body .contact-method-card>span {
+  color:#00677b!important;
+  -webkit-text-fill-color:currentColor;
+  opacity:1!important;
+}
+html[data-theme="light"] body.market-body .contact-method-chat>span {
+  color:#8c5700!important;
+}
+body.market-body .contact-method-card>span {font-size:11px!important}
+body.market-body .contact-method-card>strong {font-size:14px!important;line-height:1.4}
+body.market-body .contact-method-card>small {font-size:12px!important;line-height:1.5}
+
+/* Keep normal text legible on pale information panels; do not blanket-style
+   all headings, anchors or buttons (many intentionally sit on dark artwork). */
+html[data-theme="light"] body.market-body .commerce-contact-simple .commerce-section-title p,
+html[data-theme="light"] body.market-body .kfd-photo-credit,
+html[data-theme="light"] body.market-body .kfd-site-directory-head p,
+html[data-theme="light"] body.market-body .kfd-site-directory-links span,
+html[data-theme="light"] body.market-body .company-page-hero small,
+html[data-theme="light"] body.market-body .company-guide p,
+html[data-theme="light"] body.market-body .help-intro p {
+  color:var(--kofad-readable-subtle)!important;
+  opacity:1!important;
+}
+html[data-theme="light"] body.market-body .kfd-site-directory-links strong,
+html[data-theme="light"] body.market-body .company-page :is(h1,h2,h3,h4),
+html[data-theme="light"] body.market-body .commerce-contact-simple .commerce-section-title h2 {
+  color:var(--kofad-readable-ink)!important;
+}
+html[data-theme="light"] body.market-body .company-page :is(input,textarea,select),
+html[data-theme="light"] body.market-body .company-feedback :is(input,textarea,select) {
+  color:var(--kofad-readable-ink)!important;
+  background:#fff!important;
+  border-color:var(--kofad-readable-border)!important;
+}
+html[data-theme="light"] body.market-body :is(input,textarea)::placeholder {
+  color:#596f7d;
+  opacity:1;
+}
+html[data-theme="light"] body.market-body .company-links a {
+  color:var(--kofad-readable-link)!important;
+  opacity:1!important;
+}
+html[data-theme="light"] body.market-body .public-desktop-nav>a:not(.public-market-link) {
+  color:#183a50!important;
+  opacity:1!important;
+}
+html[data-theme="light"] body.market-body .kfd-compact-footer {
+  color:var(--kofad-readable-ink)!important;
+}
+html[data-theme="light"] body.market-body .kfd-compact-footer :is(.kfd-compact-footer-identity span,.kfd-compact-footer-bottom) {
+  color:#465d6a!important;
+  opacity:1!important;
+}
+html[data-theme="light"] body.market-body .kfd-compact-footer :is(.kfd-compact-footer-contact,.company-links a) {
+  color:var(--kofad-readable-link)!important;
+}
+html[data-theme="light"] body.market-body .kfd-compact-footer-identity strong{
+  color:var(--kofad-readable-ink)!important;
+}
+body.market-body .kfd-photo-credit,
+body.market-body .kfd-compact-footer-bottom {font-size:12px!important;line-height:1.55}
+body.market-body .kfd-compact-footer .company-links a {font-size:13px;line-height:1.5}
+body.market-body .public-desktop-nav>a {font-size:12px!important}
+
+/* Staff: apply the same solid readable muted palette to white work surfaces,
+   leaving navy sidebars, status badges, approval chips and buttons alone. */
+html[data-theme="light"] body[data-session-zone="staff"] :is(.page-footer,.top-user-card small,.panel .muted,.settings-card .muted,.metric-card small,.table-wrap .muted) {
+  color:var(--kofad-readable-subtle)!important;
+  opacity:1!important;
+}
+html[data-theme="light"] body[data-session-zone="staff"] :is(.panel,.settings-card,.metric-card,.table-wrap) {
+  --ops-muted:var(--kofad-readable-subtle);
+}
+html[data-theme="light"] body[data-session-zone="staff"] :is(input,textarea)::placeholder {
+  color:#566b78;
+  opacity:1;
+}
+/* A11y: maintain deliberate selection feedback without relying on it to
+   reveal regular text, including when the user toggles between themes. */
+html[data-theme="light"] ::selection {background:#245bc5;color:#fff}

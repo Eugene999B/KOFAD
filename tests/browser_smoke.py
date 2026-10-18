@@ -125,6 +125,52 @@ browser_support.messages.create(
     read_by_customer=True,
 )
 
+def assert_text_contrast(page, selectors):
+    """Real computed foreground/background WCAG contrast, no highlighted text."""
+    failures = page.evaluate(r"""(selectors) => {
+      const rgb = value => {
+        const nums = (value || "").match(/[0-9.]+/g);
+        return nums && nums.length >= 3 ? nums.map(Number) : null;
+      };
+      const luminance = channel => {
+        const v = channel / 255;
+        return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4);
+      };
+      const contrast = (a, b) => {
+        const bright = c => .2126*luminance(c[0]) + .7152*luminance(c[1]) + .0722*luminance(c[2]);
+        const x = bright(a), y = bright(b);
+        return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
+      };
+      const failures = [];
+      for (const selector of selectors) {
+        const matches = [...document.querySelectorAll(selector)];
+        if (!matches.length) { failures.push(selector + ': missing'); continue; }
+        for (const el of matches.slice(0, 8)) {
+          if (!el.textContent.trim() || !el.getClientRects().length) continue;
+          const foreground = rgb(getComputedStyle(el).color);
+          let node = el;
+          let background = [255, 255, 255];
+          while (node) {
+            const color = rgb(getComputedStyle(node).backgroundColor);
+            if (color && (color.length < 4 || color[3] >= .99)) {
+              background = color;
+              break;
+            }
+            node = node.parentElement;
+          }
+          if (!foreground) { failures.push(selector + ': no computed foreground'); continue; }
+          const score = contrast(foreground, background);
+          if (score < 4.5) {
+            failures.push(selector + ': ' + score.toFixed(2) + ':1 (text "' +
+              el.textContent.trim().slice(0, 50) + '")');
+          }
+        }
+      }
+      return failures;
+    }""", selectors)
+    assert not failures, f"Text is unreadable in light theme: {failures}"
+
+
 out = Path("test-results")
 out.mkdir(exist_ok=True)
 with sync_playwright() as p:
@@ -722,6 +768,17 @@ with sync_playwright() as p:
     # dark commerce footer shown previously. Market and inner pages are untouched.
     assert market_page.locator("footer.market-footer.commerce-footer").count() == 0
     assert market_page.locator("footer.kfd-compact-footer").count() == 1
+    market_page.evaluate("document.documentElement.dataset.theme = 'light'")
+    assert_text_contrast(market_page, [
+        ".commerce-contact-simple .contact-method-chat > span",
+        ".commerce-contact-simple .contact-method-chat > strong",
+        ".commerce-contact-simple .contact-method-chat > small",
+        ".commerce-contact-simple .contact-method-card:not(.contact-method-chat) > strong",
+        ".commerce-contact-simple .contact-method-card:not(.contact-method-chat) > small",
+        ".kfd-photo-credit",
+        ".kfd-compact-footer .company-links a",
+        ".kfd-compact-footer-bottom > span",
+    ])
     assert market_page.locator("footer.kfd-compact-footer .company-links a").count() >= 8
     assert market_page.locator(".kfd-hero").evaluate("el => el.getBoundingClientRect().height") <= 400
     assert market_page.locator("[data-hero-count]").inner_text() == "01 / 06"
@@ -740,6 +797,15 @@ with sync_playwright() as p:
         const cta = el.querySelector(".kfd-cta.primary").getBoundingClientRect();
         return title.top >= hero.top - 1 && cta.bottom <= hero.bottom - 10;
     }""")
+    market_page.evaluate("document.documentElement.dataset.theme = 'light'")
+    assert_text_contrast(market_page, [".public-desktop-nav > a:not(.public-market-link)"])
+    # Verify that fixing white cards does not invert dark-mode text.
+    market_page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    assert_text_contrast(market_page, [
+        ".commerce-contact-simple .contact-method-chat > strong",
+        ".commerce-contact-simple .contact-method-chat > small",
+    ])
+    market_page.evaluate("document.documentElement.dataset.theme = 'light'")
     assert market_page.get_by_role("button", name="Next photograph").is_visible()
     # The contact cards fill the row rather than leaving an unused third column.
     assert market_page.locator(".commerce-contact-simple .contact-method-grid").evaluate("""grid => {
@@ -1101,6 +1167,18 @@ with sync_playwright() as p:
 
     admin_page.set_viewport_size({"width":1440,"height":1000})
     admin_page.screenshot(path=str(out / "branch-comparison-desktop.png"),full_page=True)
+    admin_page.goto("http://127.0.0.1:8000/settings/")
+    admin_page.evaluate("document.documentElement.dataset.theme = 'light'")
+    assert_text_contrast(admin_page, [".page-footer > span", ".page-heading h1"])
+    assert "kofad-light-contrast.css" in admin_page.content()
+
+    public_contrast_page = browser.new_page(viewport={"width":1280,"height":900})
+    for public_path in ("/contact/", "/faq/", "/about/", "/delivery/"):
+        public_contrast_page.goto("http://127.0.0.1:8000" + public_path)
+        public_contrast_page.evaluate("document.documentElement.dataset.theme = 'light'")
+        assert "kofad-light-contrast.css" in public_contrast_page.content()
+        assert_text_contrast(public_contrast_page, [".company-links a"])
+    public_contrast_page.close()
     admin_page.goto(staff_login_url)
     assert admin_page.get_by_label("Username, mobile number or verified email", exact=True).is_visible()
     staff_state = admin_page.request.get("http://127.0.0.1:8000/session/state/").json()

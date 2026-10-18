@@ -50,7 +50,7 @@
 <link rel="stylesheet" href="{% static 'marketplace/kofad-ai.css' %}">
 <script defer src="{% static 'marketplace/kofad-ai.js' %}"></script>
 {% endif %}
-<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script></head>
+<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'kofad-light-contrast.css' %}"></head>
 <body class="market-body market-v2{% if request.path == '/' %} is-kofad-home{% endif %}{% if market_customer and '/market/' in request.path %} customer-session{% endif %}{% if market_auth_page %} market-access-page{% endif %}"{% if market_customer and '/market/' in request.path %} data-session-zone="market" data-session-active="true" data-session-logout-url="/market/account/logout/" data-session-status-url="/market/session/state/" data-session-login-url="/market/access/"{% endif %}>
 <a class="market-skip" href="#main">Skip to content</a>
 {% if '/market/' in request.path %}
