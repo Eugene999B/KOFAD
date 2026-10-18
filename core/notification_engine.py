@@ -505,10 +505,11 @@ def queue_customer_order_email(order, event):
     except ValidationError:
         return 0
     label = dict(order.STATUSES).get(event, event.replace("_", " ").title())
-    subject = f"KOFAD order {order.customer_reference}: {label}"
+    reference = f" {order.confirmed_reference}" if order.confirmed_reference else ""
+    subject = f"KOFAD order{reference} update: {label}"
     body = (
         f"Hello {customer.full_name},\n\n"
-        f"Your order {order.customer_reference} has a new update: {label}.\n"
+        f"Your KOFAD order{reference} has a new update: {label}.\n"
         f"Total recorded order amount: GHS {order.total:,.2f}.\n"
         "Sign in to your KOFAD Market account to confirm current status and delivery details.\n\n"
         "This is a transaction notification, not a promotional offer.\n"

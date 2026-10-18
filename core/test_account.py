@@ -6,8 +6,9 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 
-from .models import Access, Branch, PasswordRecovery
+from .models import Access, Branch, LoginAttempt, PasswordRecovery
 from .sms.providers import Submission
+from .account import digest
 
 
 @override_settings(SMS_ENABLED=True, SMS_SANDBOX=False, ARKESEL_API_KEY="test-only", SMS_SENDER_ID="KOFAD")
@@ -124,9 +125,146 @@ class AccountRecoveryTests(TestCase):
         self.assertContains(response, "Your current password is incorrect")
         self.user.access.refresh_from_db()
         self.assertEqual(self.user.access.recovery_phone, "+233241234567")
-        self.assertRedirects(self.client.post("/account/", {"recovery_phone":"0241234568","current_password":"ADMIN"}), "/account/")
+        with patch("core.account.secrets.randbelow", return_value=123456):
+            self.assertRedirects(self.client.post("/account/", {
+                "recovery_phone":"0241234568","current_password":"ADMIN",
+            }), "/account/")
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234567")
+        self.assertEqual(self.provider.submit.call_args.args[0], "+233241234568")
+        self.assertContains(self.client.get("/account/"), "Verify and link number")
+        self.assertRedirects(self.client.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456", "current_password":"ADMIN",
+        }), "/account/")
         self.user.access.refresh_from_db()
         self.assertEqual(self.user.access.recovery_phone, "+233241234568")
+
+    def _login_staff_for_phone(self):
+        self.client.force_login(self.user)
+        self.user.access.refresh_from_db()
+        session = self.client.session
+        session["access_version"] = self.user.access.session_version
+        session.save()
+
+    def _start_phone_link(self, phone="0241234568", should_send=True):
+        self._login_staff_for_phone()
+        with patch("core.account.secrets.randbelow", return_value=123456):
+            response = self.client.post("/account/", {
+                "action":"recovery", "recovery_phone":phone,
+                "current_password":"ADMIN",
+            })
+        if should_send:
+            self.assertRedirects(response, "/account/")
+        else:
+            self.assertEqual(response.status_code, 200)
+        self.user.access.refresh_from_db()
+        return self.client.session.get("staff_phone_link_verification")
+
+    def test_phone_verification_wrong_code_and_retry_limit_leave_old_number(self):
+        self.assertIsNotNone(self._start_phone_link())
+        for _ in range(5):
+            self.assertRedirects(self.client.post("/account/", {
+                "action":"recovery_verify", "phone_code":"000000",
+                "current_password":"ADMIN",
+            }), "/account/")
+        self.assertNotIn("staff_phone_link_verification", self.client.session)
+        self.assertRedirects(self.client.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456",
+            "current_password":"ADMIN",
+        }), "/account/")
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234567")
+
+    def test_phone_verification_expires_and_cannot_cross_browser_sessions(self):
+        challenge = self._start_phone_link()
+        self.assertIsNotNone(challenge)
+        other = Client()
+        other.force_login(self.user)
+        session = other.session
+        session["access_version"] = self.user.access.session_version
+        session.save()
+        other.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456",
+            "current_password":"ADMIN",
+        })
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234567")
+        session = self.client.session
+        challenge["expires"] = (timezone.now() - timedelta(seconds=1)).timestamp()
+        session["staff_phone_link_verification"] = challenge
+        session.save()
+        self.client.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456",
+            "current_password":"ADMIN",
+        })
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234567")
+
+    def test_phone_verification_rejects_password_change_and_old_phone_change(self):
+        self._start_phone_link()
+        Access.objects.filter(user=self.user).update(recovery_phone="+233241234569")
+        self.client.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456",
+            "current_password":"ADMIN",
+        })
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234569")
+        self._start_phone_link()
+        self.user.set_password("Changed-password-without-session-reset-123!")
+        self.user.save()
+        self.client.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456",
+            "current_password":"ADMIN",
+        })
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234569")
+
+    def test_phone_link_accepts_provider_delivered_acknowledgement(self):
+        self.provider.submit.return_value = Submission("delivered")
+        self.assertIsNotNone(self._start_phone_link())
+
+    def test_phone_link_provider_failure_cannot_be_bypassed_with_code(self):
+        self.provider.submit.return_value = Submission("failed")
+        self.assertIsNone(self._start_phone_link(should_send=False))
+        self.client.post("/account/", {
+            "action":"recovery_verify", "phone_code":"123456",
+            "current_password":"ADMIN",
+        })
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "+233241234567")
+
+    @override_settings(SMS_ENABLED=False)
+    def test_unavailable_sms_does_not_allow_unverified_link(self):
+        self.assertIsNone(self._start_phone_link(should_send=False))
+        self.assertEqual(self.user.access.recovery_phone, "+233241234567")
+        self.assertRedirects(self.client.post("/account/", {
+            "action":"recovery", "recovery_phone":"",
+            "current_password":"ADMIN",
+        }), "/account/")
+        self.user.access.refresh_from_db()
+        self.assertEqual(self.user.access.recovery_phone, "")
+
+    def test_phone_link_limited_to_three_submissions_per_hour(self):
+        self._login_staff_for_phone()
+        with patch("core.account.secrets.randbelow", return_value=123456):
+            for _ in range(4):
+                self.client.post("/account/", {
+                    "action":"recovery", "recovery_phone":"0241234568",
+                    "current_password":"ADMIN",
+                })
+        self.assertEqual(self.provider.submit.call_count, 3)
+        self.assertEqual(LoginAttempt.objects.get(key=digest("staff-phone-link:global")).failures, 3)
+
+    def test_phone_cannot_be_claimed_from_another_staff_account(self):
+        other = User.objects.create_user("other-staff", password="another-password")
+        Access.objects.filter(user=other).update(recovery_phone="+233241234568")
+        self._login_staff_for_phone()
+        response = self.client.post("/account/", {
+            "action":"recovery", "recovery_phone":"0241234568",
+            "current_password":"ADMIN",
+        })
+        self.assertContains(response, "already linked to another staff")
+        self.provider.submit.assert_not_called()
 
     def test_authenticated_password_change_is_optional_and_keeps_current_session(self):
         self.client.post("/login/", {"username":"ADMIN","password":"ADMIN"})

@@ -20,11 +20,11 @@
 <div class="account-v4-main">
 {% if active_orders %}
 <section class="account-v4-card"><div class="account-v4-card-head"><h2>Active orders</h2><a href="/market/orders/">View all</a></div>
-<div>{% for order in active_orders %}<a class="account-v4-order" href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{{ order.customer_reference }}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.get_fulfilment_display }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b></a>{% endfor %}</div>
+<div>{% for order in active_orders %}<a class="account-v4-order" href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{% if order.confirmed_reference %}{{ order.confirmed_reference }}{% else %}Order details{% endif %}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.get_fulfilment_display }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b></a>{% endfor %}</div>
 </section>
 {% endif %}
 <section class="account-v4-card"><div class="account-v4-card-head"><h2>Recent orders</h2>{% if recent_orders %}<a href="/market/orders/">Order history</a>{% endif %}</div>
-{% if recent_orders %}<div>{% for order in recent_orders %}<a class="account-v4-order" href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{{ order.customer_reference }}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.lines.count }} item{{ order.lines.count|pluralize }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b></a>{% endfor %}</div>
+{% if recent_orders %}<div>{% for order in recent_orders %}<a class="account-v4-order" href="/market/orders/{{ order.pk }}/"><span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span><div><strong>{% if order.confirmed_reference %}{{ order.confirmed_reference }}{% else %}Order details{% endif %}</strong><small>{{ order.created_at|date:"d M Y" }} · {{ order.lines.count }} item{{ order.lines.count|pluralize }}</small></div><b>GHS {{ order.total|floatformat:2 }}</b></a>{% endfor %}</div>
 {% else %}<div class="account-empty"><strong>No orders yet.</strong><span>Your purchases will appear here.</span><a href="/market/">Start shopping →</a></div>{% endif %}
 </section>
 {% if wishlist %}

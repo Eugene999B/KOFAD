@@ -56,7 +56,10 @@ class RecoveryPhoneForm(forms.Form):
 
     def clean_recovery_phone(self):
         raw = self.cleaned_data["recovery_phone"].strip()
-        return normalize_phone(raw) if raw else ""
+        phone = normalize_phone(raw) if raw else ""
+        if phone and Access.objects.filter(recovery_phone=phone).exclude(user=self.user).exists():
+            raise ValidationError("This phone number is already linked to another staff account.")
+        return phone
 
     def clean_current_password(self):
         value = self.cleaned_data["current_password"]
@@ -65,13 +68,101 @@ class RecoveryPhoneForm(forms.Form):
         return value
 
 
+PHONE_LINK_SESSION_KEY = "staff_phone_link_verification"
+
+
+def _phone_link_budget(user_id):
+    now = timezone.now()
+    with transaction.atomic():
+        # Check the per-account cap first so blocked users cannot exhaust the
+        # shared SMS budget by repeatedly submitting over-limit requests.
+        for key, limit in ((f"staff-phone-link:{user_id}", 3), ("staff-phone-link:global", 100)):
+            row, _ = LoginAttempt.objects.get_or_create(key=digest(key))
+            row = LoginAttempt.objects.select_for_update().get(pk=row.pk)
+            if not row.blocked_until or row.blocked_until <= now:
+                row.failures, row.blocked_until = 0, now + timedelta(hours=1)
+            if row.failures >= limit:
+                return False
+            row.failures += 1
+            row.save(update_fields=["failures", "blocked_until"])
+    return True
+
+
+def _pending_phone_link(request):
+    challenge = request.session.get(PHONE_LINK_SESSION_KEY)
+    if not isinstance(challenge, dict):
+        return None
+    try:
+        valid = (
+            challenge["user_id"] == request.user.pk
+            and challenge["expires"] > timezone.now().timestamp()
+            and challenge["password_hash"] == digest(request.user.password)
+            and 0 <= challenge["attempts"] < 5
+        )
+        return challenge if valid else None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _verify_staff_phone_link(request):
+    challenge = _pending_phone_link(request)
+    code = request.POST.get("phone_code", "").strip()
+    password = request.POST.get("current_password", "")
+    if not challenge:
+        request.session.pop(PHONE_LINK_SESSION_KEY, None)
+        messages.error(request, "That phone verification expired. Request a new code.")
+        return
+    challenge["attempts"] += 1
+    request.session.modified = True
+    matched = (
+        request.user.check_password(password)
+        and re.fullmatch(r"[0-9]{6}", code)
+        and constant_time_compare(
+            challenge["digest"],
+            digest(
+                f"staff-phone:{request.user.pk}:{challenge['password_hash']}:"
+                f"{challenge['old_phone']}:{challenge['phone']}:{code}"
+            ),
+        )
+    )
+    if not matched:
+        if challenge["attempts"] >= 5:
+            request.session.pop(PHONE_LINK_SESSION_KEY, None)
+        messages.error(request, "Incorrect or expired verification code or password.")
+        return
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=request.user.pk)
+        access = Access.objects.select_for_update().get(user=user)
+        if Access.objects.filter(recovery_phone=challenge["phone"]).exclude(pk=access.pk).exists():
+            request.session.pop(PHONE_LINK_SESSION_KEY, None)
+            messages.error(request, "This number is already linked to another staff account.")
+            return
+        if (
+            user.password != request.user.password
+            or access.recovery_phone != challenge["old_phone"]
+            or not user.is_active
+        ):
+            request.session.pop(PHONE_LINK_SESSION_KEY, None)
+            messages.error(request, "Your account changed. Request a fresh code.")
+            return
+        access.recovery_phone = challenge["phone"]
+        access.save(update_fields=["recovery_phone"])
+        PasswordRecovery.objects.filter(user=user, used=False).update(used=True)
+        audit(user, None, "account.recovery_phone_verified", user.pk)
+    request.session.pop(PHONE_LINK_SESSION_KEY, None)
+    messages.success(request, "Phone verified and linked for secure staff recovery.")
+
+
 @login_required
-@sensitive_post_parameters("current_password")
+@sensitive_post_parameters("current_password", "phone_code")
 def account(request):
     from . import email_identity, google_oauth, gmail_api
     from marketplace.models import GoogleIdentity
     access = request.user.access
     action = request.POST.get("action", "recovery")
+    if request.method == "POST" and action == "recovery_verify":
+        _verify_staff_phone_link(request)
+        return redirect("account")
     if request.method == "POST" and action in {"email_start", "email_verify", "email_notifications"}:
         try:
             if not request.user.check_password(request.POST.get("current_password", "")):
@@ -118,14 +209,54 @@ def account(request):
                     ).first(),
                     "gmail_setup_ready": gmail_api.configured(),
                     "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
+                    "phone_link_pending": (_pending_phone_link(request) or {}).get("phone"),
                 })
             locked = Access.objects.select_for_update().get(pk=access.pk)
-            locked.recovery_phone = form.cleaned_data["recovery_phone"]
-            locked.save(update_fields=["recovery_phone"])
-            PasswordRecovery.objects.filter(user=request.user, used=False).update(used=True)
-            audit(request.user, None, "account.recovery_phone_updated", request.user.pk)
-        messages.success(request, "Recovery phone saved.")
-        return redirect("account")
+            phone = form.cleaned_data["recovery_phone"]
+            if phone == locked.recovery_phone:
+                messages.info(request, "Your recovery phone is already up to date.")
+                return redirect("account")
+            if not phone:
+                # Removing recovery access still requires the current password.
+                locked.recovery_phone = ""
+                locked.save(update_fields=["recovery_phone"])
+                PasswordRecovery.objects.filter(user=request.user, used=False).update(used=True)
+                request.session.pop(PHONE_LINK_SESSION_KEY, None)
+                audit(request.user, None, "account.recovery_phone_removed", request.user.pk)
+                messages.success(request, "SMS recovery disabled for this account.")
+                return redirect("account")
+            old_phone = locked.recovery_phone
+            password_hash = digest(current.password)
+        if not sms_ready():
+            form.add_error("recovery_phone", "SMS verification is currently unavailable; your saved phone is unchanged.")
+        elif not _phone_link_budget(request.user.pk):
+            form.add_error("recovery_phone", "Too many verification requests. Try again in an hour.")
+        else:
+            code = f"{secrets.randbelow(1000000):06d}"
+            try:
+                submission = get_provider(settings.SMS_PROVIDER).submit(
+                    phone,
+                    f"KOFAD staff verification code: {code}. Valid for 10 minutes. Never share it.",
+                    settings.SMS_SENDER_ID, "", False,
+                )
+            except Exception:
+                # Provider failures must not activate a recovery number.
+                submission = None
+            if submission is not None and submission.status in {"accepted", "delivered", "unknown"}:
+                request.session[PHONE_LINK_SESSION_KEY] = {
+                    "user_id": request.user.pk,
+                    "old_phone": old_phone,
+                    "phone": phone,
+                    "password_hash": password_hash,
+                    "expires": (timezone.now() + timedelta(minutes=10)).timestamp(),
+                    "attempts": 0,
+                    "digest": digest(
+                        f"staff-phone:{request.user.pk}:{password_hash}:{old_phone}:{phone}:{code}"
+                    ),
+                }
+                messages.success(request, "A six-digit verification code was requested. Enter the SMS code below to activate the new phone.")
+                return redirect("account")
+            form.add_error("recovery_phone", "The SMS request was rejected. Your saved phone is unchanged.")
     return render(request, "account.html", {
         "title": "My account", "form": form, "sms_ready": sms_ready(),
         "profile_form": profile_form,
@@ -139,6 +270,7 @@ def account(request):
         ).first(),
         "gmail_setup_ready": gmail_api.configured(),
         "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
+        "phone_link_pending": (_pending_phone_link(request) or {}).get("phone"),
     })
 
 
