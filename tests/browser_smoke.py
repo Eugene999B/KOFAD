@@ -125,11 +125,11 @@ browser_support.messages.create(
     read_by_customer=True,
 )
 
-def assert_text_contrast(page, selectors, *, minimum=4.5):
+def assert_text_contrast(page, selectors):
     """Real computed foreground/background WCAG contrast, no highlighted text."""
     failures = page.evaluate(r"""(selectors) => {
       const rgb = value => {
-        const nums = (value || "").match(/[\\d.]+/g);
+        const nums = (value || "").match(/[0-9.]+/g);
         return nums && nums.length >= 3 ? nums.map(Number) : null;
       };
       const luminance = channel => {
