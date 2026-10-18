@@ -45,7 +45,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "core.password_validation.PwnedPasswordValidator"},
 ]
+# Free, keyless HIBP range lookup is opt-in for controlled production activation.
+KOFAD_PWNED_PASSWORDS_ENABLED = os.environ.get("KOFAD_PWNED_PASSWORDS_ENABLED", "0") == "1"
 LANGUAGE_CODE = "en-gb"
 TIME_ZONE = "Africa/Accra"
 USE_I18N = True
