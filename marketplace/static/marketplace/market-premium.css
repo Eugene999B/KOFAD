@@ -709,21 +709,14 @@ html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .
   body.market-body:has(.shop-catalog) .shop-product-grid .commerce-product-image img{transition:none!important;transform:none!important}
 }
 
-
-/* Customer account accessibility: readable stat values and separated tile labels.
-   Dark theme retains its surface palette while correcting text contrast. */
+/* Customer account: keep metric values legible and shortcut copy separated. */
 .account-v4-page .account-v4-grid .account-v4-tile > div{
-  display:flex!important;
-  flex-direction:column!important;
-  align-items:flex-start!important;
-  min-width:0;
-  gap:4px;
+  display:flex!important;flex-direction:column!important;align-items:flex-start!important;
+  min-width:0;gap:4px;
 }
 .account-v4-page .account-v4-grid .account-v4-tile > div > strong,
 .account-v4-page .account-v4-grid .account-v4-tile > div > small{
-  display:block!important;
-  margin:0;
-  line-height:1.35;
+  display:block!important;margin:0;line-height:1.35;
 }
 html[data-theme="dark"] body.market-body .account-v4-page .experience-customer-pulse article strong{
   color:#eff9fc!important;

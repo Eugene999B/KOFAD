@@ -60,6 +60,14 @@ STAFF_LOGIN_SLUG = os.environ.get("STAFF_LOGIN_SLUG", "login").strip("/")
 if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,80}", STAFF_LOGIN_SLUG):
     raise RuntimeError("STAFF_LOGIN_SLUG must contain only lowercase letters, digits and hyphens.")
 STAFF_LOGIN_PATH = f"/{STAFF_LOGIN_SLUG}/"
+
+# Invisible Cloudflare Turnstile. Off until both login widgets and secrets
+# have been provisioned; when on, missing/failed Siteverify rejects login.
+KOFAD_TURNSTILE_ENABLED = os.environ.get("KOFAD_TURNSTILE_ENABLED", "0") == "1"
+KOFAD_TURNSTILE_MARKET_SITE_KEY = os.environ.get("KOFAD_TURNSTILE_MARKET_SITE_KEY", "").strip()
+KOFAD_TURNSTILE_MARKET_SECRET_KEY = os.environ.get("KOFAD_TURNSTILE_MARKET_SECRET_KEY", "").strip()
+KOFAD_TURNSTILE_STAFF_SITE_KEY = os.environ.get("KOFAD_TURNSTILE_STAFF_SITE_KEY", "").strip()
+KOFAD_TURNSTILE_STAFF_SECRET_KEY = os.environ.get("KOFAD_TURNSTILE_STAFF_SECRET_KEY", "").strip()
 PUBLIC_SITE_ORIGIN = os.environ.get("PUBLIC_SITE_ORIGIN", "https://kofadimpex.com").rstrip("/")
 MARKET_SITE_ORIGIN = os.environ.get("MARKET_SITE_ORIGIN", "https://market.kofadimpex.com").rstrip("/")
 GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()

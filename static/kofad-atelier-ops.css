@@ -623,17 +623,11 @@ body[data-session-zone="staff"] .approval-attention-link{
   }
 }
 
-
-/* Keep the dashboard control-pulse denominator separated from the large score. */
+/* Preserve space between the prominent control score and its /100 denominator. */
 body.staff-dashboard-refined .control-pulse strong{
-  display:flex!important;
-  align-items:baseline!important;
-  gap:.35rem!important;
-  white-space:nowrap;
-  letter-spacing:-.035em!important;
+  display:flex!important;align-items:baseline!important;gap:.35rem!important;
+  white-space:nowrap;letter-spacing:-.035em!important;
 }
 body.staff-dashboard-refined .control-pulse strong span{
-  font-size:.9rem!important;
-  letter-spacing:0!important;
-  margin:0!important;
+  font-size:.9rem!important;letter-spacing:0!important;margin:0!important;
 }
