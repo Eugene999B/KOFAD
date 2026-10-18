@@ -77,6 +77,15 @@ CATALOG = (
          requirements=(("Breach-password screening enabled", "pwned_passwords_enabled"),),
          repair="Set KOFAD_PWNED_PASSWORDS_ENABLED=1 on the Railway web service after release validation, then verify customer/staff password forms. This local flag does not prove HIBP availability.",
          manage="https://haveibeenpwned.com/API/v3"),
+    dict(id="sentry", group="core", name="Sentry error monitoring", mark="SE",
+         purpose="Receives minimized backend exception metadata for marketplace, staff and optional messaging worker diagnostics.",
+         steps=("An error is captured by the Django or worker exception integration.",
+                "KOFAD removes request data, identities, exception values and stack locals before transport.",
+                "The approved Sentry project groups code-location errors and provides alerting."),
+         requirements=(("Sentry reporting enabled", "sentry_enabled"),
+                       ("HTTPS Sentry project DSN installed", "sentry_dsn")),
+         repair="Create an approved Sentry Python/Django project and set KOFAD_SENTRY_DSN plus KOFAD_SENTRY_ENABLED=1 on the Railway service. Configuration presence does not verify delivery.",
+         manage="https://sentry.io"),
     dict(id="oracle", group="core", name="Oracle Cloud", mark="OC",
          purpose="Optional future hosting or external database infrastructure.",
          steps=("Oracle resources must be provisioned and authorised.",
@@ -250,6 +259,8 @@ def _configuration():
     return {
         "railway_runtime": bool(os.environ.get("RAILWAY_SERVICE_ID")),
         "pwned_passwords_enabled": bool(settings.KOFAD_PWNED_PASSWORDS_ENABLED),
+        "sentry_enabled": bool(settings.KOFAD_SENTRY_ENABLED),
+        "sentry_dsn": bool(settings.KOFAD_SENTRY_DSN),
         "postgres_configured": settings.DATABASES["default"].get("ENGINE") == "django.db.backends.postgresql",
         "google_oauth_enabled": bool(settings.KOFAD_GOOGLE_OAUTH_ENABLED),
         "google_client_id": bool(settings.KOFAD_GOOGLE_CLIENT_ID),
@@ -424,6 +435,7 @@ def catalog(probes=None):
             # An intentionally disabled or not-yet-onboarded provider stays grey.
             enabled_flags = {
                 "google_login": "google_oauth_enabled", "gmail": "gmail_enabled",
+                "sentry": "sentry_enabled",
                 "google_drive": "backup_enabled", "apps_script": "backup_enabled",
                 "inbound_email": "email_center", "arkesel": "sms_enabled",
                 "whatsapp": "wa_enabled", "paystack": "paystack_enabled",
