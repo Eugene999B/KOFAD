@@ -6,6 +6,11 @@ on:
     paths:
       - '.github/workflows/release-regression-guard.yml'
       - 'docs/ROLLBACK_RECOVERY_REGRESSION_MATRIX.md'
+      - 'core/google_oauth.py'
+      - 'marketplace/views.py'
+      - 'core/test_release_security_contracts.py'
+      - 'marketplace/test_security_boundaries.py'
+      - 'marketplace/test_google_oauth.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -48,6 +53,7 @@ jobs:
         run: >
           python manage.py test --noinput
           core.test_lost_route_recovery
+          core.test_release_security_contracts
           core.test_staff_login_routes
           core.test_native_apps
           core.test_pwa

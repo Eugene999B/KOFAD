@@ -43,6 +43,17 @@ class OfficialDomainTests(SimpleTestCase):
                 response = self.middleware(self.factory.post(path, HTTP_HOST=host))
                 self.assertEqual(response.content, b"served")
 
+    def test_railway_origin_redirects_login_get_and_rejects_login_post(self):
+        origin = "kofad-web-production.up.railway.app"
+        get = self.middleware(self.factory.get("/login/", HTTP_HOST=origin))
+        self.assertEqual(get.status_code, 302)
+        self.assertEqual(get["Location"], "https://staff.kofadimpex.com/login/")
+        post = self.middleware(self.factory.post("/login/", HTTP_HOST=origin))
+        self.assertEqual(post.status_code, 409)
+        self.assertNotIn("Location", post)
+        health = self.middleware(self.factory.get("/health/", HTTP_HOST=origin))
+        self.assertEqual(health.content, b"served")
+
     def test_development_and_staff_map_requests_still_work(self):
         for host, path in (("testserver", "/login/"),
                            ("staff.kofadimpex.com", "/market/location/search/?q=Accra")):
