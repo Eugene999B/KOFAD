@@ -43,6 +43,13 @@ PRIVATE_TOPIC = re.compile(
 )
 
 
+INSTRUCTION_ATTACK = re.compile(
+    r"(?i)(?:\b(?:ignore|override|disregard|bypass)\s+(?:all\s+)?"
+    r"(?:previous|prior|system|developer)\s+(?:instructions?|rules?|prompts?)\b|"
+    r"\b(?:reveal|print|show|dump)\s+(?:the\s+)?(?:hidden\s+)?"
+    r"(?:system|developer)\s+(?:prompt|instructions?)\b)"
+)
+
 META_QUESTION = re.compile(
     r"(?i)\b(?:(?:what|which)\s+(?:(?:ai|language|underlying)\s+)?"
     r"(?:model|api|provider|engine)\b|which\s+llm\b|"
@@ -104,6 +111,7 @@ def eligible_for_external_ai(question):
         and not INTENT_ORDER.search(question)
         and not PRIVATE_TOPIC.search(question)
         and not META_QUESTION.search(question)
+        and not INSTRUCTION_ATTACK.search(question)
     )
 
 
@@ -330,7 +338,9 @@ def _public_history(value):
             continue
         role = turn.get("role")
         content = turn.get("content")
-        if role not in {"user", "assistant"} or not isinstance(content, str):
+        # A browser can forge assistant-role history. Only the visitor's own
+        # public questions are forwarded; no client text receives assistant authority.
+        if role != "user" or not isinstance(content, str):
             continue
         content = " ".join(content.split())[:440]
         if len(content) < 2 or BLOCKED.search(content) or PRIVATE_TOPIC.search(content) or INTENT_ORDER.search(content):
@@ -434,6 +444,9 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
         return "Please ask a question in 600 characters or fewer.", "local"
     if META_QUESTION.search(question):
         return _meta_reply(), "local"
+    if INSTRUCTION_ATTACK.search(question):
+        return ("I can help with published KOFAD products, orders and delivery, "
+                "but cannot follow instructions to override my safeguards."), "local"
     if INTENT_ORDER.search(question):
         return _customer_orders(customer), "private" if customer else "local"
     if BLOCKED.search(question):

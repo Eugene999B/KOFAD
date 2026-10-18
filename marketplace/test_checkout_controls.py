@@ -68,6 +68,41 @@ class CheckoutControlsTests(MarketFixtures):
             with self.subTest(cart=repr(corrupt_cart)[:64]):
                 self.assertEqual(services.cart_rows(corrupt_cart), [])
 
+    def test_cart_add_ignores_external_redirects_and_recovers_corrupt_session(self):
+        self.customer_session()
+        session = self.client.session
+        session["market_cart"] = {str(self.listing.pk): "²"}
+        session.save()
+        response = self.client.post(
+            f"/market/cart/add/{self.listing.pk}/",
+            {"quantity": "2", "next": "https://attacker.example/fake-login"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/market/cart/")
+        self.assertEqual(self.client.session["market_cart"][str(self.listing.pk)], 2)
+
+        response = self.client.post(
+            f"/market/cart/add/{self.listing.pk}/",
+            {"quantity": "1", "next": "/market/"},
+        )
+        self.assertEqual(response["Location"], "/market/")
+        self.assertEqual(self.client.session["market_cart"][str(self.listing.pk)], 3)
+
+    def test_market_login_next_rejects_browser_normalized_external_paths(self):
+        # Browsers interpret /\\evil.example as //evil.example.
+        for path in ("/market/account/login/", "/market/access/"):
+            for crafted in (r"/\attacker.example", r"/\\attacker.example", "//attacker.example", "https://attacker.example"):
+                with self.subTest(path=path, crafted=crafted):
+                    session = self.client.session
+                    session.pop("market_after_login", None)
+                    session.save()
+                    response = self.client.get(path, {"next": crafted})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertNotIn("market_after_login", self.client.session)
+        response = self.client.get("/market/account/login/", {"next": "/market/orders/"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session["market_after_login"], "/market/orders/")
+
     def test_valid_cart_quantity_is_still_capped_at_999(self):
         rows = services.cart_rows({str(self.listing.pk): "999999"})
         self.assertEqual(len(rows), 1)
