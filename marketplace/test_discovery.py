@@ -91,6 +91,23 @@ class PublicDiscoveryPagesTests(TestCase):
             with self.subTest(path=path):
                 self.assertContains(response, f'href="{path}"')
 
+    def test_company_home_has_compact_footer_without_oversized_navy_band(self):
+        homepage = self.client.get("/", HTTP_HOST="kofadimpex.com")
+        self.assertEqual(homepage.status_code, 200)
+        self.assertContains(homepage, 'class="kfd-compact-footer"')
+        self.assertContains(homepage, 'aria-label="Company information and policies"')
+        self.assertContains(homepage, "Everyday shopping and wholesale supply in Ghana.")
+        self.assertNotContains(homepage, 'class="market-footer commerce-footer"')
+        for important_path in ("/contact/", "/privacy/", "/terms/", "/market/"):
+            with self.subTest(path=important_path):
+                self.assertContains(homepage, f'href="{important_path}"')
+
+    def test_other_public_pages_retain_their_existing_company_footer(self):
+        response = self.client.get("/about/", HTTP_HOST="kofadimpex.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="market-footer commerce-footer"')
+        self.assertNotContains(response, 'class="kfd-compact-footer"')
+
     def test_customer_app_page_is_public_and_describes_real_downloads(self):
         response = self.client.get("/apps/", HTTP_HOST="kofadimpex.com")
         self.assertEqual(response.status_code, 200)
