@@ -725,6 +725,36 @@ with sync_playwright() as p:
     assert admin_page.locator("tbody tr").count() == 2
     admin_page.screenshot(path=str(out / "branch-comparison-mobile.png"),full_page=True)
     assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), "Branch report overflows"
+    # Guest marketplace redesigned header: usable without signing in.
+    guest_market = browser.new_page(viewport={"width":1440,"height":920})
+    guest_market.goto("http://127.0.0.1:8000/market/")
+    assert guest_market.locator(".shop-shell-brand .shop-brand-copy").is_visible()
+    assert guest_market.locator(".shop-shell-actions .shop-shell-signin").is_visible()
+    assert guest_market.locator(".shop-shell-actions .shop-shell-cart").is_visible()
+    assert guest_market.locator(".shop-shell-search input[name='q']").is_visible()
+    assert guest_market.locator("link[href*='market-premium.']").count() == 1
+    assert guest_market.locator(".shop-shell-actions .shop-shell-signin").get_attribute("href") == "/market/access/"
+    assert guest_market.locator(".shop-shell-actions .shop-shell-cart").get_attribute("href") == "/market/cart/"
+    assert guest_market.locator(".shop-shell-actions .shop-guest-user-icon").count() == 1
+    assert guest_market.locator(".shop-shell-actions .shop-cart-graphic .shop-ui-icon").count() == 1
+    guest_market.screenshot(path=str(out / "market-guest-redesign-desktop.png"), full_page=True)
+    for width in (320,390,720,1024,1440):
+        guest_market.set_viewport_size({"width":width,"height":900})
+        guest_market.goto("http://127.0.0.1:8000/market/")
+        assert guest_market.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Guest market horizontal overflow {width}"
+        assert guest_market.locator(".shop-shell-search input").is_visible(), f"Guest market search hidden at {width}"
+        assert guest_market.locator(".shop-shell-actions .shop-shell-signin").is_visible(), f"Guest sign-in hidden at {width}"
+        assert guest_market.locator(".shop-shell-actions .shop-shell-cart").is_visible(), f"Guest cart hidden at {width}"
+        if width < 800:
+            assert guest_market.locator(".shop-shell-search").evaluate("""el => {
+                const search = el.getBoundingClientRect();
+                const header = document.querySelector(".shop-shell-brand").getBoundingClientRect();
+                return search.top >= header.bottom - 2 && search.right <= innerWidth + 1;
+            }"""), f"Mobile search not on own row at {width}"
+        if width in (320,390):
+            guest_market.screenshot(path=str(out / f"market-guest-redesign-{width}.png"), full_page=True)
+    guest_market.close()
+
     market_page = browser.new_page(viewport={"width":390,"height":844})
     market_page.context.add_cookies([{
         "name": settings.SESSION_COOKIE_NAME,
@@ -857,6 +887,13 @@ with sync_playwright() as p:
     market_page.set_viewport_size({"width":1440,"height":1000})
     first_market_title = market_page.locator(".shop-product-grid .commerce-card-body h3").first
     first_market_title.wait_for()
+    # Signed-in header preserves native details menu and original order routes.
+    assert market_page.locator(".shop-shell-account .shop-shell-avatar").is_visible()
+    assert market_page.locator(".shop-shell-cart .shop-cart-graphic .shop-ui-icon").count() == 1
+    assert market_page.locator(".shop-shell-account-copy strong").is_visible()
+    assert market_page.locator(".shop-account-menu nav a[href='/market/orders/']").count() == 1
+    assert market_page.locator(".shop-product-grid .commerce-card-actions .shop-ui-icon").count() > 0
+    market_page.screenshot(path=str(out / "market-signed-in-redesign-desktop.png"), full_page=True)
     assert float(first_market_title.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14
     market_page.evaluate("localStorage.setItem(\'kofad-theme\', \'dark\')")
     market_page.reload()
@@ -891,6 +928,9 @@ with sync_playwright() as p:
     market_page.goto("http://127.0.0.1:8000/market/account/")
     assert market_page.get_by_role("heading", name="Hi, Mobile Market Customer.", exact=True).is_visible()
     assert market_page.locator(".market-mobile-dock").is_visible()
+    assert market_page.locator(".market-mobile-dock .shop-ui-icon").count() >= 4
+    assert market_page.locator(".shop-shell-actions .shop-shell-cart").is_visible()
+    assert market_page.locator(".shop-shell-actions .shop-shell-account").is_visible()
     assert market_page.get_by_text(browser_market_order.confirmed_reference, exact=True).count() >= 1
     assert market_page.get_by_text("Paystack", exact=False).count() == 0
     market_page.screenshot(path=str(out / "market-account-mobile.png"), full_page=True)
