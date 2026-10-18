@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from .tests import MarketFixtures
-from .models import Conversation, MarketPaymentAttempt, MarketReturnAttachment, MarketReturnRequest
+from .models import Conversation, MarketListingImage, MarketPaymentAttempt, MarketReturnAttachment, MarketReturnRequest
 from . import services, views
 from .paystack_reconciliation import reconcile_due
 from core.models import Branch
@@ -50,6 +50,23 @@ class CheckoutSecurityTests(MarketFixtures):
         self.assertEqual(order.payment_status, "paid")
         self.assertIsNotNone(order.sale_document_id)
         self.assertEqual(get.call_count, 1)
+
+    def test_inactive_products_never_serve_public_listing_media(self):
+        image = MarketListingImage.objects.create(
+            listing=self.listing, image_data=b"gallery", image_thumb=b"thumbnail",
+        )
+        primary_url = f"/market/products/{self.listing.pk}/image/thumb/"
+        gallery_url = f"/market/gallery/{image.pk}/image/thumb/"
+        for url in (primary_url, gallery_url):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        self.product.active = False
+        self.product.save(update_fields=["active"])
+        # The listing remains enabled but is no longer a public product.
+        for url in (primary_url, gallery_url):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_unicode_signature_fails_closed(self):
         self.assertFalse(services.paystack_signature_valid(b"{}", "é" * 128))
