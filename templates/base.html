@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="{% static 'kofad-atelier-ops.css' %}">
 <link rel="stylesheet" href="{% static 'kofad-atelier-commerce.css' %}">
 <link rel="stylesheet" href="{% static 'kofad-mobile-reachability.css' %}">
-<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'kofad-minimal.css' %}"></head>
+<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'kofad-minimal.css' %}"><link rel="stylesheet" href="{% static 'kofad-light-contrast.css' %}"></head>
 <body class="{% block body_class %}{% endblock %}" data-session-zone="staff" data-session-active="true" data-session-logout-url="/logout/" data-session-status-url="/session/state/" data-session-login-url="/login/"><a class="skip" href="#main">Skip to content</a>
 <div class="login-welcome-overlay" id="login-welcome-overlay" aria-hidden="true" data-user-name="{{ request.user.get_full_name|default:request.user.username }}" >
   <div class="welcome-orbit" aria-hidden="true"></div>
