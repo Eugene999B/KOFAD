@@ -1820,15 +1820,24 @@ def customer_return_detail(request, customer, pk):
 
 def market_return_attachment(request, pk):
     attachment = get_object_or_404(
-        MarketReturnAttachment.objects.select_related("request__customer"),
+        MarketReturnAttachment.objects.select_related("request__customer", "request__order"),
         pk=pk,
     )
     customer = services.customer_from_session(request)
+    # Return evidence may contain private customer documents. A global role
+    # permission alone must not grant access to another location's attachments.
     staff_allowed = request.user.is_authenticated and (
         request.user.is_superuser
-        or request.user.has_perm("core.operate_sales")
-        or request.user.has_perm("core.approve_operations")
-        or request.user.has_perm("core.manage_company")
+        or (
+            (
+                request.user.has_perm("core.operate_sales")
+                or request.user.has_perm("core.approve_operations")
+                or request.user.has_perm("core.manage_company")
+            )
+            and request.user.access.branches.filter(
+                pk=attachment.request.order.branch_id, active=True,
+            ).exists()
+        )
     )
     if not staff_allowed and (not customer or attachment.request.customer_id != customer.pk):
         raise Http404
