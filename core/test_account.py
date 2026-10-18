@@ -214,6 +214,10 @@ class AccountRecoveryTests(TestCase):
         self.user.access.refresh_from_db()
         self.assertEqual(self.user.access.recovery_phone, "+233241234569")
 
+    def test_phone_link_accepts_provider_delivered_acknowledgement(self):
+        self.provider.submit.return_value = Submission("delivered")
+        self.assertIsNotNone(self._start_phone_link())
+
     def test_phone_link_provider_failure_cannot_be_bypassed_with_code(self):
         self.provider.submit.return_value = Submission("failed")
         self.assertIsNone(self._start_phone_link())

@@ -1444,7 +1444,7 @@ def customer_order(request, customer, pk):
     wallet_default = saved_wallet.get("phone") or customer.phone or ""
     wallet_channel_default = saved_wallet.get("channel") or "mtn-gh"
     return render(request, "marketplace/order_detail.html", _market_context(
-        request, title=order.public_reference, order=order,
+        request, title=order.confirmed_reference or "Order details", order=order,
         handover_code=services.handover_code(order) if order.payment_status == "paid" else "",
         payment_available=hubtel_direct.enabled("receive"),
         direct_wallet_number=wallet_default,

@@ -237,9 +237,10 @@ def account(request):
                     f"KOFAD staff verification code: {code}. Valid for 10 minutes. Never share it.",
                     settings.SMS_SENDER_ID, "", False,
                 )
-            except (ValidationError, OSError):
+            except Exception:
+                # Provider failures must not activate a recovery number.
                 submission = None
-            if submission is not None and submission.status in {"accepted", "unknown"}:
+            if submission is not None and submission.status in {"accepted", "delivered", "unknown"}:
                 request.session[PHONE_LINK_SESSION_KEY] = {
                     "user_id": request.user.pk,
                     "old_phone": old_phone,
