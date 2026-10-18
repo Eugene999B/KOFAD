@@ -26,7 +26,7 @@ class ReleaseSecurityContracts(MarketFixtures):
             mime_type="image/png", size=5, sha256="synthetic", data=b"proof",
         )
         url = f"/market/returns/attachments/{evidence.pk}/"
-        other = Branch.objects.create(name="Unrelated location", code="contract-other")
+        other = Branch.objects.create(name="Unrelated location", code="sec-other")
         staff = User.objects.create_user("security-contract-staff", password="isolated-test-password")
         staff.user_permissions.add(Permission.objects.get(codename="operate_sales"))
         staff.access.branches.add(other)
