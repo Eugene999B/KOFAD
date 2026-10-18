@@ -13,7 +13,7 @@ from django.utils.text import slugify
 COMPANY_HOST = "kofadimpex.com"
 MARKET_HOST = "market.kofadimpex.com"
 COMPANY_PAGES = (
-    "/", "/about/", "/wholesale/", "/faq/", "/delivery/", "/returns-policy/",
+    "/", "/apps/", "/about/", "/wholesale/", "/faq/", "/delivery/", "/returns-policy/",
     "/terms/", "/privacy/", "/contact/",
 )
 

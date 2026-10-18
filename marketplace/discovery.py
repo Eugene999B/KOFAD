@@ -11,6 +11,7 @@ from django.conf import settings
 ORG = "https://kofadimpex.com/#organization"
 PAGE_NAMES = {
     "/": "KOFAD IMPEX ENTERPRISE",
+    "/apps/": "Download KOFAD Market app",
     "/about/": "About KOFAD",
     "/wholesale/": "Wholesale & bulk supply",
     "/faq/": "Help and frequently asked questions",
@@ -30,6 +31,18 @@ def page_title(path, title, category_name=None, listing=None):
         return "KOFAD Market | Shop Retail & Wholesale Products in Ghana"
     if path == "/wholesale/":
         return "Wholesale & Bulk Supply in Ghana | KOFAD"
+    public_titles = {
+        "/apps/": "Download KOFAD Market App | Shopping in Ghana",
+        "/about/": "About KOFAD IMPEX ENTERPRISE | Ghana",
+        "/faq/": "Help & FAQs | KOFAD IMPEX ENTERPRISE",
+        "/delivery/": "Delivery & Collection | KOFAD Ghana",
+        "/returns-policy/": "Returns & Refunds | KOFAD Ghana",
+        "/contact/": "Contact KOFAD IMPEX ENTERPRISE | Customer Care",
+        "/terms/": "Terms of Service | KOFAD IMPEX ENTERPRISE",
+        "/privacy/": "Privacy Notice | KOFAD IMPEX ENTERPRISE",
+    }
+    if path in public_titles:
+        return public_titles[path]
     if category_name:
         return f"{category_name} Products in Ghana | KOFAD Market"
     if listing:
@@ -57,6 +70,18 @@ def description(path, page=None, listing=None, category_name=None):
         return ("Ask KOFAD IMPEX ENTERPRISE about wholesale quantities, business "
                 "restocking and bulk orders in Ghana. Request availability, pack sizes "
                 "and a quotation before placing a special order.")
+    public_descriptions = {
+        "/apps/": "Get the KOFAD Market customer shopping app. Check available official Android, iOS and desktop releases and installation information.",
+        "/about/": "Learn about KOFAD IMPEX ENTERPRISE, our Ghana retail and wholesale business, product catalogue, customer service and order fulfilment.",
+        "/faq/": "Find KOFAD answers about shopping, payment verification, delivery, collection, returns and account support before or after you order.",
+        "/delivery/": "Learn about KOFAD delivery coverage, pickup, fees, tracking and customer handover. Check available options and charges at checkout.",
+        "/returns-policy/": "Read KOFAD's returns, cancellations and refunds policy, including eligibility, how to request support and refund processing.",
+        "/contact/": "Contact KOFAD IMPEX ENTERPRISE in Ghana for product enquiries, wholesale quotations, order support or customer feedback.",
+        "/terms/": "Read the terms for shopping with KOFAD Market, including orders, payment confirmation, fulfilment and customer responsibilities.",
+        "/privacy/": "Learn how KOFAD IMPEX ENTERPRISE handles customer account information, order data, communications and privacy choices.",
+    }
+    if path in public_descriptions:
+        return public_descriptions[path]
     return ((page or {}).get("intro") or
             "Explore retail and wholesale shopping, delivery and customer support "
             "from KOFAD IMPEX ENTERPRISE in Ghana.")[:180]
@@ -84,6 +109,10 @@ def structured_data(path, url, title, summary, listing=None, category_name=None)
     company = settings.PUBLIC_SITE_ORIGIN
     market = settings.MARKET_SITE_ORIGIN
     market_page = path.startswith("/market/")
+    # The market subdomain's actual public landing page is /market/, not /.
+    # Keep WebSite.url, @id and WebPage.isPartOf on the same canonical home.
+    website_home = market + "/market/" if market_page else company + "/"
+    website_id = website_home + "#website"
     brand = {
         "@type": "Organization", "@id": ORG, "name": "KOFAD IMPEX ENTERPRISE",
         "alternateName": "KOFAD IMPEX", "url": company + "/",
@@ -97,17 +126,17 @@ def structured_data(path, url, title, summary, listing=None, category_name=None)
     if path in {"/", "/market/"}:
         graph.append({
             "@type": "WebSite",
-            "@id": (market if market_page else company) + "/#website",
+            "@id": website_id,
             "name": "KOFAD Market" if market_page else "KOFAD IMPEX ENTERPRISE",
             "alternateName": "KOFAD" if not market_page else "KOFAD IMPEX Market",
-            "url": (market if market_page else company) + "/",
+            "url": website_home,
             "publisher": {"@id": ORG}, "inLanguage": "en-GH",
         })
     page_type = "CollectionPage" if market_page and not listing else "WebPage"
     page_node = {
         "@type": page_type, "@id": url + "#webpage", "url": url,
         "name": title, "description": summary, "inLanguage": "en-GH",
-        "isPartOf": {"@id": (market if market_page else company) + "/#website"},
+        "isPartOf": {"@id": website_id},
     }
     graph.append(page_node)
     crumb = _breadcrumb(url, path, PAGE_NAMES.get(path, title), category_name)

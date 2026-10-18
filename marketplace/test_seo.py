@@ -23,6 +23,7 @@ class SearchCrawlTests(SimpleTestCase):
         self.assertIn("Allow: /", rules)
         self.assertIn("https://kofadimpex.com/sitemap.xml", rules)
         xml = sitemap(self._request("/sitemap.xml", "kofadimpex.com")).content.decode()
+        self.assertIn("<loc>https://kofadimpex.com/apps/</loc>", xml)
         self.assertIn("<loc>https://kofadimpex.com/about/</loc>", xml)
         self.assertIn("<loc>https://kofadimpex.com/wholesale/</loc>", xml)
         self.assertNotIn("/login/", xml)
