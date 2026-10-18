@@ -270,6 +270,7 @@ def account(request):
         ).first(),
         "gmail_setup_ready": gmail_api.configured(),
         "gmail_sender": gmail_api.connection() if request.user.has_perm("core.manage_company") else None,
+        "phone_link_pending": (_pending_phone_link(request) or {}).get("phone"),
     })
 
 
