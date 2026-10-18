@@ -174,3 +174,18 @@ body.is-kofad-home .kfd-category:nth-child(3) .kfd-photo-tag{background:rgba(87,
 body.is-kofad-home .kfd-category:nth-child(4) .kfd-photo-tag{background:rgba(105,78,37,.92)}
 body.is-kofad-home .kfd-category .kfd-category-body{min-height:62px}
 body.is-kofad-home .kfd-category:hover .kfd-category-body{background:#f4f7f7}
+
+/* Crawlable public page directory: visible, semantic homepage links. */
+.kfd-home .kfd-site-directory{max-width:1280px;margin:0 auto;padding:37px 30px 5px}
+.kfd-site-directory-head{display:flex;justify-content:space-between;align-items:end;gap:28px;margin-bottom:18px}
+.kfd-site-directory-label{display:block;font-size:10px;letter-spacing:.16em;font-weight:800;color:#8a6532;margin-bottom:8px}
+.kfd-site-directory-head h2{margin:0;color:#102e45;font-size:clamp(24px,2.7vw,33px);letter-spacing:-.035em}
+.kfd-site-directory-head p{max-width:480px;margin:0;color:#597081;line-height:1.6;font-size:13px}
+.kfd-site-directory-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kfd-site-directory-links a{display:flex;flex-direction:column;gap:7px;min-width:0;padding:19px 20px;border-radius:14px;background:#fff;border:1px solid #dae5eb;text-decoration:none!important;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.kfd-site-directory-links a:hover{border-color:#c2a371;box-shadow:0 8px 22px rgba(10,48,74,.08);transform:translateY(-2px)}
+.kfd-site-directory-links a:focus-visible{outline:3px solid #b48634;outline-offset:3px}
+.kfd-site-directory-links strong{color:#113c55;font-size:14px;line-height:1.35}
+.kfd-site-directory-links span{color:#5a7384;font-size:12px;line-height:1.45}
+@media(max-width:950px){.kfd-site-directory-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.kfd-home .kfd-site-directory{padding:28px 15px 0}.kfd-site-directory-head{display:block;margin-bottom:14px}.kfd-site-directory-head p{margin-top:8px}.kfd-site-directory-links{gap:9px}.kfd-site-directory-links a{padding:14px 12px}.kfd-site-directory-links strong{font-size:12px}.kfd-site-directory-links span{font-size:11px}}
