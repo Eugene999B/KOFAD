@@ -7,11 +7,19 @@ import base64
 import hashlib
 import hmac
 import logging
+from datetime import timedelta
 
 from cryptography.fernet import Fernet
 from django.conf import settings
+from django.db import connection, transaction
+from django.utils import timezone
 
 from .models import HubtelEvidence, MarketPaymentAttempt
+
+# Callback payloads are untrusted; independent provider checks settle payments.
+# Retain distinct original callback bodies for investigation without allowing a
+# known reference to turn the evidence table into an unbounded write sink.
+CALLBACK_EVIDENCE_LIMIT_PER_HOUR = 24
 
 
 def _cipher():
@@ -37,14 +45,38 @@ def save_exchange(*, reference, direction, raw_body, http_status=None, attempt=N
         attempt = MarketPaymentAttempt.objects.filter(
             provider="hubtel", reference=reference
         ).first()
-    return HubtelEvidence.objects.create(
-        attempt=attempt,
-        reference=reference,
-        direction=direction,
-        http_status=http_status,
-        encrypted_body=_cipher().encrypt(raw_body).decode("ascii"),
-        body_sha256=hashlib.sha256(raw_body).hexdigest(),
+    record = {
+        "attempt": attempt,
+        "reference": reference,
+        "direction": direction,
+        "http_status": http_status,
+        "encrypted_body": _cipher().encrypt(raw_body).decode("ascii"),
+        "body_sha256": hashlib.sha256(raw_body).hexdigest(),
+    }
+    if direction != "callback":
+        return HubtelEvidence.objects.create(**record)
+
+    # Hubtel callbacks have no source-authenticated signature. A forged caller
+    # who learns a legitimate reference must not exhaust database storage.
+    # PostgreSQL's non-blocking transaction lock serializes the hourly check
+    # across all web workers; on contention, omit the *untrusted* evidence.
+    # Settlement is NEVER authorized by this callback.
+    lock_key = int.from_bytes(
+        hashlib.sha256(("kofad:hubtel:callback:" + reference).encode()).digest()[:8],
+        byteorder="big", signed=True,
     )
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [lock_key])
+            if not cursor.fetchone()[0]:
+                return None
+        recent = HubtelEvidence.objects.filter(
+            reference=reference, direction="callback",
+            created_at__gte=timezone.now() - timedelta(hours=1),
+        ).count()
+        if recent >= CALLBACK_EVIDENCE_LIMIT_PER_HOUR:
+            return None
+        return HubtelEvidence.objects.create(**record)
 
 
 def decrypt_exchange(exchange):

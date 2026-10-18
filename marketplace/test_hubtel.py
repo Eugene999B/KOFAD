@@ -499,3 +499,20 @@ class HubtelPaymentTests(MarketFixtures):
         self.assertEqual(HubtelEvidence.objects.filter(
             reference=attempt.reference, direction="callback"
         ).count(), 2)
+
+    def test_forged_callback_burst_cannot_exhaust_evidence_storage(self):
+        from .hubtel_evidence import CALLBACK_EVIDENCE_LIMIT_PER_HOUR
+        attempt = self.pending()
+        forged = {"Data": {"ClientReference": attempt.reference, "Status": "Success", "Amount": 200}}
+        for _ in range(CALLBACK_EVIDENCE_LIMIT_PER_HOUR + 8):
+            response = self.client.post(
+                "/market/payments/hubtel/callback/", forged,
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(HubtelEvidence.objects.filter(
+            direction="callback", reference=attempt.reference,
+        ).count(), CALLBACK_EVIDENCE_LIMIT_PER_HOUR)
+        attempt.order.refresh_from_db()
+        self.assertNotEqual(attempt.order.payment_status, "paid")
+        self.assertIsNone(attempt.order.sale_document_id)

@@ -525,7 +525,13 @@ def callback(request):
     ):
         from marketplace.hubtel_evidence import save_exchange
         try:
-            save_exchange(reference=ref, direction="callback", raw_body=request.body)
+            saved = save_exchange(reference=ref, direction="callback", raw_body=request.body)
+            if saved is None:
+                # Independent status polling remains authoritative; cap
+                # untrusted callback writes even for a disclosed reference.
+                response = JsonResponse({"received": True})
+                response["Cache-Control"] = "no-store"
+                return response
         except Exception:
             logging.getLogger(__name__).exception("Hubtel callback evidence capture failed")
     if staff_request:
