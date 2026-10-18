@@ -96,7 +96,7 @@ class PublicDiscoveryPagesTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'rel="canonical" href="https://kofadimpex.com/apps/"')
         self.assertContains(response, "Download KOFAD Market App")
-        self.assertContains(response, '"name":"KOFAD IMPEX ENTERPRISE"')
+        self.assertContains(response, '"isPartOf":{"@id":"https://kofadimpex.com/#website"}')
         self.assertNotContains(response, 'content="noindex,nofollow,noarchive"')
 
     def test_wholesale_guide_indexable_on_company_domain(self):
