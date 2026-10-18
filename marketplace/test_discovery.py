@@ -91,6 +91,24 @@ class PublicDiscoveryPagesTests(TestCase):
             with self.subTest(path=path):
                 self.assertContains(response, f'href="{path}"')
 
+    def test_public_pages_load_shared_light_theme_contrast_guard(self):
+        # The same final CSS layer must load on home, company guidance and
+        # Market pages; don't fix just the screenshot's footer.
+        for path, hostname in (
+            ("/", "kofadimpex.com"),
+            ("/contact/", "kofadimpex.com"),
+            ("/faq/", "kofadimpex.com"),
+            ("/market/", "market.kofadimpex.com"),
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path, HTTP_HOST=hostname)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "kofad-light-contrast.css")
+                self.assertLess(
+                    response.content.index(b"kofad-atelier.css"),
+                    response.content.index(b"kofad-light-contrast.css"),
+                )
+
     def test_company_home_has_compact_footer_without_oversized_navy_band(self):
         homepage = self.client.get("/", HTTP_HOST="kofadimpex.com")
         self.assertEqual(homepage.status_code, 200)
