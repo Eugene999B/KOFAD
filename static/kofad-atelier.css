@@ -617,3 +617,15 @@ html[data-theme="dark"] .market-body .atelier-story-steps>a strong{color:#f0f1ed
 @media(prefers-reduced-motion:reduce){
  .atelier-market-intro-actions a{transition:none}
 }
+
+/* Staff access: feature-card copy sits over a dark blue panel even in light mode. */
+html:not([data-theme="dark"]) body.login-page .premium-login-story .login-command-map article strong{
+  color:#f6fbfe!important;
+}
+html:not([data-theme="dark"]) body.login-page .premium-login-story .login-command-map article small{
+  color:#c6d9e5!important;
+}
+/* Recovery needs contrast against the dark login card. */
+html[data-theme="dark"] body.login-page .premium-login-form .login-form-row a{
+  color:#95e0e9!important;text-decoration:underline;text-underline-offset:3px;
+}

@@ -708,3 +708,25 @@ html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-product-grid .
   body.market-body:has(.shop-catalog) .shop-product-grid .commerce-product-card,
   body.market-body:has(.shop-catalog) .shop-product-grid .commerce-product-image img{transition:none!important;transform:none!important}
 }
+
+/* Customer account: keep metric values legible and shortcut copy separated. */
+.account-v4-page .account-v4-grid .account-v4-tile > div{
+  display:flex!important;flex-direction:column!important;align-items:flex-start!important;
+  min-width:0;gap:4px;
+}
+.account-v4-page .account-v4-grid .account-v4-tile > div > strong,
+.account-v4-page .account-v4-grid .account-v4-tile > div > small{
+  display:block!important;margin:0;line-height:1.35;
+}
+html[data-theme="dark"] body.market-body .account-v4-page .experience-customer-pulse article strong{
+  color:#eff9fc!important;
+}
+html[data-theme="dark"] body.market-body .account-v4-page .account-v4-card-head a{
+  color:#83d9d9!important;
+}
+html[data-theme="dark"] body.market-body .account-v4-page .experience-email-card .market-eyebrow{
+  color:#a4d7e3!important;
+}
+html[data-theme="dark"] body.market-body .account-v4-page .account-v4-tile small{
+  color:#bed1dc!important;
+}
