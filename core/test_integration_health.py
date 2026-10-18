@@ -126,6 +126,27 @@ class ConnectionsCenterTests(MarketFixtures):
                     record = next(x for x in integration_health.catalog()["items"] if x["id"] == "google_login")
                 self.assertEqual(record["status"], expected)
 
+    @override_settings(
+        KOFAD_SENTRY_ENABLED=True,
+        KOFAD_SENTRY_DSN="https://test-project-key@o123.ingest.sentry.io/456",
+    )
+    def test_sentry_status_reports_configuration_without_leaking_dsn(self):
+        with patch("core.integration_health._evidence", return_value={}):
+            item = next(row for row in integration_health.catalog()["items"] if row["id"] == "sentry")
+            detail = self.client.get(reverse("connections_detail", args=["sentry"]))
+        self.assertEqual(item["status"], "ready")
+        self.assertEqual(item["requirements_ok"], 2)
+        self.assertEqual(detail.status_code, 200)
+        self.assertNotContains(detail, "test-project-key")
+        self.assertContains(detail, "Configured")
+
+    @override_settings(KOFAD_SENTRY_ENABLED=True, KOFAD_SENTRY_DSN="")
+    def test_sentry_enabled_without_dsn_needs_attention(self):
+        with patch("core.integration_health._evidence", return_value={}):
+            item = next(row for row in integration_health.catalog()["items"] if row["id"] == "sentry")
+        self.assertEqual(item["status"], "issue")
+        self.assertTrue(any("DSN" in label for label in item["missing"]))
+
     def test_post_is_rejected_and_cache_headers_are_private(self):
         response = self.client.post(reverse("connections_center"))
         self.assertEqual(response.status_code, 405)

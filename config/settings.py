@@ -315,3 +315,18 @@ TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") =
 # never accept a paid model ID, dynamic fallback or customer-supplied model.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", "0") == "1"
+
+# Privacy-minimized server-side error telemetry. Off until an approved Sentry
+# project DSN is installed in Railway; no browser replay or performance traces.
+KOFAD_SENTRY_ENABLED = os.environ.get("KOFAD_SENTRY_ENABLED", "0") == "1"
+KOFAD_SENTRY_DSN = os.environ.get("KOFAD_SENTRY_DSN", "").strip()
+KOFAD_SENTRY_SAMPLE_RATE = os.environ.get("KOFAD_SENTRY_SAMPLE_RATE", "0.25")
+if KOFAD_SENTRY_ENABLED and KOFAD_SENTRY_DSN:
+    from core.sentry_monitoring import configure_sentry
+
+    configure_sentry(
+        KOFAD_SENTRY_DSN,
+        environment=os.environ.get("RAILWAY_ENVIRONMENT_NAME", "production"),
+        release=os.environ.get("RAILWAY_GIT_COMMIT_SHA") or None,
+        sample_rate=KOFAD_SENTRY_SAMPLE_RATE,
+    )
