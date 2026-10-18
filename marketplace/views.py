@@ -248,6 +248,17 @@ def _message_json(message):
     }
 
 
+def _safe_market_next(request, target):
+    """Allow only local paths; browsers may treat backslashes as URL slashes."""
+    return bool(
+        isinstance(target, str)
+        and target.startswith("/")
+        and url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        )
+    )
+
+
 def market_customer_required(view):
     @wraps(view)
     def inner(request, *args, **kwargs):
@@ -469,7 +480,7 @@ def customer_access(request):
     if services.customer_from_session(request):
         services.clear_customer_session(request)
     requested_next = request.GET.get("next", "")
-    if requested_next.startswith("/") and not requested_next.startswith("//"):
+    if _safe_market_next(request, requested_next):
         request.session["market_after_login"] = requested_next
     form = CustomerAccessForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -698,7 +709,7 @@ def account_finish(request):
         request.session.pop("market_verified_phone", None)
         messages.success(request, "Welcome to KOFAD Market. Your phone number is verified.")
         after = request.session.pop("market_after_login", None)
-        return redirect(after or "market")
+        return redirect(after if _safe_market_next(request, after) else "market")
     return render(request, "marketplace/account_finish.html", _market_context(
         request, title="Finish your account", phone=phone, form=form,
     ))
@@ -856,7 +867,7 @@ def customer_login(request):
     if services.customer_from_session(request):
         services.clear_customer_session(request)
     requested_next = request.GET.get("next", "")
-    if requested_next.startswith("/") and not requested_next.startswith("//"):
+    if _safe_market_next(request, requested_next):
         request.session["market_after_login"] = requested_next
     initial_phone = request.session.get("market_login_phone", "")
     form = CustomerLoginForm(request.POST or None, initial={"phone": initial_phone})
@@ -906,7 +917,7 @@ def customer_login(request):
             services.set_customer_session(request, customer)
             request.session.pop("market_login_phone", None)
             after = request.session.pop("market_after_login", None)
-            return redirect(after or "market_account")
+            return redirect(after if _safe_market_next(request, after) else "market_account")
         messages.error(request, "The phone number or password is incorrect.")
     return render(request, "marketplace/login.html", _market_context(
         request, title="Customer sign in", form=form, locked_phone=initial_phone,
@@ -1689,7 +1700,7 @@ def wishlist_toggle(request, customer, pk):
     if request.headers.get("Accept") == "application/json":
         return JsonResponse({"saved": saved, "count": customer.wishlist_items.count()})
     target = request.POST.get("next", "")
-    return redirect(target if target.startswith("/") and not target.startswith("//") else "market_product", pk=listing.pk)
+    return redirect(target if _safe_market_next(request, target) else "market_product", pk=listing.pk)
 
 
 @market_customer_required

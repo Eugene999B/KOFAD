@@ -88,6 +88,21 @@ class CheckoutControlsTests(MarketFixtures):
         self.assertEqual(response["Location"], "/market/")
         self.assertEqual(self.client.session["market_cart"][str(self.listing.pk)], 3)
 
+    def test_market_login_next_rejects_browser_normalized_external_paths(self):
+        # Browsers interpret /\\evil.example as //evil.example.
+        for path in ("/market/account/login/", "/market/access/"):
+            for crafted in (r"/\attacker.example", r"/\\attacker.example", "//attacker.example", "https://attacker.example"):
+                with self.subTest(path=path, crafted=crafted):
+                    session = self.client.session
+                    session.pop("market_after_login", None)
+                    session.save()
+                    response = self.client.get(path, {"next": crafted})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertNotIn("market_after_login", self.client.session)
+        response = self.client.get("/market/account/login/", {"next": "/market/orders/"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.session["market_after_login"], "/market/orders/")
+
     def test_valid_cart_quantity_is_still_capped_at_999(self):
         rows = services.cart_rows({str(self.listing.pk): "999999"})
         self.assertEqual(len(rows), 1)
