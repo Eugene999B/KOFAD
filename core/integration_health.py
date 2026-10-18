@@ -69,6 +69,14 @@ CATALOG = (
                 "TLS, DNS health and firewall analytics belong to the Cloudflare account."),
          requirements=(), repair="Verify each DNS record, proxy mode, TLS certificate and edge challenge in Cloudflare. A public page loading does not prove the WAF is enabled.",
          manage="https://dash.cloudflare.com/", external=True),
+    dict(id="pwned_passwords", group="core", name="Pwned Passwords security", mark="PW",
+         purpose="Screens newly chosen customer and staff passwords against known breach data using the free HIBP API.",
+         steps=("Customer and staff password-setting forms use the shared Django validator.",
+                "KOFAD sends only a five-character SHA-1 prefix to HIBP over HTTPS.",
+                "Positive-count local suffix matches are rejected; upstream outages retain local password-policy validation."),
+         requirements=(("Breach-password screening enabled", "pwned_passwords_enabled"),),
+         repair="Set KOFAD_PWNED_PASSWORDS_ENABLED=1 on the Railway web service after release validation, then verify customer/staff password forms. This local flag does not prove HIBP availability.",
+         manage="https://haveibeenpwned.com/API/v3"),
     dict(id="oracle", group="core", name="Oracle Cloud", mark="OC",
          purpose="Optional future hosting or external database infrastructure.",
          steps=("Oracle resources must be provisioned and authorised.",
@@ -241,6 +249,7 @@ def _configuration():
     # full environment variables are returned to templates or JSON responses.
     return {
         "railway_runtime": bool(os.environ.get("RAILWAY_SERVICE_ID")),
+        "pwned_passwords_enabled": bool(settings.KOFAD_PWNED_PASSWORDS_ENABLED),
         "postgres_configured": settings.DATABASES["default"].get("ENGINE") == "django.db.backends.postgresql",
         "google_oauth_enabled": bool(settings.KOFAD_GOOGLE_OAUTH_ENABLED),
         "google_client_id": bool(settings.KOFAD_GOOGLE_CLIENT_ID),
