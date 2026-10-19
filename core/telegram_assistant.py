@@ -633,7 +633,14 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return "Staff help and account support: " + STAFF
     if command == "ping":
         return "KOFAD Staff Bot is responding."
-    return ("I can help with your authorized KOFAD work. Ask about your "
-            "tasks, assigned branches, inventory, pending orders or closing "
-            "reports, or use /menu. Financial and account data require a "
-            "verified staff link and appropriate permissions.")
+    # Natural-language fallback shares the website's permission-scoped, read-only
+    # data tools. It never sends staff records to OpenRouter or Gemini.
+    if identity and identity.kind == "staff":
+        staff = _account(identity)
+        if staff:
+            from .staff_ai import staff_reply
+            result, _ = staff_reply(staff, stripped[:600])
+            return result[:2000]
+    return ("I can help with your authorized KOFAD work. First link and verify "
+            "your account with /login, then ask about priorities, inventory, "
+            "sales trends and assigned branches.")
