@@ -316,6 +316,11 @@ TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") =
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", "0") == "1"
 
+# Owner-only IPinfo Lite country/ASN investigation; never a login-blocking signal.
+# Both switches must be present. The token remains only in Railway secrets.
+KOFAD_IPINFO_LITE_ENABLED = os.environ.get("KOFAD_IPINFO_LITE_ENABLED", "0") == "1"
+KOFAD_IPINFO_LITE_TOKEN = os.environ.get("KOFAD_IPINFO_LITE_TOKEN", "").strip()
+
 # Privacy-minimized server-side error telemetry. Off until an approved Sentry
 # project DSN is installed in Railway; no browser replay or performance traces.
 KOFAD_SENTRY_ENABLED = os.environ.get("KOFAD_SENTRY_ENABLED", "0") == "1"
