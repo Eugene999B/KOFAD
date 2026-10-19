@@ -34,8 +34,8 @@ def enabled():
     return bool(getattr(settings, "KOFAD_UPSTASH_REST_ENABLED", False))
 
 
-def _credentials():
-    if not enabled():
+def _credentials(*, require_enabled=True):
+    if require_enabled and not enabled():
         raise UpstashUnavailable("Upstash is disabled.")
     endpoint = getattr(settings, "KOFAD_UPSTASH_REST_URL", "").strip()
     token = getattr(settings, "KOFAD_UPSTASH_REST_TOKEN", "").strip()
@@ -59,14 +59,14 @@ def _credentials():
 
 def configured():
     try:
-        _credentials()
+        _credentials(require_enabled=False)
         return True
     except UpstashUnavailable:
         return False
 
 
-def _command(parts):
-    endpoint, token = _credentials()
+def _command(parts, *, require_enabled=True):
+    endpoint, token = _credentials(require_enabled=require_enabled)
     try:
         response = requests.post(
             endpoint, json=parts, timeout=TIMEOUT, allow_redirects=False,
@@ -84,7 +84,7 @@ def _command(parts):
 
 def ping():
     """Live authenticated read-only check, never called during page render."""
-    if _command(["PING"]) != "PONG":
+    if _command(["PING"], require_enabled=False) != "PONG":
         raise UpstashUnavailable("Upstash PING was not acknowledged.")
     return True
 
