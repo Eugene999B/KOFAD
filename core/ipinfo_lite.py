@@ -72,7 +72,7 @@ def _normalise(data, address):
     return result
 
 
-def lookup_public_ip(value):
+def lookup_public_ip(value, *, use_cache=True):
     """Return bounded Lite metadata, or an intentionally non-sensitive error."""
     address = public_address(value)
     if not is_configured():
@@ -85,7 +85,7 @@ def lookup_public_ip(value):
     ).hexdigest()
     key = "kofad:ipinfo-lite:v1:" + digest
     try:
-        cached = cache.get(key)
+        cached = cache.get(key) if use_cache else None
         if isinstance(cached, dict) and set(cached) == set(FIELDS):
             return cached
     except Exception:
