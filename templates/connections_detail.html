@@ -29,6 +29,35 @@
   {% else %}
   <div class="ic-note"><span aria-hidden="true">ⓘ</span><div>This connection has no safe authenticated verification method in KOFAD yet. Use the provider console linked below; the website will not guess or perform chargeable tests.</div></div>
   {% endif %}
+  {% if item.id == "ipinfo_lite" and can_ipinfo_lookup %}
+  <section class="ic-panel ic-ipinfo-panel" aria-labelledby="ipinfo-lookup-title">
+    <h3 id="ipinfo-lookup-title">Inspect a public IP address</h3>
+    <p>For a specific security investigation, enter an IPv4 or IPv6 address from an incident record you are authorised to inspect. Submitting sends that IP address to IPinfo. KOFAD does not write it into its database or audit logs; coarse results may be cached for one hour under a one-way keyed identifier.</p>
+    <p class="ic-caveat">Country and network ownership are approximate context, not proof of a person's location, identity, use of a VPN, or malicious activity. This check never blocks accounts or affects login decisions.</p>
+    <form class="ic-ipinfo-form" method="post" action="{% url 'ipinfo_lookup' %}">
+      {% csrf_token %}
+      <label for="ipinfo-address">Public IPv4 or IPv6 address</label>
+      <div class="ic-ipinfo-controls">
+        <input id="ipinfo-address" name="ip_address" type="text" required maxlength="45" autocomplete="off" spellcheck="false" placeholder="e.g. 8.8.8.8" aria-describedby="ipinfo-privacy">
+        <button class="ic-tool ic-verify-button" type="submit">Inspect network →</button>
+      </div>
+      <small id="ipinfo-privacy">Owner only · 12 lookups per 15 minutes per session · no automated IP collection</small>
+    </form>
+    {% if lookup_error %}<p class="ic-ipinfo-error" role="alert">{{ lookup_error }}</p>{% endif %}
+    {% if lookup_result %}
+    <div class="ic-live-result success" role="status">
+      <strong>Country and network context returned</strong>
+      <dl class="ic-ipinfo-results">
+        <div><dt>Country</dt><dd>{{ lookup_result.country|default:"Not returned" }} ({{ lookup_result.country_code }})</dd></div>
+        <div><dt>Continent</dt><dd>{{ lookup_result.continent|default:"Not returned" }}</dd></div>
+        <div><dt>Network (ASN)</dt><dd>{{ lookup_result.asn|default:"Not returned" }}</dd></div>
+        <div><dt>Network operator</dt><dd>{{ lookup_result.as_name|default:"Not returned" }}</dd></div>
+        <div><dt>Operator domain</dt><dd>{{ lookup_result.as_domain|default:"Not returned" }}</dd></div>
+      </dl>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
   <div class="ic-detail-grid">
     <div>
       <div class="ic-panel"><h3>How this connection works</h3>
