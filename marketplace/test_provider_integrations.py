@@ -100,6 +100,7 @@ class QdrantPublicCatalogTests(TestCase):
         self.assertEqual(args[0],
                          f"https://testing.eu-central.aws.cloud.qdrant.io/collections/{COLLECTION}/points/query")
         self.assertEqual(kwargs["json"]["query"], {"text": "rice flour", "model": MODEL})
+        self.assertEqual(MODEL, "sentence-transformers/all-minilm-l6-v2")
         self.assertNotIn("customer", str(kwargs["json"]))
         self.assertEqual(kwargs["timeout"], (2, 5))
 
