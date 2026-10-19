@@ -550,6 +550,12 @@ def catalog(probes=None):
             if verified_state == "verified":
                 if not missing:
                     state = "working"
+                    # A successful authenticated probe supersedes the generic
+                    # "not tested" message added for local-only configuration.
+                    details = [
+                        detail for detail in details
+                        if detail != "KOFAD configuration checks passed, but credentials have NOT been tested with the provider."
+                    ]
                 details.append("Manually checked provider API or routing; scope is documented in the verification evidence.")
             elif verified_state == "failed":
                 state = "issue"
@@ -563,8 +569,16 @@ def catalog(probes=None):
         if spec["id"] == "brevo_webhook" and not config["brevo_webhook"] and config["brevo_api"]:
             state = "issue"
             details.append("Brevo outbound API can operate, but KOFAD has no authenticated delivery-receipt token. This does NOT imply that Brevo's independent event reporting API is unavailable.")
+        repair = spec["repair"]
+        if spec["id"] == "upstash_redis" and state == "working" and probe.get("state") == "verified" and not missing:
+            repair = (
+                "Upstash authentication is verified and the shared map-search limiter is enabled. "
+                "Monitor Free-tier usage and map lookups. If Redis becomes unavailable, "
+                "set KOFAD_UPSTASH_REST_ENABLED=0 on Railway and redeploy to restore local limits."
+            )
         rows.append({
             **spec,
+            "repair": repair,
             "status": state, "status_label": STATUS[state][0],
             "status_style": STATUS[state][1],
             "checks": checks, "missing": missing, "issues": details,
