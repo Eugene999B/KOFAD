@@ -362,6 +362,7 @@ def market(request, category_slug=None):
     else:
         rows = rows.annotate(stock_available=Value(0, output_field=IntegerField()))
 
+    published_rows = rows  # PostgreSQL remains authoritative for every returned listing.
     if query:
         terms = [term for term in query.replace(",", " ").split() if term][:8]
         for term in terms:
@@ -389,6 +390,18 @@ def market(request, category_slug=None):
                 stock_available__gte=F("product__pack_size"),
             )
         )
+
+    # Never forward a visitor query to Qdrant without a deliberate click on
+    # "Try enhanced search". SQL matches, pricing and filtered results win.
+    enhanced_applied = False
+    if (query and request.GET.get("smart") == "1" and not category
+            and not featured_only and not in_stock
+            and price_min is None and price_max is None and not rows.exists()):
+        from .qdrant_products import semantic_product_ids
+        candidate_ids = semantic_product_ids(query)
+        if candidate_ids:
+            rows = published_rows.filter(pk__in=candidate_ids)
+            enhanced_applied = True
 
     if sort == "price_low":
         rows = rows.order_by("market_price_sort", "product__name")
@@ -419,6 +432,8 @@ def market(request, category_slug=None):
         request, title="KOFAD Market", listings=listings, q=query,
         selected_category=category, categories=categories,
         selected_sort=sort, in_stock=in_stock, featured_only=featured_only,
+        enhanced_search=enhanced_applied,
+        enhanced_opt_in_available=bool(query and settings.KOFAD_QDRANT_ENABLED),
         price_min=price_min_raw, price_max=price_max_raw,
         visible_price_low=price_range["low"],
         visible_price_high=price_range["high"],
