@@ -155,6 +155,7 @@ urlpatterns = [
     path("administration/roles/<int:pk>/", admin_views.role_edit, name="admin_role_edit"),
     path("settings/", admin_views.settings_center, name="settings"),
     path("settings/connections/", admin_views.connections_center, name="connections_center"),
+    path("settings/connections/ipinfo/lookup/", admin_views.ipinfo_lookup, name="ipinfo_lookup"),
     path("settings/connections/<slug:connection_id>/", admin_views.connections_detail, name="connections_detail"),
     path("settings/connections/<slug:connection_id>/verify/", admin_views.connections_live_verify, name="connections_live_verify"),
     path("settings/company/", v.settings_view, name="company_settings"),

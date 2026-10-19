@@ -100,3 +100,20 @@ html[data-theme="dark"] .kofad-connections .ic-verify-panel{background:var(--ic-
 .kofad-connections .ic-attention-row strong{display:block;font-size:13px;color:var(--ic-ink)}
 .kofad-connections .ic-attention-row small{display:block;font-size:11px;color:var(--ic-muted);line-height:1.5;margin-top:4px}
 @media(max-width:600px){.kofad-connections .ic-attention-row{align-items:flex-start}.kofad-connections .ic-attention-row .ic-arrow{display:none}}
+
+/* Explicit owner-initiated IP lookup: keyboard, mobile and dark-mode friendly. */
+.kofad-connections .ic-ipinfo-panel{border-left:4px solid #4288a4}
+.kofad-connections .ic-ipinfo-panel>p{max-width:880px}
+.kofad-connections .ic-ipinfo-form{display:grid;gap:9px;margin-top:18px}
+.kofad-connections .ic-ipinfo-form label{font-size:13px;font-weight:800;color:var(--ic-ink)}
+.kofad-connections .ic-ipinfo-controls{display:flex;gap:10px;align-items:stretch}
+.kofad-connections .ic-ipinfo-controls input{width:100%;flex:1;min-width:0;min-height:46px;border:1px solid var(--ic-line);border-radius:12px;padding:11px 13px;background:var(--ic-paper);color:var(--ic-ink);font:inherit}
+.kofad-connections .ic-ipinfo-controls input:focus-visible{outline:3px solid #4b9fcd;outline-offset:2px}
+.kofad-connections .ic-ipinfo-form small{font-size:11px;color:var(--ic-muted);line-height:1.5}
+.kofad-connections .ic-ipinfo-error{border-left:4px solid #b33c45;background:#fff1f1;color:#82262f;padding:10px 13px;border-radius:8px}
+.kofad-connections .ic-ipinfo-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:14px 0 0}
+.kofad-connections .ic-ipinfo-results div{min-width:0;padding:10px;border:1px solid var(--ic-line);border-radius:10px}
+.kofad-connections .ic-ipinfo-results dt{font-size:11px;color:var(--ic-muted);font-weight:750}
+.kofad-connections .ic-ipinfo-results dd{font-size:14px;font-weight:800;color:var(--ic-ink);margin:3px 0 0;overflow-wrap:anywhere}
+html[data-theme="dark"] .kofad-connections .ic-ipinfo-error{background:#4a292f;color:#ffd0d4}
+@media(max-width:680px){.kofad-connections .ic-ipinfo-controls{flex-direction:column}.kofad-connections .ic-ipinfo-controls .ic-tool{width:100%;justify-content:center}.kofad-connections .ic-ipinfo-results{grid-template-columns:1fr}}
