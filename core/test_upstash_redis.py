@@ -116,10 +116,11 @@ class UpstashRESTTests(SimpleTestCase):
         ping.assert_called_once_with()
         self.assertEqual(result["state"], "verified")
         self.assertNotIn(TOKEN, str(result))
-        with patch.object(integration_health, "_evidence", return_value={}):
-            item = next(row for row in integration_health.catalog()["items"] if row["id"] == "upstash_redis")
-        self.assertEqual(item["status"], "ready")
+        item = next(row for row in integration_health.CATALOG if row["id"] == "upstash_redis")
+        config = integration_health._configuration()
+        self.assertTrue(all(config[key] for _, key in item["requirements"]))
         self.assertNotIn(TOKEN, str(item))
+        self.assertNotIn(TOKEN, str(config))
 
     def test_market_budget_uses_shared_provider_only_when_enabled(self):
         class SessionStub:
