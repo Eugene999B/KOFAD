@@ -17,15 +17,15 @@ class StaffAssistantTests(TestCase):
         self.hq = Branch.objects.create(name="Head Office", code="hq-ai")
         self.other = Branch.objects.create(name="Hidden Depot", code="hidden-ai")
         self.manager = User.objects.create_superuser("ai-manager", "manager@example.test", "test-only-pass")
-        self.manager_access = Access.objects.create(user=self.manager)
+        self.manager_access = Access.objects.get(user=self.manager)
         self.manager_access.branches.add(self.hq)
         self.seller = User.objects.create_user("ai-seller", password="test-only-pass")
         self.seller.user_permissions.add(Permission.objects.get(codename="operate_sales"))
-        self.seller_access = Access.objects.create(user=self.seller)
+        self.seller_access = Access.objects.get(user=self.seller)
         self.seller_access.branches.add(self.hq)
         self.inventory = User.objects.create_user("ai-inventory", password="test-only-pass")
         self.inventory.user_permissions.add(Permission.objects.get(codename="operate_inventory"))
-        self.inventory_access = Access.objects.create(user=self.inventory)
+        self.inventory_access = Access.objects.get(user=self.inventory)
         self.inventory_access.branches.add(self.hq)
 
     def test_anonymous_and_unassigned_do_not_read_staff_data(self):
@@ -35,7 +35,7 @@ class StaffAssistantTests(TestCase):
         self.assertEqual(source, "denied")
         self.assertNotIn("GHS", result)
         outsider = User.objects.create_user("ai-outsider", password="test-only-pass")
-        Access.objects.create(user=outsider)
+        Access.objects.get(user=outsider)
         result, source = staff_reply(outsider, "my priorities")
         self.assertEqual(source, "denied")
 
