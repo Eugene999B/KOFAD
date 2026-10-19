@@ -40,6 +40,9 @@ ARKESEL_OTP_GENERATE = "https://sms.arkesel.com/api/otp/generate"
 ARKESEL_OTP_VERIFY = "https://sms.arkesel.com/api/otp/verify"
 GOOGLE_ROUTES = "https://routes.googleapis.com/directions/v2:computeRoutes"
 GOOGLE_GEOCODE = "https://maps.googleapis.com/maps/api/geocode/json"
+GEOAPIFY_SEARCH = "https://api.geoapify.com/v1/geocode/search"
+GEOAPIFY_REVERSE = "https://api.geoapify.com/v1/geocode/reverse"
+GEOAPIFY_DAILY_CAP = 1800  # below the published free daily allowance
 NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse"
 
@@ -230,6 +233,35 @@ def _nominatim_headers():
     return {"User-Agent": f"KOFAD-Market/1.0 ({contact})", "Accept": "application/json"}
 
 
+def _geoapify_results(endpoint, params):
+    """Call optional Ghana-friendly geocoding with a conservative daily cap.
+
+    Returns None to preserve the existing Nominatim fallback when Geoapify
+    is not enabled, over budget or unavailable. Never log request URLs/keys.
+    """
+    if not (settings.KOFAD_GEOAPIFY_ENABLED and settings.KOFAD_GEOAPIFY_API_KEY):
+        return None
+    day = timezone.now().strftime("%Y%m%d")
+    quota_key = "kofad:geoapify:requests:" + day
+    try:
+        if not cache.add(quota_key, 1, timeout=86400) and cache.incr(quota_key) > GEOAPIFY_DAILY_CAP:
+            return None
+    except (ValueError, TypeError, ConnectionError):
+        return None
+    try:
+        response = requests.get(
+            endpoint,
+            params={**params, "apiKey": settings.KOFAD_GEOAPIFY_API_KEY, "format": "json"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["results"] if isinstance(data, dict) and isinstance(data.get("results"), list) else None
+    except (requests.RequestException, ValueError, TypeError, KeyError):
+        logger.warning("Geoapify lookup temporarily unavailable; existing fallback retained.")
+        return None
+
+
 def location_search(query):
     query = (query or "").strip()[:180]
     if len(query) < 3:
@@ -254,6 +286,26 @@ def location_search(query):
                 ]
         except (requests.RequestException, ValueError, KeyError) as exc:
             logger.warning("Google geocoding failed: %s", exc)
+
+    geoapify_rows = _geoapify_results(GEOAPIFY_SEARCH, {
+        "text": query, "filter": "countrycode:gh", "limit": 5,
+    })
+    if geoapify_rows is not None:
+        output = []
+        for row in geoapify_rows[:5]:
+            if not isinstance(row, dict) or str(row.get("country_code", "")).lower() != "gh":
+                continue
+            try:
+                lat, lon = float(row["lat"]), float(row["lon"])
+                if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                    continue
+            except (TypeError, ValueError, KeyError):
+                continue
+            output.append({
+                "label": str(row.get("formatted") or row.get("address_line1") or query)[:240],
+                "latitude": lat, "longitude": lon,
+            })
+        return output
 
     if not cache.add("kofad:nominatim:search-lock", "1", timeout=1):
         raise ValidationError("Please wait a moment before searching again.")
@@ -299,6 +351,14 @@ def reverse_location(latitude, longitude):
                 return {"label": body["results"][0].get("formatted_address") or f"{lat}, {lng}"}
         except (requests.RequestException, ValueError, KeyError) as exc:
             logger.warning("Google reverse geocoding failed: %s", exc)
+
+    geoapify_rows = _geoapify_results(GEOAPIFY_REVERSE, {
+        "lat": str(lat), "lon": str(lng), "limit": 1,
+    })
+    if geoapify_rows:
+        first = geoapify_rows[0]
+        if isinstance(first, dict) and first.get("formatted"):
+            return {"label": str(first["formatted"])[:240]}
 
     if not cache.add("kofad:nominatim:reverse-lock", "1", timeout=1):
         return {"label": f"{lat}, {lng}"}

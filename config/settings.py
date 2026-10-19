@@ -183,6 +183,10 @@ MAP_LOOKUP_SESSION_MINUTE_LIMIT = int(os.environ.get("MAP_LOOKUP_SESSION_MINUTE_
 MAP_LOOKUP_GLOBAL_MINUTE_LIMIT = int(os.environ.get("MAP_LOOKUP_GLOBAL_MINUTE_LIMIT", "500"))
 GOOGLE_MAPS_MAP_ID = os.environ.get("GOOGLE_MAPS_MAP_ID", "")
 GOOGLE_MAPS_TIMEOUT_SECONDS = int(os.environ.get("GOOGLE_MAPS_TIMEOUT_SECONDS", "12"))
+# Geoapify complements Ghana address search without changing delivery pricing.
+# Free-tier daily budget is capped server-side; disabled until key is verified.
+KOFAD_GEOAPIFY_ENABLED = os.environ.get("KOFAD_GEOAPIFY_ENABLED", "0") == "1"
+KOFAD_GEOAPIFY_API_KEY = os.environ.get("KOFAD_GEOAPIFY_API_KEY", "").strip()
 
 # Existing Hubtel Online Checkout, unchanged. New Direct APIs are separately gated.
 HUBTEL_API_ID = os.environ.get("HUBTEL_API_ID", "").strip()
@@ -281,6 +285,11 @@ KOFAD_CLOUDFLARE_ZONE_ID = os.environ.get("KOFAD_CLOUDFLARE_ZONE_ID", "5459e4491
 
 # Optional public-site analytics is loaded only after the visitor opts in.
 KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip()
+# PostHog receives only consented, server-forwarded public page categories.
+# No browser SDK, person identifiers, private routes, session replay or autocapture.
+# Disabled until the EU PostHog project token is installed and validated.
+KOFAD_POSTHOG_ENABLED = os.environ.get("KOFAD_POSTHOG_ENABLED", "0") == "1"
+KOFAD_POSTHOG_PROJECT_TOKEN = os.environ.get("KOFAD_POSTHOG_PROJECT_TOKEN", "").strip()
 
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
