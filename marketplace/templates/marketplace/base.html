@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="{% static 'brand/apple-touch-icon.png' %}">
 {% if request.path|slice:':8' == '/market/' %}<link rel="manifest" href="/market/app/manifest.webmanifest">{% endif %}
 {% if seo_json_ld %}<script type="application/ld+json">{{ seo_json_ld|safe }}</script>{% endif %}
-<link rel="stylesheet" href="{% static 'cookie-consent.css' %}"><script src="{% static 'cookie-consent.js' %}"></script>
+<link rel="stylesheet" href="{% static 'cookie-consent.css' %}"><script src="{% static 'cookie-consent.js' %}"></script>{% if cookie_posthog_enabled %}<meta name="kofad-analytics-csrf" content="{{ csrf_token }}"><script defer src="{% static 'posthog-consent.js' %}"></script>{% endif %}
 <script src="{% static 'theme.js' %}"></script>
 <link rel="stylesheet" href="{% static 'marketplace/market.css' %}">
 <link rel="stylesheet" href="{% static 'marketplace/market-v2.css' %}">

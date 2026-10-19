@@ -298,6 +298,11 @@ KOFAD_CLOUDFLARE_ZONE_ID = os.environ.get("KOFAD_CLOUDFLARE_ZONE_ID", "5459e4491
 
 # Optional public-site analytics is loaded only after the visitor opts in.
 KOFAD_GA4_MEASUREMENT_ID = os.environ.get("KOFAD_GA4_MEASUREMENT_ID", "").strip()
+# PostHog receives only consented, server-forwarded public page categories.
+# No browser SDK, person identifiers, private routes, session replay or autocapture.
+# Disabled until the EU PostHog project token is installed and validated.
+KOFAD_POSTHOG_ENABLED = os.environ.get("KOFAD_POSTHOG_ENABLED", "0") == "1"
+KOFAD_POSTHOG_PROJECT_TOKEN = os.environ.get("KOFAD_POSTHOG_PROJECT_TOKEN", "").strip()
 
 # Native account authorization remains OFF until verified app deep links and
 # hardware-backed OS token storage are shipped and reviewed.
@@ -332,6 +337,12 @@ TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") =
 # never accept a paid model ID, dynamic fallback or customer-supplied model.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", "0") == "1"
+
+# Direct Gemini uses a fixed free-eligible text model. Operator must verify the
+# linked Google project is on its no-billing free tier before enabling.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+KOFAD_GEMINI_ENABLED = os.environ.get("KOFAD_GEMINI_ENABLED", "0") == "1"
+KOFAD_GEMINI_FREE_TIER_CONFIRMED = os.environ.get("KOFAD_GEMINI_FREE_TIER_CONFIRMED", "0") == "1"
 
 # Owner-only IPinfo Lite country/ASN investigation; never a login-blocking signal.
 # Both switches must be present. The token remains only in Railway secrets.

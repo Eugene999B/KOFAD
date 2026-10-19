@@ -284,6 +284,15 @@ CATALOG = (
          requirements=(("GA4 measurement ID set", "ga4_id"),),
          repair="Check GA4 property, tag installation and consent controls. This screen does not track visitors or verify the GA4 reporting API.",
          manage="https://analytics.google.com/"),
+    dict(id="posthog", group="growth", name="PostHog public-page analytics", mark="PH",
+         purpose="Optional anonymous counts of consented public KOFAD pageviews in the EU PostHog project.",
+         steps=("A visitor explicitly permits website analytics on an approved public page.",
+                "Only a public page category and one-time random event ID reach EU PostHog from KOFAD's server.",
+                "No account pages, customer identities, browser SDK, recordings or user profiles are collected."),
+         requirements=(("PostHog public analytics enabled", "posthog_enabled"),
+                       ("PostHog EU project token installed", "posthog_token")),
+         repair="Use the existing EU PostHog project, install KOFAD_POSTHOG_PROJECT_TOKEN and enable KOFAD_POSTHOG_ENABLED only after tests. This screen proves only local readiness; confirm consented events in PostHog Live Events.",
+         manage="https://eu.posthog.com/project/311908/"),
     dict(id="search_console", group="growth", name="Google Search Console", mark="SC",
          purpose="Tracks indexing, search traffic and domain verification.",
          steps=("Google validates property ownership.",
@@ -358,6 +367,8 @@ def _configuration():
         "hubtel_key": bool(settings.HUBTEL_API_KEY),
         "hubtel_collection": bool(settings.HUBTEL_COLLECTION_ACCOUNT),
         "ga4_id": bool(settings.KOFAD_GA4_MEASUREMENT_ID),
+        "posthog_enabled": bool(settings.KOFAD_POSTHOG_ENABLED),
+        "posthog_token": bool(settings.KOFAD_POSTHOG_PROJECT_TOKEN),
         "search_verify": bool(settings.GOOGLE_SITE_VERIFICATION),
     }
 
@@ -498,7 +509,7 @@ def catalog(probes=None):
             # An intentionally disabled or not-yet-onboarded provider stays grey.
             enabled_flags = {
                 "google_login": "google_oauth_enabled", "gmail": "gmail_enabled",
-                "sentry": "sentry_enabled", "geoapify": "geoapify_enabled",
+                "sentry": "sentry_enabled", "geoapify": "geoapify_enabled", "posthog": "posthog_enabled",
                 "qdrant": "qdrant_enabled", "cloudinary": "cloudinary_enabled",
                 "google_drive": "backup_enabled", "apps_script": "backup_enabled",
                 "inbound_email": "email_center", "arkesel": "sms_enabled",
