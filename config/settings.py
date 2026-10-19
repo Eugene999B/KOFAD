@@ -325,6 +325,12 @@ TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") =
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", "0") == "1"
 
+# Direct Gemini uses a fixed free-eligible text model. Operator must verify the
+# linked Google project is on its no-billing free tier before enabling.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+KOFAD_GEMINI_ENABLED = os.environ.get("KOFAD_GEMINI_ENABLED", "0") == "1"
+KOFAD_GEMINI_FREE_TIER_CONFIRMED = os.environ.get("KOFAD_GEMINI_FREE_TIER_CONFIRMED", "0") == "1"
+
 # Owner-only IPinfo Lite country/ASN investigation; never a login-blocking signal.
 # Both switches must be present. The token remains only in Railway secrets.
 KOFAD_IPINFO_LITE_ENABLED = os.environ.get("KOFAD_IPINFO_LITE_ENABLED", "0") == "1"

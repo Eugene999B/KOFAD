@@ -416,7 +416,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             return (
                 "Ask me about KOFAD public products and services using "
                 "/ask followed by a question. The question may be processed "
-                "by OpenRouter free AI. Never send passwords, OTPs or private records."
+                "by an optional external AI provider. Never send passwords, OTPs or private records."
             )
         if bot_kind == "staff" and re.search(
             r"(?i)\b(?:closing|salaries|payroll|profit|financial|"
