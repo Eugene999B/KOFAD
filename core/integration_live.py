@@ -314,7 +314,7 @@ def _ipinfo_lite():
             _check("IPinfo Lite configuration", "failed", "Add the server-side token and enable the feature to verify it."),
         ], scope=scope)
     try:
-        result = lookup_public_ip("8.8.8.8", use_cache=False)
+        lookup_public_ip("8.8.8.8", use_cache=False)
     except IPinfoUnavailable:
         return _result("failed", "IPinfo Lite could not authenticate or return valid country data.", [
             _check("Authenticated IPinfo Lite lookup", "failed",
