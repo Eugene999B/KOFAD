@@ -13,7 +13,7 @@ from django.utils import timezone
 TIMEOUT = (2, 5)
 VALID = frozenset({
     "brevo", "brevo_reporting", "brevo_webhook",
-    "cloudflare", "inbound_email", "paystack", "google_login",
+    "cloudflare", "inbound_email", "paystack", "google_login", "ipinfo_lite",
 })
 LIFETIME_SECONDS = 15 * 60
 
@@ -304,6 +304,28 @@ def _google():
                    ], scope="Public Google OpenID discovery only")
 
 
+def _ipinfo_lite():
+    """Authenticate the Lite token using a known public address, not a customer IP."""
+    from .ipinfo_lite import IPinfoUnavailable, is_configured, lookup_public_ip
+
+    scope = "Explicit uncached IPinfo Lite lookup of public DNS test address only"
+    if not is_configured():
+        return _result("not_configured", "IPinfo Lite is disabled or its token is missing.", [
+            _check("IPinfo Lite configuration", "failed", "Add the server-side token and enable the feature to verify it."),
+        ], scope=scope)
+    try:
+        result = lookup_public_ip("8.8.8.8", use_cache=False)
+    except IPinfoUnavailable:
+        return _result("failed", "IPinfo Lite could not authenticate or return valid country data.", [
+            _check("Authenticated IPinfo Lite lookup", "failed",
+                   "Check the token, provider availability and egress access. No private customer address was sent."),
+        ], scope=scope)
+    return _result("verified", "IPinfo Lite returned country/ASN data for the test address.", [
+        _check("Authenticated IPinfo Lite lookup", "passed", "Read-only HTTPS lookup succeeded; no customer IP was sent."),
+        _check("Fraud/VPN identification", "unknown", "IPinfo Lite does not provide paid proxy, VPN or fraud-detection fields."),
+    ], scope=scope)
+
+
 def verify(service_id):
     if service_id not in VALID:
         raise ValueError("This service does not support safe live verification.")
@@ -312,6 +334,7 @@ def verify(service_id):
         "brevo_webhook": _webhook, "cloudflare": lambda: _cloudflare("cloudflare"),
         "inbound_email": lambda: _cloudflare("inbound_email"),
         "paystack": _paystack, "google_login": _google,
+        "ipinfo_lite": _ipinfo_lite,
     }[service_id]()
 
 
