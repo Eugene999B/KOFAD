@@ -143,5 +143,5 @@ class QdrantPublicCatalogTests(TestCase):
         self.assertEqual(put.call_count, 2)
         points = put.call_args.kwargs["json"]["points"]
         self.assertEqual(points[0]["id"], self.listing.pk)
-        self.assertIn("Public White Rice", points[0]["vector"]["text"])
+        self.assertIn(self.listing.display_name, points[0]["vector"]["text"])
         self.assertEqual(points[0]["payload"], {"listing_id": self.listing.pk})
