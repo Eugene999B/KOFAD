@@ -65,6 +65,14 @@ class StaffAssistantTests(TestCase):
         self.assertEqual(source, "denied")
         self.assertNotIn("Grounded inventory", text)
 
+    def test_follow_up_remains_permission_checked(self):
+        reply, source = staff_reply(self.manager, "What about last month?", context="compare")
+        self.assertEqual(source, "compare")
+        self.assertIsInstance(reply, str)
+        reply, source = staff_reply(self.seller, "What about last month?", context="compare")
+        self.assertEqual(source, "denied")
+        self.assertNotIn("GHS", reply)
+
     @patch("marketplace.kofad_ai.requests.post")
     def test_staff_questions_never_call_free_ai_providers(self, external):
         for question in ("compare sales this week", "my priorities", "send customers an SMS",
