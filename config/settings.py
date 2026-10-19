@@ -321,6 +321,13 @@ KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", 
 KOFAD_IPINFO_LITE_ENABLED = os.environ.get("KOFAD_IPINFO_LITE_ENABLED", "0") == "1"
 KOFAD_IPINFO_LITE_TOKEN = os.environ.get("KOFAD_IPINFO_LITE_TOKEN", "").strip()
 
+# Optional shared Redis REST map-search counter; disabled until a dedicated
+# Upstash database is provisioned, credentials secured in Railway, and verified.
+# Never put REST tokens in templates, client JavaScript or source control.
+KOFAD_UPSTASH_REST_ENABLED = os.environ.get("KOFAD_UPSTASH_REST_ENABLED", "0") == "1"
+KOFAD_UPSTASH_REST_URL = os.environ.get("KOFAD_UPSTASH_REST_URL", "").strip()
+KOFAD_UPSTASH_REST_TOKEN = os.environ.get("KOFAD_UPSTASH_REST_TOKEN", "").strip()
+
 # Privacy-minimized server-side error telemetry. Off until an approved Sentry
 # project DSN is installed in Railway; no browser replay or performance traces.
 KOFAD_SENTRY_ENABLED = os.environ.get("KOFAD_SENTRY_ENABLED", "0") == "1"

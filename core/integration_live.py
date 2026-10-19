@@ -13,7 +13,7 @@ from django.utils import timezone
 TIMEOUT = (2, 5)
 VALID = frozenset({
     "brevo", "brevo_reporting", "brevo_webhook",
-    "cloudflare", "inbound_email", "paystack", "google_login", "ipinfo_lite",
+    "cloudflare", "inbound_email", "paystack", "google_login", "ipinfo_lite", "upstash_redis",
 })
 LIFETIME_SECONDS = 15 * 60
 
@@ -326,6 +326,27 @@ def _ipinfo_lite():
     ], scope=scope)
 
 
+def _upstash_redis():
+    """Authenticate Upstash through an explicitly requested read-only PING."""
+    from .upstash_redis import UpstashUnavailable, configured, ping
+
+    scope = "Upstash authenticated HTTPS REST PING; no customer or key data"
+    if not configured():
+        return _result("not_configured", "Upstash REST endpoint or token is missing or invalid.", [
+            _check("Upstash configuration", "failed", "Install the Upstash URL and token on the server; the PING check works before activation."),
+        ], scope=scope)
+    try:
+        ping()
+    except UpstashUnavailable:
+        return _result("failed", "Upstash did not confirm the REST connection.", [
+            _check("Authenticated Upstash PING", "failed", "Check the dedicated HTTPS URL, token, provider availability and outbound access."),
+        ], scope=scope)
+    return _result("verified", "Upstash authenticated and returned PONG.", [
+        _check("Authenticated Upstash PING", "passed", "A read-only authenticated REST request succeeded."),
+        _check("Shared map-search budgets", "unknown", "This does not prove concurrent counters until a separate isolated load test passes."),
+    ], scope=scope)
+
+
 def verify(service_id):
     if service_id not in VALID:
         raise ValueError("This service does not support safe live verification.")
@@ -334,7 +355,7 @@ def verify(service_id):
         "brevo_webhook": _webhook, "cloudflare": lambda: _cloudflare("cloudflare"),
         "inbound_email": lambda: _cloudflare("inbound_email"),
         "paystack": _paystack, "google_login": _google,
-        "ipinfo_lite": _ipinfo_lite,
+        "ipinfo_lite": _ipinfo_lite, "upstash_redis": _upstash_redis,
     }[service_id]()
 
 
