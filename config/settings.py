@@ -183,6 +183,10 @@ MAP_LOOKUP_SESSION_MINUTE_LIMIT = int(os.environ.get("MAP_LOOKUP_SESSION_MINUTE_
 MAP_LOOKUP_GLOBAL_MINUTE_LIMIT = int(os.environ.get("MAP_LOOKUP_GLOBAL_MINUTE_LIMIT", "500"))
 GOOGLE_MAPS_MAP_ID = os.environ.get("GOOGLE_MAPS_MAP_ID", "")
 GOOGLE_MAPS_TIMEOUT_SECONDS = int(os.environ.get("GOOGLE_MAPS_TIMEOUT_SECONDS", "12"))
+# Geoapify complements Ghana address search without changing delivery pricing.
+# Free-tier daily budget is capped server-side; disabled until key is verified.
+KOFAD_GEOAPIFY_ENABLED = os.environ.get("KOFAD_GEOAPIFY_ENABLED", "0") == "1"
+KOFAD_GEOAPIFY_API_KEY = os.environ.get("KOFAD_GEOAPIFY_API_KEY", "").strip()
 
 # Existing Hubtel Online Checkout, unchanged. New Direct APIs are separately gated.
 HUBTEL_API_ID = os.environ.get("HUBTEL_API_ID", "").strip()
