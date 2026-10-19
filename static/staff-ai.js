@@ -37,6 +37,7 @@
         body: JSON.stringify({message: value, context: lastTopic})
       });
       const data = await response.json();
+      if (response.ok && typeof data.source === "string") lastTopic = data.source;
       bubble("KOFAD Staff Assistant", data.reply || data.error || "That question couldn't be completed.");
       status.textContent = "Results stay within your staff access. Please verify critical business decisions.";
     } catch (_) {
