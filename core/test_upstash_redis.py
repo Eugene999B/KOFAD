@@ -122,6 +122,23 @@ class UpstashRESTTests(SimpleTestCase):
         self.assertNotIn(TOKEN, str(item))
         self.assertNotIn(TOKEN, str(config))
 
+    def test_verified_connection_status_removes_stale_warning(self):
+        # Mock the module's connection reference, not a method on Django's
+        # shared connection proxy (which corrupts class-level test teardown).
+        with patch.object(integration_health, "_evidence", return_value={}), \
+             patch.object(integration_health, "connection") as db:
+            db.cursor.return_value.__enter__.return_value.fetchone.return_value = (1,)
+            before = integration_health.catalog()
+            after = integration_health.catalog(probes={"upstash_redis": {"state": "verified"}})
+
+        pending = next(item for item in before["items"] if item["id"] == "upstash_redis")
+        verified = next(item for item in after["items"] if item["id"] == "upstash_redis")
+        self.assertIn("credentials have NOT been tested", " ".join(pending["issues"]))
+        self.assertEqual(verified["status"], "working")
+        self.assertNotIn("credentials have NOT been tested", " ".join(verified["issues"]))
+        self.assertIn("Monitor Free-tier usage", verified["repair"])
+        self.assertNotIn(TOKEN, str(verified))
+
     def test_market_budget_uses_shared_provider_only_when_enabled(self):
         class SessionStub:
             session_key = "non-public-session-identifier"
