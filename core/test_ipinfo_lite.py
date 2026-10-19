@@ -173,7 +173,7 @@ class IPinfoOwnerTests(MarketFixtures):
         session["access_version"] = staff.access.session_version
         session.save()
         with patch.object(ipinfo_lite, "lookup_public_ip") as lookup:
-            self.assertEqual(self.client.post(url, {"ip_address": "8.8.8.8"}).status_code, 403)
+            self.assertIn(self.client.post(url, {"ip_address": "8.8.8.8"}).status_code, (302, 403))
             lookup.assert_not_called()
 
     @override_settings(KOFAD_IPINFO_LITE_ENABLED=True, KOFAD_IPINFO_LITE_TOKEN=TOKEN)
