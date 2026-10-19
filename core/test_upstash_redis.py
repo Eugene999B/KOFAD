@@ -123,9 +123,14 @@ class UpstashRESTTests(SimpleTestCase):
         self.assertNotIn(TOKEN, str(config))
 
     def test_verified_connection_status_removes_stale_warning(self):
+        # Avoid patching Django's connection proxy: changing its bound method
+        # leaks into Django's class-level database teardown in the full suite.
+        # The catalogue only needs local configuration to exercise this branch.
         with patch.object(integration_health, "_evidence", return_value={}), \
-             patch.object(integration_health.connection, "cursor") as cursor:
-            cursor.return_value.__enter__.return_value.fetchone.return_value = (1,)
+             patch.object(integration_health, "_configuration", return_value={
+                 "upstash_enabled": True, "upstash_url": True,
+                 "upstash_token": True, "postgres_configured": False,
+             }):
             before = integration_health.catalog()
             after = integration_health.catalog(probes={"upstash_redis": {"state": "verified"}})
 
