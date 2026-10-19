@@ -332,8 +332,8 @@ def _upstash_redis():
 
     scope = "Upstash authenticated HTTPS REST PING; no customer or key data"
     if not configured():
-        return _result("not_configured", "Upstash REST is disabled or credentials are missing.", [
-            _check("Upstash configuration", "failed", "Install the Upstash URL and token on the server and enable the integration."),
+        return _result("not_configured", "Upstash REST endpoint or token is missing or invalid.", [
+            _check("Upstash configuration", "failed", "Install the Upstash URL and token on the server; the PING check works before activation."),
         ], scope=scope)
     try:
         ping()
