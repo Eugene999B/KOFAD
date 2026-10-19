@@ -9,6 +9,7 @@
   const status = document.getElementById("staff-ai-status");
   const token = form.querySelector("input[name=csrfmiddlewaretoken]");
   let busy = false;
+  let lastTopic = "";
 
   function bubble(speaker, message) {
     const node = document.createElement("div");
@@ -33,7 +34,7 @@
       const response = await fetch(root.dataset.staffAiEndpoint, {
         method: "POST", credentials: "same-origin",
         headers: {"Content-Type": "application/json", "X-CSRFToken": token ? token.value : ""},
-        body: JSON.stringify({message: value})
+        body: JSON.stringify({message: value, context: lastTopic})
       });
       const data = await response.json();
       bubble("KOFAD Staff Assistant", data.reply || data.error || "That question couldn't be completed.");
