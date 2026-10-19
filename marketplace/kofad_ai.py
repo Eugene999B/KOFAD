@@ -258,20 +258,55 @@ def _company_info():
     }
 
 
-def _customer_orders(customer):
+def _customer_orders(customer, question=""):
+    """Answer a signed-in customer's order question using only their records.
+
+    Never forward names, addresses, payment references or order details to a
+    free model. Avoid promises about delivery timing or payment success.
+    """
     if customer is None:
         return ("Sign in to your KOFAD Market customer account to view your private "
                 "order details: https://market.kofadimpex.com/market/account/login/")
-    rows = OnlineOrder.objects.filter(customer=customer).order_by("-created_at")[:5]
+    recent = list(
+        OnlineOrder.objects.filter(customer=customer).order_by("-created_at")[:15]
+    )
+    requested = next(
+        (row for row in recent
+         if len(row.public_reference) >= 5
+         and row.public_reference.casefold() in question.casefold()),
+        None,
+    )
+    rows = [requested] if requested else recent[:5]
+    if not rows:
+        return ("No orders found in your signed-in KOFAD customer account. "
+                "You can browse published products at https://market.kofadimpex.com/market/")
+    next_steps = {
+        "awaiting_payment": "Open your order to review available secure payment steps; do not pay through chat.",
+        "paid": "Payment is marked paid; check the order page for fulfillment updates.",
+        "confirmed": "KOFAD has confirmed the order; follow its progress in My Orders.",
+        "preparing": "Your items are being prepared; check My Orders for the next recorded update.",
+        "ready_pickup": "Your order is marked ready for pickup; confirm pickup details in My Orders.",
+        "out_for_delivery": "Your order is marked out for delivery; see My Orders for any delivery updates.",
+        "delivered": "This order is marked delivered; contact support if that does not match what happened.",
+        "picked_up": "This order is marked picked up; contact support if that is incorrect.",
+        "cancelled": "This order is cancelled; review your account for any refund status.",
+        "refund_pending": "A refund is pending; contact support if you need a case update.",
+        "refunded": "This order is marked refunded; refer to your payment provider for processing details.",
+    }
     lines = [
-        f"{order.public_reference}: {order.get_status_display()} "
-        f"(payment: {order.get_payment_status_display()})"
+        f"• {order.public_reference}: {order.get_status_display()} "
+        f"(payment: {order.get_payment_status_display()})."
         for order in rows
     ]
+    latest = rows[0]
     return (
-        ("Your recent orders:\n" + "\n".join(lines) if lines
-         else "No orders found in your signed-in KOFAD customer account.")
-        + "\nFull order details: https://market.kofadimpex.com/market/orders/"
+        ("Your matching order:\n" if requested else "Your recent KOFAD orders:\n")
+        + "\n".join(lines)
+        + "\n\n" + next_steps.get(
+            latest.status, "Check your signed-in orders for the latest recorded status."
+        )
+        + "\nFull, private order details: https://market.kofadimpex.com/market/orders/"
+        + "\nIs there another order or delivery question I can help with?"
     )
 
 
@@ -592,7 +627,7 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
         return ("I can help with published KOFAD products, orders and delivery, "
                 "but cannot follow instructions to override my safeguards."), "local"
     if INTENT_ORDER.search(question):
-        return _customer_orders(customer), "private" if customer else "local"
+        return _customer_orders(customer, question), "private" if customer else "local"
     if contains_sensitive_input(question):
         return ("Please do not enter account numbers, phone numbers, email "
                 "addresses, passwords or verification codes into the AI chat. "
