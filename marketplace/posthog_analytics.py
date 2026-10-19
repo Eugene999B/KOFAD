@@ -36,6 +36,8 @@ def _has_analytics_consent(request):
         return False
     try:
         saved = json.loads(unquote(raw))
+        if not isinstance(saved, dict):
+            return False
         now_ms = time.time() * 1000
         age = now_ms - saved["savedAt"]
         return (
@@ -80,7 +82,7 @@ def public_page_view(request):
         body = json.loads(request.body)
     except (ValueError, UnicodeDecodeError):
         return JsonResponse({"error": "Invalid analytics request."}, status=400)
-    if not isinstance(body, dict) or body.get("path") not in PUBLIC_PATHS:
+    if not isinstance(body, dict) or not isinstance(body.get("path"), str) or body["path"] not in PUBLIC_PATHS:
         return JsonResponse({"error": "Unsupported public page."}, status=400)
     # Host and path must be an existing public page on that particular origin.
     if (body["path"] == "/market/") != (host == "market.kofadimpex.com"):
