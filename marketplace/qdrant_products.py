@@ -15,7 +15,7 @@ from django.utils import timezone
 
 log = logging.getLogger(__name__)
 COLLECTION = "kofad_public_products_v1"
-MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+MODEL = "sentence-transformers/all-minilm-l6-v2"
 DAILY_SEARCH_CAP = 80
 MAX_SYNC_PRODUCTS = 250
 
