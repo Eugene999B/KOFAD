@@ -649,7 +649,7 @@ with sync_playwright() as p:
     admin_page.get_by_label("Recovery phone number",exact=False).fill("0241234567")
     admin_page.get_by_label("Current password",exact=False).fill("admin")
     admin_page.locator('form:has(input[name="action"][value="recovery"]) button.button').click()
-    assert admin_page.get_by_text("SMS verification is currently unavailable",exact=False).count() >= 1
+    admin_page.get_by_text("SMS verification is currently unavailable", exact=False).first.wait_for(timeout=10000)
     admin_page.goto("http://127.0.0.1:8000/account/")
     assert admin_page.get_by_label("Recovery phone number",exact=False).input_value() == recovery_before
     admin_page.screenshot(path=str(out / "account-settings.png"),full_page=True)

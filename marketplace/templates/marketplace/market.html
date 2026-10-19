@@ -25,6 +25,7 @@
 {% if q or selected_category or in_stock or featured_only or price_min or price_max %}<div class="shop-active-filter"><span>Showing a filtered view</span><a href="/market/">Clear all ×</a></div>{% endif %}
 
 {% if listings %}
+{% if enhanced_search %}<p role="status">Related published products suggested by enhanced search. Confirm current stock and price at checkout.</p>{% endif %}
 <div id="market-products" class="market-grid commerce-product-grid shop-product-grid">{% for listing in listings %}{% include "marketplace/product_card.html" %}{% endfor %}</div>
 {% if page_obj.paginator.num_pages > 1 %}
 <nav class="shop-pagination" aria-label="Product pages">
@@ -33,7 +34,7 @@
   {% if page_obj.has_next %}<a href="?q={{ q|urlencode }}&category={{ selected_category|urlencode }}&sort={{ selected_sort }}{% if in_stock %}&stock=available{% endif %}{% if featured_only %}&featured=1{% endif %}{% if price_min %}&min_price={{ price_min }}{% endif %}{% if price_max %}&max_price={{ price_max }}{% endif %}&page={{ page_obj.next_page_number }}">Next →</a>{% else %}<span></span>{% endif %}
 </nav>
 {% endif %}
-{% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p><a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
+{% else %}<div class="market-empty commerce-empty shop-empty"><b>⌕</b><h2>No products found</h2><p>Try another search or category.</p>{% if enhanced_opt_in_available and not enhanced_requested %}<p><a class="market-button ghost" href="/market/?q={{ q|urlencode }}&amp;smart=1">Try enhanced product search</a></p><p><small>This sends your public product-search words to Qdrant Cloud. Do not enter personal details.</small></p>{% endif %}<a class="market-button ghost" href="/market/">View all products</a></div>{% endif %}
 <aside class="atelier-market-help" aria-label="Need help shopping">
 <div><span class="atelier-kicker">PERSONAL SERVICE</span><h2>Shopping for more than one?</h2><p>For large quantities, repeat purchases, or a product you cannot find, our team can discuss availability and a quotation before you order.</p></div>
 <a href="/wholesale/">Ask about wholesale supply <span aria-hidden="true">↗</span></a>

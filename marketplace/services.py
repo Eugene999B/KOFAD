@@ -419,22 +419,25 @@ def compress_market_image(upload):
 
 def save_listing_image(listing, upload):
     large, thumb, mime = compress_market_image(upload)
+    from .cloudinary_images import mirror_public_image
     listing.image_data = large
     listing.image_thumb = thumb
     listing.image_mime = mime
     listing.image_name = str(getattr(upload, "name", "product-image"))[:180]
     listing.image_updated_at = timezone.now()
-    listing.image_url = ""
+    listing.image_url = mirror_public_image(large)
     listing.image_credit = ""
 
 
 def save_gallery_image(listing, upload, *, alt_text="", sort_order=100):
     large, thumb, mime = compress_market_image(upload)
+    from .cloudinary_images import mirror_public_image
     return MarketListingImage.objects.create(
         listing=listing,
         image_data=large,
         image_thumb=thumb,
         image_mime=mime,
+        image_url=mirror_public_image(large),
         image_name=str(getattr(upload, "name", "gallery-image"))[:180],
         alt_text=(alt_text or listing.display_name)[:180],
         sort_order=sort_order,

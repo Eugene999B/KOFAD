@@ -188,6 +188,19 @@ GOOGLE_MAPS_TIMEOUT_SECONDS = int(os.environ.get("GOOGLE_MAPS_TIMEOUT_SECONDS", 
 KOFAD_GEOAPIFY_ENABLED = os.environ.get("KOFAD_GEOAPIFY_ENABLED", "0") == "1"
 KOFAD_GEOAPIFY_API_KEY = os.environ.get("KOFAD_GEOAPIFY_API_KEY", "").strip()
 
+# Optional published-product semantic discovery on the existing Qdrant free cluster.
+# Never index private customer, stock, payment or accounting records.
+KOFAD_QDRANT_ENABLED = os.environ.get("KOFAD_QDRANT_ENABLED", "0") == "1"
+KOFAD_QDRANT_URL = os.environ.get("KOFAD_QDRANT_URL", "").strip()
+KOFAD_QDRANT_API_KEY = os.environ.get("KOFAD_QDRANT_API_KEY", "").strip()
+
+# Optional mirror for NEW publicly uploaded product photos only.
+# The original compressed Django database image remains as a fallback.
+KOFAD_CLOUDINARY_ENABLED = os.environ.get("KOFAD_CLOUDINARY_ENABLED", "0") == "1"
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip()
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "").strip()
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "").strip()
+
 # Existing Hubtel Online Checkout, unchanged. New Direct APIs are separately gated.
 HUBTEL_API_ID = os.environ.get("HUBTEL_API_ID", "").strip()
 HUBTEL_API_KEY = os.environ.get("HUBTEL_API_KEY", "").strip()
