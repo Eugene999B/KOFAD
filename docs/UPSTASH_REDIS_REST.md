@@ -26,17 +26,17 @@ non-atomic Upstash REST pipelines.
    [Upstash Console](https://console.upstash.com/). Check its usage/billing
    limits first. Do not use a temporary expiring database in production.
 2. In the Railway *web service* variables set
-   \`KOFAD_UPSTASH_REST_URL\` to the HTTPS REST endpoint issued by Upstash
-   (the code only accepts a plain \`*.upstash.io\` host), and
-   \`KOFAD_UPSTASH_REST_TOKEN\` to the matching REST token.
-3. Leave \`KOFAD_UPSTASH_REST_ENABLED=0\` at first. In
+   `KOFAD_UPSTASH_REST_URL` to the HTTPS REST endpoint issued by Upstash
+   (the code only accepts a plain `*.upstash.io` host), and
+   `KOFAD_UPSTASH_REST_TOKEN` to the matching REST token.
+3. Leave `KOFAD_UPSTASH_REST_ENABLED=0` at first. In
    **Staff → Settings → Connections → Upstash Redis REST**, click
-   **Verify provider now**. This only sends authenticated \`PING\`,
+   **Verify provider now**. This only sends authenticated `PING`,
    reports whether Upstash accepted it, and does **not** create Redis keys.
 4. After a successful PING and an isolated concurrency/usage test, set
-   \`KOFAD_UPSTASH_REST_ENABLED=1\` on the web service and redeploy.
+   `KOFAD_UPSTASH_REST_ENABLED=1` on the web service and redeploy.
 5. Confirm map-search limit behavior in the test environment. To roll back,
-   set the feature flag to \`0\` and redeploy; the prior local limiter resumes.
+   set the feature flag to `0` and redeploy; the prior local limiter resumes.
 
 The URL and token must **never** be sent to client code, logs, tickets,
 screenshots or repository files. All live REST requests have a short timeout,
@@ -55,6 +55,6 @@ traffic and known quota values.
 
 Run the mocked regression tests with:
 
-\`\`\`shell
+```shell
 python manage.py test core.test_upstash_redis
-\`\`\`
+```
