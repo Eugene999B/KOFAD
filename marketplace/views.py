@@ -434,6 +434,7 @@ def market(request, category_slug=None):
         selected_sort=sort, in_stock=in_stock, featured_only=featured_only,
         enhanced_search=enhanced_applied,
         enhanced_opt_in_available=bool(query and settings.KOFAD_QDRANT_ENABLED),
+        enhanced_requested=request.GET.get("smart") == "1",
         price_min=price_min_raw, price_max=price_max_raw,
         visible_price_low=price_range["low"],
         visible_price_high=price_range["high"],
