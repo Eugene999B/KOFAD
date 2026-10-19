@@ -22,11 +22,15 @@ MAX_SYNC_PRODUCTS = 250
 
 def _cluster_url():
     url = getattr(settings, "KOFAD_QDRANT_URL", "").strip().rstrip("/")
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        return ""
     if (parsed.scheme != "https" or not parsed.hostname
             or not parsed.hostname.endswith(".cloud.qdrant.io")
             or parsed.username or parsed.password or parsed.path not in ("", "/")
-            or parsed.query or parsed.fragment or parsed.port not in (None, 443, 6333)):
+            or parsed.query or parsed.fragment or port not in (None, 443, 6333)):
         return ""
     return url
 
@@ -86,7 +90,8 @@ def semantic_product_ids(text):
             log.warning("Optional enhanced product search unavailable: HTTP %s", response.status_code)
             return []
         result = response.json()
-        rows = result.get("result", {}).get("points", []) if isinstance(result, dict) else []
+        result_rows = result.get("result") if isinstance(result, dict) else None
+        rows = result_rows.get("points", []) if isinstance(result_rows, dict) else []
         ids = []
         for point in rows[:10] if isinstance(rows, list) else []:
             identifier = point.get("payload", {}).get("listing_id") if isinstance(point, dict) else None
