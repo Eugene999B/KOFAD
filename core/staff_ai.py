@@ -37,7 +37,7 @@ def _intent(text):
     return "clarify"
 
 
-def staff_reply(user, question):
+def staff_reply(user, question, *, context=""):
     """Derive an answer from *current* permissions and authorized branches.
 
     No model/embeddings provider, customer PII, message send, or generated SQL.
@@ -55,6 +55,11 @@ def staff_reply(user, question):
 
     intent = _intent(question)
     q = question.casefold()
+    # A short follow-up may reuse only the prior *category*, never data or
+    # authority supplied by the browser. Every tool checks current roles.
+    if (intent == "clarify" and context in {"reports", "compare", "inventory", "orders"}
+            and re.search(r"(?i)\b(?:what about|how about|same for|previous|last|this)\b", q)):
+        intent = context
     if intent == "security":
         return ("Never share passwords, verification codes, PINs or API keys here. "
                 "Use KOFAD's official security and account-recovery pages."), "security"
