@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'staff-ai.css' %}">
+<script defer src="{% static 'staff-ai.js' %}"></script>
+{% endblock %}
+{% block content %}
+<section class="staff-ai-layout" aria-labelledby="staff-ai-intro">
+  <div class="staff-ai-main">
+    <div class="staff-ai-hero">
+      <div class="staff-ai-spark" aria-hidden="true">✦</div>
+      <div>
+        <p class="staff-ai-eyebrow">Your intelligent work companion</p>
+        <h2 id="staff-ai-intro">What can we work on together?</h2>
+        <p>Ask about sales performance, stock exceptions, fulfillment, priorities or your assigned branches. Answers use current KOFAD records within <strong>your staff permissions</strong>.</p>
+      </div>
+    </div>
+    <div class="staff-ai-chat" data-staff-ai-endpoint="{% url 'staff_ai_chat' %}">
+      <div class="staff-ai-log" id="staff-ai-log" role="log" aria-live="polite" aria-label="Assistant conversation">
+        <div class="staff-ai-message is-assistant"><strong>KOFAD Staff Assistant</strong><p>Hello {{ request.user.first_name|default:request.user.username }}! I'm ready to explore your work with you. What would you like to understand or improve today?</p></div>
+      </div>
+      <form id="staff-ai-form" class="staff-ai-form">
+        {% csrf_token %}
+        <label for="staff-ai-question">Your question</label>
+        <div class="staff-ai-compose">
+          <textarea id="staff-ai-question" rows="2" minlength="2" maxlength="600" placeholder="E.g. How did sales change this week, and what should I check?" required></textarea>
+          <button id="staff-ai-submit" type="submit">Ask assistant →</button>
+        </div>
+        <p class="staff-ai-hint" id="staff-ai-status" role="status">Private, read-only analysis · No external AI is sent staff records · No automated transactions</p>
+      </form>
+    </div>
+  </div>
+  <aside class="staff-ai-aside" aria-label="Suggested questions">
+    <h3>Start with a question</h3>
+    <p>Choose a topic or ask in your own words.</p>
+    <div class="staff-ai-prompts">
+      <button type="button" data-ai-prompt="What needs my attention today?">✦ What needs attention today?</button>
+      {% if perms.core.view_reports or perms.core.operate_finance or perms.core.manage_company %}
+      <button type="button" data-ai-prompt="Compare sales performance this week.">↗ Compare weekly sales</button>
+      <button type="button" data-ai-prompt="Analyse verified closings this month.">◷ Review the month</button>
+      {% endif %}
+      {% if perms.core.operate_inventory or perms.core.manage_company %}
+      <button type="button" data-ai-prompt="Show low stock and restocking priorities.">▦ Identify low stock</button>
+      {% endif %}
+      {% if perms.core.operate_sales or perms.core.manage_company %}
+      <button type="button" data-ai-prompt="Which online orders need follow-through?">▣ Check fulfillment</button>
+      {% endif %}
+      <button type="button" data-ai-prompt="Which branches and abilities are assigned to me?">◎ My role and branches</button>
+    </div>
+    <div class="staff-ai-note"><strong>In control, always.</strong><p>Reports are based on verified data and may be incomplete if closings are missing. The assistant can advise, but approvals, payments, outbound messages and inventory changes stay in their established workspaces.</p></div>
+  </aside>
+</section>
+{% endblock %}
