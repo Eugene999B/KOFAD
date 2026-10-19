@@ -403,6 +403,7 @@ def connections_detail(request, branch, connection_id):
         "title": item["name"] + " · Connection diagnostics",
         "item": item, "snapshot": snapshot,
         "can_live_verify": connection_id in VALID,
+        "can_ipinfo_lookup": bool(request.user.is_superuser),
     })
 
 @company_admin
@@ -440,6 +441,63 @@ def connections_live_verify(request, branch, connection_id):
         request.session["kofad_integration_live_checks"] = values
         request.session.modified = True
     return redirect("connections_detail", connection_id=connection_id)
+
+
+@company_admin
+@never_cache
+@require_POST
+def ipinfo_lookup(request, branch):
+    """On-demand owner lookup only; no login interception or IP persistence."""
+    from .integration_health import catalog
+    from .integration_live import recent_probes, VALID
+    from .ipinfo_lite import (
+        IPinfoUnavailable, InvalidPublicIP, is_configured,
+        lookup_public_ip, public_address,
+    )
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only a system owner may inspect network context.")
+
+    result = None
+    error = ""
+    try:
+        address = public_address(request.POST.get("ip_address", ""))
+    except InvalidPublicIP as exc:
+        error = str(exc)
+        address = None
+
+    if address is not None:
+        if not is_configured():
+            error = "IPinfo Lite is not enabled. Install the token and enable this integration first."
+        else:
+            # Cap owner-initiated third-party disclosures per staff session.
+            # Store timestamps only, never the queried IP or the provider result.
+            now = int(timezone.now().timestamp())
+            history = request.session.get("kofad_ipinfo_lookup_times", [])
+            if not isinstance(history, list):
+                history = []
+            recent = [value for value in history
+                      if type(value) is int and 0 <= now - value < 900][-12:]
+            if len(recent) >= 12:
+                error = "The lookup limit (12 per 15 minutes) has been reached. Try later."
+            else:
+                recent.append(now)
+                request.session["kofad_ipinfo_lookup_times"] = recent
+                request.session.modified = True
+                try:
+                    result = lookup_public_ip(address.compressed)
+                except IPinfoUnavailable:
+                    error = "IPinfo Lite could not complete the lookup. Check connection health and retry later."
+
+    snapshot = catalog(probes=recent_probes(request.session))
+    item = next(row for row in snapshot["items"] if row["id"] == "ipinfo_lite")
+    return render(request, "connections_detail.html", {
+        "title": item["name"] + " · Connection diagnostics",
+        "item": item, "snapshot": snapshot,
+        "can_live_verify": "ipinfo_lite" in VALID,
+        "can_ipinfo_lookup": True,
+        "lookup_result": result,
+        "lookup_error": error,
+    })
 
 
 @company_admin
