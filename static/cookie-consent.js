@@ -9,7 +9,7 @@
   try {
     const value = document.cookie.split("; ").find(row => row.startsWith(name + "="));
     const saved = value && JSON.parse(decodeURIComponent(value.slice(name.length + 1)));
-    if (saved && saved.version === 1 && typeof saved.preferences === "boolean"
+    if (saved && saved.version === 2 && typeof saved.preferences === "boolean"
         && typeof saved.analytics === "boolean" && Number.isFinite(saved.savedAt)
         && saved.savedAt <= Date.now() && Date.now() - saved.savedAt < lifetime) choice = saved;
   } catch (_) {}
@@ -69,7 +69,8 @@
     const status = document.querySelector("[data-cookie-status]");
     const id = panel.dataset.analyticsId || "";
     const openers = document.querySelectorAll("[data-cookie-open]");
-    const analyticsAvailable = /^G-[A-Z0-9]{4,20}$/.test(id);
+    const analyticsAvailable = /^G-[A-Z0-9]{4,20}$/.test(id)
+      || panel.dataset.posthogEnabled === "1";
     analytics.disabled = !analyticsAvailable;
     let returnFocus = null;
     function open(showOptions) {
@@ -81,7 +82,7 @@
       panel.querySelector("[data-cookie-reject]").focus({preventScroll: true});
     }
     function save(preferenceChoice, analyticsChoice) {
-      choice = {version: 1, preferences: preferenceChoice,
+      choice = {version: 2, preferences: preferenceChoice,
         analytics: analyticsAvailable && analyticsChoice, savedAt: Date.now()};
       document.cookie = name + "=" + encodeURIComponent(JSON.stringify(choice))
         + "; Max-Age=15552000; Path=/; SameSite=Lax" + (secure ? "; Secure" : "");
