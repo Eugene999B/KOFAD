@@ -316,6 +316,32 @@ TELEGRAM_STAFF_BOT_ENABLED = os.environ.get("TELEGRAM_STAFF_BOT_ENABLED", "0") =
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 KOFAD_OPENROUTER_FREE_ENABLED = os.environ.get("KOFAD_OPENROUTER_FREE_ENABLED", "0") == "1"
 
+ 
+# Optional, strictly opt-in external providers. No paid-tier activation, uploads,
+# user tracking or vector synchronization occurs from configuration alone.
+# Gemini uses a FIXED model with a documented free tier. Use an AI Studio
+# project with NO billing account; a paid project could incur usage charges.
+KOFAD_GEMINI_API_ENABLED = os.environ.get("KOFAD_GEMINI_API_ENABLED", "0") == "1"
+KOFAD_GEMINI_API_KEY = os.environ.get("KOFAD_GEMINI_API_KEY", "").strip()
+
+# Ghana address geocoding only; existing manual map fallback remains available.
+KOFAD_GEOAPIFY_ENABLED = os.environ.get("KOFAD_GEOAPIFY_ENABLED", "0") == "1"
+KOFAD_GEOAPIFY_API_KEY = os.environ.get("KOFAD_GEOAPIFY_API_KEY", "").strip()
+
+# Vector catalog, CDN media and analytics remain gated until a separate
+# verified collection/media/consent rollout. Never index private business data.
+KOFAD_QDRANT_ENABLED = os.environ.get("KOFAD_QDRANT_ENABLED", "0") == "1"
+KOFAD_QDRANT_CLUSTER_URL = os.environ.get("KOFAD_QDRANT_CLUSTER_URL", "").strip()
+KOFAD_QDRANT_API_KEY = os.environ.get("KOFAD_QDRANT_API_KEY", "").strip()
+KOFAD_CLOUDINARY_ENABLED = os.environ.get("KOFAD_CLOUDINARY_ENABLED", "0") == "1"
+KOFAD_CLOUDINARY_CLOUD_NAME = os.environ.get("KOFAD_CLOUDINARY_CLOUD_NAME", "").strip()
+KOFAD_CLOUDINARY_API_KEY = os.environ.get("KOFAD_CLOUDINARY_API_KEY", "").strip()
+KOFAD_CLOUDINARY_API_SECRET = os.environ.get("KOFAD_CLOUDINARY_API_SECRET", "").strip()
+KOFAD_POSTHOG_ENABLED = os.environ.get("KOFAD_POSTHOG_ENABLED", "0") == "1"
+KOFAD_POSTHOG_PROJECT_KEY = os.environ.get("KOFAD_POSTHOG_PROJECT_KEY", "").strip()
+KOFAD_POSTHOG_HOST = os.environ.get("KOFAD_POSTHOG_HOST", "https://us.i.posthog.com").strip()
+
+
 # Owner-only IPinfo Lite country/ASN investigation; never a login-blocking signal.
 # Both switches must be present. The token remains only in Railway secrets.
 KOFAD_IPINFO_LITE_ENABLED = os.environ.get("KOFAD_IPINFO_LITE_ENABLED", "0") == "1"
