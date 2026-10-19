@@ -1109,6 +1109,20 @@ def _consume_map_lookup_budget(request):
     ).hexdigest()
     minute = int(timezone.now().timestamp() // 60)
 
+    # An explicitly enabled Upstash database enforces both limits in one
+    # atomic Redis script across all Django workers. If the provider fails,
+    # reject only metered map lookups instead of silently dropping the limit.
+    if getattr(settings, "KOFAD_UPSTASH_REST_ENABLED", False):
+        from core.upstash_redis import UpstashUnavailable, consume_map_budget
+        try:
+            return consume_map_budget(
+                session_token, minute,
+                settings.MAP_LOOKUP_GLOBAL_MINUTE_LIMIT,
+                settings.MAP_LOOKUP_SESSION_MINUTE_LIMIT,
+            )
+        except UpstashUnavailable:
+            return False
+
     def consume(key, limit):
         limit = max(int(limit), 1)
         if cache.add(key, 1, timeout=70):
