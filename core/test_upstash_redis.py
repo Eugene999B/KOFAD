@@ -67,17 +67,24 @@ class UpstashRESTTests(SimpleTestCase):
                         upstash_redis.ping()
             post.assert_not_called()
 
-    def test_missing_token_and_disabled_switch_never_call_provider(self):
+    def test_missing_token_rejects_network_and_disabled_counter_remains_off(self):
         with patch.object(upstash_redis.requests, "post") as post:
             with override_settings(KOFAD_UPSTASH_REST_TOKEN=""):
                 self.assertFalse(upstash_redis.configured())
                 with self.assertRaises(upstash_redis.UpstashUnavailable):
                     upstash_redis.ping()
             with override_settings(KOFAD_UPSTASH_REST_ENABLED=False):
-                self.assertFalse(upstash_redis.configured())
+                # An owner may verify credentials first, but cannot spend the
+                # shared map-search budget while the rollout flag is off.
+                self.assertTrue(upstash_redis.configured())
                 with self.assertRaises(upstash_redis.UpstashUnavailable):
-                    upstash_redis.ping()
+                    upstash_redis.consume_map_budget("a" * 64, 23456, 500, 40)
             post.assert_not_called()
+
+    def test_owner_can_verify_before_counter_rollout(self):
+        with override_settings(KOFAD_UPSTASH_REST_ENABLED=False):
+            with patch.object(upstash_redis.requests, "post", return_value=reply("PONG")):
+                self.assertTrue(upstash_redis.ping())
 
     def test_provider_errors_do_not_expose_token_or_response_body(self):
         results = [reply(None, status=401), reply(None, status=302), reply("unexpected")]
