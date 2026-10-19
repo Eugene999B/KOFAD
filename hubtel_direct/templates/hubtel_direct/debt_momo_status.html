@@ -21,9 +21,9 @@
   <p class="kpay-reference">Original reference {{ collection.reference }}</p>
   <div class="kpay-actions">
    {% if collection.receipt %}<a class="button" href="{% url 'document' collection.receipt.pk %}">Open confirmed receipt</a>{% endif %}
-   {% if collection.status == 'pending' or collection.status == 'submission_unknown' or collection.status == 'initializing' %}
+   {% if collection.status == 'pending' or collection.status == 'submission_unknown' or collection.status == 'initializing' or collection.status == 'attention' %}
    <form method="post" action="{% url 'hubtel_debt_momo_check' collection.pk %}">{% csrf_token %}
-    <button class="button secondary" type="submit" {% if not can_check %}disabled title="First network check becomes available after five minutes"{% endif %}>Check network status</button>
+    <button class="button secondary" type="submit" {% if not can_check %}disabled title="Network checks are temporarily on cooldown"{% endif %}>{% if collection.status == 'attention' %}Recheck original payment{% else %}Check network status{% endif %}</button>
    </form>{% endif %}
    <a class="button secondary" href="{% url 'debts' %}?customer={{ collection.party_id }}">Customer debt account</a>
   </div>
