@@ -34,6 +34,32 @@ class SmsTests(Fixtures,TestCase):
     def draft(self):
         return create_draft(self.user,self.branch,self.customer,"KOFAD: thank you for your purchase.")
 
+    def test_receipt_sms_omits_unset_phone_and_nonexistent_tender(self):
+        from core.models import Company
+        from core.sms.templates import DEFAULTS, render_for_document
+
+        company = Company.objects.get()
+        company.phone = ""
+        company.secondary_phone = ""
+        company.save(update_fields=["phone", "secondary_phone"])
+        MessageTemplate.objects.update_or_create(
+            code="receipt",
+            defaults={"name": "Sale receipt", "body": DEFAULTS["receipt"][1], "active": True},
+        )
+        credit_sale = self.sale(payments=[])
+        credit_text = render_for_document(credit_sale, "receipt")
+        self.assertIn("received GHS 0.00; outstanding GHS", credit_text)
+        self.assertNotIn("via not recorded", credit_text)
+        self.assertNotIn("For assistance:", credit_text)
+        self.assertNotIn(" via ", credit_text)
+
+        company.phone = "+233302111111"
+        company.save(update_fields=["phone"])
+        paid_sale = self.sale()
+        paid_text = render_for_document(paid_sale, "receipt")
+        self.assertIn("via Cash;", paid_text)
+        self.assertIn("For assistance: +233302111111.", paid_text)
+
     def test_normalization_and_encoding(self):
         self.assertEqual(normalize_phone("024 123 4567"),"+233241234567")
         for value in ("hello241234567","+233241234567;0241111111","0123"):
