@@ -43,12 +43,18 @@ def render_for_document(document,code):
     business_phone = " / ".join(
         value.strip() for value in (company.phone, company.secondary_phone) if value and value.strip()
     )
+    if not business_phone:
+        # Never print empty phone punctuation when the official contact is unset.
+        body = re.sub(r"\s*For (?:assistance|enquiries):\s*\{business_phone\}\.", "", body)
+    if code == "receipt" and not document.payments.exists():
+        # A credit-only sale has no tender method; do not claim one was recorded.
+        body = body.replace(" via {payment_method}", "")
     location = document.branch.address.strip() if document.branch.address else (company.address.strip() if company.address else document.branch.name)
     data = {"company":company.name,"customer":document.party.name,"reference":document.reference,
         "total":str(document.total),"paid":str(document.paid),"balance":str(balance(document)) if document.kind=="sale" else "0.00",
         "due_date":str(document.due_date or ""),"currency":company.currency,
         "business_phone": business_phone, "location": location,
-        "payment_method": ", ".join(p.get_method_display() for p in document.payments.all()) or "not recorded",
+        "payment_method": ", ".join(p.get_method_display() for p in document.payments.all()),
         "transaction_type": ("Part payment with debt" if document.kind == "sale" and document.paid < document.total else
                              "Paid sale" if document.kind == "sale" else document.get_kind_display()),
         "payment_status": ("Part-paid" if document.kind == "sale" and document.paid < document.total else "Recorded"),}
