@@ -13,61 +13,80 @@ from .telegram_intelligence import (
 
 
 def _receivables_brief(user):
-    """Live invoice-level debt position for finance-authorized branches only.
+    """Live, allocation-aware balances for every finance-authorized branch.
 
-    Report current balances and separately identify today's posted activity.
-    Do not infer an opening balance from mutable invoices or reveal other
-    branches' customers.
+    Match the Debt Desk's balance and overdue-grace rules. Collection allocations
+    reduce invoice debt; a later approved correction reverses that allocation.
     """
     from datetime import timedelta
     from decimal import Decimal
 
-    from django.db.models import DecimalField, F, Sum
+    from django.db.models import F, Sum
     from django.utils import timezone
 
-    from .models import Document
+    from .debts import debt_policy
+    from .models import Allocation, Document
 
     branches = _branches(user)
     if not _role(user)["management"] or not branches.exists():
         return "Your KOFAD role does not grant receivables reporting."
 
     today = timezone.localdate()
-    open_sales = Document.objects.filter(
+    invoices = list(Document.objects.filter(
         branch__in=branches, kind="sale", paid__lt=F("total"),
+    ).order_by(F("due_date").asc(nulls_last=True), "created_at", "pk"))
+
+    # Match core.services.balance() in bulk, avoiding a query per invoice.
+    # Approved corrections reverse collections in the Debt Desk as well.
+    applied = dict(
+        Allocation.objects.filter(invoice__in=invoices)
+        .exclude(payment_document__correction__status="approved")
+        .values("invoice_id").annotate(applied_total=Sum("amount"))
+        .values_list("invoice_id", "applied_total")
     )
-    money_field = DecimalField(max_digits=18, decimal_places=2)
+    rows = [
+        (invoice, invoice.total - invoice.paid - (applied.get(invoice.pk) or Decimal("0.00")))
+        for invoice in invoices
+    ]
+    rows = [(invoice, amount) for invoice, amount in rows if amount > 0]
+    grace_days = debt_policy().overdue_grace_days
 
-    def outstanding(queryset):
-        return queryset.aggregate(
-            amount=Sum(F("total") - F("paid"), output_field=money_field),
-        )["amount"] or Decimal("0.00")
+    def total(items):
+        return sum((amount for _, amount in items), Decimal("0.00"))
 
-    overdue = open_sales.filter(due_date__lt=today)
-    due_soon = open_sales.filter(due_date__gte=today, due_date__lte=today + timedelta(days=7))
-    posted_today = open_sales.filter(created_at__date=today)
+    overdue = [
+        (invoice, amount) for invoice, amount in rows
+        if invoice.due_date and today > invoice.due_date + timedelta(days=grace_days)
+    ]
+    due_soon = [
+        (invoice, amount) for invoice, amount in rows
+        if invoice.due_date and today <= invoice.due_date <= today + timedelta(days=7)
+    ]
+    posted_today = [
+        (invoice, amount) for invoice, amount in rows
+        if timezone.localdate(invoice.created_at) == today
+    ]
     collected_today = Document.objects.filter(
         branch__in=branches, kind="collection", created_at__date=today,
-    ).aggregate(amount=Sum("total"))["amount"] or Decimal("0.00")
-    top_due = list(
-        open_sales.filter(due_date__isnull=False)
-        .order_by("due_date", "created_at")
-        .values("reference", "due_date", "total", "paid")[:5]
-    )
+    ).exclude(correction__status="approved").aggregate(
+        amount=Sum("total"),
+    )["amount"] or Decimal("0.00")
+    top_due = [(invoice, amount) for invoice, amount in rows if invoice.due_date][:5]
     lines = [
-        "KOFAD CUSTOMER RECEIVABLES — authorized locations",
-        f"Outstanding now: GHS {outstanding(open_sales):,.2f} across {open_sales.count()} open invoice(s).",
-        f"Overdue: GHS {outstanding(overdue):,.2f} across {overdue.count()} invoice(s).",
-        f"Due within seven days: GHS {outstanding(due_soon):,.2f} across {due_soon.count()} invoice(s).",
-        f"Posted today and still owing: GHS {outstanding(posted_today):,.2f} across {posted_today.count()} invoice(s).",
+        f"KOFAD CUSTOMER RECEIVABLES — {branches.count()} authorized location(s)",
+        "Figures cover all authorized locations; the Debt Desk shows the selected branch.",
+        f"Outstanding now: GHS {total(rows):,.2f} across {len(rows)} open invoice(s).",
+        f"Overdue: GHS {total(overdue):,.2f} across {len(overdue)} invoice(s).",
+        f"Due within seven days: GHS {total(due_soon):,.2f} across {len(due_soon)} invoice(s).",
+        f"Posted today and still owing: GHS {total(posted_today):,.2f} across {len(posted_today)} invoice(s).",
         f"Debt collections posted today: GHS {collected_today:,.2f}.",
     ]
     if top_due:
         lines.append("Review these invoices first (earliest due):")
-        for row in top_due:
-            balance = row["total"] - row["paid"]
+        for invoice, amount in top_due:
             lines.append(
-                f"• {row['reference']}: GHS {balance:,.2f} left; "
-                f"due {row['due_date']:%d %b %Y}."
+                f"• {invoice.reference}: GHS {amount:,.2f} left; "
+                f"due {invoice.due_date:%d %b %Y}."
             )
     else:
         lines.append("No dated open invoice currently needs scheduling.")
