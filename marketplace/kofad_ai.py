@@ -539,9 +539,13 @@ def _gemini_completion(question, products, company, history=None):
 
 def _free_completion(question, products, company, history=None):
     if gemini_configured():
-        return _gemini_completion(question, products, company, history)
-
-    if not free_configured():
+        result = _gemini_completion(question, products, company, history)
+        if result:
+            return result
+        # A transient Gemini timeout must not strand a public shopper when a
+        # separately approved, zero-priced OpenRouter route is available.
+    if not (getattr(settings, "KOFAD_OPENROUTER_FREE_ENABLED", False)
+            and getattr(settings, "OPENROUTER_API_KEY", "").strip()):
         return None
     # All context here is explicitly PUBLIC. Do not pass customer, staff,
     # session, order data or conversation history to OpenRouter.
