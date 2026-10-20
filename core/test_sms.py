@@ -46,7 +46,9 @@ class SmsTests(Fixtures,TestCase):
             code="receipt",
             defaults={"name": "Sale receipt", "body": DEFAULTS["receipt"][1], "active": True},
         )
-        credit_sale = self.sale(payments=[])
+        credit_sale = self.sale(
+            payments=[], due_date=(timezone.localdate() + timedelta(days=7)).isoformat()
+        )
         credit_text = render_for_document(credit_sale, "receipt")
         self.assertIn("received GHS 0.00; outstanding GHS", credit_text)
         self.assertNotIn("via not recorded", credit_text)
