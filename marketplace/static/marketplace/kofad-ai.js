@@ -154,7 +154,7 @@
 
   function scrollEnd() { feed.scrollTop = feed.scrollHeight; }
 
-  function appendMessage(message, type, source, mode) {
+  function appendMessage(message, type) {
     const bubble = document.createElement("div");
     bubble.className = "kofad-ai-message " + (type === "user" ? "user" : "bot");
     if (type === "bot" && !reducedMotion && message.length > 90) {
@@ -177,16 +177,9 @@
       safelyLink(bubble, message);
       feed.appendChild(bubble);
     }
-    if (source) {
+    if (type === "bot") {
       const meta = document.createElement("div");
       meta.className = "kofad-ai-response-meta";
-      const label = document.createElement("span");
-      label.textContent = source === "free-ai" ? "AI-assisted · verify important details" :
-        source === "private" ? "From your KOFAD account" :
-        mode === "consent_required" ? "Local answer · enable advanced AI below" :
-        mode === "daily_limit" ? "Local answer · free AI daily limit reached" :
-        mode === "provider_unavailable" ? "Local answer · advanced AI unavailable" :
-        "KOFAD quick answer";
       const copy = document.createElement("button");
       copy.type = "button";
       copy.textContent = "Copy";
@@ -197,7 +190,6 @@
           copy.textContent = "Copied";
         } catch (_e) { copy.textContent = "Select to copy"; }
       });
-      meta.appendChild(label);
       meta.appendChild(copy);
       bubble.appendChild(meta);
     }
@@ -284,7 +276,7 @@
       thinking.node.remove();
       const text = response.ok ? String(data.reply || "I couldn't find an answer.") :
         String(data.error || "KOFAD Bot couldn't answer. Please try again.");
-      appendMessage(text, "bot", response.ok ? data.source : "local", data.ai_mode);
+      appendMessage(text, "bot");
       if (response.ok && ["free-ai", "local"].includes(data.source)) {
         history.push({ role: "user", content: question.slice(0, 320) });
         history.push({ role: "assistant", content: text.slice(0, 440) });

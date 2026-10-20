@@ -33,6 +33,28 @@ class PublicSemanticGroundingTests(TestCase):
         self.assertEqual(rows[0]["price"], str(self.live.market_price))
         semantic.assert_called_once()
 
+    def test_public_product_urls_resolve_market_listings_not_stock_products(self):
+        # Product and listing primary keys diverge whenever a stock item is
+        # not published. Marketplace product-detail routes use listing.pk.
+        for i in range(2):
+            Product.objects.create(
+                sku=f"AI-SEM-UNLISTED-{i}", name=f"Unlisted stock item {i}",
+                retail_unit=Decimal("12.00"), active=True,
+            )
+        target = Product.objects.create(
+            sku="AI-SEM-LUNCHBOX", name="Unique Bento Lunch Box",
+            retail_unit=Decimal("19.00"), active=True,
+        )
+        listing = MarketListing.objects.create(product=target, enabled=True)
+        self.assertNotEqual(target.pk, listing.pk)
+        rows = _public_products("Unique Bento Lunch Box")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            rows[0]["url"],
+            f"https://market.kofadimpex.com/market/products/{listing.pk}/",
+        )
+        self.assertNotIn(f"/products/{target.pk}/", rows[0]["url"])
+
     @patch("marketplace.qdrant_products.semantic_product_ids")
     def test_private_order_and_no_consent_do_not_query_qdrant(self, semantic):
         answer("Where is my order?", ai_allowed=True)
@@ -57,7 +79,7 @@ class PublicSemanticGroundingTests(TestCase):
         reply, source = answer("Recommend baking flour as a gift", ai_allowed=True)
         self.assertEqual(source, "free-ai")
         self.assertNotIn("/products/999/", reply)
-        self.assertIn(f"/market/products/{self.published.pk}/", reply)
+        self.assertIn(f"/market/products/{self.live.pk}/", reply)
         self.assertIn("Verified KOFAD catalogue listings", reply)
         self.assertIn("GHS", reply)
         self.assertNotIn("Internal Item", reply)
