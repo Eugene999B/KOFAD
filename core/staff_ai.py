@@ -12,6 +12,73 @@ from .telegram_intelligence import (
 )
 
 
+def _receivables_brief(user):
+    """Live invoice-level debt position for finance-authorized branches only.
+
+    Report current balances and separately identify today's posted activity.
+    Do not infer an opening balance from mutable invoices or reveal other
+    branches' customers.
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.db.models import DecimalField, F, Sum
+    from django.utils import timezone
+
+    from .models import Document
+
+    branches = _branches(user)
+    if not _role(user)["management"] or not branches.exists():
+        return "Your KOFAD role does not grant receivables reporting."
+
+    today = timezone.localdate()
+    open_sales = Document.objects.filter(
+        branch__in=branches, kind="sale", paid__lt=F("total"),
+    )
+    money_field = DecimalField(max_digits=18, decimal_places=2)
+
+    def outstanding(queryset):
+        return queryset.aggregate(
+            amount=Sum(F("total") - F("paid"), output_field=money_field),
+        )["amount"] or Decimal("0.00")
+
+    overdue = open_sales.filter(due_date__lt=today)
+    due_soon = open_sales.filter(due_date__gte=today, due_date__lte=today + timedelta(days=7))
+    posted_today = open_sales.filter(created_at__date=today)
+    collected_today = Document.objects.filter(
+        branch__in=branches, kind="collection", created_at__date=today,
+    ).aggregate(amount=Sum("total"))["amount"] or Decimal("0.00")
+    top_due = list(
+        open_sales.filter(due_date__isnull=False)
+        .order_by("due_date", "created_at")
+        .values("reference", "due_date", "total", "paid")[:5]
+    )
+    lines = [
+        "KOFAD CUSTOMER RECEIVABLES — authorized locations",
+        f"Outstanding now: GHS {outstanding(open_sales):,.2f} across {open_sales.count()} open invoice(s).",
+        f"Overdue: GHS {outstanding(overdue):,.2f} across {overdue.count()} invoice(s).",
+        f"Due within seven days: GHS {outstanding(due_soon):,.2f} across {due_soon.count()} invoice(s).",
+        f"Posted today and still owing: GHS {outstanding(posted_today):,.2f} across {posted_today.count()} invoice(s).",
+        f"Debt collections posted today: GHS {collected_today:,.2f}.",
+    ]
+    if top_due:
+        lines.append("Review these invoices first (earliest due):")
+        for row in top_due:
+            balance = row["total"] - row["paid"]
+            lines.append(
+                f"• {row['reference']}: GHS {balance:,.2f} left; "
+                f"due {row['due_date']:%d %b %Y}."
+            )
+    else:
+        lines.append("No dated open invoice currently needs scheduling.")
+    lines.append(
+        "Next: open Customer Debts, confirm the customer's payment evidence, "
+        "then send only consented reminders or record verified collections. "
+        "Today's figures are posted activity, not a historical opening-to-closing reconciliation."
+    )
+    return "\n".join(lines)
+
+
 def _intent(text):
     q = " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
     if re.search(r"\b(password|otp|verification code|payment pin|api key|secret)\b", q):
@@ -22,6 +89,8 @@ def _intent(text):
         return "role"
     if any(word in q for word in ("branch", "location", "where do i work")):
         return "branches"
+    if any(word in q for word in ("receivable", "debt", "debtor", "invoice", "overdue", "arrears", "owing", "owed")):
+        return "receivables"
     if any(word in q for word in ("low stock", "restock", "reorder", "inventory", "out of stock", "stock alert")):
         return "inventory"
     if any(word in q for word in ("pending order", "online order", "fulfil", "fulfill", "dispatch", "delivery work", "orders due")):
@@ -57,7 +126,7 @@ def staff_reply(user, question, *, context=""):
     q = question.casefold()
     # A short follow-up may reuse only the prior *category*, never data or
     # authority supplied by the browser. Every tool checks current roles.
-    if (intent == "clarify" and context in {"reports", "compare", "inventory", "orders"}
+    if (intent == "clarify" and context in {"reports", "compare", "inventory", "orders", "receivables"}
             and re.search(r"(?i)\b(?:what about|how about|same for|previous|last|this)\b", q)):
         intent = context
     if intent == "security":
@@ -90,6 +159,10 @@ def staff_reply(user, question, *, context=""):
             + "\n".join("• " + name for name in branches.order_by("name").values_list("name", flat=True)[:30])
             + ("\nShowing the first 30." if branches.count() > 30 else "")
         ), "branches"
+    if intent == "receivables":
+        if not role["management"]:
+            return "Your current KOFAD role does not grant receivables reporting.", "denied"
+        return _receivables_brief(user), "receivables"
     if intent == "inventory":
         if not role["inventory"]:
             return "Your current KOFAD role does not grant inventory reporting.", "denied"
@@ -114,7 +187,7 @@ def staff_reply(user, question, *, context=""):
         return account_tasks(user), "tasks"
     choices = ["your assigned branches", "current priorities"]
     if role["management"]:
-        choices.extend(["sales today", "sales trends this month"])
+        choices.extend(["sales today", "sales trends this month", "overdue invoices and receivables"])
     if role["inventory"]:
         choices.append("low stock and restocking")
     if role["sales"]:
