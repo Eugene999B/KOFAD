@@ -76,9 +76,11 @@ META_QUESTION = re.compile(
 
 
 def _meta_reply():
-    return ("I'm KOFAD Bot. I can't provide details of the internal AI "
-            "model or API configuration. I can help you with KOFAD "
-            "shopping, payments, delivery and verified orders.")
+    return ("I'm KOFAD Bot, KOFAD IMPEX's shopping assistant. I use approved "
+            "AI services with KOFAD's published catalogue and policies; the "
+            "underlying provider can change, so I do not promise one fixed model. "
+            "I can check current public prices, delivery information and your "
+            "verified orders through the secure KOFAD account.")
 
 
 def reserve_free_request(channel, user_key, today):
@@ -652,6 +654,21 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
     if not question or len(question) > MAX_QUESTION:
         return "Please ask a question in 600 characters or fewer.", "local"
     if META_QUESTION.search(question):
+        # Answer a mixed model-and-product question fully, without sending the
+        # technical/configuration part to an outside model or guessing prices.
+        product_part = re.search(
+            r"(?i)\b(?:price|cost)\s+(?:of|for)\s+(?:the\s+)?([^?.!,]+)",
+            question,
+        )
+        if product_part:
+            products = _public_products(product_part.group(1).strip())
+            if products:
+                verified = "\n".join(
+                    f"• {p['name']} — GHS {p['price']} per {p['unit']}: {p['url']}"
+                    for p in products[:3]
+                )
+                return (_meta_reply() + "\n\nCurrent published KOFAD price(s):\n"
+                        + verified + "\nConfirm availability at checkout."), "local"
         return _meta_reply(), "local"
     if INSTRUCTION_ATTACK.search(question):
         return ("I can help with published KOFAD products, orders and delivery, "
