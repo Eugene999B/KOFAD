@@ -34,6 +34,19 @@ class PublicKofadAiTests(TestCase):
         )
         self.listing = MarketListing.objects.create(product=product, enabled=True, featured=True)
 
+    @override_settings(KOFAD_OPENROUTER_FREE_ENABLED=False, KOFAD_GEMINI_ENABLED=False)
+    def test_offline_wholesale_strategy_is_useful_without_ai_providers(self):
+        response, source = answer(
+            "I want to source 200 electronics items. Compare supplier reliability, "
+            "warranty exposure, shipping cost and cash-flow risks, with a buying strategy."
+        )
+        self.assertEqual(source, "local")
+        self.assertIn("Verify each supplier", response)
+        self.assertIn("Calculate landed cost", response)
+        self.assertIn("Protect cash flow", response)
+        self.assertIn("/wholesale/", response)
+        self.assertNotIn("Here are published KOFAD Market listings", response)
+
     def test_business_advice_keeps_complete_sentences_and_no_unrequested_product_list(self):
         from marketplace.kofad_ai import (
             MAX_OUTPUT, _clip_complete_answer, _verified_product_completion,
