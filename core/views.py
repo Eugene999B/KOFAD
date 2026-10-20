@@ -1949,7 +1949,7 @@ def audit_log(request, branch):
         row.integrity_ok = digest_ok and predecessor_ok
         if not row.integrity_ok:
             chain_ok = False
-    categories = Audit.objects.filter(branch=branch).exclude(category="").values_list("category", flat=True).distinct()
+    categories = Audit.objects.filter(branch=branch).exclude(category="").order_by("category").values_list("category", flat=True).distinct()
     actors = User.objects.filter(audit__branch=branch).distinct().order_by("username")
     summary = {
         "events": len(rows),
