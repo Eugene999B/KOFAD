@@ -621,10 +621,11 @@ _PRODUCT_DETAIL_URL = r"https?://[^\s)\]}]+/market/products/\d+/?"
 
 def _verified_product_completion(generated, products, question):
     """Keep the model's prose, but only show product links sourced from SQL."""
-    if not products or not re.search(
+    product_question = re.search(
         r"(?i)\b(?:product|price|shop|buy|find|recommend|gift|available|stock|sell|need)\b",
         question,
-    ):
+    )
+    if not products or not (product_question or re.search(_PRODUCT_DETAIL_URL, generated)):
         return generated
     generated = re.sub(
         r"\s*\((?:URL|link)\s*:\s*" + _PRODUCT_DETAIL_URL + r"\s*\)",
