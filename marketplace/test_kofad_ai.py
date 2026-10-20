@@ -343,7 +343,7 @@ class PublicKofadAiTests(TestCase):
         for question in ("Which AI model is this?", "Which API are you using?"):
             response, source = answer(question, ai_allowed=True)
             self.assertEqual(source, "local")
-            self.assertIn("can't provide details", response)
+            self.assertIn("provider can change", response)
         post.assert_not_called()
 
     @patch("marketplace.kofad_ai.requests.post")
@@ -396,7 +396,7 @@ class PublicKofadAiTests(TestCase):
     def test_local_chat_handles_real_visitor_questions_without_repetitive_greeting(self, post):
         examples = (
             ("Hi wahts your name", "KOFAD Bot"),
-            ("which model is this", "can't provide"),
+            ("which model is this", "provider can change"),
             ("which api are you using", "approved AI services"),
             ("what can you do", "published products"),
             ("can you track my items if i register", "track KOFAD"),
