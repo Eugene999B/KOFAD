@@ -35,7 +35,10 @@ class GeminiPublicAiTests(TestCase):
             "candidates": [{"content": {"parts": [{"text": "See the public listing."}]}}]
         })
         result, source = answer("Do you sell maize flour?")
-        self.assertEqual((result, source), ("See the public listing.", "free-ai"))
+        self.assertEqual(source, "free-ai")
+        self.assertTrue(result.startswith("See the public listing."))
+        self.assertIn("Verified KOFAD catalogue listings", result)
+        self.assertIn("Public Ghana Maize Flour", result)
         post.assert_called_once()
         args, kwargs = post.call_args
         self.assertEqual(args[0], GEMINI_ENDPOINT)

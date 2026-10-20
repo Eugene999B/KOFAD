@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -221,4 +221,5 @@ class StaffNotificationTests(TestCase):
         for notice in EmailNotice.objects.all():
             self.assertEqual(notice.status, "failed")
             self.assertEqual(notice.attempts, 0)
-            self.assertGreater(notice.last_attempt_at, timezone.now())
+            # Delivery becomes eligible after its 15-minute retry cooldown.
+            self.assertGreater(notice.last_attempt_at + timedelta(minutes=15), timezone.now())
