@@ -35,8 +35,8 @@
 </header>
 
 <div class="receipt-business-bar">
-<div><small>BUSINESS CONTACT</small><strong>{% if company.phone %}{{ company.phone }}{% else %}Not configured{% endif %}{% if company.secondary_phone %} · {{ company.secondary_phone }}{% endif %}</strong></div>
-<div><small>LOCATION</small><strong>{{ doc.branch.name }}</strong><span>{% if doc.branch.address %}{{ doc.branch.address }}{% elif company.address %}{{ company.address }}{% else %}Location address not configured{% endif %}</span></div>
+{% if company.phone or company.secondary_phone %}<div><small>BUSINESS CONTACT</small><strong>{% if company.phone %}{{ company.phone }}{% endif %}{% if company.phone and company.secondary_phone %} · {% endif %}{% if company.secondary_phone %}{{ company.secondary_phone }}{% endif %}</strong></div>{% endif %}
+<div><small>LOCATION</small><strong>{{ doc.branch.name }}</strong>{% if doc.branch.address %}<span>{{ doc.branch.address }}</span>{% elif company.address %}<span>{{ company.address }}</span>{% endif %}</div>
 </div>
 
 <div class="receipt-meta">

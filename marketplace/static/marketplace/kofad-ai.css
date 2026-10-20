@@ -77,3 +77,10 @@
 [data-theme="dark"] .kofad-ai-compose,.dark .kofad-ai-compose{background:#223844;border-color:#3a5867}
 [data-theme="dark"] .kofad-ai-compose textarea,.dark .kofad-ai-compose textarea{color:#e4edf2}
 [data-theme="dark"] .kofad-ai-message.user,.dark .kofad-ai-message.user{background:#284a5d;color:#ebf8ff}
+
+/* Optional privacy control is available without exposing internal AI modes. */
+.kofad-ai-privacy{font-size:10px;color:#61798a;max-width:285px}
+.kofad-ai-privacy summary{cursor:pointer;font-weight:600;list-style-position:inside}
+.kofad-ai-privacy[open]{padding:4px 0}
+.kofad-ai-privacy .kofad-ai-consent{margin-top:7px}
+.kofad-ai-privacy p{font-size:10px;line-height:1.45;margin:6px 0 0}

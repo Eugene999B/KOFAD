@@ -40,7 +40,7 @@ def _business_contacts(company):
     return " / ".join(
         value.strip() for value in (company.phone, company.secondary_phone)
         if value and value.strip()
-    ) or "Not configured"
+    )
 
 
 def _location(document, company):
@@ -122,7 +122,12 @@ def render_receipt_pdf(document, format_name="a4"):
     story = []
 
     logo = _logo(15 * mm if not thermal else 10 * mm, 15 * mm if not thermal else 10 * mm)
-    company_name = Paragraph(f"<b>{_text(company.name)}</b><br/><font color='#657585'>{_text(_business_contacts(company))}</font>", body)
+    contact_text = _business_contacts(company)
+    company_name = Paragraph(
+        f"<b>{_text(company.name)}</b>"
+        + (f"<br/><font color='#657585'>{_text(contact_text)}</font>" if contact_text else ""),
+        body,
+    )
     receipt_title = Paragraph(
         f"<font color='#138895'><b>{_text(document.get_kind_display().upper())}</b></font><br/>"
         f"<b>{_text(document.reference)}</b><br/>"
@@ -163,7 +168,10 @@ def render_receipt_pdf(document, format_name="a4"):
     elif document.kind == "inventory_writeoff":
         party_name = "Internal inventory record"
 
-    location_text = f"<b>{_text(document.branch.name)}</b><br/><font color='#657585'>{_text(_location(document, company))}</font>"
+    address = _location(document, company)
+    location_text = f"<b>{_text(document.branch.name)}</b>"
+    if address and address != document.branch.name:
+        location_text += f"<br/><font color='#657585'>{_text(address)}</font>"
     party_text = f"<b>{_text(party_name)}</b>"
     if party_phone:
         party_text += f"<br/><font color='#657585'>{_text(party_phone)}</font>"
