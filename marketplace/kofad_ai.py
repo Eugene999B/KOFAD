@@ -206,7 +206,7 @@ def _public_products(question, *, semantic=False):
             "description": listing.description[:240],
             "features": [value[:90] for value in highlights[:3] if isinstance(value, str)],
             "url": "https://market.kofadimpex.com/market/products/"
-                   + str(listing.product_id) + "/",
+                   + str(listing.pk) + "/",
         })
     return result
 
