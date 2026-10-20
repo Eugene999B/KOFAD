@@ -285,7 +285,7 @@ def home(request):
     # hypothetical food/cleaning stock previously sent shoppers to empty pages.
     published_categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
-        .exclude(category="").values_list("category", flat=True).distinct()
+        .exclude(category="").order_by("category").values_list("category", flat=True).distinct()
     )
     preferred = ("Homeware", "Personal Care", "Electronics")
     category_images = {
