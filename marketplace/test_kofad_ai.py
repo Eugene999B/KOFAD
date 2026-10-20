@@ -34,6 +34,30 @@ class PublicKofadAiTests(TestCase):
         )
         self.listing = MarketListing.objects.create(product=product, enabled=True, featured=True)
 
+    def test_business_advice_keeps_complete_sentences_and_no_unrequested_product_list(self):
+        from marketplace.kofad_ai import (
+            MAX_OUTPUT, _clip_complete_answer, _verified_product_completion,
+        )
+
+        listing = [{
+            "name": "Public Maize Flour", "price": "33.00",
+            "unit": "bag", "url": "https://market.kofadimpex.com/market/products/1/",
+        }]
+        advice = "Check suppliers, compare delivery terms, and reserve working capital."
+        self.assertEqual(
+            _verified_product_completion(advice, listing, "How do I plan supply for my shop?"),
+            advice,
+        )
+
+        lengthy = "First, compare warranty terms. " * 150
+        clipped = _clip_complete_answer(lengthy, 95)
+        self.assertTrue(clipped.endswith("."))
+        self.assertLessEqual(len(clipped), 95)
+        catalogue = _verified_product_completion(lengthy, listing, "Recommend available products")
+        self.assertIn("Verified KOFAD catalogue listings", catalogue)
+        self.assertLessEqual(len(catalogue), MAX_OUTPUT)
+        self.assertTrue(catalogue.split("\\n\\nVerified")[0].endswith((".", "…")))
+
     @patch("marketplace.kofad_ai.requests.post")
     def test_openrouter_is_hard_coded_to_free_and_receives_only_public_data(self, post):
         post.return_value = Mock(
