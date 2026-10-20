@@ -281,10 +281,31 @@ def home(request):
     except ValidationError:
         pass
     _decorate_listings(listings, branch)
+    # Homepage shortcuts must reflect the actual live catalogue; searching for
+    # hypothetical food/cleaning stock previously sent shoppers to empty pages.
+    published_categories = list(
+        Product.objects.filter(market_listing__enabled=True, active=True)
+        .exclude(category="").values_list("category", flat=True).distinct()
+    )
+    preferred = ("Homeware", "Personal Care", "Electronics")
+    category_images = {
+        "Homeware": "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=650&q=76",
+        "Personal Care": "https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&w=650&q=76",
+        "Electronics": "https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=650&q=76",
+    }
+    ordered_categories = sorted(
+        published_categories,
+        key=lambda name: (preferred.index(name) if name in preferred else len(preferred), name.casefold()),
+    )[:3]
+    home_categories = [
+        {"name": name, "tag": name.upper(), "image_url": category_images.get(name, "")}
+        for name in ordered_categories
+    ]
     return render(request, "marketplace/home.html", _market_context(
         request,
         title="KOFAD Market & Operations",
         listings=listings,
+        home_categories=home_categories,
     ))
 
 def market(request, category_slug=None):
