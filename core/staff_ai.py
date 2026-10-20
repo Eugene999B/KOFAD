@@ -41,8 +41,8 @@ def _receivables_brief(user):
     applied = dict(
         Allocation.objects.filter(invoice__in=invoices)
         .exclude(payment_document__correction__status="approved")
-        .values("invoice_id").annotate(amount=Sum("amount"))
-        .values_list("invoice_id", "amount")
+        .values("invoice_id").annotate(applied_total=Sum("amount"))
+        .values_list("invoice_id", "applied_total")
     )
     rows = [
         (invoice, invoice.total - invoice.paid - (applied.get(invoice.pk) or Decimal("0.00")))
