@@ -5,7 +5,8 @@ from django.utils.html import escape
 from django.conf import settings
 from django.test import Client, TestCase, override_settings
 
-from .models import Conversation
+from core.models import Product
+from .models import Conversation, MarketListing
 from .public_content import PAGES
 
 
@@ -95,6 +96,27 @@ class PublicSiteTests(TestCase):
         self.assertNotContains(response, settings.STAFF_LOGIN_PATH)
         self.assertNotContains(response, "Staff login")
         self.assertNotContains(response, "Staff access")
+
+    def test_home_category_links_only_offer_published_active_products(self):
+        active = Product.objects.create(
+            sku="HOME-CAT-1", name="Test cookware", category="Homeware",
+            retail_unit=10, active=True,
+        )
+        hidden = Product.objects.create(
+            sku="HOME-CAT-2", name="Unavailable drinks", category="Food & Drink",
+            retail_unit=10, active=True,
+        )
+        MarketListing.objects.create(product=active, enabled=True)
+        MarketListing.objects.create(product=hidden, enabled=False)
+        response = self.client.get("/")
+        self.assertContains(response, "/market/?category=Homeware")
+        self.assertNotContains(response, "/market/?q=food")
+        self.assertNotContains(response, "/market/?q=cleaning")
+        self.assertNotContains(response, "/market/?category=Food")
+        # Removing the only published listing removes its homepage shortcut.
+        MarketListing.objects.filter(product=active).update(enabled=False)
+        response = self.client.get("/")
+        self.assertNotContains(response, "/market/?category=Homeware")
 
     def test_sitemap_contains_public_pages_and_never_staff_routes(self):
         response = self.client.get("/sitemap.xml", HTTP_HOST="kofadimpex.com")
