@@ -614,6 +614,40 @@ def _free_completion(question, products, company, history=None):
         return None
 
 
+
+_PRODUCT_DETAIL_URL = (
+    r"https?://[^\\s)\\]}]+/market/products/\\d+/?"
+)
+
+
+def _verified_product_completion(generated, products, question):
+    """Keep LLM prose, but supply product links from SQL rather than model text.
+
+    A model can associate an otherwise real URL with the wrong item. Strip its
+    product-detail links entirely and append our own name/price/URL tuples.
+    """
+    if not products or not re.search(
+        r"(?i)\\b(?:product|price|shop|buy|find|recommend|gift|available|stock|sell|need)\\b",
+        question,
+    ):
+        return generated
+    generated = re.sub(
+        r"\\s*\\((?:URL|link)\\s*:\\s*" + _PRODUCT_DETAIL_URL + r"\\s*\\)",
+        "", generated, flags=re.IGNORECASE,
+    )
+    generated = re.sub(
+        r"\\[([^]\\n]{1,120})\\]\\(\\s*" + _PRODUCT_DETAIL_URL + r"\\s*\\)",
+        r"\\1", generated,
+    )
+    generated = re.sub(_PRODUCT_DETAIL_URL, "", generated)
+    verified = "\\n".join(
+        f"• {p['name']} — GHS {p['price']} per {p['unit']}: {p['url']}"
+        for p in products[:3]
+    )
+    suffix = "\\n\\nVerified KOFAD catalogue listings (confirm stock at checkout):\\n" + verified
+    return generated[:max(0, MAX_OUTPUT - len(suffix))].rstrip() + suffix
+
+
 def answer(question, *, customer=None, ai_allowed=True, history=None):
     """Answer public questions; private order status is handled on KOFAD only."""
     if not isinstance(question, str):
@@ -648,5 +682,5 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
     if ai_allowed:
         generated = _free_completion(question, products, company, public_history)
         if generated:
-            return generated, "free-ai"
+            return _verified_product_completion(generated, products, question), "free-ai"
     return _offline(question, products, company, public_history), "local"
