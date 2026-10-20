@@ -1846,10 +1846,14 @@
     document.querySelector("#success-reference").textContent = result.reference || "Receipt";
     const successHeadline = document.querySelector("#sale-success-headline");
     const successEyebrow = document.querySelector("#sale-success-eyebrow");
-    const saleHasDebt = Number(result.total || 0) > Number(result.paid || 0);
-    if (successHeadline) successHeadline.textContent = saleHasDebt
-      ? "Credit invoice recorded — balance unpaid" : "Sale recorded";
-    if (successEyebrow) successEyebrow.textContent = saleHasDebt ? "UNPAID SALE · NOT A PAYMENT" : "SALE RECORDED";
+    const amountPaid = Number(result.paid || 0);
+    const saleHasDebt = Number(result.total || 0) > amountPaid;
+    const partPaid = saleHasDebt && amountPaid > 0;
+    if (successHeadline) successHeadline.textContent = partPaid
+      ? "Part-paid sale recorded — balance still owed"
+      : saleHasDebt ? "Credit sale recorded — payment outstanding" : "Sale recorded";
+    if (successEyebrow) successEyebrow.textContent = partPaid
+      ? "PART PAYMENT RECORDED" : saleHasDebt ? "CREDIT SALE · NO PAYMENT RECEIVED" : "SALE RECORDED";
     document.querySelector("#success-total").textContent = Number(result.total || 0).toFixed(2);
     const successPaid = document.querySelector("#success-paid");
     const successBalance = document.querySelector("#success-balance");
@@ -1858,7 +1862,8 @@
     if (successBalance) successBalance.textContent = Math.max(Number(result.total || 0) - Number(result.paid || 0), 0).toFixed(2);
     if (successPayment) {
       successPayment.textContent = saleHasDebt
-        ? "Unpaid balance · no Direct Debit approval or collection"
+        ? (partPaid ? "Cashier-recorded part payment · remaining balance awaits collection; no Direct Debit approval"
+                    : "No payment received · balance awaits collection; no Direct Debit approval")
         : selectedPaymentMethod === "split"
         ? "Mixed payment"
         : (selectedPaymentMethod ? selectedPaymentMethod.toUpperCase() + " payment" : "Payment recorded");
