@@ -1,12 +1,15 @@
 """Authorization and privacy regression tests for web/Telegram staff intelligence."""
 import json
 from decimal import Decimal
+from datetime import timedelta
+
+from django.utils import timezone
 from unittest.mock import patch
 
 from django.contrib.auth.models import Permission, User
 from django.test import RequestFactory, TestCase
 
-from core.models import Access, Branch, Product, Stock
+from core.models import Access, Branch, Document, Party, Product, Stock
 from core.staff_ai import staff_reply
 from core.staff_ai_views import assistant_chat
 
@@ -57,6 +60,50 @@ class StaffAssistantTests(TestCase):
         self.assertEqual(source, "inventory")
         self.assertIn("Head Office", message)
         self.assertNotIn("Hidden Depot", message)
+
+    def test_receivables_analysis_uses_live_scoped_invoices_and_oldest_due(self):
+        customer = Party.objects.create(
+            branch=self.hq, kind="customer", name="Authorized customer", phone="0240000001",
+        )
+        outsider = Party.objects.create(
+            branch=self.other, kind="customer", name="Private outside customer", phone="0240000002",
+        )
+        today = timezone.localdate()
+        Document.objects.create(
+            reference="AI-DEBT-ONE", branch=self.hq, kind="sale", party=customer,
+            total=Decimal("10.00"), paid=Decimal("4.00"),
+            due_date=today - timedelta(days=2), created_by=self.manager,
+        )
+        Document.objects.create(
+            reference="AI-DEBT-HIDDEN", branch=self.other, kind="sale", party=outsider,
+            total=Decimal("999.00"), paid=Decimal("0.00"),
+            due_date=today - timedelta(days=3), created_by=self.manager,
+        )
+        # Superusers legitimately see all active branches; restrict this
+        # regression to a finance-authorized, single-branch staff account.
+        analyst = User.objects.create_user("ai-analyst", password="test-only-pass")
+        analyst.user_permissions.add(Permission.objects.get(codename="view_reports"))
+        Access.objects.get(user=analyst).branches.add(self.hq)
+        response, source = staff_reply(
+            analyst, "Which receivables and overdue invoices need attention today?",
+        )
+        self.assertEqual(source, "receivables")
+        self.assertIn("Outstanding now: GHS 6.00", response)
+        self.assertIn("AI-DEBT-ONE", response)
+        self.assertNotIn("AI-DEBT-HIDDEN", response)
+        self.assertNotIn("999.00", response)
+        denied, source = staff_reply(self.seller, "Show me overdue invoices")
+        self.assertEqual(source, "denied")
+        self.assertNotIn("AI-DEBT-ONE", denied)
+
+    def test_staff_question_about_receivables_does_not_route_to_online_orders(self):
+        answer, source = staff_reply(
+            self.manager,
+            "What changed in customer receivables today, which invoices need attention first?",
+        )
+        self.assertEqual(source, "receivables")
+        self.assertIn("Outstanding now", answer)
+        self.assertNotIn("open online orders needing operational follow-through", answer)
 
     def test_credential_change_blocks_all_reporting(self):
         self.inventory_access.force_password_change = True
