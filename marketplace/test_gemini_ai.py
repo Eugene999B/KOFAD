@@ -48,7 +48,7 @@ class GeminiPublicAiTests(TestCase):
         payload = kwargs["json"]
         self.assertNotIn("tools", payload)
         self.assertNotIn("model", payload)
-        self.assertEqual(payload["generationConfig"]["maxOutputTokens"], 450)
+        self.assertEqual(payload["generationConfig"]["maxOutputTokens"], 750)
         body = json.dumps(payload)
         self.assertIn("Public Ghana Maize Flour", body)
         self.assertNotIn("customer_id", body)
