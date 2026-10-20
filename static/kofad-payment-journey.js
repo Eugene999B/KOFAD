@@ -5,6 +5,8 @@
     const url = root.dataset.statusUrl;
     const title = root.querySelector('[data-kpay-title]');
     const detail = root.querySelector('[data-kpay-detail]');
+    const waitingCopy = root.querySelector('[data-kpay-wait]');
+    const progressSteps = root.querySelector('[aria-label="Payment steps"]');
     const providerStatus = root.querySelector('[data-kpay-provider-status]');
     const lastCheck = root.querySelector('[data-kpay-last-check]');
     const mark = root.querySelector('[data-kpay-mark]');
@@ -63,12 +65,20 @@
         const timestamp = data.last_checked_at;
         const parsed = timestamp ? new Date(timestamp) : null;
         lastCheck.textContent = parsed && !Number.isNaN(parsed.getTime())
-          ? parsed.toLocaleString() : 'Not yet checked';
+          ? parsed.toLocaleString() : (phase === 'success' ? 'Verified by KOFAD' : 'Not yet checked');
       }
       if (detail && data.message && phase !== 'success') detail.textContent = String(data.message).slice(0,240);
       if (phase === 'success' && detail) detail.textContent = mode === 'authorization'
         ? 'Your wallet authorization is verified. This is not a payment or a receipt.'
         : mode === 'transfer' ? 'The transfer has been verified.' : 'KOFAD has independently confirmed this payment.';
+      if (mode === 'payment' && phase === 'success') {
+        if (waitingCopy) waitingCopy.textContent = 'Your payment is verified. Follow your order for fulfilment updates.';
+        const steps = progressSteps?.querySelectorAll('li small');
+        if (steps?.length >= 3) {
+          steps[1].textContent = 'Wallet approval completed';
+          steps[2].textContent = 'Payment independently verified';
+        }
+      }
       if (receipt) {
         receipt.hidden = phase !== 'success';
         for (const [name, selector] of [['receipt','[data-kpay-receipt-link]'],
