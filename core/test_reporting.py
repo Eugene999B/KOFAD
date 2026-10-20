@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from . import services as s
-from .models import Document, PayrollEntry, PayrollPeriod, PayrollRule, Stock, Worker
+from .models import Audit, Document, PayrollEntry, PayrollPeriod, PayrollRule, Stock, Worker
 from .reporting import branch_comparison, build_report, business_kpis, limited
 from .tests import Fixtures
 
@@ -22,6 +22,20 @@ class BranchReportingTests(Fixtures, TestCase):
     def report(self, user=None, first=None, last=None):
         rows, _ = branch_comparison(user or self.user, first or self.today, last or self.today)
         return {row["branch"]: row for row in rows}
+
+    def test_audit_category_filter_does_not_repeat_options_per_event(self):
+        for index, category in enumerate(("system", "system", "finance", "system", "finance")):
+            Audit.objects.create(
+                branch=self.branch, actor=self.user,
+                action="uat.audit", reference=f"UAT-{index}", category=category,
+            )
+        self.authenticate_client()
+        response = self.client.get("/audit/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["categories"]), ["finance", "system"])
+        self.assertEqual(
+            response.content.decode().count('<option value="system"'), 1,
+        )
 
     def test_trend_includes_backdated_operating_creditor_bills_in_profit(self):
         business_day = self.today - timedelta(days=3)
