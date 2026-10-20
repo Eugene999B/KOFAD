@@ -628,13 +628,13 @@ def _clip_complete_answer(text, limit):
     if len(text) <= limit:
         return text
     excerpt = text[:max(0, limit - 1)].rstrip()
-    complete = list(re.finditer(r"[.!?](?=\\s|$)", excerpt))
+    complete = list(re.finditer(r"[.!?](?=\s|$)", excerpt))
     if complete and complete[-1].end() >= len(excerpt) // 2:
         return excerpt[:complete[-1].end()].rstrip()
     boundary = excerpt.rfind(" ")
     if boundary > len(excerpt) // 2:
         excerpt = excerpt[:boundary]
-    return excerpt.rstrip(" \\n.,;:") + "…"
+    return excerpt.rstrip(" \n.,;:") + "…"
 
 
 _PRODUCT_DETAIL_URL = r"https?://[^\s)\]}]+/market/products/\d+/?"
