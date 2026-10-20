@@ -56,7 +56,7 @@ class PublicKofadAiTests(TestCase):
         catalogue = _verified_product_completion(lengthy, listing, "Recommend available products")
         self.assertIn("Verified KOFAD catalogue listings", catalogue)
         self.assertLessEqual(len(catalogue), MAX_OUTPUT)
-        self.assertTrue(catalogue.split("\\n\\nVerified")[0].endswith((".", "…")))
+        self.assertTrue(catalogue.split("\n\nVerified")[0].endswith((".", "…")))
 
     @patch("marketplace.kofad_ai.requests.post")
     def test_openrouter_is_hard_coded_to_free_and_receives_only_public_data(self, post):
