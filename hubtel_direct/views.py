@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
@@ -478,7 +478,13 @@ def collect_status(request, order_id):
 @require_GET
 def collection_verification(request, order_id):
     """Customer payment page: one original reference, read-only checks only."""
-    customer, order = _customer(request, order_id)
+    try:
+        customer, order = _customer(request, order_id)
+    except PermissionDenied:
+        # A bookmarked payment URL should recover gracefully after the
+        # customer session expires, without disclosing any order details.
+        request.session["market_after_login"] = request.get_full_path()
+        return redirect("market_access")
     tx = DirectTransaction.objects.filter(
         order=order, customer=customer, kind="receive",
     ).order_by("-created_at").first()
