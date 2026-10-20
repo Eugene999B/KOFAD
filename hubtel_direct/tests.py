@@ -27,6 +27,24 @@ READY = dict(
 )
 
 
+class CustomerPaymentPageTests(SimpleTestCase):
+    @patch("hubtel_direct.views.market_services.customer_from_session", return_value=None)
+    def test_expired_session_redirects_payment_page_to_customer_signin(self, customer_lookup):
+        from django.test import RequestFactory
+        from django.urls import reverse
+        from .views import collection_verification
+
+        order_id = uuid.uuid4()
+        path = reverse("hubtel_direct_collection_verification", kwargs={"order_id": order_id})
+        request = RequestFactory().get(path)
+        request.session = {}
+        response = collection_verification(request, order_id)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("market_access"))
+        self.assertEqual(request.session["market_after_login"], path)
+        customer_lookup.assert_called_once()
+
+
 class ContractTests(SimpleTestCase):
     def test_all_money_functions_are_disabled_by_default(self):
         with override_settings(
