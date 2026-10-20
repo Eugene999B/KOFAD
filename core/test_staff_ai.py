@@ -9,7 +9,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import Permission, User
 from django.test import RequestFactory, TestCase
 
-from core.models import Access, Branch, Document, Party, Product, Stock
+from core.models import Access, Allocation, Branch, Document, Party, Product, Stock
 from core.staff_ai import staff_reply
 from core.staff_ai_views import assistant_chat
 
@@ -69,11 +69,16 @@ class StaffAssistantTests(TestCase):
             branch=self.other, kind="customer", name="Private outside customer", phone="0240000002",
         )
         today = timezone.localdate()
-        Document.objects.create(
+        invoice = Document.objects.create(
             reference="AI-DEBT-ONE", branch=self.hq, kind="sale", party=customer,
             total=Decimal("10.00"), paid=Decimal("4.00"),
             due_date=today - timedelta(days=2), created_by=self.manager,
         )
+        collection = Document.objects.create(
+            reference="AI-DEBT-PAYMENT", branch=self.hq, kind="collection", party=customer,
+            total=Decimal("2.00"), paid=Decimal("2.00"), created_by=self.manager,
+        )
+        Allocation.objects.create(invoice=invoice, payment_document=collection, amount=Decimal("2.00"))
         Document.objects.create(
             reference="AI-DEBT-HIDDEN", branch=self.other, kind="sale", party=outsider,
             total=Decimal("999.00"), paid=Decimal("0.00"),
@@ -88,7 +93,9 @@ class StaffAssistantTests(TestCase):
             analyst, "Which receivables and overdue invoices need attention today?",
         )
         self.assertEqual(source, "receivables")
-        self.assertIn("Outstanding now: GHS 6.00", response)
+        self.assertIn("Outstanding now: GHS 4.00", response)
+        self.assertIn("Overdue: GHS 4.00", response)
+        self.assertIn("Debt collections posted today: GHS 2.00", response)
         self.assertIn("AI-DEBT-ONE", response)
         self.assertNotIn("AI-DEBT-HIDDEN", response)
         self.assertNotIn("999.00", response)
