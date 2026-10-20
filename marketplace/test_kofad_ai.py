@@ -308,7 +308,9 @@ class PublicKofadAiTests(TestCase):
         self.assertContains(response, "Drag to move")
         self.assertContains(response, "data-kofad-ai-new")
         self.assertContains(response, "data-kofad-ai-feed")
-        self.assertContains(response, "data-kofad-ai-consent")
+        self.assertContains(response, "data-kofad-ai-consent checked")
+        self.assertContains(response, "Public questions may be processed by an external AI")
+        self.assertNotContains(response, "enable free AI below")
         self.assertNotContains(response, "fake-test-only-should-never-display")
 
     @patch("marketplace.kofad_ai.requests.post")
