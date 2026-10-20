@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 
 from core.models import Product
 from marketplace.kofad_ai import (
-    GEMINI_ENDPOINT, GEMINI_MODEL, _gemini_completion, answer, free_configured,
+    GEMINI_ENDPOINT, GEMINI_MODEL, OPENROUTER_ENDPOINT, _gemini_completion, answer, free_configured,
 )
 from marketplace.models import MarketListing
 
@@ -79,6 +79,29 @@ class GeminiPublicAiTests(TestCase):
         self.assertIn("/delivery/", text)
         post.assert_called_once()
         self.assertEqual(post.call_args.args[0], GEMINI_ENDPOINT)
+
+    @patch("marketplace.kofad_ai.requests.post")
+    def test_gemini_outage_uses_only_approved_free_openrouter_route(self, post):
+        post.side_effect = [
+            Mock(status_code=503),
+            Mock(status_code=200, json=lambda: {
+                "choices": [{"message": {"content": "Compare warranties and supplier references."}}]
+            }),
+        ]
+        with override_settings(
+            KOFAD_OPENROUTER_FREE_ENABLED=True,
+            OPENROUTER_API_KEY="isolated-test-only-free-router-key",
+        ):
+            result, source = answer("How should I compare wholesale electronics suppliers?")
+        self.assertEqual(source, "free-ai")
+        self.assertIn("Compare warranties and supplier references.", result)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args_list[0].args[0], GEMINI_ENDPOINT)
+        self.assertEqual(post.call_args_list[1].args[0], OPENROUTER_ENDPOINT)
+        payload = post.call_args_list[1].kwargs["json"]
+        self.assertEqual(payload["model"], "openrouter/free")
+        self.assertEqual(payload["provider"]["max_price"], {"prompt": 0, "completion": 0})
+        self.assertEqual(payload["provider"]["data_collection"], "deny")
 
     @patch("marketplace.kofad_ai.requests.post")
     def test_public_ai_remains_subject_to_web_explicit_consent(self, post):

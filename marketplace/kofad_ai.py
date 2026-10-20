@@ -384,6 +384,26 @@ def _offline(question, products, company, history=None):
         ]
         return ("I found these published KOFAD listings:\n\n" + "\n\n".join(rows)
                 + "\nConfirm current stock and price at checkout.")
+    if any(x in q for x in ("supplier reliability", "warranty exposure",
+                             "cash-flow", "cash flow", "sourcing strategy",
+                             "supplier risk", "buying strategy")):
+        return (
+            "For a wholesale sourcing decision, use this practical checklist "
+            "(general guidance, not a claim about KOFAD suppliers):\n\n"
+            "1. Verify each supplier: registration, recent customer references, "
+            "sample quality and written replacement terms.\n"
+            "2. Compare warranty risks: duration, exclusions, repair handling "
+            "and who pays return freight.\n"
+            "3. Calculate landed cost per sellable item: purchase price, "
+            "shipping, duties, local delivery and an allowance for defects.\n"
+            "4. Protect cash flow: budget for slow sales, compare deposit "
+            "requirements and keep a reserve before buying a full 200 units.\n"
+            "5. Start with a smaller test batch, monitor defects and demand, "
+            "then negotiate volume pricing before reordering.\n\n"
+            "For a KOFAD-specific quotation or warranty terms, ask the team at "
+            + company["wholesale"] + ". Which electronics categories and "
+            "target resale price are you considering?"
+        )
     if any(x in q for x in ("stock", "catalog", "price", "buy", "purchase",
                             "sell", "find product", "product")) and products:
         rows = [
@@ -539,9 +559,13 @@ def _gemini_completion(question, products, company, history=None):
 
 def _free_completion(question, products, company, history=None):
     if gemini_configured():
-        return _gemini_completion(question, products, company, history)
-
-    if not free_configured():
+        result = _gemini_completion(question, products, company, history)
+        if result:
+            return result
+        # A transient Gemini timeout must not strand a public shopper when a
+        # separately approved, zero-priced OpenRouter route is available.
+    if not (getattr(settings, "KOFAD_OPENROUTER_FREE_ENABLED", False)
+            and getattr(settings, "OPENROUTER_API_KEY", "").strip()):
         return None
     # All context here is explicitly PUBLIC. Do not pass customer, staff,
     # session, order data or conversation history to OpenRouter.
