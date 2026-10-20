@@ -45,3 +45,19 @@ class PublicSemanticGroundingTests(TestCase):
         reply, source = answer("Recommend something for baking", ai_allowed=True)
         self.assertEqual(source, "local")
         self.assertIsInstance(reply, str)
+
+
+    @patch("marketplace.kofad_ai._free_completion")
+    @patch("marketplace.qdrant_products.semantic_product_ids", return_value=[])
+    def test_generated_product_links_are_replaced_with_verified_catalogue(self, semantic, generate):
+        generate.return_value = (
+            "Baking Flour makes a thoughtful gift "
+            "(URL: https://market.kofadimpex.com/market/products/999/)."
+        )
+        reply, source = answer("Recommend baking flour as a gift", ai_allowed=True)
+        self.assertEqual(source, "free-ai")
+        self.assertNotIn("/products/999/", reply)
+        self.assertIn(f"/market/products/{self.published.pk}/", reply)
+        self.assertIn("Verified KOFAD catalogue listings", reply)
+        self.assertIn("GHS", reply)
+        self.assertNotIn("Internal Item", reply)
