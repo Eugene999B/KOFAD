@@ -10,6 +10,7 @@ import requests
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import SimpleTestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from marketplace.models import MarketPaymentAttempt, VerifiedMomoPhone
@@ -190,7 +191,7 @@ class DirectWorkflowTests(MarketFixtures):
         url = "/market/orders/" + str(order.pk) + "/payment/verification/"
         unauthenticated = self.client.get(url)
         self.assertEqual(unauthenticated.status_code, 302)
-        self.assertEqual(unauthenticated.url, "/market/access/")
+        self.assertEqual(unauthenticated.url, reverse("market_access"))
         self.assertEqual(self.client.session.get("market_after_login"), url)
         session = self.client.session
         session["market_customer_id"] = str(self.customer.pk)
