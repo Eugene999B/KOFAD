@@ -37,6 +37,7 @@ class Command(BaseCommand):
         last_delivery_sync = 0.0
         last_recovery = None
         last_security_cleanup = 0.0
+        last_brevo_webhook_setup = -21600.0
 
         while True:
             close_old_connections()
@@ -114,6 +115,19 @@ class Command(BaseCommand):
                 except Exception:
                     self.stderr.write("Verified-account email delivery failed safely; will retry.")
                 last_email_dispatch = now
+
+            # Register only an explicitly configured, authenticated Brevo
+            # delivery callback. Never interrupt messages if Brevo is down.
+            if now - last_brevo_webhook_setup >= 21600:
+                if getattr(settings, "KOFAD_BREVO_WEBHOOK_AUTO_REGISTER", False):
+                    try:
+                        from core.brevo_webhook_setup import ensure_delivery_webhook
+                        outcome = ensure_delivery_webhook()
+                        if outcome == "requires_review":
+                            self.stderr.write("Brevo delivery webhook needs configuration review.")
+                    except Exception:
+                        self.stderr.write("Brevo webhook check unavailable; will retry later.")
+                last_brevo_webhook_setup = now
 
             if now - last_security_cleanup >= 3600:
                 try:
