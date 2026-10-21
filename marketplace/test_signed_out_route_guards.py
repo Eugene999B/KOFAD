@@ -15,10 +15,9 @@ class SignedOutRouteGuardTests(TestCase):
     def test_market_payment_verification_requires_sign_in_without_provider_calls(self):
         path = reverse("market_payment_verification", kwargs={"pk": uuid.uuid4()})
         for suffix in ("", "?format=json"):
-            with self.subTest(suffix=suffix), (
-                patch("requests.get", side_effect=AssertionError("Provider GET must not run")),
-                patch("requests.post", side_effect=AssertionError("Provider POST must not run")),
-            ):
+            with (self.subTest(suffix=suffix),
+                  patch("requests.get", side_effect=AssertionError("Provider GET must not run")),
+                  patch("requests.post", side_effect=AssertionError("Provider POST must not run"))):
                 requested = path + suffix
                 response = self.client.get(requested)
                 self.assertEqual(response.status_code, 302)
