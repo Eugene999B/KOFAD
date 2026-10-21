@@ -10,6 +10,7 @@ import requests
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import SimpleTestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from marketplace.models import MarketPaymentAttempt, VerifiedMomoPhone
@@ -25,6 +26,24 @@ READY = dict(
     HUBTEL_DIRECT_MAX_PAYOUT_GHS="500.00",
     MARKET_SITE_ORIGIN="https://market.kofadimpex.com",
 )
+
+
+class CustomerPaymentPageTests(SimpleTestCase):
+    @patch("hubtel_direct.views.market_services.customer_from_session", return_value=None)
+    def test_expired_session_redirects_payment_page_to_customer_signin(self, customer_lookup):
+        from django.test import RequestFactory
+        from django.urls import reverse
+        from .views import collection_verification
+
+        order_id = uuid.uuid4()
+        path = reverse("hubtel_direct_collection_verification", kwargs={"order_id": order_id})
+        request = RequestFactory().get(path)
+        request.session = {}
+        response = collection_verification(request, order_id)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("market_access"))
+        self.assertEqual(request.session["market_after_login"], path)
+        customer_lookup.assert_called_once()
 
 
 class ContractTests(SimpleTestCase):
@@ -170,7 +189,10 @@ class DirectWorkflowTests(MarketFixtures):
         order = self.order()
         tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
         url = "/market/orders/" + str(order.pk) + "/payment/verification/"
-        self.assertEqual(self.client.get(url).status_code, 403)
+        unauthenticated = self.client.get(url)
+        self.assertEqual(unauthenticated.status_code, 302)
+        self.assertEqual(unauthenticated.url, reverse("market_access"))
+        self.assertEqual(self.client.session.get("market_after_login"), url)
         session = self.client.session
         session["market_customer_id"] = str(self.customer.pk)
         session.save()
