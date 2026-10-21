@@ -188,7 +188,10 @@ class DirectWorkflowTests(MarketFixtures):
         order = self.order()
         tx = service.create_collection(self.customer, order.pk, "mtn-gh", self.customer.phone)
         url = "/market/orders/" + str(order.pk) + "/payment/verification/"
-        self.assertEqual(self.client.get(url).status_code, 403)
+        unauthenticated = self.client.get(url)
+        self.assertEqual(unauthenticated.status_code, 302)
+        self.assertEqual(unauthenticated.url, "/market/access/")
+        self.assertEqual(self.client.session.get("market_after_login"), url)
         session = self.client.session
         session["market_customer_id"] = str(self.customer.pk)
         session.save()
