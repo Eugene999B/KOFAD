@@ -52,3 +52,32 @@ class SignedOutRouteGuardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Choose Google for fast access")
         self.assertContains(response, "Continue with Google")
+
+    def test_market_sign_in_survives_malformed_persisted_cart(self):
+        # Unlike checkout parsing, the shared page header previously called
+        # cart.values() and int() without validating session contents.
+        damaged = (
+            ["not-a-cart"],
+            "not-a-cart",
+            {"²": "1"},
+            {"1": "²"},
+            {"1": "9" * 5000},
+            {"9223372036854775808": "1"},
+            {"1": None},
+        )
+        for cart in damaged:
+            with self.subTest(cart=repr(cart)[:60]):
+                session = self.client.session
+                session["market_cart"] = cart
+                session.save()
+                response = self.client.get(reverse("market_access"))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context["market_cart_count"], 0)
+
+    def test_market_cart_badge_bounds_valid_quantities(self):
+        session = self.client.session
+        session["market_cart"] = {"1": "2000", "2": "2", "²": "5"}
+        session.save()
+        response = self.client.get(reverse("market_access"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["market_cart_count"], 1001)
