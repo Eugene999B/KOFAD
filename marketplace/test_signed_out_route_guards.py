@@ -38,3 +38,17 @@ class SignedOutRouteGuardTests(TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 302)
                 self.assertEqual(urlsplit(response["Location"]).path, reverse("login"))
+
+    def test_market_entry_only_promises_google_when_available(self):
+        with patch("core.google_oauth.enabled", return_value=False):
+            response = self.client.get(reverse("market_access"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Use your mobile number to sign in or create your account.")
+        self.assertNotContains(response, "Choose Google for fast access")
+        self.assertNotContains(response, "Continue with Google")
+
+        with patch("core.google_oauth.enabled", return_value=True):
+            response = self.client.get(reverse("market_access"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose Google for fast access")
+        self.assertContains(response, "Continue with Google")
