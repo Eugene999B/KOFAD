@@ -794,6 +794,13 @@ with sync_playwright() as p:
     guest_market.screenshot(path=str(out / "market-dark-search-contrast.png"), full_page=True)
     guest_market.close()
 
+    # Public-site Sign in means authentication, not another visit to the shop.
+    guest_public = browser.new_page(viewport={"width":390,"height":844})
+    guest_public.goto("http://127.0.0.1:8000/")
+    assert guest_public.locator(".public-account-link").get_attribute("href") == "/market/access/"
+    assert guest_public.locator(".public-mobile-account").get_attribute("href") == "/market/access/"
+    guest_public.close()
+
     market_page = browser.new_page(viewport={"width":390,"height":844})
     market_page.context.add_cookies([{
         "name": settings.SESSION_COOKIE_NAME,
