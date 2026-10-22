@@ -821,6 +821,11 @@ with sync_playwright() as p:
 
     market_page.goto("http://127.0.0.1:8000/")
     market_page.locator("[data-cookie-accept]").click()
+    # Native download wording must reflect release readiness; the public
+    # page currently offers PWA installation while native builds are pending.
+    if market_page.locator("[data-native-suggest]").count() == 0:
+        assert "Explore app options" in market_page.locator(".kfd-app-cta").inner_text()
+        assert "App options" in market_page.locator(".public-desktop-nav a[href='/apps/']").inner_text()
     assert market_page.locator(".commerce-global-search").count() == 0
     assert market_page.locator(".commerce-category-section").count() == 0
     assert market_page.get_by_text("SHOP BY DEPARTMENT", exact=False).count() == 0
@@ -930,6 +935,12 @@ with sync_playwright() as p:
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/")
 
+    # Follow the actual public app CTA, then return; this must never land on
+    # a 404 or imply that an unreleased Android binary can be downloaded.
+    market_page.locator(".kfd-app-cta").click()
+    assert market_page.url.endswith("/apps/")
+    assert market_page.locator(".kf-download").is_visible()
+    market_page.go_back()
     # Enter Market from the public site, then move within Market. Back inside the
     # same authenticated zone must navigate normally without a logout prompt.
     market_page.locator(".public-mobile-market").click()
