@@ -187,6 +187,8 @@ with sync_playwright() as p:
     # Existing workflow evidence follows a visitor who enabled preferences.
     # Fresh essential-only and withdrawal flows are exercised by cookie_smoke.py.
     page.locator("[data-cookie-accept]").click()
+    # Do not capture the transient full-screen brand animation instead of the login UI.
+    page.locator(".login-brand-intro").wait_for(state="hidden", timeout=5000)
     page.screenshot(path=str(out / "login-desktop.png"), full_page=True)
     assert float(page.locator(".premium-login-form label").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
     assert float(page.locator(".premium-login-form input").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 14

@@ -46,6 +46,30 @@ from . import services, hubtel, paystack_momo, momo_security
 from .hubtel_evidence import decrypt_exchange, save_exchange
 
 
+
+def _safe_cart_badge_count(cart):
+    """Render a cart badge safely even when an old session is malformed.
+
+    Match the inexpensive numeric bounds checked by services.cart_rows, but do
+    not issue product/database queries from the shared page context.
+    """
+    if not isinstance(cart, dict):
+        return 0
+    count = 0
+    for key, raw in cart.items():
+        listing_id, quantity = str(key), str(raw)
+        if not (
+            listing_id.isascii() and listing_id.isdecimal()
+            and 1 <= len(listing_id) <= 20
+            and quantity.isascii() and quantity.isdecimal()
+            and 1 <= len(quantity) <= 32
+        ):
+            continue
+        if 0 < int(listing_id) <= 9223372036854775807:
+            count += min(max(int(quantity), 1), 999)
+    return count
+
+
 def _market_context(request, **extra):
     # Keep customer Google authentication visibility behind the readiness check.
     from core.google_oauth import enabled as google_oauth_enabled
@@ -108,7 +132,7 @@ def _market_context(request, **extra):
         "native_customer_app_ios": released_platforms.get("ios", False),
         "native_customer_app_windows": released_platforms.get("windows", False),
         "market_customer": customer,
-        "market_cart_count": sum(int(value) for value in cart.values() if str(value).isdigit()),
+        "market_cart_count": _safe_cart_badge_count(cart),
         "market_unread_count": unread,
         "market_wishlist_count": customer.wishlist_items.count() if customer else 0,
         "market_auth_page": market_auth_page,
