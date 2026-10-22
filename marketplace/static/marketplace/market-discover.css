@@ -402,3 +402,13 @@ html[data-theme="dark"] body.market-body:has(.shop-catalog) .shop-catalog-head>d
   body.market-body:has(.shop-catalog) .shop-product-grid .commerce-product-card,
   body.market-body:has(.shop-catalog) .shop-product-grid .commerce-product-image img{transition:none!important}
 }
+
+
+/* A small published catalogue should not leave a lone product squeezed into
+   one quarter of a desktop row (or half of a phone row). Keep normal multi-item
+   grids unchanged and limit the lone product to a readable showcase width. */
+body.market-body:has(.shop-catalog) .shop-product-grid:has(> .commerce-product-card:only-child){
+  grid-template-columns:minmax(0,1fr)!important;
+  width:min(100%,460px)!important;
+  margin-inline:auto!important;
+}
