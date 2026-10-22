@@ -374,17 +374,56 @@ class BusinessTests(Fixtures, TestCase):
         response = self.client.post("/login/",{"username":"owner","password":"test-password-long-enough"})
         self.assertContains(response,"Too many attempts")
 
-    def test_account_targeted_lockout_does_not_block_correct_password_from_fresh_browser(self):
-        attacker = Client()
+    def test_account_lockout_survives_cookie_reset_and_correct_password(self):
+        from .models import LoginAttempt
+        attacker = Client(REMOTE_ADDR="198.51.100.20")
         for _ in range(5):
             attacker.post("/login/", {"username": "owner", "password": "wrong"})
-        fresh = Client()
+        # Attackers cannot bypass the account budget with new cookies or a new
+        # remote address. Even a correct password must be rejected until expiry.
+        fresh = Client(REMOTE_ADDR="203.0.113.20")
+        with patch("core.views.authenticate") as authenticate:
+            response = fresh.post("/login/", {
+                "username": "owner", "password": "test-password-long-enough",
+            })
+        self.assertContains(response, "Too many attempts")
+        authenticate.assert_not_called()
+
+        # After the lock expires, legitimate account recovery works without
+        # deleting the original attempt row.
+        from hashlib import sha256
+        key = sha256(b"user:owner").hexdigest()
+        attempt = LoginAttempt.objects.get(key=key)
+        attempt.blocked_until = timezone.now() - timedelta(seconds=1)
+        attempt.save(update_fields=["blocked_until"])
         response = fresh.post("/login/", {
-            "username": "owner",
-            "password": "test-password-long-enough",
+            "username": "owner", "password": "test-password-long-enough",
         })
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "/workspace/")
+
+    @override_settings(KOFAD_LOGIN_SOURCE_MAX_FAILURES=20)
+    def test_source_throttle_survives_cookie_changes_and_untrusted_headers(self):
+        # A sequence of arbitrary identifiers would bypass per-account keys.
+        # A single peer must instead share its failure budget across sessions.
+        for i in range(20):
+            attacker = Client(REMOTE_ADDR="198.51.100.35")
+            attacker.post("/login/", {
+                "username": f"unknown_{i}", "password": "incorrect",
+            }, HTTP_CF_CONNECTING_IP=f"203.0.113.{i+1}")
+        fresh = Client(REMOTE_ADDR="198.51.100.35")
+        with patch("core.views.authenticate") as authenticate:
+            response = fresh.post("/login/", {
+                "username": "owner", "password": "test-password-long-enough",
+            }, HTTP_CF_CONNECTING_IP="203.0.113.77")
+        self.assertContains(response, "Too many attempts")
+        authenticate.assert_not_called()
+        # Source limits cannot be bypassed by spoofing Cloudflare headers;
+        # independent honest peers can still authenticate.
+        other = Client(REMOTE_ADDR="203.0.113.35")
+        self.assertEqual(other.post("/login/", {
+            "username": "owner", "password": "test-password-long-enough",
+        }).status_code, 302)
 
     @override_settings(PRIVILEGED_MFA_ENFORCED=True)
     @patch("core.views.matching_step", return_value=123456)
