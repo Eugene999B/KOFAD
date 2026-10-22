@@ -125,15 +125,7 @@ SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 # Staff digest email is OFF until verified SMTP/DNS, recipients and consent are configured.
 EMAIL_AUTOMATIONS_ENABLED = os.environ.get("EMAIL_AUTOMATIONS_ENABLED", "0") == "1"
 EMAIL_DELIVERY_ENABLED = os.environ.get("EMAIL_DELIVERY_ENABLED", "0") == "1"
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
-EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "0") == "1"
-EMAIL_TIMEOUT = 15
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "KOFAD Reports <no-reply@kofadimpex.com>")
+# SMTP settings are declared once below using KOFAD_SMTP_* variables.
 
 # Staff SMS is INDEPENDENT of existing management-contact SMS.
 SMS_STAFF_NOTICES_ENABLED = os.environ.get("SMS_STAFF_NOTICES_ENABLED", "0") == "1"
@@ -244,8 +236,13 @@ KOFAD_EMAIL_NOTIFICATIONS_ENABLED = os.environ.get("KOFAD_EMAIL_NOTIFICATIONS_EN
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("KOFAD_SMTP_HOST", "")
 EMAIL_PORT = int(os.environ.get("KOFAD_SMTP_PORT", "587"))
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
+KOFAD_SMTP_SECURITY = os.environ.get(
+    "KOFAD_SMTP_SECURITY", "ssl" if EMAIL_PORT == 465 else "starttls"
+).strip().lower()
+if KOFAD_SMTP_SECURITY not in {"ssl", "starttls"}:
+    raise RuntimeError("KOFAD_SMTP_SECURITY must be 'ssl' or 'starttls'.")
+EMAIL_USE_SSL = KOFAD_SMTP_SECURITY == "ssl"
+EMAIL_USE_TLS = KOFAD_SMTP_SECURITY == "starttls"
 EMAIL_HOST_USER = os.environ.get("KOFAD_SMTP_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("KOFAD_SMTP_PASSWORD", "")
 EMAIL_TIMEOUT = 12
