@@ -134,7 +134,7 @@ padding:14px 22px;font:inherit;font-weight:800}</style>
 <h1>Internet connection needed</h1>
 <p>This installed app is offline. No personal information, orders, payments
 or business records were stored for offline use. Reconnect before continuing.</p>
-<button type="button" onclick="location.reload()">Try again</button>
+<form method="get"><button type="submit">Try again</button></form>
 </section></html>""")
     r = HttpResponse(html, content_type="text/html; charset=utf-8")
     # Explicitly public content with no personal or staff detail.
