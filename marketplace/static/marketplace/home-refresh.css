@@ -354,3 +354,12 @@ html[data-theme="dark"] body.is-kofad-home .kfd-compact-footer .company-links{
 @media(prefers-reduced-motion:reduce){
   body.is-kofad-home .commerce-contact-simple .contact-method-card{transition:none}
 }
+
+
+/* When only one item is published, make Featured picks a centered showcase
+   instead of a half-width phone tile with an unused empty column. */
+body.is-kofad-home .home-featured-grid:has(> .market-product-card:only-child){
+  grid-template-columns:minmax(0,1fr)!important;
+  width:min(100%,430px)!important;
+  margin-inline:auto!important;
+}
