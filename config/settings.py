@@ -103,6 +103,13 @@ KOFAD_GDRIVE_BACKUP_ENABLED = os.environ.get("KOFAD_GDRIVE_BACKUP_ENABLED", "0")
 KOFAD_GDRIVE_BACKUP_HMAC_KEY = os.environ.get("KOFAD_GDRIVE_BACKUP_HMAC_KEY", "")
 KOFAD_GDRIVE_BACKUP_PASSPHRASE = os.environ.get("KOFAD_GDRIVE_BACKUP_PASSPHRASE", "")
 
+# Password guessing guard: account lockout (5 failures) is independent of
+# browser cookies. A physical network peer may be a shared CDN proxy; set a
+# higher per-peer budget to limit cross-account attacks without immediately
+# locking every staff member behind that proxy.
+KOFAD_LOGIN_SOURCE_MAX_FAILURES = max(
+    20, min(200, int(os.environ.get("KOFAD_LOGIN_SOURCE_MAX_FAILURES", "50")))
+)
 PRIVILEGED_MFA_ENFORCED = os.environ.get("PRIVILEGED_MFA_ENFORCED", "0") == "1"
 MFA_SESSION_SECONDS = int(os.environ.get("MFA_SESSION_SECONDS", str(STAFF_SESSION_SECONDS)))
 SESSION_COOKIE_AGE = max(STAFF_SESSION_SECONDS, MARKET_SESSION_SECONDS)
