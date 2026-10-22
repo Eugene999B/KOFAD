@@ -61,7 +61,10 @@ with sync_playwright() as tool:
     iphone.close()
 
     customer.goto(base + "/")
-    assert customer.get_by_role("link", name="Download the app").is_visible()
+    if customer.locator("[data-native-suggest]").count():
+        assert customer.get_by_role("link", name="Download the app").is_visible()
+    else:
+        assert customer.get_by_role("link", name="Explore app options").is_visible()
     customer.goto(base + "/market/")
     assert customer.locator(".native-market-promo").count() == 0
     assert customer.get_by_role("link", name="Install Market web app").count() == 0
