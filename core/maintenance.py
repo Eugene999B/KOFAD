@@ -108,12 +108,80 @@ def _signature_payload(bundle):
     return {key: value for key, value in bundle.items() if key != "signature"}
 
 
+def _active_backup_signing_key():
+    """Use a distinct archive key when configured, never silently downgrade."""
+    key = getattr(settings, "KOFAD_BACKUP_SIGNING_KEY", "")
+    if key and len(key) < 32:
+        raise BackupError("The configured backup signing key must have at least 32 characters.")
+    return key or settings.SECRET_KEY
+
+
+def _backup_signing_key_id():
+    key_id = str(getattr(settings, "KOFAD_BACKUP_SIGNING_KEY_ID", "backup-v1"))
+    if not key_id or len(key_id) > 48 or any(
+        ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"
+        for ch in key_id
+    ) or key_id == "legacy":
+        raise BackupError("The backup signing key ID must be a short, non-legacy identifier.")
+    return key_id
+
+
+def _retired_backup_keys():
+    """Explicit, private verification-only key ring; no implicit remote lookup."""
+    raw = getattr(settings, "KOFAD_BACKUP_PREVIOUS_SIGNING_KEYS_JSON", "")
+    if not raw:
+        return {}
+    try:
+        keys = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise BackupError("Backup previous signing key configuration is invalid.") from exc
+    if (not isinstance(keys, dict) or len(keys) > 16
+            or any(not isinstance(key_id, str)
+                   or not isinstance(key, str) or len(key) < 32
+                   or len(key_id) > 48 or not key_id
+                   for key_id, key in keys.items())):
+        raise BackupError("Backup previous signing key configuration is invalid.")
+    return keys
+
+
 def _sign(bundle):
     return hmac.new(
-        settings.SECRET_KEY.encode("utf-8"),
+        _active_backup_signing_key().encode("utf-8"),
         _canonical(_signature_payload(bundle)),
         hashlib.sha256,
     ).hexdigest()
+
+
+def _signature_valid(bundle, supplied):
+    key_id = bundle.get("signature_key_id")
+    retired = _retired_backup_keys()
+    if key_id is None:
+        # Archives created before the dedicated key rollout were signed by
+        # DJANGO_SECRET_KEY. Its old value must be escrowed as "legacy" before
+        # rotating the Django key, or a historic archive cannot be verified.
+        candidates = [
+            settings.SECRET_KEY,
+            *getattr(settings, "SECRET_KEY_FALLBACKS", []),
+        ]
+        if retired.get("legacy"):
+            candidates.append(retired["legacy"])
+    elif not isinstance(key_id, str):
+        return False
+    elif key_id == _backup_signing_key_id():
+        active = getattr(settings, "KOFAD_BACKUP_SIGNING_KEY", "")
+        candidates = [active] if active else []
+    else:
+        previous = retired.get(key_id)
+        candidates = [previous] if previous and key_id != "legacy" else []
+    payload = _canonical(_signature_payload(bundle))
+    # Do not exit early based on which retained key validates.
+    matches = [
+        hmac.compare_digest(
+            supplied, hmac.new(key.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+        )
+        for key in candidates if key
+    ]
+    return any(matches)
 
 
 def _serialize_fixture():
@@ -150,6 +218,9 @@ def create_backup(actor=None):
         "fixture_sha256": hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
         "fixture": fixture,
     }
+    if getattr(settings, "KOFAD_BACKUP_SIGNING_KEY", ""):
+        _active_backup_signing_key()  # Fail closed before writing the archive.
+        bundle["signature_key_id"] = _backup_signing_key_id()
     bundle["signature"] = _sign(bundle)
     return bundle
 
@@ -280,8 +351,7 @@ def validate_backup(bundle):
     ):
         raise BackupError("Unsupported backup format or version.")
     supplied = str(bundle.get("signature", ""))
-    expected = _sign(bundle)
-    if not supplied or not hmac.compare_digest(supplied, expected):
+    if not supplied or not _signature_valid(bundle, supplied):
         raise BackupError("Backup signature is invalid. The file may be altered or from another KOFAD installation.")
 
     fixture = bundle.get("fixture")
