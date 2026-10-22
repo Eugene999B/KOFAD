@@ -206,7 +206,7 @@
             {% endif %}
           {% endif %}
           {% if perms.core.manage_company %}
-          <form method="post" class="comms-delete-form" onsubmit="return confirm('Remove this message from Communication history? Delivery and audit evidence will still be preserved.');">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button danger" name="action" value="delete">Delete</button></form>
+          <form method="post" class="comms-delete-form" data-confirm-submit="Remove this message from Communication history? Delivery and audit evidence will still be preserved.">{% csrf_token %}<input type="hidden" name="id" value="{{ row.pk }}"><button class="text-button danger" name="action" value="delete">Delete</button></form>
           {% endif %}
         </td>
       </tr>
