@@ -113,7 +113,7 @@ class AccessMiddleware:
             # authentication domains in KOFAD's private sign-in form.
             response["Content-Security-Policy"] = (
                 "default-src 'self'; script-src 'self' https://telegram.org; "
-                "style-src 'self'; img-src 'self' data:; font-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
                 "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
             )
         elif settings.KOFAD_TURNSTILE_ENABLED and request.path in {
@@ -123,14 +123,14 @@ class AccessMiddleware:
             response["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 "script-src 'self' https://unpkg.com https://challenges.cloudflare.com; "
-                "style-src 'self' https://unpkg.com; "
+                "style-src 'self' 'unsafe-inline' https://unpkg.com; "
                 "img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; "
                 "font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; "
                 "frame-src https://challenges.cloudflare.com; "
                 "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
             )
         else:
-            response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+            response["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://images.unsplash.com https://tile.openstreetmap.org; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         geolocation = "(self)" if request.path.startswith(geolocation_paths) else "()"
         response["Permissions-Policy"] = f"camera=(), microphone=(), geolocation={geolocation}"
         if request.user.is_authenticated or request.session.get("market_customer_id"):
