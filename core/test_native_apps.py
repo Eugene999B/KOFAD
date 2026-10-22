@@ -30,7 +30,7 @@ class NativeAppDownloadsTests(Fixtures, TestCase):
 
     def test_home_download_link_but_no_market_install_promotions(self):
         home = self.client.get("/")
-        self.assertContains(home, "Download the app")
+        self.assertContains(home, "Explore app options")
         self.assertContains(home, 'href="/apps/"')
         market = self.client.get("/market/")
         self.assertNotContains(market, "native-market-promo")
