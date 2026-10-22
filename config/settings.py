@@ -103,6 +103,17 @@ KOFAD_GDRIVE_BACKUP_ENABLED = os.environ.get("KOFAD_GDRIVE_BACKUP_ENABLED", "0")
 KOFAD_GDRIVE_BACKUP_HMAC_KEY = os.environ.get("KOFAD_GDRIVE_BACKUP_HMAC_KEY", "")
 KOFAD_GDRIVE_BACKUP_PASSPHRASE = os.environ.get("KOFAD_GDRIVE_BACKUP_PASSPHRASE", "")
 
+# Versioned signature keys for full KOFAD backups. These are distinct from the
+# archive's AES-GCM passphrase and Django session/signing SECRET_KEY.
+# Blank means legacy signature mode for backwards-compatible rollout.
+KOFAD_BACKUP_SIGNING_KEY = os.environ.get("KOFAD_BACKUP_SIGNING_KEY", "")
+KOFAD_BACKUP_SIGNING_KEY_ID = os.environ.get("KOFAD_BACKUP_SIGNING_KEY_ID", "backup-v1")
+# Private JSON map of retired key IDs to signing keys. A reserved "legacy"
+# entry can verify pre-migration archives after DJANGO_SECRET_KEY rotation.
+KOFAD_BACKUP_PREVIOUS_SIGNING_KEYS_JSON = os.environ.get(
+    "KOFAD_BACKUP_PREVIOUS_SIGNING_KEYS_JSON", ""
+)
+
 PRIVILEGED_MFA_ENFORCED = os.environ.get("PRIVILEGED_MFA_ENFORCED", "0") == "1"
 MFA_SESSION_SECONDS = int(os.environ.get("MFA_SESSION_SECONDS", str(STAFF_SESSION_SECONDS)))
 SESSION_COOKIE_AGE = max(STAFF_SESSION_SECONDS, MARKET_SESSION_SECONDS)
