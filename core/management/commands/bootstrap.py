@@ -5,17 +5,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from core.models import Access, Branch, Company, Party, Product
 from core.services import stock_move, audit
+from core.role_catalog import FRESH_START_ROLES
 
-ROLE_PERMISSIONS = {
-    "Owner": ["operate_sales", "operate_inventory", "operate_finance", "approve_operations", "view_reports", "manage_company", "send_messages",
-              "add_product", "change_product", "add_party", "change_party"],
-    "Manager": ["send_messages", "operate_sales", "operate_inventory", "operate_finance", "approve_operations", "view_reports",
-                "add_product", "change_product", "add_party", "change_party"],
-    "Cashier": ["operate_sales", "add_party"],
-    "Storekeeper": ["operate_inventory"],
-    "Accountant": ["operate_finance", "view_reports", "change_party", "add_party"],
-    "Auditor": ["view_reports"],
-}
+# One canonical policy defines only newly created default role templates.
+# Never overwrite existing custom grants or restored role memberships on boot.
+ROLE_PERMISSIONS = FRESH_START_ROLES
 
 
 class Command(BaseCommand):
