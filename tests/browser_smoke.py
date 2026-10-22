@@ -938,9 +938,10 @@ with sync_playwright() as p:
     # Follow the actual public app CTA, then return; this must never land on
     # a 404 or imply that an unreleased Android binary can be downloaded.
     market_page.locator(".kfd-app-cta").click()
-    assert market_page.url.endswith("/apps/")
-    assert market_page.locator(".kf-download").is_visible()
-    market_page.go_back()
+    market_page.wait_for_url("**/apps/", wait_until="domcontentloaded")
+    market_page.locator(".kf-download").wait_for(state="visible", timeout=10000)
+    market_page.go_back(wait_until="domcontentloaded")
+    market_page.locator(".kfd-hero").wait_for(state="visible", timeout=10000)
     # Enter Market from the public site, then move within Market. Back inside the
     # same authenticated zone must navigate normally without a logout prompt.
     market_page.locator(".public-mobile-market").click()
