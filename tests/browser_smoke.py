@@ -759,6 +759,17 @@ with sync_playwright() as p:
                 return search.top >= header.bottom - 2 && search.right <= innerWidth + 1;
             }"""), f"Mobile search not on own row at {width}"
         if width in (320,390):
+            # One published listing must use the phone width; fixed two-column
+            # grids previously left it as a narrow tile with empty space.
+            if guest_market.locator(".shop-product-grid > .commerce-product-card").count() == 1:
+                assert guest_market.locator(".shop-product-grid").evaluate("""grid => {
+                    const card = grid.querySelector(":scope > .commerce-product-card");
+                    const outer = grid.getBoundingClientRect();
+                    const inner = card.getBoundingClientRect();
+                    return inner.width >= outer.width * .95
+                        && inner.left >= outer.left - 1
+                        && inner.right <= outer.right + 1;
+                }"""), f"Lone Market product fails to fill grid at {width}px"
             guest_market.screenshot(path=str(out / f"market-guest-redesign-{width}.png"), full_page=True)
     # A real rendered dark marketplace must keep muted captions readable.
     # Contrast checks cover the filtered strip as well as normal product cards.
@@ -906,6 +917,15 @@ with sync_playwright() as p:
                 && action.right <= hero.right + 1;
         }"""), f"Homepage title or shop button clipped at {width}px"
         if width in (320, 390, 768):
+            if width <= 390 and market_page.locator(".home-featured-grid > .market-product-card").count() == 1:
+                assert market_page.locator(".home-featured-grid").evaluate("""grid => {
+                    const card = grid.querySelector(":scope > .market-product-card");
+                    const outer = grid.getBoundingClientRect();
+                    const inner = card.getBoundingClientRect();
+                    return inner.width >= outer.width * .95
+                        && inner.left >= outer.left - 1
+                        && inner.right <= outer.right + 1;
+                }"""), f"Single homepage featured card does not use mobile width at {width}px"
             market_page.screenshot(path=str(out / f"homepage-layout-review-{width}.png"), full_page=True)
     market_page.set_viewport_size({"width":390,"height":844})
     market_page.goto("http://127.0.0.1:8000/")
