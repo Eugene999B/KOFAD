@@ -12,9 +12,9 @@ class AtelierPublicTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "kofad-atelier")
         self.assertContains(response, "atelier-home-story")
-        self.assertContains(response, "Find your products")
-        self.assertContains(response, "Discuss bulk supply")
-        self.assertContains(response, "Plan collection or delivery")
+        self.assertContains(response, "Have a look")
+        self.assertContains(response, "Ask about bulk orders")
+        self.assertContains(response, "Choose pickup or delivery")
         self.assertContains(response, 'href="/market/"')
 
     def test_market_uses_live_catalogue_and_keeps_checkout_paths(self):
