@@ -56,12 +56,17 @@ def assistant_chat(request, branch):
     if not allowed:
         return JsonResponse({"error": "You've reached the daily assistant limit."}, status=429)
     context = data.get("context")
-    reply, source = staff_reply(
-        request.user, data["message"],
-        context=context if isinstance(context, str) else "",
-    )
+    safe_context = context if isinstance(context, str) else ""
+    from .staff_ai_planner import plan_and_answer
+
+    planned = plan_and_answer(request.user, data["message"], context=safe_context)
+    if planned is not None:
+        reply, source, external_ai_used = planned
+    else:
+        reply, source = staff_reply(request.user, data["message"], context=safe_context)
+        external_ai_used = False
     response = JsonResponse({
-        "reply": reply, "source": source, "external_ai_used": False,
+        "reply": reply, "source": source, "external_ai_used": external_ai_used,
         "actions": staff_actions(request.user, source),
         "read_only": True,
     })
