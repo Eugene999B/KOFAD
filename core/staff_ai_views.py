@@ -55,12 +55,24 @@ def assistant_chat(request, branch):
         allowed = False
     if not allowed:
         return JsonResponse({"error": "You've reached the daily assistant limit."}, status=429)
-    context = data.get("context")
-    safe_context = context if isinstance(context, str) else ""
-    from .staff_ai_conversation import conversational_reply
+    from .staff_ai_conversation import TOPIC_LABELS, conversational_reply
     from .staff_ai_planner import plan_and_answer
 
-    dialogue = conversational_reply(request.user, data["message"], context=safe_context)
+    context = data.get("context")
+    safe_context = context if isinstance(context, str) and context in TOPIC_LABELS else ""
+    recent = data.get("recent_topics")
+    if not safe_context and isinstance(recent, list):
+        for candidate in reversed(recent[-5:]):
+            if isinstance(candidate, str) and candidate in TOPIC_LABELS:
+                safe_context = candidate
+                break
+    # Turn counts help vary greetings, never grant access to data or tools.
+    turn_count = data.get("turn_count")
+    turn_count = min(turn_count, 40) if type(turn_count) is int and turn_count >= 0 else 0
+
+    dialogue = conversational_reply(
+        request.user, data["message"], context=safe_context, turn_count=turn_count
+    )
     if dialogue is not None:
         reply, source = dialogue
         external_ai_used = False
