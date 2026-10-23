@@ -135,4 +135,24 @@ with sync_playwright() as playwright:
     login_button_accessible(staff)
     staff.screenshot(path=str(ARTIFACTS / "staff-login-unclipped-desktop.png"), full_page=True)
     desktop.close()
+
+    # Real isolated-fixture login after rejecting optional cookies proves
+    # optional analytics/preferences are not prerequisites for a staff session.
+    # The CI runner seeds this account; it is not a production credential.
+    import os
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    from django.conf import settings
+
+    private = browser.new_context(viewport={"width": 1280, "height": 900})
+    signed_in = private.new_page()
+    signed_in.goto(BASE + "/" + settings.STAFF_LOGIN_SLUG + "/")
+    expect(signed_in.locator("[data-cookie-panel]")).to_be_visible()
+    signed_in.locator("[data-cookie-reject]").click()
+    signed_in.get_by_label("Username, mobile number or verified email", exact=True).fill("demo")
+    signed_in.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
+    signed_in.get_by_role("button", name="Sign in to workspace").click()
+    signed_in.wait_for_url(BASE + "/workspace/")
+    expect(signed_in.get_by_role("heading", name="Command centre", exact=True)).to_be_visible()
+    expect(signed_in.locator("[data-cookie-panel]")).to_be_hidden()
+    private.close()
     browser.close()
