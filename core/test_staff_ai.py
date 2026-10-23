@@ -32,6 +32,110 @@ class StaffAssistantTests(TestCase):
         self.inventory_access = Access.objects.get(user=self.inventory)
         self.inventory_access.branches.add(self.hq)
 
+    def test_private_staff_intent_is_redacted_before_free_model(self):
+        from core.staff_ai_planner import _sanitized_intent
+
+        text = _sanitized_intent(
+            "Show why sales to Ama Mensah at ama@example.com "
+            "0243344567 for item Rice-99 fell last week and check MoMo"
+        )
+        self.assertIn("sales", text)
+        self.assertIn("momo", text)
+        for secret in ("Ama", "Mensah", "example", "0243344567", "Rice", "99", "@"):
+            self.assertNotIn(secret.casefold(), text.casefold())
+        self.assertEqual(_sanitized_intent("Ama Mensah abc@example.test 0243344567"), "")
+
+    @override_settings(
+        KOFAD_STAFF_AI_PLANNER_ENABLED=True,
+        KOFAD_GEMINI_ENABLED=True,
+        KOFAD_GEMINI_FREE_TIER_CONFIRMED=True,
+        GEMINI_API_KEY="test-only-gemini",
+        KOFAD_OPENROUTER_FREE_ENABLED=False,
+    )
+    @patch("core.staff_ai_planner.requests.post")
+    def test_gemini_sees_only_generic_intent_and_returns_fixed_tools(self, post):
+        from core.staff_ai_planner import _sanitized_intent, _ai_plan
+
+        post.return_value = Mock(
+            status_code=200, json=lambda: {
+                "candidates": [{
+                    "content": {"parts": [{"text": '{"tools":["sales_activity","momo"]}'}]}
+                }]
+            },
+        )
+        redacted = _sanitized_intent("How many MoMo sales to Ama Mensah 0243344567 today?")
+        selected = _ai_plan(redacted)
+        self.assertEqual(selected, ("sales_activity", "momo"))
+        serialized = json.dumps(post.call_args.kwargs.get("json"))
+        self.assertNotIn("Mensah", serialized)
+        self.assertNotIn("0243344567", serialized)
+        self.assertNotIn("GHS", serialized)
+        self.assertIn("responseMimeType", serialized)
+        self.assertIn("test-only-gemini", post.call_args.kwargs["headers"]["x-goog-api-key"])
+
+    @override_settings(KOFAD_STAFF_AI_PLANNER_ENABLED=True)
+    @patch("core.staff_ai_planner._ai_plan", return_value=("sales_activity", "inventory"))
+    def test_model_planned_multi_tool_answer_is_local_and_scope_checked(self, chosen):
+        from core.staff_ai_planner import plan_and_answer
+
+        visible = Product.objects.create(
+            sku="AI-PLANNED-STOCK", name="Planner visible stock",
+            retail_unit=Decimal("4"), active=True, reorder_level=3,
+        )
+        Stock.objects.create(branch=self.hq, product=visible, quantity=2)
+        reply, source, external = plan_and_answer(
+            self.manager, "Show sales and low stock today"
+        )
+        self.assertIn("Recorded sales", reply)
+        self.assertIn("Planner visible stock", reply)
+        self.assertEqual(source, "insights")
+        self.assertTrue(external)
+        chosen.assert_called_once()
+
+    @override_settings(KOFAD_STAFF_AI_PLANNER_ENABLED=True)
+    @patch("core.staff_ai_planner._ai_plan", return_value=("sales_activity",))
+    def test_planner_does_not_bypass_staff_finance_permissions(self, chosen):
+        from core.staff_ai_planner import plan_and_answer
+
+        answer, source, external = plan_and_answer(
+            self.seller, "Show sales today"
+        )
+        self.assertEqual(source, "denied")
+        self.assertNotIn("GHS", answer)
+        self.assertTrue(external)
+        chosen.assert_called_once()
+
+    @override_settings(KOFAD_STAFF_AI_PLANNER_ENABLED=True)
+    @patch("core.staff_ai_planner._ai_plan")
+    def test_planner_never_plans_mutating_or_secret_bearing_requests(self, chosen):
+        from core.staff_ai_planner import plan_and_answer
+
+        for question in (
+            "Send SMS to customers now",
+            "Approve all sales",
+            "Delete overdue debts",
+            "Reset password and API key",
+        ):
+            self.assertIsNone(plan_and_answer(self.manager, question))
+        chosen.assert_not_called()
+
+    @override_settings(KOFAD_STAFF_AI_PLANNER_ENABLED=True)
+    @patch("core.staff_ai_planner._ai_plan", return_value=("sales_activity",))
+    def test_staff_chat_marks_external_planning_but_never_data_export(self, chosen):
+        request = self.factory.post(
+            "/staff/assistant/chat/",
+            data=json.dumps({"message": "What were sales today?"}),
+            content_type="application/json",
+        )
+        request.user = self.manager
+        request.session = {}
+        response = assistant_chat(request)
+        self.assertEqual(response.status_code, 200)
+        result = json.loads(response.content)
+        self.assertTrue(result["external_ai_used"])
+        self.assertTrue(result["read_only"])
+        self.assertIn("Recorded sales", result["reply"])
+
     def test_anonymous_and_unassigned_do_not_read_staff_data(self):
         anonymous = User()
         anonymous.is_active = False
