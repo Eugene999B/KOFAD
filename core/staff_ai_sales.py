@@ -99,3 +99,65 @@ def posted_sales(user, question):
         "These numbers exclude unposted/off-system activity and are not proof of delivery, cash in bank, or profit."
     )
     return "\n".join(result), "sales_activity"
+
+
+def posted_sales_trend(user, question):
+    """Compare two equal posted-sale windows, without asserting a causal story."""
+    from datetime import datetime, time, timedelta
+
+    if not _role(user)["management"]:
+        return "Your KOFAD role does not grant company sales reporting."
+    branches = _branches(user)
+    if not branches.exists():
+        return "No authorized active branches are available."
+    q = question.casefold()
+    days = 30 if any(t in q for t in ("month", "monthly", "30 day")) else (
+        1 if "today" in q else 7
+    )
+    today = timezone.localdate()
+    current_start = today - timedelta(days=days - 1)
+    previous_start = current_start - timedelta(days=days)
+    left = timezone.make_aware(datetime.combine(previous_start, time.min))
+    mid = timezone.make_aware(datetime.combine(current_start, time.min))
+    right = timezone.make_aware(datetime.combine(today + timedelta(days=1), time.min))
+    from .models import Document
+
+    posted = Document.objects.filter(
+        branch__in=branches, finalized=True,
+        kind__in=("sale", "return"), created_at__gte=left,
+        created_at__lt=right,
+    )
+
+    def summarize(rows):
+        sales = rows.filter(kind="sale")
+        returns = rows.filter(kind="return")
+        gross = sales.aggregate(value=Sum("total"))["value"] or Decimal("0.00")
+        refunds = returns.aggregate(value=Sum("total"))["value"] or Decimal("0.00")
+        return sales.count(), gross, refunds, gross - refunds
+
+    previous = summarize(posted.filter(created_at__lt=mid))
+    current = summarize(posted.filter(created_at__gte=mid))
+    delta = current[3] - previous[3]
+    if previous[3] == 0:
+        percent = "not calculable because the previous net amount was zero"
+    else:
+        percent = f"{delta / abs(previous[3]) * 100:+.1f}%"
+    lines = [
+        f"Recorded sales comparison — two {days}-day periods",
+        f"Current ({current_start:%d %b}–{today:%d %b}): "
+        f"{current[0]} sales; gross {_money(current[1])}, "
+        f"returns {_money(current[2])}; net {_money(current[3])}.",
+        f"Previous ({previous_start:%d %b}–"
+        f"{current_start - timedelta(days=1):%d %b}): "
+        f"{previous[0]} sales; gross {_money(previous[1])}, "
+        f"returns {_money(previous[2])}; net {_money(previous[3])}.",
+        f"Change in recorded net sales: {_money(delta)} ({percent}).",
+    ]
+    if current[0] == 0 and previous[0] == 0:
+        lines.append("No finalized sales in either window; this cannot establish a demand trend.")
+    lines.append(
+        "These are finalized ledger postings, not cash or verified daily closings. "
+        "The change is observed, but its cause is unverified. Check missing postings, "
+        "stock-outs, returns, channel mix and seasonal effects before deciding why."
+    )
+    return "\n".join(lines)
