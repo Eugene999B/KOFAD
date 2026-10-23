@@ -161,9 +161,9 @@ def suggested_communication(user):
         + summary[:1150]
         + "\n\nIf a verified customer is affected, first check the actual order "
           "or account and the allowed contact channel. Suggested wording:\n"
-          ""Hello, this is KOFAD. We're checking an update about your order. "
+          "Hello, this is KOFAD. We're checking an update about your order. "
           "Please open your account for the latest status, or contact our team "
-          "if you need a hand."\n"
+          "if you need a hand.\n"
           "Do not claim payment received, a new delivery date, a discount or "
           "stock availability without verified evidence. Personalise only "
           "within the authorized customer record. Routine transactional notices "
