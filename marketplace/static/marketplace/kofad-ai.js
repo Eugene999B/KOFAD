@@ -195,6 +195,28 @@
     }
     scrollEnd();
     while (feed.children.length > 28) feed.removeChild(feed.children[0]);
+    return bubble;
+  }
+
+  function appendVerifiedActions(bubble, actions) {
+    if (!bubble || !Array.isArray(actions)) return;
+    const allowed = new Set([
+      "/market/", "/market/orders/", "/market/account/login/",
+      "/market/account/returns/", "/returns-policy/", "/market/cart/",
+      "/delivery/", "/wholesale/", "/market/messages/"
+    ]);
+    const row = document.createElement("nav");
+    row.className = "kofad-ai-task-links";
+    row.setAttribute("aria-label", "Suggested KOFAD actions");
+    actions.slice(0, 3).forEach(function (action) {
+      if (!action || typeof action.label !== "string" || action.label.length > 50
+          || !allowed.has(action.href)) return;
+      const link = document.createElement("a");
+      link.href = action.href;
+      link.textContent = action.label + " ↗";
+      row.appendChild(link);
+    });
+    if (row.children.length) bubble.appendChild(row);
   }
 
   function showThinking() {
@@ -276,7 +298,8 @@
       thinking.node.remove();
       const text = response.ok ? String(data.reply || "I couldn't find an answer.") :
         String(data.error || "KOFAD Bot couldn't answer. Please try again.");
-      appendMessage(text, "bot");
+      const answerBubble = appendMessage(text, "bot");
+      if (response.ok) appendVerifiedActions(answerBubble, data.actions);
       if (response.ok && ["free-ai", "local"].includes(data.source)) {
         history.push({ role: "user", content: question.slice(0, 320) });
         history.push({ role: "assistant", content: text.slice(0, 440) });
