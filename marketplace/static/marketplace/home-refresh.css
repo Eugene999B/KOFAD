@@ -363,3 +363,13 @@ body.is-kofad-home .home-featured-grid:has(> .market-product-card:only-child){
   width:min(100%,430px)!important;
   margin-inline:auto!important;
 }
+
+
+/* Ghanaian welcome: give the naturally spoken headline room to breathe. */
+.kfd-hero .kfd-hero-copy h1 { text-wrap:balance; max-width:740px; line-height:1.12; }
+.kfd-hero .kfd-hero-copy h1 [lang="tw"] { color:#ffda88; }
+.kfd-home .kfd-hero-copy > p:not(.kfd-eyebrow) { max-width:610px; text-wrap:pretty; }
+@media (max-width:480px) {
+  .kfd-home .kfd-hero h1 { font-size:clamp(34px,8.8vw,48px); letter-spacing:-.04em; }
+  .kfd-home .kfd-hero-copy { padding-block:48px 76px; }
+}
