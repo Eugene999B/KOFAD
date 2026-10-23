@@ -1,0 +1,122 @@
+/* Compact storefront card actions — shared by Market and homepage.
+   Previous unbounded SVGs rendered as enormous eyes and plus signs. */
+.market-product-card .commerce-card-actions {
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+  align-items:stretch !important;
+  gap:8px !important;
+  margin-top:14px !important;
+  padding-top:12px !important;
+  border-top:1px solid #e3eae9 !important;
+}
+.market-product-card .commerce-card-actions > form {
+  display:flex !important;
+  width:100% !important;
+  min-width:0 !important;
+  margin:0 !important;
+}
+.market-product-card .commerce-card-actions > a.product-action-details,
+.market-product-card .commerce-card-actions > a.product-action-add,
+.market-product-card .commerce-card-actions > form > button.product-action-add {
+  box-sizing:border-box !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex-direction:row !important;
+  gap:7px !important;
+  min-height:44px !important;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  padding:9px 10px !important;
+  border:1px solid #c5d4d6 !important;
+  border-radius:10px !important;
+  background:#f6f9f8 !important;
+  color:#174653 !important;
+  font-size:12px !important;
+  font-weight:750 !important;
+  line-height:1.2 !important;
+  text-align:center !important;
+  text-decoration:none !important;
+  white-space:normal !important;
+  cursor:pointer !important;
+  box-shadow:none !important;
+}
+.market-product-card .commerce-card-actions > a.product-action-add,
+.market-product-card .commerce-card-actions > form > button.product-action-add {
+  background:#0b4e61 !important;
+  color:#fff !important;
+  border-color:#0b4e61 !important;
+}
+.market-product-card .commerce-card-actions :is(a,button) > .product-action-icon {
+  box-sizing:content-box !important;
+  display:block !important;
+  flex:0 0 16px !important;
+  width:16px !important;
+  height:16px !important;
+  min-width:16px !important;
+  min-height:16px !important;
+  max-width:16px !important;
+  max-height:16px !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:visible !important;
+  color:inherit !important;
+  stroke:currentColor !important;
+}
+.market-product-card .commerce-card-actions :is(a,button) > span {
+  display:inline !important;
+  flex:0 1 auto !important;
+  color:inherit !important;
+  font-size:inherit !important;
+  font-weight:inherit !important;
+  line-height:inherit !important;
+  white-space:normal !important;
+}
+.market-product-card .commerce-card-actions > a.product-action-details:hover {
+  background:#e8f3f1 !important;
+  border-color:#679a95 !important;
+}
+.market-product-card .commerce-card-actions > a.product-action-add:hover,
+.market-product-card .commerce-card-actions > form > button.product-action-add:hover {
+  background:#083e50 !important;
+  border-color:#083e50 !important;
+}
+.market-product-card .commerce-card-actions :is(a,button):focus-visible {
+  outline:3px solid #2e998b !important;
+  outline-offset:3px !important;
+}
+html[data-theme="dark"] .market-product-card .commerce-card-actions {
+  border-top-color:#355463 !important;
+}
+html[data-theme="dark"] .market-product-card .commerce-card-actions > a.product-action-details {
+  background:#1d3845 !important;
+  border-color:#537282 !important;
+  color:#f0f9ff !important;
+}
+html[data-theme="dark"] .market-product-card .commerce-card-actions > a.product-action-add,
+html[data-theme="dark"] .market-product-card .commerce-card-actions > form > button.product-action-add {
+  background:#136d7c !important;
+  border-color:#438f9d !important;
+  color:#fff !important;
+}
+@media (max-width:380px) {
+  .market-product-card .commerce-card-actions { gap:5px !important; }
+  .market-product-card .commerce-card-actions :is(a.product-action-details,a.product-action-add,form>button.product-action-add) {
+    gap:4px !important;
+    padding:8px 5px !important;
+    font-size:10px !important;
+  }
+  .market-product-card .commerce-card-actions :is(a,button) > .product-action-icon {
+    flex-basis:14px !important;
+    width:14px !important;
+    height:14px !important;
+    min-width:14px !important;
+    min-height:14px !important;
+    max-width:14px !important;
+    max-height:14px !important;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .market-product-card .commerce-card-actions :is(a,button) { transition:none !important; }
+}
