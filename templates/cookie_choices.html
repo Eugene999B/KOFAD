@@ -1,9 +1,4 @@
 {# Consent notice is independent of Django authentication, CSRF and Cloudflare Turnstile. #}
-{% if request.path == '/privacy/' %}
-<div class="kofad-cookie-preferences-link">
-  <button type="button" data-cookie-open aria-controls="kofad-cookie-panel" aria-expanded="false">Manage cookie preferences</button>
-</div>
-{% endif %}
 <section id="kofad-cookie-panel"
          class="kofad-cookie-panel"
          data-cookie-panel
