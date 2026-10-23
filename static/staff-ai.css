@@ -60,3 +60,17 @@ body.staff-ai-page #main .page-heading,body.staff-ai-page #main>.page-footer,bod
  .staff-ai-compose{border-radius:19px}
 }
 @media(prefers-reduced-motion:reduce){.staff-ai-message,.staff-ai-message.is-thinking .staff-ai-reply:after{animation:none}}
+
+/* Honor the existing KOFAD dark-mode switch without changing the site's theme. */
+html[data-theme="dark"] body.staff-ai-page{
+ --chat-green:#4ed1b3;--chat-ink:#ebf4f1;--chat-muted:#97aea9;
+ --chat-line:#2c403b;--chat-bg:#101916;--chat-soft:#172721
+}
+html[data-theme="dark"] .staff-ai-mark,
+html[data-theme="dark"] .staff-ai-message.is-user,
+html[data-theme="dark"] .staff-ai-compose button{background:#176e5b;color:#fff}
+html[data-theme="dark"] .staff-ai-status-dot{background:#51d4a3}
+html[data-theme="dark"] .staff-ai-compose{background:#111c18;border-color:#416659}
+html[data-theme="dark"] .staff-ai-compose textarea{color:#f3f8f5!important}
+html[data-theme="dark"] .staff-ai-compose textarea::placeholder{color:#a2bdb2}
+html[data-theme="dark"] .staff-ai-speaker-dot{background:#1e382f}
