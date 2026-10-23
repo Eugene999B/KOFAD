@@ -25,6 +25,7 @@
   let busy = false;
   let lastTopic = "";
   let recentTopics = [];
+  let turnCount = 0;
   let inFlight = null;
 
   function scrollEnd() { log.scrollTop = log.scrollHeight; }
@@ -127,6 +128,7 @@
     if (busy || value.length < 2 || value.length > 600) return;
     setBusy(true);
     userBubble(value);
+    turnCount = Math.min(turnCount + 1, 40);
     field.value = "";
     resizeField();
     status.textContent = "Checking...";
@@ -141,7 +143,7 @@
         credentials: "same-origin",
         signal: inFlight.signal,
         headers: {"Content-Type": "application/json", "X-CSRFToken": token ? token.value : ""},
-        body: JSON.stringify({message: value, context: lastTopic, recent_topics: recentTopics})
+        body: JSON.stringify({message: value, context: lastTopic, recent_topics: recentTopics, turn_count: turnCount})
       });
       const data = await response.json();
       progress.remove();
@@ -178,6 +180,7 @@
     log.querySelectorAll(".staff-ai-message").forEach(node => node.remove());
     lastTopic = "";
     recentTopics = [];
+    turnCount = 0;
     field.value = "";
     resizeField();
     showLanding();
