@@ -749,6 +749,36 @@ def _verified_product_completion(generated, products, question):
     return _clip_complete_answer(generated, max(0, MAX_OUTPUT - len(suffix))) + suffix
 
 
+def customer_actions(question, customer=None):
+    """Offer safe first-party actions for shopping questions, never checkout or payment writes.
+
+    Links are fixed in the server and are never produced by an AI provider.
+    The destination still enforces customer login and permission checks.
+    """
+    if not isinstance(question, str):
+        return []
+    q = question.casefold()
+    actions = []
+    if INTENT_ORDER.search(question) or any(x in q for x in ("track", "my delivery", "shipment")):
+        actions.append({
+            "label": "My orders" if customer else "Sign in to track",
+            "href": "/market/orders/" if customer else "/market/account/login/",
+        })
+    if any(x in q for x in ("return", "refund", "exchange")):
+        actions.append({"label": "Returns", "href": "/market/account/returns/" if customer else "/returns-policy/"})
+    if any(x in q for x in ("buy", "product", "price", "stock", "looking for", "sell", "catalog", "shop")):
+        actions.append({"label": "Browse products", "href": "/market/"})
+    if any(x in q for x in ("pay", "checkout", "cart", "momo")):
+        actions.append({"label": "Open cart", "href": "/market/cart/"})
+    if any(x in q for x in ("deliver", "shipping", "pickup", "collection")):
+        actions.append({"label": "Delivery guide", "href": "/delivery/"})
+    if any(x in q for x in ("bulk", "wholesale", "quotation", "supply")):
+        actions.append({"label": "Wholesale enquiries", "href": "/wholesale/"})
+    if any(x in q for x in ("contact", "help", "support", "message", "speak to", "human")):
+        actions.append({"label": "Contact KOFAD", "href": "/market/messages/"})
+    return actions[:3]
+
+
 def answer(question, *, customer=None, ai_allowed=True, history=None):
     """Answer public questions; private order status is handled on KOFAD only."""
     if not isinstance(question, str):
