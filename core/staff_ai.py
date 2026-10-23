@@ -202,8 +202,8 @@ def staff_actions(user, source):
         actions.append({"label": "Open inventory", "href": "/inventory/"})
     if source in {"orders", "insights", "tasks"} and roles["sales"]:
         actions.append({"label": "View online orders", "href": "/online-orders/"})
-    if source == "receivables" and (
-        user.is_superuser or user.has_perm("core.operate_sales") or user.has_perm("core.operate_finance")
+    if source == "receivables" and roles["management"] and (
+        user.is_superuser or user.has_perm("core.operate_finance") or user.has_perm("core.manage_company")
     ):
         actions.append({"label": "Open customer debts", "href": "/debts/"})
     if source == "draft" and (user.is_superuser or user.has_perm("core.operate_sales")):
