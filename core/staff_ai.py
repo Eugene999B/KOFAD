@@ -208,6 +208,18 @@ def staff_actions(user, source):
         actions.append({"label": "Open customer debts", "href": "/debts/"})
     if source == "draft" and (user.is_superuser or user.has_perm("core.operate_sales")):
         actions.append({"label": "Review communications", "href": "/communications/"})
+    if source == "momo" and roles["management"]:
+        actions.append({"label": "Open reports", "href": "/reports/"})
+    if source == "debt_activity" and roles["management"]:
+        actions.append({"label": "Review debt desk", "href": "/debts/"})
+    if source == "sms" and (user.is_superuser or user.has_perm("core.send_messages") or user.has_perm("core.manage_company")):
+        actions.append({"label": "SMS records", "href": "/communications/"})
+    if source == "email":
+        from .email_center import visible_mailboxes
+        if visible_mailboxes(user).exists():
+            actions.append({"label": "Email Centre", "href": "/email/"})
+    if source == "diagnostics" and (user.is_superuser or user.has_perm("core.manage_company")):
+        actions.append({"label": "Connections", "href": "/settings/connections/"})
     if source in {"branches", "role"}:
         actions.append({"label": "My account", "href": "/account/"})
     return actions[:3]
@@ -253,6 +265,13 @@ def staff_reply(user, question, *, context=""):
     if intent == "security":
         return ("Never share passwords, verification codes, PINs or API keys here. "
                 "Use KOFAD's official security and account-recovery pages."), "security"
+
+    # Higher-fidelity cross-system tools take precedence over generic
+    # "communication" and "report" keywords; each tool rechecks permissions.
+    from .staff_ai_tools import answer_operational_question
+    operational = answer_operational_question(user, question, context=context)
+    if operational is not None:
+        return operational
     if intent == "communication":
         return (
             "I cannot send unsolicited messages or contact customers from this chat.\n\n"
