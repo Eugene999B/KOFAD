@@ -360,6 +360,11 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 KOFAD_GEMINI_ENABLED = os.environ.get("KOFAD_GEMINI_ENABLED", "0") == "1"
 KOFAD_GEMINI_FREE_TIER_CONFIRMED = os.environ.get("KOFAD_GEMINI_FREE_TIER_CONFIRMED", "0") == "1"
 
+# Staff assistant: private evidence always remains local. When enabled, free
+# models see only approved generic intent words and can choose read-only tools.
+# No customer data, private business figures or conversation are forwarded.
+KOFAD_STAFF_AI_PLANNER_ENABLED = os.environ.get("KOFAD_STAFF_AI_PLANNER_ENABLED", "0") == "1"
+
 # Owner-only IPinfo Lite country/ASN investigation; never a login-blocking signal.
 # Both switches must be present. The token remains only in Railway secrets.
 KOFAD_IPINFO_LITE_ENABLED = os.environ.get("KOFAD_IPINFO_LITE_ENABLED", "0") == "1"
