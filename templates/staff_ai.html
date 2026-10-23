@@ -14,6 +14,7 @@
     </div>
     <div class="staff-ai-toolbar">
       <span class="staff-ai-private"><span aria-hidden="true">●</span> Staff only</span>
+      {% if perms.core.approve_operations or perms.core.manage_company %}<a class="staff-ai-tool staff-ai-approvals" href="/approvals/" title="Open pending approvals">Approvals</a>{% endif %}
       <button type="button" class="staff-ai-tool" id="staff-ai-reset" aria-label="Start a new conversation" title="New conversation">↻ <span>New chat</span></button>
     </div>
   </header>
