@@ -90,7 +90,7 @@ class InstallableWebAppTests(Fixtures, TestCase):
         self.assertContains(public, "Add as web app")
         self.assertContains(public, "Windows")
         home = self.client.get("/")
-        self.assertContains(home, "Download the app")
+        self.assertContains(home, "Explore app options")
 
     def test_private_staff_download_page_offers_browser_install_only_after_signin(self):
         self.assertEqual(self.client.get("/staff/app/").status_code, 302)

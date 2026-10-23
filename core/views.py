@@ -1,4 +1,5 @@
 import hashlib
+import ipaddress
 import json
 import secrets
 import uuid
@@ -129,6 +130,21 @@ def _resume_mobile_staff_authorization(request):
     return None
 
 
+def _login_source_key(request):
+    """Use the actual network peer, not a caller-supplied forwarding header.
+
+    A Django session cookie is not an authentication-rate-limit identity:
+    attackers can discard it freely. Remote peers can be shared by proxy/CDN
+    users; use a higher source budget than the account budget.
+    """
+    raw_peer = str(request.META.get("REMOTE_ADDR") or "")
+    try:
+        peer = str(ipaddress.ip_address(raw_peer))
+    except ValueError:
+        peer = "unidentified"
+    return hashlib.sha256(("login-peer:" + peer).encode()).hexdigest()
+
+
 def login_view(request):
     pending = request.GET.get("next", "")
     # Only these exact internal Telegram Mini App URLs can be resumed after
@@ -167,11 +183,7 @@ def login_view(request):
         identifier = request.POST.get("username", "").strip()[:150]
         canonical, lock_identity = resolve_login_identifier(identifier)
         account_key = hashlib.sha256(lock_identity.encode()).hexdigest()
-        if not request.session.session_key:
-            request.session.create()
-        source_key = hashlib.sha256(
-            ("login-source:" + str(request.session.session_key)).encode()
-        ).hexdigest()
+        source_key = _login_source_key(request)
         now = timezone.now()
         with transaction.atomic():
             # Lock in lexical order so simultaneous login attempts cannot deadlock.
@@ -186,12 +198,19 @@ def login_view(request):
             attempt = locked[account_key]
             source = locked[source_key]
 
-            if source.blocked_until and source.blocked_until > now:
+            # Both limits must be enforced *before* password verification.
+            # Otherwise a fresh session could bypass source throttling, and
+            # the account "lock" would affect only the displayed error.
+            if (source.blocked_until and source.blocked_until > now
+                    or attempt.blocked_until and attempt.blocked_until > now):
                 error = "Too many attempts. Please wait 15 minutes."
             else:
                 if source.blocked_until:
                     source.failures = 0
                     source.blocked_until = None
+                if attempt.blocked_until:
+                    attempt.failures = 0
+                    attempt.blocked_until = None
                 user = authenticate(
                     request,
                     username=canonical,
@@ -228,21 +247,15 @@ def login_view(request):
                     return redirect(_resume_mobile_staff_authorization(request) or request.session.pop("staff_telegram_quick_return", None) or "dashboard")
 
                 source.failures += 1
-                if source.failures >= 5:
+                if source.failures >= settings.KOFAD_LOGIN_SOURCE_MAX_FAILURES:
                     source.blocked_until = now + timedelta(minutes=15)
                 source.save(update_fields=["failures", "blocked_until"])
 
-                if attempt.blocked_until and attempt.blocked_until > now:
-                    error = "Too many attempts. Please wait 15 minutes."
-                else:
-                    if attempt.blocked_until:
-                        attempt.failures = 0
-                        attempt.blocked_until = None
-                    attempt.failures += 1
-                    if attempt.failures >= 5:
-                        attempt.blocked_until = now + timedelta(minutes=15)
-                    attempt.save(update_fields=["failures", "blocked_until"])
-                    error = "The username, phone number or password is incorrect."
+                attempt.failures += 1
+                if attempt.failures >= 5:
+                    attempt.blocked_until = now + timedelta(minutes=15)
+                attempt.save(update_fields=["failures", "blocked_until"])
+                error = "The username, phone number or password is incorrect."
     from .google_oauth import enabled as google_enabled
     response = render(request, "login.html", {
         "error": error, "username": request.POST.get("username", ""),
