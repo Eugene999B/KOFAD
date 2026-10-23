@@ -156,6 +156,50 @@ def _debts(user, start, end):
     )
 
 
+def _arkesel_balance():
+    """Read-only provider balance, on request and at most once per five minutes."""
+    import requests
+    from django.conf import settings
+    from django.core.cache import cache
+
+    if getattr(settings, "SMS_PROVIDER", "") != "arkesel" or not settings.ARKESEL_API_KEY:
+        return "not available (Arkesel account access is not configured)."
+    key = "kofad:staff-ai:arkesel-sms-credit:v1"
+    try:
+        cached = cache.get(key)
+        if isinstance(cached, int) and cached >= 0:
+            return f"{cached:,} credits (provider reading cached for up to five minutes)."
+    except (ConnectionError, ValueError, TypeError):
+        pass
+    try:
+        response = requests.get(
+            "https://sms.arkesel.com/api/v2/clients/balance-details",
+            headers={"api-key": settings.ARKESEL_API_KEY, "Accept": "application/json"},
+            timeout=(3, 5),
+        )
+        if response.status_code != 200:
+            return "not available (Arkesel did not confirm the balance)."
+        data = response.json()
+        if not isinstance(data, dict) or data.get("status") != "success":
+            return "not available (provider response was not a verified success)."
+        details = data.get("data")
+        if not isinstance(details, dict):
+            return "not available (provider balance missing)."
+        raw = details.get("sms_balance")
+        if isinstance(raw, bool) or not str(raw).isdecimal():
+            return "not available (provider returned an invalid credit count)."
+        value = int(raw)
+        if value < 0 or value > 10**12:
+            return "not available (provider returned an out-of-range credit count)."
+        try:
+            cache.set(key, value, timeout=300)
+        except (ConnectionError, ValueError, TypeError):
+            pass
+        return f"{value:,} credits (read-only Arkesel balance check just completed)."
+    except (requests.RequestException, ValueError, TypeError):
+        return "not available (Arkesel could not be reached or returned an invalid response)."
+
+
 def _sms(user, start, end, question):
     from .models import Message, SmsAttempt
 
@@ -179,10 +223,7 @@ def _sms(user, start, end, question):
         "Submission is not delivery, and retried messages can appear in both success and failure groups."
     )
     if any(x in question.casefold() for x in ("left", "balance", "credit", "remaining", "quota")):
-        result += (
-            "\nRemaining Arkesel SMS credits: not available from KOFAD's local database. "
-            "Check the Arkesel account balance; message counts cannot establish purchased credit remaining."
-        )
+        result += "\nRemaining Arkesel SMS credits: " + _arkesel_balance()
     if any(x in question.casefold() for x in ("type", "kind", "category", "what messages")):
         debt = messages.filter(Q(source_key__startswith="debt:") | Q(source_key__startswith="auto:debt:")).count()
         manual = messages.filter(manual_override=True).count()
