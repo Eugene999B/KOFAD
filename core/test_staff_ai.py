@@ -154,6 +154,12 @@ class StaffAssistantTests(TestCase):
         self.assertNotIn("Hidden Depot", response)
         self.assertNotIn("finance trends", response)
 
+    def test_missing_verified_closings_are_not_treated_as_zero_real_sales(self):
+        response, source = staff_reply(self.manager, "Show sales today")
+        self.assertEqual(source, "reports")
+        self.assertIn("this does not mean KOFAD made zero sales", response)
+        self.assertNotIn("Recorded sales: GHS 0.00", response)
+
     def test_staff_analysis_stays_grounded_and_permission_scoped(self):
         text, source = staff_reply(self.manager, "Deep analysis: why did sales change this week?")
         self.assertEqual(source, "insights")
