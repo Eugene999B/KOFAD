@@ -198,7 +198,7 @@ def _email(user, start, end, question):
     from .email_models import EmailLetter
 
     visible = visible_mailboxes(user)
-    if not visible.exists():
+    if not visible.exists() and not user.is_superuser:
         return "No authorized email mailboxes are available to this staff account."
     letters = EmailLetter.objects.filter(mailbox__in=visible, direction="outbound")
     initiated = letters.filter(created_at__gte=start, created_at__lt=end)
@@ -237,6 +237,17 @@ def _email(user, start, end, question):
             f"internal notices {internal.count()} ({_status_counts(internal)}); "
             f"market notices {customer.count()} ({_status_counts(customer)})."
         )
+        if any(x in q for x in ("address", "recipient", "subject", "type", "kind", "which mail", "what messages")):
+            for row in internal.order_by("-created_at").values("recipient", "category", "subject", "status")[:5]:
+                result += (
+                    f"\n• Internal notice → {row['recipient']} | {row['category'][:40]} | "
+                    f"{row['subject'][:80]} | {row['status']}"
+                )
+            for row in customer.order_by("-created_at").values("email", "subject", "status")[:5]:
+                result += (
+                    f"\n• Market notice → {row['email']} | {row['subject'][:80]} | {row['status']}"
+                )
+            result += "\nThese are message metadata only, not private email bodies."
     return result
 
 
