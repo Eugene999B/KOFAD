@@ -7,7 +7,7 @@ from django.shortcuts import render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 
-from .staff_ai import staff_reply
+from .staff_ai import staff_reply, staff_actions
 from .views import protected
 
 STAFF_PERMISSIONS = "manage_company|view_reports|operate_sales|operate_inventory|operate_finance"
@@ -62,6 +62,7 @@ def assistant_chat(request, branch):
     )
     response = JsonResponse({
         "reply": reply, "source": source, "external_ai_used": False,
+        "actions": staff_actions(request.user, source),
         "read_only": True,
     })
     response["Cache-Control"] = "private, no-store"

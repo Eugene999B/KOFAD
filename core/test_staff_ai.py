@@ -4,14 +4,15 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.utils import timezone
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Permission, User
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
-from core.models import Access, Allocation, Branch, Document, Party, Product, Stock
-from core.staff_ai import staff_reply
+from core.models import Access, Allocation, Branch, Document, Message, Party, Payment, Product, SmsAttempt, Stock
+from core.staff_ai import staff_reply, staff_actions
 from core.staff_ai_views import assistant_chat
+from core.email_models import EmailLetter, EmailMailbox, EmailMailboxMember
 
 
 class StaffAssistantTests(TestCase):
@@ -146,6 +147,52 @@ class StaffAssistantTests(TestCase):
         self.assertIn("no-store", response["Cache-Control"])
         self.assertFalse(json.loads(response.content)["external_ai_used"])
 
+    def test_branch_and_abilities_question_is_answered_together(self):
+        response, source = staff_reply(self.seller, "Which branches and abilities are assigned to me?")
+        self.assertEqual(source, "role")
+        self.assertIn("Head Office", response)
+        self.assertIn("online-order fulfilment", response)
+        self.assertNotIn("Hidden Depot", response)
+        self.assertNotIn("finance trends", response)
+
+    def test_missing_verified_closings_are_not_treated_as_zero_real_sales(self):
+        response, source = staff_reply(self.manager, "Show sales today")
+        self.assertEqual(source, "reports")
+        self.assertIn("this does not mean KOFAD made zero sales", response)
+        self.assertNotIn("Recorded sales: GHS 0.00", response)
+
+    def test_staff_analysis_stays_grounded_and_permission_scoped(self):
+        text, source = staff_reply(self.manager, "Deep analysis: why did sales change this week?")
+        self.assertEqual(source, "insights")
+        self.assertIn("VERIFIED SALES COMPARISON", text)
+        self.assertIn("recorded signals", text)
+        restricted, source = staff_reply(self.seller, "Deep analysis: why did sales change this week?")
+        self.assertNotIn("VERIFIED SALES COMPARISON", restricted)
+
+    def test_workflow_actions_respect_current_permissions(self):
+        self.assertEqual(staff_actions(self.seller, "reports"), [])
+        self.assertEqual(staff_actions(self.seller, "receivables"), [])
+        self.assertIn({"label": "View online orders", "href": "/online-orders/"},
+                      staff_actions(self.seller, "orders"))
+        self.assertIn({"label": "Open inventory", "href": "/inventory/"},
+                      staff_actions(self.inventory, "inventory"))
+        self.inventory_access.force_password_change = True
+        self.inventory_access.save(update_fields=["force_password_change"])
+        self.assertEqual(staff_actions(self.inventory, "inventory"), [])
+
+    def test_chat_exposes_only_server_approved_workflow_links(self):
+        request = self.factory.post(
+            "/staff/assistant/chat/", data=json.dumps({"message": "pending online orders"}),
+            content_type="application/json",
+        )
+        request.user = self.seller
+        request.session = {}
+        response = assistant_chat(request)
+        payload = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["actions"], [{"label": "View online orders", "href": "/online-orders/"}])
+        self.assertTrue(payload["read_only"])
+
     def test_chat_rejects_oversized_and_bad_input(self):
         request = self.factory.post(
             "/staff/assistant/chat/", data=json.dumps({"message": "x" * 601}),
@@ -154,6 +201,106 @@ class StaffAssistantTests(TestCase):
         request.user = self.manager
         request.session = {}
         self.assertEqual(assistant_chat(request).status_code, 400)
+
+    def test_operational_date_parser_is_gra_local_and_bounded(self):
+        from core.staff_ai_tools import _window
+
+        start, end, _, _ = _window("from 2026-10-01 to 2026-10-23")
+        self.assertEqual((str(start), str(end)), ("2026-10-01", "2026-10-23"))
+        d, e, _, _ = _window("SMS sent 01/10/2026")
+        self.assertEqual(d, e)
+        self.assertEqual(str(d), "2026-10-01")
+        with self.assertRaises(ValueError):
+            _window("from 2026-11-01 to 2026-10-01")
+        with self.assertRaises(ValueError):
+            _window("from 2024-01-01 to 2026-10-23")
+
+    def test_momo_uses_linked_customers_and_never_exposes_other_branches(self):
+        p = Party.objects.create(branch=self.hq, kind="customer", name="Visible", phone="0240000191")
+        hidden = Party.objects.create(branch=self.other, kind="customer", name="Hidden", phone="0240000192")
+        for b, party, amount in ((self.hq, p, "32.00"), (self.other, hidden, "9999.00")):
+            sale = Document.objects.create(
+                reference=f"AI-MOMO-{b.code}", branch=b, kind="sale",
+                party=party, total=Decimal(amount), paid=Decimal(amount), created_by=self.manager,
+            )
+            Payment.objects.create(document=sale, method="momo", direction=1, amount=Decimal(amount))
+        analyst = User.objects.create_user("momo-analyst", password="test-only-pass")
+        analyst.user_permissions.add(Permission.objects.get(codename="view_reports"))
+        Access.objects.get(user=analyst).branches.add(self.hq)
+        date = timezone.localdate().isoformat()
+        result, source = staff_reply(analyst, f"How many people used MoMo on {date}?")
+        self.assertEqual(source, "momo")
+        self.assertIn("Distinct linked customers using MoMo: 1", result)
+        self.assertIn("GHS 32.00", result)
+        self.assertNotIn("9,999.00", result)
+        denied, source = staff_reply(self.seller, f"How many people used MoMo on {date}?")
+        self.assertEqual(source, "denied")
+        self.assertNotIn("GHS", denied)
+
+    @override_settings(ARKESEL_API_KEY='')
+    def test_sms_counts_are_scoped_and_remaining_credits_are_not_invented(self):
+        p = Party.objects.create(branch=self.hq, kind="customer", name="SMS tested", phone="0240000301")
+        msg = Message.objects.create(
+            branch=self.hq, party=p, created_by=self.manager, channel="sms",
+            status="delivered", recipient="+233240000301", body="Test update",
+            sandbox=False, source_key="debt:example",
+        )
+        SmsAttempt.objects.create(
+            message=msg, number=1, provider="arkesel", status="delivered",
+            callback_digest="0" * 64,
+        )
+        date = timezone.localdate().isoformat()
+        reply, source = staff_reply(self.manager, f"How many SMS were sent and how many SMS credits are left on {date}?")
+        self.assertEqual(source, "sms")
+        self.assertIn("with recorded delivery: 1", reply)
+        self.assertIn("Remaining Arkesel SMS credits: not available", reply)
+        denied, source = staff_reply(self.seller, "How many SMS credits are left today?")
+        self.assertEqual(source, "denied")
+        self.assertNotIn("with recorded delivery: 1", denied)
+
+    @override_settings(SMS_PROVIDER="arkesel", ARKESEL_API_KEY="ci-test-only-arkesel-key")
+    @patch("requests.get")
+    def test_sms_remaining_credit_checks_read_only_arkesel_api(self, get):
+        from django.core.cache import cache
+        from core.staff_ai_tools import _arkesel_balance
+
+        cache.delete("kofad:staff-ai:arkesel-sms-credit:v1")
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "status": "success", "data": {"sms_balance": "2003", "main_balance": "GHS 20.99"},
+        })
+        self.assertIn("2,003 credits", _arkesel_balance())
+        self.assertIn("2,003 credits", _arkesel_balance())
+        get.assert_called_once()
+        self.assertEqual(get.call_args.args[0],
+                         "https://sms.arkesel.com/api/v2/clients/balance-details")
+        self.assertNotIn("GHS 20.99", _arkesel_balance())
+        cache.delete("kofad:staff-ai:arkesel-sms-credit:v1")
+        get.return_value = Mock(status_code=401)
+        self.assertIn("not available", _arkesel_balance())
+
+    def test_mail_reports_require_mailbox_read_access(self):
+        mailbox, _ = EmailMailbox.objects.get_or_create(address="sales@kofadimpex.com", defaults={"label": "Sales"})
+        EmailMailboxMember.objects.create(mailbox=mailbox, user=self.seller, can_read=True)
+        other_box, _ = EmailMailbox.objects.get_or_create(address="private@kofadimpex.com", defaults={"label": "Restricted"})
+        for mb, to in ((mailbox, "buyer@example.test"), (other_box, "private@example.test")):
+            EmailLetter.objects.create(
+                mailbox=mb, direction="outbound", status="submitted",
+                from_address=mb.address, to_address=to, subject="Order delivery",
+                submitted_at=timezone.now(), delivery_status="delivered",
+            )
+        date = timezone.localdate().isoformat()
+        response, source = staff_reply(self.seller, f"Which email addresses and types of emails were sent {date}?")
+        self.assertEqual(source, "email")
+        self.assertIn("buyer@example.test", response)
+        self.assertIn("Order delivery", response)
+        self.assertNotIn("private@example.test", response)
+        noaccess, source = staff_reply(self.inventory, f"Show email addresses on {date}")
+        self.assertIn("No authorized email mailboxes", noaccess)
+
+    def test_cross_system_question_respects_partial_permissions(self):
+        response, source = staff_reply(self.seller, "How many emails and MoMo transactions were sent today?")
+        self.assertNotIn("Recorded POS/debt payment entries", response)
+        self.assertIn("Not included due to your account permissions: financial reports", response)
 
     def test_message_request_is_advice_not_external_send(self):
         text, source = staff_reply(self.seller, "Send an unsolicited Gmail and SMS blast")
