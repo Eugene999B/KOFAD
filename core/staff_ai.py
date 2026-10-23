@@ -142,11 +142,11 @@ def _role_branches_brief(user, branches, role):
         abilities.append("online-order fulfilment reviews")
     names = list(branches.order_by("name").values_list("name", flat=True)[:30])
     return (
-        "YOUR CURRENT KOFAD ACCESS\\n"
+        "YOUR CURRENT KOFAD ACCESS\n"
         + "Authorized branches: " + ", ".join(names)
         + (" (first 30 shown)" if branches.count() > 30 else "")
-        + "\\nAvailable abilities: " + "; ".join(abilities)
-        + "\\nThese permissions are verified on each request. You can open the relevant workflows below."
+        + "\nAvailable abilities: " + "; ".join(abilities)
+        + "\nThese permissions are verified on each request. You can open the relevant workflows below."
     )
 
 
@@ -158,26 +158,26 @@ def _evidence_analysis(user, question, role):
         term in q for term in ("sale", "revenue", "trend", "performance", "clos", "why", "forecast")
     ):
         days = 30 if any(term in q for term in ("month", "monthly", "30 day")) else 7
-        analysis.append("VERIFIED SALES COMPARISON\\n" + _staff_compare(user, days))
+        analysis.append("VERIFIED SALES COMPARISON\n" + _staff_compare(user, days))
     if role["management"] and any(
         term in q for term in ("debt", "receivab", "invoice", "overdue", "collection")
     ):
-        analysis.append("RECEIVABLES EVIDENCE\\n" + _receivables_brief(user))
+        analysis.append("RECEIVABLES EVIDENCE\n" + _receivables_brief(user))
     if role["inventory"] and any(
         term in q for term in ("inventory", "stock", "reorder", "restock", "shortage")
     ):
-        analysis.append("STOCK EVIDENCE\\n" + inventory_brief(user))
+        analysis.append("STOCK EVIDENCE\n" + inventory_brief(user))
     if role["sales"] and any(
         term in q for term in ("order", "fulfil", "fulfill", "delivery")
     ):
-        analysis.append("ORDER EVIDENCE\\n" + sales_work_brief(user))
+        analysis.append("ORDER EVIDENCE\n" + sales_work_brief(user))
     if not analysis:
         return decision_brief(user)
     return (
-        "\\n\\n".join(analysis[:3])
-        + "\\n\\nWHAT TO CHECK NEXT\\n"
+        "\n\n".join(analysis[:3])
+        + "\n\nWHAT TO CHECK NEXT\n"
         + decision_brief(user)
-        + "\\n\\nInterpretation: these are recorded signals, not proof of why a trend occurred. "
+        + "\n\nInterpretation: these are recorded signals, not proof of why a trend occurred. "
           "Compare missing closings, product availability, timing and order status before acting."
     )
 
