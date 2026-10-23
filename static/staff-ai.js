@@ -25,7 +25,7 @@
     if (typeof action.href !== "string" || !/^\/[a-z0-9/?=&_-]+$/i.test(action.href)) return false;
     return ["/workspace/","/reports/","/inventory/","/online-orders/","/debts/",
       "/communications/","/email/","/closings/","/approvals/","/parties/",
-      "/account/","/sales/new/"].includes(action.href);
+      "/account/","/sales/new/","/settings/connections/"].includes(action.href);
   }
   function bubble(speaker, message, actions) {
     const node = document.createElement("article");
