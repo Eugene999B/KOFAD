@@ -105,7 +105,7 @@ def _intent(text):
         return "security"
     if any(word in q for word in ("send", "message", "notify", "email", "gmail", "sms", "telegram", "draft")):
         return "communication"
-    if any(word in q for word in ("why sales", "why revenue", "risk", "root cause",
+    if any(word in q for word in ("why sales", "why did sales", "why are sales", "why revenue", "risk", "root cause",
                                   "deep analysis", "analyse", "analyze", "insight",
                                   "decision", "what should we", "forecast", "prediction",
                                   "recommend", "action plan")):
