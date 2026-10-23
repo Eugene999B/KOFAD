@@ -8,53 +8,20 @@
 {% block content %}
 <section class="staff-ai-workspace" data-staff-ai-endpoint="{% url 'staff_ai_chat' %}" aria-label="KOFAD staff assistant">
   <header class="staff-ai-header">
-    <div class="staff-ai-identity">
-      <span class="staff-ai-mark" aria-hidden="true">✦</span>
-      <div><h2>KOFAD Assistant</h2><p>Your work, made clearer.</p></div>
-    </div>
-    <div class="staff-ai-toolbar">
-      <span class="staff-ai-private"><span aria-hidden="true">●</span> Staff only</span>
-      {% if perms.core.approve_operations or perms.core.manage_company %}<a class="staff-ai-tool staff-ai-approvals" href="/approvals/" title="Open pending approvals">Approvals</a>{% endif %}
-      <button type="button" class="staff-ai-tool" id="staff-ai-reset" aria-label="Start a new conversation" title="New conversation">↻ <span>New chat</span></button>
-    </div>
+    <div class="staff-ai-identity"><span class="staff-ai-mark" aria-hidden="true">✦</span><h2>KOFAD Assistant</h2></div>
+    <button type="button" class="staff-ai-tool" id="staff-ai-reset" aria-label="Start a new conversation" title="New conversation">↻ <span>New chat</span></button>
   </header>
-
   <div class="staff-ai-conversation">
-    <div class="staff-ai-log" id="staff-ai-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Assistant conversation">
-      <div class="staff-ai-empty" id="staff-ai-empty">
-        <span class="staff-ai-empty-spark" aria-hidden="true">✦</span>
-        <h3>What's on your mind?</h3>
-        <p>Ask about today's work, sales trends, stock or what needs your attention.</p>
+    <div class="staff-ai-log" id="staff-ai-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Assistant conversation"></div>
+    <form id="staff-ai-form" class="staff-ai-form">
+      {% csrf_token %}
+      <label class="sr-only" for="staff-ai-question">Message KOFAD Assistant</label>
+      <div class="staff-ai-compose">
+        <textarea id="staff-ai-question" rows="1" minlength="2" maxlength="600" placeholder="Message KOFAD Assistant..." aria-label="Message KOFAD Assistant" required></textarea>
+        <button id="staff-ai-submit" type="submit" aria-label="Send message" title="Send message"><span aria-hidden="true">↑</span></button>
       </div>
-    </div>
-    <div class="staff-ai-bottom">
-      <div class="staff-ai-suggestions" id="staff-ai-suggestions" aria-label="Try asking">
-        <button type="button" data-ai-prompt="What should I review first today?">✦ Today's priorities</button>
-        {% if perms.core.view_reports or perms.core.operate_finance or perms.core.manage_company %}
-        <button type="button" data-ai-prompt="Analyse why sales changed this week, what evidence supports it, and what we should check next.">↗ Analyse sales</button>
-        <button type="button" data-ai-prompt="Which overdue receivables need follow-up?">◷ Receivables</button>
-        {% endif %}
-        {% if perms.core.operate_inventory or perms.core.manage_company %}
-        <button type="button" data-ai-prompt="Which products need restocking, and where?">▦ Low stock</button>
-        {% endif %}
-        {% if perms.core.operate_sales or perms.core.manage_company %}
-        <button type="button" data-ai-prompt="Which online orders need follow-through?">▣ Open orders</button>
-        {% endif %}
-        <button type="button" data-ai-prompt="Which branches and abilities are assigned to me?">◎ My access</button>
-      </div>
-      <form id="staff-ai-form" class="staff-ai-form">
-        {% csrf_token %}
-        <label class="sr-only" for="staff-ai-question">Ask KOFAD Assistant</label>
-        <div class="staff-ai-compose">
-          <textarea id="staff-ai-question" rows="1" minlength="2" maxlength="600" placeholder="Ask anything about your work..." aria-label="Ask KOFAD Assistant" required></textarea>
-          <button id="staff-ai-submit" type="submit" aria-label="Send message" title="Send message"><span aria-hidden="true">↑</span></button>
-        </div>
-        <div class="staff-ai-meta">
-          <span id="staff-ai-status" role="status">Answers use your permitted KOFAD records.</span>
-          <details class="staff-ai-privacy"><summary>Privacy</summary><p>Information stays within your authorized staff access. Reports may be incomplete. The assistant can prepare guidance and open workflows, but cannot independently send messages, change stock, or approve payments.</p></details>
-        </div>
-      </form>
-    </div>
+      <p class="sr-only" id="staff-ai-status" role="status" aria-live="polite"></p>
+    </form>
   </div>
 </section>
 {% endblock %}
