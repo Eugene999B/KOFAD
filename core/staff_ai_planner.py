@@ -30,7 +30,7 @@ reports detail details summarize summary analyze analyse analysis compare
 compared comparing difference changed change changes increase decrease
 growth drop falling rising fell rose performance trend trends today
 yesterday week weekly month monthly last previous this past days day
-between from to and or also together all each both across into
+between from to and or also together all each both across into not without only
 sales sale selling sold sell purchases purchased products product items
 stock inventory restock reorder shortages shortage low unavailable
 customer customers people buyer buyers transactions transaction
@@ -210,7 +210,7 @@ def _execute(user, question, name):
         _debts, _diagnostics, _email, _momo, _sms, _window,
     )
     from .staff_decisions import decision_brief
-    from .telegram_intelligence import account_tasks, inventory_brief, sales_work_brief
+    from .telegram_intelligence import inventory_brief, sales_work_brief
     roles = _role(user)
     finance = {"sales_activity", "sales_trend", "receivables", "debt_activity", "momo"}
     if name in finance and not roles["management"]:
@@ -252,7 +252,8 @@ def _execute(user, question, name):
     if name == "tasks":
         return decision_brief(user), ""
     if name == "branches":
-        return account_tasks(user), ""
+        from .staff_ai import _role_branches_brief
+        return _role_branches_brief(user, _branches(user), roles), ""
     return None, ""
 
 
