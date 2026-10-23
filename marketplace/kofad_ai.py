@@ -312,6 +312,66 @@ def _customer_orders(customer, question=""):
     )
 
 
+def _grounded_shopping_comparison(question, products):
+    """Make price/budget decisions from published listings, never model guesses.
+
+    Different selling units are not ranked as equivalent: a carton may contain
+    many pieces. No item here is asserted to be in physical stock.
+    """
+    from decimal import Decimal, InvalidOperation
+
+    if not products or not re.search(
+        r"(?i)\b(?:compare|comparison|cheapest|cheaper|lowest price|budget|under|below|"
+        r"best value|which is better|less expensive)\b", question,
+    ):
+        return None
+    priced = []
+    for product in products[:5]:
+        try:
+            value = Decimal(str(product["price"]))
+        except (InvalidOperation, ValueError, TypeError, KeyError):
+            continue
+        if value.is_finite() and value > 0:
+            priced.append((value, product))
+    if not priced:
+        return None
+    priced.sort(key=lambda item: (item[0], item[1]["name"].casefold()))
+    limit = re.search(
+        r"(?i)\b(?:under|below|up to|within|budget(?: of)?)\s*(?:GHS\s*|GH₵\s*|₵\s*)?"
+        r"(\d{1,8}(?:\.\d{1,2})?)\b",
+        question,
+    )
+    if limit:
+        ceiling = Decimal(limit.group(1))
+        priced = [(v, p) for v, p in priced if v <= ceiling]
+        if not priced:
+            return (
+                f"None of the matching published listings I found is priced at or below "
+                f"GHS {ceiling:,.2f}. Tell me another product or budget to check. "
+                "You can also browse https://market.kofadimpex.com/market/."
+            )
+    units = {p["unit"].casefold() for _, p in priced}
+    lines = [
+        "Here's a price comparison from KOFAD's currently published listings:",
+        *(
+            f"• {p['name']} — GHS {value:,.2f} per {p['unit']}\n{p['url']}"
+            for value, p in priced
+        ),
+    ]
+    if len(units) > 1:
+        lines.append(
+            "Important: these are different selling units or pack sizes; "
+            "the lowest listed price is not necessarily the best value per piece."
+        )
+    elif len(priced) > 1:
+        lines.append("The first option has the lowest listed price for the same displayed selling unit.")
+    lines.append(
+        "These are listing prices, not a promise of physical stock or suitability. "
+        "Check the product details and checkout before ordering."
+    )
+    return "\n\n".join(lines)
+
+
 def _offline(question, products, company, history=None):
     """Honest local assistance when free AI is not available."""
     q = question.casefold()
@@ -427,10 +487,10 @@ def _offline(question, products, company, history=None):
                 (f"\nTelephone: {company['phone']}" if company["phone"] else "") +
                 (f"\nEmail: {company['email']}" if company["email"] else "") +
                 (f"\nAddress: {company['address']}" if company["address"] else ""))
-    if re.search(r"\b(?:hello|hi|hey|good morning|good evening|good afternoon)\b", q):
-        return ("Hello! I'm KOFAD Bot. I can help you shop, check your own "
-                "orders after sign-in, or explain delivery and payments. "
-                "What are you looking for?")
+    if re.search(r"\b(?:hello|hi|hey|good morning|good evening|good afternoon|akwaaba|maakye|maaha|maadwo)\b", q):
+        return ("Akwaaba! You're welcome at KOFAD. I can help you check "
+                "published products, ask about a bigger order, or find your "
+                "own order updates after sign-in. What are you looking for today?")
     return (
         "I can't give a reliable answer to that question from KOFAD's "
         "published information alone. Advanced AI may be unavailable or "
@@ -735,6 +795,12 @@ def answer(question, *, customer=None, ai_allowed=True, history=None):
     products = _public_products(
         topic, semantic=bool(ai_allowed and eligible_for_external_ai(question)),
     )
+    # Exact catalogue and budget comparisons are calculated locally from
+    # current SQL-published prices even when a free AI provider is enabled.
+    # A general language model must not invent amounts or compare pack sizes.
+    grounded_comparison = _grounded_shopping_comparison(question, products)
+    if grounded_comparison:
+        return grounded_comparison, "local"
     if ai_allowed:
         generated = _free_completion(question, products, company, public_history)
         if generated:
