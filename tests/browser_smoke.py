@@ -752,6 +752,27 @@ with sync_playwright() as p:
         assert guest_market.locator(".shop-shell-search input").is_visible(), f"Guest market search hidden at {width}"
         assert guest_market.locator(".shop-shell-actions .shop-shell-signin").is_visible(), f"Guest sign-in hidden at {width}"
         assert guest_market.locator(".shop-shell-actions .shop-shell-cart").is_visible(), f"Guest cart hidden at {width}"
+        # Every product card uses compact actions, never the giant unbounded
+        # eye and plus SVGs that overwhelmed the public storefront.
+        if guest_market.locator(".shop-product-grid .commerce-product-card").count():
+            assert guest_market.locator(".shop-product-grid .commerce-product-card").first.evaluate("""card => {
+                const actions = card.querySelector(".commerce-card-actions");
+                const links = actions.querySelectorAll(".product-action-details, .product-action-add");
+                if (links.length !== 2) return false;
+                const icons = [...actions.querySelectorAll(".product-action-icon")];
+                if (icons.length !== 2) return false;
+                const bounds = card.getBoundingClientRect();
+                return icons.every(icon => {
+                    const box = icon.getBoundingClientRect();
+                    return box.width >= 12 && box.width <= 18
+                        && box.height >= 12 && box.height <= 18;
+                }) && [...links].every(link => {
+                    const box = link.getBoundingClientRect();
+                    return box.height >= 34 && box.left >= bounds.left - 1
+                        && box.right <= bounds.right + 1;
+                }) && actions.innerText.includes("View details")
+                    && actions.innerText.includes("Add to cart");
+            }"""), f"Oversized or overflowing product-card action at {width}px"
         if width < 800:
             assert guest_market.locator(".shop-shell-search").evaluate("""el => {
                 const search = el.getBoundingClientRect();
