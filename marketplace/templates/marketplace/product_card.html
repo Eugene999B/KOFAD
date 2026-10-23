@@ -15,8 +15,23 @@
 <div class="commerce-stock-line">{% if listing.available_sell_qty > 0 %}<span class="stock-ok">● Available now</span>{% else %}<span class="stock-out">● Temporarily unavailable</span>{% endif %}<small>{{ listing.selling_label|title }}</small></div>
 <div class="product-price commerce-product-price"><strong>GHS {{ listing.market_price_value|floatformat:2 }}</strong><span>/ {{ listing.selling_label }}</span></div>
 <div class="product-card-actions commerce-card-actions">
-<a href="/market/products/{{ listing.pk }}/"><svg class="shop-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><span>View product</span></a>
-{% if market_customer and listing.available_sell_qty > 0 %}<form method="post" action="/market/cart/add/{{ listing.pk }}/">{% csrf_token %}<input type="hidden" name="quantity" value="1"><input type="hidden" name="next" value="/market/"><button type="submit"><svg class="shop-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add to cart</span></button></form>
-{% elif not market_customer and listing.available_sell_qty > 0 %}<a class="card-order-link" href="/market/access/?next=/market/products/{{ listing.pk }}/"><svg class="shop-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add to cart</span></a>{% endif %}
+<a class="product-action-details" href="/market/products/{{ listing.pk }}/" aria-label="View details of {{ listing.display_name }}">
+  <svg class="shop-ui-icon product-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+  <span>View details</span>
+</a>
+{% if market_customer and listing.available_sell_qty > 0 %}
+<form method="post" action="/market/cart/add/{{ listing.pk }}/">{% csrf_token %}<input type="hidden" name="quantity" value="1"><input type="hidden" name="next" value="/market/">
+  <button class="product-action-add" type="submit" aria-label="Add {{ listing.display_name }} to cart">
+    <svg class="shop-ui-icon product-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h14l-1.5 10h-11L5 10Z"/><path d="M9 10l3-6 3 6"/></svg>
+    <span>Add to cart</span>
+  </button>
+</form>
+{% elif not market_customer and listing.available_sell_qty > 0 %}
+<a class="card-order-link product-action-add" href="/market/access/?next=/market/products/{{ listing.pk }}/" aria-label="Sign in to add {{ listing.display_name }} to cart">
+  <svg class="shop-ui-icon product-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h14l-1.5 10h-11L5 10Z"/><path d="M9 10l3-6 3 6"/></svg>
+  <span>Add to cart</span>
+</a>
+{% endif %}
+
 </div>
 </div></article>
