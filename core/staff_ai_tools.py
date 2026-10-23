@@ -346,7 +346,7 @@ def answer_operational_question(user, question, *, context=""):
     topics = []
     # Actual posted transaction questions should not fall through to a generic welcome
     # or a verified-closing-only summary. Keep causal questions with insight tools.
-    about_sales = bool(re.search(r"\b(?:sold|sales?|selling|revenue|turnover)\b", q))
+    about_sales = bool(re.search(r"\b(?:sell|sold|sales?|selling|revenue|turnover)\b", q))
     wants_explanation = bool(re.search(
         r"\b(?:why|forecast|predict|prediction|trend|compare|comparison|cause|"
         r"reason|growth|increase|decrease|changed|analysis|analyse|analyze)\b", q
