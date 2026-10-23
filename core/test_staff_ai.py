@@ -136,6 +136,115 @@ class StaffAssistantTests(TestCase):
         self.assertTrue(result["read_only"])
         self.assertIn("Recorded sales", result["reply"])
 
+    def test_incomplete_what_is_a_short_natural_reply(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        answer, source = conversational_reply(self.manager, "What")
+        self.assertEqual(source, "clarify")
+        self.assertEqual(answer, "What would you like me to check?")
+        contextual, source = conversational_reply(
+            self.manager, "What?", context="sales_activity"
+        )
+        self.assertEqual(source, "clarify")
+        self.assertIn("about sales", contextual)
+        self.assertNotIn("verified KOFAD report", contextual)
+
+    def test_social_conversation_does_not_need_an_external_provider(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        cases = (
+            ("Hello", "Hi!"),
+            ("How are you?", "here and ready"),
+            ("Thanks", "You're welcome"),
+            ("Who are you?", "KOFAD Assistant"),
+            ("What can you do?", "KOFAD records"),
+        )
+        for question, expected in cases:
+            answer, source = conversational_reply(self.manager, question)
+            self.assertIn(expected, answer, question)
+            self.assertEqual(source, "conversation")
+
+    def test_followup_why_uses_actual_posted_sales_comparison(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        answer, source = conversational_reply(
+            self.manager, "Why?", context="sales_activity"
+        )
+        self.assertEqual(source, "sales_trend")
+        self.assertIn("Recorded sales comparison", answer)
+        self.assertIn("cause is unverified", answer)
+        denied, source = conversational_reply(
+            self.seller, "Why?", context="sales_activity"
+        )
+        self.assertEqual(source, "denied")
+        self.assertNotIn("GHS", denied)
+
+    def test_followup_date_rechecks_permissions_and_returns_actual_records(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        answer, source = conversational_reply(
+            self.manager, "What about yesterday?", context="sales_activity"
+        )
+        self.assertEqual(source, "sales_activity")
+        self.assertIn("Recorded sales", answer)
+        denied, source = conversational_reply(
+            self.seller, "And yesterday?", context="sales_activity"
+        )
+        self.assertEqual(source, "denied")
+        self.assertNotIn("GHS", denied)
+        uncertain, source = conversational_reply(
+            self.manager, "What about yesterday?", context="unknown"
+        )
+        self.assertEqual(source, "clarify")
+        self.assertIn("Which report", uncertain)
+
+    def test_tell_me_more_uses_real_sales_tool_without_making_up_cause(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        text, source = conversational_reply(
+            self.manager, "Tell me more", context="sales_activity"
+        )
+        self.assertEqual(source, "sales_trend")
+        self.assertIn("finalized ledger postings", text)
+        question, source = conversational_reply(self.manager, "Tell me more")
+        self.assertEqual(source, "clarify")
+        self.assertLess(len(question), 130)
+
+    @override_settings(KOFAD_STAFF_AI_PLANNER_ENABLED=True)
+    @patch("core.staff_ai_planner._ai_plan")
+    def test_chat_short_messages_skip_external_planner(self, planned):
+        messages = [
+            ("What", "What would you like me to check?"),
+            ("Thanks", "You're welcome"),
+            ("What?", "about sales"),
+        ]
+        for message, expected in messages:
+            request = self.factory.post(
+                "/staff/assistant/chat/",
+                data=json.dumps({
+                    "message": message,
+                    "context": "sales_activity" if message == "What?" else "",
+                }),
+                content_type="application/json",
+            )
+            request.user = self.manager
+            request.session = {}
+            response = assistant_chat(request)
+            self.assertEqual(response.status_code, 200)
+            result = json.loads(response.content)
+            self.assertIn(expected, result["reply"])
+            self.assertFalse(result["external_ai_used"])
+        planned.assert_not_called()
+
+    def test_unknown_request_stays_short_not_repetitive_marketing(self):
+        answer, source = staff_reply(
+            self.manager, "some unrelated puzzling phrase"
+        )
+        self.assertEqual(source, "clarify")
+        self.assertNotIn("verified KOFAD report", answer)
+        self.assertNotIn("I won't invent an answer", answer)
+        self.assertLess(len(answer), 190)
+
     def test_anonymous_and_unassigned_do_not_read_staff_data(self):
         anonymous = User()
         anonymous.is_active = False
