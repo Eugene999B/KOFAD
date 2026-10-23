@@ -10,6 +10,14 @@ on:
       - "marketplace/templates/marketplace/base.html"
       - "marketplace/urls.py"
       - "core/telegram_assistant.py"
+      - "core/staff_ai.py"
+      - "core/staff_ai_sales.py"
+      - "core/staff_ai_tools.py"
+      - "core/staff_ai_views.py"
+      - "core/test_staff_ai.py"
+      - "templates/staff_ai.html"
+      - "static/staff-ai.js"
+      - "static/staff-ai.css"
       - "core/domain_middleware.py"
       - "config/settings.py"
       - ".github/workflows/kofad-free-ai.yml"
@@ -48,7 +56,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt -c requirements.lock
-      - run: ruff check marketplace/kofad_ai.py marketplace/kofad_ai_views.py marketplace/test_kofad_ai.py core/telegram_assistant.py core/domain_middleware.py
+      - run: ruff check marketplace/kofad_ai.py marketplace/kofad_ai_views.py marketplace/test_kofad_ai.py core/telegram_assistant.py core/domain_middleware.py core/staff_ai.py core/staff_ai_sales.py core/staff_ai_tools.py core/staff_ai_views.py core/test_staff_ai.py
+      - run: node --check static/staff-ai.js
       - run: node --check marketplace/static/marketplace/kofad-ai.js
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
