@@ -8,8 +8,6 @@
   const field = document.getElementById("staff-ai-question");
   const submit = document.getElementById("staff-ai-submit");
   const status = document.getElementById("staff-ai-status");
-  const suggestions = document.getElementById("staff-ai-suggestions");
-  const empty = document.getElementById("staff-ai-empty");
   const reset = document.getElementById("staff-ai-reset");
   const token = form.querySelector("input[name=csrfmiddlewaretoken]");
   let busy = false;
@@ -83,8 +81,6 @@
     const value = (question || "").trim();
     if (busy || value.length < 2 || value.length > 600) return;
     setWorking(true);
-    if (empty) empty.hidden = true;
-    if (suggestions) suggestions.hidden = true;
     bubble("You", value);
     field.value = "";
     resizeField();
@@ -133,14 +129,9 @@
     }
   });
   field.addEventListener("input", resizeField);
-  document.querySelectorAll("[data-ai-prompt]").forEach(function (button) {
-    button.addEventListener("click", function () { ask(button.dataset.aiPrompt || ""); });
-  });
   reset.addEventListener("click", function () {
     if (inFlight) inFlight.abort();
     log.querySelectorAll(".staff-ai-message").forEach(function (node) { node.remove(); });
-    if (empty) empty.hidden = false;
-    if (suggestions) suggestions.hidden = false;
     lastTopic = "";
     field.value = "";
     resizeField();
