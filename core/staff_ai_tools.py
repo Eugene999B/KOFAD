@@ -4,7 +4,7 @@ Use KOFAD's existing ORM and approval boundaries. Never execute generated SQL,
 publish email bodies, expose credentials, or contact external providers here.
 """
 import re
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
@@ -111,7 +111,7 @@ def _momo(user, start, end):
     )
 
 
-def _debts(user, start, end, first, last):
+def _debts(user, start, end):
     from .models import Allocation, Document
 
     branches = _branches(user)
@@ -338,7 +338,7 @@ def answer_operational_question(user, question, *, context=""):
         if topic == "momo":
             results.append(_momo(user, start, end))
         elif topic == "debt_activity":
-            results.append(_debts(user, start, end, first, last))
+            results.append(_debts(user, start, end))
         elif topic == "sms":
             results.append(_sms(user, start, end, question))
         elif topic == "email":
