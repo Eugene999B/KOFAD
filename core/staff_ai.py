@@ -105,7 +105,7 @@ def _intent(text):
         return "security"
     if any(word in q for word in ("send", "message", "notify", "email", "gmail", "sms", "telegram", "draft")):
         return "communication"
-    if any(word in q for word in ("why sales", "why revenue", "risk", "root cause",
+    if any(word in q for word in ("why sales", "why did sales", "why are sales", "why revenue", "risk", "root cause",
                                   "deep analysis", "analyse", "analyze", "insight",
                                   "decision", "what should we", "forecast", "prediction",
                                   "recommend", "action plan")):
@@ -208,6 +208,8 @@ def staff_actions(user, source):
         actions.append({"label": "Open customer debts", "href": "/debts/"})
     if source == "draft" and (user.is_superuser or user.has_perm("core.operate_sales")):
         actions.append({"label": "Review communications", "href": "/communications/"})
+    if source == "sales_activity" and roles["management"]:
+        actions.append({"label": "Sales history", "href": "/documents/?kind=sale"})
     if source == "momo" and roles["management"]:
         actions.append({"label": "Open reports", "href": "/reports/"})
     if source == "debt_activity" and roles["management"]:
@@ -328,16 +330,15 @@ def staff_reply(user, question, *, context=""):
         return _honest_closing_report(_staff_analysis(user, days)) + "\nFor detail and reconciliation, open /workspace/.", "reports"
     if intent == "tasks":
         return decision_brief(user), "tasks"
-    choices = ["your assigned branches", "evidence-ranked priorities", "operational risks"]
-    if role["management"]:
-        choices.extend(["sales today", "sales trends this month", "why sales changed", "overdue invoices and receivables"])
-    if role["inventory"]:
-        choices.append("low stock and restocking")
-    if role["sales"]:
-        choices.append("pending online orders")
+    if intent == "help":
+        return (
+            "I can investigate actual posted sales and products, cash/MoMo, debt, "
+            "SMS, email, inventory and operational issues within your access. "
+            "I can prepare next steps and take you to the approved workflow; "
+            "I can't make financial changes or send messages without that workflow."
+        ), "help"
     return (
-        "Hello! I'm your KOFAD Staff Assistant. I can check " + ", ".join(choices)
-        + ".\n\nTry: “What needs attention today?” or ask for a report using "
-        "ordinary language. Figures come from authorized KOFAD records, not AI guesses. "
-        "This chat cannot approve, edit, or send transactions; it will label missing evidence."
-    ), "help"
+        "I couldn't confidently match that question to a verified KOFAD report. "
+        "Please specify the record or task and a date or period—for example, "
+        "‘What products were sold today?’ I won't invent an answer."
+    ), "clarify"

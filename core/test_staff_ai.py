@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth.models import Permission, User
 from django.test import RequestFactory, TestCase, override_settings
 
-from core.models import Access, Allocation, Branch, Document, Message, Party, Payment, Product, SmsAttempt, Stock
+from core.models import Access, Allocation, Branch, Document, Line, Message, Party, Payment, Product, SmsAttempt, Stock
 from core.staff_ai import staff_reply, staff_actions
 from core.staff_ai_views import assistant_chat
 from core.email_models import EmailLetter, EmailMailbox, EmailMailboxMember
@@ -157,9 +157,72 @@ class StaffAssistantTests(TestCase):
 
     def test_missing_verified_closings_are_not_treated_as_zero_real_sales(self):
         response, source = staff_reply(self.manager, "Show sales today")
-        self.assertEqual(source, "reports")
-        self.assertIn("this does not mean KOFAD made zero sales", response)
-        self.assertNotIn("Recorded sales: GHS 0.00", response)
+        self.assertEqual(source, "sales_activity")
+        self.assertIn("No finalized sale documents were found", response)
+        self.assertIn("This does not prove that no goods changed hands", response)
+        self.assertIn("Reconciliation is not confirmed", response)
+
+    def test_exact_screenshot_question_reaches_live_sales_tool(self):
+        response, source = staff_reply(self.manager, "What was really sold today")
+        self.assertEqual(source, "sales_activity")
+        self.assertIn("Recorded sales", response)
+        self.assertNotIn("Hello!", response)
+        self.assertNotIn("Try:", response)
+
+    def test_posted_sales_show_real_products_returns_and_branch_scope(self):
+        visible = Product.objects.create(
+            sku="AI-SALE-BOX", name="Visible Rice Pack", retail_unit=Decimal("3.00"), active=True,
+        )
+        hidden = Product.objects.create(
+            sku="AI-SALE-HIDDEN", name="Private Other Branch Stock", retail_unit=Decimal("2.00"), active=True,
+        )
+        for branch, product, value in (
+            (self.hq, visible, Decimal("60.00")),
+            (self.other, hidden, Decimal("999.00")),
+        ):
+            doc = Document.objects.create(
+                reference="AI-POSTED-" + branch.code, branch=branch, kind="sale",
+                total=value, paid=value, created_by=self.manager,
+            )
+            Line.objects.create(
+                document=doc, product=product, description=product.name, mode="unit",
+                quantity=2, factor=1, unit_price=value / 2, unit_cost=Decimal("1"),
+                total=value,
+            )
+        ret = Document.objects.create(
+            reference="AI-RETURN-HQ", branch=self.hq, kind="return",
+            total=Decimal("10.00"), paid=Decimal("10.00"), created_by=self.manager,
+        )
+        Line.objects.create(
+            document=ret, product=visible, description="Visible Rice Pack", mode="unit",
+            quantity=1, factor=1, unit_price=Decimal("10.00"),
+            unit_cost=Decimal("1"), total=Decimal("10.00"),
+        )
+        analyst = User.objects.create_user("sale-analyst", password="test-only-pass")
+        analyst.user_permissions.add(Permission.objects.get(codename="view_reports"))
+        Access.objects.get(user=analyst).branches.add(self.hq)
+        reply, source = staff_reply(analyst, "What did we actually sell today?")
+        self.assertEqual(source, "sales_activity")
+        self.assertIn("Gross recorded sales: GHS 60.00", reply)
+        self.assertIn("Net recorded sales after returns: GHS 50.00", reply)
+        self.assertIn("Visible Rice Pack", reply)
+        self.assertNotIn("999.00", reply)
+        self.assertNotIn("Private Other Branch Stock", reply)
+        self.assertIn({"label": "Sales history", "href": "/documents/?kind=sale"},
+                      staff_actions(analyst, "sales_activity"))
+        self.assertEqual(staff_actions(self.seller, "sales_activity"), [])
+
+    def test_sales_followup_changes_date_without_reusing_unauthorized_data(self):
+        reply, source = staff_reply(self.manager, "What about yesterday?", context="sales_activity")
+        self.assertEqual(source, "sales_activity")
+        self.assertIn("Recorded sales", reply)
+        denied, source = staff_reply(self.seller, "What about yesterday?", context="sales_activity")
+        self.assertEqual(source, "denied")
+
+    def test_analytical_sales_questions_do_not_collapse_into_simple_counts(self):
+        result, source = staff_reply(self.manager, "Why did sales change this week?")
+        self.assertEqual(source, "insights")
+        self.assertIn("VERIFIED SALES COMPARISON", result)
 
     def test_staff_analysis_stays_grounded_and_permission_scoped(self):
         text, source = staff_reply(self.manager, "Deep analysis: why did sales change this week?")
