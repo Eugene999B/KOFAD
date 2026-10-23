@@ -131,6 +131,88 @@ def _intent(text):
     return "clarify"
 
 
+def _role_branches_brief(user, branches, role):
+    """Explain permissions and branch assignments together, not as two unrelated replies."""
+    abilities = []
+    if role["management"]:
+        abilities.append("verified closings, finance trends and evidence-based reporting")
+    if role["inventory"]:
+        abilities.append("inventory exceptions and restocking reviews")
+    if role["sales"]:
+        abilities.append("online-order fulfilment reviews")
+    names = list(branches.order_by("name").values_list("name", flat=True)[:30])
+    return (
+        "YOUR CURRENT KOFAD ACCESS\\n"
+        + "Authorized branches: " + ", ".join(names)
+        + (" (first 30 shown)" if branches.count() > 30 else "")
+        + "\\nAvailable abilities: " + "; ".join(abilities)
+        + "\\nThese permissions are verified on each request. You can open the relevant workflows below."
+    )
+
+
+def _evidence_analysis(user, question, role):
+    """Compose live, independently permission-scoped tools; no invented causal claims."""
+    q = question.casefold()
+    analysis = []
+    if role["management"] and any(
+        term in q for term in ("sale", "revenue", "trend", "performance", "clos", "why", "forecast")
+    ):
+        days = 30 if any(term in q for term in ("month", "monthly", "30 day")) else 7
+        analysis.append("VERIFIED SALES COMPARISON\\n" + _staff_compare(user, days))
+    if role["management"] and any(
+        term in q for term in ("debt", "receivab", "invoice", "overdue", "collection")
+    ):
+        analysis.append("RECEIVABLES EVIDENCE\\n" + _receivables_brief(user))
+    if role["inventory"] and any(
+        term in q for term in ("inventory", "stock", "reorder", "restock", "shortage")
+    ):
+        analysis.append("STOCK EVIDENCE\\n" + inventory_brief(user))
+    if role["sales"] and any(
+        term in q for term in ("order", "fulfil", "fulfill", "delivery")
+    ):
+        analysis.append("ORDER EVIDENCE\\n" + sales_work_brief(user))
+    if not analysis:
+        return decision_brief(user)
+    return (
+        "\\n\\n".join(analysis[:3])
+        + "\\n\\nWHAT TO CHECK NEXT\\n"
+        + decision_brief(user)
+        + "\\n\\nInterpretation: these are recorded signals, not proof of why a trend occurred. "
+          "Compare missing closings, product availability, timing and order status before acting."
+    )
+
+
+def staff_actions(user, source):
+    """Explicit navigation tools. Never let client text choose URLs or bypass permissions."""
+    if not user or not user.is_authenticated or not user.is_active:
+        return []
+    branches = _branches(user)
+    if not branches.exists():
+        return []
+    roles = _role(user)
+    if not any(roles.values()):
+        return []
+    actions = []
+    if source in {"insights", "tasks", "compare", "reports"} and roles["management"]:
+        if user.is_superuser or user.has_perm("core.view_reports") or user.has_perm("core.manage_company"):
+            actions.append({"label": "Open reports", "href": "/reports/"})
+        if user.is_superuser or user.has_perm("core.operate_finance"):
+            actions.append({"label": "Review closings", "href": "/closings/"})
+    if source in {"inventory", "insights", "tasks"} and roles["inventory"]:
+        actions.append({"label": "Open inventory", "href": "/inventory/"})
+    if source in {"orders", "insights", "tasks"} and roles["sales"]:
+        actions.append({"label": "View online orders", "href": "/online-orders/"})
+    if source == "receivables" and (
+        user.is_superuser or user.has_perm("core.operate_sales") or user.has_perm("core.operate_finance")
+    ):
+        actions.append({"label": "Open customer debts", "href": "/debts/"})
+    if source == "draft" and (user.is_superuser or user.has_perm("core.operate_sales")):
+        actions.append({"label": "Review communications", "href": "/communications/"})
+    if source in {"branches", "role"}:
+        actions.append({"label": "My account", "href": "/account/"})
+    return actions[:3]
+
+
 def staff_reply(user, question, *, context=""):
     """Derive an answer from *current* permissions and authorized branches.
 
@@ -165,7 +247,7 @@ def staff_reply(user, question, *, context=""):
               "Check recipient consent, evidence and any delivery cost before sending."
         ), "draft"
     if intent == "insights":
-        return decision_brief(user), "insights"
+        return _evidence_analysis(user, question, role), "insights"
     if intent == "role":
         allowed = []
         if role["management"]:
@@ -179,6 +261,8 @@ def staff_reply(user, question, *, context=""):
             "Authorized active branches: " + str(branches.count()) + ".\n"
             "All results are read-only, scoped to your current account and subject to live permission checks."
         ), "role"
+    if intent == "branches" and any(token in q for token in ("abilit", "permission", "access", "assigned to me", "my role")):
+        return _role_branches_brief(user, branches, role), "role"
     if intent == "branches":
         return (
             "Your authorized active KOFAD branches:\n"
