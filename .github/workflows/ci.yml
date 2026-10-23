@@ -12,7 +12,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # Pin a Playwright-tested Ubuntu base; rolling runner images can stall apt
+    # browser dependency setup and block verified product-page releases.
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
