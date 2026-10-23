@@ -10,7 +10,7 @@ from django.contrib.auth.models import Permission, User
 from django.test import RequestFactory, TestCase
 
 from core.models import Access, Allocation, Branch, Document, Party, Product, Stock
-from core.staff_ai import staff_reply
+from core.staff_ai import staff_reply, staff_actions
 from core.staff_ai_views import assistant_chat
 
 
@@ -145,6 +145,46 @@ class StaffAssistantTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("no-store", response["Cache-Control"])
         self.assertFalse(json.loads(response.content)["external_ai_used"])
+
+    def test_branch_and_abilities_question_is_answered_together(self):
+        response, source = staff_reply(self.seller, "Which branches and abilities are assigned to me?")
+        self.assertEqual(source, "role")
+        self.assertIn("Head Office", response)
+        self.assertIn("online-order fulfilment", response)
+        self.assertNotIn("Hidden Depot", response)
+        self.assertNotIn("finance trends", response)
+
+    def test_staff_analysis_stays_grounded_and_permission_scoped(self):
+        text, source = staff_reply(self.manager, "Deep analysis: why did sales change this week?")
+        self.assertEqual(source, "insights")
+        self.assertIn("VERIFIED SALES COMPARISON", text)
+        self.assertIn("recorded signals", text)
+        restricted, source = staff_reply(self.seller, "Deep analysis: why did sales change this week?")
+        self.assertNotIn("VERIFIED SALES COMPARISON", restricted)
+
+    def test_workflow_actions_respect_current_permissions(self):
+        self.assertEqual(staff_actions(self.seller, "reports"), [])
+        self.assertEqual(staff_actions(self.seller, "receivables"), [])
+        self.assertIn({"label": "View online orders", "href": "/online-orders/"},
+                      staff_actions(self.seller, "orders"))
+        self.assertIn({"label": "Open inventory", "href": "/inventory/"},
+                      staff_actions(self.inventory, "inventory"))
+        self.inventory_access.force_password_change = True
+        self.inventory_access.save(update_fields=["force_password_change"])
+        self.assertEqual(staff_actions(self.inventory, "inventory"), [])
+
+    def test_chat_exposes_only_server_approved_workflow_links(self):
+        request = self.factory.post(
+            "/staff/assistant/chat/", data=json.dumps({"message": "pending online orders"}),
+            content_type="application/json",
+        )
+        request.user = self.seller
+        request.session = {}
+        response = assistant_chat(request)
+        payload = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["actions"], [{"label": "View online orders", "href": "/online-orders/"}])
+        self.assertTrue(payload["read_only"])
 
     def test_chat_rejects_oversized_and_bad_input(self):
         request = self.factory.post(
