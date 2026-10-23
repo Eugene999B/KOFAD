@@ -251,7 +251,7 @@ def _email(user, start, end, question):
     q = question.casefold()
     incoming_requested = bool(re.search(
         r"\b(?:received|receive|incoming|inbox|inbound|got|gotten|arrived|new emails?|any emails?)\b", q
-    )) and not bool(re.search(r"\b(?:sent|outgoing|submitted|send)\b", q))
+    )) and not bool(re.search(r"\b(?:outgoing|we sent|emails? sent by us|submitted to provider)\b", q))
     if incoming_requested:
         received = EmailLetter.objects.filter(
             mailbox__in=visible, direction="inbound",
