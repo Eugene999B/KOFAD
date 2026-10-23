@@ -338,7 +338,6 @@ def staff_reply(user, question, *, context=""):
             "I can't make financial changes or send messages without that workflow."
         ), "help"
     return (
-        "I couldn't confidently match that question to a verified KOFAD report. "
-        "Please specify the record or task and a date or period—for example, "
-        "‘What products were sold today?’ I won't invent an answer."
+        "I can look into that, but I need a little more detail. "
+        "Are you asking about sales, customers, payments, stock, messages or something else?"
     ), "clarify"
