@@ -294,7 +294,10 @@ def answer_operational_question(user, question, *, context=""):
     topics = []
     if re.search(r"\b(?:momo|mobile money|mobile-money)\b", q):
         topics.append("momo")
-    if re.search(r"\b(?:debt|debts|receivable|receivables|overdue|owing|owed|invoice|invoices)\b", q):
+    if re.search(r"\b(?:debt|debts|receivable|receivables|overdue|owing|owed|invoice|invoices)\b", q) and (
+        re.search(r"\b(?:how many|count|number|between|from|last month|this month|last week|this week|past \d+ days)\b", q)
+        or re.search(r"\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4}", q)
+    ):
         topics.append("debt_activity")
     if re.search(r"\b(?:sms|text messages?|arkesel)\b", q):
         topics.append("sms")
