@@ -203,6 +203,13 @@ def _arkesel_balance():
 def _sms(user, start, end, question):
     from .models import Message, SmsAttempt
 
+    q = question.casefold()
+    balance_only = bool(re.search(r"\b(?:left|remaining|balance|credits?|quota)\b", q))
+    activity_requested = bool(re.search(
+        r"\b(?:sent|delivered|failed|received|how many messages|history|attempts|types|category)\b", q
+    ))
+    if balance_only and not activity_requested:
+        return "Arkesel SMS credits available: " + _arkesel_balance()
     branches = _branches(user)
     messages = Message.objects.filter(
         branch__in=branches, channel="sms", created_at__gte=start, created_at__lt=end
@@ -241,6 +248,32 @@ def _email(user, start, end, question):
     visible = visible_mailboxes(user)
     if not visible.exists() and not user.is_superuser:
         return "No authorized email mailboxes are available to this staff account."
+    q = question.casefold()
+    incoming_requested = bool(re.search(
+        r"\b(?:received|receive|incoming|inbox|inbound|got|gotten|arrived|new emails?|any emails?)\b", q
+    )) and not bool(re.search(r"\b(?:outgoing|we sent|emails? sent by us|submitted to provider)\b", q))
+    if incoming_requested:
+        received = EmailLetter.objects.filter(
+            mailbox__in=visible, direction="inbound",
+            created_at__gte=start, created_at__lt=end,
+        )
+        count = received.count()
+        result = (
+            f"Yes — {count} incoming email(s) are recorded in your authorized KOFAD inboxes for that period."
+            if count else
+            "No incoming email is recorded in your authorized KOFAD inboxes for that period."
+        )
+        if count and re.search(r"\b(?:who|which|sender|address|subject|from|details?)\b", q):
+            result += "\nMost recent received messages (metadata only):"
+            for item in received.order_by("-created_at").values(
+                "from_address", "subject", "mailbox__address"
+            )[:5]:
+                result += (
+                    f"\n• {item['from_address']} → {item['mailbox__address']} | "
+                    f"{item['subject'][:90] or '(no subject)'}"
+                )
+        result += "\nThis reflects KOFAD's received-email records, not a live provider inbox sync."
+        return result
     letters = EmailLetter.objects.filter(mailbox__in=visible, direction="outbound")
     initiated = letters.filter(created_at__gte=start, created_at__lt=end)
     submitted = letters.filter(submitted_at__gte=start, submitted_at__lt=end)
@@ -417,4 +450,6 @@ def answer_operational_question(user, question, *, context=""):
             results.append(_diagnostics(user, start, end))
     if blocked:
         results.append("Not included due to your account permissions: " + ", ".join(dict.fromkeys(blocked)) + ".")
+    if len(permitted) == 1 and not blocked and permitted[0] in {"sms", "email"} and len(results[1]) < 450:
+        return results[1], permitted[0]
     return "\n\n".join(results), permitted[0] if len(permitted) == 1 else "operations"

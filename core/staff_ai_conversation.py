@@ -46,7 +46,7 @@ FOLLOWUP_PERIOD = re.compile(
 )
 
 
-def conversational_reply(user, question, *, context=""):
+def conversational_reply(user, question, *, context="", turn_count=0):
     """Return (answer, source) or None to use the structured business router."""
     if not isinstance(question, str):
         return None
@@ -54,9 +54,41 @@ def conversational_reply(user, question, *, context=""):
     normalized = value.strip(" \t\r\n.!?,")
     topic = TOPIC_LABELS.get(context)
     if GREETING.fullmatch(value):
+        if isinstance(turn_count, int) and turn_count > 0:
+            return ("Hey again! What shall we look at next?", "conversation")
         return ("Hi! What would you like to look into?", "conversation")
     if normalized in {"how are you", "how are you doing", "are you there"}:
         return ("I'm here and ready to help. What's on your mind?", "conversation")
+    if normalized in {
+        "are you okay", "are u okay", "r u okay", "are you ok", "you okay",
+        "you ok", "r you okay", "how is it going", "how's it going",
+        "are you working", "are you fine",
+    }:
+        return ("I'm here and working. What would you like to talk about or check?", "conversation")
+    if normalized in {"good", "great", "nice", "cool", "alright", "i see"}:
+        return ("Glad that helps. Anything else you'd like to explore?", "conversation")
+    if normalized in {"why is that", "why did that happen", "what does that mean", "explain the result"}:
+        if context == "email":
+            return (
+                "For email, submitted means KOFAD handed a message to its provider. "
+                "It doesn't confirm inbox delivery. Incoming mail is counted separately. "
+                "Would you like me to check received messages or sent messages?",
+                "clarify",
+            )
+        if context == "sms":
+            return (
+                "SMS submitted and delivered are different provider states. "
+                "Retries can produce both failed and successful attempts. "
+                "Would you like delivery details or the remaining SMS credit balance?",
+                "clarify",
+            )
+        if topic:
+            return (
+                f"The {topic} figures come from your authorized KOFAD records. "
+                "A recorded change doesn't prove a cause. Which result should I investigate more closely?",
+                "clarify",
+            )
+        return ("What result would you like me to explain?", "clarify")
     if normalized in {"thank you", "thanks", "thank you so much", "ok thanks", "okay thanks"}:
         return ("You're welcome!", "conversation")
     if normalized in {"who are you", "what are you", "what is this"}:
