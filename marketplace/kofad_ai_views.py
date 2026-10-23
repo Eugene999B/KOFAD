@@ -10,7 +10,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from . import services
-from .kofad_ai import answer, free_configured, eligible_for_external_ai, reserve_free_request
+from .kofad_ai import answer, customer_actions, free_configured, eligible_for_external_ai, reserve_free_request
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ def message(request):
     )
     response = JsonResponse({
         "reply": reply, "source": source,
+        "actions": customer_actions(data["message"], customer),
         "ai_mode": ("free" if source == "free-ai" else
                     "private" if source == "private" else
                     "provider_unavailable" if mode == "ready" else mode),
