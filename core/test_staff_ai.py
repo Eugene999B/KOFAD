@@ -4,10 +4,10 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.utils import timezone
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Permission, User
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
 from core.models import Access, Allocation, Branch, Document, Message, Party, Payment, Product, SmsAttempt, Stock
 from core.staff_ai import staff_reply, staff_actions
@@ -237,6 +237,7 @@ class StaffAssistantTests(TestCase):
         self.assertEqual(source, "denied")
         self.assertNotIn("GHS", denied)
 
+    @override_settings(ARKESEL_API_KEY='')
     def test_sms_counts_are_scoped_and_remaining_credits_are_not_invented(self):
         p = Party.objects.create(branch=self.hq, kind="customer", name="SMS tested", phone="0240000301")
         msg = Message.objects.create(
@@ -256,6 +257,26 @@ class StaffAssistantTests(TestCase):
         denied, source = staff_reply(self.seller, "How many SMS credits are left today?")
         self.assertEqual(source, "denied")
         self.assertNotIn("with recorded delivery: 1", denied)
+
+    @override_settings(SMS_PROVIDER="arkesel", ARKESEL_API_KEY="ci-test-only-arkesel-key")
+    @patch("requests.get")
+    def test_sms_remaining_credit_checks_read_only_arkesel_api(self, get):
+        from django.core.cache import cache
+        from core.staff_ai_tools import _arkesel_balance
+
+        cache.delete("kofad:staff-ai:arkesel-sms-credit:v1")
+        get.return_value = Mock(status_code=200, json=lambda: {
+            "status": "success", "data": {"sms_balance": "2003", "main_balance": "GHS 20.99"},
+        })
+        self.assertIn("2,003 credits", _arkesel_balance())
+        self.assertIn("2,003 credits", _arkesel_balance())
+        get.assert_called_once()
+        self.assertEqual(get.call_args.args[0],
+                         "https://sms.arkesel.com/api/v2/clients/balance-details")
+        self.assertNotIn("GHS 20.99", _arkesel_balance())
+        cache.delete("kofad:staff-ai:arkesel-sms-credit:v1")
+        get.return_value = Mock(status_code=401)
+        self.assertIn("not available", _arkesel_balance())
 
     def test_mail_reports_require_mailbox_read_access(self):
         mailbox, _ = EmailMailbox.objects.get_or_create(address="sales@kofadimpex.com", defaults={"label": "Sales"})
