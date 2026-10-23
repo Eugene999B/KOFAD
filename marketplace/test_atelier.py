@@ -60,6 +60,24 @@ class AtelierAssetsTests(SimpleTestCase):
         inspector.feed(path.read_text(encoding="utf-8"))
         self.assertEqual(inspector.nested_forms, [], "Product-card forms must not be nested inside links.")
 
+    def test_product_cards_use_compact_accessible_actions(self):
+        root = Path(settings.BASE_DIR)
+        card = (root / "marketplace/templates/marketplace/product_card.html").read_text()
+        stylesheet = (root / "marketplace/static/marketplace/product-actions.css").read_text()
+        base = (root / "marketplace/templates/marketplace/base.html").read_text()
+        self.assertIn("product-action-details", card)
+        self.assertIn("product-action-add", card)
+        self.assertIn("product-action-icon", card)
+        self.assertIn("View details", card)
+        self.assertIn("Add to cart", card)
+        self.assertIn('aria-label="View details of', card)
+        self.assertIn('aria-label="Sign in to add', card)
+        self.assertIn("width:16px !important", stylesheet)
+        self.assertIn("height:16px !important", stylesheet)
+        self.assertIn("min-height:44px !important", stylesheet)
+        self.assertIn("prefers-reduced-motion", stylesheet)
+        self.assertIn("marketplace/product-actions.css", base)
+
     def test_unified_theme_defines_light_dark_and_responsive_rules(self):
         file = Path(settings.BASE_DIR) / "static" / "kofad-atelier.css"
         css = file.read_text(encoding="utf-8")
