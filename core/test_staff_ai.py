@@ -9,9 +9,10 @@ from unittest.mock import patch
 from django.contrib.auth.models import Permission, User
 from django.test import RequestFactory, TestCase
 
-from core.models import Access, Allocation, Branch, Document, Party, Product, Stock
+from core.models import Access, Allocation, Branch, Document, Message, Party, Payment, Product, SmsAttempt, Stock
 from core.staff_ai import staff_reply, staff_actions
 from core.staff_ai_views import assistant_chat
+from core.email_models import EmailLetter, EmailMailbox, EmailMailboxMember
 
 
 class StaffAssistantTests(TestCase):
@@ -200,6 +201,85 @@ class StaffAssistantTests(TestCase):
         request.user = self.manager
         request.session = {}
         self.assertEqual(assistant_chat(request).status_code, 400)
+
+    def test_operational_date_parser_is_gra_local_and_bounded(self):
+        from core.staff_ai_tools import _window
+
+        start, end, _, _ = _window("from 2026-10-01 to 2026-10-23")
+        self.assertEqual((str(start), str(end)), ("2026-10-01", "2026-10-23"))
+        d, e, _, _ = _window("SMS sent 01/10/2026")
+        self.assertEqual(d, e)
+        self.assertEqual(str(d), "2026-10-01")
+        with self.assertRaises(ValueError):
+            _window("from 2026-11-01 to 2026-10-01")
+        with self.assertRaises(ValueError):
+            _window("from 2024-01-01 to 2026-10-23")
+
+    def test_momo_uses_linked_customers_and_never_exposes_other_branches(self):
+        p = Party.objects.create(branch=self.hq, kind="customer", name="Visible", phone="0240000191")
+        hidden = Party.objects.create(branch=self.other, kind="customer", name="Hidden", phone="0240000192")
+        for b, party, amount in ((self.hq, p, "32.00"), (self.other, hidden, "9999.00")):
+            sale = Document.objects.create(
+                reference=f"AI-MOMO-{b.code}", branch=b, kind="sale",
+                party=party, total=Decimal(amount), paid=Decimal(amount), created_by=self.manager,
+            )
+            Payment.objects.create(document=sale, method="momo", direction=1, amount=Decimal(amount))
+        analyst = User.objects.create_user("momo-analyst", password="test-only-pass")
+        analyst.user_permissions.add(Permission.objects.get(codename="view_reports"))
+        Access.objects.get(user=analyst).branches.add(self.hq)
+        date = timezone.localdate().isoformat()
+        result, source = staff_reply(analyst, f"How many people used MoMo on {date}?")
+        self.assertEqual(source, "momo")
+        self.assertIn("Distinct linked customers using MoMo: 1", result)
+        self.assertIn("GHS 32.00", result)
+        self.assertNotIn("9,999.00", result)
+        denied, source = staff_reply(self.seller, f"How many people used MoMo on {date}?")
+        self.assertEqual(source, "denied")
+        self.assertNotIn("GHS", denied)
+
+    def test_sms_counts_are_scoped_and_remaining_credits_are_not_invented(self):
+        p = Party.objects.create(branch=self.hq, kind="customer", name="SMS tested", phone="0240000301")
+        msg = Message.objects.create(
+            branch=self.hq, party=p, created_by=self.manager, channel="sms",
+            status="delivered", recipient="+233240000301", body="Test update",
+            sandbox=False, source_key="debt:example",
+        )
+        SmsAttempt.objects.create(
+            message=msg, number=1, provider="arkesel", status="delivered",
+            callback_digest="0" * 64,
+        )
+        date = timezone.localdate().isoformat()
+        reply, source = staff_reply(self.manager, f"How many SMS were sent and how many SMS credits are left on {date}?")
+        self.assertEqual(source, "sms")
+        self.assertIn("with recorded delivery: 1", reply)
+        self.assertIn("Remaining Arkesel SMS credits: not available", reply)
+        denied, source = staff_reply(self.seller, "How many SMS credits are left today?")
+        self.assertEqual(source, "denied")
+        self.assertNotIn("with recorded delivery: 1", denied)
+
+    def test_mail_reports_require_mailbox_read_access(self):
+        mailbox = EmailMailbox.objects.create(address="sales@kofadimpex.com", label="Sales")
+        EmailMailboxMember.objects.create(mailbox=mailbox, user=self.seller, can_read=True)
+        other_box = EmailMailbox.objects.create(address="private@kofadimpex.com", label="Restricted")
+        for mb, to in ((mailbox, "buyer@example.test"), (other_box, "private@example.test")):
+            EmailLetter.objects.create(
+                mailbox=mb, direction="outbound", status="submitted",
+                from_address=mb.address, to_address=to, subject="Order delivery",
+                submitted_at=timezone.now(), delivery_status="delivered",
+            )
+        date = timezone.localdate().isoformat()
+        response, source = staff_reply(self.seller, f"Which email addresses and types of emails were sent {date}?")
+        self.assertEqual(source, "email")
+        self.assertIn("buyer@example.test", response)
+        self.assertIn("Order delivery", response)
+        self.assertNotIn("private@example.test", response)
+        noaccess, source = staff_reply(self.inventory, f"Show email addresses on {date}")
+        self.assertIn("No authorized email mailboxes", noaccess)
+
+    def test_cross_system_question_respects_partial_permissions(self):
+        response, source = staff_reply(self.seller, "How many emails and MoMo transactions were sent today?")
+        self.assertNotIn("Recorded POS/debt payment entries", response)
+        self.assertIn("Not included due to your account permissions: financial reports", response)
 
     def test_message_request_is_advice_not_external_send(self):
         text, source = staff_reply(self.seller, "Send an unsolicited Gmail and SMS blast")
