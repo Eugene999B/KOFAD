@@ -231,8 +231,9 @@ class StaffAssistantTests(TestCase):
             request.session = {}
             response = assistant_chat(request)
             self.assertEqual(response.status_code, 200)
-            self.assertIn(expected, response.json()["reply"])
-            self.assertFalse(response.json()["external_ai_used"])
+            result = json.loads(response.content)
+            self.assertIn(expected, result["reply"])
+            self.assertFalse(result["external_ai_used"])
         planned.assert_not_called()
 
     def test_unknown_request_stays_short_not_repetitive_marketing(self):
