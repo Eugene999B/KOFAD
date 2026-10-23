@@ -1,8 +1,104 @@
+/* Compact privacy choices; never a blocking overlay for sign-in or checkout. */
 .kofad-cookie-panel[hidden],.kofad-cookie-options[hidden]{display:none!important}
-.kofad-cookie-panel{position:fixed;z-index:1100;bottom:18px;left:50%;transform:translateX(-50%);width:min(900px,calc(100% - 32px));max-height:80dvh;overflow:auto;box-sizing:border-box;padding:24px;background:#fff;color:#162e40;border:1px solid #cbd8df;border-radius:18px;box-shadow:0 12px 60px #071d3340;font-family:inherit}
-.kofad-cookie-eyebrow{font-size:10px;font-weight:800;letter-spacing:.18em;color:#69706c}.kofad-cookie-panel h2{font-size:23px;margin:7px 0 10px;line-height:1.2}.kofad-cookie-panel p{font-size:14px;line-height:1.6;margin:0 0 10px}.kofad-cookie-panel a{color:#165c80;text-decoration:underline;font-size:13px}
-.kofad-cookie-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}.kofad-cookie-panel button{min-height:44px;padding:10px 16px;border:1px solid #849cab;border-radius:8px;background:#f3f7f8;color:#162e40;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer}.kofad-cookie-panel button:focus-visible,.kofad-cookie-footer button:focus-visible{outline:3px solid #ba8500;outline-offset:3px}
-.kofad-cookie-options{margin-top:18px;padding-top:16px;border-top:1px solid #d8e2e7}.kofad-cookie-panel .kofad-cookie-options label{display:flex;gap:12px;align-items:flex-start;margin:14px 0;font-size:14px}.kofad-cookie-panel .kofad-cookie-options input[type=checkbox]{display:inline-block;flex:0 0 20px;width:20px;min-width:20px;max-width:20px;height:20px;min-height:20px;max-height:20px;padding:0;margin:2px 0;box-sizing:border-box;accent-color:#164c6b}.kofad-cookie-options small{display:block;line-height:1.5;margin-top:3px;color:#596e7a}
-.kofad-cookie-footer{padding:12px 16px;text-align:center}.kofad-cookie-footer button{border:0;background:transparent;color:inherit;text-decoration:underline;min-height:44px;cursor:pointer;font:inherit;font-size:12px}.kofad-cookie-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0)}
-[data-theme=dark] .kofad-cookie-panel{background:#112b3c;color:#f0f5f7;border-color:#365466}[data-theme=dark] .kofad-cookie-panel a{color:#badced}[data-theme=dark] .kofad-cookie-eyebrow,[data-theme=dark] .kofad-cookie-options small{color:#b9cbd3}[data-theme=dark] .kofad-cookie-panel button{background:#1d3c50;color:#fff;border-color:#628195}
-@media(max-width:600px){.kofad-cookie-panel{bottom:10px;width:calc(100% - 20px);padding:18px;border-radius:12px}.kofad-cookie-panel h2{font-size:20px}.kofad-cookie-actions{display:grid;grid-template-columns:1fr}.kofad-cookie-actions button{width:100%}.kofad-cookie-panel p{font-size:13px}}
+.kofad-cookie-panel{
+  position:fixed;z-index:1100;
+  inset:auto auto max(16px,env(safe-area-inset-bottom)) 18px;
+  transform:none;
+  width:min(430px,calc(100vw - 36px));
+  max-height:min(90dvh,740px);overflow-y:auto;overflow-x:hidden;
+  box-sizing:border-box;padding:20px 21px 15px;
+  border-radius:21px;border:1px solid #d5e4df;
+  background:#fff;color:#173b41;
+  box-shadow:0 20px 70px rgba(10,43,47,.19),0 2px 9px rgba(10,43,47,.05);
+  font-family:inherit;line-height:1.45;overscroll-behavior:contain;
+}
+.kofad-cookie-panel *{box-sizing:border-box}
+.kofad-cookie-head{display:flex;align-items:center;gap:13px}
+.kofad-cookie-emblem{
+  width:46px;height:46px;display:grid;place-items:center;flex:0 0 46px;
+  color:#075e59;background:#e8f6f0;border:1px solid #c8e8dc;border-radius:15px;
+}
+.kofad-cookie-emblem svg{display:block;width:25px;height:25px}
+.kofad-cookie-eyebrow{color:#357267;font-size:10px;font-weight:850;letter-spacing:.14em;margin:0 0 4px}
+.kofad-cookie-panel h2{font-size:clamp(18px,2vw,21px);margin:0;color:#133b41;line-height:1.18;letter-spacing:-.025em}
+.kofad-cookie-panel .kofad-cookie-intro{font-size:13px;line-height:1.65;margin:15px 0 17px;color:#3c5861}
+.kofad-cookie-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0}
+.kofad-cookie-panel button{
+  appearance:none;min-height:44px;border-radius:11px;
+  padding:10px 12px;font:750 12px/1.25 inherit;
+  font-size:12px;font-weight:750;font-family:inherit;
+  cursor:pointer;text-align:center;transition:background .16s ease,border-color .16s ease;
+}
+.kofad-cookie-panel button[data-cookie-accept]{
+  grid-column:1/-1;background:#0a5e61;color:#fff;border:1px solid #0a5e61;
+  font-size:13px;letter-spacing:.005em;
+}
+.kofad-cookie-panel button[data-cookie-accept]:hover{background:#07484c}
+.kofad-cookie-panel button[data-cookie-reject]{
+  background:#f4f8f7;color:#234a4e;border:1px solid #b9d1cd;
+}
+.kofad-cookie-panel button[data-cookie-reject]:hover{background:#eaf3ef}
+.kofad-cookie-panel button[data-cookie-customise]{
+  background:transparent;color:#1a5b60;border:1px solid #d7e5e1;
+}
+.kofad-cookie-panel button[data-cookie-customise]:hover{background:#edf6f2}
+.kofad-cookie-bottom{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border-top:1px solid #edf0ef;margin-top:16px;padding-top:12px;
+  font-size:10px;line-height:1.45;color:#62757a;
+}
+.kofad-cookie-panel .kofad-cookie-bottom a{
+  color:#0b6368;font-size:11px;font-weight:750;text-decoration:underline;
+  text-underline-offset:3px;white-space:nowrap;
+}
+.kofad-cookie-options{border-top:1px solid #dceae5;padding-top:14px;margin:15px 0}
+.kofad-cookie-essential,.kofad-cookie-option{
+  display:flex;align-items:flex-start;gap:12px;padding:12px 11px;
+  margin-bottom:9px;border:1px solid #dbe8e5;border-radius:12px;
+  background:#f9fcfb;
+}
+.kofad-cookie-essential{align-items:center;justify-content:space-between}
+.kofad-cookie-essential span:first-child{min-width:0;flex:1}
+.kofad-cookie-options strong{display:block;font-size:12px;color:#234750}
+.kofad-cookie-options small{display:block;font-size:11px;color:#526d75;line-height:1.5;margin-top:3px}
+.kofad-cookie-required{white-space:nowrap;font-size:10px;font-weight:750;color:#126754}
+.kofad-cookie-panel .kofad-cookie-option input[type=checkbox]{
+  appearance:auto;display:block;flex:0 0 20px;width:20px;height:20px;
+  min-width:20px;max-width:20px;min-height:20px;max-height:20px;
+  margin:0;padding:0;accent-color:#0a7770;
+}
+.kofad-cookie-option:has(input:disabled){opacity:.7}
+.kofad-cookie-options .kofad-cookie-save{
+  width:100%;background:#e3f4ee;color:#0a5552;border:1px solid #90c7ba;
+}
+.kofad-cookie-privacy-link{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  min-height:44px!important;padding:10px 18px!important;border-radius:999px!important;
+  border:1px solid #a8cbc0!important;background:#eaf7f2!important;color:#105d55!important;
+  font-size:13px!important;font-weight:750!important;cursor:pointer;text-decoration:none!important;
+}
+.kofad-cookie-status{
+  position:absolute;width:1px;height:1px;overflow:hidden;
+  margin:-1px;padding:0;border:0;clip-path:inset(50%);
+}
+.kofad-cookie-panel :is(button,a,input):focus-visible,
+.kofad-cookie-privacy-link:focus-visible{
+  outline:3px solid #e6ae40;outline-offset:3px;
+}
+html[data-theme="dark"] .kofad-cookie-panel{background:#142c34;color:#f2faf8;border-color:#3e6269;box-shadow:0 20px 65px #0007}
+html[data-theme="dark"] .kofad-cookie-panel h2{color:#f5fffc}
+html[data-theme="dark"] .kofad-cookie-emblem{background:#244e4d;color:#bdede1;border-color:#386b65}
+html[data-theme="dark"] .kofad-cookie-eyebrow{color:#b3e6d5}
+html[data-theme="dark"] .kofad-cookie-panel .kofad-cookie-intro{color:#d1e4e3}
+html[data-theme="dark"] .kofad-cookie-panel :is(.kofad-cookie-essential,.kofad-cookie-option){background:#1c3a40;border-color:#446267}
+html[data-theme="dark"] .kofad-cookie-panel .kofad-cookie-options :is(strong,small),html[data-theme="dark"] .kofad-cookie-panel .kofad-cookie-bottom{color:#e0eeec}
+html[data-theme="dark"] .kofad-cookie-panel button[data-cookie-reject],html[data-theme="dark"] .kofad-cookie-panel button[data-cookie-customise]{
+  background:#27434a;color:#fff;border-color:#577780;
+}
+html[data-theme="dark"] .kofad-cookie-panel .kofad-cookie-bottom a{color:#b7e8de}
+@media(max-width:600px){
+  .kofad-cookie-panel{top:10px;bottom:auto;left:10px;right:10px;width:auto;max-height:min(70dvh,480px);padding:17px;border-radius:17px}
+  .kofad-cookie-panel .kofad-cookie-intro{font-size:12px;line-height:1.55;margin:12px 0}
+  .kofad-cookie-bottom{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.kofad-cookie-panel button{transition:none}}

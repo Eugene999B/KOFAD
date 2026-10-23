@@ -1,14 +1,51 @@
-<div class="kofad-cookie-footer"><button type="button" data-cookie-open>Cookie choices</button></div>
-<section class="kofad-cookie-panel" data-cookie-panel data-analytics-id="{{ cookie_analytics_id }}" data-posthog-enabled="{{ cookie_posthog_enabled|yesno:'1,0' }}" role="region" aria-labelledby="cookie-title" hidden>
-  <div class="kofad-cookie-copy"><span class="kofad-cookie-eyebrow">YOUR CHOICE</span><h2 id="cookie-title">A few words about cookies.</h2>
-  <p>We use essential cookies for sign-in, your basket and secure forms. You can choose whether we remember preferences or use optional website analytics.</p>
-  <a href="https://kofadimpex.com/privacy/" target="_blank" rel="noopener">Read our privacy notice</a></div>
-  <div class="kofad-cookie-options" data-cookie-options hidden>
-    <p><strong>Essential</strong> · Always on for security and the services you request.</p>
-    <label><input type="checkbox" name="cookie_preferences"><span><strong>Preferences</strong><small>Remember your theme and welcome-sound choices.</small></span></label>
-    <label><input type="checkbox" name="cookie_analytics"{% if not cookie_analytics_id and not cookie_posthog_enabled %} disabled{% endif %}><span><strong>Website analytics</strong><small>{% if cookie_analytics_id or cookie_posthog_enabled %}Help us count visits to public pages without account, payment or search details. PostHog, when enabled, uses only anonymous page categories and no browser tracker; GA4 may also be available.{% else %}Not connected on this page. No analytics or advertising trackers are loaded.{% endif %}</small></span></label>
-    <button type="button" data-cookie-save>Save my choices</button>
+{# Consent notice is independent of Django authentication, CSRF and Cloudflare Turnstile. #}
+<section id="kofad-cookie-panel"
+         class="kofad-cookie-panel"
+         data-cookie-panel
+         data-analytics-id="{{ cookie_analytics_id }}"
+         data-posthog-enabled="{{ cookie_posthog_enabled|yesno:'1,0' }}"
+         role="region" aria-labelledby="cookie-title" aria-describedby="cookie-intro"
+         hidden>
+  <div class="kofad-cookie-head">
+    <div class="kofad-cookie-emblem" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9"/><circle cx="8" cy="9" r="1.1" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
+        <circle cx="12.5" cy="15.5" r="1.2" fill="currentColor"/><path d="M5 16c2-1 3-1 4 1"/>
+      </svg>
+    </div>
+    <div>
+      <p class="kofad-cookie-eyebrow">YOUR PRIVACY MATTERS</p>
+      <h2 id="cookie-title">A better visit, your choice.</h2>
+    </div>
   </div>
-  <div class="kofad-cookie-actions"><button type="button" data-cookie-reject>Essential only</button><button type="button" data-cookie-customise>Choose cookies</button><button type="button" data-cookie-accept>Accept available cookies</button></div>
+  <p class="kofad-cookie-intro" id="cookie-intro">
+    Essential cookies keep sign-in, security and your basket working.
+    Optional cookies help remember your preferences or understand public-page visits.
+    It's up to you.
+  </p>
+  <div class="kofad-cookie-options" data-cookie-options hidden>
+    <div class="kofad-cookie-essential">
+      <span><strong>Strictly necessary</strong><small>Sign-in, secure forms and shopping basket</small></span>
+      <span class="kofad-cookie-required">Always active</span>
+    </div>
+    <label class="kofad-cookie-option">
+      <input type="checkbox" name="cookie_preferences">
+      <span><strong>Preferences</strong><small>Remember your theme and welcome-sound choices.</small></span>
+    </label>
+    <label class="kofad-cookie-option">
+      <input type="checkbox" name="cookie_analytics"{% if not cookie_analytics_id and not cookie_posthog_enabled %} disabled{% endif %}>
+      <span><strong>Website analytics</strong><small>{% if cookie_analytics_id or cookie_posthog_enabled %}Count visits to public pages without sharing account, payment or search details.{% else %}Not active on this page. No optional analytics trackers are loaded.{% endif %}</small></span>
+    </label>
+    <button class="kofad-cookie-save" type="button" data-cookie-save>Save my choices</button>
+  </div>
+  <div class="kofad-cookie-actions">
+    <button class="kofad-cookie-accept" type="button" data-cookie-accept>Accept optional cookies</button>
+    <button class="kofad-cookie-reject" type="button" data-cookie-reject>Essential only</button>
+    <button class="kofad-cookie-customise" type="button" data-cookie-customise>Customise <span aria-hidden="true">→</span></button>
+  </div>
+  <div class="kofad-cookie-bottom">
+    <span>You're in control. Change your choice on the privacy page.</span>
+    <a href="/privacy/">Privacy notice</a>
+  </div>
 </section>
 <span class="kofad-cookie-status" data-cookie-status role="status" aria-live="polite"></span>

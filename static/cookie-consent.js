@@ -79,6 +79,7 @@
       analytics.checked = analyticsAvailable && allows("analytics");
       options.hidden = !showOptions;
       panel.hidden = false;
+      openers.forEach(button => button.setAttribute("aria-expanded", "true"));
       panel.querySelector("[data-cookie-reject]").focus({preventScroll: true});
     }
     function save(preferenceChoice, analyticsChoice) {
@@ -96,6 +97,7 @@
       applyAnalytics(id);
       window.dispatchEvent(new CustomEvent("kofad:cookie-choice", {detail: {...choice}}));
       panel.hidden = true;
+      openers.forEach(button => button.setAttribute("aria-expanded", "false"));
       if (returnFocus && returnFocus.isConnected) returnFocus.focus({preventScroll: true});
       status.textContent = "Your cookie choices have been saved.";
     }
@@ -108,7 +110,11 @@
     panel.querySelector("[data-cookie-accept]").addEventListener("click", () => save(true, analyticsAvailable));
     panel.querySelector("[data-cookie-save]").addEventListener("click", () => save(preferences.checked, analytics.checked));
     panel.addEventListener("keydown", event => {
-      if (event.key === "Escape") { panel.hidden = true; if (returnFocus) returnFocus.focus(); }
+      if (event.key === "Escape") {
+        panel.hidden = true;
+        openers.forEach(button => button.setAttribute("aria-expanded", "false"));
+        if (returnFocus && returnFocus.isConnected) returnFocus.focus({preventScroll: true});
+      }
     });
     if (!choice) open(false);
     applyAnalytics(id);
