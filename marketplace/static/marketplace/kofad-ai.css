@@ -84,3 +84,8 @@
 .kofad-ai-privacy[open]{padding:4px 0}
 .kofad-ai-privacy .kofad-ai-consent{margin-top:7px}
 .kofad-ai-privacy p{font-size:10px;line-height:1.45;margin:6px 0 0}
+
+/* Verified customer self-service actions, never payment or message submissions. */
+.kofad-ai-task-links{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:10px 0 0}
+.kofad-ai-task-links a{display:inline-flex;max-width:100%;align-items:center;border:1px solid rgba(18,111,93,.35);background:rgba(18,111,93,.06);color:inherit!important;text-decoration:none!important;padding:7px 10px;border-radius:999px;font-size:.77rem;font-weight:650;line-height:1.2}
+.kofad-ai-task-links a:hover,.kofad-ai-task-links a:focus-visible{border-color:#126f5d;background:rgba(18,111,93,.12)}
