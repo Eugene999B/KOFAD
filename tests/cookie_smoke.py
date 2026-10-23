@@ -140,6 +140,9 @@ with sync_playwright() as playwright:
     # optional analytics/preferences are not prerequisites for a staff session.
     # The CI runner seeds this account; it is not a production credential.
     import os
+    import sys
+    # Direct script execution adds tests/ to sys.path, not the project root.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     from django.conf import settings
 
