@@ -258,9 +258,9 @@ class StaffAssistantTests(TestCase):
         self.assertNotIn("with recorded delivery: 1", denied)
 
     def test_mail_reports_require_mailbox_read_access(self):
-        mailbox = EmailMailbox.objects.create(address="sales@kofadimpex.com", label="Sales")
+        mailbox, _ = EmailMailbox.objects.get_or_create(address="sales@kofadimpex.com", defaults={"label": "Sales"})
         EmailMailboxMember.objects.create(mailbox=mailbox, user=self.seller, can_read=True)
-        other_box = EmailMailbox.objects.create(address="private@kofadimpex.com", label="Restricted")
+        other_box, _ = EmailMailbox.objects.get_or_create(address="private@kofadimpex.com", defaults={"label": "Restricted"})
         for mb, to in ((mailbox, "buyer@example.test"), (other_box, "private@example.test")):
             EmailLetter.objects.create(
                 mailbox=mb, direction="outbound", status="submitted",
