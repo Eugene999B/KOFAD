@@ -428,6 +428,29 @@ class PublicKofadAiTests(TestCase):
         self.assertEqual(limited.json()["source"], "local")
         post.assert_not_called()
 
+    def test_customer_actions_never_initiate_payments_or_messages(self):
+        from marketplace.kofad_ai import customer_actions
+
+        unlinked = customer_actions("Track my order and delivery")
+        self.assertIn({"label": "Sign in to track", "href": "/market/account/login/"}, unlinked)
+        signed = customer_actions("Where is my order?", customer=self.customer)
+        self.assertIn({"label": "My orders", "href": "/market/orders/"}, signed)
+        self.assertIn({"label": "Open cart", "href": "/market/cart/"},
+                      customer_actions("How can I pay with momo?"))
+        self.assertFalse(any("submit" in item["href"] or "pay/" in item["href"]
+                             for item in signed + customer_actions("momo checkout")))
+
+    @override_settings(KOFAD_OPENROUTER_FREE_ENABLED=False)
+    def test_chat_returns_safe_customer_task_links(self):
+        response = self.client.post(
+            "/market/ai/chat/",
+            data='{"message":"How do I track my order?","ai_consent":false}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn({"label": "Sign in to track", "href": "/market/account/login/"},
+                      response.json()["actions"])
+
     @override_settings(KOFAD_OPENROUTER_FREE_ENABLED=False)
     @patch("marketplace.kofad_ai.requests.post")
     def test_local_chat_handles_real_visitor_questions_without_repetitive_greeting(self, post):
