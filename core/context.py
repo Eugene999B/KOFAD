@@ -12,15 +12,21 @@ def shell(request):
     online_order_attention = 0
     market_unread = 0
     if request.user.is_authenticated:
+        from django.db.models import Q
         from marketplace.models import ConversationMessage, OnlineOrder
         if current:
             online_order_attention = OnlineOrder.objects.filter(
                 branch=current,
                 status__in=["paid", "confirmed", "preparing", "ready_pickup", "out_for_delivery"],
             ).count()
-        market_unread = ConversationMessage.objects.filter(
-            read_by_staff=False
-        ).exclude(sender_type="staff").count()
+            # Match the staff inbox's authorized branch scope exactly. The old
+            # global count exposed unread activity from unrelated locations.
+            scope = Q(conversation__branch=current) | Q(
+                conversation__branch__isnull=True, conversation__order__branch=current,
+            )
+            market_unread = ConversationMessage.objects.filter(
+                scope, read_by_staff=False,
+            ).exclude(sender_type="staff").count()
     return {
         "company": Company.objects.first() or Company(),
         "branches": branches,

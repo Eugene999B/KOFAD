@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block content %}
 <section class="panel" style="max-width:980px;margin:0 auto;padding:24px">
   <p class="eyebrow">SALES / DIRECT DEBIT V2</p>
@@ -60,21 +61,8 @@
   <p class="muted" id="v2-live-info" aria-live="polite">This page checks KOFAD's saved status periodically. The server independently verifies Hubtel before marking the wallet approved.</p>
 </section>
 {% if intent.status == "pending" or intent.status == "unknown" or intent.status == "sending" or intent.status == "approved" %}
-<script>
-(() => {
- const uri="{% url 'hubtel_v2_staff_status' intent.pk %}";
- let prior="{{ intent.status|escapejs }}";
- async function refresh() {
-  if (document.hidden) return;
-  try {
-   const r=await fetch(uri,{credentials:"same-origin",cache:"no-store"});
-   if (!r.ok) return;
-   const j=await r.json();
-   if (j.status!==prior) { prior=j.status; location.reload(); }
-  } catch(_){}
- }
- setInterval(refresh,10000);
-})();
-</script>
+<div data-v2-status-url="{% url 'hubtel_v2_staff_status' intent.pk %}"
+     data-v2-status="{{ intent.status }}" hidden></div>
+<script defer src="{% static 'hubtel_direct/sale-intent-wait.js' %}"></script>
 {% endif %}
 {% endblock %}

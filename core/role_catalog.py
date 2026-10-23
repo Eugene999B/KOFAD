@@ -35,7 +35,7 @@ ROLE_DESCRIPTIONS = {
 # backup and are preserved by RESTORE, but deliberately not by RESET.
 FRESH_START_ROLES = {
     "Owner": list(ROLE_PERMISSION_CODES),
-    "Manager": list(ROLE_PERMISSION_CODES),
+    "Manager": [code for code in ROLE_PERMISSION_CODES if code != "manage_company"],
     "Cashier": ["operate_sales", "add_party"],
     "Storekeeper": ["operate_inventory"],
     "Accountant": ["operate_finance", "view_reports", "change_party", "add_party"],

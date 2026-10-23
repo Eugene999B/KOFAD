@@ -1,7 +1,5 @@
 name: Archive and prune obsolete KOFAD branches
 on:
-  push:
-    branches: [railway-release]
   workflow_dispatch:
     inputs:
       mode:
@@ -24,9 +22,7 @@ jobs:
   prune:
     if: >-
       github.repository == 'Eugene999B/KOFAD' &&
-      (github.event_name == 'push' ||
-       (github.event_name == 'workflow_dispatch' &&
-        (inputs.mode == 'audit' || inputs.confirm == 'PRUNE KOFAD BRANCHES')))
+      (inputs.mode == 'audit' || inputs.confirm == 'PRUNE KOFAD BRANCHES')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,25 +34,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           INPUT_MODE: ${{ inputs.mode }}
           INPUT_CONFIRM: ${{ inputs.confirm }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
-            if [ "$INPUT_MODE" = 'prune' ] && [ "$INPUT_CONFIRM" = 'PRUNE KOFAD BRANCHES' ]; then
-              python scripts/github_branch_cleanup.py --apply
-            else
-              python scripts/github_branch_cleanup.py
-            fi
-          elif [[ "$COMMIT_MESSAGE" == *"KOFAD branch hygiene: first guarded cleanup"* ]]; then
-            # Only this particular first release promotion can prune older orphan branches.
+          # Branch mutation requires an explicit manually dispatched run and
+          # the exact confirmation phrase; regular releases never delete work.
+          if [ "$INPUT_MODE" = 'prune' ] && [ "$INPUT_CONFIRM" = 'PRUNE KOFAD BRANCHES' ]; then
             python scripts/github_branch_cleanup.py --apply
           else
-            # On later releases only remove already-merged branches.
-            python scripts/github_branch_cleanup.py --apply --merged-only
+            python scripts/github_branch_cleanup.py
           fi
       - name: Keep 90-day artifact with exact archived branch SHA values
         if: always()

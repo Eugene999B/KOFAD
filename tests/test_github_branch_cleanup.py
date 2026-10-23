@@ -75,6 +75,22 @@ class BranchCleanupSafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "SHA verification failed"):
                 cleanup.archive("merged/old", "desired")
 
+    def test_branch_cleanup_requires_manual_dispatch(self):
+        path = Path(__file__).resolve().parents[1] / ".github/workflows/branch-hygiene.yml"
+        content = path.read_text()
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("\n  push:", content)
+        self.assertNotIn("github.event_name == 'push'", content)
+        self.assertIn("PRUNE KOFAD BRANCHES", content)
+
+    def test_docker_context_excludes_common_secrets_and_backups(self):
+        path = Path(__file__).resolve().parents[1] / ".dockerignore"
+        ignored = set(path.read_text().splitlines())
+        for target in (".env", ".venv/", "backups/", "*.key", "staticfiles/", "node_modules/"):
+            self.assertIn(target, ignored)
+        # We must keep authored static files for collectstatic.
+        self.assertNotIn("static/", ignored)
+
     def test_production_auto_promotion_is_retired(self):
         path = Path(__file__).resolve().parents[1] / ".github/workflows/promote.yml"
         content = path.read_text()
