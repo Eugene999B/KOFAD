@@ -1,5 +1,7 @@
 /* KOFAD staff sign-in: high-contrast, human and readable at every size.
    Scoped to the login route so staff workspace themes remain unaffected. */
+/* Skip the old nearly-black full-screen intro. Show the sign-in form immediately. */
+body.login-page .login-brand-intro { display: none !important; }
 body.login-page {
   --login-ink: #173b43;
   --login-muted: #385663;
