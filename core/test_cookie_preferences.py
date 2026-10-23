@@ -31,8 +31,11 @@ class CookieExperienceContracts(SimpleTestCase):
         from django.conf import settings
 
         template = (Path(settings.BASE_DIR) / "templates/cookie_choices.html").read_text()
-        self.assertIn("{% if request.path == '/privacy/' %}", template)
-        self.assertIn("data-cookie-open", template)
+        public_page = (Path(settings.BASE_DIR) / "marketplace/templates/marketplace/public_page.html").read_text()
+        self.assertNotIn("data-cookie-open", template)
+        self.assertEqual(public_page.count("data-cookie-open"), 1)
+        self.assertIn("kofad-cookie-privacy-link", public_page)
+        self.assertIn("Manage cookie preferences", public_page)
         self.assertIn("data-cookie-reject", template)
         self.assertIn("data-cookie-accept", template)
         self.assertIn("data-cookie-options", template)
