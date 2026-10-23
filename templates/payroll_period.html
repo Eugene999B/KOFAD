@@ -19,7 +19,7 @@
   <span>GHS {{ hubtel_batch.expected_amount|floatformat:2 }} · prepared by {{ hubtel_batch.created_by.get_full_name|default:hubtel_batch.created_by.username }}</span>
  </div>
  {% if hubtel_batch.status == "awaiting_approval" and can_transfer_approve and hubtel_batch.created_by_id != request.user.pk and hubtel_payroll_enabled %}
- <form method="post" action="{% url 'hubtel_payroll_approve' period.pk %}" onsubmit="return confirm('Approve KOFAD Hubtel salary transfers for every verified worker in this payroll batch?')">{% csrf_token %}
+ <form method="post" action="{% url 'hubtel_payroll_approve' period.pk %}" data-confirm-submit="Approve KOFAD Hubtel salary transfers for every verified worker in this payroll batch?">{% csrf_token %}
   <button class="button" type="submit">Authorize Hubtel salary batch</button>
  </form>
  {% endif %}

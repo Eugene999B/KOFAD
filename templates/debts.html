@@ -140,7 +140,7 @@
         {% endif %}
         {% if perms.core.operate_finance and mandate.status != "cancelled" and mandate.status != "settled" %}
         <form action="{% url 'hubtel_debt_staff_cancel' mandate.pk %}" method="post">{% csrf_token %}
-          <button type="submit" class="button secondary" onclick="return confirm('Disable this arrangement locally and request cancellation with Hubtel? Only provider-confirmed clearing releases the wallet for new approval.')">{% if mandate.status == 'suspended' %}Clear suspended authorization{% elif mandate.status == 'pending' or mandate.status == 'expired_review' %}Clear unsuccessful/pending request{% elif mandate.status == 'cancel_pending' %}Check cancellation{% else %}Stop direct debit{% endif %}</button>
+          <button type="submit" class="button secondary" data-confirm-click="Disable this arrangement locally and request cancellation with Hubtel? Only provider-confirmed clearing releases the wallet for new approval.">{% if mandate.status == 'suspended' %}Clear suspended authorization{% elif mandate.status == 'pending' or mandate.status == 'expired_review' %}Clear unsuccessful/pending request{% elif mandate.status == 'cancel_pending' %}Check cancellation{% else %}Stop direct debit{% endif %}</button>
         </form>
         {% endif %}
       </div>

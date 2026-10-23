@@ -1,0 +1,47 @@
+# Keep secrets, local state, CI artifacts and build outputs out of Railway images.
+# Dockerfile copies the repository as its build context; the ignore rules below
+# must not hide source static/ or scripts needed by collectstatic.
+.git/
+.github/
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+test-results/
+staticfiles/
+media/
+backups/
+backup/
+*.sqlite3
+*.dump
+*.bak
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+node_modules/
+dist/
+build/
+native/android/.gradle/
+native/android/build/
+native/android/app/build/
+native/ios/Pods/
+native/windows/dist/
+*.apk
+*.aab
+*.ipa
+*.exe
+*.msi
+*.log
+.DS_Store
+Thumbs.db

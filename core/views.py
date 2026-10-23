@@ -1516,8 +1516,36 @@ def parties(request):
     q = request.GET.get("q", "")[:100]
     if q:
         rows = rows.filter(Q(name__icontains=q) | Q(phone__icontains=q))
+    # One page of parties plus two bulk ledger queries. Preserve all existing
+    # settlement and approved-correction rules in services.balance(): naive
+    # Sum(total - paid) is incorrect for allocated customer/creditor debt.
+    selected = list(rows[:200])
+    amounts = {party.pk: Decimal("0.00") for party in selected}
+    if selected:
+        from .models import Allocation
+        documents = list(Document.objects.filter(
+            party_id__in=[party.pk for party in selected],
+            kind__in=["sale"] if kind == "customer" else ["purchase", "creditor_charge"],
+        ).annotate(correction_status=F("correction__status")).values(
+            "id", "party_id", "kind", "total", "paid", "correction_status"
+        ))
+        allocated = {
+            row["invoice_id"]: row["amount"]
+            for row in Allocation.objects.filter(
+                invoice_id__in=[doc["id"] for doc in documents],
+            ).exclude(
+                payment_document__correction__status="approved",
+            ).order_by().values("invoice_id").annotate(amount=Sum("amount"))
+        }
+        for doc in documents:
+            if doc["kind"] == "creditor_charge" and doc["correction_status"] == "approved":
+                continue
+            amounts[doc["party_id"]] += (
+                doc["total"] - doc["paid"] - (allocated.get(doc["id"]) or Decimal("0.00"))
+            )
     return render(request, "parties.html", {"title": "Suppliers" if kind == "supplier" else "Customers",
-        "rows": [{"party": p, "debt": s.party_debt(p)} for p in rows[:200]], "kind": kind, "q": q})
+        "rows": [{"party": p, "debt": amounts[p.pk]} for p in selected], "kind": kind, "q": q})
+
 
 
 @login_required
