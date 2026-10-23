@@ -450,4 +450,6 @@ def answer_operational_question(user, question, *, context=""):
             results.append(_diagnostics(user, start, end))
     if blocked:
         results.append("Not included due to your account permissions: " + ", ".join(dict.fromkeys(blocked)) + ".")
+    if len(permitted) == 1 and not blocked and permitted[0] in {"sms", "email"} and len(results[1]) < 450:
+        return results[1], permitted[0]
     return "\n\n".join(results), permitted[0] if len(permitted) == 1 else "operations"
