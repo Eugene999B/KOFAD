@@ -66,3 +66,9 @@
 }
 @media(max-width:380px){.staff-ai-conversation{height:max(355px,calc(100dvh - 245px))}.staff-ai-meta #staff-ai-status{max-width:70%}}
 @media(prefers-reduced-motion:no-preference){.staff-ai-message{animation:ai-message-in .16s ease-out}@keyframes ai-message-in{from{opacity:.4;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}}
+
+/* Do not cover the assistant with the draggable global approval badge. The header retains its link. */
+.staff-ai-page .approval-attention{display:none!important}
+.staff-ai-approvals{text-decoration:none!important;color:inherit!important;display:inline-flex;align-items:center;font-size:.79rem}
+.staff-ai-approvals:hover,.staff-ai-approvals:focus-visible{border-color:var(--ai-accent)}
+@media(max-width:380px){.staff-ai-approvals{font-size:.7rem;padding:7px 8px}}
