@@ -188,6 +188,9 @@ def _conversational_command(text, bot_kind):
     if any(x in q for x in ("sign in", "log in", "connect my account", "link my account")):
         return "login"
     if bot_kind == "staff":
+        if any(x in q for x in ("why are sales", "what caused", "risk brief", "deep analysis",
+                                "decision brief", "operational insight", "what should we do")):
+            return "insights"
         if (any(x in q for x in ("compare", "versus", " vs ", "growth", "trend"))
                 and any(x in q for x in ("sales", "revenue", "performance", "closing"))):
             if any(x in q for x in ("month", "30 day")):
@@ -559,7 +562,7 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
         return ("KOFAD Staff Bot — sign in to unlock the tools your real "
                 "KOFAD role permits. Tap Sign in below or type /login. "
                 "Your password and any MFA code are entered only on KOFAD's website.")
-    if command in {"tasks", "priorities", "mytasks", "inventory", "orders_due"}:
+    if command in {"tasks", "priorities", "mytasks", "inventory", "orders_due", "insights", "decisions"}:
         from .telegram_intelligence import account_tasks, _role
         if not identity or identity.kind != "staff" or not _account(identity):
             return "Use /login to verify your KOFAD staff account before viewing tasks."
@@ -569,6 +572,9 @@ def reply_for(text, chat_id, user_id, bot_kind="official"):
             return "Your KOFAD role does not include inventory access."
         if command == "orders_due" and not roles["sales"]:
             return "Your KOFAD role does not include sales operations."
+        if command in {"insights", "decisions"}:
+            from .staff_decisions import decision_brief
+            return decision_brief(user)[:3900]
         if command == "inventory":
             from .telegram_intelligence import inventory_brief
             return inventory_brief(user)

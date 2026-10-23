@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#102B46">
+<meta name="theme-color" content="#F6F9F7">
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>Sign in · KOFAD</title>
@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="{% static 'experience-upgrade.css' %}"><link rel="stylesheet" href="{% static 'kofad-contrast-mobile.css' %}">
 <script defer src="{% static 'app.js' %}"></script>
 <link rel="stylesheet" href="{% static 'kofad-atelier.css' %}">
-<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'staff-login-contrast.css' %}">{% if turnstile_sitekey %}
+<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'staff-login-contrast.css' %}"><link rel="stylesheet" href="{% static 'staff-login-welcome.css' %}">{% if turnstile_sitekey %}
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 {% endif %}</head>
 <body class="login-page">
@@ -33,17 +33,17 @@
 <section class="login-story premium-login-story" aria-label="KOFAD business workspace">
 <div class="login-story-grid" aria-hidden="true"></div>
 <div class="login-story-top">
-<p class="eyebrow">KOFAD OPERATIONS</p>
-<h1>One place to run<br><span>the whole trading day.</span></h1>
-<p class="story-copy">Search products. Serve customers. Control stock. Follow debt. Reconcile the day. Every action leaves a trace.</p>
+<p class="eyebrow">AKWAABA · KOFAD TEAM</p>
+<h1>Good to have you back.<br><span lang="tw">Yɛnkɔ adwuma!</span></h1>
+<p class="story-copy">Everything for today's work is here: serve your customers, check stock, follow up on orders and keep the records straight. <span lang="tw">Yɛbɛyɛ no yie.</span></p>
 </div>
 
 <div class="login-command-map" aria-hidden="true">
 <div class="command-rail"><span></span><span></span><span></span><span></span></div>
-<article><b>01</b><div><strong>Sell faster</strong><small>Search-first retail & wholesale counter</small></div><span>→</span></article>
-<article><b>02</b><div><strong>Know stock</strong><small>Packs, loose units, receiving & controls</small></div><span>→</span></article>
-<article><b>03</b><div><strong>Know customers</strong><small>Accounts, debt, payments & statements</small></div><span>→</span></article>
-<article><b>04</b><div><strong>Close with confidence</strong><small>Cash, channels, variance & evidence</small></div><span>✓</span></article>
+<article><b>01</b><div><strong>Serve a customer</strong><small>Find products and finish a sale</small></div><span>→</span></article>
+<article><b>02</b><div><strong>Check what's in stock</strong><small>Packs, single items and new deliveries</small></div><span>→</span></article>
+<article><b>03</b><div><strong>Follow up with customers</strong><small>Orders, balances and payment records</small></div><span>→</span></article>
+<article><b>04</b><div><strong>Finish the day clearly</strong><small>Review your figures before closing</small></div><span>✓</span></article>
 </div>
 
 <div class="login-story-bottom">
@@ -53,12 +53,12 @@
 </section>
 
 <main class="login-card premium-login-card" id="main">
-<div class="login-access-chip"><span>PRIVATE STAFF ACCESS</span><b>● LIVE</b></div>
+<div class="login-access-chip"><span>STAFF SIGN-IN</span><b>SECURE</b></div>
 <div class="login-card-top">
 <div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt=""></div>
-<div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KOFAD.</h2></div>
+<div><p class="eyebrow">WELCOME BACK</p><h2>Ready for your shift?</h2></div>
 </div>
-<p class="muted login-intro-copy">Your permissions decide exactly what you can see and do after sign-in.</p>
+<p class="muted login-intro-copy">Sign in with your username, verified email or linked phone number. Your work area will open with the tools assigned to you.</p>
 
 {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
 {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
@@ -70,7 +70,7 @@
 <label for="password">Password</label>
 <div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="current-password" data-login-password required placeholder="Enter your password"></div>
 
-<div class="login-form-row"><span>Authorized staff only</span><a href="/forgot-password/">Forgot password?</a></div>
+<div class="login-form-row"><span>Your own KOFAD staff account</span><a href="/forgot-password/">Forgot password?</a></div>
 {% if turnstile_sitekey %}
 <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-action="staff_login" data-theme="auto"></div>
 <p class="turnstile-privacy-note">Protected by Cloudflare Turnstile · <a href="/privacy/">Privacy</a></p>
@@ -89,10 +89,10 @@
 <div><span>✓</span><p><strong>Permission scoped</strong><small>Only your assigned workspaces and locations.</small></p></div>
 <div><span>✓</span><p><strong>Audited activity</strong><small>Critical business actions retain evidence.</small></p></div>
 </div>
-<p class="login-security">Need account access? <a href="/forgot-password/">Recover password by SMS or verified email</a>, or contact your KOFAD administrator.</p>
+<p class="login-security">Need help signing in? <a href="/forgot-password/">Recover by verified email or SMS</a>. After sign-in, open <strong>My account</strong> to link your email or phone. Ask your administrator if you still need a hand.</p>
 </main>
 </div>
 
-<footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Built for controlled, connected trading.</span></footer>
+<footer class="login-footer"><span>© {% now "Y" %} KOFAD IMPEX ENTERPRISE</span><span>Good work starts with good people.</span></footer>
 {% include "cookie_choices.html" %}</body>
 </html>
