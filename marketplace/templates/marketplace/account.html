@@ -13,7 +13,7 @@
 <a class="account-v4-tile" href="/market/account/wishlist/"><span>♡</span><div><strong>Saved items</strong><small>{{ summary.wishlist }} saved</small></div></a>
 <a class="account-v4-tile" href="/market/messages/"><span>✦</span><div><strong>Support</strong><small>Messages and order help</small></div></a>
 <a class="account-v4-tile" href="/market/account/returns/"><span>↩</span><div><strong>Returns</strong><small>{{ summary.returns }} request{{ summary.returns|pluralize }}</small></div></a>
-<a class="account-v4-tile" href="/market/account/security/"><span>⌁</span><div><strong>Security</strong><small>Change your password</small></div></a>
+<a class="account-v4-tile" href="/market/account/security/"><span>⌁</span><div><strong>Email, phone &amp; sign-in</strong><small>Link verified recovery and login methods</small></div></a>
 </nav>
 
 <div class="account-v4-layout">
@@ -36,7 +36,8 @@
 <section class="experience-email-card"><p class="market-eyebrow">LINKED SIGN-IN</p><h2>Your account security</h2>
 <p class="helper">Mobile number: <strong>{{ market_customer.phone|default:"Not linked (optional)" }}</strong></p>
 {% if email_identity.verified_at %}<p class="verified">Verified sign-in email: {{ email_identity.email }}</p>{% else %}<p class="waiting">Email sign-in not linked yet</p>{% endif %}
-<p class="helper">Manage your verified email, Google sign-in, password and optional phone number securely.</p>
+<p class="helper">You can link a phone, verify an email or connect Google without losing your order history. These changes use a code or password check to protect your account.</p>
+<div class="kofad-link-methods"><a href="/market/account/security/#customer-link-email">✉ Email</a><a href="/market/account/security/#customer-link-phone">✆ Phone</a><a href="/market/account/security/#customer-link-google">G Google</a></div>
 <a class="market-button ghost" href="/market/account/security/">Manage email &amp; security →</a>
 </section>
 

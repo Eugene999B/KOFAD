@@ -7,6 +7,7 @@ This module deliberately has no outbound message or write operations.
 import re
 
 from .telegram_assistant import _staff_analysis, _staff_compare
+from .staff_decisions import decision_brief, suggested_communication
 from .telegram_intelligence import (
     _branches, _role, account_tasks, inventory_brief, sales_work_brief,
 )
@@ -104,6 +105,11 @@ def _intent(text):
         return "security"
     if any(word in q for word in ("send", "message", "notify", "email", "gmail", "sms", "telegram", "draft")):
         return "communication"
+    if any(word in q for word in ("why sales", "why revenue", "risk", "root cause",
+                                  "deep analysis", "analyse", "analyze", "insight",
+                                  "decision", "what should we", "forecast", "prediction",
+                                  "recommend", "action plan")):
+        return "insights"
     if any(word in q for word in ("my role", "my access", "my permission", "allowed to", "who am i")):
         return "role"
     if any(word in q for word in ("branch", "location", "where do i work")):
@@ -145,7 +151,7 @@ def staff_reply(user, question, *, context=""):
     q = question.casefold()
     # A short follow-up may reuse only the prior *category*, never data or
     # authority supplied by the browser. Every tool checks current roles.
-    if (intent == "clarify" and context in {"reports", "compare", "inventory", "orders", "receivables"}
+    if (intent == "clarify" and context in {"reports", "compare", "inventory", "orders", "receivables", "insights"}
             and re.search(r"(?i)\b(?:what about|how about|same for|previous|last|this)\b", q)):
         intent = context
     if intent == "security":
@@ -153,12 +159,13 @@ def staff_reply(user, question, *, context=""):
                 "Use KOFAD's official security and account-recovery pages."), "security"
     if intent == "communication":
         return (
-            "I can help identify operational priorities, but I cannot send unsolicited messages "
-            "or contact customers from this chat. Start with your role-scoped priorities:\n\n"
-            + account_tasks(user)
+            "I cannot send unsolicited messages or contact customers from this chat.\n\n"
+            + suggested_communication(user)
             + "\n\nFor SMS, Telegram or email, use the approved Communications Center. "
-            "Check recipient consent, contents and the delivery cost before sending."
+              "Check recipient consent, evidence and any delivery cost before sending."
         ), "draft"
+    if intent == "insights":
+        return decision_brief(user), "insights"
     if intent == "role":
         allowed = []
         if role["management"]:
@@ -203,10 +210,10 @@ def staff_reply(user, question, *, context=""):
         days = 30 if any(token in q for token in ("month", "30 day", "monthly")) else 1 if "today" in q else 7
         return _staff_analysis(user, days) + "\nFor detail and reconciliation, open /workspace/.", "reports"
     if intent == "tasks":
-        return account_tasks(user), "tasks"
-    choices = ["your assigned branches", "current priorities"]
+        return decision_brief(user), "tasks"
+    choices = ["your assigned branches", "evidence-ranked priorities", "operational risks"]
     if role["management"]:
-        choices.extend(["sales today", "sales trends this month", "overdue invoices and receivables"])
+        choices.extend(["sales today", "sales trends this month", "why sales changed", "overdue invoices and receivables"])
     if role["inventory"]:
         choices.append("low stock and restocking")
     if role["sales"]:
@@ -215,5 +222,5 @@ def staff_reply(user, question, *, context=""):
         "Hello! I'm your KOFAD Staff Assistant. I can check " + ", ".join(choices)
         + ".\n\nTry: “What needs attention today?” or ask for a report using "
         "ordinary language. Figures come from authorized KOFAD records, not AI guesses. "
-        "This chat cannot approve, edit, or send transactions."
+        "This chat cannot approve, edit, or send transactions; it will label missing evidence."
     ), "help"

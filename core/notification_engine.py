@@ -252,16 +252,26 @@ def _period_report(branch, category, first, last):
     days = (last - first).days + 1
     previous = _window_values(branch, first - timedelta(days=days), first - timedelta(days=1))
     comparison = "Previous period had no recorded sales."
-    if previous["sales"] > 0:
+    if previous["sales"] > 0 and now["days"] == previous["days"] and now["days"] > 0:
         change = ((now["sales"] - previous["sales"]) / previous["sales"]) * 100
-        comparison = f"Recorded sales change: {change:+.1f}% versus comparable preceding period."
+        comparison = f"Recorded sales change: {change:+.1f}% versus the preceding period."
+    elif now["days"] != previous["days"]:
+        comparison = (
+            f"Closing coverage differs ({now['days']} recent versus "
+            f"{previous['days']} previous). A percentage sales change would "
+            "be misleading until those records are checked."
+        )
     actions = []
     if not now["days"]:
         actions.append("No closings recorded for this period. Check whether reporting was completed.")
     if now["variance_dates"]:
         actions.append("Review cash variance on: " + ", ".join(now["variance_dates"][:12]))
-    if previous["sales"] > 0 and now["sales"] < previous["sales"] * Decimal("0.8"):
-        actions.append("Sales fell over 20%; investigate demand, availability and branch operations.")
+    if (previous["sales"] > 0 and now["days"] == previous["days"]
+            and now["days"] > 0 and now["sales"] < previous["sales"] * Decimal("0.8")):
+        actions.append(
+            "Recorded sales were over 20% lower. Check stock availability, "
+            "receipts and customer demand before assuming a cause."
+        )
     if not actions:
         actions.append("No automatic critical trend detected; review store-specific exceptions.")
     return (
@@ -586,14 +596,17 @@ def run_customer_personalised_promotions(now=None):
             defaults={
                 "recipient": customer.email, "recipient_ref": str(customer.pk),
                 "category": "marketing",
-                "subject": "An item you saved at KOFAD Market",
+                "subject": "Still thinking about something you saved at KOFAD?",
                 "body": (
                     f"Hello {customer.full_name},\n\n"
-                    f"You saved '{product_name}' at KOFAD Market. If you are still interested, "
-                    "sign in to check current availability and pricing.\n"
-                    "No discount or stock availability is guaranteed.\n\n"
-                    "Manage or stop promotional emails from My Account > Email preferences.\n"
-                    "This message is sent only to customers who explicitly confirmed their marketing email."
+                    f"Remember '{product_name}'? You saved it at KOFAD Market. "
+                    "We thought we'd make it easy to find again.\n"
+                    "Have another look in your account whenever you're ready. "
+                    "Please check the current price and availability before ordering; "
+                    "we have not reserved it or promised a discount.\n\n"
+                    "You're receiving this because you confirmed that you'd like occasional "
+                    "KOFAD emails. To stop them, open My Account > Email preferences "
+                    "and unsubscribe at any time."
                 ),
             },
         )

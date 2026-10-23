@@ -39,6 +39,7 @@ def staff_menu(user):
     options = ["/status — verified KOFAD staff identity",
                "/myalerts — subscribed notifications",
                "/tasks — responsibilities needing attention",
+               "/insights — evidence-ranked risks, sales signals and next actions",
                "/branches — locations in your access scope",
                "/alerts_on — enable permitted operational alerts",
                "/alerts_off — pause optional notices"]
@@ -197,8 +198,14 @@ def queue_role_briefings(now=None):
         summary = account_tasks(user)
         if not summary.startswith("KOFAD OPERATIONAL PRIORITIES"):
             continue
+        # This is the existing once-daily *consented* message, not an extra
+        # broadcast. Decisions are derived again from current live role/branch
+        # permissions at queue time, with no private customer contacts.
+        from .staff_decisions import decision_brief
+        detail = decision_brief(user)
+        body = (summary + "\n\n" + detail)[:3600]
         created += int(queue_notice(
             identity, "task", f"tg:role-brief:{now.date().isoformat()}:{user.pk}",
-            summary,
+            body,
         ))
     return created
