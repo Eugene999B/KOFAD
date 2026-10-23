@@ -203,6 +203,13 @@ def _arkesel_balance():
 def _sms(user, start, end, question):
     from .models import Message, SmsAttempt
 
+    q = question.casefold()
+    balance_only = bool(re.search(r"\b(?:left|remaining|balance|credits?|quota)\b", q))
+    activity_requested = bool(re.search(
+        r"\b(?:sent|delivered|failed|received|how many messages|history|attempts|types|category)\b", q
+    ))
+    if balance_only and not activity_requested:
+        return "Arkesel SMS credits available: " + _arkesel_balance()
     branches = _branches(user)
     messages = Message.objects.filter(
         branch__in=branches, channel="sms", created_at__gte=start, created_at__lt=end
