@@ -136,6 +136,83 @@ class StaffAssistantTests(TestCase):
         self.assertTrue(result["read_only"])
         self.assertIn("Recorded sales", result["reply"])
 
+    def test_conversational_reply_handles_informal_questions_and_repeat_greeting(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        result, source = conversational_reply(self.manager, "Are u okay")
+        self.assertEqual(source, "conversation")
+        self.assertIn("I'm here and working", result)
+        first, _ = conversational_reply(self.manager, "Hi", turn_count=0)
+        second, _ = conversational_reply(self.manager, "Hi", turn_count=2)
+        self.assertNotEqual(first, second)
+        answer, source = conversational_reply(
+            self.manager, "Why did that happen?", context="email"
+        )
+        self.assertEqual(source, "clarify")
+        self.assertIn("Incoming mail", answer)
+
+    @patch("core.staff_ai_tools._arkesel_balance", return_value="199,928 credits (provider reading)")
+    def test_sms_balance_request_is_short_and_not_full_delivery_history(self, balance):
+        answer, source = staff_reply(self.manager, "What's the SMS left?")
+        self.assertEqual(source, "sms")
+        self.assertEqual(answer, "Arkesel SMS credits available: 199,928 credits (provider reading)")
+        balance.assert_called_once_with()
+
+    def test_received_email_question_does_not_report_outgoing_mail(self):
+        mb, _ = EmailMailbox.objects.get_or_create(
+            address="sales@kofadimpex.com", defaults={"label": "Sales"},
+        )
+        incoming = EmailLetter.objects.create(
+            mailbox=mb, direction="inbound", status="received",
+            from_address="reply@example.test", to_address=mb.address,
+            subject="Account question",
+        )
+        EmailLetter.objects.create(
+            mailbox=mb, direction="outbound", status="submitted",
+            from_address=mb.address, to_address="sent@example.test",
+            subject="Sent invoice",
+        )
+        reply, source = staff_reply(self.manager, "Have we gotten any email?")
+        self.assertEqual(source, "email")
+        self.assertIn("1 incoming email", reply)
+        self.assertNotIn("Outgoing letters created", reply)
+        self.assertNotIn("sent@example.test", reply)
+        self.assertTrue(incoming.pk)
+
+    def test_inbound_mail_detail_is_permission_scoped(self):
+        mb = EmailMailbox.objects.create(
+            address="inbox_ai_scope@kofadimpex.com", label="Limited access",
+        )
+        EmailLetter.objects.create(
+            mailbox=mb, direction="inbound", status="received",
+            from_address="buyer@example.test", to_address=mb.address,
+            subject="Private customer question",
+        )
+        EmailMailboxMember.objects.create(mailbox=mb, user=self.seller, can_read=True)
+        reply, source = staff_reply(self.seller, "Who sent incoming email today?")
+        self.assertIn("buyer@example.test", reply)
+        self.assertEqual(source, "email")
+        restricted, source = staff_reply(self.inventory, "Who sent incoming email today?")
+        self.assertNotIn("buyer@example.test", restricted)
+
+    def test_chat_accepts_bounded_continuation_context_without_extra_permissions(self):
+        request = self.factory.post(
+            "/staff/assistant/chat/",
+            data=json.dumps({
+                "message": "And yesterday?",
+                "recent_topics": ["sales_activity"],
+                "turn_count": 5,
+            }),
+            content_type="application/json",
+        )
+        request.user = self.seller
+        request.session = {}
+        response = assistant_chat(request)
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        self.assertEqual(payload["source"], "denied")
+        self.assertNotIn("GHS", payload["reply"])
+
     def test_incomplete_what_is_a_short_natural_reply(self):
         from core.staff_ai_conversation import conversational_reply
 
