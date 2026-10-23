@@ -147,3 +147,76 @@ html[data-theme="dark"] body.login-page .login-theme-toggle {
   body.login-page .login-brand-intro,
   body.login-page .login-command-map article { animation: none !important; transition: none !important; }
 }
+
+
+/* Sign-in must never be cropped to exactly one viewport. The legacy base
+   stylesheet sets html/body to 100dvh with overflow:hidden and puts
+   max-height:100% / overflow:hidden on the card. This clipped the primary
+   Sign in to workspace button on real 900px-height screens. */
+html:has(body.login-page){
+  height:auto!important;
+  min-height:100dvh!important;
+  max-height:none!important;
+  overflow-x:clip!important;
+  overflow-y:auto!important;
+}
+body.login-page{
+  height:auto!important;
+  min-height:100dvh!important;
+  max-height:none!important;
+  overflow-x:clip!important;
+  overflow-y:visible!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+body.login-page .login-layout,
+body.login-page .premium-login-layout{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  align-items:start!important;
+  padding-block:16px 22px!important;
+  overflow:visible!important;
+}
+body.login-page .premium-login-card{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+  align-self:start!important;
+}
+body.login-page .premium-login-story{
+  height:auto!important;
+  min-height:560px!important;
+  max-height:none!important;
+  align-self:stretch!important;
+}
+body.login-page .premium-login-submit{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  min-height:52px!important;
+  height:auto!important;
+  overflow:visible!important;
+}
+body.login-page .login-footer{
+  width:100%;
+  margin-top:0!important;
+  padding-block:14px 20px!important;
+}
+@media(max-width:760px){
+  body.login-page .login-layout,
+  body.login-page .premium-login-layout{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    height:auto!important;
+    padding:10px 16px 20px!important;
+  }
+  body.login-page .premium-login-card{
+    width:min(100%,455px)!important;
+    margin:0 auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+  }
+}
