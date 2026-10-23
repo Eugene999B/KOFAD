@@ -86,3 +86,9 @@
 .staff-ai-page .staff-ai-header{padding:2px 2px 10px}
 .staff-ai-page .staff-ai-form{padding:10px 10px max(10px,env(safe-area-inset-bottom))}
 }
+
+/* Last-rule specificity: the inherited page title otherwise clips under the mobile header. */
+body.staff-ai-page main#main > .page-heading{display:none!important}
+body.staff-ai-page main#main > footer.page-footer{display:none!important}
+.staff-ai-page .staff-ai-message.is-assistant .staff-ai-message-actions{margin:8px 0 4px}
+.staff-ai-page .staff-ai-copy{font-size:.73rem;padding:5px 9px;opacity:.8}
