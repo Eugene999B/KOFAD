@@ -344,6 +344,17 @@ def answer_operational_question(user, question, *, context=""):
     q = " ".join(question.casefold().split())
     followup = bool(re.search(r"\b(?:what about|how about|and last|and this|same for)\b", q))
     topics = []
+    # Actual posted transaction questions should not fall through to a generic welcome
+    # or a verified-closing-only summary. Keep causal questions with insight tools.
+    about_sales = bool(re.search(r"\b(?:sold|sales?|selling|revenue|turnover)\b", q))
+    wants_explanation = bool(re.search(
+        r"\b(?:why|forecast|predict|prediction|trend|compare|comparison|cause|"
+        r"reason|growth|increase|decrease|changed|analysis|analyse|analyze)\b", q
+    ))
+    if about_sales and not wants_explanation and not re.search(
+        r"\b(?:start|create|make|post|record|complete|refund|reverse)\s+(?:a\s+)?sale\b", q
+    ):
+        topics.append("sales_activity")
     if re.search(r"\b(?:momo|mobile money|mobile-money)\b", q):
         topics.append("momo")
     if re.search(r"\b(?:debt|debts|receivable|receivables|overdue|owing|owed|invoice|invoices)\b", q) and (
@@ -357,7 +368,7 @@ def answer_operational_question(user, question, *, context=""):
         topics.append("email")
     if re.search(r"\b(?:system health|diagnos\w*|outages?|what.s wrong|system errors?|system issues?|what is broken|connections? status)\b", q):
         topics.append("diagnostics")
-    if not topics and followup and context in {"momo", "debt_activity", "sms", "email", "diagnostics"}:
+    if not topics and followup and context in {"sales_activity", "momo", "debt_activity", "sms", "email", "diagnostics"}:
         topics.append(context)
     if not topics:
         return None
@@ -374,7 +385,7 @@ def answer_operational_question(user, question, *, context=""):
     permitted = []
     blocked = []
     for topic in dict.fromkeys(topics):
-        if topic in {"momo", "debt_activity"} and not roles["management"]:
+        if topic in {"sales_activity", "momo", "debt_activity"} and not roles["management"]:
             blocked.append("financial reports")
             continue
         if topic == "sms" and not (
@@ -390,7 +401,11 @@ def answer_operational_question(user, question, *, context=""):
         return "Your current staff permissions don't allow " + ", ".join(dict.fromkeys(blocked)) + ".", "denied"
     results = [f"KOFAD record analysis · {first:%d %b %Y}–{last:%d %b %Y} · authorized scope only"]
     for topic in permitted[:5]:
-        if topic == "momo":
+        if topic == "sales_activity":
+            from .staff_ai_sales import posted_sales
+            response, _ = posted_sales(user, question)
+            results.append(response)
+        elif topic == "momo":
             results.append(_momo(user, start, end))
         elif topic == "debt_activity":
             results.append(_debts(user, start, end))
