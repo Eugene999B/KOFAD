@@ -57,7 +57,8 @@
         : source === "sales_activity"
           ? lines.filter(s => /finalized sale|gross recorded sales|net recorded sales|recorded sales/i.test(s))
           : lines;
-    const selected = (important.length ? important : lines).slice(0, 3);
+    const limit = source === "sales_activity" ? 4 : 3;
+    const selected = (important.length ? important : lines).slice(0, limit);
     return {headline: selected.join("\n"), full: text};
   }
   function assistantBubble(message, actions, source) {
@@ -143,7 +144,7 @@
         credentials: "same-origin",
         signal: inFlight.signal,
         headers: {"Content-Type": "application/json", "X-CSRFToken": token ? token.value : ""},
-        body: JSON.stringify({message: value, context: lastTopic, recent_topics: recentTopics, turn_count: turnCount})
+        body: JSON.stringify({message: value, context: lastTopic, recent_topics: recentTopics, turn_count: Math.max(0, turnCount - 1)})
       });
       const data = await response.json();
       progress.remove();
