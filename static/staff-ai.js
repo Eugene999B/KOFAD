@@ -45,7 +45,7 @@
     const body = document.createElement("p");
     body.textContent = message;
     node.append(body);
-    if (!user && message) {
+    if (!user && message && (message.length > 120 || (Array.isArray(actions) && actions.length))) {
       const toolbar = document.createElement("div");
       toolbar.className = "staff-ai-message-actions";
       (Array.isArray(actions) ? actions : []).filter(approvedAction).slice(0, 3).forEach(function (action) {
@@ -100,7 +100,11 @@
       });
       const data = await response.json();
       progress.remove();
-      if (response.ok && typeof data.source === "string") lastTopic = data.source;
+      // Clarifications and pleasantries must not erase the last report topic.
+      if (response.ok && typeof data.source === "string" &&
+          !["clarify", "conversation", "invalid", "help", "denied", "security"].includes(data.source)) {
+        lastTopic = data.source;
+      }
       bubble("KOFAD Assistant", data.reply || data.error || "That request couldn't be completed.",
         response.ok ? data.actions : []);
       status.textContent = response.ok
