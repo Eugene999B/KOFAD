@@ -1,55 +1,59 @@
 {% extends "base.html" %}
 {% load static %}
+{% block body_class %}staff-ai-page{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'staff-ai.css' %}">
 <script defer src="{% static 'staff-ai.js' %}"></script>
 {% endblock %}
 {% block content %}
-<section class="staff-ai-layout" aria-labelledby="staff-ai-intro">
-  <div class="staff-ai-main">
-    <div class="staff-ai-hero">
-      <div class="staff-ai-spark" aria-hidden="true">✦</div>
-      <div>
-        <p class="staff-ai-eyebrow">Real figures. Clear next steps.</p>
-        <h2 id="staff-ai-intro">What needs our attention today?</h2>
-        <p>Ask why sales have changed, what needs attention first, where stock is low or how to follow up on orders. You'll get evidence and next steps from <strong>your authorized KOFAD records</strong>, with missing data clearly marked.</p>
+<section class="staff-ai-workspace" data-staff-ai-endpoint="{% url 'staff_ai_chat' %}" aria-label="KOFAD staff assistant">
+  <header class="staff-ai-header">
+    <div class="staff-ai-identity">
+      <span class="staff-ai-mark" aria-hidden="true">✦</span>
+      <div><h2>KOFAD Assistant</h2><p>Your work, made clearer.</p></div>
+    </div>
+    <div class="staff-ai-toolbar">
+      <span class="staff-ai-private"><span aria-hidden="true">●</span> Staff only</span>
+      <button type="button" class="staff-ai-tool" id="staff-ai-reset" aria-label="Start a new conversation" title="New conversation">↻ <span>New chat</span></button>
+    </div>
+  </header>
+
+  <div class="staff-ai-conversation">
+    <div class="staff-ai-log" id="staff-ai-log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Assistant conversation">
+      <div class="staff-ai-empty" id="staff-ai-empty">
+        <span class="staff-ai-empty-spark" aria-hidden="true">✦</span>
+        <h3>What's on your mind?</h3>
+        <p>Ask about today's work, sales trends, stock or what needs your attention.</p>
       </div>
     </div>
-    <div class="staff-ai-chat" data-staff-ai-endpoint="{% url 'staff_ai_chat' %}">
-      <div class="staff-ai-log" id="staff-ai-log" role="log" aria-live="polite" aria-label="Assistant conversation">
-        <div class="staff-ai-message is-assistant"><strong>KOFAD Staff Assistant</strong><p>Hello {{ request.user.first_name|default:request.user.username }}! I'm ready to explore your work with you. What would you like to understand or improve today?</p></div>
+    <div class="staff-ai-bottom">
+      <div class="staff-ai-suggestions" id="staff-ai-suggestions" aria-label="Try asking">
+        <button type="button" data-ai-prompt="What should I review first today?">✦ Today's priorities</button>
+        {% if perms.core.view_reports or perms.core.operate_finance or perms.core.manage_company %}
+        <button type="button" data-ai-prompt="Analyse why sales changed this week, what evidence supports it, and what we should check next.">↗ Analyse sales</button>
+        <button type="button" data-ai-prompt="Which overdue receivables need follow-up?">◷ Receivables</button>
+        {% endif %}
+        {% if perms.core.operate_inventory or perms.core.manage_company %}
+        <button type="button" data-ai-prompt="Which products need restocking, and where?">▦ Low stock</button>
+        {% endif %}
+        {% if perms.core.operate_sales or perms.core.manage_company %}
+        <button type="button" data-ai-prompt="Which online orders need follow-through?">▣ Open orders</button>
+        {% endif %}
+        <button type="button" data-ai-prompt="Which branches and abilities are assigned to me?">◎ My access</button>
       </div>
       <form id="staff-ai-form" class="staff-ai-form">
         {% csrf_token %}
-        <label for="staff-ai-question">Your question</label>
+        <label class="sr-only" for="staff-ai-question">Ask KOFAD Assistant</label>
         <div class="staff-ai-compose">
-          <textarea id="staff-ai-question" rows="2" minlength="2" maxlength="600" placeholder="E.g. How did sales change this week, and what should I check?" required></textarea>
-          <button id="staff-ai-submit" type="submit">Ask assistant →</button>
+          <textarea id="staff-ai-question" rows="1" minlength="2" maxlength="600" placeholder="Ask anything about your work..." aria-label="Ask KOFAD Assistant" required></textarea>
+          <button id="staff-ai-submit" type="submit" aria-label="Send message" title="Send message"><span aria-hidden="true">↑</span></button>
         </div>
-        <p class="staff-ai-hint" id="staff-ai-status" role="status">Verified records only · Role-based access · No external sharing of staff records or automatic payments/messages</p>
+        <div class="staff-ai-meta">
+          <span id="staff-ai-status" role="status">Answers use your permitted KOFAD records.</span>
+          <details class="staff-ai-privacy"><summary>Privacy</summary><p>Information stays within your authorized staff access. Reports may be incomplete. The assistant can prepare guidance and open workflows, but cannot independently send messages, change stock, or approve payments.</p></details>
+        </div>
       </form>
     </div>
   </div>
-  <aside class="staff-ai-aside" aria-label="Suggested questions">
-    <h3>Start with a question</h3>
-    <p>Choose a topic or ask in your own words.</p>
-    <div class="staff-ai-prompts">
-      <button type="button" data-ai-prompt="What needs my attention today?">✦ What should I review first?</button>
-      {% if perms.core.view_reports or perms.core.operate_finance or perms.core.manage_company %}
-      <button type="button" data-ai-prompt="Compare sales performance this week.">↗ Compare weekly sales</button>
-      <button type="button" data-ai-prompt="Why are sales changing, and what evidence is missing?">◷ Explain the sales trend</button>
-      <button type="button" data-ai-prompt="Analyse verified closings this month.">◷ Review the month</button>
-      {% endif %}
-      {% if perms.core.operate_inventory or perms.core.manage_company %}
-      <button type="button" data-ai-prompt="Show low stock and restocking priorities.">▦ Identify low stock</button>
-      {% endif %}
-      {% if perms.core.operate_sales or perms.core.manage_company %}
-      <button type="button" data-ai-prompt="Which online orders need follow-through?">▣ Check fulfillment</button>
-      {% endif %}
-      <button type="button" data-ai-prompt="Which branches and abilities are assigned to me?">◎ My role and branches</button>
-      <button type="button" data-ai-prompt="Draft a safe communication plan for what needs attention.">✉ Plan a customer update (no sending)</button>
-    </div>
-    <div class="staff-ai-note"><strong>Evidence first, action second.</strong><p>Sales comparisons show how much verified data was available. The assistant can suggest priorities and draft guidance; staff must still use approved workflows for contacts, payments, stock changes and customer commitments.</p></div>
-  </aside>
 </section>
 {% endblock %}
