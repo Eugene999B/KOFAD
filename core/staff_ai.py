@@ -213,6 +213,20 @@ def staff_actions(user, source):
     return actions[:3]
 
 
+def _honest_closing_report(report):
+    """No verified closing must never be presented as zero actual business sales."""
+    if "Verified closings reviewed: 0" not in report:
+        return report
+    headline = "\n".join(report.splitlines()[:3])
+    return (
+        headline + "\nNo verified closing records are available for this period. "
+        "Sales, expense and collection totals are NOT established from closing data; "
+        "this does not mean KOFAD made zero sales. "
+        "Check /closings/ for missing submissions and review authorized live transaction "
+        "reports before making a decision."
+    )
+
+
 def staff_reply(user, question, *, context=""):
     """Derive an answer from *current* permissions and authorized branches.
 
@@ -290,9 +304,9 @@ def staff_reply(user, question, *, context=""):
         if not role["management"]:
             return "Your current KOFAD role does not grant verified closing reports.", "denied"
         if any(token in q for token in ("yesterday", "previous day")):
-            return _staff_analysis(user, 1, offset=1), "reports"
+            return _honest_closing_report(_staff_analysis(user, 1, offset=1)), "reports"
         days = 30 if any(token in q for token in ("month", "30 day", "monthly")) else 1 if "today" in q else 7
-        return _staff_analysis(user, days) + "\nFor detail and reconciliation, open /workspace/.", "reports"
+        return _honest_closing_report(_staff_analysis(user, days)) + "\nFor detail and reconciliation, open /workspace/.", "reports"
     if intent == "tasks":
         return decision_brief(user), "tasks"
     choices = ["your assigned branches", "evidence-ranked priorities", "operational risks"]
