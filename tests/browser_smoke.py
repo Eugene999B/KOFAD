@@ -1233,9 +1233,12 @@ with sync_playwright() as p:
 
     admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.goto("http://127.0.0.1:8000/workspace/")
-    assert admin_page.locator(".top-right form[action=\"/logout/\"] button").is_visible()
+    assert admin_page.locator(".top-right form[action=\"/logout/\"] button").is_hidden()
+    admin_page.locator("#menu-toggle").click()
+    assert admin_page.locator(".sidebar-signout button").is_visible()
+    admin_page.locator(".nav-close").click()
     assert admin_page.locator(".executive-kpis").is_visible()
-    assert admin_page.get_by_text("Operational control pulse", exact=True).is_visible()
+    assert admin_page.get_by_text("Operational pulse", exact=True).is_visible()
     admin_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
     admin_page.reload()
     assert admin_page.locator(".executive-kpis article").first.evaluate(
