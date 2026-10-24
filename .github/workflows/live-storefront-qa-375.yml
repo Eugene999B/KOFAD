@@ -6,6 +6,12 @@ on:
     paths:
       - tests/live_storefront_qa_375.py
       - .github/workflows/live-storefront-qa-375.yml
+  pull_request:
+    branches:
+      - railway-release
+    paths:
+      - tests/live_storefront_qa_375.py
+      - .github/workflows/live-storefront-qa-375.yml
   workflow_dispatch:
 permissions:
   contents: read
