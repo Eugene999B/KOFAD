@@ -53,43 +53,37 @@
 </section>
 
 <main class="login-card premium-login-card" id="main">
-<div class="login-access-chip"><span>STAFF SIGN-IN</span><b>SECURE</b></div>
+<div class="login-access-chip"><span>KOFAD STAFF</span><b>SECURE ACCESS</b></div>
 <div class="login-card-top">
-<div class="welcome-icon premium-welcome-icon" aria-hidden="true"><img src="{% static 'brand/kofad-official-logo.svg' %}" alt=""></div>
-<div><p class="eyebrow">WELCOME BACK</p><h2>Ready for your shift?</h2></div>
+<div><p class="eyebrow">WELCOME BACK</p><h2>Sign in to KOFAD</h2></div>
 </div>
-<p class="muted login-intro-copy">Sign in with your username, verified email or linked phone number. Your work area will open with the tools assigned to you.</p>
+<p class="muted login-intro-copy">Your workspace, securely connected.</p>
 
 {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
 {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
 <form method="post" class="premium-login-form">{% csrf_token %}
-<label for="username">Username, mobile number or verified email</label>
+<label for="username">Username, phone or email</label>
 <div class="login-input-shell"><span aria-hidden="true">◎</span><input id="username" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus placeholder="Username, phone or verified email"></div>
 
 <label for="password">Password</label>
 <div class="password-field login-input-shell"><span aria-hidden="true">⌁</span><input id="password" name="password" type="password" autocomplete="current-password" data-login-password required placeholder="Enter your password"></div>
 
-<div class="login-form-row"><span>Your own KOFAD staff account</span><a href="/forgot-password/">Forgot password?</a></div>
+<div class="login-form-row"><a href="/forgot-password/">Forgot password?</a></div>
 {% if turnstile_sitekey %}
 <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-action="staff_login" data-theme="auto"></div>
-<p class="turnstile-privacy-note">Protected by Cloudflare Turnstile · <a href="/privacy/">Privacy</a></p>
+<p class="turnstile-privacy-note">Protected sign-in · <a href="/privacy/">Privacy</a></p>
 {% endif %}
-<button class="button wide login-submit premium-login-submit">Sign in to workspace <span aria-hidden="true">→</span></button>
+<button class="button wide login-submit premium-login-submit">Sign in <span aria-hidden="true">→</span></button>
 </form>
 {% if google_ready %}
 <div class="kofad-oauth-separator"><span>or continue with</span></div>
 <a class="kofad-google-button" href="{% url 'google_staff_login' %}">
   <span class="kofad-google-mark" aria-hidden="true">G</span> Sign in with Google
 </a>
-<p class="kofad-google-hint">Only linked staff Google accounts can sign in. Staff security checks still apply.</p>
+<p class="kofad-google-hint">For linked staff accounts only.</p>
 {% endif %}
 
-<div class="login-assurance">
-<div><span>✓</span><p><strong>Permission scoped</strong><small>Only your assigned workspaces and locations.</small></p></div>
-<div><span>✓</span><p><strong>Audited activity</strong><small>Critical business actions retain evidence.</small></p></div>
-</div>
-<p class="login-security">Need help signing in? <a href="/forgot-password/">Recover by verified email or SMS</a>. After sign-in, open <strong>My account</strong> to link your email or phone. Ask your administrator if you still need a hand.</p>
 </main>
 </div>
 
