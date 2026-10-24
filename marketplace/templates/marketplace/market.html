@@ -1,5 +1,5 @@
 {% extends "marketplace/base.html" %}{% load static %}{% block after_styles %}<link rel="stylesheet" href="{% static 'marketplace/market-discover.css' %}">{% endblock %}{% block content %}
-<section class="shop-catalog">
+<section class="shop-catalog">{% if requires_catalog_verification %}<p class="market-flash" role="status">Some products are awaiting independent stock and price checks. Request a verified quote before ordering these items.</p>{% endif %}
 {% if categories %}<nav class="shop-category-strip" aria-label="Product categories"><a href="/market/{% if q %}?q={{ q|urlencode }}{% endif %}" class="{% if not selected_category %}active{% endif %}">All</a>{% for category in categories %}<a href="{% if q %}/market/?category={{ category|urlencode }}&amp;q={{ q|urlencode }}{% else %}/market/categories/{{ category|slugify }}/{% endif %}" class="{% if selected_category == category %}active{% endif %}">{{ category }}</a>{% endfor %}</nav>{% endif %}
 {% if not q and not selected_category %}
 <section class="market-shop-lead" aria-labelledby="market-shop-title">
