@@ -4,6 +4,11 @@ on:
     paths:
       - marketplace/views.py
       - marketplace/test_market_seo_restore.py
+      - marketplace/test_public_qa_fixes.py
+      - marketplace/listing_safety.py
+      - marketplace/public_trust.py
+      - marketplace/templates/marketplace/market.html
+      - marketplace/templates/marketplace/cart.html
       - .github/workflows/market-public-context-recovery.yml
   workflow_dispatch:
 permissions:
@@ -38,4 +43,4 @@ jobs:
       - run: python manage.py migrate --noinput
       - run: python scripts/prepare_logo.py
       - run: python manage.py collectstatic --noinput
-      - run: python manage.py test marketplace.test_market_seo_restore marketplace.test_discovery marketplace.test_public_search core.test_email_upgrade --noinput
+      - run: python manage.py test marketplace.test_public_qa_fixes marketplace.test_market_seo_restore marketplace.test_discovery marketplace.test_public_search core.test_email_upgrade --noinput
