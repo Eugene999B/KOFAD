@@ -43,6 +43,7 @@ from .models import (
     RecentView, StockReservation, WishlistItem,
 )
 from . import services, hubtel, paystack_momo, momo_security
+from .listing_safety import requires_review, ensure_orderable
 from .hubtel_evidence import decrypt_exchange, save_exchange
 
 
@@ -169,6 +170,7 @@ def _decorate_listings(listings, branch):
             listing.available_units = services.available_units(branch, listing.product) if branch else 0
         listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
         listing.market_price_value = listing.market_price
+        listing.awaiting_verification = requires_review(listing)
     return listings
 
 
@@ -1090,10 +1092,14 @@ def market_session_state(request):
     return response
 
 
-@market_customer_required
 @require_POST
-def cart_add(request, customer, pk):
+def cart_add(request, pk):
     listing = get_object_or_404(MarketListing.objects.select_related("product"), pk=pk, enabled=True, product__active=True)
+    try:
+        ensure_orderable(listing)
+    except ValidationError as exc:
+        messages.error(request, str(exc.messages[0]))
+        return redirect("market_product", pk=listing.pk)
     try:
         quantity = int(request.POST.get("quantity", "1"))
     except ValueError:
@@ -1110,6 +1116,9 @@ def cart_add(request, customer, pk):
         current = int(cart.get(str(listing.pk), 0))
     except (ValueError, TypeError, OverflowError):
         current = 0
+    if str(listing.pk) not in cart and len(cart) >= 40:
+        messages.error(request, "A cart can contain up to 40 different products.")
+        return redirect("market_cart")
     cart[str(listing.pk)] = min(max(current, 0) + quantity, available)
     request.session["market_cart"] = cart
     request.session.modified = True
@@ -1122,8 +1131,7 @@ def cart_add(request, customer, pk):
     return redirect("market_cart")
 
 
-@market_customer_required
-def cart(request, customer):
+def cart(request):
     rows = services.cart_rows(request.session.get("market_cart", {}))
     branch = services.market_branch()
     subtotal = 0
@@ -1135,16 +1143,19 @@ def cart(request, customer):
     ))
 
 
-@market_customer_required
 @require_POST
-def cart_update(request, customer):
+def cart_update(request):
     cart_data = {}
     for key, value in request.POST.items():
         if not key.startswith("qty_"):
             continue
         listing_id = key.removeprefix("qty_")
-        if not listing_id.isdigit():
+        if not (listing_id.isascii() and listing_id.isdecimal()
+                and 1 <= len(listing_id) <= 20
+                and 0 < int(listing_id) <= 9223372036854775807):
             continue
+        if len(cart_data) >= 40:
+            break
         try:
             qty = int(value)
         except ValueError:
