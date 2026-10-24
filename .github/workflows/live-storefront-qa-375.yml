@@ -19,13 +19,11 @@ jobs:
   live_public_qa:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.55.0-noble
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install playwright==1.55.0
-      - run: python -m playwright install --with-deps chromium
+      - run: python -m pip install playwright==1.55.0
       - name: Audit live public pages, screenshot and capture errors
         run: python tests/live_storefront_qa_375.py
       - uses: actions/upload-artifact@v4
