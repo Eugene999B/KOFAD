@@ -7,7 +7,6 @@
   const empty = document.querySelector("#sidebar-search-empty");
   if (!input || !nav) return;
   const links = [...nav.querySelectorAll("a[href]")];
-  const sections = [...nav.querySelectorAll(".nav-label")];
   const groups = [];
   let current = null;
   [...nav.children].forEach(node => {
