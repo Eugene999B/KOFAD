@@ -1,7 +1,7 @@
 """Read-only public KOFAD QA snapshot: exact 375px + simulated Slow 3G.
 No sign-ins, no forms submitted, no checkout, no production writes.
 """
-import json, re, sys, time
+import base64, json, re, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -33,6 +33,13 @@ with sync_playwright() as p:
     page = ctx.new_page()
     cdps = ctx.new_cdp_session(page)
     cdps.send("Network.enable")
+    def screenshot_cdp(path):
+        """Chromium native PNG capture; avoids Playwright waiting for remote fonts."""
+        payload = cdps.send("Page.captureScreenshot", {
+            "format":"png", "captureBeyondViewport":True,
+            "fromSurface":True,
+        })
+        Path(path).write_bytes(base64.b64decode(payload["data"]))
     for n, (name,path) in enumerate(PAGES):
         console=[]; errors=[]; failed=[]; statuses=[]
         def on_console(msg):
@@ -74,19 +81,32 @@ with sync_playwright() as p:
               visible_buttons:[...document.querySelectorAll('button')].filter(x=>x.getBoundingClientRect().height && x.getBoundingClientRect().width).slice(0,12).map(x=>x.textContent.trim().slice(0,65)),
             })"""))
             if name == "home":
+                panel=page.locator("#kofad-cookie-panel")
+                outcome["cookie_visible_initially"] = bool(panel.count() and panel.is_visible())
+                if outcome["cookie_visible_initially"]:
+                    screenshot_cdp(out/"home-cookie-consent-375.png")
+                    essential=page.get_by_role("button",name="Essential only")
+                    if essential.count():
+                        try:
+                            essential.click(timeout=5000)
+                            outcome["cookie_dismissed"]=not panel.is_visible()
+                        except Exception as exc:
+                            outcome["cookie_dismiss_error"]=str(exc)[:250]
                 mobile=page.locator(".public-mobile-menu summary")
                 if mobile.count() and mobile.is_visible():
-                    mobile.click()
-                    outcome["mobile_menu_open"]=page.locator(".public-mobile-menu").evaluate("(el) => el.open")
-                    await_text=page.locator(".public-mobile-menu").inner_text()
-                    outcome["mobile_menu_text"]=await_text[:400]
-                    page.screenshot(path=str(out/"home-menu-375.png"),full_page=True)
-                    mobile.click()
-            # Screenshot regardless of HTTP result. Capture without interacting.
-            page.screenshot(path=str(out/f"{n+1:02d}-{name}-375.png"),full_page=True,timeout=20000,animations="disabled")
+                    try:
+                        mobile.click(timeout=4500)
+                        outcome["mobile_menu_open"]=page.locator(".public-mobile-menu").evaluate("(el) => el.open")
+                        outcome["mobile_menu_text"]=page.locator(".public-mobile-menu").inner_text()[:400]
+                        screenshot_cdp(out/"home-menu-375.png")
+                        mobile.click(timeout=3000)
+                    except Exception as exc:
+                        outcome["menu_interaction_error"]=str(exc)[:350]
+            # Capture every screen directly through Chromium, including slow-font pages.
+            screenshot_cdp(out/f"{n+1:02d}-{name}-375.png")
         except Exception as exc:
             outcome["error"]=str(exc)[:550]
-            try:page.screenshot(path=str(out/f"{n+1:02d}-{name}-ERROR.png"),full_page=False)
+            try:screenshot_cdp(out/f"{n+1:02d}-{name}-ERROR.png")
             except Exception:pass
         outcome["console_errors"]=console[:15]
         outcome["uncaught_exceptions"]=errors[:15]
