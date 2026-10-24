@@ -108,6 +108,19 @@ class PublicQaFixes(MarketFixtures):
         self.assertContains(response, "GHS 12.50")
         self.assertContains(response, "Coverage and delivery eligibility")
 
+    def test_contact_fallback_is_truthful_when_phone_is_not_published(self):
+        company = Company.objects.first()
+        company.phone = "+233240000000"
+        company.secondary_phone = "+233240000000"
+        company.whatsapp_phone = "+233243000000"
+        company.save(update_fields=["phone", "secondary_phone", "whatsapp_phone"])
+        for url in ("/contact/", "/faq/"):
+            page = self.client.get(url)
+            self.assertEqual(page.status_code, 200)
+            self.assertNotContains(page, "call the published business number")
+            self.assertNotContains(page, "+233240000000")
+            self.assertContains(page, "contact")
+
     def test_mobile_consent_does_not_cover_top_navigation(self):
         from pathlib import Path
         from django.conf import settings

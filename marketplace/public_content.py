@@ -49,7 +49,7 @@ PAGES = {
             ("Where do you deliver and how much does it cost?", ["Delivery depends on your location and the options offered at checkout. The delivery charge is shown before you pay. Contact us before ordering if your area is unavailable or you need a particular date."]),
             ("When can I collect my order?", ["Wait until your order says it is ready for pickup. Bring your order reference and the collection code if one is provided. Confirm the collection location with our team."]),
             ("Can I cancel or return an order?", ["You can cancel an unpaid order from its order page. Contact support promptly for a paid order. Standard return requests should be made within seven calendar days of receiving the goods; see our returns policy for condition requirements, exceptions and refunds."]),
-            ("How do I get help or share feedback?", ["Use the contact and feedback form, call our published business number, or sign in to customer support for order-linked conversations. Never include your password, OTP, card PIN or mobile-money PIN."]),
+            ("How do I get help or share feedback?", ["Use the contact and feedback form, or sign in to customer support for order-linked conversations. Call KOFAD only if a current verified number is shown on the contact page. Never include your password, OTP, card PIN or mobile-money PIN."]),
         ],
     },
     "delivery": {
@@ -125,7 +125,7 @@ PAGES = {
         "eyebrow": "LET’S TALK",
         "intro": "Ask about a product, share feedback or get help with an order. Your message goes to KOFAD’s customer care team.",
         "sections": [
-            ("A useful message gets a better answer", ["Include your order reference when relevant, the item involved and what you would like us to help with. We aim to acknowledge enquiries within two business days. For an urgent delivery issue, call the published business number."]),
+            ("A useful message gets a better answer", ["Include your order reference when relevant, the item involved and what you would like us to help with. We aim to acknowledge enquiries within two business days. For an urgent delivery issue, submit the enquiry form with your order reference and a reachable phone number. Call only if a verified business number is displayed on this page."]),
             ("Your feedback stays private", ["Feedback is sent to our team, not published as a customer review. Do not include passwords, OTPs, card details or mobile-money PINs."]),
         ],
     },
