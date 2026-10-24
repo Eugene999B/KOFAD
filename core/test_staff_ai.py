@@ -281,7 +281,7 @@ class StaffAssistantTests(TestCase):
         KOFAD_GEMINI_FREE_TIER_CONFIRMED=True,
         GEMINI_API_KEY="dummy-private-test",
     )
-    @patch("core.staff_ai_general._budget", return_value=True)
+    @patch("core.staff_ai_planner._budget", return_value=True)
     @patch("core.staff_ai_general.requests.post")
     def test_public_general_question_can_use_existing_free_gemini(self, post, budget):
         from core.staff_ai_general import general_reply
