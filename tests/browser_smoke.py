@@ -434,10 +434,29 @@ with sync_playwright() as p:
     admin_page.get_by_role("button",name="Sign in",exact=False).click()
     admin_page.wait_for_url("http://127.0.0.1:8000/workspace/")
     admin_page.get_by_role("heading",name="Command centre",exact=True).wait_for()
+    # UX regression: staff navigation is discoverable, searchable and never
+    # removes authorized links. The overview opens with actual operating data.
+    assert admin_page.locator("#sidebar-page-search").is_visible()
+    admin_page.locator("#sidebar-page-search").fill("payroll")
+    assert admin_page.locator('#staff-sidebar-nav a[href="/payroll/"]').is_visible()
+    assert admin_page.locator('#staff-sidebar-nav a[href="/sales/new/"]').is_hidden()
+    admin_page.locator("#sidebar-page-search").fill("")
+    assert admin_page.locator('#staff-sidebar-nav a[href="/sales/new/"]').is_visible()
+    assert admin_page.get_by_role("heading", name="Your business at a glance.", exact=True).is_visible()
+    assert admin_page.locator(".control-pulse-summary strong").is_visible()
     admin_page.screenshot(path=str(out / "admin-direct-login.png"),full_page=True)
     assert float(admin_page.locator(".sidebar nav a").first.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")) >= 13
 
     admin_page.set_viewport_size({"width":390,"height":844})
+    admin_page.locator("#menu-toggle").click()
+    assert admin_page.locator("#sidebar-page-search").is_visible()
+    admin_page.locator("#sidebar-page-search").fill("inventory")
+    assert admin_page.locator('#staff-sidebar-nav a[href="/inventory/"]').is_visible()
+    assert admin_page.locator('#staff-sidebar-nav a[href="/sales/new/"]').is_hidden()
+    admin_page.locator("#sidebar-page-search").fill("")
+    admin_page.locator(".nav-close").click()
+    assert not admin_page.evaluate("document.body.classList.contains('nav-open')")
+    assert admin_page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     approval = admin_page.locator("#approval-attention")
     approval.evaluate("el => { el.hidden = false; el.classList.add('has-approvals'); }")
     assert approval.locator(".approval-drag-handle").count() == 0
@@ -1214,9 +1233,12 @@ with sync_playwright() as p:
 
     admin_page.set_viewport_size({"width":390,"height":844})
     admin_page.goto("http://127.0.0.1:8000/workspace/")
-    assert admin_page.locator(".top-right form[action=\"/logout/\"] button").is_visible()
+    assert admin_page.locator(".top-right form[action=\"/logout/\"] button").is_hidden()
+    admin_page.locator("#menu-toggle").click()
+    assert admin_page.locator(".sidebar-signout button").is_visible()
+    admin_page.locator(".nav-close").click()
     assert admin_page.locator(".executive-kpis").is_visible()
-    assert admin_page.get_by_text("Operational control pulse", exact=True).is_visible()
+    assert admin_page.locator(".executive-hero .control-pulse > small").is_visible()
     admin_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
     admin_page.reload()
     assert admin_page.locator(".executive-kpis article").first.evaluate(

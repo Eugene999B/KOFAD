@@ -1,19 +1,17 @@
 {% extends "base.html" %}{% load static %}
 {% block body_class %}staff-dashboard-refined{% endblock %}
 {% block after_styles %}<link rel="stylesheet" href="{% static 'staff-refinement.css' %}"><link rel="stylesheet" href="{% static 'experience-upgrade.css' %}">{% endblock %}
-{% block actions %}{% if perms.core.operate_sales %}<a class="button" href="/sales/new/">＋ New sale</a>{% endif %}{% endblock %}
+{% block actions %}{% if perms.core.operate_sales %}<a class="button" href="/sales/new/">New sale <span aria-hidden="true">↗</span></a>{% endif %}{% endblock %}
 {% block content %}
-<section class="executive-hero">
+<section class="executive-hero" aria-label="Today's business snapshot">
   <div class="executive-hero-copy">
-    <p class="eyebrow">KOFAD COMMAND CENTRE</p>
-    <h2>Know what needs attention before it becomes a problem.</h2>
-    <p>{{ today|date:"l, j F Y" }} · {{ current_branch.name }} · live operational and accounting-backed records</p>
-    <div class="executive-hero-trust"><span>Sales & returns</span><span>Receivables & payables</span><span>Inventory & controls</span></div>
+    <p class="eyebrow">TODAY AT KOFAD</p>
+    <h2>Your business at a glance.</h2>
+    <p>{{ today|date:"D, j M Y" }} <span aria-hidden="true">·</span> {{ current_branch.name }}</p>
   </div>
   <div class="control-pulse">
-    <small>Operational control pulse</small>
-    <strong>{{ control_score }}<span>/100</span></strong>
-    <b>{{ control_label }}</b>
+    <small>Operational pulse</small>
+    <div class="control-pulse-summary"><strong>{{ control_score }}<span>/100</span></strong><b>{{ control_label }}</b></div>
     <p>Stock, overdue accounts and pending approvals.</p>
   </div>
 </section>

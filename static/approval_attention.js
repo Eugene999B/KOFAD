@@ -157,6 +157,16 @@
     }
   }
 
+  // A failed or unauthorized count must never leave stale approval badges.
+  const hideIndicator = () => {
+    badges.forEach(badge => { badge.hidden = true; });
+    if (launcher) {
+      launcher.hidden = true;
+      launcher.classList.remove("has-approvals");
+    }
+    previous = null;
+  };
+
   async function refresh() {
     try {
       const response = await fetch("/api/approvals/summary/", {
@@ -164,9 +174,12 @@
         credentials:"same-origin",
         cache:"no-store",
       });
-      if (!response.ok) return;
+      if (!response.ok) { hideIndicator(); return; }
       const data = await response.json();
-      const count = Number(data.actionable ?? data.pending ?? 0);
+      // Only approval actions this authenticated user can actually review.
+      // "pending" may include requests the user submitted but cannot authorize.
+      const raw = data && data.actionable;
+      const count = Number.isSafeInteger(raw) && raw > 0 ? raw : 0;
       badges.forEach(badge => {
         badge.textContent = String(count);
         badge.hidden = count <= 0;
@@ -184,6 +197,7 @@
       }
       previous = count;
     } catch (_) {
+      hideIndicator();
       // Approval awareness must never interrupt normal KOFAD work.
     }
   }

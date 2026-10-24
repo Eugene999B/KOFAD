@@ -30,6 +30,11 @@ class StaffDesignAssetContractTests(SimpleTestCase):
         self.assertLess(shell.index("kofad-atelier-ops.css"), shell.index("kofad-atelier-commerce.css"))
         self.assertIn("/settings/connections/", shell)
         self.assertIn("Email Centre", shell)
+        self.assertIn("staff-navigation-experience.css", shell)
+        self.assertIn("staff-navigation-experience.js", shell)
+        self.assertIn("sidebar-page-search", shell)
+        self.assertTrue((Path(settings.BASE_DIR) / "static/staff-navigation-experience.css").is_file())
+        self.assertTrue((Path(settings.BASE_DIR) / "static/staff-navigation-experience.js").is_file())
 
     def test_dashboard_still_uses_per_page_css_hook(self):
         page = (Path(settings.BASE_DIR) / "templates/dashboard.html").read_text(encoding="utf-8")
@@ -52,8 +57,8 @@ class StaffDesignRenderedPagesTests(AtelierOperationsPageTests):
                       "kofad-atelier-commerce.css", "brand-transparent.css"):
             # WhiteNoise hashes filenames, e.g. staff-refinement.ab12cd.css.
             self.assertContains(response, asset.replace(".css", "."))
-        self.assertContains(response, "KOFAD COMMAND CENTRE")
-        self.assertContains(response, "Operational control pulse")
+        self.assertContains(response, "TODAY AT KOFAD")
+        self.assertContains(response, "Operational pulse")
         self.assertContains(response, "/settings/connections/")
         # Email Centre nav is deliberately conditional on feature availability.
 
