@@ -5,7 +5,7 @@ from .telegram_intelligence import _branches, _role
 
 
 def inventory_totals(user):
-    from .models import Stock, Product
+    from .models import Stock
     if not _role(user)["inventory"]:
         return "Your role does not permit inventory reporting."
     branches = _branches(user)
@@ -18,7 +18,6 @@ def inventory_totals(user):
     unique_recorded = rows.values("product_id").distinct().count()
     units = with_stock.aggregate(total=Sum("quantity"))["total"] or 0
     empty = rows.filter(quantity=0).count()
-    catalog = Product.objects.filter(active=True).count()
     return (
         f"{product_types:,} distinct product(s) have a positive recorded stock balance "
         f"across your {branches.count()} authorized branch(es). "
@@ -26,7 +25,6 @@ def inventory_totals(user):
         f"There are {unique_recorded:,} distinct products with stock records "
         f"({stocked_rows:,} branch-product records), of which {empty:,} branch-product "
         f"record(s) have zero balance. "
-        f"KOFAD has {catalog:,} active catalog products company-wide; "
-        "a catalog entry is not evidence of stock in your branches. "
+        "A catalog entry alone is not evidence of stock in your branches. "
         "These are current recorded balances, not a physical stock count."
     )
