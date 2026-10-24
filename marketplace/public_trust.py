@@ -10,7 +10,7 @@ from types import SimpleNamespace
 def usable_phone(value):
     raw = str(value or "").strip()
     digits = "".join(ch for ch in raw if ch.isdigit())
-    return raw if 9 <= len(digits) <= 15 and not digits.endswith("0000000") else ""
+    return raw if 9 <= len(digits) <= 15 and not digits.endswith("000000") else ""
 
 
 def public_contacts(company):
