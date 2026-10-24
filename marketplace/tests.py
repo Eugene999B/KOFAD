@@ -280,13 +280,20 @@ class MarketPublicExperienceTests(MarketFixtures):
 
 
 class MarketCustomerAndCartTests(MarketFixtures):
-    def test_cart_requires_customer_account_not_staff_auth(self):
+    def test_guest_cart_keeps_browse_open_and_checkout_needs_customer_auth(self):
         response = self.client.post(
-            f"/market/cart/add/{self.listing.pk}/",
-            {"quantity": "1"},
+            f"/market/cart/add/{self.listing.pk}/", {"quantity": "1"},
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/market/access/")
+        self.assertEqual(response.url, "/market/cart/")
+        self.assertEqual(self.client.session["market_cart"], {str(self.listing.pk): 1})
+        guest_cart = self.client.get("/market/cart/")
+        self.assertEqual(guest_cart.status_code, 200)
+        self.assertContains(guest_cart, "Sign in to checkout")
+        self.assertContains(guest_cart, self.product.name)
+        self.assertRedirects(self.client.get("/market/checkout/"), "/market/access/", fetch_redirect_response=False)
+        self.assertEqual(self.client.session["market_cart"], {str(self.listing.pk): 1})
+        self.assertEqual(self.client.session["market_after_login"], "/market/checkout/")
 
     def test_customer_login_throttles_repeated_wrong_passwords(self):
         for _ in range(5):
