@@ -46,13 +46,80 @@ FOLLOWUP_PERIOD = re.compile(
 )
 
 
-def conversational_reply(user, question, *, context="", turn_count=0):
+def conversational_reply(user, question, *, context="", turn_count=0, recent_questions=None):
     """Return (answer, source) or None to use the structured business router."""
     if not isinstance(question, str):
         return None
     value = " ".join(question.casefold().strip().split())
     normalized = value.strip(" \t\r\n.!?,")
     topic = TOPIC_LABELS.get(context)
+    prior = [x.casefold().strip() for x in (recent_questions or [])[-4:] if isinstance(x, str)]
+    if re.search(r"\b(?:which|what|your|ai)\b.*\bmodel\b|\bmodel\b.*\b(?:speaking|using|running)\b", normalized):
+        from django.conf import settings
+        from marketplace.kofad_ai import FREE_MODEL, GEMINI_MODEL, gemini_configured
+
+        enabled = bool(getattr(settings, "KOFAD_STAFF_AI_PLANNER_ENABLED", False))
+        providers = []
+        if enabled and gemini_configured():
+            providers.append(f"Gemini {GEMINI_MODEL}")
+        if enabled and getattr(settings, "KOFAD_OPENROUTER_FREE_ENABLED", False) and getattr(settings, "OPENROUTER_API_KEY", "").strip():
+            providers.append(f"OpenRouter ({FREE_MODEL})")
+        detail = ", ".join(providers) if providers else "no enabled external model verified for this reply"
+        return (
+            "You're talking to KOFAD Assistant, not one permanent AI model. "
+            "KOFAD handles short conversations and private business calculations locally. "
+            f"When available, a free-model planner may select read-only tools: {detail}. "
+            "This answer was generated locally, and private financial records are not sent to free models.",
+            "conversation",
+        )
+    if re.search(r"\b(?:what (?:were|was) we (?:talking|speaking|discussing)|what did we discuss|what was our topic|recap (?:our|this) (?:chat|conversation))\b", normalized):
+        labels = []
+        for q in prior:
+            label = (
+                "inventory" if "stock" in q or "inventory" in q else
+                "the AI model" if "model" in q or "speaking with" in q else
+                "sales" if "sale" in q or "sold" in q else
+                "SMS" if "sms" in q else
+                "email" if "email" in q else
+                "payments" if "momo" in q or "payment" in q else
+                "customer debts" if "debt" in q else ""
+            )
+            if label and label not in labels:
+                labels.append(label)
+        if topic and topic not in labels:
+            labels.insert(0, topic)
+        if labels:
+            return (
+                "We were discussing " + ", ".join(labels[:3]) +
+                ". I can continue from there—what would you like to explore?",
+                "conversation",
+            )
+        return (
+            "I don't have an earlier business topic in this chat yet. "
+            "Tell me what you'd like to investigate.",
+            "conversation",
+        )
+    if re.search(r"\b(?:didn.t ask|did not ask|not asking|that.s not what i asked|wrong question|you misunderstood)\b", normalized):
+        if "stock" in normalized or "inventory" in normalized or context == "inventory":
+            from .staff_ai_inventory import inventory_totals
+            return (
+                "You're right—I answered a low-stock alert instead of your question. "
+                + inventory_totals(user),
+                "inventory",
+            )
+        return (
+            "I misunderstood your question. What specifically should I check? "
+            "I'll answer that directly.",
+            "clarify",
+        )
+    if (
+        re.search(r"\b(?:how many|number of|total|count|quantity)\b", normalized)
+        and re.search(r"\b(?:products?|items?|stock)\b", normalized)
+        and re.search(r"\b(?:stock|inventory|on hand|available)\b", normalized)
+        and not re.search(r"\b(?:low|short|reorder|below minimum)\b", normalized)
+    ):
+        from .staff_ai_inventory import inventory_totals
+        return inventory_totals(user), "inventory"
     if GREETING.fullmatch(value):
         if isinstance(turn_count, int) and turn_count > 0:
             return ("Hey again! What shall we look at next?", "conversation")
