@@ -127,7 +127,15 @@ def _market_context(request, **extra):
     released_platforms = {
         entry["id"]: entry["available"] for entry in app_release["platforms"]
     }
+    from .public_trust import public_contacts, usable_phone
+    from core.models import CustomerServiceContact
+    company = getattr(request, "company", None) or Company.objects.first() or Company()
+    customer_care = [
+        row for row in CustomerServiceContact.objects.filter(active=True)
+        if usable_phone(row.number)
+    ]
     context = {
+        "public_company": public_contacts(company),
         "native_customer_app_released": app_release["released"],
         "native_customer_app_android": released_platforms.get("android", False),
         "native_customer_app_ios": released_platforms.get("ios", False),
@@ -143,8 +151,8 @@ def _market_context(request, **extra):
             else ""
         ),
         "google_ready": google_oauth_enabled(),
-        "company": getattr(request, "company", None) or Company.objects.first() or Company(),
-        "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
+        "company": company,
+        "customer_service_contacts": customer_care,
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
