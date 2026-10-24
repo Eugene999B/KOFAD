@@ -10,6 +10,10 @@ PAGES = {
                 "KOFAD IMPEX ENTERPRISE serves buyers looking for larger quantities and repeat purchases of goods from the KOFAD Market catalogue. Explore currently listed items and selling units before you ask for a quotation.",
                 "A product visible online is not a guarantee of wholesale stock or a discounted bulk price. Please tell us the item, preferred quantity and delivery area so we can check what is possible.",
             ]),
+            ("Bulk quantities, minimums and pricing", [
+                "There is no public fixed wholesale discount or universal minimum quantity published. The minimum, price per selling unit, pack size and availability must be confirmed for the specific products you request.",
+                "Ask for a written itemised quote stating quantity, selling unit, VAT or other charges where applicable, delivery or pickup cost, lead time, and quotation expiry. Only pay using confirmed KOFAD checkout or invoice instructions.",
+            ]),
             ("How to request a bulk quotation", [
                 "Send the product name or specification, quantity, preferred pack size, business contact and destination through our contact page. Our team will confirm availability, the applicable price and the fulfilment arrangement before you pay for a special order.",
             ]),
@@ -66,6 +70,10 @@ PAGES = {
         "eyebrow": "AFTER-SALES CARE",
         "intro": "Tell us what went wrong. We will review the order and explain the next step.",
         "sections": [
+            ("Simple return guide", [
+                "Need to return something? Contact us with your order number. For a standard change-of-mind return, ask within seven days of receiving it. If an item is damaged or wrong, tell us as soon as you can and keep the packaging.",
+                "We will explain whether you can return it, who pays transport and when to expect a decision. These simple steps do not replace the detailed rules below or any rights under Ghanaian law.",
+            ]),
             ("Standard return window", ["Request a standard return within seven calendar days after delivery or collection. Include your order reference, item, quantity and reason. Keep proof of purchase and, where useful, clear photographs. Later requests involving faults, incorrect goods or applicable legal rights will still be reviewed; this policy does not remove rights provided by law."]),
             ("Condition of goods", ["For a change-of-mind return, goods should be unused, complete and in their original packaging where reasonably possible. Opened hygiene-sensitive goods, perishables and goods made or specially sourced to your specification are not eligible for a change-of-mind return. These exclusions do not prevent a claim for goods that are faulty, damaged on arrival or incorrectly supplied. Any product-specific restriction should be confirmed before purchase."]),
             ("Damaged, faulty or incorrect goods", ["Report visible damage or an incorrect delivery as soon as possible, ideally within 48 hours, so we can investigate promptly. This reporting target is not a waiver of your legal rights. Stop using an unsafe or faulty item and retain the goods and packaging while we arrange review."]),
