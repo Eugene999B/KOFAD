@@ -220,3 +220,28 @@ body.login-page .login-footer{
     overflow:visible!important;
   }
 }
+
+/* 2026-10-24: intentionally quieter staff sign-in */
+body.login-page .login-access-chip{background:transparent!important;border:0!important;padding:0!important;margin-bottom:13px!important;letter-spacing:.13em;font-size:.73rem}
+body.login-page .login-access-chip b{font-size:.66rem;opacity:.75}
+body.login-page .login-card-top{margin:0 0 5px!important;display:block!important}
+body.login-page .login-card-top h2{font-size:clamp(1.9rem,5.4vw,2.55rem)!important;line-height:1.16!important;letter-spacing:-.045em!important;margin:0!important}
+body.login-page .login-card-top .eyebrow{color:#2b8176!important;font-size:.72rem!important;letter-spacing:.15em!important;margin-bottom:7px!important}
+body.login-page .login-intro-copy{font-size:.91rem!important;line-height:1.45!important;margin:6px 0 25px!important}
+body.login-page .login-form-row{justify-content:flex-end!important;margin:1px 0 9px!important}
+body.login-page .premium-login-form{gap:10px!important}
+body.login-page .premium-login-form label{font-size:.87rem!important}
+body.login-page .login-input-shell{border-radius:15px!important}
+body.login-page .login-input-shell>span:first-child{opacity:.65}
+body.login-page .login-submit{border-radius:15px!important;min-height:53px!important;box-shadow:0 8px 22px rgba(8,82,77,.12)!important}
+body.login-page .kofad-oauth-separator{margin:19px 0 15px!important}
+body.login-page .kofad-google-button{min-height:51px!important;border-radius:15px!important}
+body.login-page .kofad-google-hint{font-size:.72rem!important;margin:9px 0 0!important;text-align:center!important}
+body.login-page .turnstile-privacy-note{font-size:.7rem!important;margin:8px 0 12px!important}
+body.login-page .premium-login-card{padding:clamp(23px,5vw,42px)!important;max-width:515px!important}
+@media(max-width:760px){
+ body.login-page .premium-login-layout{padding:13px 17px 20px!important}
+ body.login-page .premium-login-card{width:min(100%,480px)!important;border-radius:23px!important}
+ body.login-page .login-story{display:none!important}
+}
+html[data-theme="dark"] body.login-page .login-card-top .eyebrow{color:#9fdfd3!important}
