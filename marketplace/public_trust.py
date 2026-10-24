@@ -17,7 +17,7 @@ def public_contacts(company):
     phone = usable_phone(company.phone)
     secondary = usable_phone(company.secondary_phone)
     whatsapp = usable_phone(company.whatsapp_phone)
-    if secondary and secondary == phone:
+    if secondary and "".join(ch for ch in secondary if ch.isdigit()) == "".join(ch for ch in phone if ch.isdigit()):
         secondary = ""
     return SimpleNamespace(
         phone=phone, secondary_phone=secondary, whatsapp_phone=whatsapp,
