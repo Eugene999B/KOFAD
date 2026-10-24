@@ -471,6 +471,12 @@ def market(request, category_slug=None):
     for listing in listings:
         listing.in_wishlist = listing.pk in wishlist_ids
 
+    review_qs = Product.objects.filter(
+        market_listing__enabled=True, active=True, sku__istartswith="SHOW-"
+    ).exclude(sku__in=settings.KOFAD_VERIFIED_SHOWCASE_SKUS)
+    requires_catalog_verification = (
+        settings.KOFAD_REQUIRE_SHOWCASE_VERIFICATION and review_qs.exists()
+    )
     categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
@@ -486,6 +492,7 @@ def market(request, category_slug=None):
         visible_price_low=price_range["low"],
         visible_price_high=price_range["high"],
         total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
+        requires_catalog_verification=requires_catalog_verification,
         page_obj=page_obj,
     ))
 
