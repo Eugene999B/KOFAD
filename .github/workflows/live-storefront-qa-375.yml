@@ -1,0 +1,31 @@
+name: Public store QA at 375px (read-only)
+on:
+  push:
+    branches:
+      - qa/live-storefront-375-audit-20261024
+    paths:
+      - tests/live_storefront_qa_375.py
+      - .github/workflows/live-storefront-qa-375.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live_public_qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install playwright==1.55.0
+      - run: python -m playwright install --with-deps chromium
+      - name: Audit live public pages, screenshot and capture errors
+        run: python tests/live_storefront_qa_375.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: storefront-375-screenshots-console
+          path: qa-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
