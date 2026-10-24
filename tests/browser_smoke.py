@@ -1238,7 +1238,7 @@ with sync_playwright() as p:
     assert admin_page.locator(".sidebar-signout button").is_visible()
     admin_page.locator(".nav-close").click()
     assert admin_page.locator(".executive-kpis").is_visible()
-    assert admin_page.get_by_text("Operational pulse", exact=True).is_visible()
+    assert admin_page.locator(".executive-hero .control-pulse > small").is_visible()
     admin_page.evaluate("localStorage.setItem('kofad-theme','dark'); document.documentElement.dataset.theme='dark'")
     admin_page.reload()
     assert admin_page.locator(".executive-kpis article").first.evaluate(
