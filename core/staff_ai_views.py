@@ -87,8 +87,13 @@ def assistant_chat(request, branch):
         if planned is not None:
             reply, source, external_ai_used = planned
         else:
-            reply, source = staff_reply(request.user, data["message"], context=safe_context)
-            external_ai_used = False
+            from .staff_ai_general import general_reply
+            general = general_reply(data["message"])
+            if general is not None:
+                reply, source, external_ai_used = general
+            else:
+                reply, source = staff_reply(request.user, data["message"], context=safe_context)
+                external_ai_used = False
     response = JsonResponse({
         "reply": reply, "source": source, "external_ai_used": external_ai_used,
         "actions": staff_actions(request.user, source),
