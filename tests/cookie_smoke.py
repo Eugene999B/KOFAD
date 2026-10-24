@@ -151,7 +151,7 @@ with sync_playwright() as playwright:
     signed_in.goto(BASE + "/" + settings.STAFF_LOGIN_SLUG + "/")
     expect(signed_in.locator("[data-cookie-panel]")).to_be_visible()
     signed_in.locator("[data-cookie-reject]").click()
-    signed_in.get_by_label("Username, mobile number or verified email", exact=True).fill("demo")
+    signed_in.get_by_label("Username, phone or email", exact=True).fill("demo")
     signed_in.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
     signed_in.get_by_role("button", name="Sign in").click()
     signed_in.wait_for_url(BASE + "/workspace/")
