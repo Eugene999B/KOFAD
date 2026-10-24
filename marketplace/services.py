@@ -843,6 +843,11 @@ def create_order(customer, cart, cleaned):
     rows = cart_rows(cart)
     if not rows:
         raise ValidationError("Your cart is empty.")
+    # Check provenance before creating an order, reserving stock or initiating
+    # any customer payment. A stale session cannot bypass this check.
+    from .listing_safety import ensure_orderable
+    for row in rows:
+        ensure_orderable(row["listing"])
     zone = cleaned.get("delivery_zone") if cleaned.get("fulfilment") == "delivery" else None
     quote = (
         delivery_quote(cleaned.get("latitude"), cleaned.get("longitude"))
