@@ -139,8 +139,8 @@ document.addEventListener("DOMContentLoaded", () => {
             window.setTimeout(() => {
               overlay.classList.remove("show", "leaving");
               overlay.setAttribute("aria-hidden", "true");
-            }, reduced ? 0 : 420);
-          }, reduced ? 650 : 1850);
+            }, reduced ? 0 : 310);
+          }, reduced ? 0 : 1050);
         }
         setTimeout(welcomeChime, 180);
       }

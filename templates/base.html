@@ -9,14 +9,15 @@
 <link rel="stylesheet" href="{% static 'kofad-atelier-ops.css' %}">
 <link rel="stylesheet" href="{% static 'kofad-atelier-commerce.css' %}">
 <link rel="stylesheet" href="{% static 'kofad-mobile-reachability.css' %}">
-<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'kofad-minimal.css' %}"><link rel="stylesheet" href="{% static 'kofad-light-contrast.css' %}"></head>
+<link rel="stylesheet" href="{% static 'password-visibility.css' %}"><script defer src="{% static 'password-visibility.js' %}"></script><link rel="stylesheet" href="{% static 'kofad-minimal.css' %}"><link rel="stylesheet" href="{% static 'kofad-light-contrast.css' %}"><link rel="stylesheet" href="{% static 'staff-welcome-flow-v2.css' %}"></head>
 <body class="{% block body_class %}{% endblock %}" data-session-zone="staff" data-session-active="true" data-session-logout-url="/logout/" data-session-status-url="/session/state/" data-session-login-url="/login/"><a class="skip" href="#main">Skip to content</a>
-<div class="login-welcome-overlay" id="login-welcome-overlay" aria-hidden="true" data-user-name="{{ request.user.get_full_name|default:request.user.username }}" >
+<div class="login-welcome-overlay" id="login-welcome-overlay" aria-hidden="true">
   <div class="welcome-orbit" aria-hidden="true"></div>
   <div class="welcome-logo"><img src="{% static 'brand/kofad-logo-transparent.png' %}" alt=""></div>
   <p>WELCOME BACK</p>
-  <h2><span id="welcome-person">{{ request.user.get_full_name|default:request.user.username }}</span></h2>
-  <small>KOFAD workspace</small>
+  <h2>Opening your workspace</h2>
+  <small>Securing your session</small>
+  <div class="welcome-progress" aria-hidden="true"><span></span></div>
 </div>
 <div class="workspace">
 <button class="nav-backdrop" aria-label="Close navigation" tabindex="-1" hidden></button><aside class="sidebar" id="main-navigation" aria-label="Main navigation"><button type="button" class="nav-close" aria-label="Close menu">×</button>

@@ -25,6 +25,7 @@
   let busy = false;
   let lastTopic = "";
   let recentTopics = [];
+  let recentQuestions = [];
   let turnCount = 0;
   let inFlight = null;
 
@@ -129,6 +130,9 @@
     if (busy || value.length < 2 || value.length > 600) return;
     setBusy(true);
     userBubble(value);
+    const previousQuestions = recentQuestions.slice(-4);
+    recentQuestions.push(value.slice(0,120));
+    recentQuestions = recentQuestions.slice(-4);
     turnCount = Math.min(turnCount + 1, 40);
     field.value = "";
     resizeField();
@@ -144,7 +148,7 @@
         credentials: "same-origin",
         signal: inFlight.signal,
         headers: {"Content-Type": "application/json", "X-CSRFToken": token ? token.value : ""},
-        body: JSON.stringify({message: value, context: lastTopic, recent_topics: recentTopics, turn_count: Math.max(0, turnCount - 1)})
+        body: JSON.stringify({message: value, context: lastTopic, recent_topics: recentTopics, recent_questions: previousQuestions, turn_count: Math.max(0, turnCount - 1)})
       });
       const data = await response.json();
       progress.remove();
@@ -176,11 +180,12 @@
     }
   });
   field.addEventListener("input", resizeField);
-  reset.addEventListener("click", function () {
+  if (reset) reset.addEventListener("click", function () {
     if (inFlight) inFlight.abort();
     log.querySelectorAll(".staff-ai-message").forEach(node => node.remove());
     lastTopic = "";
     recentTopics = [];
+    recentQuestions = [];
     turnCount = 0;
     field.value = "";
     resizeField();

@@ -213,6 +213,95 @@ class StaffAssistantTests(TestCase):
         self.assertEqual(payload["source"], "denied")
         self.assertNotIn("GHS", payload["reply"])
 
+    def test_inventory_count_is_not_low_stock_report_and_is_scoped(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        item = Product.objects.create(
+            sku="AI-IN-STOCK-COUNT", name="Rice stock", active=True, pack_size=1,
+        )
+        Stock.objects.create(branch=self.hq, product=item, quantity=14)
+        Stock.objects.create(branch=self.other, product=Product.objects.create(
+            sku="AI-HIDDEN-COUNT", name="Hidden stock", active=True, pack_size=1,
+        ), quantity=900)
+        result, source = conversational_reply(self.inventory, "How many products are in stock?")
+        self.assertEqual(source, "inventory")
+        self.assertIn("1 distinct product", result)
+        self.assertIn("14 individual base units", result)
+        self.assertNotIn("900", result)
+        self.assertNotIn("No low-stock", result)
+        correction, source = conversational_reply(
+            self.inventory, "I didn't ask if low stocks", context="inventory"
+        )
+        self.assertEqual(source, "inventory")
+        self.assertIn("I answered a low-stock alert", correction)
+        self.assertIn("14 individual base units", correction)
+        denied, _ = conversational_reply(self.seller, "How many products are in stock?")
+        self.assertNotIn("14 individual base units", denied)
+
+    def test_model_identity_is_transparent_not_a_pretend_single_model(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        answer, source = conversational_reply(self.manager, "Which model am I speaking with?")
+        self.assertEqual(source, "conversation")
+        self.assertIn("KOFAD Assistant", answer)
+        self.assertIn("local", answer)
+        self.assertIn("private financial records", answer)
+
+    def test_recap_uses_recent_topics_without_trusting_them_for_database_permissions(self):
+        from core.staff_ai_conversation import conversational_reply
+
+        answer, source = conversational_reply(
+            self.inventory, "What were we talking about?", context="inventory",
+            recent_questions=[
+                "How many products are in stock",
+                "I didn't ask about low stocks",
+                "Which model am I speaking with",
+            ],
+        )
+        self.assertEqual(source, "conversation")
+        self.assertIn("inventory", answer)
+        self.assertIn("AI model", answer)
+
+    def test_general_ai_only_allows_public_nonprivate_questions(self):
+        from core.staff_ai_general import public_question
+
+        self.assertTrue(public_question("Explain the water cycle"))
+        for query in [
+            "Explain our company sales",
+            "What is my account balance?",
+            "Explain Ama@example.com email",
+            "Explain our warehouse inventory",
+            "What is the password for the company?",
+        ]:
+            self.assertFalse(public_question(query), query)
+
+    @override_settings(
+        KOFAD_STAFF_AI_PLANNER_ENABLED=True,
+        KOFAD_GEMINI_ENABLED=True,
+        KOFAD_GEMINI_FREE_TIER_CONFIRMED=True,
+        GEMINI_API_KEY="dummy-private-test",
+    )
+    @patch("core.staff_ai_planner._budget", return_value=True)
+    @patch("core.staff_ai_general.requests.post")
+    def test_public_general_question_can_use_existing_free_gemini(self, post, budget):
+        from core.staff_ai_general import general_reply
+
+        post.return_value = Mock(status_code=200, json=lambda: {
+            "candidates": [{"content": {"parts": [
+                {"text": "The water cycle moves water through evaporation and precipitation."}
+            ]}}]
+        })
+        result = general_reply("Explain the water cycle")
+        self.assertIsNotNone(result)
+        self.assertEqual(result[1], "general")
+        self.assertTrue(result[2])
+        budget.assert_called_once_with()
+        self.assertNotIn("KOFAD customer records", json.dumps(post.call_args.kwargs["json"]))
+        post.assert_called_once()
+        post.reset_mock()
+        self.assertIsNone(general_reply("Explain our company sales"))
+        post.assert_not_called()
+
     def test_incomplete_what_is_a_short_natural_reply(self):
         from core.staff_ai_conversation import conversational_reply
 

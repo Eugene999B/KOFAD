@@ -1,0 +1,29 @@
+/* Workspace entry – concise, branded, visible and low-motion. */
+.login-welcome-overlay{
+  background:radial-gradient(ellipse 72% 50% at 50% 46%,#164458 0%,#102b3c 55%,#0a1b2d 100%)!important;
+  gap:11px!important;isolation:isolate
+}
+.login-welcome-overlay::before{
+  content:"";position:absolute;width:min(85vw,480px);aspect-ratio:1;border-radius:50%;
+  border:1px solid rgba(111,209,201,.13);box-shadow:0 0 0 70px rgba(49,173,160,.035),0 0 0 135px rgba(49,173,160,.02);
+  pointer-events:none
+}
+.login-welcome-overlay .welcome-orbit{
+  width:min(67vw,300px)!important;height:min(67vw,300px)!important;
+  border:1px solid rgba(111,209,201,.2)!important;
+  box-shadow:0 0 0 38px rgba(80,215,223,.035)!important;
+  animation:welcome-orbit 1s ease-out both!important
+}
+.login-welcome-overlay .welcome-logo{
+  border-radius:24px!important;background:rgba(255,255,255,.96)!important;
+  width:92px!important;height:92px!important;
+  box-shadow:0 18px 52px rgba(0,0,0,.22),0 0 0 1px rgba(239,204,130,.25)!important
+}
+.login-welcome-overlay .welcome-logo img{width:86px!important;height:86px!important}
+.login-welcome-overlay p{color:#f0b94a!important;margin:19px 0 0!important;letter-spacing:.3em!important;font-size:.7rem!important}
+.login-welcome-overlay h2{color:#f2f8fa!important;-webkit-text-fill-color:#f2f8fa!important;font-size:clamp(1.3rem,5vw,2rem)!important;letter-spacing:-.03em!important;line-height:1.2!important}
+.login-welcome-overlay small{color:#b9cfda!important;font-size:.8rem!important}
+.login-welcome-overlay .welcome-progress{width:126px;height:3px;border-radius:20px;background:rgba(255,255,255,.18);overflow:hidden;margin-top:18px;z-index:2}
+.login-welcome-overlay .welcome-progress>span{display:block;height:100%;width:40%;border-radius:20px;background:linear-gradient(90deg,#3abbab,#e9ba4f);animation:welcome-progress-slide 1.2s ease-in-out infinite}
+@keyframes welcome-progress-slide{0%{transform:translateX(-100%)}100%{transform:translateX(360%)}}
+@media(prefers-reduced-motion:reduce){.login-welcome-overlay *, .login-welcome-overlay::before{animation:none!important;transition:none!important}.login-welcome-overlay .welcome-progress>span{width:100%}}

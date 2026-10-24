@@ -18,7 +18,7 @@ def login_button_accessible(page):
     """Clipped form containers must not hide the sign-in button at any height."""
     page.goto(BASE + "/login/")
     form = page.locator(".premium-login-card")
-    button = page.get_by_role("button", name="Sign in to workspace")
+    button = page.get_by_role("button", name="Sign in")
     expect(form).to_be_visible()
     expect(button).to_be_visible()
     assert page.locator(".premium-login-card").evaluate(
@@ -151,9 +151,9 @@ with sync_playwright() as playwright:
     signed_in.goto(BASE + "/" + settings.STAFF_LOGIN_SLUG + "/")
     expect(signed_in.locator("[data-cookie-panel]")).to_be_visible()
     signed_in.locator("[data-cookie-reject]").click()
-    signed_in.get_by_label("Username, mobile number or verified email", exact=True).fill("demo")
+    signed_in.get_by_label("Username, phone or email", exact=True).fill("demo")
     signed_in.get_by_label("Password", exact=True).fill("isolated-demo-browser-password")
-    signed_in.get_by_role("button", name="Sign in to workspace").click()
+    signed_in.get_by_role("button", name="Sign in").click()
     signed_in.wait_for_url(BASE + "/workspace/")
     expect(signed_in.get_by_role("heading", name="Command centre", exact=True)).to_be_visible()
     expect(signed_in.locator("[data-cookie-panel]")).to_be_hidden()

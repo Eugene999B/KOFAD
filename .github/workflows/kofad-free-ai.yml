@@ -14,6 +14,8 @@ on:
       - "core/staff_ai_planner.py"
       - "core/staff_ai_conversation.py"
       - "core/staff_ai_sales.py"
+      - "core/staff_ai_inventory.py"
+      - "core/staff_ai_general.py"
       - "core/staff_ai_tools.py"
       - "core/staff_ai_views.py"
       - "core/test_staff_ai.py"
@@ -58,7 +60,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements-dev.txt -c requirements.lock
-      - run: ruff check marketplace/kofad_ai.py marketplace/kofad_ai_views.py marketplace/test_kofad_ai.py core/telegram_assistant.py core/domain_middleware.py core/staff_ai.py core/staff_ai_planner.py core/staff_ai_conversation.py core/staff_ai_sales.py core/staff_ai_tools.py core/staff_ai_views.py core/test_staff_ai.py
+      - run: ruff check marketplace/kofad_ai.py marketplace/kofad_ai_views.py marketplace/test_kofad_ai.py core/telegram_assistant.py core/domain_middleware.py core/staff_ai.py core/staff_ai_planner.py core/staff_ai_conversation.py core/staff_ai_inventory.py core/staff_ai_general.py core/staff_ai_sales.py core/staff_ai_tools.py core/staff_ai_views.py core/test_staff_ai.py
       - run: node --check static/staff-ai.js
       - run: node --check marketplace/static/marketplace/kofad-ai.js
       - run: python manage.py check
