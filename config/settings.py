@@ -95,6 +95,15 @@ SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 STAFF_SESSION_SECONDS = int(os.environ.get("STAFF_SESSION_SECONDS", "43200"))  # 12 hours
+# Public SHOW- items must be independently verified before sale. Never delete
+# historical showcase transactions to clean up a storefront.
+KOFAD_REQUIRE_SHOWCASE_VERIFICATION = os.environ.get(
+    "KOFAD_REQUIRE_SHOWCASE_VERIFICATION", "1"
+) != "0"
+KOFAD_VERIFIED_SHOWCASE_SKUS = tuple(
+    item.strip().upper() for item in
+    os.environ.get("KOFAD_VERIFIED_SHOWCASE_SKUS", "").split(",") if item.strip()
+)
 MARKET_SESSION_SECONDS = int(os.environ.get("MARKET_SESSION_SECONDS", "7200"))  # 2 hours
 # Opt-in Google Apps Script weekly off-site export (not a Railway scheduled job).
 # Passphrase MUST be escrowed offline; losing Railway's secret or changing the

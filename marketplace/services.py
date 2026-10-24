@@ -843,6 +843,11 @@ def create_order(customer, cart, cleaned):
     rows = cart_rows(cart)
     if not rows:
         raise ValidationError("Your cart is empty.")
+    # Check provenance before creating an order, reserving stock or initiating
+    # any customer payment. A stale session cannot bypass this check.
+    from .listing_safety import ensure_orderable
+    for row in rows:
+        ensure_orderable(row["listing"])
     zone = cleaned.get("delivery_zone") if cleaned.get("fulfilment") == "delivery" else None
     quote = (
         delivery_quote(cleaned.get("latitude"), cleaned.get("longitude"))
@@ -939,6 +944,12 @@ def refresh_order_reservations(order):
     if order.status != "awaiting_payment":
         raise ValidationError("This order can no longer be paid.")
 
+    # Protect unpaid historical showcase orders from being paid after the
+    # customer catalogue has been placed under verification review.
+    from .listing_safety import ensure_orderable
+    for line in order.lines.select_related("listing__product"):
+        if line.listing_id:
+            ensure_orderable(line.listing)
     branch = core_services.lock_branch(order.branch)
     expiry = timezone.now() + timedelta(minutes=settings.MARKET_RESERVATION_MINUTES)
     for item in order.lines.select_related("product"):

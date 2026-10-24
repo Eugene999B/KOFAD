@@ -97,7 +97,7 @@ html[data-theme="dark"] .kofad-cookie-panel button[data-cookie-reject],html[data
 }
 html[data-theme="dark"] .kofad-cookie-panel .kofad-cookie-bottom a{color:#b7e8de}
 @media(max-width:600px){
-  .kofad-cookie-panel{top:10px;bottom:auto;left:10px;right:10px;width:auto;max-height:min(70dvh,480px);padding:17px;border-radius:17px}
+  .kofad-cookie-panel{top:auto;bottom:max(8px,env(safe-area-inset-bottom));left:10px;right:10px;width:auto;max-height:min(55dvh,380px);padding:15px;border-radius:17px}
   .kofad-cookie-panel .kofad-cookie-intro{font-size:12px;line-height:1.55;margin:12px 0}
   .kofad-cookie-bottom{font-size:10px}
 }

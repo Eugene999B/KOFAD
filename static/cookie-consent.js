@@ -2,6 +2,11 @@
   "use strict";
   const secure = location.protocol === "https:";
   const name = secure ? "__Host-kofad_consent" : "kofad_consent";
+  // Share only a privacy-preserving rejection across KOFAD subdomains.
+  // Do not share analytics opt-in or authenticated cookies across hosts.
+  const firstParty = secure && (location.hostname === "kofadimpex.com"
+    || location.hostname.endsWith(".kofadimpex.com"));
+  const sharedReject = "kofad_essential_only";
   const lifetime = 180 * 86400000;
   let choice = null;
   let analyticsStarted = false;
@@ -13,6 +18,12 @@
         && typeof saved.analytics === "boolean" && Number.isFinite(saved.savedAt)
         && saved.savedAt <= Date.now() && Date.now() - saved.savedAt < lifetime) choice = saved;
   } catch (_) {}
+  if (!choice && firstParty) {
+    const rejected = document.cookie.split("; ").some(row => row === sharedReject + "=2");
+    if (rejected) choice = {
+      version: 2, preferences: false, analytics: false, savedAt: Date.now()
+    };
+  }
   const allows = category => Boolean(choice && choice[category] === true);
   window.KofadPrivacy = {
     allows,
@@ -87,6 +98,11 @@
         analytics: analyticsAvailable && analyticsChoice, savedAt: Date.now()};
       document.cookie = name + "=" + encodeURIComponent(JSON.stringify(choice))
         + "; Max-Age=15552000; Path=/; SameSite=Lax" + (secure ? "; Secure" : "");
+      if (firstParty) {
+        document.cookie = sharedReject + "=" + (choice.analytics || choice.preferences ? "" : "2")
+          + "; Max-Age=" + (choice.analytics || choice.preferences ? "0" : "15552000")
+          + "; Path=/; Domain=kofadimpex.com; SameSite=Lax; Secure";
+      }
       if (!choice.preferences) {
         try { preferenceKeys.forEach(key => localStorage.removeItem(key)); } catch (_) {}
       } else {

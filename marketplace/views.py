@@ -43,6 +43,7 @@ from .models import (
     RecentView, StockReservation, WishlistItem,
 )
 from . import services, hubtel, paystack_momo, momo_security
+from .listing_safety import requires_review, ensure_orderable
 from .hubtel_evidence import decrypt_exchange, save_exchange
 
 
@@ -126,7 +127,15 @@ def _market_context(request, **extra):
     released_platforms = {
         entry["id"]: entry["available"] for entry in app_release["platforms"]
     }
+    from .public_trust import public_contacts, usable_phone
+    from core.models import CustomerServiceContact
+    company = getattr(request, "company", None) or Company.objects.first() or Company()
+    customer_care = [
+        row for row in CustomerServiceContact.objects.filter(active=True)
+        if usable_phone(row.number)
+    ]
     context = {
+        "public_company": public_contacts(company),
         "native_customer_app_released": app_release["released"],
         "native_customer_app_android": released_platforms.get("android", False),
         "native_customer_app_ios": released_platforms.get("ios", False),
@@ -142,8 +151,8 @@ def _market_context(request, **extra):
             else ""
         ),
         "google_ready": google_oauth_enabled(),
-        "company": getattr(request, "company", None) or Company.objects.first() or Company(),
-        "customer_service_contacts": __import__("core.models", fromlist=["CustomerServiceContact"]).CustomerServiceContact.objects.filter(active=True),
+        "company": company,
+        "customer_service_contacts": customer_care,
         "google_maps_browser_key": settings.GOOGLE_MAPS_BROWSER_KEY if settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED else "",
         "google_maps_map_id": settings.GOOGLE_MAPS_MAP_ID,
         "google_maps_browser_ready": bool(settings.GOOGLE_MAPS_BROWSER_KEY and settings.GOOGLE_MAPS_BROWSER_KEY_RESTRICTED),
@@ -169,6 +178,7 @@ def _decorate_listings(listings, branch):
             listing.available_units = services.available_units(branch, listing.product) if branch else 0
         listing.available_sell_qty = listing.available_units // max(listing.factor, 1)
         listing.market_price_value = listing.market_price
+        listing.awaiting_verification = requires_review(listing)
     return listings
 
 
@@ -469,6 +479,12 @@ def market(request, category_slug=None):
     for listing in listings:
         listing.in_wishlist = listing.pk in wishlist_ids
 
+    review_qs = Product.objects.filter(
+        market_listing__enabled=True, active=True, sku__istartswith="SHOW-"
+    ).exclude(sku__in=settings.KOFAD_VERIFIED_SHOWCASE_SKUS)
+    requires_catalog_verification = (
+        settings.KOFAD_REQUIRE_SHOWCASE_VERIFICATION and review_qs.exists()
+    )
     categories = list(
         Product.objects.filter(market_listing__enabled=True, active=True)
         .exclude(category="").values_list("category", flat=True).distinct().order_by("category")
@@ -484,6 +500,7 @@ def market(request, category_slug=None):
         visible_price_low=price_range["low"],
         visible_price_high=price_range["high"],
         total_catalog=MarketListing.objects.filter(enabled=True, product__active=True).count(),
+        requires_catalog_verification=requires_catalog_verification,
         page_obj=page_obj,
     ))
 
@@ -1090,10 +1107,14 @@ def market_session_state(request):
     return response
 
 
-@market_customer_required
 @require_POST
-def cart_add(request, customer, pk):
+def cart_add(request, pk):
     listing = get_object_or_404(MarketListing.objects.select_related("product"), pk=pk, enabled=True, product__active=True)
+    try:
+        ensure_orderable(listing)
+    except ValidationError as exc:
+        messages.error(request, str(exc.messages[0]))
+        return redirect("market_product", pk=listing.pk)
     try:
         quantity = int(request.POST.get("quantity", "1"))
     except ValueError:
@@ -1110,6 +1131,9 @@ def cart_add(request, customer, pk):
         current = int(cart.get(str(listing.pk), 0))
     except (ValueError, TypeError, OverflowError):
         current = 0
+    if str(listing.pk) not in cart and len(cart) >= 40:
+        messages.error(request, "A cart can contain up to 40 different products.")
+        return redirect("market_cart")
     cart[str(listing.pk)] = min(max(current, 0) + quantity, available)
     request.session["market_cart"] = cart
     request.session.modified = True
@@ -1122,29 +1146,36 @@ def cart_add(request, customer, pk):
     return redirect("market_cart")
 
 
-@market_customer_required
-def cart(request, customer):
+def cart(request):
     rows = services.cart_rows(request.session.get("market_cart", {}))
     branch = services.market_branch()
     subtotal = 0
+    cart_has_unverified = False
     for row in rows:
         row["available"] = services.available_units(branch, row["listing"].product) // max(row["listing"].factor, 1)
-        subtotal += row["total"]
+        row["awaiting_verification"] = requires_review(row["listing"])
+        cart_has_unverified = cart_has_unverified or row["awaiting_verification"]
+        if not row["awaiting_verification"]:
+            subtotal += row["total"]
     return render(request, "marketplace/cart.html", _market_context(
         request, title="Your cart", rows=rows, subtotal=subtotal,
+        cart_has_unverified=cart_has_unverified,
     ))
 
 
-@market_customer_required
 @require_POST
-def cart_update(request, customer):
+def cart_update(request):
     cart_data = {}
     for key, value in request.POST.items():
         if not key.startswith("qty_"):
             continue
         listing_id = key.removeprefix("qty_")
-        if not listing_id.isdigit():
+        if not (listing_id.isascii() and listing_id.isdecimal()
+                and 1 <= len(listing_id) <= 20
+                and 0 < int(listing_id) <= 9223372036854775807):
             continue
+        if len(cart_data) >= 40:
+            break
         try:
             qty = int(value)
         except ValueError:
@@ -1255,6 +1286,9 @@ def checkout(request, customer):
     if not rows:
         messages.info(request, "Your cart is empty.")
         return redirect("market")
+    if any(requires_review(row["listing"]) for row in rows):
+        messages.error(request, "Remove any items awaiting stock and price verification before checkout.")
+        return redirect("market_cart")
     initial = {
         "recipient_name": customer.full_name,
         "phone": customer.phone,
