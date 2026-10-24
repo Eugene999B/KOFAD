@@ -1150,11 +1150,16 @@ def cart(request):
     rows = services.cart_rows(request.session.get("market_cart", {}))
     branch = services.market_branch()
     subtotal = 0
+    cart_has_unverified = False
     for row in rows:
         row["available"] = services.available_units(branch, row["listing"].product) // max(row["listing"].factor, 1)
-        subtotal += row["total"]
+        row["awaiting_verification"] = requires_review(row["listing"])
+        cart_has_unverified = cart_has_unverified or row["awaiting_verification"]
+        if not row["awaiting_verification"]:
+            subtotal += row["total"]
     return render(request, "marketplace/cart.html", _market_context(
         request, title="Your cart", rows=rows, subtotal=subtotal,
+        cart_has_unverified=cart_has_unverified,
     ))
 
 
@@ -1281,6 +1286,9 @@ def checkout(request, customer):
     if not rows:
         messages.info(request, "Your cart is empty.")
         return redirect("market")
+    if any(requires_review(row["listing"]) for row in rows):
+        messages.error(request, "Remove any items awaiting stock and price verification before checkout.")
+        return redirect("market_cart")
     initial = {
         "recipient_name": customer.full_name,
         "phone": customer.phone,
