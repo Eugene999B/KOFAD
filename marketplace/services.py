@@ -944,6 +944,12 @@ def refresh_order_reservations(order):
     if order.status != "awaiting_payment":
         raise ValidationError("This order can no longer be paid.")
 
+    # Protect unpaid historical showcase orders from being paid after the
+    # customer catalogue has been placed under verification review.
+    from .listing_safety import ensure_orderable
+    for line in order.lines.select_related("listing__product"):
+        if line.listing_id:
+            ensure_orderable(line.listing)
     branch = core_services.lock_branch(order.branch)
     expiry = timezone.now() + timedelta(minutes=settings.MARKET_RESERVATION_MINUTES)
     for item in order.lines.select_related("product"):
