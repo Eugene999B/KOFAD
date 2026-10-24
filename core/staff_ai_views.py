@@ -70,8 +70,14 @@ def assistant_chat(request, branch):
     turn_count = data.get("turn_count")
     turn_count = min(turn_count, 40) if type(turn_count) is int and turn_count >= 0 else 0
 
+    previous = data.get("recent_questions")
+    previous = [
+        item.strip()[:120] for item in previous[-4:]
+        if isinstance(item, str) and 2 <= len(item.strip()) <= 120
+    ] if isinstance(previous, list) else []
     dialogue = conversational_reply(
-        request.user, data["message"], context=safe_context, turn_count=turn_count
+        request.user, data["message"], context=safe_context,
+        turn_count=turn_count, recent_questions=previous,
     )
     if dialogue is not None:
         reply, source = dialogue
